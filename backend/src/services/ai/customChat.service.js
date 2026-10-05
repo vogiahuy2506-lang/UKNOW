@@ -10,6 +10,7 @@ import aiUsageMeter from './aiUsageMeter.service.js';
 import { resolveAllowedModel } from './aiModelPolicy.service.js';
 import { buildChatbotSystemPrompt } from '../../utils/chatbotSystemPrompt.util.js';
 import chatAttachmentService from '../chatbot/chatAttachment.service.js';
+import { recordChatbotAnswerEvent } from '../chatbot/chatbotAnswerEvent.service.js';
 import { chunkText as splitIntoChunks } from '../../utils/kbChunker.util.js';
 import { CUSTOM_CHATBOT_MIN_SIMILARITY, MAX_KB_CHUNKS, capChunkTexts } from '../../utils/ragLimits.util.js';
 import { decodeUploadFilename } from '../../utils/uploadFilename.util.js';
@@ -157,11 +158,14 @@ class CustomChatService {
       : Promise.resolve('');
 
     let ragContext = '';
+    let ragChunkCount = null; // A P2-10: số đoạn tài liệu đưa vào prompt (null = không tra được) — cho sổ đo lường chatbot
+    const answerStartedAt = Date.now();
     try {
       const lastUserMessage = [...history].reverse().find((message) => message.role === 'user')?.content || '';
       if (lastUserMessage) {
         // Trần khi dựng prompt (A P0-3): mỗi đoạn ≤ 1.500 ký tự, tổng ≤ 6.000 — đoạn cũ chưa nạp lại vẫn bị cắt.
         const chunks = capChunkTexts(await this.searchChunks({ chatbotId, userId, query: lastUserMessage }));
+        ragChunkCount = chunks.length;
         if (chunks.length > 0) {
           ragContext = `Tài liệu tham khảo từ Knowledge Base:\n${chunks.map((chunk) => `- ${chunk}`).join('\n')}`;
         }
@@ -265,6 +269,17 @@ class CustomChatService {
         // Model THẬT đã trả lời (có thể là model dự phòng), không phải model hệ thống.
         model: rawContent?.modelUsed || model,
       });
+      // A P2-10: một sự kiện đo lường mỗi lượt khách hỏi qua widget / trang chat / "Chat thử" Studio (chatbot nào, bao nhiêu đoạn RAG, có "chưa có thông tin" không).
+      recordChatbotAnswerEvent({
+        ownerUserId: userId,
+        channel: 'web',
+        chatbotId,
+        ragStats: ragChunkCount == null ? null : { kbChunks: ragChunkCount },
+        reply: content,
+        usage: rawContent?.usage,
+        model: rawContent?.modelUsed || model,
+        durationMs: Date.now() - answerStartedAt,
+      });
 
       return {
         content,
@@ -273,6 +288,14 @@ class CustomChatService {
     } catch (err) {
       // providerMessage = câu gốc của Google khi lõi đã đổi `message` sang câu tiếng Việt cho khách.
       console.error('[CustomChat] Gemini call failed:', err.providerMessage || err.message);
+      recordChatbotAnswerEvent({
+        ownerUserId: userId,
+        channel: 'web',
+        chatbotId,
+        ragStats: ragChunkCount == null ? null : { kbChunks: ragChunkCount },
+        failure: err,
+        durationMs: Date.now() - answerStartedAt,
+      });
 
       // Return user-friendly error
       if (err.name === 'AbortError' || err.message.includes('timeout')) {

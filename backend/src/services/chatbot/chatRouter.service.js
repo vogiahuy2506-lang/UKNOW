@@ -25,6 +25,7 @@ import { buildChatbotSystemPrompt } from '../../utils/chatbotSystemPrompt.util.j
 import chatbotContactAlertRepository from '../../repositories/chatbot/chatbotContactAlert.repository.js';
 import { handleAiUnavailable } from './aiUnavailableNotice.service.js';
 import { classifyAiFailure } from '../../utils/aiUnavailable.util.js';
+import { recordChatbotAnswerEvent } from './chatbotAnswerEvent.service.js';
 
 const ADAPTERS = {
   web: webChatAdapter,
@@ -70,9 +71,13 @@ class ChatRouterService {
       return { type: 'disabled', content: null };
     }
 
+    const turnStartedAt = Date.now();
     const creditFeature = `chatbot_${channel}`;
     const creditPrep = await this._prepareChatCredit(userId, creditFeature);
     if (creditPrep.visitorMessage) {
+      recordChatbotAnswerEvent({
+        ownerUserId: userId, channel, chatbotId, failureReason: creditPrep.unavailableReason, durationMs: Date.now() - turnStartedAt,
+      });
       // Hết credit / hết gói: câu xin lỗi mang NHÃN `ai_unavailable` (không tính là AI trả lời), báo chủ qua email, và tối
       // đa 1 lần / khách / 6 giờ (G3b, A P1-6). Bị chặn do khách đã nhận rồi → content null, caller không gửi gì.
       const unavailable = await this._unavailableReply({
@@ -107,10 +112,12 @@ class ChatRouterService {
     // the channel-level KB for legacy rows that still wire through
     // sub_assistants.
     // Đã có hồ sơ đầy đủ trong prompt → RAG không chèn thêm đoạn hồ sơ (lặp nội dung, A P2-6). Hồ sơ lỗi/rỗng → giữ đoạn RAG.
+    const ragStats = {};
     const ragContext = await ragEngineService.buildContext(userId, message, {
       kbId: linkedKbId,
       customChatbotId: chatbotId,
       includeProfileChunks: !profileContext,
+      onStats: (stats) => Object.assign(ragStats, stats), // A P2-10: số đoạn RAG + độ giống cho sổ đo lường chatbot
     });
 
     const extractedContacts = extractContacts(message);
@@ -132,6 +139,7 @@ class ChatRouterService {
     });
 
     let aiResponse;
+    let aiFailure = null;
     let shouldChargeCredit = false;
     let unavailableReason = null;
     try {
@@ -153,9 +161,19 @@ class ChatRouterService {
         console.warn(`[ChatRouter] AI limit reached (channel=${channel}, userId=${userId}): ${error.message}`);
       }
       unavailableReason = classifyAiFailure(error);
+      aiFailure = error;
     }
 
     if (unavailableReason) {
+      recordChatbotAnswerEvent({
+        ownerUserId: userId,
+        channel,
+        chatbotId,
+        ragStats,
+        failure: aiFailure,
+        failureReason: unavailableReason,
+        durationMs: Date.now() - turnStartedAt,
+      });
       // AI lỗi / chạm hạn mức giữa chừng: cùng cách xử lý như hết credit. Lời xác nhận liên hệ (nếu khách để lại SĐT/email)
       // vẫn phải đến được khách dù câu xin lỗi bị chặn vì đã gửi trong 6 giờ qua.
       const unavailable = await this._unavailableReply({
@@ -186,6 +204,17 @@ class ChatRouterService {
     if (contactAck?.footer) {
       cleanResponse = `${cleanResponse.trim()}\n\n${contactAck.footer}`;
     }
+
+    recordChatbotAnswerEvent({
+      ownerUserId: userId,
+      channel,
+      chatbotId,
+      ragStats,
+      reply: cleanResponse,
+      usage: aiResponse.usage,
+      model: aiResponse.modelUsed,
+      durationMs: Date.now() - turnStartedAt,
+    });
 
     // Log messages
     await this._logMessage(channel, conversationId, userId, { role: 'visitor', content: message });
@@ -306,7 +335,8 @@ class ChatRouterService {
       model: result.modelUsed || modelName,
     });
     if (!textResponse) throw new Error('AI returned empty response');
-    return { text: textResponse };
+    // `usage` + model THẬT đi kèm để sổ đo lường chatbot (chatbotAnswerEvent.service.js) ghi tổng token của lượt; nơi gọi chỉ đọc `text` vẫn như cũ.
+    return { text: textResponse, usage: result.usage, modelUsed: result.modelUsed };
   }
 
   async _getHistory(channel, conversationId, limit, options = {}) {
@@ -484,6 +514,8 @@ class ChatRouterService {
    */
   async routeChatbotMessage({ chatbotId, message, conversationId, beforeMessageId = null, throughMessageId = null, excludeMessageIds = [] }) {
     let ownerId = null;
+    const turnStartedAt = Date.now();
+    const ragStats = {};
     try {
       const chatbot = await chatbotRepository.findChatbotById(chatbotId);
       if (!chatbot) {
@@ -499,6 +531,9 @@ class ChatRouterService {
 
       const creditPrep = await this._prepareChatCredit(ownerId, 'chatbot_widget');
       if (creditPrep.visitorMessage) {
+        recordChatbotAnswerEvent({
+          ownerUserId: ownerId, channel: 'studio_channel', chatbotId: chatbot.id, failureReason: creditPrep.unavailableReason, durationMs: Date.now() - turnStartedAt,
+        });
         return this._unavailableReply({
           ownerUserId: ownerId,
           channel: 'studio_channel',
@@ -532,6 +567,7 @@ class ChatRouterService {
       const ragContext = await ragEngineService.buildContext(ownerId, message, {
         customChatbotId: chatbot.id,
         includeProfileChunks: !profileContext,
+        onStats: (stats) => Object.assign(ragStats, stats), // A P2-10
       }).catch((err) => {
         console.warn('[ChatRouter] routeChatbotMessage: RAG buildContext failed:', err.message);
         return '';
@@ -576,11 +612,31 @@ class ChatRouterService {
 
       await this._chargeChatCredit(ownerId, 'chatbot_widget', creditPrep.creditContext);
 
-      return { content: stripMarkdown(response.text) };
+      const reply = stripMarkdown(response.text);
+      recordChatbotAnswerEvent({
+        ownerUserId: ownerId,
+        channel: 'studio_channel',
+        chatbotId: chatbot.id,
+        ragStats,
+        reply,
+        usage: response.usage,
+        model: response.modelUsed,
+        durationMs: Date.now() - turnStartedAt,
+      });
+      return { content: reply };
     } catch (err) {
       console.error('[ChatRouter] routeChatbotMessage error:', err);
       // Chưa biết chủ (không tìm thấy chatbot) thì không có gì để báo/giới hạn — giữ câu lỗi như cũ.
       if (ownerId == null) return { content: VISITOR_CHAT_ERROR_MESSAGE };
+      recordChatbotAnswerEvent({
+        ownerUserId: ownerId,
+        channel: 'studio_channel',
+        chatbotId,
+        ragStats,
+        failure: err,
+        failureReason: classifyAiFailure(err),
+        durationMs: Date.now() - turnStartedAt,
+      });
       return this._unavailableReply({
         ownerUserId: ownerId,
         channel: 'studio_channel',

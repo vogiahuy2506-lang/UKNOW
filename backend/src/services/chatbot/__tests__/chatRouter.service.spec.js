@@ -580,7 +580,7 @@ describe('chatRouter._callAI — đi qua lõi Gemini dùng chung (G2.1)', () => 
       ],
     }));
 
-    expect(res).toEqual({ text: 'Xin chào bạn' });
+    expect(res).toEqual({ text: 'Xin chào bạn', usage: { promptTokens: 10, outputTokens: 4, totalTokens: 14 }, modelUsed: 'gemini-2.5-flash' });
     expect(global.fetch).toHaveBeenCalledTimes(1);
     const [url, init] = global.fetch.mock.calls[0];
     const body = JSON.parse(init.body);
@@ -609,7 +609,7 @@ describe('chatRouter._callAI — đi qua lõi Gemini dùng chung (G2.1)', () => 
 
     const res = await settle(chatRouterService._callAI(callArgs));
 
-    expect(res).toEqual({ text: 'rescued' });
+    expect(res).toEqual({ text: 'rescued', usage: { promptTokens: 120, outputTokens: 15, totalTokens: 135 }, modelUsed: 'gemini-2.5-flash' });
     expect(global.fetch).toHaveBeenCalledTimes(2);
     const first = JSON.parse(global.fetch.mock.calls[0][1].body);
     const second = JSON.parse(global.fetch.mock.calls[1][1].body);
@@ -646,7 +646,7 @@ describe('chatRouter._callAI — đi qua lõi Gemini dùng chung (G2.1)', () => 
 
     const res = await settle(chatRouterService._callAI(callArgs));
 
-    expect(res).toEqual({ text: 'Dạ có ạ' });
+    expect(res).toEqual({ text: 'Dạ có ạ', usage: { promptTokens: 120, outputTokens: 15, totalTokens: 135 }, modelUsed: 'gemini-2.5-flash' });
     expect(global.fetch).toHaveBeenCalledTimes(2);
     expect(record).toHaveBeenCalledTimes(1);
   });
@@ -661,7 +661,7 @@ describe('chatRouter._callAI — đi qua lõi Gemini dùng chung (G2.1)', () => 
 
     const res = await settle(chatRouterService._callAI(callArgs));
 
-    expect(res).toEqual({ text: 'Dạ dự phòng đây ạ' });
+    expect(res).toEqual({ text: 'Dạ dự phòng đây ạ', usage: { promptTokens: 120, outputTokens: 15, totalTokens: 135 }, modelUsed: 'gemini-du-phong' });
     expect(global.fetch.mock.calls.map(([url]) => urlModel(url))).toEqual([
       'gemini-2.5-flash', 'gemini-2.5-flash', 'gemini-2.5-flash', 'gemini-du-phong',
     ]);
@@ -694,7 +694,7 @@ describe('chatRouter._callAI — đi qua lõi Gemini dùng chung (G2.1)', () => 
     resolveFallbackModel.mockResolvedValue(null);
     global.fetch = jest.fn().mockResolvedValue(googleOk('ổn'));
 
-    await expect(settle(chatRouterService._callAI(callArgs))).resolves.toEqual({ text: 'ổn' });
+    await expect(settle(chatRouterService._callAI(callArgs))).resolves.toEqual({ text: 'ổn', usage: { promptTokens: 120, outputTokens: 15, totalTokens: 135 }, modelUsed: 'gemini-2.5-flash' });
   });
 });
 
@@ -978,11 +978,11 @@ describe('A P2-6 — prompt chatbot: hồ sơ không lặp (RAG bỏ đoạn h�
       getFormattedProfileForPrompt.mockResolvedValue('=== HỒ SƠ ===\n- Tên công ty: Hoa Nắng\n=== HẾT HỒ SƠ ===');
       await runStudio();
       expect(getFormattedProfileForPrompt).toHaveBeenCalledWith(3, { includeLogo: false });
-      expect(buildContext).toHaveBeenLastCalledWith(3, 'giá khoá Python?', { customChatbotId: 9, includeProfileChunks: false });
+      expect(buildContext).toHaveBeenLastCalledWith(3, 'giá khoá Python?', { customChatbotId: 9, includeProfileChunks: false, onStats: expect.any(Function) });
 
       getFormattedProfileForPrompt.mockRejectedValue(new Error('db down'));
       await runStudio();
-      expect(buildContext).toHaveBeenLastCalledWith(3, 'giá khoá Python?', { customChatbotId: 9, includeProfileChunks: true });
+      expect(buildContext).toHaveBeenLastCalledWith(3, 'giá khoá Python?', { customChatbotId: 9, includeProfileChunks: true, onStats: expect.any(Function) });
     });
   });
 });

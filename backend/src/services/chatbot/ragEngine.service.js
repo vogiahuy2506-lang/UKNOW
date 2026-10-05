@@ -24,6 +24,8 @@ class RagEngineService {
    * @param {number} [options.minSimilarity=0.45]
    * @param {boolean} [options.includeProfileChunks=true] - false khi prompt ĐÃ có hồ sơ đầy đủ
    *   (`businessProfileService.getFormattedProfileForPrompt`): đoạn hồ sơ RAG chỉ lặp lại đúng nội dung đó (A P2-6)
+   * @param {(stats: { kbChunks: number, profileChunks: number, topSimilarity: number|null }) => void} [options.onStats] - nhận số liệu của lần tra
+   *   (số đoạn tài liệu / đoạn hồ sơ đã đưa vào prompt, độ giống cao nhất) để nơi gọi ghi sổ đo lường chatbot (A P2-10). Hỏng/ném lỗi thì bị bỏ qua.
    * @returns {Promise<string>} context string for AI prompt
    */
   async buildContext(userId, userQuery, options = {}) {
@@ -34,6 +36,7 @@ class RagEngineService {
       maxProfileChunks = MAX_PROFILE_CHUNKS,
       minSimilarity = MIN_SIMILARITY,
       includeProfileChunks = true,
+      onStats = null,
     } = options;
 
     try {
@@ -51,6 +54,7 @@ class RagEngineService {
         maxProfileChunks,
         minSimilarity,
         includeProfileChunks,
+        onStats,
       });
     } catch (e) {
       console.warn('[RAG Engine] Failed to build context, continuing without RAG:', e.message);
@@ -75,6 +79,7 @@ class RagEngineService {
       maxProfileChunks = MAX_PROFILE_CHUNKS,
       minSimilarity = MIN_SIMILARITY,
       includeProfileChunks = true,
+      onStats = null,
     } = options;
 
     try {
@@ -85,6 +90,7 @@ class RagEngineService {
         maxProfileChunks,
         minSimilarity,
         includeProfileChunks,
+        onStats,
       });
     } catch (e) {
       console.warn('[RAG Engine] Failed to build context with embedding:', e.message);
@@ -99,6 +105,7 @@ class RagEngineService {
     maxProfileChunks,
     minSimilarity,
     includeProfileChunks = true,
+    onStats = null,
   }) {
     // Two KB scopes live side by side:
     //   1) channel settings path  (chatbot_settings -> knowledge_bases via sub_assistant,
@@ -151,6 +158,20 @@ class RagEngineService {
     const parts = [];
     if (kbContext) parts.push(kbContext);
     if (profileContext) parts.push(profileContext);
+
+    // A P2-10: số liệu của lần tra cho sổ đo lường chatbot. Chỉ ĐẾM và lấy độ giống — không đưa nội dung đoạn ra ngoài.
+    if (typeof onStats === 'function') {
+      try {
+        const similarities = kbChunks.map((c) => Number(c.similarity)).filter(Number.isFinite);
+        onStats({
+          kbChunks: kbChunks.length,
+          profileChunks: profileChunks.filter((c) => c.similarity > minSimilarity).length,
+          topSimilarity: similarities.length > 0 ? Math.max(...similarities) : null,
+        });
+      } catch {
+        // đo lường không bao giờ được làm hỏng câu trả lời
+      }
+    }
 
     return parts.join('\n\n');
   }
