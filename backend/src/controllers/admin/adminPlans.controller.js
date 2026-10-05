@@ -1,7 +1,6 @@
 import * as adminPlansService from '../../services/admin/adminPlans.service.js';
 import cloudflareService from '../../services/cloudflare.service.js';
-import { generateGeminiText } from '../../utils/geminiClient.util.js';
-import { resolveAllowedModel } from '../../services/ai/aiModelPolicy.service.js';
+import { translateFeatureTexts } from '../../services/admin/planFeatureTranslate.service.js';
 import { logSystem, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../../services/audit.service.js';
 import { getSystemAuditContext } from '../../utils/auditContext.util.js';
 
@@ -216,23 +215,14 @@ export async function removeUserPlan(req, res) {
   } catch (err) { return handleError(res, err); }
 }
 
-/** POST /api/admin/plans/translate-features */
+/**
+ * POST /api/admin/plans/translate-features — dịch dòng tính năng gói sang tiếng Anh (chia lô ≤ 20 dòng, ghi token, JSON hỏng → 422;
+ * xem planFeatureTranslate.service.js).
+ */
 export async function translateFeatures(req, res) {
   try {
-    const { texts } = req.body;
-    if (!Array.isArray(texts) || texts.length === 0) {
-      return res.status(400).json({ success: false, message: 'texts phải là mảng không rỗng' });
-    }
-    const list = texts.map((t, i) => `${i + 1}. ${t}`).join('\n');
-    const prompt = `Translate the following Vietnamese SaaS plan feature strings into concise English. Return ONLY a JSON array of strings in the same order, no explanation.\n\n${list}`;
-    // Không truyền model thì lớp gọi rơi về GEMINI_MODEL trong .env — tức bỏ qua model admin chọn.
-    const model = await resolveAllowedModel(req.user?.id);
-    const { text } = await generateGeminiText({ prompt, model, maxOutputTokens: 1024, temperature: 0.1, jsonMode: true, feature: 'admin_plan_translate', ownerUserId: req.user?.id ?? null });
-    const translations = JSON.parse(text);
-    if (!Array.isArray(translations) || translations.length !== texts.length) {
-      throw new Error('Gemini trả về kết quả không hợp lệ');
-    }
-    return res.json({ success: true, data: translations });
+    const data = await translateFeatureTexts({ texts: req.body?.texts, userId: req.user?.id ?? null });
+    return res.json({ success: true, data });
   } catch (err) { return handleError(res, err); }
 }
 
