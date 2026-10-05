@@ -10,10 +10,7 @@ import {
   HiOutlineCheckCircle,
   HiOutlineBan,
   HiOutlineShieldCheck,
-  HiOutlineTag,
-  HiOutlineClipboardCopy,
 } from 'react-icons/hi';
-import toast from 'react-hot-toast';
 import { useAuthStore } from '../../../stores/authStore';
 import { getMyProfile, updateMyProfile, getUserConsentHistory } from '../services/authApi.service';
 import { useI18n } from '../../../i18n';
@@ -157,6 +154,114 @@ function EmployeeContextTab({ activeContext, t }) {
   );
 }
 
+/** Khối hiển thị lịch sử đồng ý điều khoản & xử lý dữ liệu (Nghị định 330/2026/NĐ-CP) */
+function ConsentHistorySection({ consentHistory = [], t }) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <HiOutlineShieldCheck className="w-4 h-4 text-primary-600" />
+        <span className="text-xs font-bold uppercase tracking-wider text-gray-700">
+          {t('accountProfileModal.consentHistoryTitle')}
+        </span>
+      </div>
+
+      <div className="divide-y divide-gray-100">
+        {[
+          {
+            purpose: 'terms',
+            title: t('accountProfileModal.consentDocTerms'),
+            href: '/terms',
+            record: consentHistory.find((item) => item.purpose === 'terms'),
+          },
+          {
+            purpose: 'privacy',
+            title: t('accountProfileModal.consentDocPrivacy'),
+            href: '/privacy-policy',
+            record: consentHistory.find((item) => item.purpose === 'privacy'),
+          },
+          {
+            purpose: 'dpa',
+            title: t('accountProfileModal.consentDocDpa'),
+            href: '/public-dpa',
+            record: consentHistory.find((item) => item.purpose === 'dpa'),
+          },
+        ].map((doc) => {
+          const isGranted = doc.record?.granted === true;
+          const version = doc.record?.documentVersion || doc.record?.document_version || null;
+          const dateStr = doc.record?.createdAt || doc.record?.created_at;
+          const formattedDate = dateStr ? formatDate(dateStr, t) : null;
+
+          return (
+            <div key={doc.purpose} className="py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-900">{doc.title}</span>
+                  <a
+                    href={doc.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-primary-600 hover:underline font-medium inline-flex items-center gap-0.5"
+                  >
+                    {t('accountProfileModal.viewDocLink')}
+                  </a>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs text-gray-500 mt-1">
+                  {version && (
+                    <span>
+                      {t('accountProfileModal.consentDocVersion')}: <strong className="font-semibold text-gray-700">{version}</strong>
+                    </span>
+                  )}
+                  {formattedDate && (
+                    <span>
+                      {t('accountProfileModal.consentDocDate')}: <strong className="font-semibold text-gray-700">{formattedDate}</strong>
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="shrink-0">
+                {isGranted ? (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-green-50 text-green-700 border border-green-200">
+                    <HiOutlineCheckCircle className="w-3.5 h-3.5" />
+                    {t('accountProfileModal.consentGranted')}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                    <HiOutlineClock className="w-3.5 h-3.5" />
+                    {t('accountProfileModal.consentPending')}
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Thông điệp minh bạch về việc rút lại đồng ý */}
+      <div className="rounded-lg bg-amber-50/70 border border-amber-200/70 p-3 text-xs text-amber-900 leading-relaxed">
+        <p>
+          {t('accountProfileModal.consentWithdrawalNotice')}{' '}
+          <a
+            href="mailto:info@digiso.vn"
+            className="font-semibold text-amber-950 underline hover:text-black"
+          >
+            info@digiso.vn
+          </a>{' '}
+          {t('accountProfileModal.consentWithdrawalOr')}{' '}
+          <a
+            href="/contact"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-amber-950 underline hover:text-black"
+          >
+            {t('accountProfileModal.contactPage')}
+          </a>.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 const ROLE_LABELS = {
   admin: 'systemAdmin',
   member: 'member',
@@ -198,31 +303,6 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
   // này qua /auth/me — KHÔNG dùng profileData/getMyProfile() cục bộ vì GET /users/profile
   // hiện chưa SELECT phone_verified_at, xem bảng phản biện bước 1).
   const [showPhoneVerify, setShowPhoneVerify] = useState(false);
-  const [copiedTarget, setCopiedTarget] = useState(null);
-
-  const referralCode = profileData?.referralCode || user?.referralCode || '';
-  const referralLink = referralCode ? `https://founderai.biz/register?ref=${referralCode}` : '';
-
-  const handleCopy = (text, target) => {
-    if (!text) return;
-    try {
-      if (navigator?.clipboard?.writeText) {
-        navigator.clipboard.writeText(text);
-      } else {
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
-      }
-      setCopiedTarget(target);
-      toast.success(t('accountProfileModal.copied'));
-      setTimeout(() => setCopiedTarget(null), 2000);
-    } catch {
-      toast.error('Không thể sao chép');
-    }
-  };
 
   const isUserAdmin = !isEmployeeCtx && user?.role === 'user';
 
@@ -388,8 +468,11 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
             <div className="spinner w-8 h-8" />
           </div>
         ) : activeTab === 'security' ? (
-          <div className="overflow-y-auto px-6 py-5">
+          <div className="overflow-y-auto px-6 py-5 space-y-6">
             <TwoFactorSecurityTab />
+            <div className="pt-2 border-t border-gray-100">
+              <ConsentHistorySection consentHistory={consentHistory} t={t} />
+            </div>
           </div>
         ) : activeTab === 'orders' ? (
           <div className="overflow-y-auto px-6 py-5">
@@ -479,197 +562,6 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
                     </div>
                   )}
                 </div>
-              </div>
-            </div>
-
-            {/* Mã giới thiệu & Link chia sẻ (Affiliate PR-A1) */}
-            {referralCode && (
-              <div className="rounded-xl border border-orange-100 bg-gradient-to-br from-orange-50/50 to-amber-50/30 p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <HiOutlineTag className="w-4 h-4 text-orange-600" />
-                    <span className="text-xs font-bold uppercase tracking-wider text-orange-950">
-                      {t('accountProfileModal.affiliateTitle')}
-                    </span>
-                  </div>
-                </div>
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  {t('accountProfileModal.affiliateDesc')}
-                </p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                  {/* Mã giới thiệu */}
-                  <div className="bg-white rounded-lg border border-orange-200/80 p-3 flex items-center justify-between shadow-xs">
-                    <div>
-                      <span className="block text-[11px] font-medium text-slate-500 uppercase tracking-wide">
-                        {t('accountProfileModal.referralCodeLabel')}
-                      </span>
-                      <span className="text-base font-bold font-mono text-slate-900 tracking-wider">
-                        {referralCode}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleCopy(referralCode, 'code')}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-50 text-orange-700 hover:bg-orange-100 transition-colors border border-orange-200 cursor-pointer"
-                    >
-                      {copiedTarget === 'code' ? (
-                        <>
-                          <HiOutlineCheckCircle className="w-3.5 h-3.5 text-green-600" />
-                          <span className="text-green-700">{t('accountProfileModal.copied')}</span>
-                        </>
-                      ) : (
-                        <>
-                          <HiOutlineClipboardCopy className="w-3.5 h-3.5" />
-                          <span>{t('accountProfileModal.copyCode')}</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  {/* Link giới thiệu */}
-                  <div className="bg-white rounded-lg border border-orange-200/80 p-3 flex items-center justify-between shadow-xs">
-                    <div className="min-w-0 pr-2">
-                      <span className="block text-[11px] font-medium text-slate-500 uppercase tracking-wide">
-                        {t('accountProfileModal.referralLinkLabel')}
-                      </span>
-                      <span className="text-xs font-mono text-slate-600 truncate block">
-                        {referralLink}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleCopy(referralLink, 'link')}
-                      className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-orange-50 text-orange-700 hover:bg-orange-100 transition-colors border border-orange-200 cursor-pointer"
-                    >
-                      {copiedTarget === 'link' ? (
-                        <>
-                          <HiOutlineCheckCircle className="w-3.5 h-3.5 text-green-600" />
-                          <span className="text-green-700">{t('accountProfileModal.copied')}</span>
-                        </>
-                      ) : (
-                        <>
-                          <HiOutlineClipboardCopy className="w-3.5 h-3.5" />
-                          <span>{t('accountProfileModal.copyLink')}</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {profileData?.referrerCode && (
-                  <div className="pt-2 border-t border-orange-200/60 flex items-center justify-between text-xs text-slate-600">
-                    <span>{t('accountProfileModal.referredBy')}:</span>
-                    <span className="font-medium text-slate-900">
-                      {profileData.referrerName ? `${profileData.referrerName} (${profileData.referrerCode})` : profileData.referrerCode}
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
-
-
-            {/* Lịch sử đồng ý điều khoản & xử lý dữ liệu (PR-N3a / Nghị định 330/2026/NĐ-CP) */}
-            <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <HiOutlineShieldCheck className="w-4 h-4 text-primary-600" />
-                <span className="text-xs font-bold uppercase tracking-wider text-gray-700">
-                  {t('accountProfileModal.consentHistoryTitle')}
-                </span>
-              </div>
-
-              <div className="divide-y divide-gray-100">
-                {[
-                  {
-                    purpose: 'terms',
-                    title: t('accountProfileModal.consentDocTerms'),
-                    href: '/terms',
-                    record: consentHistory.find((item) => item.purpose === 'terms'),
-                  },
-                  {
-                    purpose: 'privacy',
-                    title: t('accountProfileModal.consentDocPrivacy'),
-                    href: '/privacy-policy',
-                    record: consentHistory.find((item) => item.purpose === 'privacy'),
-                  },
-                  {
-                    purpose: 'dpa',
-                    title: t('accountProfileModal.consentDocDpa'),
-                    href: '/public-dpa',
-                    record: consentHistory.find((item) => item.purpose === 'dpa'),
-                  },
-                ].map((doc) => {
-                  const isGranted = doc.record?.granted === true;
-                  const version = doc.record?.documentVersion || doc.record?.document_version || null;
-                  const dateStr = doc.record?.createdAt || doc.record?.created_at;
-                  const formattedDate = dateStr ? formatDate(dateStr, t) : null;
-
-                  return (
-                    <div key={doc.purpose} className="py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-gray-900">{doc.title}</span>
-                          <a
-                            href={doc.href}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-primary-600 hover:underline font-medium inline-flex items-center gap-0.5"
-                          >
-                            {t('accountProfileModal.viewDocLink')}
-                          </a>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs text-gray-500 mt-1">
-                          {version && (
-                            <span>
-                              {t('accountProfileModal.consentDocVersion')}: <strong className="font-semibold text-gray-700">{version}</strong>
-                            </span>
-                          )}
-                          {formattedDate && (
-                            <span>
-                              {t('accountProfileModal.consentDocDate')}: <strong className="font-semibold text-gray-700">{formattedDate}</strong>
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="shrink-0">
-                        {isGranted ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-green-50 text-green-700 border border-green-200">
-                            <HiOutlineCheckCircle className="w-3.5 h-3.5" />
-                            {t('accountProfileModal.consentGranted')}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                            <HiOutlineClock className="w-3.5 h-3.5" />
-                            {t('accountProfileModal.consentPending')}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Thông điệp minh bạch về việc rút lại đồng ý */}
-              <div className="rounded-lg bg-amber-50/70 border border-amber-200/70 p-3 text-xs text-amber-900 leading-relaxed">
-                <p>
-                  {t('accountProfileModal.consentWithdrawalNotice')}{' '}
-                  <a
-                    href="mailto:info@digiso.vn"
-                    className="font-semibold text-amber-950 underline hover:text-black"
-                  >
-                    info@digiso.vn
-                  </a>{' '}
-                  {t('accountProfileModal.consentWithdrawalOr')}{' '}
-                  <a
-                    href="/contact"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-semibold text-amber-950 underline hover:text-black"
-                  >
-                    {t('accountProfileModal.contactPage')}
-                  </a>.
-                </p>
               </div>
             </div>
 
