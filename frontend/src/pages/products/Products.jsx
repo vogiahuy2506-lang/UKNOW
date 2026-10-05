@@ -6,7 +6,6 @@ import { useI18n } from '../../i18n';
 import { parseVndPrice } from '../../utils/parseVndPrice';
 import { useAuthStore } from '../../stores/authStore';
 import productApiService from '../../features/products/services/productApi.service';
-import PageHeader from '../../components/common/PageHeader';
 import useStorageQuota from '../../features/storage/useStorageQuota';
 import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../features/storage/validateUpload';
 import { notifyStorageQuotaRefresh } from '../../features/storage/storageEvents';
@@ -19,10 +18,14 @@ import {
   HiOutlinePencil,
   HiOutlineTrash,
   HiOutlineX,
+  HiOutlineTag,
+  HiOutlineCurrencyDollar,
+  HiOutlineSparkles,
+  HiOutlineLink,
+  HiOutlinePhotograph,
 } from 'react-icons/hi';
 
 const MODAL_OVERLAY = 'fixed inset-0 z-[9999] flex items-center justify-center p-4';
-const MODAL_PANEL = 'relative bg-white rounded-2xl shadow-xl w-full max-w-xl max-h-[90vh] overflow-y-auto';
 
 const PRODUCT_STATUS_OPTIONS = ['active', 'inactive'];
 
@@ -56,7 +59,18 @@ const StatusBadge = ({ status, kind }) => {
   const isActive = normalized === 'active';
   const keys = STATUS_KEYS[kind === 'event' ? 'event' : 'sale'];
   return (
-    <span className={`badge ${isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+    <span
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors shadow-2xs ${
+        isActive
+          ? 'bg-emerald-50 text-emerald-700 border-emerald-200/80'
+          : 'bg-slate-100 text-slate-600 border-slate-200'
+      }`}
+    >
+      <span
+        className={`h-1.5 w-1.5 rounded-full ${
+          isActive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'
+        }`}
+      />
       {isActive ? t(keys.active) : t(keys.inactive)}
     </span>
   );
@@ -86,10 +100,11 @@ const FunnelCells = ({ funnel }) => {
   const formIds = funnel?.formIds || [];
   const target =
     formIds.length === 1 ? `/app/forms/${formIds[0]}/submissions` : formIds.length > 1 ? '/app/forms' : null;
+
   return (
     <>
       <td
-        className="px-3 py-4 whitespace-nowrap text-sm text-right text-gray-900"
+        className="px-3 py-4 whitespace-nowrap text-sm text-right"
         data-testid="funnel-interested"
         title={
           funnel?.interested
@@ -101,18 +116,24 @@ const FunnelCells = ({ funnel }) => {
             : undefined
         }
       >
-        {funnel?.interested ?? 0}
+        <span className={funnel?.interested ? 'font-semibold text-slate-800' : 'text-slate-400 font-normal'}>
+          {funnel?.interested ?? 0}
+        </span>
       </td>
-      <td className="px-3 py-4 whitespace-nowrap text-sm text-right text-gray-900" data-testid="funnel-left-contact">
-        {funnel?.leftContact ?? 0}
+      <td className="px-3 py-4 whitespace-nowrap text-sm text-right" data-testid="funnel-left-contact">
+        <span className={funnel?.leftContact ? 'font-semibold text-slate-800' : 'text-slate-400 font-normal'}>
+          {funnel?.leftContact ?? 0}
+        </span>
       </td>
-      <td className="px-3 py-4 whitespace-nowrap text-sm text-right text-gray-900" data-testid="funnel-registered">
+      <td className="px-3 py-4 whitespace-nowrap text-sm text-right" data-testid="funnel-registered">
         {target ? (
-          <Link to={target} className="text-primary-600 hover:underline">
+          <Link to={target} className="font-semibold text-primary-600 hover:text-primary-700 hover:underline">
             {registered}
           </Link>
         ) : (
-          registered
+          <span className={registered ? 'font-semibold text-slate-800' : 'text-slate-400 font-normal'}>
+            {registered}
+          </span>
         )}
       </td>
       <td
@@ -123,15 +144,19 @@ const FunnelCells = ({ funnel }) => {
         {noMoney ? (
           '—'
         ) : target && awaiting > 0 ? (
-          <Link to={target} className="hover:underline">
+          <Link to={target} className="hover:underline inline-flex items-center px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200/80 text-amber-700">
             {awaiting}
           </Link>
+        ) : awaiting > 0 ? (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200/80 text-amber-700">
+            {awaiting}
+          </span>
         ) : (
-          awaiting
+          <span className="text-slate-400 font-normal">0</span>
         )}
       </td>
       <td
-        className="px-3 py-4 whitespace-nowrap text-sm text-right text-gray-900"
+        className="px-3 py-4 whitespace-nowrap text-sm text-right"
         data-testid="funnel-paid"
         title={
           !noMoney && paidOrders > paidPeople
@@ -139,10 +164,24 @@ const FunnelCells = ({ funnel }) => {
             : undefined
         }
       >
-        {noMoney ? '—' : funnel?.paid ?? 0}
+        {noMoney ? (
+          '—'
+        ) : (
+          <span className={paidPeople ? 'font-semibold text-slate-800' : 'text-slate-400 font-normal'}>
+            {paidPeople}
+          </span>
+        )}
       </td>
-      <td className="px-3 py-4 whitespace-nowrap text-sm text-right font-medium text-gray-900" data-testid="funnel-revenue">
-        {noMoney ? '—' : formatMoney(funnel?.revenue)}
+      <td className="px-3 py-4 whitespace-nowrap text-sm text-right" data-testid="funnel-revenue">
+        {noMoney ? (
+          '—'
+        ) : funnel?.revenue ? (
+          <span className="font-semibold text-emerald-600">
+            {formatMoney(funnel?.revenue)}
+          </span>
+        ) : (
+          <span className="text-slate-500 font-medium">0 đ</span>
+        )}
       </td>
     </>
   );
@@ -310,6 +349,7 @@ const Products = () => {
   };
 
   const setField = (field, value) => setFormData((prev) => ({ ...prev, [field]: value }));
+
   // Đổi giá chữ: nếu ô Giá bán (số) đang là số đọc từ giá chữ CŨ ("500k" → 500.000) thì đọc lại theo giá mới ("700k" →
   // 700.000; đọc không được → trống). Số người dùng tự nhập khác giá chữ thì giữ nguyên.
   const handlePriceTextChange = (value) =>
@@ -352,22 +392,37 @@ const Products = () => {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        icon={HiOutlineCube}
-        title={t('products.productManagement')}
-        subtitle={t('products.productDescription')}
-        actions={
-          <button type="button" onClick={openCreate} className="btn btn-primary flex items-center gap-2">
-            <HiOutlinePlus className="w-5 h-5" />
-            {t('products.addProduct')}
-          </button>
-        }
-      />
+      {/* ── Page Header ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-start gap-3.5">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500/10 via-amber-500/10 to-orange-500/5 text-orange-600 border border-orange-200/70 shadow-xs">
+            <HiOutlineCube className="w-6 h-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+              {t('products.productManagement')}
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-500 mt-1 leading-relaxed">
+              {t('products.productDescription')}
+            </p>
+          </div>
+        </div>
 
-      <div className="card p-4">
-        <form onSubmit={handleSearch} className="flex gap-3">
-          <div className="flex items-center flex-1 min-w-0 rounded-lg border border-gray-300 bg-white transition-base focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-500">
-            <span className="pl-3 pr-2 text-gray-400 pointer-events-none shrink-0">
+        <button
+          type="button"
+          onClick={openCreate}
+          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white text-sm font-semibold shadow-sm hover:shadow transition-all duration-150 shrink-0"
+        >
+          <HiOutlinePlus className="w-4 h-4 stroke-[2.5]" />
+          <span>{t('products.addProduct')}</span>
+        </button>
+      </div>
+
+      {/* ── Filter & Search Toolbar ── */}
+      <div className="rounded-2xl border border-slate-200/90 bg-white p-3.5 shadow-xs">
+        <form onSubmit={handleSearch} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <div className="flex items-center flex-1 min-w-0 rounded-xl border border-slate-200 bg-slate-50/50 transition-all focus-within:bg-white focus-within:border-orange-500 focus-within:ring-2 focus-within:ring-orange-500/20">
+            <span className="pl-3.5 pr-2 text-slate-400 pointer-events-none shrink-0">
               <HiOutlineSearch className="w-4 h-4" />
             </span>
             <input
@@ -375,112 +430,154 @@ const Products = () => {
               value={pendingSearch}
               onChange={(e) => setPendingSearch(e.target.value)}
               placeholder={t('products.searchPlaceholder')}
-              className="w-full py-2 pr-3 text-sm bg-transparent border-0 rounded-lg focus:outline-none"
+              className="w-full py-2 pr-3 text-sm bg-transparent border-0 focus:outline-none placeholder:text-slate-400 text-slate-800"
             />
+            {pendingSearch && (
+              <button
+                type="button"
+                onClick={() => {
+                  setPendingSearch('');
+                  setSearch('');
+                  setPagination((p) => ({ ...p, page: 1 }));
+                }}
+                className="pr-3 text-slate-400 hover:text-slate-600"
+                title="Xóa tìm kiếm"
+              >
+                <HiOutlineX className="w-4 h-4" />
+              </button>
+            )}
           </div>
-          <button type="submit" className="btn btn-secondary shrink-0">
-            {t('common.search')}
-          </button>
-          {canViewFunnel && (
-            <select
-              data-testid="products-funnel-period"
-              aria-label={t('products.funnel.periodLabel')}
-              value={funnelPeriod}
-              onChange={(e) => setFunnelPeriod(e.target.value)}
-              className="shrink-0 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
+
+          <div className="flex items-center gap-2.5 shrink-0">
+            <button
+              type="submit"
+              className="inline-flex items-center justify-center px-4 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-colors shadow-xs"
             >
-              {FUNNEL_PERIODS.map((p) => (
-                <option key={p} value={p}>
-                  {t(`products.funnel.period${p}`)}
-                </option>
-              ))}
-            </select>
-          )}
+              {t('common.search')}
+            </button>
+
+            {canViewFunnel && (
+              <select
+                data-testid="products-funnel-period"
+                aria-label={t('products.funnel.periodLabel')}
+                value={funnelPeriod}
+                onChange={(e) => setFunnelPeriod(e.target.value)}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 shadow-xs cursor-pointer"
+              >
+                {FUNNEL_PERIODS.map((p) => (
+                  <option key={p} value={p}>
+                    {t(`products.funnel.period${p}`)}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {pagination.total > 0 && (
+              <span className="hidden md:inline-flex items-center px-2.5 py-1.5 rounded-lg bg-slate-100 text-[11px] font-semibold text-slate-600 border border-slate-200/60">
+                {t('products.totalProducts', { total: pagination.total })}
+              </span>
+            )}
+          </div>
         </form>
       </div>
 
-      <div className="card overflow-hidden">
+      {/* ── Table Card ── */}
+      <div className="rounded-2xl border border-slate-200/90 bg-white shadow-xs overflow-hidden">
         {isLoading ? (
-          <div className="flex items-center justify-center h-48">
-            <div className="spinner w-8 h-8" />
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <div className="w-7 h-7 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-xs text-slate-500 font-medium">Đang tải danh sách sản phẩm…</p>
           </div>
         ) : products.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-48 text-gray-400 gap-3">
-            <HiOutlineCube className="w-10 h-10" />
-            <p>{t('products.noProducts')}</p>
+          <div className="flex flex-col items-center justify-center py-16 text-center px-4">
+            <div className="w-14 h-14 rounded-2xl bg-orange-50 border border-orange-200/60 flex items-center justify-center text-orange-400 mb-3 shadow-xs">
+              <HiOutlineCube className="w-7 h-7" />
+            </div>
+            <p className="text-sm font-semibold text-slate-700">{t('products.noProducts')}</p>
+            <p className="text-xs text-slate-400 mt-1 max-w-sm leading-relaxed">
+              Bấm "+ Thêm sản phẩm" ở trên để đưa các sản phẩm hoặc dịch vụ vào hệ thống.
+            </p>
           </div>
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+              <table className="min-w-full divide-y divide-slate-100">
+                <thead className="bg-slate-50/80">
                   <tr>
                     {/* Có cột phễu: mã sản phẩm chuyển xuống dòng nhỏ dưới tên — bảng vừa màn hình laptop, cột Hành động không bị đẩy ra ngoài. */}
                     {!canViewFunnel && (
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                         {t('products.productCode')}
                       </th>
                     )}
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                       {t('products.productName')}
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                       {t('products.price')}
                     </th>
                     {canViewFunnel && (
                       <>
-                        <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider" title={t('products.funnel.interestedHint')}>
+                        <th className="px-3 py-3.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider" title={t('products.funnel.interestedHint')}>
                           {t('products.funnel.interested')}
                         </th>
-                        <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider" title={t('products.funnel.leftContactHint')}>
+                        <th className="px-3 py-3.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider" title={t('products.funnel.leftContactHint')}>
                           {t('products.funnel.leftContact')}
-                          <span className="block normal-case font-normal">({t('products.funnel.peopleUnit')})</span>
+                          <span className="block normal-case font-normal text-slate-400 text-[10px]">({t('products.funnel.peopleUnit')})</span>
                         </th>
-                        <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider" title={t('products.funnel.registeredHint')}>
+                        <th className="px-3 py-3.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider" title={t('products.funnel.registeredHint')}>
                           {t('products.funnel.registered')}
-                          <span className="block normal-case font-normal">({t('products.funnel.peopleUnit')})</span>
+                          <span className="block normal-case font-normal text-slate-400 text-[10px]">({t('products.funnel.peopleUnit')})</span>
                         </th>
-                        <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider" title={t('products.funnel.awaitingConfirmHint')}>
+                        <th className="px-3 py-3.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider" title={t('products.funnel.awaitingConfirmHint')}>
                           {t('products.funnel.awaitingConfirm')}
                         </th>
-                        <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider" title={t('products.funnel.paidHint')}>
+                        <th className="px-3 py-3.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider" title={t('products.funnel.paidHint')}>
                           {t('products.funnel.paid')}
-                          <span className="block normal-case font-normal">({t('products.funnel.peopleUnit')})</span>
+                          <span className="block normal-case font-normal text-slate-400 text-[10px]">({t('products.funnel.peopleUnit')})</span>
                         </th>
-                        <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-3 py-3.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                           {t('products.funnel.revenue')}
                         </th>
                       </>
                     )}
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                       {t('common.status')}
                     </th>
                     {/* Khi có các cột phễu, bỏ cột ngày cập nhật để cột Hành động (sửa/xoá) không bị đẩy ra ngoài màn hình laptop. */}
                     {!canViewFunnel && (
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                         {t('products.lastUpdated')}
                       </th>
                     )}
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                       {t('common.actions')}
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-white divide-y divide-slate-100">
                   {products.map((product) => (
-                    <tr key={product.id} className="hover:bg-gray-50">
+                    <tr key={product.id} className="hover:bg-slate-50/70 transition-colors">
                       {!canViewFunnel && (
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 font-mono">
                           {product.productCode || '—'}
                         </td>
                       )}
                       <td className="px-6 py-4">
-                        <div className="flex items-center">
-                          <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary-50 shrink-0 mr-3">
-                            <HiOutlineCube className="w-5 h-5 text-primary-600" />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="text-sm font-medium text-gray-900 truncate">
+                        <div className="flex items-center gap-3.5 min-w-0">
+                          {product.thumbnailUrl ? (
+                            <img
+                              src={product.thumbnailUrl}
+                              alt={product.productName}
+                              className="w-10 h-10 rounded-xl object-cover border border-slate-200 shrink-0 shadow-2xs"
+                            />
+                          ) : (
+                            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500/10 via-amber-500/10 to-orange-500/5 border border-orange-200/60 text-orange-600 shrink-0 shadow-2xs">
+                              <HiOutlineCube className="w-5 h-5" />
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-semibold text-slate-900 truncate">
                               {product.productName}
                               {product.kind === 'event' && (
                                 <span
@@ -492,14 +589,19 @@ const Products = () => {
                               )}
                             </div>
                             {(canViewFunnel ? [product.productCode, product.category] : [product.category]).some(Boolean) && (
-                              <div className="text-xs text-gray-500 mt-1" data-testid="product-subline">
-                                {(canViewFunnel ? [product.productCode, product.category] : [product.category]).filter(Boolean).join(' · ')}
+                              <div className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap" data-testid="product-subline">
+                                {(canViewFunnel ? [product.productCode, product.category] : [product.category]).filter(Boolean).map((tag, idx) => (
+                                  <span key={idx} className="inline-flex items-center text-slate-500">
+                                    {idx > 0 && <span className="mx-1 text-slate-300">·</span>}
+                                    {tag}
+                                  </span>
+                                ))}
                               </div>
                             )}
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900 font-semibold">
                         {product.price || (product.kind === 'event' ? t('products.priceFreePlaceholder') : '—')}
                       </td>
                       {canViewFunnel && (
@@ -509,16 +611,16 @@ const Products = () => {
                         <StatusBadge status={product.status} kind={product.kind} />
                       </td>
                       {!canViewFunnel && (
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500">
                           {formatDate(product.updatedAt)}
                         </td>
                       )}
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-1">
                           <button
                             type="button"
                             onClick={() => openEdit(product)}
-                            className="p-2 text-gray-500 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                            className="p-1.5 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
                             title={t('common.edit')}
                           >
                             <HiOutlinePencil className="w-4 h-4" />
@@ -526,7 +628,7 @@ const Products = () => {
                           <button
                             type="button"
                             onClick={() => setDeleteTarget(product)}
-                            className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
                             title={t('common.delete')}
                           >
                             <HiOutlineTrash className="w-4 h-4" />
@@ -540,25 +642,25 @@ const Products = () => {
             </div>
 
             {pagination.totalPages > 1 && (
-              <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100">
-                <p className="text-sm text-gray-500">{t('products.totalProducts', { total: pagination.total })}</p>
+              <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+                <p className="text-xs text-slate-500 font-medium">{t('products.totalProducts', { total: pagination.total })}</p>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setPagination((p) => ({ ...p, page: p.page - 1 }))}
                     disabled={pagination.page === 1}
-                    className="btn btn-secondary btn-sm disabled:opacity-50"
+                    className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 disabled:opacity-40 transition-colors shadow-2xs"
                   >
                     <HiOutlineChevronLeft className="w-4 h-4" />
                   </button>
-                  <span className="text-sm px-1 text-gray-600">
+                  <span className="text-xs font-semibold px-2 text-slate-700">
                     {pagination.page} / {pagination.totalPages}
                   </span>
                   <button
                     type="button"
                     onClick={() => setPagination((p) => ({ ...p, page: p.page + 1 }))}
                     disabled={pagination.page === pagination.totalPages}
-                    className="btn btn-secondary btn-sm disabled:opacity-50"
+                    className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 disabled:opacity-40 transition-colors shadow-2xs"
                   >
                     <HiOutlineChevronRight className="w-4 h-4" />
                   </button>
@@ -569,221 +671,398 @@ const Products = () => {
         )}
       </div>
 
+      {/* ── Modal Thêm / Sửa Sản Phẩm ── */}
       {formModal && createPortal(
         <div className={MODAL_OVERLAY}>
-          <button type="button" className="absolute inset-0 bg-black/50" onClick={closeFormModal} aria-label={t('common.close')} />
-          <div className={MODAL_PANEL}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h3 className="text-lg font-semibold text-gray-900">
-                {formModal.mode === 'edit' ? t('products.editProduct') : t('products.addProduct')}
-              </h3>
-              <button type="button" onClick={closeFormModal} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg">
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-hidden="true"
+            className="absolute inset-0 bg-black/60 backdrop-blur-xs transition-opacity cursor-default"
+            onClick={closeFormModal}
+          />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden z-10 animate-in fade-in zoom-in-95 duration-200">
+            {/* ── Sticky Header ── */}
+            <div className="sticky top-0 z-20 flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-white/95 backdrop-blur-md">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-orange-50 border border-orange-200/70 text-orange-600 flex items-center justify-center shrink-0 shadow-2xs">
+                  <HiOutlineCube className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
+                    {formModal.mode === 'edit' ? t('products.editProduct') : t('products.addProduct')}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {formModal.mode === 'edit' ? 'Chỉnh sửa thông tin chi tiết sản phẩm / dịch vụ' : 'Thêm mới sản phẩm vào kho dữ liệu AI & chiến dịch'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeFormModal}
+                aria-label={t('common.close')}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+              >
                 <HiOutlineX className="w-5 h-5" />
               </button>
             </div>
-            <form onSubmit={handleFormSubmit} className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.productName')} *</label>
-                  <input
-                    type="text"
-                    value={formData.productName}
-                    onChange={(e) => setField('productName', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                    required
-                  />
+
+            {/* ── Scrollable Form Body ── */}
+            <form id="product-form" onSubmit={handleFormSubmit} className="p-6 space-y-6 overflow-y-auto flex-1 text-xs sm:text-sm">
+              {/* Section 1: Thông tin cơ bản */}
+              <div className="rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-5 shadow-2xs space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                  <HiOutlineTag className="w-4 h-4 text-orange-500" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                    Thông tin cơ bản & Phân loại
+                  </span>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.productCode')}</label>
-                  <input
-                    type="text"
-                    value={formData.productCode}
-                    onChange={(e) => setField('productCode', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="product-kind-select">{t('products.kindLabel')}</label>
-                <select
-                  id="product-kind-select"
-                  data-testid="product-kind-select"
-                  value={formData.kind}
-                  onChange={(e) => setField('kind', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                >
-                  {PRODUCT_KIND_OPTIONS.map((kind) => (
-                    <option key={kind} value={kind}>
-                      {kind === 'event' ? t('products.kindEvent') : t('products.kindSale')}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.price')}</label>
-                <input
-                  type="text"
-                  value={formData.price}
-                  onChange={(e) => handlePriceTextChange(e.target.value)}
-                  placeholder={formData.kind === 'event' ? t('products.priceFreePlaceholder') : t('products.pricePlaceholder')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.priceAmount')}</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  data-testid="product-price-amount"
-                  value={formData.priceAmount === '' ? '' : Number(formData.priceAmount).toLocaleString('vi-VN')}
-                  onChange={(e) => setField('priceAmount', e.target.value.replace(/\D/g, ''))}
-                  placeholder={t('products.priceAmountPlaceholder')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                />
-                {(() => {
-                  const suggested = formData.priceAmount === '' ? parseVndPrice(formData.price) : null;
-                  return suggested !== null ? (
-                    <p className="mt-1 text-xs text-gray-500" data-testid="product-price-amount-suggest">
-                      {t('products.priceAmountSuggest', { amount: formatMoney(suggested) })}{' '}
-                      <button
-                        type="button"
-                        className="text-primary-600 hover:underline"
-                        onClick={() => setField('priceAmount', String(suggested))}
-                      >
-                        {t('products.priceAmountUse')}
-                      </button>
-                    </p>
-                  ) : (
-                    <p className="mt-1 text-xs text-gray-500">{t('products.priceAmountHint')}</p>
-                  );
-                })()}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.category')}</label>
-                <input
-                  type="text"
-                  list="product-category-suggestions"
-                  value={formData.category}
-                  onChange={(e) => setField('category', e.target.value)}
-                  placeholder={t('products.categoryPlaceholder')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                />
-                <datalist id="product-category-suggestions">
-                  {categorySuggestions.map((item) => (
-                    <option key={item} value={item} />
-                  ))}
-                </datalist>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.description')}</label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setField('description', e.target.value)}
-                  rows={2}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.usp')}</label>
-                <textarea
-                  value={formData.usp}
-                  onChange={(e) => setField('usp', e.target.value)}
-                  rows={3}
-                  placeholder={t('products.uspPlaceholder')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.productUrl')}</label>
-                <input
-                  type="url"
-                  value={formData.productUrl}
-                  onChange={(e) => setField('productUrl', e.target.value)}
-                  placeholder={t('products.productUrlPlaceholder')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.targetAudience')}</label>
-                <textarea
-                  value={formData.targetAudience}
-                  onChange={(e) => setField('targetAudience', e.target.value)}
-                  rows={2}
-                  placeholder={t('products.targetAudiencePlaceholder')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.thumbnailUrl')}</label>
-                <div className="flex gap-2">
-                  <input
-                    type="url"
-                    value={formData.thumbnailUrl}
-                    onChange={(e) => setField('thumbnailUrl', e.target.value)}
-                    placeholder="https://..."
-                    className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  />
-                  <label className="btn btn-secondary shrink-0 cursor-pointer">
-                    {isUploadingThumbnail ? t('products.uploading') : t('products.uploadImage')}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                      {t('products.productName')} <span className="text-rose-500">*</span>
+                    </label>
                     <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleThumbnailUpload}
-                      disabled={isUploadingThumbnail || isSaving}
+                      type="text"
+                      value={formData.productName}
+                      onChange={(e) => setField('productName', e.target.value)}
+                      placeholder="VD: Khoá học AI thực chiến"
+                      className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 font-medium text-slate-800"
+                      required
                     />
-                  </label>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                      {t('products.productCode')}
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.productCode}
+                      onChange={(e) => setField('productCode', e.target.value)}
+                      placeholder="VD: SP-AI-01"
+                      className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 font-mono text-slate-800"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5" htmlFor="product-kind-select">
+                      {t('products.kindLabel')}
+                    </label>
+                    <select
+                      id="product-kind-select"
+                      data-testid="product-kind-select"
+                      value={formData.kind}
+                      onChange={(e) => setField('kind', e.target.value)}
+                      className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all cursor-pointer font-medium text-slate-800"
+                    >
+                      {PRODUCT_KIND_OPTIONS.map((kind) => (
+                        <option key={kind} value={kind}>
+                          {kind === 'event' ? t('products.kindEvent') : t('products.kindSale')}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                      {t('products.category')}
+                    </label>
+                    <input
+                      type="text"
+                      list="product-category-suggestions"
+                      value={formData.category}
+                      onChange={(e) => setField('category', e.target.value)}
+                      placeholder={t('products.categoryPlaceholder')}
+                      className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 text-slate-800"
+                    />
+                    <datalist id="product-category-suggestions">
+                      {categorySuggestions.map((item) => (
+                        <option key={item} value={item} />
+                      ))}
+                    </datalist>
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                      {t('common.status')}
+                    </label>
+                    <select
+                      value={formData.status}
+                      onChange={(e) => setField('status', e.target.value)}
+                      className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all cursor-pointer font-medium text-slate-800"
+                    >
+                      {PRODUCT_STATUS_OPTIONS.map((status) => (
+                        <option key={status} value={status}>
+                          {status === 'active' ? t('products.statusActive') : t('products.statusInactive')}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-                {formData.thumbnailUrl ? (
-                  <img
-                    src={formData.thumbnailUrl}
-                    alt={t('products.thumbnailPreview')}
-                    className="mt-2 h-24 w-24 rounded-lg border border-gray-200 object-cover"
-                  />
-                ) : null}
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('common.status')}</label>
-                <select
-                  value={formData.status}
-                  onChange={(e) => setField('status', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                >
-                  {PRODUCT_STATUS_OPTIONS.map((status) => (
-                    <option key={status} value={status}>
-                      {status === 'active' ? t('products.statusActive') : t('products.statusInactive')}
-                    </option>
-                  ))}
-                </select>
+
+              {/* Section 2: Thiết lập giá & Doanh thu */}
+              <div className="rounded-2xl border border-amber-200/80 bg-gradient-to-br from-amber-50/50 via-orange-50/20 to-white p-4 sm:p-5 shadow-2xs space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b border-amber-100">
+                  <HiOutlineCurrencyDollar className="w-4 h-4 text-amber-600" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-amber-900">
+                    Thiết lập giá & Doanh thu
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                      {t('products.price')}
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.price}
+                      onChange={(e) => handlePriceTextChange(e.target.value)}
+                      placeholder={formData.kind === 'event' ? t('products.priceFreePlaceholder') : t('products.pricePlaceholder')}
+                      className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 font-semibold text-slate-900"
+                    />
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Hiển thị trực quan cho khách (VD: 500k, 2.9tr/tháng, Miễn phí)
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                      {t('products.priceAmount')}
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      data-testid="product-price-amount"
+                      value={formData.priceAmount === '' ? '' : Number(formData.priceAmount).toLocaleString('vi-VN')}
+                      onChange={(e) => setField('priceAmount', e.target.value.replace(/\D/g, ''))}
+                      placeholder={t('products.priceAmountPlaceholder')}
+                      className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 font-mono font-medium text-slate-900"
+                    />
+                    {(() => {
+                      const suggested = formData.priceAmount === '' ? parseVndPrice(formData.price) : null;
+                      return suggested !== null ? (
+                        <div
+                          className="mt-1.5 flex items-center justify-between gap-2 px-2.5 py-1 rounded-lg bg-amber-100/70 border border-amber-200 text-xs text-amber-900 font-medium"
+                          data-testid="product-price-amount-suggest"
+                        >
+                          <span>{t('products.priceAmountSuggest', { amount: formatMoney(suggested) })}</span>
+                          <button
+                            type="button"
+                            className="font-bold text-orange-700 hover:text-orange-950 underline shrink-0 cursor-pointer"
+                            onClick={() => setField('priceAmount', String(suggested))}
+                          >
+                            {t('products.priceAmountUse')}
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="mt-1 text-[11px] text-slate-500 leading-relaxed">
+                          {t('products.priceAmountHint')}
+                        </p>
+                      );
+                    })()}
+                  </div>
+                </div>
               </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <button type="button" onClick={closeFormModal} className="btn btn-secondary" disabled={isSaving}>
-                  {t('common.cancel')}
-                </button>
-                <button type="submit" className="btn btn-primary" disabled={isSaving}>
-                  {isSaving ? t('common.saving') : t('common.save')}
-                </button>
+
+              {/* Section 3: Nội dung cho AI & Chiến dịch */}
+              <div className="rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-5 shadow-2xs space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                  <HiOutlineSparkles className="w-4 h-4 text-purple-600" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                    Nội dung cho AI & Chiến dịch tiếp thị
+                  </span>
+                </div>
+
+                <div className="space-y-3.5">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                      {t('products.description')}
+                    </label>
+                    <textarea
+                      value={formData.description}
+                      onChange={(e) => setField('description', e.target.value)}
+                      rows={2}
+                      placeholder="Mô tả tóm tắt giá trị hoặc nội dung của sản phẩm / dịch vụ..."
+                      className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 text-slate-800"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                      {t('products.usp')}
+                    </label>
+                    <textarea
+                      value={formData.usp}
+                      onChange={(e) => setField('usp', e.target.value)}
+                      rows={2}
+                      placeholder={t('products.uspPlaceholder')}
+                      className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 text-slate-800"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                      {t('products.targetAudience')}
+                    </label>
+                    <textarea
+                      value={formData.targetAudience}
+                      onChange={(e) => setField('targetAudience', e.target.value)}
+                      rows={2}
+                      placeholder={t('products.targetAudiencePlaceholder')}
+                      className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 text-slate-800"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 4: Media & Đường dẫn */}
+              <div className="rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-5 shadow-2xs space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                  <HiOutlinePhotograph className="w-4 h-4 text-sky-600" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                    Hình ảnh & Đường dẫn liên kết
+                  </span>
+                </div>
+
+                <div className="space-y-3.5">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                      {t('products.productUrl')}
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                        <HiOutlineLink className="w-4 h-4" />
+                      </div>
+                      <input
+                        type="url"
+                        value={formData.productUrl}
+                        onChange={(e) => setField('productUrl', e.target.value)}
+                        placeholder={t('products.productUrlPlaceholder')}
+                        className="w-full pl-9 pr-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 text-slate-800"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                      {t('products.thumbnailUrl')}
+                    </label>
+                    <div className="flex gap-2.5">
+                      <input
+                        type="url"
+                        value={formData.thumbnailUrl}
+                        onChange={(e) => setField('thumbnailUrl', e.target.value)}
+                        placeholder="https://..."
+                        className="flex-1 min-w-0 px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 text-slate-800"
+                      />
+                      <label className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 cursor-pointer transition-colors shadow-2xs shrink-0">
+                        <HiOutlinePhotograph className="w-4 h-4 text-slate-500" />
+                        <span>{isUploadingThumbnail ? t('products.uploading') : t('products.uploadImage')}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleThumbnailUpload}
+                          disabled={isUploadingThumbnail || isSaving}
+                        />
+                      </label>
+                    </div>
+
+                    {formData.thumbnailUrl && (
+                      <div className="mt-2.5 flex items-center gap-3 p-2.5 rounded-xl border border-slate-100 bg-slate-50/70">
+                        <img
+                          src={formData.thumbnailUrl}
+                          alt={t('products.thumbnailPreview')}
+                          className="h-16 w-16 rounded-lg border border-slate-200 object-cover shadow-2xs"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-slate-700 truncate">{formData.thumbnailUrl}</p>
+                          <button
+                            type="button"
+                            onClick={() => setField('thumbnailUrl', '')}
+                            className="text-xs text-rose-600 hover:text-rose-700 hover:underline mt-1 inline-flex items-center gap-1"
+                          >
+                            <HiOutlineTrash className="w-3.5 h-3.5" />
+                            <span>Gỡ ảnh</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </form>
+
+            {/* ── Sticky Modal Footer ── */}
+            <div className="sticky bottom-0 z-20 flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/95 backdrop-blur-md">
+              <button
+                type="button"
+                onClick={closeFormModal}
+                className="px-4 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-colors shadow-2xs"
+                disabled={isSaving}
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                type="submit"
+                form="product-form"
+                className="px-5 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white text-xs font-bold shadow-sm hover:shadow transition-all duration-150 disabled:opacity-50 flex items-center gap-2"
+                disabled={isSaving}
+              >
+                {isSaving && <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                <span>{isSaving ? t('common.saving') : t('common.save')}</span>
+              </button>
+            </div>
           </div>
         </div>,
         document.body
       )}
 
+      {/* ── Modal Xóa Sản Phẩm ── */}
       {deleteTarget && createPortal(
         <div className={MODAL_OVERLAY}>
-          <button type="button" className="absolute inset-0 bg-black/50" onClick={() => !isDeleting && setDeleteTarget(null)} aria-label={t('common.close')} />
-          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-            <h3 className="text-lg font-semibold text-gray-900">{t('products.confirmDeleteTitle')}</h3>
-            <p className="mt-2 text-sm text-gray-600">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
+            onClick={() => !isDeleting && setDeleteTarget(null)}
+            aria-label={t('common.close')}
+          />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 z-10 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3.5 mb-4">
+              <div className="w-11 h-11 rounded-2xl bg-rose-50 border border-rose-200/60 text-rose-600 flex items-center justify-center shrink-0">
+                <HiOutlineTrash className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">{t('products.confirmDeleteTitle')}</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Hành động này không thể hoàn tác</p>
+              </div>
+            </div>
+
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed bg-slate-50 p-3.5 rounded-xl border border-slate-100">
               {t('products.confirmDeleteMessage', { name: deleteTarget.productName })}
             </p>
-            <div className="flex justify-end gap-3 mt-6">
-              <button type="button" onClick={() => setDeleteTarget(null)} className="btn btn-secondary" disabled={isDeleting}>
+
+            <div className="flex items-center justify-end gap-2.5 mt-6">
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                className="px-4 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-colors shadow-2xs"
+                disabled={isDeleting}
+              >
                 {t('common.cancel')}
               </button>
-              <button type="button" onClick={handleDelete} className="btn bg-red-600 text-white hover:bg-red-700" disabled={isDeleting}>
-                {isDeleting ? t('common.deleting') : t('common.delete')}
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs hover:shadow transition-all duration-150 disabled:opacity-50 flex items-center gap-1.5"
+                disabled={isDeleting}
+              >
+                {isDeleting && <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                <span>{isDeleting ? t('common.deleting') : t('common.delete')}</span>
               </button>
             </div>
           </div>
