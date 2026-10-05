@@ -5,6 +5,29 @@ import { buildAlertEmail } from '../../utils/systemEmail.util.js';
 const HANOI_TZ = 'Asia/Ho_Chi_Minh';
 
 /**
+ * Ngưỡng MẶC ĐỊNH của ba luật đo lường AI (PLAN_SUA_AI_DOT4_PR10 mục 7) — MỘT chỗ trong code, kèm lý do. Giá trị thật đọc từ dòng `alert_rules`
+ * (sửa được ở trang Cảnh báo); đây chỉ là giá trị rơi về khi cột/`config` bị trống. Migration 286 seed ĐÚNG các số này (spec
+ * alertEvaluator.aiCallEvents.spec.js đọc file migration để ghim hai nơi khớp nhau).
+ *
+ *  - ai_error_rate_high: cửa sổ 30 phút, ≥ 20 lần gọi Google thật và tỉ lệ (error + busy + timeout) > 20%. Mẫu tối thiểu 20 để vài lần lỗi lúc đêm ít khách không
+ *    báo động giả; 20% để một đợt Google chậm ngắn (vài lần 503 được thử lại thành công) không bắn. `>` và `>=` KHÔNG hoán đổi được: đúng 20% không bắn, đúng 20 lượt thì tính.
+ *  - ai_fallback_spike: > 10 lần/giờ phải dùng model dự phòng = model chính có vấn đề nhưng khách vẫn được trả lời (nên chỉ 'warning').
+ *  - ai_usage_write_failed: > 0 trong giờ — mỗi lần là một lượt Google đã tính tiền mà sổ token không có (trang Chi phí AI thấp hơn hoá đơn).
+ */
+export const AI_ALERT_DEFAULTS = Object.freeze({
+  ai_error_rate_high: Object.freeze({ threshold: 0.2, windowMinutes: 30, minCalls: 20 }),
+  ai_fallback_spike: Object.freeze({ threshold: 10, windowMinutes: 60 }),
+  ai_usage_write_failed: Object.freeze({ threshold: 0, windowMinutes: 60 }),
+});
+
+/** Số từ cột/config của luật; null / rỗng / không phải số → giá trị mặc định (không dùng `Number(null)` = 0 làm ngưỡng ngầm). */
+function numberOr(value, fallback) {
+  if (value == null || value === '') return fallback;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+/**
  * Hour 0–23 in Asia/Ho_Chi_Minh for the given instant.
  * @param {Date|number|string} [date]
  */
@@ -247,8 +270,66 @@ async function evaluateRule(rule) {
       if (m.ratio > threshold) {
         return {
           measuredValue: m.ratio,
-          message: `Token AI hôm nay ${m.todayTokens.toLocaleString('vi-VN')} = ${m.ratio.toFixed(1)}× TB 7 ngày (${m.avgPrev7.toFixed(0)})`,
+          message: `Token AI (không gồm embedding) hôm nay ${m.todayTokens.toLocaleString('vi-VN')} = ${m.ratio.toFixed(1)}× TB 7 ngày (${m.avgPrev7.toFixed(0)})`,
           payload: m,
+        };
+      }
+      return null;
+    }
+    case 'ai_error_rate_high': {
+      const d = AI_ALERT_DEFAULTS.ai_error_rate_high;
+      const rateThreshold = numberOr(rule.thresholdValue, d.threshold);
+      const win = numberOr(rule.windowMinutes, d.windowMinutes);
+      const minCalls = numberOr(config.minCalls, d.minCalls);
+      const m = await alertRepo.metricAiErrorRate(win);
+      // Mẫu quá nhỏ thì tỉ lệ vô nghĩa (2/5 lần lỗi lúc đêm không phải sự cố) — bỏ qua.
+      if (m.total < minCalls) return null;
+      if (m.rate > rateThreshold) {
+        // Chi tiết "lỗi ở đâu" chỉ truy vấn khi đã bắn; hỏng thì vẫn bắn (cảnh báo không được mất vì phần phụ).
+        const breakdown = await alertRepo.metricAiErrorBreakdown(win).catch(() => ({ topFeatures: [], topCodes: [] }));
+        const where = breakdown.topFeatures.map((f) => `${f.feature} (${f.failed})`).join(', ');
+        const why = breakdown.topCodes.map((c) => `${c.code} (${c.failed})`).join(', ');
+        return {
+          measuredValue: m.rate,
+          message:
+            `Tỉ lệ lỗi AI ${(m.rate * 100).toFixed(1)}% (${m.failed}/${m.total} lượt gọi Gemini) trong ${win} phút`
+            + (where ? ` — nhiều nhất ở: ${where}` : '')
+            + (why ? ` — mã lỗi: ${why}` : ''),
+          payload: { ...m, windowMinutes: win, minCalls, ...breakdown },
+        };
+      }
+      return null;
+    }
+    case 'ai_fallback_spike': {
+      const d = AI_ALERT_DEFAULTS.ai_fallback_spike;
+      const limit = numberOr(rule.thresholdValue, d.threshold);
+      const win = numberOr(rule.windowMinutes, d.windowMinutes);
+      const m = await alertRepo.metricAiFallbackCount(win);
+      if (m.count > limit) {
+        return {
+          measuredValue: m.count,
+          message:
+            `${m.count} lượt AI phải chuyển sang model dự phòng trong ${win} phút`
+            + (m.topPrimaryModel ? ` (model chính hay lỗi: ${m.topPrimaryModel})` : '')
+            + ' — model chính quá tải hoặc bị Google khai tử, kiểm tra model hệ thống ở Quản lý model AI',
+          payload: { ...m, windowMinutes: win },
+        };
+      }
+      return null;
+    }
+    case 'ai_usage_write_failed': {
+      const d = AI_ALERT_DEFAULTS.ai_usage_write_failed;
+      const limit = numberOr(rule.thresholdValue, d.threshold);
+      const win = numberOr(rule.windowMinutes, d.windowMinutes);
+      const m = await alertRepo.metricAiUsageWriteFailed(win);
+      if (m.count > limit) {
+        return {
+          measuredValue: m.count,
+          message:
+            `${m.count} lần ghi sổ token AI thất bại trong ${win} phút`
+            + (m.lostTokens > 0 ? ` (≈ ${m.lostTokens.toLocaleString('vi-VN')} token Google đã tính tiền nhưng không có trong sổ)` : '')
+            + ' — kiểm tra CSDL và log aiUsageMeter',
+          payload: { ...m, windowMinutes: win },
         };
       }
       return null;

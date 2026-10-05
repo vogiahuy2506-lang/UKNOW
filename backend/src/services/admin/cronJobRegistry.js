@@ -159,7 +159,7 @@ export const CRON_JOBS = [
     code: 'data_retention_cleanup',
     label: 'Dọn dữ liệu quá hạn lưu trữ',
     schedule: '01:30 hàng ngày',
-    description: 'Dọn dẹp dữ liệu cũ quá thời hạn lưu trữ theo NĐ 13/2023 & NĐ 330/2026 (customers 90 ngày sau xoá tài khoản, leads 24 tháng/90 ngày, campaign_runs 24 tháng, landing events 13 tháng, contact submissions 24 tháng). Bảo vệ chứng từ kế toán 10 năm.',
+    description: 'Dọn dẹp dữ liệu cũ quá thời hạn lưu trữ theo NĐ 13/2023 & NĐ 330/2026 (customers 90 ngày sau xoá tài khoản, leads 24 tháng/90 ngày, campaign_runs 24 tháng, landing events 13 tháng, contact submissions 24 tháng). Bảo vệ chứng từ kế toán 10 năm. Luôn dọn thêm sổ lỗi AI (ai_call_events) cũ hơn 30 ngày — không phụ thuộc cờ DATA_RETENTION_ENABLED.',
     impact: 'Dữ liệu cá nhân quá hạn không được tiêu huỷ theo cam kết chính sách bảo mật và quy định pháp luật.',
     tracked: true,
     optional: true,

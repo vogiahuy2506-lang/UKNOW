@@ -2565,6 +2565,31 @@ VALUES
   '{}'::jsonb
 );
 
+-- migration 286 (rules: ai_call_events)
+INSERT INTO alert_rules (code, name, description, threshold_value, window_minutes, channel, severity, cooldown_minutes, config)
+VALUES
+(
+  'ai_error_rate_high',
+  'Ti le loi AI cao',
+  'Trong cua so window_minutes co it nhat minCalls lan goi Gemini that va ti le loi (error + busy + timeout) vuot nguong - xem ai_call_events (layer gemini)',
+  0.20, 30, 'email', 'critical', 120,
+  '{"minCalls": 20}'::jsonb
+),
+(
+  'ai_fallback_spike',
+  'Model AI chinh phai chuyen du phong nhieu',
+  'So lan phai chuyen sang model du phong (outcome fallback_ok) trong cua so vuot nguong - model chinh qua tai hoac bi khai tu',
+  10, 60, 'email', 'warning', 360,
+  '{}'::jsonb
+),
+(
+  'ai_usage_write_failed',
+  'Ghi so token AI that bai',
+  'Co lan ghi usage hong (error_code USAGE_WRITE_FAILED) trong cua so - Google da tinh tien nhung so token khong co',
+  0, 60, 'email', 'warning', 360,
+  '{}'::jsonb
+);
+
 CREATE TABLE alert_events (
   id              BIGSERIAL PRIMARY KEY,
   rule_id         INT NOT NULL REFERENCES alert_rules(id) ON DELETE CASCADE,

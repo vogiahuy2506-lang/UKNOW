@@ -480,12 +480,22 @@ export async function metricStuckEinvoices(staleHours) {
   };
 }
 
+/**
+ * Điều kiện SQL loại dòng EMBEDDING khỏi tổng token AI (D-OLD-C24 / D-15). Bản cũ cộng cả embedding: một lượt nạp tài liệu lớn (hàng trăm đoạn,
+ * mỗi đoạn một dòng `ai_token`) làm token trong ngày vọt lên và báo "chi phí AI vọt" dù không một câu trả lời nào tốn thêm — báo động giả
+ * khiến người ta tắt hết cảnh báo. Embedding đánh dấu bằng `metadata.kind = 'embedding'` (embeddingClient.util.js) và `feature` bắt đầu
+ * bằng `embedding` — loại theo CẢ HAI cho chắc. Dùng chung cho tử số (hôm nay) và mẫu số (TB 7 ngày) để hai bên đo cùng một thứ.
+ */
+const AI_TOKEN_EXCLUDE_EMBEDDING_SQL = `AND COALESCE(metadata->>'kind', '') <> 'embedding'
+         AND COALESCE(metadata->>'feature', '') NOT LIKE 'embedding%'`;
+
 export async function metricAiTokenSpike() {
   const { rows } = await db.query(
     `WITH today AS (
        SELECT COALESCE(SUM(delta), 0)::numeric AS tokens
        FROM usage_logs
        WHERE resource_type = 'ai_token'
+         ${AI_TOKEN_EXCLUDE_EMBEDDING_SQL}
          AND created_at >= date_trunc('day', NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')
              AT TIME ZONE 'Asia/Ho_Chi_Minh'
      ),
@@ -496,6 +506,7 @@ export async function metricAiTokenSpike() {
                 SUM(delta)::numeric AS day_total
          FROM usage_logs
          WHERE resource_type = 'ai_token'
+           ${AI_TOKEN_EXCLUDE_EMBEDDING_SQL}
            AND created_at >= (date_trunc('day', NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')
                  AT TIME ZONE 'Asia/Ho_Chi_Minh') - INTERVAL '7 days'
            AND created_at < date_trunc('day', NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')
@@ -509,6 +520,91 @@ export async function metricAiTokenSpike() {
   const todayTokens = Number(rows[0]?.todayTokens || 0);
   const avgPrev7 = Number(rows[0]?.avgPrev7 || 0);
   return { todayTokens, avgPrev7, ratio: avgPrev7 > 0 ? todayTokens / avgPrev7 : 0 };
+}
+
+/**
+ * Tỉ lệ lỗi các lần gọi AI THẬT tới Google trong `windowMinutes` phút gần nhất (bảng `ai_call_events`, tầng 'gemini' — generateContent và embedding).
+ *
+ * Mẫu số = các lần gọi Google thật đã có kết quả phía Google hoặc hết giờ: ok, fallback_ok, error, busy, timeout. KHÔNG tính `client_closed` (khách
+ * đóng tab — không phải lỗi hệ thống) và `blocked` (Google chặn nội dung — có phản hồi, không phải sự cố). Tử số = error + busy + timeout.
+ * Tầng 'app' không vào đây (một lỗi Google không được đếm hai lần).
+ */
+export async function metricAiErrorRate(windowMinutes) {
+  const { rows } = await db.query(
+    `SELECT
+       COUNT(*) FILTER (WHERE outcome IN ('ok', 'fallback_ok', 'error', 'busy', 'timeout'))::int AS total,
+       COUNT(*) FILTER (WHERE outcome IN ('error', 'busy', 'timeout'))::int AS failed
+     FROM ai_call_events
+     WHERE layer = 'gemini'
+       AND created_at >= NOW() - ($1 || ' minutes')::interval`,
+    [String(windowMinutes)]
+  );
+  const total = Number(rows[0]?.total || 0);
+  const failed = Number(rows[0]?.failed || 0);
+  return { total, failed, rate: total > 0 ? failed / total : 0 };
+}
+
+/**
+ * Chi tiết "lỗi ở đâu" cho nội dung cảnh báo (chỉ gọi khi luật ĐÃ bắn nên đường bình thường không tốn thêm truy vấn): top tính năng và top mã lỗi
+ * trong cửa sổ, cùng bộ lọc với metricAiErrorRate.
+ */
+export async function metricAiErrorBreakdown(windowMinutes) {
+  const window = String(windowMinutes);
+  const [features, codes] = await Promise.all([
+    db.query(
+      `SELECT feature, COUNT(*)::int AS failed
+       FROM ai_call_events
+       WHERE layer = 'gemini' AND outcome IN ('error', 'busy', 'timeout')
+         AND created_at >= NOW() - ($1 || ' minutes')::interval
+       GROUP BY feature ORDER BY failed DESC, feature ASC LIMIT 3`,
+      [window]
+    ),
+    db.query(
+      `SELECT COALESCE(error_code, outcome) AS code, COUNT(*)::int AS failed
+       FROM ai_call_events
+       WHERE layer = 'gemini' AND outcome IN ('error', 'busy', 'timeout')
+         AND created_at >= NOW() - ($1 || ' minutes')::interval
+       GROUP BY 1 ORDER BY failed DESC, code ASC LIMIT 3`,
+      [window]
+    ),
+  ]);
+  return {
+    topFeatures: features.rows.map((r) => ({ feature: r.feature, failed: Number(r.failed) })),
+    topCodes: codes.rows.map((r) => ({ code: r.code, failed: Number(r.failed) })),
+  };
+}
+
+/**
+ * Số lần phải chuyển sang model DỰ PHÒNG trong `windowMinutes` phút gần nhất (outcome `fallback_ok`, tầng 'gemini'): model chính quá tải hoặc bị
+ * khai tử nhưng khách vẫn được trả lời. Kèm model chính hay thất bại nhất (`meta.primaryModel`) cho nội dung cảnh báo.
+ */
+export async function metricAiFallbackCount(windowMinutes) {
+  const { rows } = await db.query(
+    `SELECT COALESCE(meta->>'primaryModel', 'unknown') AS primary_model, COUNT(*)::int AS cnt
+     FROM ai_call_events
+     WHERE layer = 'gemini' AND outcome = 'fallback_ok'
+       AND created_at >= NOW() - ($1 || ' minutes')::interval
+     GROUP BY 1 ORDER BY cnt DESC, primary_model ASC`,
+    [String(windowMinutes)]
+  );
+  const count = rows.reduce((sum, r) => sum + Number(r.cnt || 0), 0);
+  return { count, topPrimaryModel: rows[0]?.primary_model ?? null };
+}
+
+/**
+ * Số lần GHI usage hỏng trong `windowMinutes` phút gần nhất (`error_code = 'USAGE_WRITE_FAILED'`, mọi tầng) và tổng token đã mất khỏi sổ
+ * (`meta.totalTokens`, chỉ cộng giá trị là số nguyên). Mỗi lần = một lượt Google đã tính tiền mà `usage_logs` không có.
+ */
+export async function metricAiUsageWriteFailed(windowMinutes) {
+  const { rows } = await db.query(
+    `SELECT COUNT(*)::int AS cnt,
+            COALESCE(SUM(CASE WHEN meta->>'totalTokens' ~ '^[0-9]+$' THEN (meta->>'totalTokens')::bigint ELSE 0 END), 0)::bigint AS lost_tokens
+     FROM ai_call_events
+     WHERE error_code = 'USAGE_WRITE_FAILED'
+       AND created_at >= NOW() - ($1 || ' minutes')::interval`,
+    [String(windowMinutes)]
+  );
+  return { count: Number(rows[0]?.cnt || 0), lostTokens: Number(rows[0]?.lost_tokens || 0) };
 }
 
 /**

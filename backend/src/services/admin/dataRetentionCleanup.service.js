@@ -1,4 +1,6 @@
 import db from '../../config/database.js';
+import * as aiCallEventRepo from '../../repositories/ai/aiCallEvent.repository.js';
+import { AI_CALL_EVENTS_RETENTION_DAYS } from '../ai/aiCallEvents.service.js';
 
 /**
  * Danh sách bảng kế toán & tài chính TUYỆT ĐỐI KHÔNG ĐƯỢC PHÉP XOÁ.
@@ -300,4 +302,22 @@ export async function runDataRetentionCleanup({ force = false, batchSize = 1000 
     contactSubmissionsDeleted,
     chatbotContactAlertsDeleted,
   };
+}
+
+/**
+ * Dọn sổ lỗi AI (`ai_call_events`, migration 285): xoá sự kiện cũ hơn AI_CALL_EVENTS_RETENTION_DAYS (30) ngày, theo lô — PLAN_SUA_AI_DOT4_PR10 mục 7.
+ *
+ * CỐ Ý KHÔNG đi qua cờ DATA_RETENTION_ENABLED của `runDataRetentionCleanup`: cờ đó là cổng "duyệt bật" cho việc TIÊU HUỶ DỮ LIỆU CÁ NHÂN theo chính sách
+ * lưu trữ (khách hàng, lead…), mặc định TẮT. `ai_call_events` là sổ vận hành của chính hệ thống (chỉ số đếm + mã, không PII, xem migration 285) — nếu
+ * buộc nó vào cờ này thì khi cờ tắt bảng phình vô hạn mà không ai hay. Vẫn chạy trong cùng cron `data_retention_cleanup` (01:30 hàng ngày).
+ *
+ * @param {{ batchSize?: number }} [options]
+ * @returns {Promise<number>} số dòng đã xoá
+ */
+export async function cleanupAiCallEvents({ batchSize = 1000 } = {}) {
+  const deleted = await aiCallEventRepo.deleteOlderThanDays(AI_CALL_EVENTS_RETENTION_DAYS, batchSize);
+  if (deleted > 0) {
+    console.log(`[DataRetention] ai_call_events: đã xoá ${deleted} dòng cũ hơn ${AI_CALL_EVENTS_RETENTION_DAYS} ngày`);
+  }
+  return deleted;
 }

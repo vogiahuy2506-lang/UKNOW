@@ -839,13 +839,23 @@ export const initScheduler = () => {
     try {
       const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
       await cronJobRunRepository.recordRun('data_retention_cleanup', async () => {
-        const { runDataRetentionCleanup } = await import('../services/admin/dataRetentionCleanup.service.js');
+        const { runDataRetentionCleanup, cleanupAiCallEvents } = await import('../services/admin/dataRetentionCleanup.service.js');
         const result = await runDataRetentionCleanup();
+        // Sổ lỗi AI (ai_call_events) > 30 ngày: KHÔNG phụ thuộc cờ DATA_RETENTION_ENABLED (xem cleanupAiCallEvents). Hỏng ở đây không được làm hỏng
+        // phần dọn dữ liệu cá nhân ở trên (kết quả của nó đã có) — ghi lỗi vào kết quả của lượt chạy để thấy ở trang "Tác vụ định kỳ".
+        let aiCallEventsDeleted = 0;
+        let aiCallEventsError = null;
+        try {
+          aiCallEventsDeleted = await cleanupAiCallEvents();
+        } catch (error) {
+          aiCallEventsError = error?.message || String(error);
+          console.error('[Scheduler] data_retention_cleanup: dọn ai_call_events lỗi:', aiCallEventsError);
+        }
         console.log(
           `[Scheduler] data_retention_cleanup: enabled=${result.enabled} `
-          + `totalDeleted=${result.totalDeleted} durationMs=${result.durationMs}`
+          + `totalDeleted=${result.totalDeleted} aiCallEventsDeleted=${aiCallEventsDeleted} durationMs=${result.durationMs}`
         );
-        return result;
+        return { ...result, aiCallEventsDeleted, ...(aiCallEventsError ? { aiCallEventsError } : {}) };
       });
     } catch (error) {
       console.error('[Scheduler] Lỗi khi dọn dữ liệu quá hạn lưu trữ:', error.message);
