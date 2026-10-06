@@ -468,21 +468,21 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
           <button
             type="button"
             onClick={handleRefreshStatus}
-            className="btn btn-secondary"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-colors shadow-2xs disabled:opacity-50"
             disabled={isRefreshing}
           >
-            <HiOutlineRefresh className="w-4 h-4 mr-2" />
+            <HiOutlineRefresh className={`w-4 h-4 text-slate-500 ${isRefreshing ? 'animate-spin' : ''}`} />
             {isRefreshing ? t('zaloSettings.refreshing') : t('zaloSettings.refresh')}
           </button>
         }
       />
 
       {!isBackendReady && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 shadow-2xs">
           <div className="flex items-start gap-2">
-            <HiOutlineExclamationCircle className="w-5 h-5 mt-0.5" />
+            <HiOutlineExclamationCircle className="w-5 h-5 mt-0.5 text-amber-600" />
             <div className="text-sm">
-              <p className="font-medium">{t('zaloSettings.backendNotReadyTitle')}</p>
+              <p className="font-semibold">{t('zaloSettings.backendNotReadyTitle')}</p>
               <p className="mt-1">
                 {backendModeMessage || t('zaloSettings.backendNotReadyNote')}
               </p>
@@ -492,60 +492,68 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
       )}
 
       {!readOnly && (
-        <div className="card p-6 space-y-4">
-          <div className="flex items-center gap-2 text-gray-900">
-            <HiOutlineQrcode className="w-5 h-5 text-primary-600" />
-            <h2 className="text-lg font-semibold">{t('zaloSettings.loginByQr')}</h2>
+        <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-2xs space-y-4">
+          <div className="flex items-center gap-2 text-slate-900">
+            <HiOutlineQrcode className="w-5 h-5 text-orange-500" />
+            <h2 className="text-base sm:text-lg font-bold">{t('zaloSettings.loginByQr')}</h2>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
               onClick={handleConnectByQr}
-              className="btn btn-primary"
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs sm:text-sm font-bold shadow-sm hover:shadow transition-all duration-150 disabled:opacity-50"
               disabled={isCreatingQr}
             >
-              <HiOutlineQrcode className="w-4 h-4 mr-2" />
+              <HiOutlineQrcode className="w-4 h-4" />
               {isCreatingQr ? t('zaloSettings.creatingQr') : t('zaloSettings.createQrLogin')}
             </button>
           </div>
         </div>
       )}
 
-      <div className="card p-6">
+      <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-2xs">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">{t('zaloSettings.accounts')}</h2>
-          <span className="text-sm text-gray-500">{t('zaloSettings.totalAccounts')}: {sortedAccounts.length}</span>
+          <h2 className="text-base sm:text-lg font-bold text-slate-900">{t('zaloSettings.accounts')}</h2>
+          <span className="text-xs sm:text-sm font-medium text-slate-500">{t('zaloSettings.totalAccounts')}: {sortedAccounts.length}</span>
         </div>
 
         {isLoading ? (
           <AccountListSkeleton count={2} />
         ) : sortedAccounts.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
-            <HiOutlineChatAlt2 className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-            <p>{t('zaloSettings.noAccounts')}</p>
-            {!readOnly && <p className="text-xs mt-1">{t('zaloSettings.addFirstAccount')}</p>}
+          <div className="text-center py-12 text-slate-400">
+            <HiOutlineChatAlt2 className="w-12 h-12 mx-auto mb-3 text-slate-300" />
+            <p className="text-sm font-medium">{t('zaloSettings.noAccounts')}</p>
+            {!readOnly && <p className="text-xs mt-1 text-slate-400">{t('zaloSettings.addFirstAccount')}</p>}
           </div>
         ) : (
           <div className="space-y-3">
             {sortedAccounts.map((account) => (
-              <div key={account.id} className="rounded-lg border border-gray-200 p-4">
+              <div key={account.id} className="rounded-xl border border-slate-200/90 bg-slate-50/40 hover:bg-slate-50/70 p-4 transition-colors">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <div className="flex items-center flex-wrap gap-2">
-                      <h3 className="font-semibold text-gray-900">{account.displayName}</h3>
+                      <h3 className="font-semibold text-slate-900">{account.displayName}</h3>
                       {account.isDefault && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-primary-100 text-primary-700">
+                        <span className="inline-flex items-center text-xs px-2.5 py-0.5 rounded-full font-semibold bg-orange-50 text-orange-700 border border-orange-200/80 shadow-2xs">
                           {t('zaloSettings.default')}
                         </span>
                       )}
                       <span
-                        className={`text-xs px-2 py-0.5 rounded-full ${account.status === 'connected' && account.isActive
-                            ? 'bg-green-100 text-green-700'
+                        className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-0.5 rounded-full font-semibold border shadow-2xs ${
+                          account.status === 'connected' && account.isActive
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200/80'
                             : account.status === 'needs_reauth'
-                              ? 'bg-amber-100 text-amber-800'
-                              : 'bg-red-100 text-red-700'
-                          }`}
+                              ? 'bg-amber-50 text-amber-800 border-amber-200/80'
+                              : 'bg-red-50 text-red-700 border-red-200/80'
+                        }`}
                       >
+                        <span className={`h-1.5 w-1.5 rounded-full ${
+                          account.status === 'connected' && account.isActive
+                            ? 'bg-emerald-500'
+                            : account.status === 'needs_reauth'
+                              ? 'bg-amber-500'
+                              : 'bg-red-500'
+                        }`} />
                         {account.status === 'connected' && account.isActive
                           ? t('zaloSettings.connected')
                           : account.status === 'needs_reauth'

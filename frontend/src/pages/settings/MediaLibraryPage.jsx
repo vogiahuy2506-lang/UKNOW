@@ -7,6 +7,8 @@ import {
   HiOutlineTrash,
   HiOutlineSearch,
   HiOutlineExternalLink,
+  HiOutlineChevronLeft,
+  HiOutlineChevronRight,
 } from 'react-icons/hi';
 import api from '../../services/api';
 import { FileTypeIcon } from '../../components/MessageAttachments';
@@ -384,20 +386,20 @@ export default function MediaLibraryPage() {
       )}
 
       {/* Tìm theo tên + sắp xếp */}
-      <div className="flex flex-wrap gap-2.5 items-center justify-between bg-slate-50/80 p-2.5 rounded-xl border border-slate-200">
+      <div className="rounded-2xl border border-slate-200/90 bg-white p-3.5 shadow-2xs flex flex-wrap gap-3 items-center justify-between">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <HiOutlineSearch className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <HiOutlineSearch className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             placeholder={t('mediaLibrary.searchPlaceholder')}
             aria-label={t('mediaLibrary.searchPlaceholder')}
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+            className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400"
           />
         </div>
 
-        <div className="flex items-center gap-1.5" role="group" aria-label={t('mediaLibrary.sortLabel')}>
+        <div className="inline-flex rounded-xl bg-slate-100 p-0.5 border border-slate-200/80" role="group" aria-label={t('mediaLibrary.sortLabel')}>
           {SORT_OPTIONS.map((option) => (
             <button
               key={option.value}
@@ -407,8 +409,10 @@ export default function MediaLibraryPage() {
                 setSort(option.value);
                 setPage(1);
               }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                sort === option.value ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                sort === option.value
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800'
               }`}
             >
               {t(option.labelKey)}
@@ -471,23 +475,25 @@ export default function MediaLibraryPage() {
       )}
 
       {pagination.pages > 1 && (
-        <div className="flex items-center justify-center gap-3 pt-2">
+        <div className="flex items-center justify-center gap-3 pt-4 border-t border-slate-100">
           <button
             type="button"
             disabled={page <= 1}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
-            className="px-3.5 py-1.5 text-sm rounded-lg border border-slate-200 disabled:opacity-40 hover:bg-slate-50 bg-white"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 disabled:opacity-40 transition-colors shadow-2xs"
           >
+            <HiOutlineChevronLeft className="w-4 h-4" />
             {t('common.previous')}
           </button>
-          <span className="text-sm text-slate-600">{page} / {pagination.pages}</span>
+          <span className="text-xs sm:text-sm font-semibold text-slate-700">{page} / {pagination.pages}</span>
           <button
             type="button"
             disabled={page >= pagination.pages}
             onClick={() => setPage((p) => p + 1)}
-            className="px-3.5 py-1.5 text-sm rounded-lg border border-slate-200 disabled:opacity-40 hover:bg-slate-50 bg-white"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 disabled:opacity-40 transition-colors shadow-2xs"
           >
             {t('common.next')}
+            <HiOutlineChevronRight className="w-4 h-4" />
           </button>
         </div>
       )}

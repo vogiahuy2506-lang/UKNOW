@@ -642,16 +642,21 @@ const EmployeeManagement = () => {
         }
         actions={
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => fetchEmployees(true)} className="btn btn-secondary" disabled={isRefreshing}>
-              <HiOutlineRefresh className="w-5 h-5 mr-2" />
+            <button
+              type="button"
+              onClick={() => fetchEmployees(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-colors shadow-2xs disabled:opacity-50"
+              disabled={isRefreshing}
+            >
+              <HiOutlineRefresh className={`w-4 h-4 text-slate-500 ${isRefreshing ? 'animate-spin' : ''}`} />
               {t('employee.refresh')}
             </button>
             <button
               type="button"
-              className="btn btn-primary"
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs sm:text-sm font-bold shadow-sm hover:shadow transition-all duration-150"
               onClick={openCreateModal}
             >
-              <HiOutlinePlus className="w-5 h-5 mr-2" />
+              <HiOutlinePlus className="w-4 h-4" />
               {t('employee.addEmployee')}
             </button>
           </div>
@@ -659,81 +664,94 @@ const EmployeeManagement = () => {
       />
 
       {/* Bảng nhân viên */}
-      <div className="card">
+      <div className="rounded-2xl border border-slate-200/90 bg-white shadow-2xs overflow-hidden">
         {isLoading ? (
-          <div className="h-56 flex items-center justify-center"><div className="spinner w-8 h-8" /></div>
+          <div className="h-56 flex items-center justify-center">
+            <div className="w-6 h-6 border-2 border-slate-200 border-t-orange-500 rounded-full animate-spin" />
+          </div>
         ) : employees.length === 0 ? (
-          <div className="py-16 text-center text-gray-500">{t('employee.noEmployees')}</div>
+          <div className="py-16 text-center text-slate-500 text-sm">{t('employee.noEmployees')}</div>
         ) : (
-          <div className="table-container">
-            <table className="table">
-              <thead>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-slate-100">
+              <thead className="bg-slate-50/80">
                 <tr>
-                  <th>{t('employee.teamColEmployee')}</th>
-                  <th>{t('employee.status')}</th>
-                  <th>{t('employee.permissionsColumn')}</th>
-                  <th>{t('employee.sendLimitsColumn')}</th>
-                  <th>{t('employee.dateAdded')}</th>
+                  <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('employee.teamColEmployee')}</th>
+                  <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('employee.status')}</th>
+                  <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('employee.permissionsColumn')}</th>
+                  <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('employee.sendLimitsColumn')}</th>
+                  <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('employee.dateAdded')}</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="bg-white divide-y divide-slate-100">
                 {employees.map((emp) => {
                   const isActive = emp.memberStatus === 'active';
                   const grantedCount = countGrantedPermissions(emp.permissions);
                   return (
                     <tr
                       key={emp.id}
-                      className="cursor-pointer hover:bg-primary-50/40 transition-colors"
+                      className="cursor-pointer hover:bg-slate-50/70 transition-colors"
                       onClick={() => openEmployeeModal(emp)}
                     >
-                      {/* Gộp tên đăng nhập + họ tên + email vào một cột (trước là 3 cột, bảng 8 cột phải cuộn ngang). */}
-                      <td className="min-w-0">
-                        <div className="font-medium text-gray-900">{emp.fullName || emp.username}</div>
-                        <div className="text-xs text-gray-500">
-                          <span className="text-primary-600">{emp.username}</span>
-                          {emp.email && <span className="ml-1.5 break-all">{emp.email}</span>}
+                      {/* Gộp tên đăng nhập + họ tên + email vào một cột */}
+                      <td className="px-6 py-4 min-w-0">
+                        <div className="text-xs sm:text-sm font-semibold text-slate-900">{emp.fullName || emp.username}</div>
+                        <div className="text-xs text-slate-500 mt-0.5">
+                          <span className="font-medium text-orange-600">{emp.username}</span>
+                          {emp.email && <span className="ml-1.5 break-all text-slate-400">{emp.email}</span>}
                         </div>
                       </td>
-                      <td>
+                      <td className="px-6 py-4 whitespace-nowrap">
                         {emp.acceptedAt === null ? (
-                          <span className="badge badge-warning">{t('employee.pendingAcceptance')}</span>
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200/80 shadow-2xs">
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                            {t('employee.pendingAcceptance')}
+                          </span>
                         ) : emp.status === 'pending_activation' ? (
-                          <span className="badge badge-warning">{t('employee.pendingActivation')}</span>
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200/80 shadow-2xs">
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                            {t('employee.pendingActivation')}
+                          </span>
                         ) : (
-                          <span className={`badge ${isActive ? 'badge-success' : 'badge-gray'}`}>
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border shadow-2xs ${
+                            isActive
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200/80'
+                              : 'bg-slate-100 text-slate-600 border-slate-200'
+                          }`}>
+                            <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-slate-400'}`} />
                             {isActive ? t('employee.statusActive') : t('employee.statusLocked')}
                           </span>
                         )}
                       </td>
-                      <td className="whitespace-nowrap">
+                      <td className="px-6 py-4 whitespace-nowrap">
                         {grantedCount === 0 ? (
-                          // Nhân viên mới có 0 quyền: nhãn "Đang hoạt động" một mình dễ làm chủ tưởng đã xong.
                           <button
                             type="button"
-                            className="badge badge-warning cursor-pointer"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200/80 shadow-2xs cursor-pointer hover:bg-amber-100/70 transition-colors"
                             onClick={(e) => { e.stopPropagation(); openEmployeeModal(emp, 'permissions'); }}
                           >
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
                             {t('employee.noPermissionsBadge')}
                           </button>
                         ) : (
-                          <span className="text-sm text-gray-600">{t('employee.permissionsCount', { count: grantedCount })}</span>
+                          <span className="text-xs sm:text-sm font-medium text-slate-700">{t('employee.permissionsCount', { count: grantedCount })}</span>
                         )}
                       </td>
-                      <td className="text-sm text-gray-500 whitespace-nowrap">
+                      <td className="px-6 py-4 text-xs sm:text-sm text-slate-600 whitespace-nowrap">
                         <div>
-                          <span className="text-gray-700">{t('employee.emailLabel')}:</span>{' '}
+                          <span className="font-medium text-slate-800">{t('employee.emailLabel')}:</span>{' '}
                           {limitLabel(emp.dailyEmailLimit)}{t('employee.perDay')}
-                          <span className="mx-1 text-gray-300">·</span>
+                          <span className="mx-1 text-slate-300">·</span>
                           {limitLabel(emp.monthlyEmailLimit)}{t('employee.perMonth')}
                         </div>
-                        <div>
-                          <span className="text-gray-700">{t('employee.zaloLabel')}:</span>{' '}
+                        <div className="mt-0.5">
+                          <span className="font-medium text-slate-800">{t('employee.zaloLabel')}:</span>{' '}
                           {limitLabel(emp.dailyZaloLimit)}{t('employee.perDay')}
-                          <span className="mx-1 text-gray-300">·</span>
+                          <span className="mx-1 text-slate-300">·</span>
                           {limitLabel(emp.monthlyZaloLimit)}{t('employee.perMonth')}
                         </div>
                       </td>
-                      <td className="text-sm text-gray-500">
+                      <td className="px-6 py-4 text-xs sm:text-sm text-slate-500 whitespace-nowrap">
                         {emp.joinedAt ? new Date(emp.joinedAt).toLocaleDateString('vi-VN') : '—'}
                       </td>
                     </tr>
@@ -746,13 +764,13 @@ const EmployeeManagement = () => {
       </div>
 
       {/* ── Thiết lập duyệt chiến dịch lớn (Workspace Level) ── */}
-      <div className="card p-6">
+      <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-2xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
-            <h2 className="text-base font-semibold text-gray-900">
+            <h2 className="text-sm sm:text-base font-bold text-slate-900">
               {t('employee.approvalThreshold.title')}
             </h2>
-            <p className="text-sm text-gray-500 max-w-2xl">
+            <p className="text-xs sm:text-sm text-slate-500 max-w-2xl">
               {t('employee.approvalThreshold.description')}
             </p>
           </div>
@@ -763,19 +781,19 @@ const EmployeeManagement = () => {
                 onChange={(v) => setApprovalThreshold(String(v))}
                 placeholder={t('employee.approvalThreshold.inputPlaceholder')}
                 disabled={thresholdLoading || isSavingThreshold}
-                className="input w-40 text-sm font-medium"
+                className="w-40 px-3 py-2 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 font-semibold text-slate-800 transition-all"
               />
             </div>
             <button
               type="submit"
               disabled={thresholdLoading || isSavingThreshold}
-              className="btn btn-primary"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs sm:text-sm font-bold shadow-sm hover:shadow transition-all duration-150 disabled:opacity-50"
             >
               {isSavingThreshold ? t('employee.saving') : t('employee.save')}
             </button>
           </form>
         </div>
-        <div className="mt-3 text-xs text-gray-400">
+        <div className="mt-2.5 text-xs text-slate-400">
           {approvalThreshold && Number(approvalThreshold) > 0
             ? t('employee.approvalThreshold.enabledTip', { count: Number(approvalThreshold).toLocaleString('vi-VN') })
             : t('employee.approvalThreshold.disabledTip')}

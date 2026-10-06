@@ -90,10 +90,10 @@ export default function FormsListPage() {
         actions={
           <button
             onClick={() => navigate('/app/forms/new')}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-xl shadow-sm transition-all active:scale-[0.99]"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-sm font-bold shadow-sm hover:shadow transition-all duration-150 shrink-0"
           >
-            <HiOutlinePlus className="w-5 h-5" />
-            {t('forms.createNew')}
+            <HiOutlinePlus className="w-4 h-4" />
+            <span>{t('forms.createNew')}</span>
           </button>
         }
       />
@@ -113,90 +113,93 @@ export default function FormsListPage() {
 
       {/* Loading state */}
       {isLoading ? (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center text-gray-500">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-200 border-t-primary-600 mb-3" />
-          <p className="text-sm">{t('forms.listPage.loading')}</p>
+        <div className="rounded-2xl border border-slate-200/90 bg-white shadow-2xs p-16 flex flex-col items-center justify-center gap-3">
+          <div className="w-7 h-7 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs text-slate-500 font-medium">{t('forms.listPage.loading')}</p>
         </div>
       ) : forms.length === 0 ? (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary-50 text-primary-600 flex items-center justify-center">
-            <HiOutlinePlus className="w-8 h-8" />
+        <div className="rounded-2xl border border-slate-200/90 bg-white shadow-2xs py-16 text-center px-4">
+          <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-orange-50 border border-orange-200/60 text-orange-400 flex items-center justify-center shadow-xs">
+            <HiOutlinePlus className="w-7 h-7" />
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-1">{t('forms.listPage.empty')}</h3>
-          <p className="text-sm text-gray-500 mb-6 max-w-md mx-auto">
+          <h3 className="text-sm font-semibold text-slate-700 mb-1">{t('forms.listPage.empty')}</h3>
+          <p className="text-xs text-slate-400 mb-4 max-w-md mx-auto leading-relaxed">
             {t('forms.listPage.emptyDescription')}
           </p>
           <button
             onClick={() => navigate('/app/forms/new')}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-xl shadow-sm transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white text-xs font-bold shadow-xs hover:shadow transition-all"
           >
-            <HiOutlinePlus className="w-5 h-5" />
-            {t('forms.createNew')}
+            <HiOutlinePlus className="w-4 h-4" />
+            <span>{t('forms.createNew')}</span>
           </button>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="rounded-2xl border border-slate-200/90 bg-white shadow-2xs overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-gray-700">
-              <thead className="bg-gray-50/75 border-b border-gray-100 text-xs font-semibold text-gray-600 uppercase tracking-wider">
+            <table className="min-w-full divide-y divide-slate-100">
+              <thead className="bg-slate-50/80">
                 <tr>
-                  <th className="py-3.5 px-4 sm:px-6">{t('forms.listPage.colForm')}</th>
-                  <th className="py-3.5 px-4 sm:px-6">{t('forms.listPage.colStatus')}</th>
-                  <th className="py-3.5 px-4 sm:px-6">{t('forms.listPage.colSubmissions')}</th>
-                  <th className="py-3.5 px-4 sm:px-6 text-right">{t('forms.listPage.colActions')}</th>
+                  <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('forms.listPage.colForm')}</th>
+                  <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('forms.listPage.colStatus')}</th>
+                  <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('forms.listPage.colSubmissions')}</th>
+                  <th className="px-6 py-3.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('forms.listPage.colActions')}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="bg-white divide-y divide-slate-100">
                 {forms.map((form) => {
                   const submissionCount = Number(form.submissionCount) || 0;
                   return (
-                    <tr key={form.id} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="py-4 px-4 sm:px-6">
-                        <div className="font-medium text-gray-900 break-words line-clamp-1">
+                    <tr key={form.id} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="font-semibold text-sm text-slate-900 break-words line-clamp-1">
                           {form.title}
                         </div>
                         {form.description && (
-                          <div className="text-xs text-gray-500 mt-0.5 line-clamp-1 break-words">
+                          <div className="text-xs text-slate-400 mt-0.5 line-clamp-1 break-words">
                             {form.description}
                           </div>
                         )}
                       </td>
-                      <td className="py-4 px-4 sm:px-6">
+                      <td className="px-6 py-4 whitespace-nowrap">
                         {/* Admin tắt biểu mẫu (admin_disabled_at) thì khách KHÔNG nộp được dù is_published=true —
                             chủ phải thấy "Đã bị tắt" chứ không phải "Đã xuất bản" (giống trang admin). */}
                         {form.adminDisabledAt ? (
                           <span
-                            className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200/80 shadow-2xs"
                             title={t('forms.listPage.statusAdminDisabledHint')}
                           >
+                            <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
                             {t('forms.listPage.statusAdminDisabled')}
                           </span>
                         ) : form.isPublished ? (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                             {t('forms.isPublished')}
                           </span>
                         ) : (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200 shadow-2xs">
+                            <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
                             {t('forms.isDraft')}
                           </span>
                         )}
                       </td>
-                      <td className="py-4 px-4 sm:px-6">
+                      <td className="px-6 py-4 whitespace-nowrap">
                         <button
                           onClick={() => navigate(`/app/forms/${form.id}/submissions`)}
-                          className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-600 hover:text-primary-700 hover:underline"
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-600 hover:text-primary-700 hover:underline"
                         >
-                          <HiOutlineInbox className="w-4 h-4" />
+                          <HiOutlineInbox className="w-4 h-4 text-slate-400" />
                           <span>{t('forms.listPage.submissionCount', { count: submissionCount })}</span>
                         </button>
                       </td>
-                      <td className="py-4 px-4 sm:px-6 text-right">
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
                         <div className="inline-flex items-center gap-1 justify-end">
                           {/* Toggle xuất bản / ẩn */}
                           <button
                             onClick={() => handleTogglePublish(form)}
                             title={form.isPublished ? t('forms.unpublish') : t('forms.publish')}
-                            className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
                           >
                             {form.isPublished ? (
                               <HiOutlineEyeOff className="w-4 h-4" />
@@ -209,7 +212,7 @@ export default function FormsListPage() {
                           <button
                             onClick={() => setShareForm(form)}
                             title={t('forms.share')}
-                            className="p-2 rounded-lg text-gray-500 hover:text-primary-600 hover:bg-gray-100 transition-colors"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
                           >
                             <HiOutlineShare className="w-4 h-4" />
                           </button>
@@ -218,7 +221,7 @@ export default function FormsListPage() {
                           <button
                             onClick={() => navigate(`/app/forms/${form.id}/edit`)}
                             title={t('forms.editForm')}
-                            className="p-2 rounded-lg text-gray-500 hover:text-primary-600 hover:bg-gray-100 transition-colors"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
                           >
                             <HiOutlinePencil className="w-4 h-4" />
                           </button>
@@ -227,7 +230,7 @@ export default function FormsListPage() {
                           <button
                             onClick={() => setDeleteTarget(form)}
                             title={t('forms.delete')}
-                            className="p-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
                           >
                             <HiOutlineTrash className="w-4 h-4" />
                           </button>

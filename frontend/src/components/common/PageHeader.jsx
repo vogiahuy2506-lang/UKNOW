@@ -16,28 +16,32 @@ import { HiOutlineArrowLeft } from 'react-icons/hi';
  */
 export default function PageHeader({ icon: Icon, title, subtitle, actions, onBack, backLabel = 'Quay lại' }) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-      <div className="min-w-0 flex items-start gap-3">
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="min-w-0 flex items-center gap-3.5">
         {onBack && (
           <button
             type="button"
             onClick={onBack}
-            className="p-1.5 -ml-1 mt-0.5 rounded-xl text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors shrink-0"
+            className="p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors shrink-0"
             aria-label={backLabel}
           >
             <HiOutlineArrowLeft className="w-5 h-5" />
           </button>
         )}
+        {Icon && (
+          <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-md shadow-orange-500/20 shrink-0">
+            <Icon className="w-6 h-6 text-white text-orange-500" aria-hidden="true" />
+          </div>
+        )}
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2.5 flex-wrap">
-            {Icon && <Icon className="w-7 h-7 text-orange-500 shrink-0" aria-hidden="true" />}
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
             {title}
           </h1>
           {subtitle && (
             typeof subtitle === 'string' ? (
-              <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
+              <p className="text-xs sm:text-sm text-slate-500 mt-0.5">{subtitle}</p>
             ) : (
-              <div className="text-sm text-gray-500 mt-1">{subtitle}</div>
+              <div className="text-xs sm:text-sm text-slate-500 mt-0.5">{subtitle}</div>
             )
           )}
         </div>

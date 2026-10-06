@@ -10,6 +10,8 @@ import {
   HiOutlineCalendar,
   HiOutlineX,
   HiOutlineUsers,
+  HiOutlineChevronLeft,
+  HiOutlineChevronRight,
 } from 'react-icons/hi';
 import PageHeader from '../../components/common/PageHeader';
 import useLandingLeadsList from '../../features/landing/hooks/useLandingLeadsList.js';
@@ -147,22 +149,22 @@ export default function LandingLeadsListPage() {
         title={t('landingLeads.pageTitle')}
         subtitle={t('landingLeads.pageDescription')}
         actions={
-          <>
+          <div className="flex items-center gap-2">
             <div className="relative">
-              <HiOutlineSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <HiOutlineSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="search"
                 value={quickSearch}
                 onChange={(e) => setQuickSearch(e.target.value)}
                 placeholder={t('landingLeads.quickSearchPlaceholder')}
-                className="w-full sm:w-64 rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-8 text-sm placeholder-gray-400 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-200"
+                className="w-full sm:w-64 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100/70 focus:bg-white py-2 pl-9 pr-8 text-xs placeholder:text-slate-400 text-slate-800 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20 transition-all"
               />
               {quickSearch ? (
                 <button
                   type="button"
                   onClick={() => setQuickSearch('')}
                   aria-label={t('landingLeads.clearSearch')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-gray-400 hover:text-gray-600"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 hover:text-slate-600"
                 >
                   <HiOutlineX className="w-3.5 h-3.5" />
                 </button>
@@ -172,12 +174,12 @@ export default function LandingLeadsListPage() {
               type="button"
               onClick={() => reload()}
               disabled={isLoading}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-colors shadow-2xs disabled:opacity-50"
             >
-              <HiOutlineRefresh className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
-              {t('landingLeads.refresh')}
+              <HiOutlineRefresh className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+              <span>{t('landingLeads.refresh')}</span>
             </button>
-          </>
+          </div>
         }
       />
 
@@ -231,50 +233,50 @@ export default function LandingLeadsListPage() {
       ) : null}
 
       {/* Table card */}
-      <div className="card overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
-          <p className="text-sm text-gray-600">
-            <span className="font-semibold text-gray-900">{total.toLocaleString('vi-VN')}</span> {t('landingLeads.records')}
+      <div className="rounded-2xl border border-slate-200/90 bg-white shadow-2xs overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between gap-3 bg-slate-50/50">
+          <p className="text-xs sm:text-sm text-slate-600">
+            <span className="font-bold text-slate-900">{total.toLocaleString('vi-VN')}</span> {t('landingLeads.records')}
             {debouncedSearch && visibleItems.length !== items.length ? (
-              <span className="ml-2 text-xs text-gray-500">
+              <span className="ml-2 text-xs text-slate-500">
                 · {t('landingLeads.showingOf', { shown: visibleItems.length, total: items.length })}
               </span>
             ) : null}
           </p>
-          <p className="text-sm text-gray-500">
+          <p className="text-xs sm:text-sm text-slate-500 font-medium">
             {t('landingLeads.pageOf', { page, total: totalPages })}
           </p>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-slate-100">
+            <thead className="bg-slate-50/80">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                   {t('landingLeads.fullName')}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                   {t('landingLeads.email')}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                   {t('landingLeads.phone')}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                   {t('landingLeads.landingSlug')}
                 </th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3.5 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                   {t('forms.submissionsPage.colConsent', { defaultValue: 'Đồng ý tiếp thị' })}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                   {t('landingLeads.extraInfo')}
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-100">
+            <tbody className="bg-white divide-y divide-slate-100">
               {isLoading && items.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-sm text-gray-500">
-                    <span className="inline-block w-4 h-4 mr-2 align-[-2px] border-2 border-gray-300 border-t-orange-500 rounded-full animate-spin" />
+                  <td colSpan={6} className="px-6 py-12 text-center text-sm text-slate-500">
+                    <span className="inline-block w-4 h-4 mr-2 align-[-2px] border-2 border-slate-300 border-t-orange-500 rounded-full animate-spin" />
                     {t('landingLeads.loading')}
                   </td>
                 </tr>
@@ -282,29 +284,29 @@ export default function LandingLeadsListPage() {
 
               {!isLoading && visibleItems.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-16 text-center">
-                    <HiOutlineSearch className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                  <td colSpan={6} className="px-6 py-16 text-center">
+                    <HiOutlineSearch className="w-10 h-10 text-slate-300 mx-auto mb-2" />
                     {debouncedSearch ? (
                       <>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-slate-500">
                           {t('landingLeads.noMatchInPage', { query: debouncedSearch })}
                         </p>
                         <button
                           type="button"
                           onClick={() => setQuickSearch('')}
-                          className="mt-3 text-xs text-orange-600 hover:underline"
+                          className="mt-3 text-xs font-semibold text-orange-600 hover:text-orange-700 hover:underline"
                         >
                           {t('landingLeads.clearSearch')}
                         </button>
                       </>
                     ) : (
                       <>
-                        <p className="text-sm text-gray-500">{t('landingLeads.noRecords')}</p>
+                        <p className="text-sm text-slate-500">{t('landingLeads.noRecords')}</p>
                         {appliedChips.length > 0 ? (
                           <button
                             type="button"
                             onClick={resetFilters}
-                            className="mt-3 text-xs text-orange-600 hover:underline"
+                            className="mt-3 text-xs font-semibold text-orange-600 hover:text-orange-700 hover:underline"
                           >
                             Xoá bộ lọc để thấy tất cả
                           </button>
@@ -323,31 +325,31 @@ export default function LandingLeadsListPage() {
                   ? `${window.location.origin}/${row.landingPageSlug}`
                   : null;
                 return (
-                  <tr key={row.id ?? row.leadId} className="hover:bg-gray-50/80 transition-colors">
-                    <td className="px-4 py-3 text-sm whitespace-nowrap">
+                  <tr key={row.id ?? row.leadId} className="hover:bg-slate-50/70 transition-colors">
+                    <td className="px-6 py-4 text-xs sm:text-sm whitespace-nowrap">
                       <div className="flex items-center gap-2.5">
-                        <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gradient-to-br from-orange-400 to-red-500 text-white text-[11px] font-semibold shrink-0">
+                        <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gradient-to-br from-orange-400 to-amber-500 text-white text-[11px] font-semibold shrink-0 shadow-2xs">
                           {initials}
                         </span>
                         <div className="min-w-0">
-                          <p className="text-gray-900 font-medium truncate">{fullName || '—'}</p>
+                          <p className="text-slate-900 font-semibold truncate">{fullName || '—'}</p>
                           {row.registrationTime || row.createdAt ? (
-                            <p className="text-[11px] text-gray-400 truncate">
+                            <p className="text-[11px] text-slate-400 truncate">
                               {formatRelativeTime(row.registrationTime || row.createdAt)}
                             </p>
                           ) : null}
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-700 max-w-[240px]">
+                    <td className="px-6 py-4 text-xs sm:text-sm text-slate-700 max-w-[240px]">
                       {row.email ? (
                         <div className="flex items-center gap-1.5 group">
-                          <HiOutlineMail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                          <span className="truncate" title={row.email}>{row.email}</span>
+                          <HiOutlineMail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span className="truncate font-medium text-slate-800" title={row.email}>{row.email}</span>
                           <button
                             type="button"
                             onClick={() => handleCopy(row.email, 'email')}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-gray-400 hover:text-orange-600"
+                            className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-slate-400 hover:text-orange-600"
                             title="Copy email"
                           >
                             <HiOutlineClipboard className="w-3 h-3" />
@@ -357,15 +359,15 @@ export default function LandingLeadsListPage() {
                         '—'
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                    <td className="px-6 py-4 text-xs sm:text-sm text-slate-700 whitespace-nowrap">
                       {row.phone ? (
                         <div className="flex items-center gap-1.5 group">
-                          <HiOutlinePhone className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                          <span>{row.phone}</span>
+                          <HiOutlinePhone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span className="font-medium text-slate-800">{row.phone}</span>
                           <button
                             type="button"
                             onClick={() => handleCopy(row.phone, 'SĐT')}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-gray-400 hover:text-orange-600"
+                            className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-slate-400 hover:text-orange-600"
                             title="Copy SĐT"
                           >
                             <HiOutlineClipboard className="w-3 h-3" />
@@ -375,52 +377,55 @@ export default function LandingLeadsListPage() {
                         '—'
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                    <td className="px-6 py-4 text-xs sm:text-sm text-slate-700 whitespace-nowrap">
                       {row.landingPageSlug ? (
                         <a
                           href={publicUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-gray-100 hover:bg-orange-50 hover:text-orange-700 transition-colors font-medium"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-orange-50 hover:text-orange-700 border border-slate-200/60 transition-colors font-medium text-xs text-slate-700"
                           title={publicUrl}
                         >
                           /{row.landingPageSlug}
                           <HiOutlineExternalLink className="w-3 h-3 opacity-60" />
                         </a>
                       ) : (
-                        <span className="text-gray-400">—</span>
+                        <span className="text-slate-400">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-center whitespace-nowrap">
+                    <td className="px-6 py-4 text-xs sm:text-sm text-center whitespace-nowrap">
                       {row.consentWithdrawnAt ? (
                         <span
-                          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200/80 shadow-2xs"
                           title={new Date(row.consentWithdrawnAt).toLocaleString('vi-VN')}
                         >
+                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
                           {t('forms.submissionsPage.consentWithdrawn', {
                             date: new Date(row.consentWithdrawnAt).toLocaleDateString('vi-VN'),
                             defaultValue: `Đã rút · ${new Date(row.consentWithdrawnAt).toLocaleDateString('vi-VN')}`,
                           })}
                         </span>
                       ) : row.marketingConsent === true ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                           {t('forms.submissionsPage.consentYes', { defaultValue: 'Có' })}
                         </span>
                       ) : row.marketingConsent === false ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200 shadow-2xs">
+                          <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
                           {t('forms.submissionsPage.consentNo', { defaultValue: 'Không' })}
                         </span>
                       ) : (
-                        <span className="text-gray-400 font-medium">
+                        <span className="text-slate-400 font-medium">
                           {t('forms.submissionsPage.consentNone', { defaultValue: '—' })}
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600 max-w-[280px]">
+                    <td className="px-6 py-4 text-xs sm:text-sm text-slate-600 max-w-[280px]">
                       {cfSummary ? (
                         <p className="truncate" title={cfSummary}>{cfSummary}</p>
                       ) : (
-                        <span className="text-gray-400 italic text-xs">{t('landingLeads.extraEmpty')}</span>
+                        <span className="text-slate-400 italic text-xs">{t('landingLeads.extraEmpty')}</span>
                       )}
                     </td>
                   </tr>
@@ -431,25 +436,27 @@ export default function LandingLeadsListPage() {
         </div>
 
         {totalPages > 1 ? (
-          <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-between gap-3">
+          <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between gap-3">
             <button
               type="button"
               disabled={page <= 1 || isLoading}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
-              className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 disabled:opacity-40 transition-colors shadow-2xs"
             >
+              <HiOutlineChevronLeft className="w-4 h-4" />
               {t('landingLeads.previousPage')}
             </button>
-            <span className="text-sm text-gray-600">
+            <span className="text-xs sm:text-sm font-semibold text-slate-600">
               {page} / {totalPages}
             </span>
             <button
               type="button"
               disabled={page >= totalPages || isLoading}
               onClick={() => setPage((p) => p + 1)}
-              className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 disabled:opacity-40 transition-colors shadow-2xs"
             >
               {t('landingLeads.nextPage')}
+              <HiOutlineChevronRight className="w-4 h-4" />
             </button>
           </div>
         ) : null}

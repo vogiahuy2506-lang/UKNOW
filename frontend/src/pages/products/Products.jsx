@@ -998,11 +998,19 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                       </>
                     )}
 
-                    {/* Chế độ bảng gọn: 1 cột Doanh thu & Chuyển đổi tóm tắt */}
+                    {/* Chế độ bảng gọn: tách 3 cột rõ ràng Đăng ký, Đã mua, Doanh thu */}
                     {canViewFunnel && viewMode === 'compact' && (
-                      <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                        {t('products.conversionSummary') || 'Doanh thu & Chuyển đổi'}
-                      </th>
+                      <>
+                        <th className="px-4 py-3.5 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider" title={t('products.funnel.registeredHint')}>
+                          {t('products.funnel.registered')}
+                        </th>
+                        <th className="px-4 py-3.5 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider" title={t('products.funnel.paidHint')}>
+                          {t('products.funnel.paid')}
+                        </th>
+                        <th className="px-6 py-3.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                          {t('products.funnel.revenue')}
+                        </th>
+                      </>
                     )}
 
                     <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
@@ -1099,13 +1107,10 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                           <FunnelCells funnel={funnel} />
                         )}
 
-                        {/* Bảng gọn: 1 cột Doanh thu & Chuyển đổi tóm tắt */}
+                        {/* Bảng gọn: tách 3 cột rõ ràng Đăng ký, Đã mua, Doanh thu */}
                         {canViewFunnel && viewMode === 'compact' && (
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="font-bold text-slate-900 text-sm" data-testid="funnel-revenue">
-                              {noMoney ? '—' : formatMoney(funnel?.revenue)}
-                            </div>
-                            <div className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
+                          <>
+                            <td className="px-4 py-4 whitespace-nowrap text-center">
                               <span data-testid="funnel-registered">
                                 {target ? (
                                   <Link to={target} className="font-semibold text-primary-600 hover:underline">
@@ -1114,17 +1119,11 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                                 ) : (
                                   <span className="font-semibold text-slate-700">{registered}</span>
                                 )}
-                                <span className="text-slate-400 ml-0.5">đ/ký</span>
-                              </span>
-                              <span className="text-slate-300">·</span>
-                              <span data-testid="funnel-paid">
-                                <span className="font-semibold text-slate-700">{paidPeople}</span>
-                                <span className="text-slate-400 ml-0.5">đã trả</span>
                               </span>
                               {awaiting > 0 && (
                                 <span
                                   data-testid="funnel-awaiting"
-                                  className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200"
+                                  className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200"
                                   title={t('products.funnel.awaitingConfirmTooltip', { amount: formatMoney(funnel?.awaitingAmount) })}
                                 >
                                   {target ? (
@@ -1134,8 +1133,18 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                                   )}
                                 </span>
                               )}
-                            </div>
-                          </td>
+                            </td>
+                            <td className="px-4 py-4 whitespace-nowrap text-center">
+                              <span data-testid="funnel-paid" className="font-semibold text-slate-700">
+                                {noMoney ? '—' : paidPeople}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right">
+                              <span className="font-bold text-slate-900 text-sm" data-testid="funnel-revenue">
+                                {noMoney ? '—' : formatMoney(funnel?.revenue)}
+                              </span>
+                            </td>
+                          </>
                         )}
 
                         <td className="px-6 py-4 whitespace-nowrap">

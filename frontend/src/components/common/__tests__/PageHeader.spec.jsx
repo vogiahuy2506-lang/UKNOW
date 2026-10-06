@@ -15,11 +15,11 @@ describe('PageHeader', () => {
     expect(screen.queryByText('Mô tả trang')).not.toBeInTheDocument();
   });
 
-  it('có icon thì vẽ icon cam cạnh tiêu đề', () => {
+  it('có icon thì vẽ icon trong hộp gradient cạnh tiêu đề', () => {
     const { container } = render(<PageHeader title="Có icon" icon={HiOutlineChat} />);
     const icon = container.querySelector('svg');
     expect(icon).toBeInTheDocument();
-    expect(icon).toHaveClass('text-orange-500');
+    expect(icon).toHaveClass('text-white');
   });
 
   it('actions hiện khi có, không hiện khi không truyền', () => {

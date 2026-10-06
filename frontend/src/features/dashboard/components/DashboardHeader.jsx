@@ -38,23 +38,31 @@ const DashboardHeader = ({
   };
 
   return (
-    <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-3">
+    <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
       {/* Title block */}
-      <div className="min-w-0">
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2.5">
-          {Icon && <Icon className="w-7 h-7 text-orange-500 shrink-0" aria-hidden="true" />}
-          <span>{_title}</span>
-        </h1>
-        <p className="text-sm text-gray-500 mt-1">
-          {_description}
-        </p>
+      <div className="flex items-start gap-3 sm:gap-4 min-w-0">
+        {Icon && (
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center text-white shadow-md shadow-orange-500/20 shrink-0 mt-0.5">
+            <Icon className="w-6 h-6" aria-hidden="true" />
+          </div>
+        )}
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
+            {_title}
+          </h1>
+          {_description && (
+            <p className="text-xs sm:text-sm text-slate-500 mt-0.5 leading-relaxed">
+              {_description}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Actions */}
       <div className="flex flex-wrap items-center gap-2">
         {/* Active date range pill */}
-        <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm text-gray-600 shadow-sm">
-          <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm text-slate-600 shadow-2xs font-medium">
+          <svg className="w-4 h-4 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -62,7 +70,7 @@ const DashboardHeader = ({
               d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
             />
           </svg>
-          <span className="font-medium">
+          <span>
             {formatDate(filters?.startDate)} — {formatDate(filters?.endDate)}
           </span>
         </div>
@@ -70,11 +78,11 @@ const DashboardHeader = ({
         {/* Filter button */}
         <button
           type="button"
-          className="btn btn-secondary flex items-center gap-2 shadow-sm"
+          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs sm:text-sm font-semibold text-slate-700 transition-colors shadow-2xs disabled:opacity-50"
           onClick={onOpenFilter}
           disabled={isLoading}
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
               strokeLinecap="round"
               strokeLinejoin="round"

@@ -26,6 +26,8 @@ import {
   HiOutlineSparkles,
   HiOutlineX,
   HiCheck,
+  HiOutlineChevronLeft,
+  HiOutlineChevronRight,
 } from 'react-icons/hi';
 import { FaTelegramPlane, FaWhatsapp } from 'react-icons/fa';
 import { getCampaignTypeMeta } from '../../utils/campaignTypeDisplay';
@@ -425,24 +427,24 @@ const Campaigns = () => {
           activeTab === 'campaigns' && originTab === 'self_created' && (
             <button
               onClick={openCreateModal}
-              className="btn btn-primary"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-sm font-bold shadow-sm hover:shadow transition-all duration-150 shrink-0"
             >
-              <HiOutlinePlus className="w-5 h-5 mr-2" />
-              {t('campaigns.create')}
+              <HiOutlinePlus className="w-4 h-4" />
+              <span>{t('campaigns.create')}</span>
             </button>
           )
         }
       />
 
       {/* Main Tabs: Chiến dịch (?tab=campaigns) vs Lịch chạy (?tab=schedules) */}
-      <div className="flex gap-6 border-b border-gray-200">
+      <div className="flex gap-2 border-b border-slate-200/80 pb-2">
         <button
           type="button"
           onClick={() => handleTabChange('campaigns')}
-          className={`pb-3 font-medium text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 ${
+          className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-xl transition-all flex items-center gap-2 ${
             activeTab === 'campaigns'
-              ? 'border-orange-500 text-orange-600 font-semibold'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
+              ? 'bg-orange-500 text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
           }`}
         >
           <HiOutlineViewList className="w-4 h-4" aria-hidden="true" />
@@ -451,10 +453,10 @@ const Campaigns = () => {
         <button
           type="button"
           onClick={() => handleTabChange('schedules')}
-          className={`pb-3 font-medium text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 ${
+          className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-xl transition-all flex items-center gap-2 ${
             activeTab === 'schedules'
-              ? 'border-orange-500 text-orange-600 font-semibold'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
+              ? 'bg-orange-500 text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
           }`}
         >
           <HiOutlineClock className="w-4 h-4" aria-hidden="true" />
@@ -485,17 +487,17 @@ const Campaigns = () => {
           {/* Subheader Toolbar: Origin Selector + Operational State Pills */}
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
             {/* Origin Tabs */}
-            <div className="inline-flex items-center p-1 bg-gray-100/90 rounded-xl border border-gray-200/60 w-fit">
+            <div className="inline-flex rounded-xl bg-slate-100 p-0.5 border border-slate-200/80 shrink-0">
               <button
                 type="button"
                 onClick={() => {
                   setOriginTab('self_created');
                   setPagination((prev) => ({ ...prev, page: 1 }));
                 }}
-                className={`px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                   originTab === 'self_created'
-                    ? 'bg-white text-gray-900 font-semibold shadow-xs ring-1 ring-gray-200/80'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
                 {t('campaigns.selfCreated') || 'Tự tạo'}
@@ -506,10 +508,10 @@ const Campaigns = () => {
                   setOriginTab('marketplace_purchased');
                   setPagination((prev) => ({ ...prev, page: 1 }));
                 }}
-                className={`px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                   originTab === 'marketplace_purchased'
-                    ? 'bg-white text-gray-900 font-semibold shadow-xs ring-1 ring-gray-200/80'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
                 {t('campaigns.purchased') || 'Đã mua từ Marketplace'}
@@ -520,10 +522,10 @@ const Campaigns = () => {
                   setOriginTab('shared_with_me');
                   setPagination((prev) => ({ ...prev, page: 1 }));
                 }}
-                className={`px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                   originTab === 'shared_with_me'
-                    ? 'bg-white text-gray-900 font-semibold shadow-xs ring-1 ring-gray-200/80'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
                 {t('campaigns.sharedWithMe') || 'Được chia sẻ'}
@@ -537,7 +539,7 @@ const Campaigns = () => {
                 { key: 'running', label: t('campaigns.operationRunning'), dot: 'bg-emerald-500' },
                 { key: 'scheduled', label: t('campaigns.operationScheduled'), dot: 'bg-blue-500' },
                 { key: 'inactive', label: t('campaigns.operationInactive'), dot: 'bg-amber-500' },
-                { key: 'draft', label: t('campaigns.operationDraft'), dot: 'bg-gray-400' },
+                { key: 'draft', label: t('campaigns.operationDraft'), dot: 'bg-slate-400' },
               ].map((item) => {
                 const isSelected = stateFilter === item.key;
                 return (
@@ -545,10 +547,10 @@ const Campaigns = () => {
                     key={item.key}
                     type="button"
                     onClick={() => handleStateChange(item.key)}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-all ${
                       isSelected
                         ? 'bg-orange-500 text-white shadow-xs font-semibold'
-                        : 'bg-gray-100 hover:bg-gray-200/80 text-gray-600 hover:text-gray-900'
+                        : 'bg-slate-100 hover:bg-slate-200/80 text-slate-600 hover:text-slate-900 font-medium'
                     }`}
                   >
                     {item.dot && !isSelected && (
@@ -562,11 +564,11 @@ const Campaigns = () => {
           </div>
 
           {/* Filters Bar: Search + Status + Type in a single neat row */}
-          <div className="bg-white rounded-xl border border-gray-200 p-2.5 sm:p-3 shadow-xs flex flex-col md:flex-row items-stretch md:items-center gap-2.5">
+          <div className="rounded-2xl border border-slate-200/90 bg-white p-3.5 shadow-2xs flex flex-col md:flex-row items-stretch md:items-center gap-3">
             {/* Search */}
             <form onSubmit={handleSearch} className="flex-1 min-w-[200px]">
               <div className="relative flex items-center">
-                <span className="absolute left-3 flex items-center text-gray-400 pointer-events-none" aria-hidden="true">
+                <span className="absolute left-3.5 flex items-center text-slate-400 pointer-events-none" aria-hidden="true">
                   <HiOutlineSearch className="w-4 h-4" />
                 </span>
                 <input
@@ -574,7 +576,7 @@ const Campaigns = () => {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder={t('campaigns.searchPlaceholder')}
-                  className="w-full pl-9 pr-8 py-2 text-sm bg-gray-50/50 hover:bg-white focus:bg-white border border-gray-200 rounded-lg text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-all"
+                  className="w-full pl-9 pr-8 py-2 text-xs bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 rounded-xl text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all"
                 />
                 {search && (
                   <button
@@ -583,7 +585,7 @@ const Campaigns = () => {
                       setSearch('');
                       fetchCampaigns(1, statusFilter, '', typeFilter, stateFilter);
                     }}
-                    className="absolute right-2.5 text-gray-400 hover:text-gray-600 p-0.5 rounded-full hover:bg-gray-200/60 transition-colors"
+                    className="absolute right-2.5 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200/60 transition-colors"
                   >
                     <HiOutlineX className="w-3.5 h-3.5" />
                   </button>
@@ -601,7 +603,7 @@ const Campaigns = () => {
                     setStatusFilter(e.target.value);
                     setPagination((prev) => ({ ...prev, page: 1 }));
                   }}
-                  className="w-full px-3 py-2 text-sm bg-gray-50/50 hover:bg-white focus:bg-white border border-gray-200 rounded-lg text-gray-700 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-all cursor-pointer"
+                  className="w-full px-3 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl text-slate-700 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 shadow-2xs cursor-pointer"
                 >
                   <option value="">{t('campaigns.allStatuses')}</option>
                   <option value="pending_owner_approval">{t('campaigns.pendingOwnerApproval')}</option>
@@ -619,7 +621,7 @@ const Campaigns = () => {
                     setTypeFilter(e.target.value);
                     setPagination((prev) => ({ ...prev, page: 1 }));
                   }}
-                  className="w-full px-3 py-2 text-sm bg-gray-50/50 hover:bg-white focus:bg-white border border-gray-200 rounded-lg text-gray-700 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-all cursor-pointer"
+                  className="w-full px-3 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl text-slate-700 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 shadow-2xs cursor-pointer"
                 >
                   <option value="">{t('campaigns.allTypes')}</option>
                   <option value="email">{t('campaigns.email')}</option>
@@ -636,45 +638,46 @@ const Campaigns = () => {
           </div>
 
           {/* Table */}
-          <div className="card">
+          <div className="rounded-2xl border border-slate-200/90 bg-white shadow-2xs overflow-hidden">
             {isLoading ? (
-              <div className="flex items-center justify-center h-64">
-                <div className="spinner w-8 h-8"></div>
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <div className="w-7 h-7 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+                <p className="text-xs text-slate-500 font-medium">Đang tải danh sách chiến dịch…</p>
               </div>
             ) : campaigns.length === 0 ? (
-              <div className="empty-state py-16">
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                  <HiOutlinePlus className="w-8 h-8 text-gray-400" />
+              <div className="flex flex-col items-center justify-center py-16 text-center px-4">
+                <div className="w-14 h-14 rounded-2xl bg-orange-50 border border-orange-200/60 flex items-center justify-center text-orange-400 mb-3 shadow-xs">
+                  <HiOutlinePlus className="w-7 h-7" />
                 </div>
-                <h3 className="text-lg font-medium text-gray-900">{t('campaigns.noCampaigns')}</h3>
-                <p className="text-gray-500 mt-1">{t('campaigns.startFirst')}</p>
+                <h3 className="text-sm font-semibold text-slate-700">{t('campaigns.noCampaigns')}</h3>
+                <p className="text-xs text-slate-400 mt-1 max-w-sm leading-relaxed">{t('campaigns.startFirst')}</p>
                 {originTab === 'self_created' && (
                   <button
                     onClick={openCreateModal}
-                    className="btn btn-primary mt-4"
+                    className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white text-xs font-bold shadow-xs hover:shadow transition-all"
                   >
-                    <HiOutlinePlus className="w-5 h-5 mr-2" />
-                    {t('campaigns.createFirst')}
+                    <HiOutlinePlus className="w-4 h-4" />
+                    <span>{t('campaigns.createFirst')}</span>
                   </button>
                 )}
               </div>
             ) : (
-              <div className="table-container relative">
-                <table className="table">
-                  <thead>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-slate-100">
+                  <thead className="bg-slate-50/80">
                     <tr>
-                      <th>{t('campaigns.campaignName')}</th>
-                      <th>{t('common.status')}</th>
-                      <th>{t('campaigns.operation')}</th>
-                      <th>{t('campaigns.campaignType')}</th>
-                      <th>{t('campaigns.createdBy')}</th>
-                      <th>{t('campaigns.createdAt')}</th>
-                      <th>{t('campaigns.updatedAt')}</th>
-                      <th title={t('campaigns.completedRunsHint')}>{t('campaigns.completedRuns')}</th>
-                      <th className="text-right">{t('common.actions')}</th>
+                      <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('campaigns.campaignName')}</th>
+                      <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('common.status')}</th>
+                      <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('campaigns.operation')}</th>
+                      <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('campaigns.campaignType')}</th>
+                      <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('campaigns.createdBy')}</th>
+                      <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('campaigns.createdAt')}</th>
+                      <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('campaigns.updatedAt')}</th>
+                      <th className="px-6 py-3.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider" title={t('campaigns.completedRunsHint')}>{t('campaigns.completedRuns')}</th>
+                      <th className="px-6 py-3.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('common.actions')}</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="bg-white divide-y divide-slate-100">
                     {campaigns.map((campaign) => {
                       const isRunning =
                         runController.isCampaignRunningById(campaign.id) ||
@@ -703,28 +706,28 @@ const Campaigns = () => {
                       const isStopping = Number.isFinite(runId) && runController.stoppingRunIds.has(runId);
 
                       return (
-                        <tr key={campaign.id} className="hover:bg-orange-50/20 transition-colors">
-                          <td>
+                        <tr key={campaign.id} className="hover:bg-slate-50/70 transition-colors">
+                          <td className="px-6 py-4">
                             <div className="flex flex-col py-0.5">
                               <Link
                                 to={`/app/campaigns/${campaign.id}/builder`}
-                                className="font-semibold text-gray-900 hover:text-orange-600 transition-colors inline-flex items-center gap-1.5 flex-wrap group"
+                                className="font-semibold text-slate-900 hover:text-orange-600 transition-colors inline-flex items-center gap-1.5 flex-wrap group text-sm"
                               >
                                 <span className="group-hover:underline">{campaign.campaignName}</span>
                                 {campaign.origin === 'marketplace_purchased' && (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-purple-50 text-purple-700 border border-purple-200">
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
                                     {t('campaigns.marketplace') || 'Marketplace'}
                                   </span>
                                 )}
                                 {campaign.origin === 'shared_received' && (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
                                     {t('campaigns.shared') || 'Được chia sẻ'}
                                   </span>
                                 )}
                               </Link>
                               {Number(campaign.failedCount || 0) > 0 && campaign.lastFailedRun && (
-                                <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+                                <p className="mt-1 text-xs text-rose-500 flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
                                   <span>
                                     {t('campaigns.lastRunFailed', {
                                       label: campaign.lastFailedRun.label || campaign.lastFailedRun.errorMessage || '',
@@ -734,28 +737,29 @@ const Campaigns = () => {
                               )}
                             </div>
                           </td>
-                          <td>
+                          <td className="px-6 py-4 whitespace-nowrap">
                             {campaign.status === 'active' ? (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs">
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                 <span>{t('campaigns.active')}</span>
                               </span>
                             ) : campaign.status === 'draft' ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 ring-1 ring-gray-400/20">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200 shadow-2xs">
+                                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
                                 <span>{t('campaigns.draft')}</span>
                               </span>
                             ) : campaign.status === 'paused' ? (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 ring-1 ring-amber-600/20">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200/80 shadow-2xs">
                                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
                                 <span>{t('campaigns.paused')}</span>
                               </span>
                             ) : campaign.status === 'pending_owner_approval' ? (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 ring-1 ring-blue-600/20">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200/80 shadow-2xs">
                                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
                                 <span>{t('campaigns.pendingOwnerApproval')}</span>
                               </span>
                             ) : (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
                                 {campaign.status}
                               </span>
                             )}
@@ -1076,27 +1080,29 @@ const Campaigns = () => {
 
             {/* Pagination */}
             {pagination.totalPages > 1 && (
-              <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100">
-                <p className="text-sm text-gray-500">
+              <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+                <p className="text-xs text-slate-500 font-medium">
                   {t('common.showing')} {campaigns.length} / {pagination.total} {t('common.results')}
                 </p>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center gap-2">
                   <button
+                    type="button"
                     onClick={() => setPagination((prev) => ({ ...prev, page: prev.page - 1 }))}
-                    disabled={pagination.page === 1}
-                    className="btn btn-secondary disabled:opacity-50"
+                    disabled={pagination.page <= 1}
+                    className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
-                    Trước
+                    <HiOutlineChevronLeft className="w-4 h-4" />
                   </button>
-                  <span className="px-3 py-1 text-sm">
+                  <span className="text-xs font-semibold text-slate-700">
                     {pagination.page} / {pagination.totalPages}
                   </span>
                   <button
+                    type="button"
                     onClick={() => setPagination((prev) => ({ ...prev, page: prev.page + 1 }))}
-                    disabled={pagination.page === pagination.totalPages}
-                    className="btn btn-secondary disabled:opacity-50"
+                    disabled={pagination.page >= pagination.totalPages}
+                    className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
-                    {t('common.next')}
+                    <HiOutlineChevronRight className="w-4 h-4" />
                   </button>
                 </div>
               </div>

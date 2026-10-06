@@ -316,8 +316,9 @@ describe('Products — cột phễu Đăng ký / Đã trả / Doanh thu', () => 
 
     await waitFor(() => expect(screen.getByText('Khoá AI thực chiến')).toBeInTheDocument());
 
-    // Cột Doanh thu & Chuyển đổi tóm tắt hiện diện, các cột phễu chi tiết (Quan tâm, Để lại thông tin) không tràn trên bảng
-    expect(screen.getByText(/Doanh thu & Chuyển đổi/)).toBeInTheDocument();
+    // Các cột phễu cơ bản (Đăng ký, Doanh thu) hiện diện, các cột phễu chi tiết (Quan tâm, Để lại thông tin) không tràn trên bảng
+    expect(screen.getByRole('columnheader', { name: 'Đăng ký' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Doanh thu' })).toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: 'Quan tâm' })).toBeNull();
     expect(screen.getByTestId('funnel-revenue')).toHaveTextContent('2.000 đ');
     expect(screen.getByTestId('funnel-registered')).toHaveTextContent('2');
