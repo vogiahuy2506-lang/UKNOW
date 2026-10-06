@@ -75,4 +75,35 @@ export const TableSkeleton = ({ rows = 5, columns = 4 }) => (
   </div>
 );
 
+export const AccountListSkeleton = ({ count = 2 }) => (
+  <div className="space-y-4" data-testid="account-list-skeleton">
+    {Array.from({ length: count }).map((_, idx) => (
+      <div key={idx} className="rounded-2xl border border-slate-200/80 bg-white p-4.5 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <Skeleton className="w-11 h-11 rounded-2xl" variant="avatar" />
+            <div className="space-y-1.5">
+              <Skeleton className="w-36 h-4" variant="text" />
+              <div className="flex gap-2">
+                <Skeleton className="w-16 h-4 rounded-full" variant="text" />
+                <Skeleton className="w-20 h-4 rounded-full" variant="text" />
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Skeleton className="w-24 h-8 rounded-xl" variant="button" />
+            <Skeleton className="w-8 h-8 rounded-xl" variant="button" />
+          </div>
+        </div>
+        <div className="pt-3 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <Skeleton className="w-48 h-3.5" variant="text" />
+          <Skeleton className="w-40 h-3.5" variant="text" />
+          <Skeleton className="w-56 h-3.5" variant="text" />
+          <Skeleton className="w-32 h-3.5" variant="text" />
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
 export default Skeleton;

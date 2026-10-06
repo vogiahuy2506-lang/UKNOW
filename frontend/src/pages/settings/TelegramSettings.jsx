@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import {
@@ -16,6 +16,8 @@ import {
   HiOutlineX,
 } from 'react-icons/hi';
 import PageContainer from '../../components/common/PageContainer';
+import ConfirmModal from '../../components/common/ConfirmModal';
+import { AccountListSkeleton } from '../../components/common/Skeleton';
 import { FaTelegramPlane } from 'react-icons/fa';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import ChannelAccountSendSettings from '../../features/settings/components/ChannelAccountSendSettings';
@@ -155,13 +157,12 @@ function QrModal({ open, onClose, qrPayload, qrStatus, qrError, onCancel, onNewQ
               </div>
 
               {/* Status bar */}
-              <div className={`w-full rounded-xl px-4 py-3 text-sm text-center font-medium ${
-                isError
+              <div className={`w-full rounded-xl px-4 py-3 text-sm text-center font-medium ${isError
                   ? 'bg-rose-50 text-rose-700 border border-rose-200'
                   : isWaiting
-                  ? 'bg-orange-50 text-orange-700 border border-orange-200'
-                  : 'bg-slate-50 text-slate-600 border border-slate-200'
-              }`}>
+                    ? 'bg-orange-50 text-orange-700 border border-orange-200'
+                    : 'bg-slate-50 text-slate-600 border border-slate-200'
+                }`}>
                 {isError ? (
                   <span className="flex items-center justify-center gap-1.5">
                     <HiOutlineExclamation className="w-4 h-4 shrink-0" />
@@ -327,7 +328,7 @@ function AccountCard({ account, onLogout, onDelete, onRelogin, canRelogin, readO
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
+        <div className="flex flex-col gap-1.5 shrink-0 sm:items-end">
           {needsRelogin && !readOnly && (
             <button
               type="button"
@@ -351,7 +352,7 @@ function AccountCard({ account, onLogout, onDelete, onRelogin, canRelogin, readO
           )}
           <button
             type="button"
-            onClick={() => onDelete(account.id)}
+            onClick={() => onDelete(account)}
             disabled={deleting === account.id}
             className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-50"
           >
@@ -376,7 +377,7 @@ export default function TelegramSettings({ readOnly = false } = {}) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const safeAccounts = Array.isArray(accounts) ? accounts : [];
+  const safeAccounts = useMemo(() => (Array.isArray(accounts) ? accounts : []), [accounts]);
 
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [qrPayload, setQrPayload] = useState(null);
@@ -390,6 +391,8 @@ export default function TelegramSettings({ readOnly = false } = {}) {
 
   const [deleting, setDeleting] = useState(null);
   const [loggingOut, setLoggingOut] = useState(null);
+  const [accountToDelete, setAccountToDelete] = useState(null);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   const fetchAccounts = useCallback(async (signal) => {
     try {
@@ -559,19 +562,30 @@ export default function TelegramSettings({ readOnly = false } = {}) {
     setQrModalOpen(false);
   }, [qrPayload, stopPolling]);
 
-  const handleDelete = useCallback(async (id) => {
-    if (!window.confirm(t('telegramSettings.deleteConfirm'))) return;
-    setDeleting(id);
+  const handleDelete = useCallback((accountOrId) => {
+    const target =
+      typeof accountOrId === 'object' && accountOrId !== null
+        ? accountOrId
+        : safeAccounts.find((a) => a.id === accountOrId) || { id: accountOrId };
+    setAccountToDelete(target);
+  }, [safeAccounts]);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!accountToDelete) return;
+    setIsDeletingAccount(true);
+    setDeleting(accountToDelete.id);
     try {
-      await chatbotApi.deleteTelegramAccount(id);
+      await chatbotApi.deleteTelegramAccount(accountToDelete.id);
       toast.success(t('telegramSettings.deleteSuccess'));
+      setAccountToDelete(null);
       await fetchAccounts();
     } catch (err) {
       toast.error(err?.message || t('telegramSettings.deleteError'));
     } finally {
+      setIsDeletingAccount(false);
       setDeleting(null);
     }
-  }, [fetchAccounts, t]);
+  }, [accountToDelete, fetchAccounts, t]);
 
   const handleLogout = useCallback(async (id) => {
     setLoggingOut(id);
@@ -616,22 +630,22 @@ export default function TelegramSettings({ readOnly = false } = {}) {
             {refreshing ? t('telegramSettings.loading') : t('telegramSettings.refresh')}
           </button>
           {!readOnly && (
-          <button
-            type="button"
-            onClick={handleStartQrLogin}
-            disabled={!canOpenQr}
-            title={
-              gatewayStatus?.stubOnly
-                ? t('telegramSettings.gatewayStubWarning')
-                : gatewayStatus && !gatewayStatus.hasSecret
-                ? t('telegramSettings.gatewayNotConfigured')
-                : undefined
-            }
-            className="inline-flex items-center gap-1.5 rounded-xl bg-primary-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <HiOutlineQrcode className="w-3.5 h-3.5" />
-            {t('telegramSettings.scanQr')}
-          </button>
+            <button
+              type="button"
+              onClick={handleStartQrLogin}
+              disabled={!canOpenQr}
+              title={
+                gatewayStatus?.stubOnly
+                  ? t('telegramSettings.gatewayStubWarning')
+                  : gatewayStatus && !gatewayStatus.hasSecret
+                    ? t('telegramSettings.gatewayNotConfigured')
+                    : undefined
+              }
+              className="inline-flex items-center gap-1.5 rounded-xl bg-primary-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <HiOutlineQrcode className="w-3.5 h-3.5" />
+              {t('telegramSettings.scanQr')}
+            </button>
           )}
         </div>
       }
@@ -681,9 +695,8 @@ export default function TelegramSettings({ readOnly = false } = {}) {
 
         {/* Content */}
         {loading ? (
-          <div className="flex flex-col items-center justify-center gap-2 py-14">
-            <div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-sm text-slate-500">{t('telegramSettings.loadingList')}</p>
+          <div className="p-4 sm:p-5">
+            <AccountListSkeleton count={2} />
           </div>
         ) : safeAccounts.length === 0 ? (
           /* Empty state */
@@ -755,6 +768,23 @@ export default function TelegramSettings({ readOnly = false } = {}) {
         qrError={qrError}
         onCancel={handleCancelQr}
         onNewQr={handleStartQrLogin}
+      />
+
+      {/* ── Modal xác nhận xoá tài khoản ── */}
+      <ConfirmModal
+        isOpen={Boolean(accountToDelete)}
+        title={t('telegramSettings.delete') + ' ' + (t('telegramSettings.title') || 'Telegram')}
+        message={
+          accountToDelete
+            ? `${t('telegramSettings.deleteConfirm')}\n\nTài khoản: ${accountToDelete.first_name || (accountToDelete.username ? `@${accountToDelete.username}` : `ID ${accountToDelete.telegram_user_id || accountToDelete.id}`)}`
+            : ''
+        }
+        confirmText={t('common.delete') || 'Xóa tài khoản'}
+        cancelText={t('common.cancel') || 'Hủy'}
+        variant="danger"
+        isLoading={isDeletingAccount}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => !isDeletingAccount && setAccountToDelete(null)}
       />
     </PageContainer>
   );
