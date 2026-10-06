@@ -962,10 +962,10 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
       {/* Modal xác nhận xóa tài khoản chuẩn hóa */}
       <ConfirmModal
         isOpen={Boolean(accountToDelete)}
-        title={t('zaloSettings.confirmDeleteTitle') || 'Xóa tài khoản Zalo'}
+        title={t('zaloSettings.confirmDelete')}
         message={
           accountToDelete
-            ? `${t('zaloSettings.confirmDelete')}\n\nTài khoản: ${accountToDelete.displayName || accountToDelete.zaloName || accountToDelete.id}`
+            ? `Tài khoản: ${accountToDelete.displayName || accountToDelete.zaloName || accountToDelete.id}`
             : ''
         }
         confirmText={t('common.delete') || 'Xóa tài khoản'}
