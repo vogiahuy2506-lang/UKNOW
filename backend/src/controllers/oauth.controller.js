@@ -141,7 +141,11 @@ class OAuthController {
       // Exchange code for short-lived token
       const appId = process.env.FACEBOOK_APP_ID;
       const appSecret = process.env.FACEBOOK_APP_SECRET;
-      const redirectUri = `${process.env.OAUTH_CALLBACK_URL}/facebook`;
+      // Phải GHÁP GIỐNG HỆT initFacebookOAuth, nếu không Meta trả `redirect_uri mismatch`
+      // (xem dòng trên: Facebook tự ghép /api/webhooks/oauth/callback/facebook từ
+      // BACKEND_PUBLIC_URL — KHÔNG dùng OAUTH_CALLBACK_URL, biến đó không tồn tại trong .env).
+      const backendBase = (process.env.BACKEND_PUBLIC_URL || '').replace(/\/+$/, '');
+      const redirectUri = `${backendBase}/api/webhooks/oauth/callback/facebook`;
 
       const tokenResponse = await fetch(
         `${FB_GRAPH_BASE}/oauth/access_token?client_id=${appId}&client_secret=${appSecret}&redirect_uri=${encodeURIComponent(redirectUri)}&code=${code}`

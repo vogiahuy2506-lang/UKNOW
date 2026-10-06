@@ -2,8 +2,10 @@
  * P12 — Studio DeployTab: ô "Zalo cá nhân" ẩn khi gói không có kênh Zalo (như WhatsApp/Telegram ở P9);
  * gói có Zalo (kể cả limit=1) vẫn hiện.
  *
- * 04/10/2026 (S-04): Facebook và Zalo OA đã gỡ khỏi Studio — ca cũ khẳng định "Facebook và Zalo OA vẫn còn" nay đảo lại:
- * hai ô đó KHÔNG còn, kể cả khi gói có đủ kênh.
+ * Lịch sử:
+ *  - 04/10/2026 (S-04): Facebook và Zalo OA gỡ khỏi Studio.
+ *  - 05/10/2026: Facebook Messenger KHÔI PHỤC (Meta App đã có FACEBOOK_APP_ID/SECRET). Zalo OA vẫn gỡ.
+ *    Ô Facebook không phụ thuộc entitlement gói nên không cần mock thêm; nó hiện với mọi gói.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -46,14 +48,19 @@ describe('DeployTab — P12 quyền kênh Zalo', () => {
     expect(screen.getByText('Zalo cá nhân')).toBeTruthy();
   });
 
-  it('S-04: không còn ô Facebook và Zalo OA (kể cả khi gói có đủ kênh)', () => {
+  it('khôi phục 05/10/2026: có ô Facebook; Zalo OA vẫn không có (kể cả khi gói có đủ kênh)', () => {
     render(<DeployTab chatbot={bot} onOpenWidgetSettings={() => {}} />);
-    expect(screen.queryByText('Facebook')).toBeNull();
+    expect(screen.getByText('Facebook')).toBeTruthy();
     expect(screen.queryByText('Zalo OA')).toBeNull();
-    // Ba ô nhắn tin còn lại.
+    // Ba ô nhắn tin còn lại ngoài Facebook.
     expect(screen.getByText('Zalo cá nhân')).toBeTruthy();
     expect(screen.getByText('Telegram')).toBeTruthy();
     expect(screen.getByText('WhatsApp')).toBeTruthy();
+  });
+
+  it('ô Facebook đọc facebook_count để hiện "Đang bật: N tài khoản"', () => {
+    render(<DeployTab chatbot={{ ...bot, facebook_count: 1 }} onOpenWidgetSettings={() => {}} />);
+    expect(screen.getByText('Đang bật: 1 tài khoản')).toBeTruthy();
   });
 
   it('S-04: không có chấm cam "chưa nối" — ô chỉ ghi chữ nhỏ "Chưa bật" / "Đang bật: N tài khoản"', () => {
@@ -62,7 +69,7 @@ describe('DeployTab — P12 quyền kênh Zalo', () => {
     );
     expect(container.querySelector('.bg-amber-500')).toBeNull();
     expect(screen.getByText('Đang bật: 2 tài khoản')).toBeTruthy();
-    // Telegram + WhatsApp chưa bật → hai chữ "Chưa bật".
-    expect(screen.getAllByText('Chưa bật')).toHaveLength(2);
+    // Facebook + Telegram + WhatsApp chưa bật → ba chữ "Chưa bật".
+    expect(screen.getAllByText('Chưa bật')).toHaveLength(3);
   });
 });
