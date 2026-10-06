@@ -46,9 +46,18 @@ const EMBED_OPTIONS = [
   },
 ];
 
-// Kênh nhắn tin còn dùng được. Facebook đã chốt bỏ (21/09/2026) và Zalo OA chưa từng có một lần nối nào (trang Kênh tự
-// ghi "chưa khả dụng") nên gỡ khỏi Studio (S-04); `countField` đọc số tài khoản đang bật từ API danh sách chatbot.
+// Kênh nhắn tin còn dùng được trong Studio. Facebook Messenger được khôi phục 05/10/2026 (trước đó gỡ 21/09/2026
+// vì chưa có FACEBOOK_APP_ID/SECRET nên nút OAuth luôn báo lỗi); Zalo OA vẫn gỡ vì chưa từng có một lần nối nào.
+// `countField` đọc số tài khoản đang bật từ API danh sách chatbot.
 const CHANNEL_TILES = [
+  {
+    key: 'facebook',
+    title: 'Facebook',
+    tooltip: 'Facebook Messenger — Bật chatbot trả lời tin nhắn trên Fanpage',
+    icon: 'f',
+    iconClass: 'bg-blue-50 text-blue-600',
+    countField: 'facebook_count',
+  },
   {
     key: 'zalo_personal',
     title: 'Zalo cá nhân',
@@ -201,7 +210,9 @@ export default function DeployTab({
             <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-1 mb-2">
               {t('chatbot.studio.deployMessengerTitle')}
             </p>
-            <div className="grid grid-cols-3 gap-2">
+            {/* 4 ô kênh (Facebook + Zalo cá nhân + WhatsApp + Telegram) nên xuống 2 cột: 3 cột sẽ đẩy ô
+                thứ 4 xuống hàng lẻ. */}
+            <div className="grid grid-cols-2 gap-2">
               {channelTiles.map((tile) => {
                 const count = Number(chatbot[tile.countField]) || 0;
                 return (

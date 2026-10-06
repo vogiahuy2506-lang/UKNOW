@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import WhatsAppChannelModal from '../../features/chatbot/components/WhatsAppChannelModal';
 import TelegramChannelModal from '../../features/chatbot/components/TelegramChannelModal';
+import FacebookChannelModal from '../../features/chatbot/components/FacebookChannelModal';
 import { useI18n } from '../../i18n';
 
 /* ─── ChannelModal — cấu hình từng kênh ─────────────────────────────── */
@@ -44,7 +45,19 @@ export function ChannelModal({ open, channel, chatbot, onClose }) {
     );
   }
 
-  // Zalo OA và Facebook đã gỡ khỏi Studio (S-04): Facebook chốt bỏ 21/09/2026, Zalo OA chưa từng có một lần nối nào.
+  // Facebook Messenger: khôi phục 05/10/2026 sau khi Meta App đã được cấu hình (FACEBOOK_APP_ID/SECRET).
+  // Cùng pattern per-chatbot toggle list: mỗi chatbot nhận một Fanpage.
+  if (channel === 'facebook') {
+    return (
+      <FacebookChannelModal
+        open={open}
+        onClose={onClose}
+        chatbotId={chatbot.id}
+      />
+    );
+  }
+
+  // Zalo OA vẫn gỡ (chưa từng có một lần nối nào); Facebook xem nhánh trên.
   if (channel !== 'zalo_personal') return null;
 
   return (

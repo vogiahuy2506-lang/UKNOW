@@ -1651,12 +1651,10 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                 <div className="w-10 h-10 rounded-2xl bg-rose-50 flex items-center justify-center shrink-0 border border-rose-100">
                   <HiOutlineTrash className="w-5 h-5" />
                 </div>
-                <h3 className="font-bold text-slate-900 text-base">{t('common.confirmDelete')}</h3>
+                <h3 className="font-bold text-slate-900 text-base">{t('products.confirmDeleteTitle')}</h3>
               </div>
               <p className="text-sm text-slate-600 leading-relaxed mb-6">
-                Bạn có chắc chắn muốn xóa sản phẩm{' '}
-                <strong className="text-slate-900 font-semibold">{deleteTarget.productName}</strong>?
-                Hành động này không thể hoàn tác.
+                {t('products.confirmDeleteMessage', { name: deleteTarget.productName })}
               </p>
               <div className="flex items-center justify-end gap-2.5">
                 <button

@@ -127,11 +127,14 @@ describe('chatbot.repository.listChatbotsByUser — tham số khớp placeholder
     const sql = String(query.mock.calls[0][0]);
     for (const col of [
       'document_count', 'document_error_count', 'zalo_personal_count', 'telegram_count',
-      'whatsapp_count', 'web_active', 'is_locked', 'marketplace_listing_status',
+      'whatsapp_count', 'facebook_count', 'web_active', 'is_locked', 'marketplace_listing_status',
     ]) {
       expect(sql).toMatch(new RegExp(`AS ${col}\\b`));
     }
     expect(sql).toMatch(/d\.status = 'ready'/);
     expect(sql).toMatch(/d\.status = 'error'/);
+    // Facebook Messenger (khôi phục 05/10/2026): chỉ đếm dòng đang bật, đúng kênh.
+    expect(sql).toMatch(/fbc\.channel_type = 'facebook'/);
+    expect(sql).toMatch(/fbc\.is_active = true/);
   });
 });

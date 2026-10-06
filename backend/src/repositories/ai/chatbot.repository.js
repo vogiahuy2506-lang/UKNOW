@@ -514,6 +514,12 @@ class ChatbotRepository {
                 WHERE z.id_chatbot = custom_chatbots.id AND z.is_enabled = true) AS zalo_personal_count,
               (SELECT COUNT(*)::int FROM telegram_chatbot_settings t
                 WHERE t.id_chatbot = custom_chatbots.id AND t.is_enabled = true) AS telegram_count,
+              -- Facebook Messenger (khôi phục 05/10/2026): 1 chatbot nhận tối đa 1 Fanpage (partial UNIQUE
+              -- uq_chatbot_channel_legacy_idx), nên COUNT trả 0 hoặc 1 — ô "Trên ứng dụng nhắn tin" chỉ cần biết bật hay chưa.
+              (SELECT COUNT(*)::int FROM chatbot_channel_connections fbc
+                WHERE fbc.id_chatbot = custom_chatbots.id
+                  AND fbc.channel_type = 'facebook'
+                  AND fbc.is_active = true) AS facebook_count,
               ((SELECT COUNT(*) FROM chatbot_whatsapp_baileys_settings w
                  WHERE w.id_chatbot = custom_chatbots.id AND w.is_enabled = true)
                + (SELECT COUNT(*) FROM chatbot_whatsapp_account_settings w2
