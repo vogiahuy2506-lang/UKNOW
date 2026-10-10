@@ -3,6 +3,8 @@ import {
   evaluateNextGate,
   extractWizardState,
   mergeWizardState,
+  applyWizardStateAction,
+  normalizeWizardState,
   parseWizardMarker,
 } from '../aiCampaignWizard.service.js';
 import {
@@ -113,6 +115,21 @@ const runFixture = (fixture) => {
     }
     if (turn.patchPersisted) {
       persistedGates = { ...(persistedGates || {}), ...turn.patchPersisted };
+      return;
+    }
+    if (turn.reduceAction) {
+      // Chạy reducer PATCH thật trên state đã lưu — fixture không tự gõ lại kết quả của nó.
+      const before = normalizeWizardState({ v: 1, gates: persistedGates || {}, brief: persistedBrief || undefined });
+      const { state: after } = applyWizardStateAction(before, turn.reduceAction.action, turn.reduceAction.payload || {});
+      persistedGates = clone(after.gates);
+      persistedBrief = clone(after.brief);
+      return;
+    }
+    if (turn.expectBrief) {
+      const { brief } = currentState();
+      Object.entries(turn.expectBrief).forEach(([key, value]) => {
+        expect({ label, key, value: brief?.[key] }).toEqual({ label, key, value });
+      });
       return;
     }
     if (turn.dropMarkers) {

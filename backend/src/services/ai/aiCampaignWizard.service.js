@@ -10,6 +10,7 @@ import {
   createEmptyCampaignBrief,
   isCampaignBriefReady,
   mergeCampaignBrief,
+  FLOW_BOUNDARY_TYPES,
 } from './campaignBrief.service.js';
 import {
   isQuickSendRequest,
@@ -68,7 +69,8 @@ const CAMPAIGN_RESPONSE_TYPES = new Set([
 // trong luồng", ranh giới này nghĩa ngược lại — đã ra khỏi luồng. 'campaign_abandoned' thêm ở
 // PR-2 (PLAN_WIZARD_VONG_DOI) — dùng chung khối reset bên dưới, không cần nhánh riêng.
 // Khai lại y hệt ở frontend (wizardContext.js) — test wizardContext.spec.js so khớp trực tiếp.
-export const FLOW_BOUNDARY_TYPES = new Set(['campaign_created', 'auto_created_success', 'campaign_abandoned']);
+// Định nghĩa gốc nằm ở campaignBrief.service.js (extractCampaignBriefFromHistory cũng dừng ở ranh giới; tránh import vòng).
+export { FLOW_BOUNDARY_TYPES };
 
 // P12 — gói của người đang chat không có kênh Zalo: Zalo (cá nhân/nhóm) coi như KHÔNG tồn tại trong wizard (đọc lúc gọi,
 // từ kho quyền của middleware `channelEntitlementContext`; ngoài ngữ cảnh -> không chặn, như trước P12).
@@ -1918,6 +1920,8 @@ export function applyWizardStateAction(state, action, payload = {}) {
         abandonedAtMessageCount: normalizedMessageCount,
       };
       next.plan = createEmptyWizardState().plan;
+      // Brief của chiến dịch bị bỏ không được sống sang chiến dịch kế tiếp (cùng lẽ với mark_campaign_created).
+      next.brief = createEmptyCampaignBrief(current.brief?.contentLocale || 'vi');
       next.meta.lastGate = null;
       next.meta.lastGateCount = 0;
       next.meta.deadEndLoggedAt = null;
@@ -1938,6 +1942,9 @@ export function applyWizardStateAction(state, action, payload = {}) {
       next.gates = createEmptyWizardState().gates;
       next.plan.status = 'completed';
       next.plan.campaignId = campaignId;
+      // Brief (chủ đề/sản phẩm/tệp) của chiến dịch vừa tạo xong cũng đóng theo: chiến dịch thứ hai trong cùng chat
+      // phải được hỏi lại nội dung, không kế thừa chủ đề của chiến dịch trước.
+      next.brief = createEmptyCampaignBrief(current.brief?.contentLocale || 'vi');
       next.meta.lastGate = null;
       next.meta.lastGateCount = 0;
       next.meta.deadEndLoggedAt = null;

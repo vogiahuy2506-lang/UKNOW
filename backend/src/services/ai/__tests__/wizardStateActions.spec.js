@@ -133,6 +133,26 @@ describe('applyWizardStateAction', () => {
     });
   });
 
+  describe('brief qua ranh giới chiến dịch', () => {
+    const withBrief = () => {
+      const base = stateWithPlan();
+      base.brief = { ...base.brief, contentMode: 'custom_topic', topicText: 'Lịch nghỉ Tết', contentLocale: 'vi' };
+      return base;
+    };
+
+    it('mark_campaign_created: brief về rỗng — chiến dịch B không kế thừa chủ đề của A', () => {
+      const { state } = applyWizardStateAction(withBrief(), 'mark_campaign_created', { campaignId: 55 });
+      expect(state.brief.contentMode).toBeNull();
+      expect(state.brief.topicText).toBeNull();
+    });
+
+    it('abandon_campaign_flow: brief về rỗng', () => {
+      const { state } = applyWizardStateAction(withBrief(), 'abandon_campaign_flow', { messageCount: 5 });
+      expect(state.brief.contentMode).toBeNull();
+      expect(state.brief.topicText).toBeNull();
+    });
+  });
+
   describe('mark_campaign_created', () => {
     it('completes the plan with campaignId', () => {
       const { state, changed } = applyWizardStateAction(stateWithPlan(), 'mark_campaign_created', { campaignId: 55 });

@@ -8,8 +8,8 @@
 // Fixture này mô phỏng ĐÚNG hai việc production làm khi mark_campaign_created chạy:
 // 1. saveAssistantMessage ghi tin `campaign_created` vào history (ranh giới nằm trong lịch sử,
 //    ba nơi đều thấy — không phụ thuộc chỉ số tin nhắn).
-// 2. applyWizardStateAction('mark_campaign_created') ghi next.gates =
-//    createEmptyWizardState().gates lên server — patchPersisted mô phỏng đúng giá trị đó.
+// 2. applyWizardStateAction('mark_campaign_created') ghi next.gates và next.brief rỗng lên server —
+//    op reduceAction chạy đúng reducer đó trên state đã lưu.
 export default {
   name: 'hai chiến dịch trong một hội thoại — campaign_created đóng luồng, B hỏi lại từ đầu',
   locale: 'vi',
@@ -25,31 +25,18 @@ export default {
     { push: { role: 'user', content: '[wizard]{"gate":"channel","channel":"zalo_group"}\nZalo nhóm' } },
     { push: { role: 'user', content: '[wizard]{"gate":"senderAccount","channel":"zalo_group","accountId":8}\nTK 8' } },
     { push: { role: 'user', content: '[wizard]{"gate":"zaloGroups","accountId":8,"groupIds":["g1"]}\nChọn nhóm ĐI LÀM' } },
+    // Brief (chủ đề) của A — server ghi vào wizard_state.brief sau lượt này.
+    { push: { role: 'user', content: '[wizard]{"gate":"campaignBrief","contentMode":"custom_topic","topicText":"Lịch nghỉ Tết"}\nChủ đề' } },
     { push: { role: 'assistant', type: 'confirm_create', content: 'Xác nhận tạo chiến dịch A?', data: { campaignType: 'zalo_group' } } },
+    { snapshotPersisted: true },
+    { expectBrief: { contentMode: 'custom_topic', topicText: 'Lịch nghỉ Tết' } },
 
     // ---- Server tạo xong A: ghi ranh giới + đóng luồng (mark_campaign_created) ----
     { push: { role: 'assistant', type: 'campaign_created', content: '🎉 Chiến dịch A đã được tạo.', data: { campaignId: 100 } } },
-    {
-      patchPersisted: {
-        isCampaignFlow: false,
-        channel: null,
-        senderAccountId: null,
-        senderAccountName: null,
-        dataSource: null,
-        sheetUrl: null,
-        sheetCheck: null,
-        zaloGroupIds: [],
-        zaloFriendIds: [],
-        schedule: null,
-        planApproved: false,
-        senderOtherRequested: false,
-        hasContentPlan: false,
-        hasAttachedFile: false,
-        hasAttachedSpreadsheet: false,
-        fileUsage: null,
-        abandonedAtMessageCount: null,
-      },
-    },
+    // Chạy ĐÚNG reducer production (gates rỗng + brief rỗng) thay vì tự gõ lại giá trị.
+    { reduceAction: { action: 'mark_campaign_created', payload: { campaignId: 100 } } },
+    // Ranh giới đã nằm trong history: brief của A KHÔNG được quét lại từ marker cũ.
+    { expectBrief: { contentMode: null, topicText: null } },
 
     // ---- Chiến dịch B: CÙNG hội thoại, gõ tiếp ngay sau ranh giới ----
     { push: { role: 'user', content: 'Tạo thêm chiến dịch Zalo nhóm nữa' } },
@@ -59,5 +46,7 @@ export default {
     // TK của B, KHÔNG phải TK 8; nhóm vẫn rỗng, KHÔNG phải g1 của A.
     { expectState: { senderAccountId: 9, zaloGroupIds: [] } },
     { expectGate: 'zaloGroups' },
+    // Chiến dịch B chưa có chủ đề: brief vẫn rỗng, không kế thừa "Lịch nghỉ Tết" của A.
+    { expectBrief: { contentMode: null, topicText: null } },
   ],
 };

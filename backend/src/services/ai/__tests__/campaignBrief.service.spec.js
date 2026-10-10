@@ -189,6 +189,27 @@ describe('campaignBrief.service', () => {
   });
 
   describe('extractCampaignBriefFromHistory', () => {
+    it.each(['campaign_created', 'auto_created_success', 'campaign_abandoned'])(
+      'dừng ở ranh giới %s: marker campaignBrief của chiến dịch trước không được trả lại',
+      (type) => {
+        const found = extractCampaignBriefFromHistory([
+          { role: 'user', content: '[wizard]{"gate":"campaignBrief","contentMode":"custom_topic","topicText":"A"}\nA' },
+          { role: 'assistant', type, content: 'xong', data: {} },
+          { role: 'user', content: 'Tạo thêm chiến dịch nữa' },
+        ]);
+        expect(found).toEqual({ brief: null, invalid: false });
+      },
+    );
+
+    it('marker SAU ranh giới vẫn được nhận', () => {
+      const found = extractCampaignBriefFromHistory([
+        { role: 'user', content: '[wizard]{"gate":"campaignBrief","contentMode":"custom_topic","topicText":"A"}\nA' },
+        { role: 'assistant', type: 'campaign_created', content: 'xong', data: {} },
+        { role: 'user', content: '[wizard]{"gate":"campaignBrief","contentMode":"custom_topic","topicText":"Chu de B moi"}\nB' },
+      ]);
+      expect(found.brief.topicText).toBe('Chu de B moi');
+    });
+
     it('returns latest campaignBrief marker', () => {
       const found = extractCampaignBriefFromHistory([
         { role: 'user', content: '[wizard]{"gate":"campaignBrief","contentMode":"custom_topic","topicText":"old"}\n' },

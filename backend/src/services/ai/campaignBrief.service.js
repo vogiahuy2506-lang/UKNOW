@@ -563,6 +563,9 @@ export function buildCampaignBriefContext({ brief, resolvedProducts = [] } = {})
   return lines.join('\n');
 }
 
+// Ranh giới vòng đời wizard (xem aiCampaignWizard.service.js). Khai ở đây để brief dừng ở ranh giới mà không import vòng.
+export const FLOW_BOUNDARY_TYPES = new Set(['campaign_created', 'auto_created_success', 'campaign_abandoned']);
+
 /**
  * Extract latest campaignBrief marker from history.
  * Scan newest-first: first campaignBrief candidate wins (valid or invalid).
@@ -573,6 +576,8 @@ export function extractCampaignBriefFromHistory(history = []) {
   const messages = Array.isArray(history) ? history : [];
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
+    // Ranh giới "chiến dịch đã tạo xong / đã bỏ dở": marker campaignBrief TRƯỚC nó thuộc chiến dịch cũ.
+    if (message?.role === 'assistant' && FLOW_BOUNDARY_TYPES.has(message?.type)) break;
     if (message?.role !== 'user') continue;
     const content = String(message?.content || '');
     const firstLine = content.split('\n')[0]?.trim() || '';

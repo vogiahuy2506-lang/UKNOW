@@ -3,6 +3,8 @@ import campaignNodeRegistryService from '../../campaign/campaignNodeRegistry.ser
 import {
   extractWizardState,
   mergeWizardState,
+  applyWizardStateAction,
+  normalizeWizardState,
   parseWizardMarker,
 } from '../aiCampaignWizard.service.js';
 import {
@@ -30,6 +32,7 @@ import reloadThenSaveContinuesChain from './fixtures/golden/reloadThenSaveContin
 import zaloCustomSenderAccountToNodes from './fixtures/golden/zaloCustomSenderAccountToNodes.fixture.js';
 import imageAttachedSurvivesNextTurn from './fixtures/golden/imageAttachedSurvivesNextTurn.fixture.js';
 import sheetThieuCotLienHe from './fixtures/golden/sheetThieuCotLienHe.fixture.js';
+import secondCampaignSameChatReasksGates from './fixtures/golden/secondCampaignSameChatReasksGates.fixture.js';
 
 const FIXTURES = [
   emailSheetUrlAfterDrafts,
@@ -49,6 +52,7 @@ const FIXTURES = [
   zaloCustomSenderAccountToNodes,
   imageAttachedSurvivesNextTurn,
   sheetThieuCotLienHe,
+  secondCampaignSameChatReasksGates,
 ];
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -60,7 +64,7 @@ const lastUserContent = (history) => {
   return '';
 };
 
-describe('PR-2.4: Replay 17 golden fixtures qua Intent Compiler', () => {
+describe('PR-2.4: Replay 18 golden fixtures qua Intent Compiler', () => {
   FIXTURES.forEach((fixture) => {
     it(`Replay fixture: "${fixture.name}"`, () => {
       let history = [];
@@ -106,6 +110,21 @@ describe('PR-2.4: Replay 17 golden fixtures qua Intent Compiler', () => {
         }
         if (turn.patchPersisted) {
           persistedGates = { ...(persistedGates || {}), ...turn.patchPersisted };
+          return;
+        }
+        if (turn.reduceAction) {
+          // Chạy reducer PATCH thật trên state đã lưu — fixture không tự gõ lại kết quả của nó.
+          const before = normalizeWizardState({ v: 1, gates: persistedGates || {}, brief: persistedBrief || undefined });
+          const { state: after } = applyWizardStateAction(before, turn.reduceAction.action, turn.reduceAction.payload || {});
+          persistedGates = clone(after.gates);
+          persistedBrief = clone(after.brief);
+          return;
+        }
+        if (turn.expectBrief) {
+          const { brief } = currentState();
+          Object.entries(turn.expectBrief).forEach(([key, value]) => {
+            expect({ key, value: brief?.[key] }).toEqual({ key, value });
+          });
           return;
         }
         if (turn.dropMarkers) {
