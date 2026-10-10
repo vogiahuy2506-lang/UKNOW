@@ -208,13 +208,28 @@ describe('notificationDispatch', () => {
     it('CHƯA có dòng cấu hình nào (mặc định catalog = chỉ chuông) → mọi sự kiện đều không gửi email', async () => {
       mockListSettings.mockResolvedValue([]);
 
-      for (const eventType of NOTIFICATION_EVENT_KEYS.filter((key) => key !== 'support_ticket_created' && key !== 'support_ticket_user_replied')) {
+      // Ngoại lệ (quyết định 10/10): nhắc gia hạn plan_expiring / plan_expired mặc định BẬT email — test riêng bên dưới.
+      const bellOnly = NOTIFICATION_EVENT_KEYS.filter((key) => !['support_ticket_created', 'support_ticket_user_replied', 'plan_expiring', 'plan_expired'].includes(key));
+      for (const eventType of bellOnly) {
         const result = await notifyUsers(base({ eventType }));
         expect(result.emailSent).toBe(0);
         expect(result.inApp).toBe(2);
       }
       expect(mockFindEmailContacts).not.toHaveBeenCalled();
       expect(mockSendSystemEmail).not.toHaveBeenCalled();
+    });
+
+    it('CHƯA có dòng cấu hình nào: plan_expiring / plan_expired mặc định BẬT email (chuông + email), người dùng không tắt được', async () => {
+      mockListSettings.mockResolvedValue([]);
+
+      for (const eventType of ['plan_expiring', 'plan_expired']) {
+        mockSendSystemEmail.mockClear();
+        const result = await notifyUsers(base({ eventType }));
+        expect(result.inApp).toBe(2);
+        expect(result.emailSent).toBe(2);
+        expect(mockSendSystemEmail).toHaveBeenCalledTimes(2);
+        expect(await getEffectiveEventSettings(eventType)).toEqual({ inAppEnabled: true, emailEnabled: true, userCanDisableEmail: false });
+      }
     });
 
     it('email_enabled hệ thống tắt (campaign_run_completed) → không tra liên hệ, không gửi', async () => {

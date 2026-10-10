@@ -57,12 +57,8 @@ afterAll(() => {
 beforeEach(async () => {
   await truncateAll();
   mockSendMail.mockClear();
-  // PR-6: thư hết hạn / nhắc hạn đi qua dispatcher; mặc định hệ thống CHỈ CHUÔNG → bật email cho hai sự kiện gói để các ca dưới đo đường email.
-  await db.query(
-    `INSERT INTO notification_event_settings (event_type, in_app_enabled, email_enabled, user_can_disable_email)
-     VALUES ('plan_expired', true, true, false), ('plan_expiring', true, true, false)
-     ON CONFLICT (event_type) DO UPDATE SET email_enabled = true`
-  );
+  // PR-6: thư hết hạn / nhắc hạn đi qua dispatcher. truncateAll xoá notification_event_settings → dùng MẶC ĐỊNH catalog, trong đó
+  // plan_expired / plan_expiring bật email (ngoại lệ "chỉ chuông", quyết định 10/10) — nên các ca dưới đo đúng đường email mặc định.
   clearEventSettingsCache();
 });
 
@@ -263,8 +259,12 @@ describe('sendExpiringReminders — Nhắc hạn còn 7 ngày & 3 ngày (PR tác
     expect((await db.query('SELECT 1 FROM user_notifications WHERE user_id = $1', [user.id])).rows).toHaveLength(1);
   });
 
-  it('PR-6 — email mặc định TẮT (admin chưa bật): nhắc hạn chỉ ghi chuông, vẫn đóng mốc, không gửi thư', async () => {
-    await db.query(`UPDATE notification_event_settings SET email_enabled = false WHERE event_type = 'plan_expiring'`);
+  it('PR-6 — admin TẮT email của plan_expiring: nhắc hạn chỉ ghi chuông, vẫn đóng mốc, không gửi thư', async () => {
+    await db.query(
+      `INSERT INTO notification_event_settings (event_type, in_app_enabled, email_enabled, user_can_disable_email)
+       VALUES ('plan_expiring', true, false, false)
+       ON CONFLICT (event_type) DO UPDATE SET email_enabled = false`
+    );
     clearEventSettingsCache();
     const plan = await createPlan({ code: 'p-remind-bell', name: 'Gói Chỉ Chuông' });
     const user = await createUser({ username: 'user-remind-bell', email: 'remind-bell@example.com', full_name: 'Khách Chuông' });
