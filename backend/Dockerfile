@@ -2,6 +2,15 @@ FROM node:22-slim AS base
 
 WORKDIR /app
 
+# Chromium của Debian cho Puppeteer (cào trang dựng bằng JS). Không để puppeteer tự tải Chrome:
+# `npm ci` chạy bằng root nên Chrome rơi vào /root/.cache, còn app chạy USER node -> không tìm thấy.
+# fonts-noto-core: glyph tiếng Việt.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends chromium fonts-noto-core \
+    && rm -rf /var/lib/apt/lists/*
+ENV PUPPETEER_SKIP_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+
 # Chỉ copy manifest trước để tận dụng cache layer khi cài dependency
 COPY package*.json ./
 RUN npm ci --omit=dev
