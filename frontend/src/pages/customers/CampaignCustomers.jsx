@@ -52,7 +52,7 @@ const CustomerStatusBadge = ({ status, campaignType }) => {
 
 const CampaignCustomers = () => {
   const { t } = useI18n();
-  const { campaignId } = useParams();
+  const { campaignId, customerId: deepLinkCustomerId } = useParams();
   const navigate = useNavigate();
 
   const [campaign,       setCampaign]      = useState(null);
@@ -95,6 +95,28 @@ const CampaignCustomers = () => {
       setActiveTab('customers');
     }
   }, [activeTab, isZaloGroupCampaign]);
+
+  // Deep link /app/customers/:campaignId/:customerId (vd nút "xem khách" ở Dashboard) → mở sẵn modal khách.
+  useEffect(() => {
+    if (!deepLinkCustomerId) return undefined;
+    let cancelled = false;
+    customerApiService.getCustomerById(deepLinkCustomerId)
+      .then((res) => {
+        if (cancelled) return;
+        const profile = res.data?.data;
+        if (!profile) {
+          toast.error(t('campaignCustomers.loadCustomersFailed'));
+          return;
+        }
+        setSelectedCustomer(profile);
+        setShowCustomerModal(true);
+      })
+      .catch(() => {
+        if (!cancelled) toast.error(t('campaignCustomers.loadCustomersFailed'));
+      });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkCustomerId]);
 
   const fetchCustomers = useCallback(async (page, currentSearch, currentConsentSource) => {
     setIsLoading(true);
@@ -165,7 +187,12 @@ const CampaignCustomers = () => {
 
   const openCustomerModal = (c) => { setSelectedCustomer(c); setShowCustomerModal(true); };
   const openJourneyModal  = (c) => { setSelectedCustomer(c); setShowJourneyModal(true);  };
-  const closeCustomerModal = useCallback(() => setShowCustomerModal(false), []);
+  const closeCustomerModal = useCallback(() => {
+    setShowCustomerModal(false);
+    // Mở bằng đường dẫn sâu (/customers/:campaignId/:customerId): đóng thì bỏ customerId khỏi URL
+    // để tải lại trang không bật lại modal.
+    if (deepLinkCustomerId) navigate(`/app/customers/${campaignId}`, { replace: true });
+  }, [deepLinkCustomerId, campaignId, navigate]);
   const closeJourneyModal  = useCallback(() => setShowJourneyModal(false),  []);
 
 

@@ -766,7 +766,7 @@ const DashboardOrdersListTable = ({
   };
 
   const handleNavigateCustomer = (campaignId, customerId) => {
-    navigate(`/customers/${campaignId}/${customerId}`);
+    navigate(`/app/customers/${campaignId}/${customerId}`);
   };
 
   const isAnyFilter = Boolean(searchQuery.trim()) || channelFilters.length > 0 || statusFilters.length > 0;
