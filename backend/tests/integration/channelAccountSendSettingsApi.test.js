@@ -188,6 +188,11 @@ describe('send-settings — Telegram', () => {
       `UPDATE user_members SET permissions = $3::jsonb WHERE owner_id = $1 AND employee_id = $2`,
       [owner.id, employee.id, JSON.stringify({ campaigns_view: true, chatbot_channels_manage: true })]
     );
+    // PLAN_GIAO_TK_TG_WA H2 (10/10/2026): nhân viên chỉ thấy/dùng tài khoản Telegram/WhatsApp ĐƯỢC GIAO — giao tài khoản này để giữ ý định của ca.
+    await db.query(
+      `INSERT INTO member_channel_accounts (owner_id, employee_id, channel, account_ref, source) VALUES ($1, $2, 'telegram', $3, 'assigned')`,
+      [owner.id, employee.id, String(id)]
+    );
     const ok = await request(app).patch(url('telegram', id)).set(headers).send({ userDailySendLimit: 9 });
     expect(ok.status).toBe(200);
     const { rows } = await db.query('SELECT user_daily_send_limit FROM telegram_accounts WHERE id = $1', [id]);

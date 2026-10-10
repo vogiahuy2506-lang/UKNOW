@@ -379,6 +379,11 @@ describe('W4a — API cho trình dựng', () => {
       `UPDATE user_members SET permissions = $3::jsonb WHERE owner_id = $1 AND employee_id = $2`,
       [owner.id, employee.id, JSON.stringify({ campaigns_create: true })]
     );
+    // PLAN_GIAO_TK_TG_WA H2 (10/10/2026): nhân viên chỉ thấy/dùng tài khoản Telegram/WhatsApp ĐƯỢC GIAO — giao tài khoản này để giữ ý định của ca.
+    await db.query(
+      `INSERT INTO member_channel_accounts (owner_id, employee_id, channel, account_ref, source) VALUES ($1, $2, 'whatsapp_baileys', $3, 'assigned')`,
+      [owner.id, employee.id, `${owner.id}-default`]
+    );
     openSession(`${owner.id}-default`, 'Phúc');
     const allowed = await request(app)
       .get('/api/campaigns/channels/whatsapp/accounts')
