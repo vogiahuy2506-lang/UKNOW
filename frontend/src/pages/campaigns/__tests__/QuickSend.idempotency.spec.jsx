@@ -47,7 +47,7 @@ vi.mock('../../../features/settings/services/emailSettingsApi.service', () => ({
 
 vi.mock('../../../features/settings/services/zaloSettingsApi.service', () => ({
   default: {
-    listAccounts: vi.fn(),
+    listSelectableAccounts: vi.fn(),
     sendMessage: vi.fn(),
   },
 }));
@@ -94,7 +94,7 @@ describe('QuickSend Component Boundary (Idempotency Key Retention & Rotation)', 
       },
     });
 
-    zaloSettingsApiService.listAccounts.mockResolvedValue({
+    zaloSettingsApiService.listSelectableAccounts.mockResolvedValue({
       data: { data: { items: [] } },
     });
 
@@ -238,7 +238,7 @@ describe('QuickSend Bulk Send (runSendLoop Idempotency)', () => {
     emailSettingsApiService.listEmailSettings.mockResolvedValue({
       data: { data: { items: [{ id: 1, name: 'Sender Email', email: 'sender@uknow.vn', isDefault: true }] } },
     });
-    zaloSettingsApiService.listAccounts.mockResolvedValue({ data: { data: { items: [] } } });
+    zaloSettingsApiService.listSelectableAccounts.mockResolvedValue({ data: { data: { items: [] } } });
     campaignApiService.getQuickSendEstimate.mockResolvedValue({ data: { data: { unit: 'immediate', value: 0 } } });
   });
 

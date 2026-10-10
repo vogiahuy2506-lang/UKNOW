@@ -42,7 +42,7 @@ vi.mock('../../../features/settings/services/emailSettingsApi.service', () => ({
   default: { listEmailSettings: vi.fn(), sendEmail: vi.fn() },
 }));
 vi.mock('../../../features/settings/services/zaloSettingsApi.service', () => ({
-  default: { listAccounts: vi.fn(), sendMessage: vi.fn(), sendGroupMessage: vi.fn() },
+  default: { listSelectableAccounts: vi.fn(), sendMessage: vi.fn(), sendGroupMessage: vi.fn() },
 }));
 vi.mock('../../../features/campaigns/services/campaignApi.service', () => ({
   default: { getQuickSendEstimate: vi.fn(), testSendQuickCampaign: vi.fn() },
@@ -89,7 +89,7 @@ describe('QuickSend runSendLoop — Việc 1: giãn cách thật giữa các tin
     zaloTemplateApiService.getTemplates.mockResolvedValue({ data: { data: { items: [] } } });
     zaloTemplateApiService.getTemplateById.mockResolvedValue({ data: { data: null } });
     emailSettingsApiService.listEmailSettings.mockResolvedValue({ data: { data: { items: [] } } });
-    zaloSettingsApiService.listAccounts.mockResolvedValue({
+    zaloSettingsApiService.listSelectableAccounts.mockResolvedValue({
       data: { data: { items: [{ id: 9, displayName: 'TK Zalo 9', isDefault: true }] } },
     });
     campaignApiService.getQuickSendEstimate.mockResolvedValue({ data: { data: { unit: 'immediate', value: 0 } } });

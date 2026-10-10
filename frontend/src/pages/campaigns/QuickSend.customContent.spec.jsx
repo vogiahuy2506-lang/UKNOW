@@ -57,7 +57,7 @@ vi.mock('../../features/settings/services/emailSettingsApi.service', () => ({
 }));
 vi.mock('../../features/settings/services/zaloSettingsApi.service', () => ({
   default: {
-    listAccounts: m.listZaloAccounts,
+    listSelectableAccounts: m.listZaloAccounts,
     sendMessage: m.sendZaloMessage,
     sendGroupMessage: m.sendZaloGroupMessage,
   },

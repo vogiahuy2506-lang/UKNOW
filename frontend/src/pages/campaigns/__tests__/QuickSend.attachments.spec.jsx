@@ -55,7 +55,7 @@ vi.mock('../../../features/settings/services/emailSettingsApi.service', () => ({
 
 vi.mock('../../../features/settings/services/zaloSettingsApi.service', () => ({
   default: {
-    listAccounts: vi.fn(),
+    listSelectableAccounts: vi.fn(),
     sendMessage: vi.fn(),
   },
 }));
@@ -112,7 +112,7 @@ describe('QuickSend Attachments Flow', () => {
     });
     emailSettingsApiService.sendEmail.mockResolvedValue({ data: { success: true } });
 
-    zaloSettingsApiService.listAccounts.mockResolvedValue({
+    zaloSettingsApiService.listSelectableAccounts.mockResolvedValue({
       data: {
         data: {
           items: [{ id: 'z1', name: 'Zalo Account', isDefault: true, isLocked: false }],

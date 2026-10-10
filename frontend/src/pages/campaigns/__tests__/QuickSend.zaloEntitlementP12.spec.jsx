@@ -37,7 +37,7 @@ vi.mock('../../../features/settings/services/emailSettingsApi.service', () => ({
   default: { listEmailSettings: vi.fn(), sendEmail: vi.fn() },
 }));
 vi.mock('../../../features/settings/services/zaloSettingsApi.service', () => ({
-  default: { listAccounts: vi.fn(), sendMessage: vi.fn(), sendGroupMessage: vi.fn() },
+  default: { listSelectableAccounts: vi.fn(), sendMessage: vi.fn(), sendGroupMessage: vi.fn() },
 }));
 vi.mock('../../../features/campaigns/services/campaignApi.service', () => ({
   default: {
@@ -63,7 +63,7 @@ beforeEach(() => {
   emailTemplateApiService.getTemplates.mockResolvedValue({ data: { data: { items: [] } } });
   zaloTemplateApiService.getTemplates.mockResolvedValue({ data: { data: { items: [] } } });
   emailSettingsApiService.listEmailSettings.mockResolvedValue({ data: { data: { items: [] } } });
-  zaloSettingsApiService.listAccounts.mockResolvedValue({ data: { data: { items: [] } } });
+  zaloSettingsApiService.listSelectableAccounts.mockResolvedValue({ data: { data: { items: [] } } });
   campaignApiService.getQuickSendEstimate.mockResolvedValue({ data: { data: { unit: 'immediate', value: 0 } } });
   campaignApiService.getQuickSendAdapterConversations.mockResolvedValue({ data: { data: [] } });
   campaignBuilderApiService.getTelegramAccountsForBuilder.mockResolvedValue({ data: { data: [] } });

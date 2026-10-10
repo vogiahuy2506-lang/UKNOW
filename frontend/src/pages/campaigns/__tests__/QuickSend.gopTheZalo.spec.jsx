@@ -42,7 +42,7 @@ vi.mock('../../../features/settings/services/emailSettingsApi.service', () => ({
   default: { listEmailSettings: vi.fn(), sendEmail: vi.fn() },
 }));
 vi.mock('../../../features/settings/services/zaloSettingsApi.service', () => ({
-  default: { listAccounts: vi.fn(), sendMessage: vi.fn(), sendGroupMessage: vi.fn() },
+  default: { listSelectableAccounts: vi.fn(), sendMessage: vi.fn(), sendGroupMessage: vi.fn() },
 }));
 vi.mock('../../../features/chatbot/services/chatbotApi.service', () => ({
   default: { getZaloFriends: vi.fn().mockResolvedValue({ data: { data: { items: [], totalPages: 1 } } }) },
@@ -80,7 +80,7 @@ beforeEach(() => {
   zaloTemplateApiService.getTemplates.mockResolvedValue({ data: { data: { items: [ZALO_TEMPLATE] } } });
   zaloTemplateApiService.getTemplateById.mockResolvedValue({ data: { data: ZALO_TEMPLATE } });
   emailSettingsApiService.listEmailSettings.mockResolvedValue({ data: { data: { items: [] } } });
-  zaloSettingsApiService.listAccounts.mockResolvedValue({
+  zaloSettingsApiService.listSelectableAccounts.mockResolvedValue({
     data: { data: { items: [{ id: 9, displayName: 'TK Zalo 9', isDefault: true }] } },
   });
   zaloSettingsApiService.sendGroupMessage.mockResolvedValue({ data: { data: { items: [{ status: 'success' }] } } });
