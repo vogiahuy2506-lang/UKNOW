@@ -173,6 +173,14 @@ export const CRON_JOBS = [
     tracked: true,
   },
   {
+    code: 'user_notifications_cleanup',
+    label: 'Dọn thông báo chuông cũ',
+    schedule: '03:10 hàng ngày',
+    description: 'Xoá thông báo trong app (chuông) đã đọc quá 90 ngày và chưa đọc quá 180 ngày (đổi qua NOTIFICATION_RETENTION_READ_DAYS / NOTIFICATION_RETENTION_UNREAD_DAYS).',
+    impact: 'Bảng user_notifications phình dần, chuông của khách tích tụ thông báo cũ không bao giờ được dọn.',
+    tracked: true,
+  },
+  {
     code: 'courses_daily_sync',
     label: 'Đồng bộ khoá học & dọn voucher',
     schedule: '00:30',

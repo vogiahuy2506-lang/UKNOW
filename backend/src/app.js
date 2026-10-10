@@ -66,6 +66,8 @@ import adminAiUsageRoutes from './routes/adminAiUsage.routes.js';
 import adminAiModelsRoutes from './routes/adminAiModels.routes.js';
 import adminBulkNotificationRoutes from './routes/adminBulkNotification.routes.js';
 import adminNotificationRoutes from './routes/adminNotification.routes.js';
+import adminNotificationEventsRoutes from './routes/adminNotificationEvents.routes.js';
+import notificationRoutes from './routes/notification.routes.js';
 import adminMenuRoutes from './routes/adminMenu.routes.js';
 import adminSystemEmailTemplateRoutes from './routes/adminSystemEmailTemplate.routes.js';
 import adminSubscriptionReminderSettingsRoutes from './routes/adminSubscriptionReminderSettings.routes.js';
@@ -223,6 +225,8 @@ export function createApp() {
   app.use('/api/vouchers', voucherRoutes);
   app.use('/api/contact', contactRoutes);
   app.use('/api/employees', employeeRoutes);
+  // Chuông thông báo + tuỳ chọn email của người đăng nhập (chỉ authMiddleware, không requireActivePlan/requirePermission).
+  app.use('/api/notifications', notificationRoutes);
   app.use('/api/admin/stats', adminStatsRoutes);
   app.use('/api/admin/plans', adminPlansRoutes);
   app.use('/api/admin/members', adminMembersRoutes);
@@ -238,6 +242,7 @@ export function createApp() {
   app.use('/api/admin/ai-models', adminAiModelsRoutes);
   app.use('/api/admin/bulk-notification', adminBulkNotificationRoutes);
   app.use('/api/admin/notifications', adminNotificationRoutes);
+  app.use('/api/admin/notification-events', adminNotificationEventsRoutes);
   app.use('/api/admin/menu-layout', adminMenuRoutes);
   app.use('/api/admin/system-email-templates', adminSystemEmailTemplateRoutes);
   app.use('/api/admin/subscription-reminder-settings', adminSubscriptionReminderSettingsRoutes);

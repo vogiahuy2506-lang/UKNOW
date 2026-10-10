@@ -897,6 +897,54 @@ export function buildCampaignScheduleSkippedEmail({
   };
 }
 
+/**
+ * Email chung cho thông báo sự kiện (dispatcher `notifyUsers`, khi caller không truyền mẫu riêng): lời chào, tiêu đề, nội dung, một
+ * nút hành động tuỳ chọn. `title`/`message` là VĂN BẢN THUẦN (có thể chứa tên chiến dịch/nội dung do người dùng đặt) nên escape
+ * hết; `message` giữ xuống dòng bằng `white-space:pre-wrap`. Subject là text thuần.
+ *
+ * @param {{ fullName?: string|null, title: string, message: string, actionUrl?: string|null, actionLabel?: string|null }} input
+ * @returns {{ subject: string, html: string }}
+ */
+export function buildNotificationEmail({ fullName, title, message, actionUrl = null, actionLabel = null }) {
+  const safeTitle = escapeSystemEmailHtml(title || 'Thông báo');
+  const button = actionUrl
+    ? `
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px">
+      <tr>
+        <td style="text-align:center">
+          <a href="${escapeSystemEmailHtml(actionUrl)}"
+             style="display:inline-block;background:linear-gradient(135deg,#f97316,#ea580c);color:#fff;font-size:15px;font-weight:600;
+                    padding:14px 36px;border-radius:10px;text-decoration:none;box-shadow:0 4px 12px rgba(249,115,22,.35)">
+            ${escapeSystemEmailHtml(actionLabel || 'Xem chi tiết')} →
+          </a>
+        </td>
+      </tr>
+    </table>`
+    : '';
+
+  const content = `
+    <p style="margin:0 0 6px;font-size:16px;color:#374151;line-height:1.6">
+      Xin chào <strong style="color:#f97316">${escapeSystemEmailHtml(fullName || 'bạn')}</strong>,
+    </p>
+    <p style="margin:0 0 12px;font-size:17px;font-weight:700;color:#111827;line-height:1.5">${safeTitle}</p>
+    <p style="margin:0 0 28px;font-size:15px;color:#6b7280;line-height:1.6;white-space:pre-wrap">${escapeSystemEmailHtml(message)}</p>
+    ${button}
+    <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;text-align:center">
+      Cần hỗ trợ? Liên hệ
+      <a href="mailto:info@digiso.vn" style="color:#f97316;text-decoration:none">info@digiso.vn</a>.
+    </p>
+  `;
+
+  return {
+    subject: `[${SENDER_NAME}] ${String(title || 'Thông báo').replace(/[\r\n]+/g, ' ')}`,
+    html: buildBaseTemplate({
+      subtitle: 'Thông báo từ hệ thống',
+      content,
+      footerNote: 'Đây là email tự động từ hệ thống. Vui lòng không reply.',
+    }),
+  };
+}
+
 // ─── Welcome Email ────────────────────────────────────────────────────────────
 
 function buildWelcomePlanSection(planName) {

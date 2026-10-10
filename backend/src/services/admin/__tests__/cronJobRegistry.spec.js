@@ -84,7 +84,7 @@ describe('cronJobRegistry ↔ scheduler recordRun', () => {
     }
   });
 
-  it('đúng 34 cron cố định, không trùng mã', () => {
+  it('đúng 36 cron cố định, không trùng mã', () => {
     // 29 → 30: thêm notification_templates (PLAN_NOTIFICATION_CENTER_SAVE_AS_TEMPLATE,
     // PR-1 — Save As Template MVP, dispatch mark-only vì template chưa lưu targeting).
     // 30 → 31: thêm facebook_token_refresh (06209dca, 21/09/2026 — làm mới Page Access Token 03:00
@@ -94,8 +94,9 @@ describe('cronJobRegistry ↔ scheduler recordRun', () => {
     // nhưng chưa có trong CRON_JOBS nên không được cronJobRegistry giám sát/cảnh báo).
     // 33 → 34: thêm channel_disconnect_alert (P3 PLAN_TG_WA_DAY_DU_2026-09-29 — báo chủ khi kênh mất kết nối).
     // 34 → 35: thêm product_chat_mention_scan (PLAN_PHEU_NGUOI_GIA_SO_HOI_CHATBOT PR-D — đếm lượt hỏi chatbot về sản phẩm).
-    expect(CRON_JOBS).toHaveLength(35);
+    // 35 → 36: thêm user_notifications_cleanup (PLAN_TICKET_GOP_Y_VA_CHUONG_THONG_BAO PR-1 — dọn thông báo chuông cũ 03:10).
+    expect(CRON_JOBS).toHaveLength(36);
     const codes = CRON_JOBS.map((j) => j.code);
-    expect(new Set(codes).size).toBe(35);
+    expect(new Set(codes).size).toBe(36);
   });
 });

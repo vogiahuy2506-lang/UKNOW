@@ -862,6 +862,25 @@ export const initScheduler = () => {
     }
   }, { timezone: HANOI_TIME_ZONE });
 
+  // ── Dọn thông báo chuông cũ (user_notifications) — 03:10 mỗi ngày ──────────
+  // Đã đọc > NOTIFICATION_RETENTION_READ_DAYS (90) ngày, chưa đọc > NOTIFICATION_RETENTION_UNREAD_DAYS (180) ngày.
+  cron.schedule('10 3 * * *', async () => {
+    try {
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      await cronJobRunRepository.recordRun('user_notifications_cleanup', async () => {
+        const { cleanupUserNotifications } = await import('../services/notification/userNotificationCleanup.service.js');
+        const result = await cleanupUserNotifications();
+        console.log(
+          `[Scheduler] user_notifications_cleanup: readDeleted=${result.readDeleted} unreadDeleted=${result.unreadDeleted} `
+          + `readDays=${result.readDays} unreadDays=${result.unreadDays}`
+        );
+        return result;
+      });
+    } catch (error) {
+      console.error('[Scheduler] Lỗi khi dọn user_notifications:', error.message);
+    }
+  }, { timezone: HANOI_TIME_ZONE });
+
   // ── Subscription reminder & expiry — chạy lúc 08:00 mỗi ngày ──────────────
   cron.schedule('0 8 * * *', async () => {
     console.log('[Subscription] Bắt đầu kiểm tra gói hết hạn...');
