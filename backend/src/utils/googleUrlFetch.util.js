@@ -88,14 +88,6 @@ async function loadGoogleUrl(info, { summarizeCsv } = {}) {
 }
 
 /**
- * Fetch content from a Google URL descriptor returned by extractGoogleUrls().
- * Returns formatted text string, or null if inaccessible (private/invalid).
- */
-export async function fetchGoogleUrlContent({ type, id }) {
-  return (await loadGoogleUrl({ type, id }))?.text ?? null;
-}
-
-/**
  * Scan a message's text content for Google URLs, fetch each one (with per-request cache),
  * and push formatted text parts into the provided parts array.
  *

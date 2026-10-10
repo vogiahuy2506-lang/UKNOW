@@ -18,41 +18,6 @@ export function stripFounderLandingAutoBlocks(html) {
 }
 
 /**
- * Rewrite `href` http(s) trên `<a>` sang URL tracking (giống backend) và gắn `target="_blank"` + `rel` khi là link tuyệt đối/tracking.
- */
-export function rewriteHttpAnchorsToTrack(html, { slug, apiBase }) {
-  const s = String(slug || '').trim().toLowerCase();
-  const api = normalizeLandingLpTrackApiBase(apiBase);
-  if (!s || !api) return String(html ?? '');
-  const trackNeedle = '/public/landing-track/go';
-  const trackPrefix = `${api}${trackNeedle}?slug=${encodeURIComponent(s)}&u=`;
-
-  return String(html ?? '').replace(/<a\b([^>]*)>/gi, (full, attrs) => {
-    const rewriteQuoted = (fragment) =>
-      String(fragment)
-        .replace(/\bhref\s*=\s*(")(https?:\/\/[^"]*)\1/gi, (m, q, url) => {
-          const raw = String(url || '').trim();
-          if (!raw || raw.includes(trackNeedle)) return m;
-          return `href=${q}${trackPrefix}${encodeURIComponent(raw)}${q}`;
-        })
-        .replace(/\bhref\s*=\s*(')(https?:\/\/[^']*)\1/gi, (m, q, url) => {
-          const raw = String(url || '').trim();
-          if (!raw || raw.includes(trackNeedle)) return m;
-          return `href=${q}${trackPrefix}${encodeURIComponent(raw)}${q}`;
-        });
-    let next = rewriteQuoted(attrs);
-    const hasHttpOrTrackHref =
-      /\bhref\s*=\s*["']https?:\/\//i.test(next) || /\bhref\s*=\s*["'][^"']*landing-track\/go/i.test(next);
-    if (hasHttpOrTrackHref) {
-      if (!/\btarget\s*=/i.test(next)) next += ' target="_blank"';
-      if (!/\brel\s*=/i.test(next)) next += ' rel="noopener noreferrer"';
-    }
-    if (next === attrs) return full;
-    return `<a${next}>`;
-  });
-}
-
-/**
  * Khôi phục các URL gốc từ link tracking `/public/landing-track/go?slug=...&u=...`
  * nếu HTML từng bị rewrite trước đây hoặc dán từ mã đã qua xử lý.
  */

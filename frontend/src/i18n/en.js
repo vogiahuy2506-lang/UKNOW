@@ -7804,20 +7804,6 @@ export default {
     loadingPreview: 'Loading...',
   },
 
-  // Landing Pages Stats
-  landingPagesStats: {
-    insightTopLanding: 'Insight · Top landing',
-    topLandingTitle: 'Top landing (views, tracking & form)',
-    noDataAllTime: 'No data (all time).',
-    noDataInRange: 'No data in selected time range.',
-    topLandingDescription: 'Top {{topN}} landing by total (views + tracking clicks + form submissions){{scopeAllTime ? " — all time" : ""}}. Horizontal axis labels are page titles; includes /l and landing subdomain /yourname.founderai.biz.',
-    views: 'Views',
-    clicksTracking: 'Click (tracking)',
-    formSubmissions: 'Form submissions',
-    title: 'Title',
-    slug: 'slug',
-  },
-
   // Landing Page Editor
   landingPageEditor: {
     deleteFailed: 'Delete failed',

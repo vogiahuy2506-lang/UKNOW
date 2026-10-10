@@ -7811,20 +7811,6 @@ export default {
     privateSuccess: 'Đã hủy công khai template',
   },
 
-  // Landing Pages Stats
-  landingPagesStats: {
-    insightTopLanding: 'Insight · Top landing',
-    topLandingTitle: 'Top landing (xem, tracking & form)',
-    noDataAllTime: 'Chưa có dữ liệu (toàn thời gian).',
-    noDataInRange: 'Chưa có dữ liệu trong khoảng thời gian đã chọn.',
-    topLandingDescription: 'Top {{topN}} landing theo tổng (lượt xem + click tracking + gửi form){{scopeAllTime ? " — toàn thời gian" : ""}}. Nhãn trục ngang là tiêu đề trang; gồm /l và landing subdomain /yourname.founderai.biz.',
-    views: 'Lượt xem',
-    clicksTracking: 'Click (tracking)',
-    formSubmissions: 'Gửi form',
-    title: 'Tiêu đề',
-    slug: 'slug',
-  },
-
   // Landing Page Editor
   landingPageEditor: {
     deleteFailed: 'Xóa thất bại',
