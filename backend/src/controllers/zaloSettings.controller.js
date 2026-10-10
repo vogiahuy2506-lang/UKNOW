@@ -2599,13 +2599,17 @@ class ZaloSettingsController {
           return recipientType === 'phone' ? (normalizePhoneForZaloCampaign(str) || str) : str;
         }).filter(Boolean)
       ));
-      const quota = await this.assertPreviewSendQuota(req, normalizedRecipients.length);
+      // P12: gói không có kênh Zalo vẫn là cổng ĐẦU TIÊN (thông điệp rõ ràng), trước cả việc tra tài khoản.
+      await this.assertZaloChannelEntitled(req);
+      // Kiểm TÀI KHOẢN ĐƯỢC GIAO trước, hạn mức sau: nhân viên dùng tài khoản không được giao lúc hết hạn mức phải nhận 403
+      // ZALO_ACCOUNT_NOT_ASSIGNED, không phải lỗi hạn mức (lỗi hạn mức che mất nguyên nhân thật).
       const { account, api } = await this.resolvePreviewAccountAndApi({
         userId,
         roleCode: req.user?.role,
         accountId,
         workspaceContext: previewCtx,
       });
+      const quota = await this.assertPreviewSendQuota(req, normalizedRecipients.length);
       const preparedAttachments = await campaignZaloSenderService.prepareZaloAttachmentSources(
         templateAttachments,
         { ownerUserId: userId }

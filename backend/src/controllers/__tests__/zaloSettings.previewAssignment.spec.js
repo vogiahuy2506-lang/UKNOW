@@ -135,6 +135,32 @@ describe('preview Zalo + gửi thử Gửi nhanh — tài khoản được giao 
     });
   });
 
+  describe('previewSendPersonalMessage — thứ tự báo lỗi: tài khoản được giao TRƯỚC hạn mức', () => {
+    const body = { accountId: 5, recipients: ['0900000001'], message: 'hi' };
+    const quotaExceeded = { allowed: false, message: 'Đã vượt hạn mức gửi Zalo' };
+
+    it('nhân viên dùng TK KHÔNG được giao lúc HẾT hạn mức → 403 ZALO_ACCOUNT_NOT_ASSIGNED (không phải SEND_QUOTA_EXCEEDED)', async () => {
+      mockFindAssigned.mockResolvedValue([6]);
+      mockCheckSendQuota.mockResolvedValue(quotaExceeded);
+      const res = makeRes();
+      await zaloSettingsController.previewSendPersonalMessage(buildReq(employee, 'body', body), res);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(jsonOf(res).code).toBe('ZALO_ACCOUNT_NOT_ASSIGNED');
+      expect(mockCheckSendQuota).not.toHaveBeenCalled();
+    });
+
+    it('ĐỐI CHỨNG: chủ dùng TK hợp lệ lúc hết hạn mức vẫn nhận SEND_QUOTA_EXCEEDED', async () => {
+      apiSpy.mockResolvedValue({});
+      mockCheckSendQuota.mockResolvedValue(quotaExceeded);
+      const res = makeRes();
+      await zaloSettingsController.previewSendPersonalMessage(buildReq(owner, 'body', body), res);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(jsonOf(res).code).toBe('SEND_QUOTA_EXCEEDED');
+    });
+  });
+
   describe('resolvePreviewAccountAndApi — người gọi quên truyền ngữ cảnh', () => {
     it('FAIL-CLOSED: thiếu workspaceContext và accessibleAccountIds → chặn (không phải "không lọc")', async () => {
       await expect(zaloSettingsController.resolvePreviewAccountAndApi({ userId: 10, roleCode: 'user', accountId: 5 }))
