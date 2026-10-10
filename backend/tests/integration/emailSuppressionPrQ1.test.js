@@ -102,7 +102,7 @@ describe('Việc 1 — huỷ đăng ký chặn người nhận KHÔNG có trong 
     );
     expect(msgRows).toHaveLength(1);
 
-    const res = await request(app).get(`/api/customers/email-tracking/unsubscribe/${msgRows[0].tracking_token}`);
+    const res = await request(app).post(`/api/customers/email-tracking/unsubscribe/${msgRows[0].tracking_token}`);
     expect(res.status).toBe(200);
     expect(await suppressionRows()).toEqual([
       { workspace_owner_id: String(owner.id), email_lower: 'sheet.khach@test.local', reason: 'unsubscribe', source: 'unsubscribe_link' },
@@ -121,7 +121,7 @@ describe('Việc 1 — huỷ đăng ký chặn người nhận KHÔNG có trong 
 
     await sendTo(ownerA, 'chung@test.local');
     const { rows } = await db.query(`SELECT tracking_token FROM email_messages WHERE recipient_email = 'chung@test.local'`);
-    await request(app).get(`/api/customers/email-tracking/unsubscribe/${rows[0].tracking_token}`);
+    await request(app).post(`/api/customers/email-tracking/unsubscribe/${rows[0].tracking_token}`);
 
     expect((await sendTo(ownerA, 'chung@test.local', 2)).status).toBe('skipped');
     expect((await sendTo(ownerB, 'chung@test.local')).status).toBe('success');
@@ -184,7 +184,7 @@ Status: 5.1.1
     await bounceMailboxService.processDsnMessage(dsn);
     expect((await suppressionRows())[0].reason).toBe('hard_bounce');
 
-    await request(app).get('/api/customers/email-tracking/unsubscribe/up-1');
+    await request(app).post('/api/customers/email-tracking/unsubscribe/up-1');
     expect((await suppressionRows())[0].reason).toBe('hard_bounce');
   });
 });
