@@ -88,6 +88,13 @@ jest.unstable_mockModule('../../utils/manualRecipients.util.js', () => ({
   validateTelegramChatIds: jest.fn(() => []),
 }));
 jest.unstable_mockModule('../../services/ai/aiCampaignWizard.service.js', () => ({
+  // PR-C1 (10/10): ai.controller + wizardStateSource.service import thêm các export dưới — mock thiếu export là cả suite "failed to run".
+  applyAssistantResponseToGates: jest.fn((gates) => gates),
+  GATE_MERGE_POLICIES: {},
+  createEmptyDerivedWizardState: jest.fn(() => ({})),
+  extractWizardState: jest.fn(() => ({})),
+  foldWizardMessages: jest.fn(() => ({})),
+  mergeWizardState: jest.fn(() => ({})),
   applyWizardStateAction: jest.fn(),
   normalizeWizardState: jest.fn(),
   isWizardAnswerTurn: jest.fn(() => false),
