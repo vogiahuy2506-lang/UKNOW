@@ -5,8 +5,9 @@
  * ca nhan cua chu (toi 50 lan/khach/ngay), ban tin tuan ghi "AI tra loi: 340", con chu khong nhan duoc bat ky tin nao.
  * Ba viec o day:
  *  (a) cau xin loi mang NHAN rieng `source: 'ai_unavailable'` (+ `reason`) o moi kenh ghi tin -> ban tin tuan khong dem la AI tra loi;
- *  (b) bao CHU qua email khi het credit / het goi / cham han muc AI: toi da 1 email / chu / 24 gio, moc o DB (khong o bo nho -
- *      restart khong lam bao lai). Khuon: channelDisconnectAlert.service.js (chi email - khong co thong bao trong app);
+ *  (b) bao CHU khi het credit / het goi / cham han muc AI: toi da 1 lan / chu / 24 gio, moc o DB (khong o bo nho -
+ *      restart khong lam bao lai). Khuon: channelDisconnectAlert.service.js. Tu PR-6 (PLAN_TICKET_GOP_Y_VA_CHUONG_THONG_BAO) di qua
+ *      dispatcher (`deps.notify`, mac dinh `notifyUsers`, su kien `ai_unavailable`): chuong trong app + email theo cau hinh he thong;
  *  (c) cau xin loi toi da 1 lan / khach / 6 gio (khach nhan 10 tin khong nhan 10 cau xin loi). Moc cung o DB.
  *
  * Moi ham o day KHONG BAO GIO nem loi ra duong tra loi khach: DB/SMTP hong thi hanh vi quay ve nhu cu (van gui cau xin loi).
@@ -15,7 +16,9 @@ import aiUnavailableNoticeRepository, {
   NOTICE_KIND_OWNER_EMAIL,
   NOTICE_KIND_VISITOR_APOLOGY,
 } from '../../repositories/chatbot/aiUnavailableNotice.repository.js';
-import { sendSystemEmail, buildBaseTemplate, buildRenewalUrl, SENDER_NAME } from '../../utils/systemEmail.util.js';
+import { buildBaseTemplate, buildRenewalUrl, SENDER_NAME } from '../../utils/systemEmail.util.js';
+import { notifyUsers } from '../notification/notificationDispatch.service.js';
+import { vnDayKey } from '../../utils/vnTimeFormat.util.js';
 import { escapeHtml } from '../../utils/htmlEscape.util.js';
 import { logError } from '../../utils/logger.util.js';
 import { AI_UNAVAILABLE_SOURCE, AI_UNAVAILABLE_REASON, classifyAiFailure } from '../../utils/aiUnavailable.util.js';
@@ -97,15 +100,16 @@ export function buildAiUnavailableOwnerEmail({ fullName, reason, billingUrl }) {
 function resolveDeps(deps) {
   return {
     repo: aiUnavailableNoticeRepository,
-    sendEmail: sendSystemEmail,
+    notify: notifyUsers,
     buildBillingUrl: buildRenewalUrl,
     ...(deps || {}),
   };
 }
 
 /**
- * Bao CHU: toi da 1 email / chu / 24 gio, moc o DB. Chiem moc TRUOC khi gui (nguyen tu) roi lui moc neu gui that bai.
- * @returns {Promise<{ sent: boolean, skipped?: 'cooldown'|'no_email'|'send_failed' }>}
+ * Bao CHU: toi da 1 lan / chu / 24 gio, moc o DB. Chiem moc TRUOC khi gui (nguyen tu) roi lui moc neu gui that bai.
+ * Chu khong co email van nhan chuong; chu khong con hoat dong thi dispatcher khong giao duoc cho ai -> `no_delivery` va GIU moc.
+ * @returns {Promise<{ sent: boolean, skipped?: 'cooldown'|'no_delivery'|'send_failed' }>}
  */
 export async function notifyOwnerAiUnavailable({ ownerUserId, reason, now = new Date(), deps = null }) {
   const d = resolveDeps(deps);
@@ -126,18 +130,35 @@ export async function notifyOwnerAiUnavailable({ ownerUserId, reason, now = new 
   ).catch(() => {});
 
   try {
-    const owner = await d.repo.findOwnerContact(ownerUserId);
-    // Chu khong con hoat dong / khong co email: giu moc (khong thu lai moi lan co khach nhan tin).
-    if (!owner) return { sent: false, skipped: 'no_email' };
-    const { subject, html } = buildAiUnavailableOwnerEmail({
-      fullName: owner.full_name,
-      reason,
-      billingUrl: d.buildBillingUrl(),
+    const text = REASON_TEXT[reason] || REASON_TEXT[AI_UNAVAILABLE_REASON.CREDIT_EXHAUSTED];
+    const delivery = await d.notify({
+      eventType: 'ai_unavailable',
+      userIds: [ownerUserId],
+      title: 'Chatbot không trả lời được khách',
+      titleEn: 'Your chatbot cannot reply to customers',
+      message: `Chatbot vừa không trả lời được tin nhắn của khách vì ${text.cause}. ${text.action}`,
+      messageEn: 'Your chatbot could not answer customer messages just now (AI credits used up, plan expired or AI quota reached). Open Plan & billing to fix it.',
+      link: '/app/billing',
+      severity: 'error',
+      metadata: { reason },
+      // Mốc cooldown 24 giờ nên mỗi lần chiếm được mốc rơi vào một ngày giờ VN khác nhau; lui mốc thử lại trong cùng ngày vẫn trùng khoá
+      // đúng ý (chuông đã chèn thì không chèn lần hai, email chỉ gửi cho dòng mới chèn).
+      dedupeKey: `ai_unavailable:${ownerUserId}:${reason}:${vnDayKey(now)}`,
+      email: ({ fullName }) => buildAiUnavailableOwnerEmail({
+        fullName: fullName ?? null,
+        reason,
+        billingUrl: d.buildBillingUrl(),
+      }),
     });
-    await d.sendEmail({ to: owner.email, subject, html });
+    // Dispatcher khong nem loi: chi coi la hong khi email loi ma chuong cung khong ghi duoc -> lui moc thu lai sau 10 phut.
+    if (delivery.emailFailed > 0 && delivery.inApp + delivery.emailSent === 0) {
+      throw new Error(`notify_failed emailFailed=${delivery.emailFailed}`);
+    }
+    // Khong giao duoc cho ai (chu khong con hoat dong, hoac admin tat ca hai kenh): giu moc, khong thu lai moi lan co khach nhan tin.
+    if (delivery.inApp + delivery.emailSent === 0) return { sent: false, skipped: 'no_delivery' };
     return { sent: true };
   } catch (err) {
-    logError(`[AiUnavailableNotice] gửi email báo chủ ${ownerUserId} thất bại:`, err?.message || err);
+    logError(`[AiUnavailableNotice] báo chủ ${ownerUserId} thất bại:`, err?.message || err);
     // Khong de cooldown 24h nuot mat lan gui hong: lui moc de lan sau (sau 10 phut) thu lai.
     await Promise.resolve(
       d.repo.rewind({

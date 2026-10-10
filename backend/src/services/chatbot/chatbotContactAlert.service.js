@@ -1,7 +1,8 @@
 import chatbotContactAlertRepository from '../../repositories/chatbot/chatbotContactAlert.repository.js';
 import { extractContacts } from '../../utils/contactDetect.util.js';
 import { normalizeVietnamesePhone } from '../../utils/vietnamesePhone.util.js';
-import { sendSystemEmail, SENDER_NAME } from '../../utils/systemEmail.util.js';
+import { SENDER_NAME } from '../../utils/systemEmail.util.js';
+import { notifyUsers } from '../notification/notificationDispatch.service.js';
 import { escapeHtml } from '../../utils/htmlEscape.util.js';
 import { logError } from '../../utils/logger.util.js';
 import { isZaloGroupConversation } from '../../utils/zaloGroupName.util.js';
@@ -15,10 +16,10 @@ const MAX_CONTACTS_PER_MESSAGE = Number(process.env.CHATBOT_CONTACT_ALERT_MAX_PE
 
 const SOURCES = ['web', 'channel', 'zalo_personal'];
 
-export function getFrontendInboxUrl({ source, conversationId } = {}) {
-  const base = (process.env.FRONTEND_URL || 'https://founderai.vn').replace(/\/+$/, '');
+/** Đường dẫn nội bộ tới Hộp thư (không có domain) — dùng cho link của chuông; email dùng getFrontendInboxUrl (URL tuyệt đối). */
+export function getInboxPath({ source, conversationId } = {}) {
   if (!conversationId) {
-    return `${base}/app/settings/inbox`;
+    return '/app/settings/inbox';
   }
   const typeMap = {
     web: 'webchat',
@@ -26,7 +27,12 @@ export function getFrontendInboxUrl({ source, conversationId } = {}) {
     zalo_personal: 'zalo_personal',
   };
   const type = typeMap[source] || source || 'webchat';
-  return `${base}/app/settings/inbox?conversation=${encodeURIComponent(conversationId)}&type=${encodeURIComponent(type)}`;
+  return `/app/settings/inbox?conversation=${encodeURIComponent(conversationId)}&type=${encodeURIComponent(type)}`;
+}
+
+export function getFrontendInboxUrl({ source, conversationId } = {}) {
+  const base = (process.env.FRONTEND_URL || 'https://founderai.vn').replace(/\/+$/, '');
+  return `${base}${getInboxPath({ source, conversationId })}`;
 }
 
 function formatChannelLabel(alert) {
@@ -245,7 +251,9 @@ class ChatbotContactAlertService {
             let pendingNotify = true;
             let suppressedReason = null;
 
-            // Kiểm tra nếu là SĐT/email của chính chủ shop
+            // Kiểm tra nếu là SĐT/email của chính chủ shop.
+            // PR-6: chủ tắt công tắc email (`chatbot_contact_alert_email=false`) KHÔNG còn bị chặn ở đây — liên hệ vẫn vào hàng chờ
+            // để báo qua chuông; việc bỏ email nằm ở pha 2 (channels: ['in_app']).
             const isOwnerPhone =
               contact.type === 'phone' &&
               owner?.phone &&
@@ -258,10 +266,6 @@ class ChatbotContactAlertService {
             if (isOwnerPhone || isOwnerEmail) {
               pendingNotify = false;
               suppressedReason = 'owner_own_contact';
-              suppressed++;
-            } else if (owner?.chatbot_contact_alert_email === false) {
-              pendingNotify = false;
-              suppressedReason = 'owner_opted_out';
               suppressed++;
             } else if (hasAgent) {
               // Có nhân viên trả lời trong 120 phút gần nhất -> người thật đã thấy
@@ -305,6 +309,8 @@ class ChatbotContactAlertService {
           userId: item.id_user,
           email: item.user_email,
           fullName: item.user_full_name,
+          // Công tắc cũ `users.chatbot_contact_alert_email`: false = chủ không muốn nhận EMAIL loại này (chuông vẫn báo).
+          emailOptedOut: item.user_contact_alert_email === false,
           alerts: [],
         });
       }
@@ -313,13 +319,9 @@ class ChatbotContactAlertService {
 
     let notified = 0;
     const emails = { sent: 0, failed: 0 };
-    const inboxUrl = getFrontendInboxUrl();
+    let inApp = 0;
 
-    for (const { userId, email, fullName, alerts } of userMap.values()) {
-      if (!email) {
-        continue;
-      }
-
+    for (const { userId, fullName, emailOptedOut, alerts } of userMap.values()) {
       // Kiểm tra cooldown 30 phút theo hội thoại
       const sendableAlerts = [];
       const convCooldownMap = new Map();
@@ -352,34 +354,67 @@ class ChatbotContactAlertService {
       }
 
       const subject = `[${SENDER_NAME}] ${sendableAlerts.length} khách để lại liên hệ trong chatbot`;
-      const primaryUrl = sendableAlerts.length === 1
-        ? getFrontendInboxUrl({
-            source: sendableAlerts[0].last_source,
-            conversationId: sendableAlerts[0].last_conversation_id,
-          })
+      const only = sendableAlerts.length === 1 ? sendableAlerts[0] : null;
+      const primaryUrl = only
+        ? getFrontendInboxUrl({ source: only.last_source, conversationId: only.last_conversation_id })
         : getFrontendInboxUrl();
-      const html = buildAlertEmailHtml({
-        userFullName: fullName,
-        alerts: sendableAlerts,
-        inboxUrl: primaryUrl,
-      });
+      const link = only
+        ? getInboxPath({ source: only.last_source, conversationId: only.last_conversation_id })
+        : getInboxPath();
+      // Khoá chống trùng theo lô: id cảnh báo lớn nhất + last_message_id lớn nhất. Cảnh báo cũ được bật lại (khách nhắn thêm sau 24 giờ)
+      // giữ nguyên id nhưng last_message_id tăng → khoá mới, không bị nuốt.
+      const maxAlertId = Math.max(...sendableAlerts.map((a) => Number(a.id) || 0));
+      const maxMessageId = Math.max(...sendableAlerts.map((a) => Number(a.last_message_id) || 0));
 
+      let delivery;
       try {
-        await sendSystemEmail({
-          to: email,
-          subject,
-          html,
+        delivery = await notifyUsers({
+          eventType: 'chatbot_contact_left',
+          userIds: [userId],
+          title: sendableAlerts.length === 1
+            ? 'Có khách để lại liên hệ trong chatbot'
+            : `${sendableAlerts.length} khách để lại liên hệ trong chatbot`,
+          titleEn: sendableAlerts.length === 1
+            ? 'A customer left contact info in your chatbot'
+            : `${sendableAlerts.length} customers left contact info in your chatbot`,
+          message: 'Mở Hộp thư để xem thông tin khách để lại và liên hệ lại sớm.',
+          messageEn: 'Open the Inbox to see the contact details and follow up soon.',
+          link,
+          severity: 'info',
+          metadata: { alertIds: sendableAlerts.map((a) => a.id), count: sendableAlerts.length },
+          dedupeKey: `contact_alert:${userId}:${maxAlertId}:${maxMessageId}`,
+          // Chủ tắt công tắc email riêng → chỉ chuông (dispatcher bỏ hẳn phần email khi channels = ['in_app']).
+          channels: emailOptedOut ? ['in_app'] : null,
+          email: ({ fullName: recipientName }) => ({
+            subject,
+            html: buildAlertEmailHtml({
+              userFullName: recipientName ?? fullName,
+              alerts: sendableAlerts,
+              inboxUrl: primaryUrl,
+            }),
+          }),
         });
-
-        const alertIds = sendableAlerts.map((a) => a.id);
-        await chatbotContactAlertRepository.markNotified(alertIds, now);
-
-        notified += sendableAlerts.length;
-        emails.sent++;
       } catch (err) {
-        logError('[ChatbotContactAlert] Lỗi gửi email báo liên hệ:', err);
+        // Dispatcher tự nuốt lỗi từng kênh; ném ra đây chỉ khi sự cố bất thường (vd khoá sự kiện lạ) — để nguyên hàng chờ.
+        logError('[ChatbotContactAlert] Lỗi gửi thông báo liên hệ:', err);
         emails.failed++;
+        continue;
       }
+
+      // Dispatcher không ném lỗi: chỉ coi là hỏng khi email lỗi mà chuông cũng không ghi được — để nguyên hàng chờ, lượt sau thử lại
+      // (giữ luật cũ "gửi lỗi thì không markNotified"). Mọi trường hợp còn lại (đã giao, trùng khoá, kênh bị admin tắt) thì đóng sổ.
+      if (delivery.emailFailed > 0 && delivery.inApp + delivery.emailSent === 0) {
+        logError('[ChatbotContactAlert] Lỗi gửi thông báo liên hệ:', new Error(`emailFailed=${delivery.emailFailed}`));
+        emails.failed++;
+        continue;
+      }
+
+      const alertIds = sendableAlerts.map((a) => a.id);
+      await chatbotContactAlertRepository.markNotified(alertIds, now);
+
+      notified += sendableAlerts.length;
+      inApp += delivery.inApp;
+      if (delivery.emailSent > 0) emails.sent++;
     }
 
     return {
@@ -392,6 +427,7 @@ class ChatbotContactAlertService {
       scannedCount: scanned,
       alertsCreatedOrUpdated: detected,
       emailsSent: emails.sent,
+      inApp,
       initializedSources,
     };
   }

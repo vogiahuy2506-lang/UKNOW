@@ -49,6 +49,19 @@ describe('channelDisconnectAlert.repository', () => {
     rows = await repo.listDisconnectedWithOwner();
     expect(rows).toHaveLength(0);
   });
+
+  it('PR-6: chủ active có email RỖNG vẫn được trả (chuông không cần email; dispatcher tự bỏ phần email)', async () => {
+    const owner = await createUser({ role: 'user', username: 'cda_owner3' });
+    await db.query(`UPDATE users SET email = '' WHERE id = $1`, [owner.id]);
+    await repo.syncChannel('telegram', [
+      { accountRef: '333', idUser: owner.id, label: 'tg333', disconnectedSince: ago(20 * MIN) },
+    ], new Date());
+
+    const rows = await repo.listDisconnectedWithOwner();
+
+    expect(rows).toHaveLength(1);
+    expect(Number(rows[0].id_user)).toBe(Number(owner.id));
+  });
 });
 
 describe('metricChannelDisconnected', () => {

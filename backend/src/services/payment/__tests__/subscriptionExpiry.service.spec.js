@@ -16,9 +16,54 @@ const mockGetReminderSettings = jest.fn();
 // PR-3, Việc 3.1 — reconcileResourceLocks phải được gọi NGAY sau expireUserPlan, không đợi cron
 // reconcileAllDueUsers ở lượt sau (lượt đó sẽ không còn thấy user này vì active_plan_id đã NULL).
 const mockReconcileResourceLocks = jest.fn();
+// PR-6 (PLAN_TICKET_GOP_Y_VA_CHUONG_THONG_BAO) — thư hết hạn / nhắc hạn đi qua dispatcher (notifyUsers: chuông + email).
+const mockNotifyUsers = jest.fn();
+
+/** Tìm người dùng (email, tên) theo id trong các danh sách repo giả đã trả — thay cho truy vấn `findEmailContacts` của dispatcher thật. */
+async function lookupUser(id) {
+  const results = [
+    ...mockSubscriptionRepo.findExpiredUsers.mock.results,
+    ...mockSubscriptionRepo.findUsersExpiringInWindow.mock.results,
+  ];
+  for (const result of results) {
+    // eslint-disable-next-line no-await-in-loop
+    const rows = await result.value;
+    const found = Array.isArray(rows) ? rows.find((row) => row.id === id) : null;
+    if (found) return found;
+  }
+  return null;
+}
+
+/**
+ * Dispatcher GIẢ ở ranh giới notifyUsers: chuông luôn ghi được; `channels` không chứa email hoặc người nhận không có email → bỏ email;
+ * ngược lại chạy builder email thật của service rồi đưa qua `mockSendSystemEmail`; email lỗi → emailFailed và chuông 0 (cả hai kênh hỏng).
+ * Hành vi thật của dispatcher có spec riêng (notificationDispatch.service.spec.js).
+ */
+async function fakeDispatch(input) {
+  const result = { inApp: 1, emailSent: 0, emailSkipped: 0, emailFailed: 0 };
+  const wantsEmail = !Array.isArray(input.channels) || input.channels.includes('email');
+  if (!wantsEmail) return result;
+  const user = await lookupUser(input.userIds[0]);
+  if (!user?.email) {
+    result.emailSkipped = 1;
+    return result;
+  }
+  const { subject, html } = input.email({ id: user.id, email: user.email, fullName: user.full_name });
+  try {
+    await mockSendSystemEmail({ to: user.email, subject, html });
+    result.emailSent = 1;
+  } catch {
+    result.inApp = 0;
+    result.emailFailed = 1;
+  }
+  return result;
+}
 
 jest.unstable_mockModule('../../../repositories/subscription/subscription.repository.js', () => mockSubscriptionRepo);
 jest.unstable_mockModule('../../../config/database.js', () => ({ default: {} }));
+jest.unstable_mockModule('../../notification/notificationDispatch.service.js', () => ({
+  notifyUsers: mockNotifyUsers,
+}));
 jest.unstable_mockModule('../topupLock.service.js', () => ({
   reconcileResourceLocks: mockReconcileResourceLocks,
 }));
@@ -52,6 +97,8 @@ describe('subscriptionExpiry.service — Xử lý gói hết hạn và thư T-0 
     mockSubscriptionRepo.markReminderSent.mockResolvedValue();
     mockReconcileResourceLocks.mockResolvedValue({ locked: [], unlocked: [] });
     mockSendSystemEmail.mockResolvedValue();
+    mockNotifyUsers.mockReset();
+    mockNotifyUsers.mockImplementation(fakeDispatch);
     mockLoadCustomSystemEmailTemplate.mockResolvedValue(null);
     mockGetReminderSettings.mockResolvedValue({ daysBefore: [7, 3], updatedBy: null, updatedAt: null });
     mockBuildPlanExpiredEmail.mockImplementation(({ fullName, planName, expiresAt }) => ({
@@ -591,6 +638,188 @@ describe('subscriptionExpiry.service — Xử lý gói hết hạn và thư T-0 
 
       expect(expiryResult.expiredCount).toBe(1);
       expect(reminderResult).toEqual({ remindedWeek: 1, remindedThreeDay: 1, failed: 1 });
+    });
+  });
+
+  // PR-6 (PLAN_TICKET_GOP_Y_VA_CHUONG_THONG_BAO mục 10) — plan_expiring / plan_expired vào chuông.
+  describe('PR-6 — qua dispatcher (chuông + email), sự kiện plan_expired / plan_expiring', () => {
+    const expiredUser = (overrides = {}) => ({
+      id: 801,
+      email: 'u801@example.com',
+      full_name: 'Khách 801',
+      plan_name: 'Gói Pro',
+      subscription_expires_at: '2026-09-12T00:00:00.000Z',
+      subscription_reminder_count: 0,
+      ...overrides,
+    });
+    const expiringUser = (overrides = {}) => ({
+      id: 901,
+      email: 'u901@example.com',
+      full_name: 'Khách 901',
+      plan_name: 'Gói Pro',
+      subscription_expires_at: new Date(Date.now() + 7 * 86400000).toISOString(),
+      subscription_reminders_sent: {},
+      ...overrides,
+    });
+
+    it('plan_expired: notifyUsers đúng sự kiện + người nhận user.id + link billing + khoá theo CHU KỲ (ngày hết hạn giờ VN), mặc định không giới hạn kênh', async () => {
+      mockSubscriptionRepo.findExpiredUsers.mockResolvedValue([expiredUser()]);
+
+      await processExpiredSubscriptions({ renewalUrl: 'https://app.uknow.vn/app/billing' });
+
+      expect(mockNotifyUsers).toHaveBeenCalledTimes(1);
+      const call = mockNotifyUsers.mock.calls[0][0];
+      expect(call.eventType).toBe('plan_expired');
+      expect(call.userIds).toEqual([801]);
+      expect(call.link).toBe('/app/billing');
+      expect(call.severity).toBe('error');
+      expect(call.title).toContain('Gói Pro');
+      expect(call.dedupeKey).toBe('plan_expired:801:20260912');
+      expect(call.channels).toBeNull();
+    });
+
+    it('plan_expired: mẫu email riêng vẫn là buildPlanExpiredEmail (mẫu admin sửa được truyền xuống, tên người nhận do dispatcher cấp)', async () => {
+      const customTemplate = { subject: 'Mẫu tuỳ chỉnh', bodyHtml: '<p>x</p>' };
+      mockLoadCustomSystemEmailTemplate.mockResolvedValue(customTemplate);
+      mockSubscriptionRepo.findExpiredUsers.mockResolvedValue([expiredUser()]);
+
+      await processExpiredSubscriptions({ renewalUrl: 'https://app.uknow.vn/app/billing' });
+
+      const { email } = mockNotifyUsers.mock.calls[0][0];
+      email({ id: 801, email: 'u801@example.com', fullName: 'Tên Từ Dispatcher' });
+      expect(mockBuildPlanExpiredEmail).toHaveBeenLastCalledWith({
+        fullName: 'Tên Từ Dispatcher',
+        planName: 'Gói Pro',
+        expiresAt: '2026-09-12T00:00:00.000Z',
+        renewalUrl: 'https://app.uknow.vn/app/billing',
+        template: customTemplate,
+      });
+    });
+
+    it('plan_expired: reminder_count >= 3 → channels = ["in_app"] (không email nữa theo luật cũ) nhưng CHUÔNG vẫn báo', async () => {
+      mockSubscriptionRepo.findExpiredUsers.mockResolvedValue([expiredUser({ id: 802, subscription_reminder_count: 3 })]);
+
+      const result = await processExpiredSubscriptions();
+
+      expect(mockNotifyUsers).toHaveBeenCalledTimes(1);
+      expect(mockNotifyUsers.mock.calls[0][0].channels).toEqual(['in_app']);
+      expect(mockSendSystemEmail).not.toHaveBeenCalled();
+      expect(mockSubscriptionRepo.incrementReminderCount).not.toHaveBeenCalled();
+      expect(result.emailsSent).toBe(0);
+      expect(result.expiredCount).toBe(1);
+    });
+
+    it('plan_expired: người KHÔNG có email vẫn được báo qua chuông (trước đây bị bỏ qua im lặng) và gói vẫn bị thu hồi', async () => {
+      mockSubscriptionRepo.findExpiredUsers.mockResolvedValue([expiredUser({ id: 803, email: null })]);
+
+      const result = await processExpiredSubscriptions();
+
+      expect(mockNotifyUsers).toHaveBeenCalledTimes(1);
+      expect(mockNotifyUsers.mock.calls[0][0].userIds).toEqual([803]);
+      expect(result.expiredCount).toBe(1);
+      expect(result.emailsSent).toBe(0);
+    });
+
+    it('plan_expired: email mặc định TẮT (dispatcher chỉ ghi chuông, emailSent=0) → KHÔNG incrementReminderCount, KHÔNG tính emailsSent, gói vẫn thu hồi', async () => {
+      mockSubscriptionRepo.findExpiredUsers.mockResolvedValue([expiredUser({ id: 804 })]);
+      mockNotifyUsers.mockResolvedValue({ inApp: 1, emailSent: 0, emailSkipped: 0, emailFailed: 0 });
+
+      const result = await processExpiredSubscriptions();
+
+      expect(mockSubscriptionRepo.incrementReminderCount).not.toHaveBeenCalled();
+      expect(result).toEqual({ expiredCount: 1, emailsSent: 0, totalFound: 1 });
+      expect(mockSubscriptionRepo.expireUserPlan).toHaveBeenCalledWith(804, expect.anything());
+    });
+
+    it('plan_expired: notifyUsers ném lỗi bất thường → cron KHÔNG đổ, gói vẫn thu hồi và khoá tài nguyên vẫn chạy', async () => {
+      mockSubscriptionRepo.findExpiredUsers.mockResolvedValue([expiredUser({ id: 805 })]);
+      mockNotifyUsers.mockRejectedValue(new Error('db down'));
+
+      const result = await processExpiredSubscriptions();
+
+      expect(result.expiredCount).toBe(1);
+      expect(mockSubscriptionRepo.expireUserPlan).toHaveBeenCalledWith(805, expect.anything());
+      expect(mockReconcileResourceLocks).toHaveBeenCalledWith(805, expect.anything());
+    });
+
+    it('plan_expiring: notifyUsers đúng sự kiện + người nhận + link billing + khoá RIÊNG theo mốc ngày (mốc 7 và mốc 3 cùng chu kỳ là hai khoá)', async () => {
+      const expiresAt = '2026-12-20T00:00:00.000Z';
+      mockSubscriptionRepo.findUsersExpiringInWindow
+        .mockResolvedValueOnce([expiringUser({ id: 901, subscription_expires_at: expiresAt })])
+        .mockResolvedValueOnce([expiringUser({ id: 901, subscription_expires_at: expiresAt, subscription_reminders_sent: { cycle: expiresAt, days: [7] } })]);
+
+      await sendExpiringReminders();
+
+      expect(mockNotifyUsers).toHaveBeenCalledTimes(2);
+      const [first, second] = mockNotifyUsers.mock.calls.map(([call]) => call);
+      expect(first.eventType).toBe('plan_expiring');
+      expect(first.userIds).toEqual([901]);
+      expect(first.link).toBe('/app/billing');
+      expect(first.severity).toBe('warning');
+      expect(first.dedupeKey).toBe('plan_expiring:901:20261220:d7');
+      expect(second.dedupeKey).toBe('plan_expiring:901:20261220:d3');
+      expect(first.dedupeKey).not.toBe(second.dedupeKey);
+    });
+
+    it('plan_expiring: mẫu email riêng vẫn là buildRenewalReminderEmail (mẫu admin sửa được + daysLeft + renewalUrl)', async () => {
+      const customTemplate = { subject: 'Nhắc tuỳ chỉnh', bodyHtml: '<p>y</p>' };
+      mockLoadCustomSystemEmailTemplate.mockResolvedValue(customTemplate);
+      mockSubscriptionRepo.findUsersExpiringInWindow.mockResolvedValueOnce([expiringUser()]).mockResolvedValueOnce([]);
+
+      await sendExpiringReminders({ renewalUrl: 'https://app.uknow.vn/renew' });
+
+      const { email } = mockNotifyUsers.mock.calls[0][0];
+      email({ id: 901, email: 'u901@example.com', fullName: 'Tên Từ Dispatcher' });
+      expect(mockBuildRenewalReminderEmail).toHaveBeenLastCalledWith(expect.objectContaining({
+        fullName: 'Tên Từ Dispatcher',
+        planName: 'Gói Pro',
+        renewalUrl: 'https://app.uknow.vn/renew',
+        template: customTemplate,
+        daysLeft: expect.any(Number),
+      }));
+    });
+
+    it('plan_expiring: email mặc định TẮT (chỉ chuông ghi được) → vẫn markReminderSent + tính vào remindedWeek (không quét lại mốc mỗi ngày)', async () => {
+      mockSubscriptionRepo.findUsersExpiringInWindow.mockResolvedValueOnce([expiringUser({ id: 902 })]).mockResolvedValueOnce([]);
+      mockNotifyUsers.mockResolvedValue({ inApp: 1, emailSent: 0, emailSkipped: 0, emailFailed: 0 });
+
+      const result = await sendExpiringReminders();
+
+      expect(mockSubscriptionRepo.markReminderSent).toHaveBeenCalledWith(902, expect.objectContaining({ days: [7] }), expect.anything());
+      expect(result).toEqual({ remindedWeek: 1, remindedThreeDay: 0, failed: 0 });
+    });
+
+    it('plan_expiring: trùng khoá / admin tắt cả hai kênh (mọi số = 0) → vẫn đóng mốc, không failed', async () => {
+      mockSubscriptionRepo.findUsersExpiringInWindow.mockResolvedValueOnce([expiringUser({ id: 903 })]).mockResolvedValueOnce([]);
+      mockNotifyUsers.mockResolvedValue({ inApp: 0, emailSent: 0, emailSkipped: 0, emailFailed: 0 });
+
+      const result = await sendExpiringReminders();
+
+      expect(mockSubscriptionRepo.markReminderSent).toHaveBeenCalledWith(903, expect.anything(), expect.anything());
+      expect(result.failed).toBe(0);
+    });
+
+    it('plan_expiring: người KHÔNG có email vẫn được nhắc qua chuông và đóng mốc', async () => {
+      mockSubscriptionRepo.findUsersExpiringInWindow.mockResolvedValueOnce([expiringUser({ id: 904, email: null })]).mockResolvedValueOnce([]);
+
+      const result = await sendExpiringReminders();
+
+      expect(mockNotifyUsers).toHaveBeenCalledTimes(1);
+      expect(mockSubscriptionRepo.markReminderSent).toHaveBeenCalledWith(904, expect.anything(), expect.anything());
+      expect(result.remindedWeek).toBe(1);
+    });
+
+    it('plan_expiring: notifyUsers ném lỗi → failed++, KHÔNG markReminderSent, người sau vẫn được xử lý', async () => {
+      mockSubscriptionRepo.findUsersExpiringInWindow
+        .mockResolvedValueOnce([expiringUser({ id: 905 }), expiringUser({ id: 906, email: 'u906@example.com' })])
+        .mockResolvedValueOnce([]);
+      mockNotifyUsers.mockRejectedValueOnce(new Error('boom'));
+
+      const result = await sendExpiringReminders();
+
+      expect(result).toEqual({ remindedWeek: 1, remindedThreeDay: 0, failed: 1 });
+      expect(mockSubscriptionRepo.markReminderSent).not.toHaveBeenCalledWith(905, expect.anything(), expect.anything());
+      expect(mockSubscriptionRepo.markReminderSent).toHaveBeenCalledWith(906, expect.anything(), expect.anything());
     });
   });
 });

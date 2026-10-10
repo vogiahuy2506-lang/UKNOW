@@ -21,14 +21,40 @@ const at = (ms) => new Date(T0.getTime() + ms);
 
 let repo;
 let sendEmail;
+let notify;
 let deps;
+
+/**
+ * PR-6 — dispatcher GIẢ ở ranh giới `deps.notify`: chủ không còn hoạt động (repo.ownerContact = null) → không giao được cho ai (như
+ * insertMany / findEmailContacts lọc tài khoản vô hiệu); chủ không có email → chỉ chuông; có email → chạy builder email thật của service
+ * rồi đưa qua `sendEmail`; email lỗi → emailFailed và chuông 0 (cả hai kênh hỏng). Hành vi thật của dispatcher có spec riêng.
+ */
+function makeFakeNotify() {
+  return jest.fn(async (input) => {
+    const result = { inApp: 0, emailSent: 0, emailSkipped: 0, emailFailed: 0 };
+    const owner = repo.ownerContact;
+    if (!owner) return result;
+    result.inApp = 1;
+    if (!owner.email) return result;
+    const { subject, html } = input.email({ id: input.userIds[0], email: owner.email, fullName: owner.full_name });
+    try {
+      await sendEmail({ to: owner.email, subject, html });
+      result.emailSent = 1;
+    } catch {
+      result.inApp = 0;
+      result.emailFailed = 1;
+    }
+    return result;
+  });
+}
 
 beforeEach(() => {
   jest.spyOn(console, 'error').mockImplementation(() => {});
   jest.spyOn(console, 'warn').mockImplementation(() => {});
   repo = createFakeNoticeRepo({ owner: { email: 'chu@shop.vn', full_name: 'Nguyễn Văn Chủ' } });
   sendEmail = jest.fn(async () => ({ messageId: 'x' }));
-  deps = { repo, sendEmail, buildBillingUrl: () => 'https://founderai.test/app/billing' };
+  notify = makeFakeNotify();
+  deps = { repo, sendEmail, notify, buildBillingUrl: () => 'https://founderai.test/app/billing' };
 });
 
 describe('notifyOwnerAiUnavailable — email báo chủ, mốc 24 giờ', () => {
@@ -90,15 +116,53 @@ describe('notifyOwnerAiUnavailable — email báo chủ, mốc 24 giờ', () => 
     expect(after).toEqual({ sent: false, skipped: 'cooldown' });
   });
 
-  it('chủ không còn hoạt động / không có email: không gửi và GIỮ mốc (không thử lại mỗi lần có khách nhắn)', async () => {
+  it('chủ không còn hoạt động (dispatcher không giao được cho ai): không gửi và GIỮ mốc (không thử lại mỗi lần có khách nhắn)', async () => {
     repo.ownerContact = null;
 
     const out = await notifyOwnerAiUnavailable({ ownerUserId: 7, reason: 'credit_exhausted', now: T0, deps });
     const again = await notifyOwnerAiUnavailable({ ownerUserId: 7, reason: 'credit_exhausted', now: at(1000), deps });
 
-    expect(out).toEqual({ sent: false, skipped: 'no_email' });
+    expect(out).toEqual({ sent: false, skipped: 'no_delivery' });
     expect(again).toEqual({ sent: false, skipped: 'cooldown' });
     expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('PR-6: notify đúng sự kiện ai_unavailable, userIds = [chủ], link billing, khoá chống trùng (chủ, lý do, ngày VN); mẫu email vẫn là buildAiUnavailableOwnerEmail', async () => {
+    await notifyOwnerAiUnavailable({ ownerUserId: 7, reason: 'subscription_expired', now: T0, deps });
+
+    expect(notify).toHaveBeenCalledTimes(1);
+    const call = notify.mock.calls[0][0];
+    expect(call.eventType).toBe('ai_unavailable');
+    expect(call.userIds).toEqual([7]);
+    expect(call.link).toBe('/app/billing');
+    expect(call.severity).toBe('error');
+    expect(call.message).toContain('gói dịch vụ của bạn đã hết hạn');
+    expect(call.metadata).toEqual({ reason: 'subscription_expired' });
+    expect(call.dedupeKey).toBe('ai_unavailable:7:subscription_expired:20261003');
+    const mail = call.email({ id: 7, email: 'chu@shop.vn', fullName: 'Chủ Shop' });
+    expect(mail.subject).toContain('hết hạn');
+    expect(mail.html).toContain('Chủ Shop');
+    expect(mail.html).toContain('https://founderai.test/app/billing');
+  });
+
+  it('PR-6: chủ KHÔNG có email vẫn được báo qua chuông (sent: true), không còn skip no_email', async () => {
+    repo.ownerContact = { email: null, full_name: 'Chủ Không Email' };
+
+    const out = await notifyOwnerAiUnavailable({ ownerUserId: 7, reason: 'credit_exhausted', now: T0, deps });
+
+    expect(out).toEqual({ sent: true });
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('PR-6: email lỗi nhưng chuông đã ghi được → coi là đã báo (không lui mốc, không báo dồn mỗi 10 phút)', async () => {
+    notify.mockResolvedValue({ inApp: 1, emailSent: 0, emailSkipped: 0, emailFailed: 1 });
+
+    const out = await notifyOwnerAiUnavailable({ ownerUserId: 7, reason: 'credit_exhausted', now: T0, deps });
+    const again = await notifyOwnerAiUnavailable({ ownerUserId: 7, reason: 'credit_exhausted', now: at(OWNER_EMAIL_RETRY_MS + 1000), deps });
+
+    expect(out).toEqual({ sent: true });
+    expect(again).toEqual({ sent: false, skipped: 'cooldown' });
   });
 
   it('dọn câu xin lỗi cũ của chủ này (best-effort) khi chiếm được mốc email', async () => {

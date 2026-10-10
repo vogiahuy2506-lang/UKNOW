@@ -4,17 +4,21 @@
  * Mỗi lượt cron (10 phút):
  *  1. QUÉT: đọc trạng thái hiện tại từng kênh → cập nhật bảng `channel_disconnect_alerts`
  *     (mốc `disconnected_since` = lúc bắt đầu mất; NULL khi đang nối).
- *  2. BÁO: tài khoản mất > 15 phút, chưa bị bỏ > 7 ngày, chưa báo trong 24h → 1 email/chủ (gộp mọi
+ *  2. BÁO: tài khoản mất > 15 phút, chưa bị bỏ > 7 ngày, chưa báo trong 24h → 1 thông báo/chủ (gộp mọi
  *     tài khoản của chủ đó), rồi ghi `last_alerted_at`.
  *
  * Bảng này cũng là nguồn của luật cảnh báo admin `telegram_disconnected`/`whatsapp_disconnected`
- * (alert.repository.metricChannelDisconnected) — nên bước QUÉT chạy kể cả khi không gửi được email.
+ * (alert.repository.metricChannelDisconnected) — nên bước QUÉT chạy kể cả khi không gửi được thông báo.
  *
- * Không có hệ thông báo trong-app cho chủ tài khoản (bảng `notifications` là công cụ gửi email hàng
- * loạt của admin) → chỉ email.
+ * Từ PLAN_TICKET_GOP_Y_VA_CHUONG_THONG_BAO PR-6: bước BÁO đi qua dispatcher (`deps.notify`, mặc định `notifyUsers`, sự kiện
+ * `channel_disconnected`) — chuông trong app + email theo cấu hình hệ thống / tuỳ chọn người dùng. Mẫu email vẫn là
+ * buildChannelDisconnectEmail.
  */
 import repo from '../../repositories/chatbot/channelDisconnectAlert.repository.js';
-import { sendSystemEmail, buildBaseTemplate, SENDER_NAME } from '../../utils/systemEmail.util.js';
+import { createHash } from 'node:crypto';
+import { buildBaseTemplate, SENDER_NAME } from '../../utils/systemEmail.util.js';
+import { notifyUsers } from '../notification/notificationDispatch.service.js';
+import { vnDayKey } from '../../utils/vnTimeFormat.util.js';
 import { escapeHtml } from '../../utils/htmlEscape.util.js';
 import { logError } from '../../utils/logger.util.js';
 
@@ -119,6 +123,18 @@ export function buildChannelDisconnectEmail({ fullName, items }) {
   };
 }
 
+/**
+ * Khoá chống trùng của chuông: (chủ, ngày giờ VN, tập tài khoản). Chỉ theo ngày thì tài khoản thứ hai mất kết nối CÙNG ngày (sau khi
+ * tài khoản đầu đã báo) bị nuốt; gắn thêm dấu vân tay của tập tài khoản thì tập khác → thông báo khác.
+ */
+export function channelDisconnectDedupeKey(ownerId, items, now) {
+  const fingerprint = createHash('sha1')
+    .update(items.map((it) => `${it.channel}:${it.account_ref}`).sort().join('|'))
+    .digest('hex')
+    .slice(0, 10);
+  return `channel_disconnect:${ownerId}:${vnDayKey(now)}:${fingerprint}`;
+}
+
 /** Đọc trạng thái hiện tại từng kênh. Trả null cho kênh không đọc được (không sync, không xoá dòng). */
 async function collectEntries(now, deps) {
   const out = {};
@@ -188,7 +204,7 @@ async function collectEntries(now, deps) {
 async function defaultDeps() {
   return {
     repo,
-    sendEmail: sendSystemEmail,
+    notify: notifyUsers,
     getTelegramManager: () => null,
     getWhatsappSession: () => null,
   };
@@ -246,23 +262,52 @@ export async function scanAndNotify({ now = new Date(), deps = null } = {}) {
   const byOwner = new Map();
   for (const row of alertable) {
     if (!byOwner.has(row.id_user)) {
-      byOwner.set(row.id_user, { email: row.email, fullName: row.full_name, items: [] });
+      byOwner.set(row.id_user, { ownerId: row.id_user, fullName: row.full_name, items: [] });
     }
     byOwner.get(row.id_user).items.push(row);
   }
 
+  const notify = d.notify || notifyUsers;
   const emails = { sent: 0, failed: 0 };
   let alerted = 0;
+  let inApp = 0;
   for (const owner of byOwner.values()) {
-    const { subject, html } = buildChannelDisconnectEmail({ fullName: owner.fullName, items: owner.items });
     try {
-      await d.sendEmail({ to: owner.email, subject, html });
+      const labels = owner.items.map((it) => CHANNEL_LABELS[it.channel] || it.channel);
+      const distinctLabels = [...new Set(labels)];
+      const delivery = await notify({
+        eventType: 'channel_disconnected',
+        userIds: [owner.ownerId],
+        title: owner.items.length === 1
+          ? `${labels[0]} đã mất kết nối`
+          : `${owner.items.length} tài khoản kênh đã mất kết nối`,
+        titleEn: owner.items.length === 1
+          ? `${labels[0]} has disconnected`
+          : `${owner.items.length} channel accounts have disconnected`,
+        message: `Tài khoản ${distinctLabels.join(', ')} mất kết nối hơn ${DISCONNECT_AFTER_MINUTES} phút nên trợ lý AI không nhận được tin khách và chiến dịch gửi qua tài khoản này không chạy. Vào Cài đặt kênh để quét lại hoặc đăng nhập lại.`,
+        messageEn: `Your ${distinctLabels.join(', ')} account has been disconnected for over ${DISCONNECT_AFTER_MINUTES} minutes, so the chatbot cannot receive customer messages and campaigns sending through it will not run. Open channel settings to scan again or sign in again.`,
+        link: '/app/settings/channels',
+        severity: 'warning',
+        metadata: {
+          accounts: owner.items.map((it) => ({ channel: it.channel, accountRef: String(it.account_ref), label: it.account_label || null })),
+        },
+        dedupeKey: channelDisconnectDedupeKey(owner.ownerId, owner.items, now),
+        email: ({ fullName }) => buildChannelDisconnectEmail({ fullName: fullName ?? owner.fullName, items: owner.items }),
+      });
+      // Dispatcher không ném lỗi: chỉ coi là hỏng khi email lỗi mà chuông cũng không ghi được → không ghi last_alerted_at, lượt sau
+      // thử lại. Mọi trường hợp còn lại (đã giao, trùng khoá, kênh bị admin tắt) thì đóng sổ để không báo lặp mỗi 10 phút.
+      if (delivery.emailFailed > 0 && delivery.inApp + delivery.emailSent === 0) {
+        logError('[ChannelDisconnectAlert] gửi thông báo thất bại:', new Error(`emailFailed=${delivery.emailFailed}`));
+        emails.failed += 1;
+        continue;
+      }
       await d.repo.markAlerted(owner.items, now);
-      emails.sent += 1;
+      if (delivery.emailSent > 0) emails.sent += 1;
+      inApp += delivery.inApp;
       alerted += owner.items.length;
     } catch (err) {
       // Không ghi last_alerted_at → lượt sau thử lại.
-      logError('[ChannelDisconnectAlert] gửi email thất bại:', err);
+      logError('[ChannelDisconnectAlert] gửi thông báo thất bại:', err);
       emails.failed += 1;
     }
   }
@@ -273,6 +318,7 @@ export async function scanAndNotify({ now = new Date(), deps = null } = {}) {
     alerted,
     owners: byOwner.size,
     emails,
+    inApp,
     synced: alerted,
   };
 }

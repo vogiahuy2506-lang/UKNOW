@@ -2,7 +2,6 @@ import db from '../config/database.js';
 import campaignRunRepository from '../repositories/campaign/campaignRun.repository.js';
 import campaignCrudRepository from '../repositories/campaign/campaignCrud.repository.js';
 import {
-  sendSystemEmail,
   buildCampaignPausedEmail,
   buildCampaignStoppedQuotaEmail,
   buildCampaignRunFailedEmail,
@@ -10,6 +9,7 @@ import {
 } from './systemEmail.util.js';
 import { labelCampaignRunFailure } from './campaignRunFailureLabel.util.js';
 import { notifyUsers } from '../services/notification/notificationDispatch.service.js';
+import { vnDayKey, formatVnDateTime } from './vnTimeFormat.util.js';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://founderai.vn';
 
@@ -95,7 +95,12 @@ async function loadOwnerContact(campaignId, { requireEmail = true } = {}) {
 }
 
 /**
- * Gửi email "tạm dừng vì hết quota" tối đa 1 lần/đợt (cờ `quotaPauseNotifiedAt`).
+ * Báo chủ "tạm dừng vì hết quota" tối đa 1 lần/đợt (cờ `quotaPauseNotifiedAt`).
+ *
+ * Từ PLAN_TICKET_GOP_Y_VA_CHUONG_THONG_BAO PR-6: đi qua dispatcher (`notifyUsers`, sự kiện `campaign_quota_exhausted`) — chuông trong
+ * app + email theo cấu hình hệ thống / tuỳ chọn người dùng; mẫu email vẫn là buildCampaignPausedEmail. Chủ không có email vẫn nhận chuông.
+ * `dedupeKey` gắn mốc claim: cờ `quotaPauseNotifiedAt` bị xoá khi resume (QUOTA_DEFER_CLEAR_KEYS) nên MỖI đợt hoãn là một thông báo mới —
+ * khoá chỉ theo run sẽ nuốt luôn thông báo của đợt hoãn thứ hai.
  *
  * @param {{ runId: number, campaignId: number, reason: string, resetAt: Date|string }} input
  * @returns {Promise<{ sent?: boolean, skipped?: boolean, reason?: string }>}
@@ -110,65 +115,106 @@ export async function notifyCampaignQuotaPaused({ runId, campaignId, reason, res
     return { skipped: true, reason: 'already_notified' };
   }
 
-  // Claim cờ trước khi SMTP — tránh double-send khi defer song song.
+  // Claim cờ trước khi gửi — tránh double-send khi defer song song.
   const notifiedAt = new Date().toISOString();
   await campaignRunRepository.patchRunMetadata(runId, { quotaPauseNotifiedAt: notifiedAt });
 
-  const owner = await loadOwnerContact(campaignId);
-  if (!owner?.email) {
+  const owner = await loadOwnerContact(campaignId, { requireEmail: false });
+  if (!owner) {
     console.warn(
-      `[CampaignQuotaNotify] skip paused email — no owner email campaign=${campaignId} run=${runId}`
+      `[CampaignQuotaNotify] skip paused notice — no owner campaign=${campaignId} run=${runId}`
     );
-    return { skipped: true, reason: 'no_owner_email' };
+    return { skipped: true, reason: 'no_owner' };
   }
 
   const isAccountLimit = isAccountDailyQuotaReason(reason);
-  const { subject, html } = buildCampaignPausedEmail({
-    fullName: owner.fullName,
-    campaignName: owner.campaignName,
-    channelLabel: channelLabelFromQuotaReason(reason),
-    resetAt,
-    topupUrl: frontendAppUrl('/app/topup'),
-    // Giới hạn tự đặt cho tài khoản gửi: mua thêm hạn mức GÓI không giúp gửi tiếp — trỏ sang
-    // đúng chỗ sửa (Cài đặt kênh → tài khoản gửi), không phải trang mua thêm.
-    isAccountLimit,
-    settingsUrl: frontendAppUrl('/app/settings/channels'),
+  const channelLabel = channelLabelFromQuotaReason(reason);
+  const resetText = formatVnDateTime(resetAt);
+  const delivery = await notifyUsers({
+    eventType: 'campaign_quota_exhausted',
+    userIds: [owner.userId],
+    title: `Chiến dịch «${owner.campaignName}» tạm dừng vì hết hạn mức gửi`,
+    titleEn: `Campaign "${owner.campaignName}" paused: sending quota reached`,
+    message: (isAccountLimit
+      ? `Chiến dịch đã chạm giới hạn gửi mỗi ngày bạn đặt cho tài khoản gửi (${channelLabel}).`
+      : `Chiến dịch đã chạm hạn mức gửi ${channelLabel} của gói.`)
+      + (resetText ? ` Hệ thống sẽ tự chạy tiếp khi hạn mức được làm mới (${resetText}).` : ' Hệ thống sẽ tự chạy tiếp khi hạn mức được làm mới.'),
+    messageEn: (isAccountLimit
+      ? `The campaign reached the daily sending limit you set for the sending account (${channelLabel}).`
+      : `The campaign reached the plan's ${channelLabel} sending quota.`)
+      + (resetText ? ` It resumes automatically when the quota resets (${resetText}).` : ' It resumes automatically when the quota resets.'),
+    link: '/app/campaigns',
+    severity: 'warning',
+    metadata: { runId, campaignId, reason },
+    dedupeKey: `run:${runId}:quota_paused:${notifiedAt}`,
+    email: ({ fullName }) => buildCampaignPausedEmail({
+      fullName: fullName ?? owner.fullName,
+      campaignName: owner.campaignName,
+      channelLabel,
+      resetAt,
+      topupUrl: frontendAppUrl('/app/topup'),
+      // Giới hạn tự đặt cho tài khoản gửi: mua thêm hạn mức GÓI không giúp gửi tiếp — trỏ sang
+      // đúng chỗ sửa (Cài đặt kênh → tài khoản gửi), không phải trang mua thêm.
+      isAccountLimit,
+      settingsUrl: frontendAppUrl('/app/settings/channels'),
+    }),
   });
 
-  await sendSystemEmail({ to: owner.email, subject, html });
   console.log(
-    `[CampaignQuotaNotify] paused email sent campaign=${campaignId} run=${runId} to=${owner.email}`
+    `[CampaignQuotaNotify] paused notified campaign=${campaignId} run=${runId} owner=${owner.userId} `
+    + `inApp=${delivery.inApp} emailSent=${delivery.emailSent}`
   );
-  return { sent: true };
+  return delivery.inApp + delivery.emailSent > 0
+    ? { sent: true }
+    : { skipped: true, reason: 'no_delivery' };
 }
 
 /**
- * Gửi email khi campaign hard-fail vì hết hạn mức / gói hết hạn (không có resetAt).
+ * Báo chủ khi campaign hard-fail vì hết hạn mức / gói hết hạn (không có resetAt).
+ *
+ * Từ PR-6: đi qua dispatcher (sự kiện `campaign_quota_exhausted`). Hàm này không có claim/runId — trước đây mỗi lần hard-fail là một
+ * email; nay `dedupeKey` theo (chiến dịch, ngày giờ VN) để một chiến dịch dừng liên tiếp trong ngày không đẩy nhiều dòng chuông, còn
+ * ngày sau dừng lại vẫn được báo (khoá vĩnh viễn theo chiến dịch sẽ nuốt các lần sau).
  *
  * @param {{ campaignId: number, reason?: string }} input
  * @returns {Promise<{ sent?: boolean, skipped?: boolean, reason?: string }>}
  */
 export async function notifyCampaignQuotaStopped({ campaignId, reason }) {
-  const owner = await loadOwnerContact(campaignId);
-  if (!owner?.email) {
+  const owner = await loadOwnerContact(campaignId, { requireEmail: false });
+  if (!owner) {
     console.warn(
-      `[CampaignQuotaNotify] skip stopped email — no owner email campaign=${campaignId}`
+      `[CampaignQuotaNotify] skip stopped notice — no owner campaign=${campaignId}`
     );
-    return { skipped: true, reason: 'no_owner_email' };
+    return { skipped: true, reason: 'no_owner' };
   }
 
-  const { subject, html } = buildCampaignStoppedQuotaEmail({
-    fullName: owner.fullName,
-    campaignName: owner.campaignName,
-    reason: reason || 'Gói hết hạn hoặc hết hạn mức kỳ.',
-    billingUrl: frontendAppUrl('/app/billing'),
+  const stopReason = reason || 'Gói hết hạn hoặc hết hạn mức kỳ.';
+  const delivery = await notifyUsers({
+    eventType: 'campaign_quota_exhausted',
+    userIds: [owner.userId],
+    title: `Chiến dịch «${owner.campaignName}» đã dừng vì hết hạn mức`,
+    titleEn: `Campaign "${owner.campaignName}" stopped: quota exhausted`,
+    message: `${stopReason} Vào Gói & thanh toán để gia hạn hoặc nâng gói rồi chạy lại chiến dịch.`,
+    messageEn: 'The campaign stopped because the plan expired or its quota ran out. Open Plan & billing to renew or upgrade, then run it again.',
+    link: '/app/billing',
+    severity: 'error',
+    metadata: { campaignId, reason: stopReason },
+    dedupeKey: `campaign:${campaignId}:quota_stopped:${vnDayKey()}`,
+    email: ({ fullName }) => buildCampaignStoppedQuotaEmail({
+      fullName: fullName ?? owner.fullName,
+      campaignName: owner.campaignName,
+      reason: stopReason,
+      billingUrl: frontendAppUrl('/app/billing'),
+    }),
   });
 
-  await sendSystemEmail({ to: owner.email, subject, html });
   console.log(
-    `[CampaignQuotaNotify] stopped email sent campaign=${campaignId} to=${owner.email}`
+    `[CampaignQuotaNotify] stopped notified campaign=${campaignId} owner=${owner.userId} `
+    + `inApp=${delivery.inApp} emailSent=${delivery.emailSent}`
   );
-  return { sent: true };
+  return delivery.inApp + delivery.emailSent > 0
+    ? { sent: true }
+    : { skipped: true, reason: 'no_delivery' };
 }
 
 /**

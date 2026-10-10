@@ -16,7 +16,9 @@ import { notifyUsers, clearEventSettingsCache } from '../../src/services/notific
 import { getNotificationEvent } from '../../src/config/notificationEventCatalog.js';
 import { cleanupUserNotifications } from '../../src/services/notification/userNotificationCleanup.service.js';
 import { notifyCampaignRunCompleted } from '../../src/utils/campaignRunCompletedNotify.util.js';
-import { notifyCampaignApprovalRequired, notifyCampaignRunFailed } from '../../src/utils/campaignQuotaPauseNotify.util.js';
+import {
+  notifyCampaignApprovalRequired, notifyCampaignRunFailed, notifyCampaignQuotaPaused, notifyCampaignQuotaStopped,
+} from '../../src/utils/campaignQuotaPauseNotify.util.js';
 import { notifyCampaignScheduleSkipped } from '../../src/utils/campaignScheduleSkipNotify.util.js';
 
 let app;
@@ -342,13 +344,13 @@ describe('API /api/notifications', () => {
     expect(ownerRes.body.data.items.map((item) => item.title)).toEqual(['Của chủ']);
   });
 
-  it('preferences: GET 7 mục (audience=user); PUT khoá → 400 và KHÔNG ghi; PUT cho phép → ghi DB, GET phản ánh emailEnabled hiệu lực', async () => {
+  it('preferences: GET 13 mục (audience=user); PUT khoá → 400 và KHÔNG ghi; PUT cho phép → ghi DB, GET phản ánh emailEnabled hiệu lực', async () => {
     await enableEmailFor('campaign_run_failed', 'campaign_approval_required');
     const user = await createUser({ username: 'api_pref' });
 
     const list = await as('get', '/api/notifications/preferences', user);
     expect(list.status).toBe(200);
-    expect(list.body.data).toHaveLength(7);
+    expect(list.body.data).toHaveLength(13);
     const failed = list.body.data.find((item) => item.eventType === 'campaign_run_failed');
     expect(failed).toMatchObject({ emailEnabled: true, userCanDisableEmail: true, inAppEnabled: true, systemEmailEnabled: true });
 
@@ -368,7 +370,7 @@ describe('API /api/notifications', () => {
 });
 
 describe('API /api/admin/notification-events', () => {
-  it('user thường → 403; admin GET đủ 9 mục; PUT ghi DB + có hiệu lực NGAY với dispatcher (xoá cache)', async () => {
+  it('user thường → 403; admin GET đủ 15 mục; PUT ghi DB + có hiệu lực NGAY với dispatcher (xoá cache)', async () => {
     const admin = await createUser({ username: 'ev_admin', role: 'admin' });
     const user = await createUser({ username: 'ev_user' });
 
@@ -376,7 +378,7 @@ describe('API /api/admin/notification-events', () => {
 
     const list = await as('get', '/api/admin/notification-events', admin);
     expect(list.status).toBe(200);
-    expect(list.body.data).toHaveLength(9);
+    expect(list.body.data).toHaveLength(15);
 
     // campaign_run_completed mặc định tắt email → bật qua API → dispatcher gửi email ngay (cache đã bị xoá).
     const before = await notifyUsers({ eventType: 'campaign_run_completed', userIds: [user.id], title: 'T', message: 'M' });
@@ -502,6 +504,36 @@ describe('4 sự kiện chiến dịch ghi thông báo thật', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ event_type: 'campaign_approval_required', severity: 'warning' });
     expect(rows[0].metadata).toEqual({ campaignId, threshold: 50, totalCustomers: 120 });
+  });
+
+  // PR-6 — hết hạn mức (campaign_quota_exhausted) trên DB thật: bảng user_notifications nhận đúng dòng, seed 294 có mặt.
+  it('campaign_quota_exhausted (tạm dừng): một dòng chuông cho người tạo chiến dịch, link /app/campaigns; gọi lại cùng đợt (cờ đã claim) không thêm; email mặc định tắt', async () => {
+    const owner = await createUser({ username: 'ev_q_owner' });
+    const { campaignId, runId } = await createCampaignWithRun(owner);
+    const input = { runId, campaignId, reason: 'plan_quota_zalo_daily', resetAt: new Date('2026-10-12T00:00:00.000Z') };
+
+    expect(await notifyCampaignQuotaPaused(input)).toEqual({ sent: true });
+    const rows = await rowsOf(owner.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ event_type: 'campaign_quota_exhausted', severity: 'warning', link: '/app/campaigns' });
+    expect(rows[0].dedupe_key).toMatch(new RegExp(`^run:${runId}:quota_paused:`));
+    expect(rows[0].metadata).toEqual({ runId, campaignId, reason: 'plan_quota_zalo_daily' });
+    expect(rows[0].message).toContain('Zalo');
+
+    expect(await notifyCampaignQuotaPaused(input)).toEqual({ skipped: true, reason: 'already_notified' });
+    expect(await rowsOf(owner.id)).toHaveLength(1);
+  });
+
+  it('campaign_quota_exhausted (dừng hẳn): một dòng chuông link /app/billing; gọi lại cùng ngày không thêm dòng (khoá theo chiến dịch + ngày VN)', async () => {
+    const owner = await createUser({ username: 'ev_q2_owner' });
+    const { campaignId } = await createCampaignWithRun(owner);
+
+    expect(await notifyCampaignQuotaStopped({ campaignId, reason: 'Gói đã hết hạn.' })).toEqual({ sent: true });
+    expect(await notifyCampaignQuotaStopped({ campaignId, reason: 'Gói đã hết hạn.' })).toEqual({ skipped: true, reason: 'no_delivery' });
+    const rows = await rowsOf(owner.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ event_type: 'campaign_quota_exhausted', severity: 'error', link: '/app/billing' });
+    expect(rows[0].dedupe_key).toMatch(new RegExp(`^campaign:${campaignId}:quota_stopped:\\d{8}$`));
   });
 
   it('campaign_schedule_skipped: một dòng in-app cho chủ; claim lần hai không báo lại', async () => {

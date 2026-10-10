@@ -21,6 +21,10 @@ const { VISITOR_CHAT_UNAVAILABLE_MESSAGE, VISITOR_CHAT_ERROR_MESSAGE } = await i
   '../../src/services/ai/aiCreditMeter.service.js'
 );
 const { truncateAll, createUser } = await import('./helpers/db.js');
+const { notifyUsers, clearEventSettingsCache } = await import('../../src/services/notification/notificationDispatch.service.js');
+
+/** PR-6 — dispatcher THẬT (chuông ghi DB thật) bọc jest.fn để đếm số lần gọi. */
+const makeNotify = () => jest.fn((input) => notifyUsers(input));
 
 afterAll(async () => {
   await db.pool.end();
@@ -28,6 +32,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await truncateAll();
+  clearEventSettingsCache();
   jest.spyOn(console, 'error').mockImplementation(() => {});
   jest.spyOn(console, 'warn').mockImplementation(() => {});
 });
@@ -128,18 +133,26 @@ describe('aiUnavailableNotice.repository — SQL thật', () => {
 });
 
 describe('aiUnavailableNotice.service + DB thật — mốc sống qua restart', () => {
-  it('chủ hết credit: email đúng MỘT lần trong 24 giờ, mốc nằm trong DB', async () => {
+  it('chủ hết credit: báo đúng MỘT lần trong 24 giờ (một dòng chuông thật, email theo cấu hình hệ thống), mốc nằm trong DB', async () => {
     const owner = await createUser({ username: 'notice_svc_owner', email: 'chu_notice@example.com', fullName: 'Chủ Notice' });
-    const sendEmail = jest.fn(async () => ({}));
-    const deps = { sendEmail, buildBillingUrl: () => 'https://founderai.test/app/billing' };
+    // Hệ thống bật email cho sự kiện này để kiểm đường email của dispatcher (sendSystemEmail no-op khi NODE_ENV=test nhưng vẫn được đếm).
+    await db.query(
+      `INSERT INTO notification_event_settings (event_type, in_app_enabled, email_enabled, user_can_disable_email)
+       VALUES ('ai_unavailable', true, true, true) ON CONFLICT (event_type) DO UPDATE SET email_enabled = true`
+    );
+    clearEventSettingsCache();
+    const notify = makeNotify();
+    const deps = { notify, buildBillingUrl: () => 'https://founderai.test/app/billing' };
 
     const first = await notifyOwnerAiUnavailable({ ownerUserId: owner.id, reason: 'credit_exhausted', now: T0, deps });
     const second = await notifyOwnerAiUnavailable({ ownerUserId: owner.id, reason: 'credit_exhausted', now: at(2 * HOUR), deps });
 
     expect(first).toEqual({ sent: true });
     expect(second).toEqual({ sent: false, skipped: 'cooldown' });
-    expect(sendEmail).toHaveBeenCalledTimes(1);
-    expect(sendEmail.mock.calls[0][0].to).toBe('chu_notice@example.com');
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(await notify.mock.results[0].value).toMatchObject({ inApp: 1, emailSent: 1, emailFailed: 0 });
+    const { rows } = await db.query('SELECT event_type, link, severity, dedupe_key FROM user_notifications WHERE user_id = $1', [owner.id]);
+    expect(rows).toEqual([{ event_type: 'ai_unavailable', link: '/app/billing', severity: 'error', dedupe_key: 'ai_unavailable:' + owner.id + ':credit_exhausted:20261003' }]);
     expect((await ownerRow(owner.id)).send_count).toBe(1);
   });
 
@@ -150,27 +163,29 @@ describe('aiUnavailableNotice.service + DB thật — mốc sống qua restart',
     await noticeRepo.claim({ idUser: owner.id, kind: NOTICE_KIND_VISITOR_APOLOGY, noticeKey: 'zalo_personal:42', now: at(-1 * HOUR), cooldownMs: VISITOR_APOLOGY_COOLDOWN_MS });
 
     // Tiến trình MỚI (module vừa nạp, không giữ gì trong RAM).
-    const sendEmail = jest.fn(async () => ({}));
+    const notify = makeNotify();
     const out = await handleAiUnavailable({
-      ownerUserId: owner.id, reason: 'credit_exhausted', channel: 'zalo_personal', conversationId: 42, now: T0, deps: { sendEmail },
+      ownerUserId: owner.id, reason: 'credit_exhausted', channel: 'zalo_personal', conversationId: 42, now: T0, deps: { notify },
     });
     await out.ownerNotice;
 
     expect(out.send).toBe(false);
-    expect(sendEmail).not.toHaveBeenCalled();
+    expect(notify).not.toHaveBeenCalled();
+    expect((await db.query('SELECT 1 FROM user_notifications WHERE user_id = $1', [owner.id])).rows).toHaveLength(0);
   });
 
   it('khách nhắn 10 tin khi chủ hết credit: đúng 1 câu xin lỗi + 1 email chủ; khách khác vẫn nhận; sau 6 giờ lại nhận', async () => {
     const owner = await createUser({ username: 'notice_flow_owner', email: 'flow@example.com' });
-    const sendEmail = jest.fn(async () => ({}));
+    const notify = makeNotify();
     const handle = (conversationId, now) => handleAiUnavailable({
-      ownerUserId: owner.id, reason: 'credit_exhausted', channel: 'telegram_personal', conversationId, now, deps: { sendEmail },
+      ownerUserId: owner.id, reason: 'credit_exhausted', channel: 'telegram_personal', conversationId, now, deps: { notify },
     });
 
     const burst = await Promise.all(Array.from({ length: 10 }, () => handle(7, T0)));
     await Promise.all(burst.map((r) => r.ownerNotice));
     expect(burst.filter((r) => r.send)).toHaveLength(1);
-    expect(sendEmail).toHaveBeenCalledTimes(1);
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect((await db.query('SELECT 1 FROM user_notifications WHERE user_id = $1', [owner.id])).rows).toHaveLength(1);
 
     expect((await handle(8, at(60_000))).send).toBe(true);
     expect((await handle(7, at(6 * HOUR - 1))).send).toBe(false);

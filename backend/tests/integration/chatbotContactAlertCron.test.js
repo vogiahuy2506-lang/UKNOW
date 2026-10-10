@@ -28,6 +28,7 @@ const {
   truncateAll,
   createUser,
 } = await import('./helpers/db.js');
+const { clearEventSettingsCache } = await import('../../src/services/notification/notificationDispatch.service.js');
 
 let origTestSendEmail;
 
@@ -48,6 +49,13 @@ beforeEach(async () => {
   await truncateAll();
   await db.query('TRUNCATE TABLE chatbot_contact_alerts, chatbot_contact_scan_cursors CASCADE');
   mockSendMail.mockClear();
+  // PR-6: thông báo liên hệ đi qua dispatcher; mặc định hệ thống CHỈ CHUÔNG → bật email cho sự kiện này để các ca dưới đo đường email.
+  await db.query(
+    `INSERT INTO notification_event_settings (event_type, in_app_enabled, email_enabled, user_can_disable_email)
+     VALUES ('chatbot_contact_left', true, true, true)
+     ON CONFLICT (event_type) DO UPDATE SET email_enabled = true`
+  );
+  clearEventSettingsCache();
 });
 
 describe('Chatbot Contact Alert Cron Integration (PR-1, Việc 6 & Review)', () => {

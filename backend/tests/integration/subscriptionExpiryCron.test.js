@@ -30,6 +30,7 @@ const {
   createPlan,
 } = await import('./helpers/db.js');
 const { saveSettings } = await import('../../src/repositories/admin/subscriptionReminderSettings.repository.js');
+const { clearEventSettingsCache } = await import('../../src/services/notification/notificationDispatch.service.js');
 
 async function setSentRecord(userId, sentRecord) {
   await db.query('UPDATE users SET subscription_reminders_sent = $2::jsonb WHERE id = $1', [
@@ -56,6 +57,13 @@ afterAll(() => {
 beforeEach(async () => {
   await truncateAll();
   mockSendMail.mockClear();
+  // PR-6: thư hết hạn / nhắc hạn đi qua dispatcher; mặc định hệ thống CHỈ CHUÔNG → bật email cho hai sự kiện gói để các ca dưới đo đường email.
+  await db.query(
+    `INSERT INTO notification_event_settings (event_type, in_app_enabled, email_enabled, user_can_disable_email)
+     VALUES ('plan_expired', true, true, false), ('plan_expiring', true, true, false)
+     ON CONFLICT (event_type) DO UPDATE SET email_enabled = true`
+  );
+  clearEventSettingsCache();
 });
 
 async function setSubscription(userId, planId, expiresAt, reminderCount = 0) {
@@ -117,6 +125,10 @@ describe('Subscription Expiry Cron Integration (PR-2a — Ca 12 & 13 mục 5)', 
     expect(mailArgs.subject).toContain('Gói Pro T-0 của bạn đã hết hạn');
     expect(mailArgs.html).toContain('Gói <strong>Gói Pro T-0</strong> của bạn đã hết hạn');
     expect(mailArgs.html).toContain('Các chiến dịch marketing đang chạy đã dừng');
+
+    // 1b. PR-6: chuông plan_expired nằm trong DB thật, khoá theo chu kỳ (ngày hết hạn)
+    const bell = await db.query('SELECT event_type, link, severity FROM user_notifications WHERE user_id = $1', [user.id]);
+    expect(bell.rows).toEqual([{ event_type: 'plan_expired', link: '/app/billing', severity: 'error' }]);
 
     // 2. Kiểm tra trạng thái DB của user sau khi thu hồi
     const userRes = await db.query(
@@ -210,7 +222,10 @@ describe('Thư T-0 hỏng — ghim hệ quả thật, không phải lời hứa 
 });
 
 describe('sendExpiringReminders — Nhắc hạn còn 7 ngày & 3 ngày (PR tách vòng lặp)', () => {
-  it('Bẫy 2 — Thư nhắc hạn thử lại được: gửi lỗi thì gói KHÔNG bị thu hồi, reminder_count không tăng, lượt sau gửi lại thành công', async () => {
+  // PR-6 (PLAN_TICKET_GOP_Y_VA_CHUONG_THONG_BAO) ĐỔI NGỮ NGHĨA của "Bẫy 2": nhắc hạn đi qua dispatcher (chuông + email). Dispatcher chỉ
+  // gửi email cho người MỚI được chèn dòng chuông, nên khi email lỗi mà chuông đã ghi được thì lượt sau KHÔNG còn đường gửi lại email
+  // (dedupe chặn) — đóng mốc ngay để cron không quét lại. Mốc chỉ KHÔNG đóng khi cả hai kênh hỏng (unit: subscriptionExpiry.service.spec).
+  it('Bẫy 2 (PR-6) — email nhắc hạn lỗi nhưng chuông đã ghi được: mốc được đóng, gói KHÔNG bị thu hồi, lượt sau không quét lại; chuông plan_expiring nằm trong DB', async () => {
     const plan = await createPlan({ code: 'p-remind-retry', name: 'Gói Nhắc Retry' });
     const user = await createUser({
       username: 'user-remind-retry',
@@ -225,34 +240,43 @@ describe('sendExpiringReminders — Nhắc hạn còn 7 ngày & 3 ngày (PR tác
     mockSendMail.mockRejectedValueOnce(new Error('SMTP temporary error'));
 
     const res1 = await sendExpiringReminders({ renewalUrl: 'https://app.uknow.vn/billing' });
-    expect(res1.remindedWeek).toBe(0);
-    expect(res1.failed).toBe(1);
-
-    // Kiểm tra DB: active_plan_id VẪN CÒN, subscription_reminders_sent VẪN RỖNG (chưa gửi được
-    // lần nào nên chưa có gì để ghi nhớ — PLAN_CAU_HINH_LICH_NHAC_HAN đã đổi cơ chế chống gửi lặp
-    // từ subscription_reminder_count sang cột JSONB này, xem subscriptionExpiry.service.js).
-    const userDb1 = await db.query('SELECT active_plan_id, subscription_reminders_sent FROM users WHERE id = $1', [user.id]);
-    expect(userDb1.rows[0].active_plan_id).toBe(plan.id);
-    expect(userDb1.rows[0].subscription_reminders_sent).toEqual({});
-
-    // Lượt 2: SMTP phục hồi bình thường -> gửi lại thành công!
-    mockSendMail.mockClear();
-    mockSendMail.mockResolvedValueOnce({ messageId: '<retry-success-id>' });
-
-    const res2 = await sendExpiringReminders({ renewalUrl: 'https://app.uknow.vn/billing' });
-    expect(res2.remindedWeek).toBe(1);
-    expect(res2.failed).toBe(0);
+    expect(res1.remindedWeek).toBe(1);
+    expect(res1.failed).toBe(0);
     expect(mockSendMail).toHaveBeenCalledTimes(1);
 
-    // DB đã ghi nhận đã gửi mốc 7 cho đúng chu kỳ hiện tại
-    const userDb2 = await db.query('SELECT active_plan_id, subscription_reminders_sent FROM users WHERE id = $1', [user.id]);
-    expect(userDb2.rows[0].subscription_reminders_sent.days).toEqual([7]);
+    // Gói VẪN CÒN; mốc 7 đã được ghi nhớ cho đúng chu kỳ hiện tại (PLAN_CAU_HINH_LICH_NHAC_HAN: cột JSONB subscription_reminders_sent).
+    const userDb1 = await db.query('SELECT active_plan_id, subscription_reminders_sent FROM users WHERE id = $1', [user.id]);
+    expect(userDb1.rows[0].active_plan_id).toBe(plan.id);
+    expect(userDb1.rows[0].subscription_reminders_sent.days).toEqual([7]);
 
-    // Lượt 3 cùng ngày: mốc 7 đã gửi rồi → không gửi lại (ca 5 của plan, chốt ở tầng DB thật)
+    // Chuông thật trong DB: đúng sự kiện, link billing, khoá theo mốc ngày.
+    const bell = await db.query('SELECT event_type, link, dedupe_key FROM user_notifications WHERE user_id = $1', [user.id]);
+    expect(bell.rows).toHaveLength(1);
+    expect(bell.rows[0]).toMatchObject({ event_type: 'plan_expiring', link: '/app/billing' });
+    expect(bell.rows[0].dedupe_key).toMatch(/^plan_expiring:\d+:\d{8}:d7$/);
+
+    // Lượt 2 cùng ngày: mốc 7 đã đóng → không quét lại, không gửi thêm gì.
     mockSendMail.mockClear();
-    const res3 = await sendExpiringReminders({ renewalUrl: 'https://app.uknow.vn/billing' });
-    expect(res3.remindedWeek).toBe(0);
+    const res2 = await sendExpiringReminders({ renewalUrl: 'https://app.uknow.vn/billing' });
+    expect(res2.remindedWeek).toBe(0);
     expect(mockSendMail).not.toHaveBeenCalled();
+    expect((await db.query('SELECT 1 FROM user_notifications WHERE user_id = $1', [user.id])).rows).toHaveLength(1);
+  });
+
+  it('PR-6 — email mặc định TẮT (admin chưa bật): nhắc hạn chỉ ghi chuông, vẫn đóng mốc, không gửi thư', async () => {
+    await db.query(`UPDATE notification_event_settings SET email_enabled = false WHERE event_type = 'plan_expiring'`);
+    clearEventSettingsCache();
+    const plan = await createPlan({ code: 'p-remind-bell', name: 'Gói Chỉ Chuông' });
+    const user = await createUser({ username: 'user-remind-bell', email: 'remind-bell@example.com', full_name: 'Khách Chuông' });
+    await setSubscription(user.id, plan.id, new Date(Date.now() + 6.8 * 86400000), 0);
+
+    const res = await sendExpiringReminders({ renewalUrl: 'https://app.uknow.vn/billing' });
+
+    expect(res.remindedWeek).toBe(1);
+    expect(mockSendMail).not.toHaveBeenCalled();
+    expect((await db.query('SELECT 1 FROM user_notifications WHERE user_id = $1', [user.id])).rows).toHaveLength(1);
+    const userDb = await db.query('SELECT subscription_reminders_sent FROM users WHERE id = $1', [user.id]);
+    expect(userDb.rows[0].subscription_reminders_sent.days).toEqual([7]);
   });
 
   it('Ca 8: Cron chạy đầy đủ ghi vào cron_job_runs với cấu trúc đủ 5 khoá giám sát trên DB thật', async () => {

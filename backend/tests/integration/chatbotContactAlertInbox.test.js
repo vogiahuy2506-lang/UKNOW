@@ -32,6 +32,7 @@ const {
   truncateAll,
   createUser,
 } = await import('./helpers/db.js');
+const { clearEventSettingsCache } = await import('../../src/services/notification/notificationDispatch.service.js');
 
 let app;
 let origTestSendEmail;
@@ -55,6 +56,13 @@ beforeEach(async () => {
   await truncateAll();
   await db.query('TRUNCATE TABLE chatbot_contact_alerts, chatbot_contact_scan_cursors CASCADE');
   mockSendMail.mockClear();
+  // PR-6: thông báo liên hệ đi qua dispatcher; mặc định hệ thống CHỈ CHUÔNG → bật email cho sự kiện này để ca công tắc đo đúng đường email.
+  await db.query(
+    `INSERT INTO notification_event_settings (event_type, in_app_enabled, email_enabled, user_can_disable_email)
+     VALUES ('chatbot_contact_left', true, true, true)
+     ON CONFLICT (event_type) DO UPDATE SET email_enabled = true`
+  );
+  clearEventSettingsCache();
 });
 
 async function loginAs(user) {
@@ -221,7 +229,7 @@ describe('Chatbot Contact Alert Inbox & Settings Integration (PR-2)', () => {
     expect(rows[0].chatbot_contact_alert_email).toBe(false);
   });
 
-  it('khi chủ tắt nhận thư: scan vẫn lưu vào sổ với suppressed_reason = owner_opted_out và KHÔNG gửi email', async () => {
+  it('PR-6 — chủ tắt công tắc email: liên hệ vẫn vào hàng chờ (không còn owner_opted_out), CHUÔNG báo, KHÔNG gửi email dù hệ thống bật email; chủ còn bật công tắc vẫn nhận cả email', async () => {
     await setCursor('web', 0);
 
     const owner = await createUser({
@@ -229,49 +237,65 @@ describe('Chatbot Contact Alert Inbox & Settings Integration (PR-2)', () => {
       email: 'optout@example.com',
       phone: '0901234567',
     });
+    const optedIn = await createUser({
+      username: 'optin_owner',
+      email: 'optin@example.com',
+      phone: '0907654321',
+    });
 
-    // Tắt thông báo email
+    // Tắt thông báo email (chỉ chủ thứ nhất)
     await db.query(
       `UPDATE users SET chatbot_contact_alert_email = false WHERE id = $1`,
       [owner.id]
     );
 
-    const { rows: widgetRows } = await db.query(
-      `INSERT INTO web_widget_configs (id_user, widget_key)
-       VALUES ($1, $2) RETURNING id`,
-      [owner.id, `key_${Date.now()}_optout`]
-    );
-    const widgetId = widgetRows[0].id;
-
-    const { rows: convRows } = await db.query(
-      `INSERT INTO webchat_conversations (id_user, id_widget_config, session_id, visitor_name)
-       VALUES ($1, $2, 'sess_opt', 'Khách Tắt Thư') RETURNING id`,
-      [owner.id, widgetId]
-    );
-    const convId = convRows[0].id;
-
-    await db.query(
-      `INSERT INTO webchat_messages (id_conversation, id_user, role, content, created_at)
-       VALUES ($1, $2, 'visitor', 'Số mình là 0933445566 nhé shop', NOW())`,
-      [convId, owner.id]
-    );
+    for (const [user, suffix, phone] of [[owner, 'optout', '0933445566'], [optedIn, 'optin', '0944556677']]) {
+      const { rows: widgetRows } = await db.query(
+        `INSERT INTO web_widget_configs (id_user, widget_key)
+         VALUES ($1, $2) RETURNING id`,
+        [user.id, `key_${Date.now()}_${suffix}`]
+      );
+      const { rows: convRows } = await db.query(
+        `INSERT INTO webchat_conversations (id_user, id_widget_config, session_id, visitor_name)
+         VALUES ($1, $2, $3, 'Khách') RETURNING id`,
+        [user.id, widgetRows[0].id, `sess_${suffix}`]
+      );
+      await db.query(
+        `INSERT INTO webchat_messages (id_conversation, id_user, role, content, created_at)
+         VALUES ($1, $2, 'visitor', $3, NOW())`,
+        [convRows[0].id, user.id, `Số mình là ${phone} nhé shop`]
+      );
+    }
 
     const result = await scanAndNotify();
-    expect(result.scannedCount).toBe(1);
-    expect(result.alertsCreatedOrUpdated).toBe(1);
-    expect(result.emailsSent).toBe(0);
-    expect(mockSendMail).not.toHaveBeenCalled();
+    expect(result.scannedCount).toBe(2);
+    expect(result.alertsCreatedOrUpdated).toBe(2);
+    // Chỉ chủ còn bật công tắc nhận email.
+    expect(result.emailsSent).toBe(1);
+    expect(mockSendMail).toHaveBeenCalledTimes(1);
+    expect(mockSendMail.mock.calls[0][0].to).toBe('optin@example.com');
 
-    // Kiểm tra dòng trong chatbot_contact_alerts
+    // Chủ tắt email: dòng trong sổ KHÔNG bị chặn, đã đóng sổ sau khi báo chuông.
     const { rows: alertRows } = await db.query(
       `SELECT * FROM chatbot_contact_alerts WHERE id_user = $1`,
       [owner.id]
     );
     expect(alertRows.length).toBe(1);
     expect(alertRows[0].contact_value).toBe('0933445566');
-    expect(alertRows[0].suppressed_reason).toBe('owner_opted_out');
+    expect(alertRows[0].suppressed_reason).toBeNull();
     expect(alertRows[0].pending_notify).toBe(false);
-    expect(alertRows[0].last_notified_at).toBeNull();
+    expect(alertRows[0].last_notified_at).not.toBeNull();
+
+    // Cả hai chủ đều có dòng chuông chatbot_contact_left.
+    for (const user of [owner, optedIn]) {
+      const { rows } = await db.query(
+        `SELECT event_type, link FROM user_notifications WHERE user_id = $1`,
+        [user.id]
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ event_type: 'chatbot_contact_left' });
+      expect(rows[0].link).toMatch(/^\/app\/settings\/inbox/);
+    }
   });
 
   it('data retention cleanup: dọn bản ghi quá 24 tháng theo last_seen_at', async () => {

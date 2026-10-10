@@ -14,6 +14,7 @@ const {
   nextDisconnectedSince,
   buildChannelDisconnectEmail,
   channelSettingsUrl,
+  channelDisconnectDedupeKey,
   DISCONNECT_AFTER_MINUTES,
 } = await import('../channelDisconnectAlert.service.js');
 
@@ -60,13 +61,43 @@ function makeFakeRepo({ zalo = [], telegram = [], whatsapp = [], owners = {} } =
       for (const it of items) states.get(`${it.channel}|${it.account_ref}`).last_alerted_at = now;
     }),
   };
-  return { repo, states };
+  return { repo, states, owners };
+}
+
+/**
+ * PR-6 — dispatcher GIẢ ở ranh giới `deps.notify`: chạy builder email thật của service rồi đưa qua `sendEmail` (như dispatcher thật —
+ * email lỗi → emailFailed, chuông ghi 0 để mô phỏng "cả hai kênh hỏng"). Hành vi thật của dispatcher có spec riêng.
+ */
+function makeFakeNotify(fake, sendEmail, { inApp = 1 } = {}) {
+  return jest.fn(async (input) => {
+    const result = { inApp, emailSent: 0, emailSkipped: 0, emailFailed: 0 };
+    const wantsEmail = !Array.isArray(input.channels) || input.channels.includes('email');
+    if (!wantsEmail) return result;
+    for (const userId of input.userIds) {
+      const owner = fake.owners[userId];
+      if (!owner?.email) {
+        result.emailSkipped += 1;
+        continue;
+      }
+      const { subject, html } = input.email({ id: userId, email: owner.email, fullName: owner.name });
+      try {
+        await sendEmail({ to: owner.email, subject, html });
+        result.emailSent += 1;
+      } catch {
+        result.inApp = 0;
+        result.emailFailed += 1;
+      }
+    }
+    return result;
+  });
 }
 
 function makeDeps(fake, { listening = new Set(), tgOn = true, waStatus = {} } = {}) {
+  const sendEmail = jest.fn(async () => ({ messageId: 'x' }));
   return {
     repo: fake.repo,
-    sendEmail: jest.fn(async () => ({ messageId: 'x' })),
+    sendEmail,
+    notify: makeFakeNotify(fake, sendEmail),
     getTelegramManager: () => (tgOn ? { isListening: (id) => listening.has(String(id)) } : null),
     getWhatsappSession: (key) => (waStatus[key] ? { status: waStatus[key], userName: 'Shop A' } : null),
   };
@@ -258,6 +289,115 @@ describe('scanAndNotify', () => {
     const html = deps.sendEmail.mock.calls[0][0].html;
     expect(html).toContain('Zalo Shop');
     expect(html).not.toContain('Zalo OK');
+  });
+});
+
+describe('scanAndNotify — qua dispatcher (PR-6, sự kiện channel_disconnected)', () => {
+  it('notify đúng 1 lần cho chủ: eventType, userIds = [id_user], link trang kênh, khoá chống trùng (chủ, ngày VN, tập tài khoản)', async () => {
+    const fake = makeFakeRepo({
+      telegram: [TG('111', 7)],
+      owners: { 7: { email: 'chu@example.com', name: 'Chu Shop' } },
+    });
+    const deps = makeDeps(fake);
+    await scanAndNotify({ now: T0, deps });
+    const r = await scanAndNotify({ now: at(20 * MIN), deps });
+
+    expect(deps.notify).toHaveBeenCalledTimes(1);
+    const call = deps.notify.mock.calls[0][0];
+    expect(call.eventType).toBe('channel_disconnected');
+    expect(call.userIds).toEqual([7]);
+    expect(call.link).toBe('/app/settings/channels');
+    expect(call.severity).toBe('warning');
+    expect(call.title).toContain('Telegram');
+    expect(call.dedupeKey).toBe(channelDisconnectDedupeKey(7, [{ channel: 'telegram', account_ref: '111' }], at(20 * MIN)));
+    expect(call.dedupeKey).toMatch(/^channel_disconnect:7:\d{8}:[0-9a-f]{10}$/);
+    expect(call.channels).toBeUndefined();
+    expect(r.inApp).toBe(1);
+    // Email vẫn dùng builder cũ (tên người nhận do dispatcher cấp).
+    expect(deps.sendEmail.mock.calls[0][0].html).toContain('Chu Shop');
+  });
+
+  it('hai chủ → hai lần notify, mỗi lần đúng userIds của chủ đó (không gửi nhầm chủ)', async () => {
+    const fake = makeFakeRepo({
+      telegram: [TG('111', 1), TG('333', 2)],
+      owners: { 1: { email: 'a@example.com', name: 'A' }, 2: { email: 'b@example.com', name: 'B' } },
+    });
+    const deps = makeDeps(fake);
+    await scanAndNotify({ now: T0, deps });
+    await scanAndNotify({ now: at(20 * MIN), deps });
+
+    const byOwner = Object.fromEntries(deps.notify.mock.calls.map(([call]) => [call.userIds[0], call]));
+    expect(Object.keys(byOwner).sort()).toEqual(['1', '2']);
+    expect(byOwner[1].metadata.accounts).toEqual([{ channel: 'telegram', accountRef: '111', label: 'tg111' }]);
+    expect(byOwner[2].metadata.accounts).toEqual([{ channel: 'telegram', accountRef: '333', label: 'tg333' }]);
+  });
+
+  it('tài khoản thứ hai mất kết nối CÙNG ngày → khoá chống trùng KHÁC (không bị nuốt), cùng tập thì khoá y hệt', () => {
+    const one = [{ channel: 'telegram', account_ref: '111' }];
+    const two = [{ channel: 'telegram', account_ref: '111' }, { channel: 'zalo_personal', account_ref: '5' }];
+    const sameDay = at(HOUR);
+    expect(channelDisconnectDedupeKey(1, one, sameDay)).not.toBe(channelDisconnectDedupeKey(1, two, sameDay));
+    expect(channelDisconnectDedupeKey(1, two, sameDay)).toBe(channelDisconnectDedupeKey(1, [...two].reverse(), sameDay));
+    expect(channelDisconnectDedupeKey(1, one, sameDay)).not.toBe(channelDisconnectDedupeKey(2, one, sameDay));
+  });
+
+  it('chủ KHÔNG có email vẫn được báo qua chuông và được đóng sổ (last_alerted_at)', async () => {
+    const fake = makeFakeRepo({
+      telegram: [TG('111', 1)],
+      owners: { 1: { name: 'Khong Email' } },
+    });
+    const deps = makeDeps(fake);
+    await scanAndNotify({ now: T0, deps });
+    const r = await scanAndNotify({ now: at(20 * MIN), deps });
+
+    expect(deps.notify).toHaveBeenCalledTimes(1);
+    expect(deps.sendEmail).not.toHaveBeenCalled();
+    expect(fake.states.get('telegram|111').last_alerted_at).not.toBeNull();
+    expect(r.alerted).toBe(1);
+  });
+
+  it('dispatcher báo trùng khoá / admin tắt cả hai kênh (mọi số = 0) → vẫn đóng sổ, lượt sau không báo lại', async () => {
+    const fake = makeFakeRepo({
+      telegram: [TG('111', 1)],
+      owners: { 1: { email: 'a@example.com', name: 'A' } },
+    });
+    const deps = makeDeps(fake);
+    deps.notify.mockResolvedValue({ inApp: 0, emailSent: 0, emailSkipped: 0, emailFailed: 0 });
+    await scanAndNotify({ now: T0, deps });
+    await scanAndNotify({ now: at(20 * MIN), deps });
+    await scanAndNotify({ now: at(30 * MIN), deps });
+
+    expect(deps.notify).toHaveBeenCalledTimes(1);
+    expect(fake.states.get('telegram|111').last_alerted_at).not.toBeNull();
+  });
+
+  it('email lỗi nhưng chuông đã ghi được → đóng sổ (chủ đã thấy trong app)', async () => {
+    const fake = makeFakeRepo({
+      telegram: [TG('111', 1)],
+      owners: { 1: { email: 'a@example.com', name: 'A' } },
+    });
+    const deps = makeDeps(fake);
+    deps.notify.mockResolvedValue({ inApp: 1, emailSent: 0, emailSkipped: 0, emailFailed: 1 });
+    await scanAndNotify({ now: T0, deps });
+    const r = await scanAndNotify({ now: at(20 * MIN), deps });
+
+    expect(fake.states.get('telegram|111').last_alerted_at).not.toBeNull();
+    expect(r.alerted).toBe(1);
+  });
+
+  it('notify ném lỗi bất thường → KHÔNG ghi đã báo, lượt sau thử lại', async () => {
+    const fake = makeFakeRepo({
+      telegram: [TG('111', 1)],
+      owners: { 1: { email: 'a@example.com', name: 'A' } },
+    });
+    const deps = makeDeps(fake);
+    deps.notify.mockRejectedValueOnce(new Error('boom'));
+    await scanAndNotify({ now: T0, deps });
+    const r1 = await scanAndNotify({ now: at(20 * MIN), deps });
+    expect(r1.emails.failed).toBe(1);
+    expect(fake.states.get('telegram|111').last_alerted_at).toBeNull();
+    const r2 = await scanAndNotify({ now: at(30 * MIN), deps });
+    expect(r2.alerted).toBe(1);
   });
 });
 

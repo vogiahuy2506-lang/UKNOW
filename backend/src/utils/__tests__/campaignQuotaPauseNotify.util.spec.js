@@ -138,8 +138,9 @@ describe('campaignQuotaPauseNotify.util', () => {
     });
   });
 
+  // PR-6 (PLAN_TICKET_GOP_Y_VA_CHUONG_THONG_BAO) — hết hạn mức đi qua dispatcher (sự kiện campaign_quota_exhausted).
   describe('notifyCampaignQuotaPaused', () => {
-    it('defer lần 1 (plan_quota) → 1 email + set cờ', async () => {
+    it('defer lần 1 (plan_quota) → set cờ + notifyUsers đúng 1 lần: sự kiện campaign_quota_exhausted, userIds = [campaign.id_user], dedupe theo run + mốc claim', async () => {
       const resetAt = new Date('2026-08-11T00:00:00.000Z');
       const result = await notifyCampaignQuotaPaused({
         runId: 10,
@@ -153,12 +154,33 @@ describe('campaignQuotaPauseNotify.util', () => {
         10,
         expect.objectContaining({ quotaPauseNotifiedAt: expect.any(String) })
       );
-      expect(mockSendSystemEmail).toHaveBeenCalledTimes(1);
-      expect(mockSendSystemEmail).toHaveBeenCalledWith(
-        expect.objectContaining({ to: 'owner@example.com', subject: 'paused:Promo X' })
-      );
+      expect(mockNotifyUsers).toHaveBeenCalledTimes(1);
+      const call = mockNotifyUsers.mock.calls[0][0];
+      expect(call.eventType).toBe('campaign_quota_exhausted');
+      expect(call.userIds).toEqual([42]);
+      const claimedAt = mockPatchRunMetadata.mock.calls[0][1].quotaPauseNotifiedAt;
+      expect(call.dedupeKey).toBe(`run:10:quota_paused:${claimedAt}`);
+      expect(call.severity).toBe('warning');
+      expect(call.link).toBe('/app/campaigns');
+      expect(call.title).toContain('Promo X');
+      expect(call.message).toContain('email');
+      expect(call.metadata).toEqual({ runId: 10, campaignId: 5, reason: 'plan_quota_email_daily' });
+      // Không còn gửi email trực tiếp — email đi qua dispatcher.
+      expect(mockSendSystemEmail).not.toHaveBeenCalled();
+    });
+
+    it('mẫu email riêng truyền cho dispatcher là buildCampaignPausedEmail với tên người nhận do dispatcher cấp', async () => {
+      const resetAt = new Date('2026-08-11T00:00:00.000Z');
+      await notifyCampaignQuotaPaused({ runId: 10, campaignId: 5, reason: 'plan_quota_email_daily', resetAt });
+
+      const { email } = mockNotifyUsers.mock.calls[0][0];
+      expect(email({ id: 42, email: 'owner@example.com', fullName: 'Chủ Shop' })).toEqual({
+        subject: 'paused:Promo X',
+        html: '<p>paused</p>',
+      });
       expect(mockBuildPaused).toHaveBeenCalledWith(
         expect.objectContaining({
+          fullName: 'Chủ Shop',
           campaignName: 'Promo X',
           channelLabel: 'email',
           resetAt,
@@ -167,7 +189,22 @@ describe('campaignQuotaPauseNotify.util', () => {
       );
     });
 
-    it('defer lần 2 cùng đợt (đã có cờ) → không gửi lại', async () => {
+    it('hai đợt hoãn của CÙNG run (cờ bị xoá khi resume, claim lại mốc khác) → hai khoá chống trùng khác nhau', async () => {
+      jest.useFakeTimers();
+      try {
+        jest.setSystemTime(new Date('2026-08-10T01:00:00.000Z'));
+        await notifyCampaignQuotaPaused({ runId: 10, campaignId: 5, reason: 'plan_quota_daily', resetAt: new Date() });
+        jest.setSystemTime(new Date('2026-08-11T01:00:00.000Z'));
+        await notifyCampaignQuotaPaused({ runId: 10, campaignId: 5, reason: 'plan_quota_daily', resetAt: new Date() });
+      } finally {
+        jest.useRealTimers();
+      }
+      const keys = mockNotifyUsers.mock.calls.map(([call]) => call.dedupeKey);
+      expect(keys).toHaveLength(2);
+      expect(keys[0]).not.toBe(keys[1]);
+    });
+
+    it('defer lần 2 cùng đợt (đã có cờ) → không báo lại', async () => {
       mockGetRunMetadata.mockResolvedValue({
         quotaPauseNotifiedAt: '2026-08-10T01:00:00.000Z',
       });
@@ -180,11 +217,11 @@ describe('campaignQuotaPauseNotify.util', () => {
       });
 
       expect(result).toEqual({ skipped: true, reason: 'already_notified' });
-      expect(mockSendSystemEmail).not.toHaveBeenCalled();
+      expect(mockNotifyUsers).not.toHaveBeenCalled();
       expect(mockPatchRunMetadata).not.toHaveBeenCalled();
     });
 
-    it('reason khác plan_quota → không gửi', async () => {
+    it('reason khác plan_quota → không báo', async () => {
       const result = await notifyCampaignQuotaPaused({
         runId: 10,
         campaignId: 5,
@@ -193,11 +230,11 @@ describe('campaignQuotaPauseNotify.util', () => {
       });
 
       expect(result).toEqual({ skipped: true, reason: 'not_plan_quota' });
-      expect(mockSendSystemEmail).not.toHaveBeenCalled();
+      expect(mockNotifyUsers).not.toHaveBeenCalled();
       expect(mockGetRunMetadata).not.toHaveBeenCalled();
     });
 
-    it('reason plan_quota_account_daily → buildCampaignPausedEmail nhận isAccountLimit:true + settingsUrl (Cài đặt kênh, không phải topup)', async () => {
+    it('reason plan_quota_account_daily → email nhận isAccountLimit:true + settingsUrl (Cài đặt kênh, không phải topup); câu chuông nói đúng giới hạn tự đặt', async () => {
       const resetAt = new Date('2026-09-23T17:00:00.000Z');
       const result = await notifyCampaignQuotaPaused({
         runId: 10,
@@ -207,6 +244,9 @@ describe('campaignQuotaPauseNotify.util', () => {
       });
 
       expect(result).toEqual({ sent: true });
+      const call = mockNotifyUsers.mock.calls[0][0];
+      expect(call.message).toContain('bạn đặt cho tài khoản gửi');
+      call.email({ fullName: 'X' });
       expect(mockBuildPaused).toHaveBeenCalledWith(
         expect.objectContaining({
           isAccountLimit: true,
@@ -216,7 +256,7 @@ describe('campaignQuotaPauseNotify.util', () => {
       );
     });
 
-    it('reason plan_quota_daily (hạn mức GÓI) → isAccountLimit:false', async () => {
+    it('reason plan_quota_daily (hạn mức GÓI) → isAccountLimit:false, câu chuông nói hạn mức của gói', async () => {
       await notifyCampaignQuotaPaused({
         runId: 10,
         campaignId: 5,
@@ -224,10 +264,29 @@ describe('campaignQuotaPauseNotify.util', () => {
         resetAt: new Date(),
       });
 
+      const call = mockNotifyUsers.mock.calls[0][0];
+      expect(call.message).toContain('hạn mức gửi');
+      expect(call.message).toContain('của gói');
+      call.email({ fullName: 'X' });
       expect(mockBuildPaused).toHaveBeenCalledWith(expect.objectContaining({ isAccountLimit: false }));
     });
 
-    it('thiếu owner email → skip sau khi claim cờ', async () => {
+    it('chủ chiến dịch KHÔNG có email vẫn được báo trong app (không còn skip no_owner_email)', async () => {
+      mockQuery.mockResolvedValue({ rows: [{ email: null, full_name: 'Owner' }] });
+
+      const result = await notifyCampaignQuotaPaused({
+        runId: 10,
+        campaignId: 5,
+        reason: 'plan_quota_zalo_daily',
+        resetAt: new Date(),
+      });
+
+      expect(result).toEqual({ sent: true });
+      expect(mockPatchRunMetadata).toHaveBeenCalled();
+      expect(mockNotifyUsers).toHaveBeenCalledTimes(1);
+    });
+
+    it('không tìm thấy người dùng của chiến dịch → skip no_owner (cờ đã claim), không báo ai', async () => {
       mockQuery.mockResolvedValue({ rows: [] });
 
       const result = await notifyCampaignQuotaPaused({
@@ -237,28 +296,76 @@ describe('campaignQuotaPauseNotify.util', () => {
         resetAt: new Date(),
       });
 
-      expect(result).toEqual({ skipped: true, reason: 'no_owner_email' });
+      expect(result).toEqual({ skipped: true, reason: 'no_owner' });
       expect(mockPatchRunMetadata).toHaveBeenCalled();
-      expect(mockSendSystemEmail).not.toHaveBeenCalled();
+      expect(mockNotifyUsers).not.toHaveBeenCalled();
+    });
+
+    it('dispatcher không giao được cho ai (trùng / tắt kênh) → skipped no_delivery', async () => {
+      mockNotifyUsers.mockResolvedValue({ inApp: 0, emailSent: 0, emailSkipped: 0, emailFailed: 0 });
+
+      const result = await notifyCampaignQuotaPaused({
+        runId: 10,
+        campaignId: 5,
+        reason: 'plan_quota_email_daily',
+        resetAt: new Date(),
+      });
+
+      expect(result).toEqual({ skipped: true, reason: 'no_delivery' });
     });
   });
 
   describe('notifyCampaignQuotaStopped', () => {
-    it('hard-fail no-resetAt → email dừng + CTA billing', async () => {
+    it('hard-fail no-resetAt → notifyUsers sự kiện campaign_quota_exhausted tới chủ, link billing, khoá theo (chiến dịch, ngày VN)', async () => {
       const result = await notifyCampaignQuotaStopped({
         campaignId: 5,
         reason: 'Gói đã hết hạn.',
       });
 
       expect(result).toEqual({ sent: true });
-      expect(mockSendSystemEmail).toHaveBeenCalledTimes(1);
+      expect(mockNotifyUsers).toHaveBeenCalledTimes(1);
+      const call = mockNotifyUsers.mock.calls[0][0];
+      expect(call.eventType).toBe('campaign_quota_exhausted');
+      expect(call.userIds).toEqual([42]);
+      expect(call.severity).toBe('error');
+      expect(call.link).toBe('/app/billing');
+      expect(call.title).toContain('Promo X');
+      expect(call.message).toContain('Gói đã hết hạn.');
+      expect(call.dedupeKey).toMatch(/^campaign:5:quota_stopped:\d{8}$/);
+      expect(mockSendSystemEmail).not.toHaveBeenCalled();
+    });
+
+    it('mẫu email riêng là buildCampaignStoppedQuotaEmail với CTA billing', async () => {
+      await notifyCampaignQuotaStopped({ campaignId: 5, reason: 'Gói đã hết hạn.' });
+
+      const { email } = mockNotifyUsers.mock.calls[0][0];
+      expect(email({ fullName: 'Chủ' }).subject).toBe('stopped:Promo X');
       expect(mockBuildStopped).toHaveBeenCalledWith(
         expect.objectContaining({
+          fullName: 'Chủ',
           campaignName: 'Promo X',
           reason: 'Gói đã hết hạn.',
           billingUrl: expect.stringContaining('/app/billing'),
         })
       );
+    });
+
+    it('không có reason → dùng câu mặc định; chủ không có email vẫn được báo', async () => {
+      mockQuery.mockResolvedValue({ rows: [{ email: null, full_name: 'Owner' }] });
+
+      const result = await notifyCampaignQuotaStopped({ campaignId: 5 });
+
+      expect(result).toEqual({ sent: true });
+      expect(mockNotifyUsers.mock.calls[0][0].message).toContain('Gói hết hạn hoặc hết hạn mức kỳ.');
+    });
+
+    it('không tìm thấy chiến dịch / chủ → skip no_owner', async () => {
+      mockFindCampaignById.mockResolvedValue(null);
+
+      const result = await notifyCampaignQuotaStopped({ campaignId: 5, reason: 'x' });
+
+      expect(result).toEqual({ skipped: true, reason: 'no_owner' });
+      expect(mockNotifyUsers).not.toHaveBeenCalled();
     });
   });
 

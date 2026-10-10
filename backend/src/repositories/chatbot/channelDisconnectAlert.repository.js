@@ -102,7 +102,10 @@ class ChannelDisconnectAlertRepository {
     }
   }
 
-  /** Mọi tài khoản đang mất kết nối + thông tin chủ (chỉ chủ còn hoạt động và có email). */
+  /**
+   * Mọi tài khoản đang mất kết nối + thông tin chủ (chỉ chủ còn hoạt động). PR-6: KHÔNG còn lọc chủ có email — chuông trong app không cần
+   * email; dispatcher tự bỏ phần email với chủ không có địa chỉ.
+   */
   async listDisconnectedWithOwner() {
     const { rows } = await db.query(
       `SELECT a.channel, a.account_ref, a.id_user, a.account_label,
@@ -112,7 +115,6 @@ class ChannelDisconnectAlertRepository {
        JOIN users u ON u.id = a.id_user
        WHERE a.disconnected_since IS NOT NULL
          AND u.status = 'active'
-         AND u.email IS NOT NULL AND u.email <> ''
        ORDER BY a.id_user, a.channel, a.account_ref`
     );
     return rows;

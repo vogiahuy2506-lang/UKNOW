@@ -9,17 +9,36 @@ import {
 import {
   buildPlanExpiredEmail,
   buildRenewalReminderEmail,
-  sendSystemEmail,
 } from '../../utils/systemEmail.util.js';
+import { notifyUsers } from '../notification/notificationDispatch.service.js';
+import { vnDayKey } from '../../utils/vnTimeFormat.util.js';
 import { loadCustomSystemEmailTemplate } from '../email/welcomeEmailTemplate.service.js';
 import { getReminderSettings } from './subscriptionReminderSettings.service.js';
 import { reconcileResourceLocks } from './topupLock.service.js';
 
 /**
+ * Khoá chống trùng của chuông theo CHU KỲ gói (ngày hết hạn giờ VN). Gia hạn rồi lại hết hạn → chu kỳ mới → khoá mới.
+ *
+ * @param {string} prefix
+ * @param {number} userId
+ * @param {Date|string} expiresAt
+ * @param {string|number} [suffix]
+ */
+function planNoticeDedupeKey(prefix, userId, expiresAt, suffix = '') {
+  return `${prefix}:${userId}:${vnDayKey(expiresAt)}${suffix === '' ? '' : `:${suffix}`}`;
+}
+
+/** Dispatcher không ném lỗi: chỉ coi là hỏng khi email lỗi mà chuông cũng không ghi được. */
+function isDeliveryFailure(delivery) {
+  return delivery.emailFailed > 0 && delivery.inApp + delivery.emailSent === 0;
+}
+
+/**
  * Xử lý các gói thuê bao đã hết hạn:
  * 1. Quét danh sách user có gói hết hạn (sau cả thời gian ân hạn).
- * 2. Gửi email thông báo hết hạn T-0 (nếu reminder_count < 3 và có email) TRƯỚC KHI thu hồi gói.
- * 3. Tăng reminder_count sau khi gửi email thành công.
+ * 2. Báo hết hạn T-0 qua dispatcher (`notifyUsers`, sự kiện `plan_expired`: chuông + email theo cấu hình) TRƯỚC KHI thu hồi gói.
+ *    Email chỉ khi reminder_count < 3; chuông luôn có (kể cả user không có email).
+ * 3. Tăng reminder_count khi email T-0 thật sự được gửi.
  * 4. Thu hồi gói (expireUserPlan).
  * 5. Khoá NGAY tài nguyên vượt trần (PR-3, Việc 3.1) — xem chú thích tại nơi gọi.
  *
@@ -37,39 +56,52 @@ export async function processExpiredSubscriptions({ renewalUrl, queryable = db }
   const planExpiredTemplate = await loadCustomSystemEmailTemplate('plan_expired');
 
   for (const user of expired) {
-    // 1. Gửi thư T-0 TRƯỚC expireUserPlan (khi active_plan_id và plan_name vẫn còn)
+    // 1. Báo T-0 TRƯỚC expireUserPlan (khi active_plan_id và plan_name vẫn còn)
     const reminderCount = Number(user.subscription_reminder_count || 0);
-    if (reminderCount < 3) {
-      if (user.email) {
-        try {
-          const { subject, html } = buildPlanExpiredEmail({
-            fullName: user.full_name,
-            planName: user.plan_name,
-            expiresAt: user.subscription_expires_at,
-            renewalUrl,
-            template: planExpiredTemplate,
-          });
-          await sendSystemEmail({ to: user.email, subject, html });
-          await incrementReminderCount(user.id, queryable);
-          emailsSent++;
-          console.log(`[Subscription] Đã gửi thư hết hạn T-0 → ${user.email} (${user.plan_name})`);
-        } catch (emailErr) {
-          // Lỗi gửi thư cho 1 người không được làm hỏng cả lượt cron.
-          //
-          // Không gọi incrementReminderCount ở đây, nhưng ĐỪNG đọc đó là "để gửi lại sau":
-          // ngay dưới đây gói vẫn bị thu hồi, mà findExpiredUsers JOIN plans ON
-          // u.active_plan_id = p.id (subscription.repository.js:37) nên người này KHÔNG BAO GIỜ
-          // quay lại danh sách. Thư mất thật. Ghim ở
-          // tests/integration/subscriptionExpiryCron.test.js — "Thư T-0 hỏng".
-          //
-          // Vẫn thu hồi vô điều kiện vì đó là lựa chọn an toàn về tiền: bỏ qua thu hồi khi thư
-          // hỏng thì một địa chỉ email hỏng vĩnh viễn = dùng dịch vụ miễn phí vĩnh viễn.
-          // Muốn không mất thư thì phải có hàng đợi gửi lại — việc khác, không phải PR này.
-          console.error(`[Subscription] Gửi email hết hạn thất bại cho ${user.email}:`, emailErr.message);
-        }
-      } else {
-        console.warn(`[Subscription] Bỏ qua gửi email hết hạn cho user #${user.id}: không có email`);
+    const sendEmailChannel = reminderCount < 3;
+    try {
+      const delivery = await notifyUsers({
+        eventType: 'plan_expired',
+        userIds: [user.id],
+        title: `Gói ${user.plan_name || 'dịch vụ'} của bạn đã hết hạn`,
+        titleEn: `Your ${user.plan_name || 'service'} plan has expired`,
+        message: 'Quyền lợi của gói đã bị thu hồi. Gia hạn hoặc chọn gói mới để tiếp tục dùng đầy đủ tính năng.',
+        messageEn: 'The plan benefits have been revoked. Renew or choose a new plan to keep using every feature.',
+        link: '/app/billing',
+        severity: 'error',
+        metadata: { planName: user.plan_name || null, expiresAt: user.subscription_expires_at || null },
+        dedupeKey: planNoticeDedupeKey('plan_expired', user.id, user.subscription_expires_at),
+        // reminder_count >= 3: đã nhận đủ thư nhắc/T-0 theo luật cũ → chỉ chuông, không email.
+        channels: sendEmailChannel ? null : ['in_app'],
+        email: ({ fullName }) => buildPlanExpiredEmail({
+          fullName: fullName ?? user.full_name,
+          planName: user.plan_name,
+          expiresAt: user.subscription_expires_at,
+          renewalUrl,
+          template: planExpiredTemplate,
+        }),
+      });
+      if (delivery.emailSent > 0) {
+        await incrementReminderCount(user.id, queryable);
+        emailsSent++;
+        console.log(`[Subscription] Đã gửi thư hết hạn T-0 → ${user.email} (${user.plan_name})`);
       }
+      if (isDeliveryFailure(delivery)) {
+        console.error(`[Subscription] Gửi thông báo hết hạn thất bại cho user #${user.id} (email lỗi, chuông không ghi được)`);
+      }
+    } catch (notifyErr) {
+      // Lỗi báo cho 1 người không được làm hỏng cả lượt cron.
+      //
+      // Không gọi incrementReminderCount ở đây, nhưng ĐỪNG đọc đó là "để gửi lại sau":
+      // ngay dưới đây gói vẫn bị thu hồi, mà findExpiredUsers JOIN plans ON
+      // u.active_plan_id = p.id (subscription.repository.js:37) nên người này KHÔNG BAO GIỜ
+      // quay lại danh sách. Thư mất thật. Ghim ở
+      // tests/integration/subscriptionExpiryCron.test.js — "Thư T-0 hỏng".
+      //
+      // Vẫn thu hồi vô điều kiện vì đó là lựa chọn an toàn về tiền: bỏ qua thu hồi khi thư
+      // hỏng thì một địa chỉ email hỏng vĩnh viễn = dùng dịch vụ miễn phí vĩnh viễn.
+      // Muốn không mất thư thì phải có hàng đợi gửi lại — việc khác, không phải PR này.
+      console.error(`[Subscription] Báo hết hạn thất bại cho user #${user.id}:`, notifyErr.message);
     }
 
     // 2. Thu hồi gói (expireUserPlan)
@@ -169,15 +201,36 @@ export async function sendExpiringReminders({ renewalUrl, queryable = db } = {})
       if (hasSentDay(user.subscription_reminders_sent, user.subscription_expires_at, day)) continue;
       try {
         const daysLeft = Math.ceil((new Date(user.subscription_expires_at) - Date.now()) / 86400000);
-        const { subject, html } = buildRenewalReminderEmail({
-          fullName: user.full_name,
-          planName: user.plan_name,
-          expiresAt: user.subscription_expires_at,
-          daysLeft,
-          renewalUrl,
-          template: planExpiringTemplate,
+        const delivery = await notifyUsers({
+          eventType: 'plan_expiring',
+          userIds: [user.id],
+          title: `Gói ${user.plan_name || 'dịch vụ'} sắp hết hạn`,
+          titleEn: `Your ${user.plan_name || 'service'} plan expires soon`,
+          message: daysLeft > 0
+            ? `Gói của bạn còn khoảng ${daysLeft} ngày. Gia hạn sớm để không bị gián đoạn chiến dịch và chatbot.`
+            : 'Gói của bạn sắp hết hạn. Gia hạn sớm để không bị gián đoạn chiến dịch và chatbot.',
+          messageEn: daysLeft > 0
+            ? `Your plan has about ${daysLeft} day(s) left. Renew early to avoid interrupting campaigns and chatbots.`
+            : 'Your plan is about to expire. Renew early to avoid interrupting campaigns and chatbots.',
+          link: '/app/billing',
+          severity: 'warning',
+          metadata: { planName: user.plan_name || null, expiresAt: user.subscription_expires_at || null, daysLeft, milestone: day },
+          // Mỗi mốc ngày một khoá: mốc 7 và mốc 3 của cùng chu kỳ là hai thông báo khác nhau.
+          dedupeKey: planNoticeDedupeKey('plan_expiring', user.id, user.subscription_expires_at, `d${day}`),
+          email: ({ fullName }) => buildRenewalReminderEmail({
+            fullName: fullName ?? user.full_name,
+            planName: user.plan_name,
+            expiresAt: user.subscription_expires_at,
+            daysLeft,
+            renewalUrl,
+            template: planExpiringTemplate,
+          }),
         });
-        await sendSystemEmail({ to: user.email, subject, html });
+        // Giữ luật cũ: gửi hỏng (email lỗi và chuông cũng không ghi được) thì KHÔNG markReminderSent. Các trường hợp còn lại (đã giao,
+        // trùng khoá, kênh bị admin tắt) đóng mốc để cron không quét lại mốc này.
+        if (isDeliveryFailure(delivery)) {
+          throw new Error(`notify_failed emailFailed=${delivery.emailFailed}`);
+        }
         await markReminderSent(
           user.id,
           buildSentRecordAfterSend(user.subscription_reminders_sent, user.subscription_expires_at, day),
@@ -188,7 +241,7 @@ export async function sendExpiringReminders({ renewalUrl, queryable = db } = {})
         console.log(`[Subscription] Nhắc mốc ${day} ngày → ${user.email} (còn ${daysLeft} ngày)`);
       } catch (err) {
         failed++;
-        console.error(`[Subscription] Gửi email nhắc hạn mốc ${day} ngày thất bại cho ${user.email}:`, err.message);
+        console.error(`[Subscription] Gửi nhắc hạn mốc ${day} ngày thất bại cho ${user.email}:`, err.message);
       }
     }
   }

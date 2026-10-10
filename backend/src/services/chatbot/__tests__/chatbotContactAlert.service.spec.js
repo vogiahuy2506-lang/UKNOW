@@ -14,6 +14,27 @@ const mockRepo = {
 };
 
 const mockSendSystemEmail = jest.fn();
+const mockNotifyUsers = jest.fn();
+
+/**
+ * PR-6 — spec mock RANH GIỚI dispatcher (notifyUsers), nhưng dùng một dispatcher GIẢ chạy builder email thật của service rồi đưa qua
+ * `mockSendSystemEmail` (như dispatcher thật: có `channels` không chứa email thì bỏ email; email lỗi → emailFailed). Nhờ vậy các ca cũ
+ * kiểm nội dung thư (kênh, tên, tiêu đề) vẫn có răng. Hành vi thật của dispatcher có spec riêng (notificationDispatch.service.spec.js).
+ */
+async function fakeDispatch(input) {
+  const result = { inApp: 1, emailSent: 0, emailSkipped: 0, emailFailed: 0 };
+  const wantsEmail = !Array.isArray(input.channels) || input.channels.includes('email');
+  if (!wantsEmail) return result;
+  const { subject, html } = input.email({ id: input.userIds[0], email: 'owner@uknow.vn', fullName: 'Chủ Shop UKNOW' });
+  try {
+    await mockSendSystemEmail({ to: 'owner@uknow.vn', subject, html });
+    result.emailSent = 1;
+  } catch {
+    result.inApp = 0;
+    result.emailFailed = 1;
+  }
+  return result;
+}
 
 jest.unstable_mockModule(
   '../../../repositories/chatbot/chatbotContactAlert.repository.js',
@@ -25,6 +46,10 @@ jest.unstable_mockModule(
 jest.unstable_mockModule('../../../utils/systemEmail.util.js', () => ({
   sendSystemEmail: mockSendSystemEmail,
   SENDER_NAME: 'UKNOW Campaign',
+}));
+
+jest.unstable_mockModule('../../notification/notificationDispatch.service.js', () => ({
+  notifyUsers: mockNotifyUsers,
 }));
 
 const { default: chatbotContactAlertService, getFrontendInboxUrl } = await import(
@@ -51,6 +76,7 @@ describe('chatbotContactAlert.service — scanAndNotify', () => {
     mockRepo.lastNotifiedAtForConversation.mockResolvedValue(null);
     mockRepo.markNotified.mockResolvedValue();
     mockSendSystemEmail.mockResolvedValue({ messageId: 'msg-123' });
+    mockNotifyUsers.mockImplementation(fakeDispatch);
   });
 
   it('bỏ qua tin nhắn không chứa số điện thoại hoặc email', async () => {
@@ -339,6 +365,133 @@ describe('chatbotContactAlert.service — scanAndNotify', () => {
     expect(mockRepo.markNotified).not.toHaveBeenCalled();
   });
 
+  describe('PR-6 — qua dispatcher (chuông + email), sự kiện chatbot_contact_left', () => {
+    const pendingRow = (overrides = {}) => ({
+      id: 40,
+      id_user: 1,
+      user_email: 'owner@uknow.vn',
+      user_full_name: 'Chủ Shop',
+      contact_type: 'phone',
+      contact_value: '0988776655',
+      last_source: 'web',
+      last_conversation_id: 60,
+      last_message_id: 900,
+      visitor_name: 'Khách',
+      ...overrides,
+    });
+
+    it('notifyUsers đúng sự kiện + người nhận (chủ shop) + link Hộp thư tới đúng hội thoại + khoá chống trùng theo lô', async () => {
+      mockRepo.listPendingGroupedByUser.mockResolvedValue([pendingRow()]);
+
+      await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+
+      expect(mockNotifyUsers).toHaveBeenCalledTimes(1);
+      const call = mockNotifyUsers.mock.calls[0][0];
+      expect(call.eventType).toBe('chatbot_contact_left');
+      expect(call.userIds).toEqual([1]);
+      expect(call.link).toBe('/app/settings/inbox?conversation=60&type=webchat');
+      expect(call.dedupeKey).toBe('contact_alert:1:40:900');
+      expect(call.channels).toBeNull();
+      expect(call.title).toContain('khách');
+      expect(call.metadata).toEqual({ alertIds: [40], count: 1 });
+    });
+
+    it('nhiều liên hệ gom một thông báo: link chung /app/settings/inbox, khoá theo id lớn nhất', async () => {
+      mockRepo.listPendingGroupedByUser.mockResolvedValue([
+        pendingRow({ id: 10, last_message_id: 5, last_conversation_id: 1 }),
+        pendingRow({ id: 11, last_message_id: 9, last_conversation_id: 2, last_source: 'channel', channel: 'zalo_oa', contact_value: '0911223344' }),
+      ]);
+
+      await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+
+      expect(mockNotifyUsers).toHaveBeenCalledTimes(1);
+      const call = mockNotifyUsers.mock.calls[0][0];
+      expect(call.link).toBe('/app/settings/inbox');
+      expect(call.dedupeKey).toBe('contact_alert:1:11:9');
+      expect(call.title).toContain('2 khách');
+    });
+
+    it('mẫu email riêng vẫn là buildAlertEmailHtml (tên người nhận do dispatcher cấp, tiêu đề cũ)', async () => {
+      mockRepo.listPendingGroupedByUser.mockResolvedValue([pendingRow()]);
+
+      await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+
+      const { email } = mockNotifyUsers.mock.calls[0][0];
+      const built = email({ id: 1, email: 'owner@uknow.vn', fullName: 'Chủ Shop' });
+      expect(built.subject).toBe('[UKNOW Campaign] 1 khách để lại liên hệ trong chatbot');
+      expect(built.html).toContain('Chủ Shop');
+      expect(built.html).toContain('0988776655');
+    });
+
+    it('công tắc cũ chatbot_contact_alert_email=false → channels = ["in_app"], KHÔNG gửi email nhưng vẫn đóng sổ (markNotified)', async () => {
+      mockRepo.listPendingGroupedByUser.mockResolvedValue([pendingRow({ user_contact_alert_email: false })]);
+
+      const res = await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+
+      expect(mockNotifyUsers.mock.calls[0][0].channels).toEqual(['in_app']);
+      expect(mockSendSystemEmail).not.toHaveBeenCalled();
+      expect(mockRepo.markNotified).toHaveBeenCalledWith([40], fixedNow);
+      expect(res.notified).toBe(1);
+      expect(res.emails.sent).toBe(0);
+    });
+
+    it('công tắc email bật (true / thiếu) → không giới hạn kênh', async () => {
+      mockRepo.listPendingGroupedByUser.mockResolvedValue([
+        pendingRow({ user_contact_alert_email: true }),
+      ]);
+      await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+      expect(mockNotifyUsers.mock.calls[0][0].channels).toBeNull();
+    });
+
+    it('chủ KHÔNG có email vẫn được báo (chuông) — không còn bỏ qua im lặng', async () => {
+      mockRepo.listPendingGroupedByUser.mockResolvedValue([pendingRow({ user_email: null })]);
+
+      const res = await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+
+      expect(mockNotifyUsers).toHaveBeenCalledTimes(1);
+      expect(mockRepo.markNotified).toHaveBeenCalledWith([40], fixedNow);
+      expect(res.notified).toBe(1);
+    });
+
+    it('dispatcher báo trùng khoá / admin tắt cả hai kênh (mọi số = 0) → vẫn đóng sổ để không quét lại mỗi 5 phút', async () => {
+      mockRepo.listPendingGroupedByUser.mockResolvedValue([pendingRow()]);
+      mockNotifyUsers.mockResolvedValue({ inApp: 0, emailSent: 0, emailSkipped: 0, emailFailed: 0 });
+
+      await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+
+      expect(mockRepo.markNotified).toHaveBeenCalledWith([40], fixedNow);
+    });
+
+    it('email lỗi nhưng chuông đã ghi được → đóng sổ (người dùng đã thấy trong app)', async () => {
+      mockRepo.listPendingGroupedByUser.mockResolvedValue([pendingRow()]);
+      mockNotifyUsers.mockResolvedValue({ inApp: 1, emailSent: 0, emailSkipped: 0, emailFailed: 1 });
+
+      const res = await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+
+      expect(mockRepo.markNotified).toHaveBeenCalledTimes(1);
+      expect(res.notified).toBe(1);
+    });
+
+    it('notifyUsers ném lỗi bất thường → không markNotified, lượt quét không đổ', async () => {
+      mockRepo.listPendingGroupedByUser.mockResolvedValue([pendingRow()]);
+      mockNotifyUsers.mockRejectedValue(new Error('boom'));
+
+      const res = await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+
+      expect(mockRepo.markNotified).not.toHaveBeenCalled();
+      expect(res.emails.failed).toBe(1);
+    });
+
+    it('cooldown 30 phút theo hội thoại vẫn giữ nguyên: hội thoại vừa báo 10 phút trước → không gọi notifyUsers', async () => {
+      mockRepo.lastNotifiedAtForConversation.mockResolvedValue(new Date(fixedNow.getTime() - 10 * 60 * 1000));
+      mockRepo.listPendingGroupedByUser.mockResolvedValue([pendingRow()]);
+
+      await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+
+      expect(mockNotifyUsers).not.toHaveBeenCalled();
+    });
+  });
+
   it('lần đầu chạy khi cursor null: khởi tạo cursor = maxId và không quét tin', async () => {
     mockRepo.getCursor.mockResolvedValue(null);
     mockRepo.getMaxMessageId.mockResolvedValue(555);
@@ -456,7 +609,7 @@ describe('chatbotContactAlert.service — scanAndNotify', () => {
     );
   });
 
-  it('chủ shop tắt nhận email alert thì suppressedReason = owner_opted_out và pendingNotify = false', async () => {
+  it('chủ shop tắt công tắc email (chatbot_contact_alert_email=false): liên hệ VẪN vào hàng chờ (pendingNotify = true, không còn owner_opted_out) để báo qua chuông', async () => {
     mockRepo.getOwnerContact.mockResolvedValue({
       id: 1,
       email: 'owner@uknow.vn',
@@ -479,12 +632,13 @@ describe('chatbotContactAlert.service — scanAndNotify', () => {
       return [];
     });
 
-    await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+    const res = await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
 
+    expect(res.suppressed).toBe(0);
     expect(mockRepo.upsertContact).toHaveBeenCalledWith(
       expect.objectContaining({
-        pendingNotify: false,
-        suppressedReason: 'owner_opted_out',
+        pendingNotify: true,
+        suppressedReason: null,
       })
     );
   });

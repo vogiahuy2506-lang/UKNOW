@@ -256,6 +256,7 @@ class ChatbotContactAlertRepository {
   async listPendingGroupedByUser(queryable = db) {
     const { rows } = await queryable.query(
       `SELECT a.*, u.email AS user_email, u.full_name AS user_full_name,
+              u.chatbot_contact_alert_email AS user_contact_alert_email,
               COALESCE(wc.visitor_name, cc.visitor_name, zc.visitor_name) AS visitor_name,
               cc.channel AS channel,
               COALESCE(conn.display_name, zs.display_name) AS display_name
