@@ -210,6 +210,17 @@ describe('landingPageVersion.service', () => {
         statusCode: 404,
       });
     });
+
+    it('tệp 404 thật trên kho -> 404; kho không truy cập được -> 503 (không lộ lỗi gốc)', async () => {
+      mockLandingPageVersionRepository.findById.mockResolvedValue({
+        id: 1, title: 'Bản 1', storage_key: 'uploads/landing-versions/100/5/1.html', size_bytes: 15, source: 'manual',
+      });
+      mockStorageBackend.getBuffer.mockRejectedValueOnce(Object.assign(new Error('x'), { code: 'STORAGE_NOT_FOUND' }));
+      await expect(landingPageVersionService.getVersionHtml(1, 5, 100)).rejects.toMatchObject({ statusCode: 404 });
+
+      mockStorageBackend.getBuffer.mockRejectedValueOnce(Object.assign(new Error('Kho lưu trữ tệp tạm thời không truy cập được.'), { code: 'STORAGE_UNAVAILABLE' }));
+      await expect(landingPageVersionService.getVersionHtml(1, 5, 100)).rejects.toMatchObject({ statusCode: 503, code: 'STORAGE_UNAVAILABLE' });
+    });
   });
 
   describe('deleteVersion', () => {

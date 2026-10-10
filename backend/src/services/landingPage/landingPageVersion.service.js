@@ -194,7 +194,17 @@ class LandingPageVersionService {
     }
 
     const storageBackend = getStorageBackend();
-    const buffer = await storageBackend.getBuffer(version.storage_key);
+    let buffer;
+    try {
+      buffer = await storageBackend.getBuffer(version.storage_key);
+    } catch (storageErr) {
+      // Tệp không còn trên kho (404 thật) -> 404 như nhánh dưới; kho không truy cập được -> 503, không lộ lỗi gốc của Google.
+      if (storageErr?.code === 'STORAGE_NOT_FOUND') buffer = null;
+      else if (storageErr?.code === 'STORAGE_UNAVAILABLE') {
+        storageErr.statusCode = 503;
+        throw storageErr;
+      } else throw storageErr;
+    }
     if (!buffer) {
       const err = new Error('Tệp nội dung của phiên bản không còn tồn tại trên kho lưu trữ');
       err.statusCode = 404;
