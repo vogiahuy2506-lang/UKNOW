@@ -45,9 +45,9 @@ const TeamActivityCard = ({ overview, loading }) => {
             <thead>
               <tr>
                 <th>{t('employee.teamColEmployee')}</th>
-                <th className="text-center">{t('employee.teamColRunning')}</th>
-                <th className="text-center">{t('employee.teamColSent')}</th>
-                <th className="text-center">{t('employee.teamColAi')}</th>
+                <th className="!text-center">{t('employee.teamColRunning')}</th>
+                <th className="!text-center">{t('employee.teamColSent')}</th>
+                <th className="!text-center">{t('employee.teamColAi')}</th>
                 <th>{t('employee.lastActive')}</th>
               </tr>
             </thead>

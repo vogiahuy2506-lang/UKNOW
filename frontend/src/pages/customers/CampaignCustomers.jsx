@@ -308,7 +308,7 @@ const CampaignCustomers = () => {
                     <th className="text-slate-500 dark:text-dk-text2">{t('campaignCustomers.status')}</th>
                     <th className="text-slate-500 dark:text-dk-text2">{t('campaignCustomers.consentSource')}</th>
                     <th className="text-slate-500 dark:text-dk-text2">{t('campaignCustomers.joinDate')}</th>
-                    <th className="text-right text-slate-500 dark:text-dk-text2">{t('campaignCustomers.actions')}</th>
+                    <th className="!text-right text-slate-500 dark:text-dk-text2">{t('campaignCustomers.actions')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-dk-border">

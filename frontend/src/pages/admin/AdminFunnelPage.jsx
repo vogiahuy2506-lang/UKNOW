@@ -142,9 +142,9 @@ const AdminFunnelPage = () => {
           <table className="table">
             <thead>
               <tr>
-                <th>{t('adminFunnel.cohort.month')}</th>
+                <th className="whitespace-nowrap">{t('adminFunnel.cohort.month')}</th>
                 {STEP_KEYS.map((key) => (
-                  <th key={key} className="text-right">{t(`adminFunnel.steps.${key}`)}</th>
+                  <th key={key} className="!text-right whitespace-nowrap">{t(`adminFunnel.steps.${key}`)}</th>
                 ))}
               </tr>
             </thead>
@@ -156,7 +156,7 @@ const AdminFunnelPage = () => {
                 <tr key={c.cohortKey}>
                   <td className="font-medium dark:text-dk-text">{c.cohort}</td>
                   {STEP_KEYS.map((key) => (
-                    <td key={key} className="text-right dark:text-dk-text">
+                    <td key={key} className="text-right tabular-nums whitespace-nowrap dark:text-dk-text">
                       {fmtNumber(c[key])}
                       {key !== 'registered' && c.registered > 0 && (
                         <span className="text-xs text-gray-400 dark:text-dk-text2 ml-1">

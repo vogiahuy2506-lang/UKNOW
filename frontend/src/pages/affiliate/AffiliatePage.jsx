@@ -416,10 +416,10 @@ export default function AffiliatePage() {
                 <thead className="bg-gray-50 dark:bg-dk-raised/80 text-xs text-gray-500 dark:text-dk-text uppercase font-semibold border-b border-gray-200 dark:border-dk-border">
                   <tr>
                     <th className="px-6 py-3">{t('affiliate.month')}</th>
-                    <th className="px-6 py-3 text-right">{t('affiliate.grossRevenue')}</th>
+                    <th className="px-6 py-3 !text-right">{t('affiliate.grossRevenue')}</th>
                     <th className="px-6 py-3">{t('affiliate.currentTier')}</th>
                     {/* Cột này lấy `affiliate_periods.commission_amount` = số ĐÃ CHỐT sổ, không còn là ước tính (C-17). */}
-                    <th className="px-6 py-3 text-right">{t('affiliate.closedCommission')}</th>
+                    <th className="px-6 py-3 !text-right">{t('affiliate.closedCommission')}</th>
                     <th className="px-6 py-3">{t('affiliate.closedAt')}</th>
                   </tr>
                 </thead>
@@ -454,9 +454,9 @@ export default function AffiliatePage() {
                 <thead className="bg-gray-50 dark:bg-dk-raised/60 text-xs text-gray-500 dark:text-dk-text2 uppercase font-semibold">
                   <tr>
                     <th className="px-6 py-3">{t('affiliate.requestedAt')}</th>
-                    <th className="px-6 py-3 text-right">{t('affiliate.amountGross')}</th>
-                    <th className="px-6 py-3 text-right">{t('affiliate.taxAmount')}</th>
-                    <th className="px-6 py-3 text-right">{t('affiliate.amountNet')}</th>
+                    <th className="px-6 py-3 !text-right">{t('affiliate.amountGross')}</th>
+                    <th className="px-6 py-3 !text-right">{t('affiliate.taxAmount')}</th>
+                    <th className="px-6 py-3 !text-right">{t('affiliate.amountNet')}</th>
                     <th className="px-6 py-3">{t('affiliate.bankInfo')}</th>
                     <th className="px-6 py-3">{t('common.status')}</th>
                   </tr>
@@ -514,7 +514,7 @@ export default function AffiliatePage() {
                   <tr>
                     <th className="px-6 py-3">{t('common.date')}</th>
                     <th className="px-6 py-3">{t('affiliate.entryType')}</th>
-                    <th className="px-6 py-3 text-right">{t('affiliate.amountGross')}</th>
+                    <th className="px-6 py-3 !text-right">{t('affiliate.amountGross')}</th>
                     <th className="px-6 py-3">{t('affiliate.note')}</th>
                   </tr>
                 </thead>

@@ -73,7 +73,7 @@ export default function ReferralsCard({ referralLink, onCopyLink }) {
                   <th className="px-6 py-3">{t('affiliate.referralsColEmail')}</th>
                   <th className="px-6 py-3">{t('affiliate.referralsColJoinedAt')}</th>
                   <th className="px-6 py-3">{t('affiliate.referralsColStatus')}</th>
-                  <th className="px-6 py-3 text-right">{t('affiliate.referralsColRevenue')}</th>
+                  <th className="px-6 py-3 !text-right">{t('affiliate.referralsColRevenue')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-dk-border text-gray-700 dark:text-dk-text">
