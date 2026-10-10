@@ -598,7 +598,7 @@ class ChatbotRepository {
    * mã script nhúng của widget luôn 404. Không viết migration ghi dữ liệu: bot cũ được sinh key khi chủ mở danh sách
    * (nguồn dữ liệu của tab Triển khai).
    *
-   * Key sinh ra là `chatbot_<id>` — CHÍNH khoá dự phòng mà `resolveWidgetForChatbot` đã dùng cho bot thiếu key (migration
+   * Bot có allow_public_numeric_id=true: key sinh ra là `chatbot_<id>` — CHÍNH khoá dự phòng mà `resolveWidgetForChatbot` đã dùng cho bot thiếu key (migration
    * 098, mua Marketplace cũng ghi dạng này). Giữ đúng khoá đó thì `web_widget_configs` + hội thoại web đã có (qua link
    * công khai / iFrame theo id) vẫn khớp; sinh key ngẫu nhiên ở đây sẽ tạo widget_config mới và cắt đứt phiên khách đang chat.
    * Chỉ ghi khi key còn trống (`NULL` hoặc rỗng), nên chạy lại hay chạy song song đều không ghi đè key đã có. UNIQUE đụng
@@ -607,7 +607,17 @@ class ChatbotRepository {
    * @returns {Promise<string|null>} key đang có sau khi gọi
    */
   async ensureWidgetKey(chatbotId) {
-    const candidates = [`chatbot_${chatbotId}`, randomUUID().split('-')[0], randomUUID().split('-')[0]];
+    // `chatbot_<id>` đoán được → chỉ cấp cho bot đã bật allow_public_numeric_id (bot cũ); bot khác đi thẳng key ngẫu nhiên.
+    const { rows: meta } = await db.query(
+      `SELECT widget_key, allow_public_numeric_id FROM custom_chatbots WHERE id = $1`,
+      [chatbotId]
+    );
+    if (!meta[0]) return null;
+    if (String(meta[0].widget_key || '').trim()) return meta[0].widget_key;
+    const randomKey = () => randomUUID().split('-')[0];
+    const candidates = meta[0].allow_public_numeric_id === true
+      ? [`chatbot_${chatbotId}`, randomKey(), randomKey()]
+      : [randomKey(), randomKey(), randomKey()];
     for (const candidate of candidates) {
       try {
         const { rows } = await db.query(
@@ -854,7 +864,10 @@ class ChatbotRepository {
               active_hours, replies_enabled, widget_auto_open, embed_show_header, embed_size,
               created_at, updated_at
        FROM custom_chatbots
-       WHERE widget_key = $1 AND is_active = true`,
+       WHERE widget_key = $1 AND is_active = true
+         -- Khoá dạng chatbot_<số> đoán được (lặp 1..N) → coi như id số: chỉ chạy khi chủ bot đã bật
+         -- allow_public_numeric_id (migration 284). Bot mới có key ngẫu nhiên nên không bị ảnh hưởng.
+         AND (widget_key !~ '^chatbot_[0-9]+$' OR allow_public_numeric_id = true)`,
       [widgetKey]
     );
     return rows[0] || null;

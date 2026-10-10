@@ -285,6 +285,19 @@ describe('marketplacePurchase.service.purchase', () => {
       expect(mockClient.release).toHaveBeenCalled();
     });
 
+    it('mua chatbot: KHÔNG ghi đè widget_key (khoá chatbot_<id> đoán được) sau khi clone', async () => {
+      mockFindByIdTx.mockResolvedValue(chatbotListing(0));
+      mockFindByUserAndListingTx.mockResolvedValue(null);
+
+      await marketplacePurchaseService.purchase(1, 10);
+
+      const writesWidgetKey = mockClient.query.mock.calls.some(
+        ([sql]) => typeof sql === 'string' && /UPDATE custom_chatbots/i.test(sql) && /widget_key/i.test(sql)
+      );
+      expect(writesWidgetKey).toBe(false);
+      expect(mockCloneFromSnapshot).toHaveBeenCalledTimes(1);
+    });
+
     it('listing campaign KHÔNG bị kiểm suất chatbot', async () => {
       mockFindByIdTx.mockResolvedValue({
         id: 1, status: 'published', price_credits: 0, resource_type: 'campaign',

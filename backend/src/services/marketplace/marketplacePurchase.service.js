@@ -155,14 +155,6 @@ class MarketplacePurchaseService {
         );
       }
 
-      // 7b. Link cloned chatbot to purchase record (for marketplace_purchased tracking)
-      if (listing.resource_type === 'chatbot') {
-        await client.query(
-          `UPDATE custom_chatbots SET widget_key = $1 WHERE id = $2`,
-          [`chatbot_${clonedResource.id}`, clonedResource.id]
-        );
-      }
-
       // 8. Update listing stats
       await marketplaceListingRepository.incrementPurchaseCountTx(client, listingId);
 
