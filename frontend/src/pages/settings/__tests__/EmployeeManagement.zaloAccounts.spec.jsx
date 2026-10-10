@@ -95,7 +95,7 @@ const openZaloTab = async (accounts) => {
   api.getEmployeeChannelAccounts.mockReturnValue(ok({ zaloAccounts: accounts }));
   const user = await renderPage();
   await user.click(await screen.findByText('nv01'));
-  await user.click(await screen.findByRole('button', { name: 'Tài khoản Zalo' }));
+  await user.click(await screen.findByRole('button', { name: 'Tài khoản kênh' }));
   return user;
 };
 
@@ -167,10 +167,13 @@ describe('EmployeeManagement — tab Tài khoản Zalo', () => {
     await user.click(screen.getByRole('button', { name: 'Lưu tài khoản được giao' }));
 
     await waitFor(() => expect(api.updateEmployeeChannelAccounts).toHaveBeenCalledTimes(1));
-    const [id, ids] = api.updateEmployeeChannelAccounts.mock.calls[0];
+    const [id, payload] = api.updateEmployeeChannelAccounts.mock.calls[0];
     expect(id).toBe('12');
-    expect([...ids].map(Number).sort((a, b) => a - b)).toEqual([5, 6]);
-    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Đã cập nhật tài khoản Zalo được giao'));
+    expect([...payload.zaloAccountIds].map(Number).sort((a, b) => a - b)).toEqual([5, 6]);
+    // Telegram / WhatsApp không đổi → vẫn gửi danh sách hiện có (rỗng ở ca này), không bỏ khoá.
+    expect(payload.telegramAccountIds).toEqual([]);
+    expect(payload.whatsappSessionKeys).toEqual([]);
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Đã cập nhật tài khoản được giao'));
     await waitFor(() => expect(screen.queryByText('Có thay đổi chưa lưu')).not.toBeInTheDocument());
   });
 
@@ -186,7 +189,9 @@ describe('EmployeeManagement — tab Tài khoản Zalo', () => {
     expect(modal.getByText('Đã chọn 0/2 tài khoản')).toBeInTheDocument();
     api.updateEmployeeChannelAccounts.mockReturnValue(ok({ zaloAccounts: [zaloAccount(5), zaloAccount(6)] }));
     await user.click(screen.getByRole('button', { name: 'Lưu tài khoản được giao' }));
-    await waitFor(() => expect(api.updateEmployeeChannelAccounts).toHaveBeenCalledWith('12', []));
+    await waitFor(() => expect(api.updateEmployeeChannelAccounts).toHaveBeenCalledWith('12', {
+      zaloAccountIds: [], telegramAccountIds: [], whatsappSessionKeys: [],
+    }));
 
     await user.click(await modal.findByRole('button', { name: 'Chọn tất cả' }));
     expect(modal.getByText('Đã chọn 2/2 tài khoản')).toBeInTheDocument();
@@ -204,7 +209,7 @@ describe('EmployeeManagement — tab Tài khoản Zalo', () => {
     await user.click(screen.getByRole('button', { name: 'Lưu rồi đóng' }));
 
     await waitFor(() => expect(api.updateEmployeeChannelAccounts).toHaveBeenCalledTimes(1));
-    expect(api.updateEmployeeChannelAccounts.mock.calls[0][1].map(Number)).toEqual([5]);
+    expect(api.updateEmployeeChannelAccounts.mock.calls[0][1].zaloAccountIds.map(Number)).toEqual([5]);
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Lưu tài khoản được giao' })).not.toBeInTheDocument());
   });
 
@@ -220,7 +225,7 @@ describe('EmployeeManagement — tab Tài khoản Zalo', () => {
     api.getEmployeeChannelAccounts.mockReturnValue(ok({ zaloAccounts: [zaloAccount(5, { displayName: 'Shop' })] }));
     const user = await renderPage();
     await user.click(await screen.findByText('nv01'));
-    await user.click(await screen.findByRole('button', { name: 'Tài khoản Zalo' }));
+    await user.click(await screen.findByRole('button', { name: 'Tài khoản kênh' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Không tải được danh sách tài khoản Zalo');
     await user.click(screen.getByRole('button', { name: 'Thử lại' }));
@@ -247,5 +252,105 @@ describe('EmployeeManagement — tab Tài khoản Zalo', () => {
     await user.click(await screen.findByText('nv01'));
     await screen.findByRole('button', { name: 'Phân quyền' });
     expect(api.getEmployeeChannelAccounts).not.toHaveBeenCalled();
+  });
+});
+
+const telegramAccount = (id, overrides = {}) => ({
+  id,
+  displayName: `Telegram ${id}`,
+  username: '',
+  phone: '',
+  isActive: true,
+  assigned: false,
+  source: null,
+  ...overrides,
+});
+
+const whatsappAccount = (sessionKey, overrides = {}) => ({
+  sessionKey,
+  shortKey: sessionKey.replace(/^\d+-/, ''),
+  displayName: `WA ${sessionKey}`,
+  phone: '',
+  status: 'open',
+  assigned: false,
+  source: null,
+  ...overrides,
+});
+
+/** Mở tab với dữ liệu ba kênh. */
+const openChannelsTab = async (data) => {
+  api.getEmployees.mockResolvedValue({ data: { success: true, data: [makeEmployee()] } });
+  api.getEmployeeChannelAccounts.mockReturnValue(ok(data));
+  const user = await renderPage();
+  await user.click(await screen.findByText('nv01'));
+  await user.click(await screen.findByRole('button', { name: 'Tài khoản kênh' }));
+  return user;
+};
+
+describe('EmployeeManagement — tab Tài khoản kênh: nhóm Telegram và WhatsApp (PLAN_GIAO_TK_TG_WA H1)', () => {
+  it('hiện hai nhóm Telegram / WhatsApp với ô đã giao được tick và nhãn nguồn', async () => {
+    await openChannelsTab({
+      zaloAccounts: [],
+      telegramAccounts: [
+        telegramAccount(3, { displayName: 'Tele Shop', username: 'shop_vn', assigned: true, source: 'legacy' }),
+        telegramAccount(4, { displayName: 'Tele Phu' }),
+      ],
+      whatsappAccounts: [
+        whatsappAccount('10-default', { displayName: 'WA Chinh', assigned: true, source: 'self_login' }),
+      ],
+    });
+    const tele = within(await screen.findByTestId('channel-group-telegram'));
+    expect(tele.getByText('Tele Shop')).toBeInTheDocument();
+    expect(tele.getByText('@shop_vn')).toBeInTheDocument();
+    expect(tele.getByText('Giữ từ trước')).toBeInTheDocument();
+    expect(tele.getAllByRole('checkbox').map((b) => b.checked)).toEqual([true, false]);
+    const wa = within(screen.getByTestId('channel-group-whatsapp'));
+    expect(wa.getByText('WA Chinh')).toBeInTheDocument();
+    expect(wa.getByText('Nhân viên tự đăng nhập')).toBeInTheDocument();
+    expect(wa.getAllByRole('checkbox').map((b) => b.checked)).toEqual([true]);
+  });
+
+  it('tick Telegram + bỏ tick WhatsApp rồi Lưu → API nhận ĐỦ ba danh sách (id Telegram, session key WhatsApp)', async () => {
+    const user = await openChannelsTab({
+      zaloAccounts: [zaloAccount(5, { displayName: 'Shop', assigned: true, source: 'assigned' })],
+      telegramAccounts: [telegramAccount(3, { displayName: 'Tele Shop' })],
+      whatsappAccounts: [whatsappAccount('10-default', { displayName: 'WA Chinh', assigned: true, source: 'assigned' })],
+    });
+    const tele = within(await screen.findByTestId('channel-group-telegram'));
+    await user.click(tele.getByRole('checkbox'));
+    const wa = within(screen.getByTestId('channel-group-whatsapp'));
+    await user.click(wa.getByRole('checkbox'));
+    expect(await screen.findByText('Có thay đổi chưa lưu')).toBeInTheDocument();
+
+    api.updateEmployeeChannelAccounts.mockReturnValue(ok({
+      zaloAccounts: [zaloAccount(5, { displayName: 'Shop', assigned: true, source: 'assigned' })],
+      telegramAccounts: [telegramAccount(3, { displayName: 'Tele Shop', assigned: true, source: 'assigned' })],
+      whatsappAccounts: [whatsappAccount('10-default', { displayName: 'WA Chinh' })],
+    }));
+    await user.click(screen.getByRole('button', { name: 'Lưu tài khoản được giao' }));
+
+    await waitFor(() => expect(api.updateEmployeeChannelAccounts).toHaveBeenCalledTimes(1));
+    const [, payload] = api.updateEmployeeChannelAccounts.mock.calls[0];
+    expect(payload.zaloAccountIds.map(Number)).toEqual([5]);
+    expect(payload.telegramAccountIds.map(Number)).toEqual([3]);
+    expect(payload.whatsappSessionKeys).toEqual([]);
+    await waitFor(() => expect(screen.queryByText('Có thay đổi chưa lưu')).not.toBeInTheDocument());
+  });
+
+  it('CHỈ đổi Telegram (Zalo không đổi) vẫn tính là có thay đổi chưa lưu', async () => {
+    const user = await openChannelsTab({
+      zaloAccounts: [zaloAccount(5, { displayName: 'Shop', assigned: true, source: 'assigned' })],
+      telegramAccounts: [telegramAccount(3, { displayName: 'Tele Shop' })],
+      whatsappAccounts: [],
+    });
+    expect(screen.queryByText('Có thay đổi chưa lưu')).not.toBeInTheDocument();
+    await user.click(within(await screen.findByTestId('channel-group-telegram')).getByRole('checkbox'));
+    expect(await screen.findByText('Có thay đổi chưa lưu')).toBeInTheDocument();
+  });
+
+  it('chưa có tài khoản Telegram / WhatsApp → câu trống cho từng nhóm; backend cũ không trả hai khoá vẫn hiển thị được', async () => {
+    await openChannelsTab({ zaloAccounts: [zaloAccount(5, { displayName: 'Shop' })] });
+    expect(await screen.findByText('Bạn chưa kết nối tài khoản Telegram nào.')).toBeInTheDocument();
+    expect(screen.getByText('Bạn chưa kết nối tài khoản WhatsApp nào.')).toBeInTheDocument();
   });
 });

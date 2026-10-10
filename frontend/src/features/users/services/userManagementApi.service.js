@@ -44,14 +44,19 @@ export const userManagementApiService = {
     return api.patch(`/employees/${employeeId}/limits`, limits);
   },
 
-  /** Tài khoản Zalo cá nhân của chủ + cờ đã giao cho nhân viên này (chỉ chủ gọi được). */
+  /** Tài khoản Zalo cá nhân + Telegram + WhatsApp (Baileys) của chủ + cờ đã giao cho nhân viên này (chỉ chủ gọi được). */
   getEmployeeChannelAccounts(employeeId) {
     return api.get(`/employees/${employeeId}/channel-accounts`);
   },
 
-  /** Thay TOÀN BỘ danh sách tài khoản Zalo được giao cho nhân viên (id không thuộc chủ bị backend loại). */
-  updateEmployeeChannelAccounts(employeeId, zaloAccountIds) {
-    return api.put(`/employees/${employeeId}/channel-accounts`, { zaloAccountIds });
+  /**
+   * Thay TOÀN BỘ danh sách tài khoản được giao cho nhân viên (id không thuộc chủ bị backend loại). `channels` là
+   * `{ zaloAccountIds?, telegramAccountIds?, whatsappSessionKeys? }` — khoá vắng mặt = backend giữ nguyên kênh đó. Truyền mảng
+   * trần = chỉ Zalo (tương thích lời gọi cũ).
+   */
+  updateEmployeeChannelAccounts(employeeId, channels) {
+    const body = Array.isArray(channels) ? { zaloAccountIds: channels } : channels;
+    return api.put(`/employees/${employeeId}/channel-accounts`, body);
   },
 
   deleteEmployee(employeeId) {

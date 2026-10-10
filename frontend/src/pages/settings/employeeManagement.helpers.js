@@ -88,3 +88,35 @@ export function toggleIdInList(list, id, checked) {
   const rest = (Array.isArray(list) ? list : []).filter((x) => String(x) !== String(id));
   return checked ? [...rest, id] : rest;
 }
+
+/**
+ * Tách phản hồi `GET /employees/:id/channel-accounts` thành ba nhóm (Zalo cá nhân, Telegram, WhatsApp) kèm id đã được giao.
+ * Telegram: khoá = id tài khoản; WhatsApp: khoá = session key đầy đủ. Backend cũ chưa trả Telegram / WhatsApp → nhóm rỗng.
+ */
+export function splitChannelAccounts(data) {
+  const zalo = Array.isArray(data?.zaloAccounts) ? data.zaloAccounts : [];
+  const telegram = (Array.isArray(data?.telegramAccounts) ? data.telegramAccounts : []).map((a) => ({
+    key: a.id,
+    title: a.displayName || `Telegram #${a.id}`,
+    subtitle: [a.username ? `@${String(a.username).replace(/^@/, '')}` : '', a.phone].filter(Boolean).join(' · '),
+    connected: a.isActive !== false,
+    assigned: Boolean(a.assigned),
+    source: a.source || null,
+  }));
+  const whatsapp = (Array.isArray(data?.whatsappAccounts) ? data.whatsappAccounts : []).map((a) => ({
+    key: a.sessionKey,
+    title: a.displayName || a.shortKey || a.sessionKey,
+    subtitle: [a.phone, a.shortKey].filter(Boolean).join(' · '),
+    connected: a.status === 'open',
+    assigned: Boolean(a.assigned),
+    source: a.source || null,
+  }));
+  return {
+    zalo,
+    telegram,
+    whatsapp,
+    zaloSelected: zalo.filter((a) => a.assigned).map((a) => a.id),
+    telegramSelected: telegram.filter((a) => a.assigned).map((a) => a.key),
+    whatsappSelected: whatsapp.filter((a) => a.assigned).map((a) => a.key),
+  };
+}

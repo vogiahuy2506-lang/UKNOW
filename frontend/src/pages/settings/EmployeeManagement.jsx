@@ -18,6 +18,7 @@ import {
 } from 'react-icons/hi';
 import userManagementApiService from '../../features/users/services/userManagementApi.service';
 import TeamActivityCard from '../../features/users/components/TeamActivityCard';
+import EmployeeChannelAccountGroup from '../../features/users/components/EmployeeChannelAccountGroup';
 import { getMyProfile } from '../../features/auth/services/authApi.service';
 import NumberInput from '../../components/common/NumberInput';
 import { formatIntVi } from '../../utils/formatNumber.util';
@@ -27,6 +28,7 @@ import {
   findEmployeeAfterAdd,
   getEmployeeErrorInfo,
   sameIdSet,
+  splitChannelAccounts,
   toggleIdInList,
   toPermissionState,
 } from './employeeManagement.helpers';
@@ -158,6 +160,10 @@ const EmployeeManagement = () => {
   const [channelSaved, setChannelSaved]         = useState([]);
   const [channelLoading, setChannelLoading]     = useState(false);
   const [channelLoadFailed, setChannelLoadFailed] = useState(false);
+  // PLAN_GIAO_TK_TG_WA PR-H1: Telegram + WhatsApp (Baileys) ở cùng tab. Khoá Telegram = id tài khoản; WhatsApp = session key.
+  const [extraAccounts, setExtraAccounts] = useState({ telegram: [], whatsapp: [] });
+  const [extraSelected, setExtraSelected] = useState({ telegram: [], whatsapp: [] });
+  const [extraSaved, setExtraSaved]       = useState({ telegram: [], whatsapp: [] });
   const [isSavingChannels, setIsSavingChannels] = useState(false);
   const [planLimits, setPlanLimits] = useState({
     dailyEmail: null, monthlyEmail: null,
@@ -312,6 +318,9 @@ const EmployeeManagement = () => {
     setChannelAccounts(null);
     setChannelSelected([]);
     setChannelSaved([]);
+    setExtraAccounts({ telegram: [], whatsapp: [] });
+    setExtraSelected({ telegram: [], whatsapp: [] });
+    setExtraSaved({ telegram: [], whatsapp: [] });
     setChannelLoadFailed(false);
     editForm.reset({ fullName: emp.fullName || '', email: emp.email || '' });
     // Nhân viên mới có permissions = [] (mảng rỗng) — nạp thành {} để không gửi lại `[]` khi lưu.
@@ -388,12 +397,13 @@ const EmployeeManagement = () => {
     setChannelLoadFailed(false);
     try {
       const res = await userManagementApiService.getEmployeeChannelAccounts(employeeId);
-      const list = res?.data?.data?.zaloAccounts;
-      const accounts = Array.isArray(list) ? list : [];
-      const assignedIds = accounts.filter((a) => a.assigned).map((a) => a.id);
-      setChannelAccounts(accounts);
-      setChannelSelected(assignedIds);
-      setChannelSaved(assignedIds);
+      const split = splitChannelAccounts(res?.data?.data);
+      setChannelAccounts(split.zalo);
+      setChannelSelected(split.zaloSelected);
+      setChannelSaved(split.zaloSelected);
+      setExtraAccounts({ telegram: split.telegram, whatsapp: split.whatsapp });
+      setExtraSelected({ telegram: split.telegramSelected, whatsapp: split.whatsappSelected });
+      setExtraSaved({ telegram: split.telegramSelected, whatsapp: split.whatsappSelected });
     } catch {
       setChannelLoadFailed(true);
     } finally {
@@ -412,21 +422,29 @@ const EmployeeManagement = () => {
   const handleSaveChannels = async () => {
     try {
       setIsSavingChannels(true);
-      const res = await userManagementApiService.updateEmployeeChannelAccounts(selectedEmployee.id, channelSelected);
-      toast.success(t('employee.updateZaloAccountsSuccess'));
+      const res = await userManagementApiService.updateEmployeeChannelAccounts(selectedEmployee.id, {
+        zaloAccountIds: channelSelected,
+        telegramAccountIds: extraSelected.telegram,
+        whatsappSessionKeys: extraSelected.whatsapp,
+      });
+      toast.success(t('employee.updateChannelAccountsSuccess'));
       // Phản chiếu lại đúng thứ backend đã lưu (id của chủ khác bị loại, hàng giữ nguyên nguồn).
-      const list = res?.data?.data?.zaloAccounts;
-      if (Array.isArray(list)) {
-        const assignedIds = list.filter((a) => a.assigned).map((a) => a.id);
-        setChannelAccounts(list);
-        setChannelSelected(assignedIds);
-        setChannelSaved(assignedIds);
+      const data = res?.data?.data;
+      if (Array.isArray(data?.zaloAccounts)) {
+        const split = splitChannelAccounts(data);
+        setChannelAccounts(split.zalo);
+        setChannelSelected(split.zaloSelected);
+        setChannelSaved(split.zaloSelected);
+        setExtraAccounts({ telegram: split.telegram, whatsapp: split.whatsapp });
+        setExtraSelected({ telegram: split.telegramSelected, whatsapp: split.whatsappSelected });
+        setExtraSaved({ telegram: split.telegramSelected, whatsapp: split.whatsappSelected });
       } else {
         setChannelSaved(channelSelected);
+        setExtraSaved(extraSelected);
       }
       return true;
     } catch (err) {
-      toast.error(err?.response?.data?.message || t('employee.updateZaloAccountsFailed'));
+      toast.error(err?.response?.data?.message || t('employee.updateChannelAccountsFailed'));
       return false;
     } finally {
       setIsSavingChannels(false);
@@ -576,7 +594,7 @@ const EmployeeManagement = () => {
     { key: 'info',        label: t('employee.infoTab') },
     { key: 'permissions', label: t('employee.permissionsTab') },
     { key: 'limits',      label: t('employee.limitsTab') },
-    { key: 'channels',    label: t('employee.zaloAccountsTab') },
+    { key: 'channels',    label: t('employee.channelAccountsTab') },
   ];
 
   // PLAN_SUA_SAU_NGHIEM_THU_2026-09-29 PR-A — so từng khoá (KHÔNG JSON.stringify: thứ tự khoá trả
@@ -592,7 +610,11 @@ const EmployeeManagement = () => {
     (k) => (limitsState[k] ?? null) !== (selectedEmployee?.[k] ?? null)
   );
   // Tab Tài khoản Zalo chỉ có thể "bẩn" sau khi đã tải xong danh sách (channelAccounts !== null).
-  const isChannelsDirty = Boolean(selectedEmployee) && channelAccounts !== null && !sameIdSet(channelSelected, channelSaved);
+  const isChannelsDirty = Boolean(selectedEmployee) && channelAccounts !== null && (
+    !sameIdSet(channelSelected, channelSaved)
+    || !sameIdSet(extraSelected.telegram, extraSaved.telegram)
+    || !sameIdSet(extraSelected.whatsapp, extraSaved.whatsapp)
+  );
   // Review PR-A: tính trên MỌI tab — tick quyền rồi sang tab Giới hạn mà bấm Đóng từng mất im lặng.
   const isModalDirty = isPermDirty || isLimitsDirty || isChannelsDirty;
 
@@ -1072,6 +1094,9 @@ const EmployeeManagement = () => {
             {activeTab === 'channels' && (
               <div className="space-y-4">
                 <p className="text-sm text-gray-600">{t('employee.zaloAccountsHint')}</p>
+                {channelAccounts !== null && (
+                  <h3 className="text-sm font-semibold text-gray-800">{t('employee.channelGroupZalo')}</h3>
+                )}
                 {channelLoading && <p className="text-sm text-gray-500">{t('employee.zaloAccountsLoading')}</p>}
                 {channelLoadFailed && (
                   <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 flex items-center justify-between gap-3">
@@ -1155,6 +1180,27 @@ const EmployeeManagement = () => {
                     {channelAccounts.some((a) => a.source === 'legacy') && (
                       <p className="text-xs text-gray-500">{t('employee.zaloAccountsLegacyHint')}</p>
                     )}
+                  </>
+                )}
+                {channelAccounts !== null && (
+                  <>
+                    <p className="text-xs text-gray-500 pt-2 border-t border-gray-100">{t('employee.channelGroupExtraHint')}</p>
+                    <EmployeeChannelAccountGroup
+                      groupKey="telegram"
+                      title={t('employee.channelGroupTelegram')}
+                      emptyText={t('employee.channelGroupTelegramEmpty')}
+                      items={extraAccounts.telegram}
+                      selected={extraSelected.telegram}
+                      onChange={(next) => setExtraSelected((prev) => ({ ...prev, telegram: next }))}
+                    />
+                    <EmployeeChannelAccountGroup
+                      groupKey="whatsapp"
+                      title={t('employee.channelGroupWhatsApp')}
+                      emptyText={t('employee.channelGroupWhatsAppEmpty')}
+                      items={extraAccounts.whatsapp}
+                      selected={extraSelected.whatsapp}
+                      onChange={(next) => setExtraSelected((prev) => ({ ...prev, whatsapp: next }))}
+                    />
                   </>
                 )}
               </div>
