@@ -1783,7 +1783,7 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
             enabledFlows.includes(campaignIntent.channel) || slotFillingFlows.includes(campaignIntent.channel);
 
           if (!compilableCheck.ok) {
-            console.log(`[CampaignCompiler] Giữ script LLM cũ — intent khuyết trường: ${compilableCheck.missing.join(', ')}`);
+            console.log(`[CampaignCompiler] Giữ script LLM cũ — intent khuyết trường: ${compilableCheck.missing.join(', ')}${compilableCheck.reasons ? ` (${Object.entries(compilableCheck.reasons).map(([k, v]) => `${k}: ${v}`).join('; ')})` : ''}`);
             compilerDecision = { applied: false, reason: 'intent_incomplete' };
           } else if (!isCompilerActive) {
             // Luồng chưa bật cờ

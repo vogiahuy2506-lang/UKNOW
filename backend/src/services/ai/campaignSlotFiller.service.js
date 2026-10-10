@@ -30,6 +30,8 @@ export const SLOTS_RESPONSE_SCHEMA = {
         properties: {
           slotId: { type: 'string' },
           message: { type: 'string' },
+          // Chỉ kênh email dùng (tiêu đề thư). Các kênh khác bỏ qua — nên KHÔNG nằm trong `required`.
+          subject: { type: 'string' },
         },
         required: ['slotId', 'message'],
       },
@@ -91,7 +93,8 @@ function resolveSlotBrief({ campaignIntent, brief }) {
     productName: pick(fromIntent.productName, raw.productName),
     productDescription: pick(fromIntent.productDescription, raw.productDescription),
     tone: pick(fromIntent.tone, raw.tone) || 'Chuyên nghiệp, thân thiện và gần gũi',
-    targetAudience: pick(fromIntent.targetAudience, raw.targetAudience) || 'Thành viên nhóm Zalo',
+    // Không đặt mặc định ở đây: "Thành viên nhóm Zalo" chỉ đúng với tin nhóm — prompt Zalo nhóm tự thêm mặc định đó.
+    targetAudience: pick(fromIntent.targetAudience, raw.targetAudience),
     contentMode: pick(fromIntent.contentMode, raw.contentMode),
     locale: localeCandidate === 'en' ? 'en' : 'vi',
     attachedFile: raw.attachedFile && typeof raw.attachedFile === 'object' ? raw.attachedFile : null,
@@ -167,6 +170,36 @@ function languageRule(locale) {
     : 'Tiếng Việt chuẩn có dấu, ngữ điệu chuyên nghiệp và gần gũi, sử dụng emoji tinh tế.';
 }
 
+/** Kênh của một slot; slot không ghi kênh coi như Zalo nhóm (hành vi cũ). */
+function slotChannelOf(slot) {
+  return slot?.channel || 'zalo_group';
+}
+
+/**
+ * Chọn "kiểu prompt" cho một nhóm slot. Thứ tự ưu tiên giữ hành vi cũ: kênh adapter (Telegram/WhatsApp) thắng,
+ * rồi email, rồi Zalo cá nhân (`zalo`), còn lại là Zalo nhóm. Caller nên đã chia nhóm theo kênh (xem `groupSlotsByChannel`)
+ * nên trong thực tế mỗi nhóm chỉ có một kênh.
+ */
+function resolvePromptKind(slots) {
+  const channels = new Set((Array.isArray(slots) ? slots : []).map(slotChannelOf));
+  if (channels.has('telegram')) return 'telegram';
+  if (channels.has('whatsapp')) return 'whatsapp';
+  if (channels.has('email')) return 'email';
+  if (channels.has('zalo')) return 'zalo';
+  return 'zalo_group';
+}
+
+/** Chia slot theo kênh, giữ thứ tự xuất hiện: mỗi nhóm một prompt, một kênh thì vẫn đúng MỘT lượt gọi Gemini. */
+export function groupSlotsByChannel(slots = []) {
+  const groups = new Map();
+  for (const slot of Array.isArray(slots) ? slots : []) {
+    const channel = slotChannelOf(slot);
+    if (!groups.has(channel)) groups.set(channel, []);
+    groups.get(channel).push(slot);
+  }
+  return [...groups.values()];
+}
+
 /**
  * Xây dựng prompt điền slot tinh gọn, tập trung chuyên sâu cho LLM.
  *
@@ -222,7 +255,8 @@ ${profileBlock}`;
     : '';
 
   // P8a — kênh adapter (Telegram/WhatsApp) có prompt riêng: tin nhắn chat 1-1, không phải tin nhóm Zalo.
-  const adapterChannel = slots.find((slot) => slot?.channel === 'telegram' || slot?.channel === 'whatsapp')?.channel || null;
+  const promptKind = resolvePromptKind(slots);
+  const adapterChannel = promptKind === 'telegram' || promptKind === 'whatsapp' ? promptKind : null;
   if (adapterChannel) {
     const channelName = adapterChannel === 'telegram' ? 'Telegram' : 'WhatsApp';
     const adapterSystemPrompt = `Bạn là chuyên gia soạn thảo nội dung Marketing Automation cho kênh ${channelName} (tin nhắn chat 1-1 tới khách).
@@ -255,6 +289,72 @@ Yêu cầu trả về đúng định dạng JSON với mảng "slots" chứa slo
     return { systemPrompt: adapterSystemPrompt, userPrompt: adapterUserPrompt };
   }
 
+  if (promptKind === 'email') {
+    const emailSystemPrompt = `Bạn là chuyên gia soạn thảo nội dung Email Marketing.
+Nhiệm vụ của bạn là điền TIÊU ĐỀ (subject) và NỘI DUNG (message) cho các slot email được chỉ định trong chiến dịch.
+
+QUY TẮC NỘI DUNG CHO EMAIL:
+1. \`subject\`: một dòng ngắn gọn (tối đa khoảng 80 ký tự), nêu đúng lợi ích/chủ đề thư, không viết HOA toàn bộ, không nhồi dấu chấm than.
+2. \`message\`: nội dung thư dạng HTML đơn giản — các đoạn <p>, có thể dùng <strong>, <ul><li>, và link CTA dạng <a href="...">chữ kêu gọi</a>. KHÔNG dùng <script>, <style>, <iframe>, <form> hay JavaScript.
+3. ${languageRule(locale)}
+4. Bắt buộc có lời kêu gọi hành động (CTA) rõ ràng. Chỉ dùng URL có trong "THÔNG TIN NỘI DUNG", "Yêu cầu của người dùng" hoặc "HỒ SƠ DOANH NGHIỆP"; không có URL thì mời khách trả lời thư này.
+5. TUYỆT ĐỐI KHÔNG để subject hoặc message rỗng hay chỉ có khoảng trắng.
+6. Biến cá nhân hoá: chỉ được dùng {{ten}} (tên khách, ví dụ "Chào {{ten}},") nếu cần; KHÔNG bịa biến khác. Không chắc thì dùng câu chào chung.
+7. Mỗi slot trong kết quả trả về PHẢI mang đúng \`slotId\` tương ứng được yêu cầu.
+8. ${SLOT_ANTI_FABRICATION_RULE}`;
+    const emailSlotsDescription = slots
+      .map((s, idx) => `- Slot ID: "${s.slotId}" | Email số ${(s.stepIndex ?? idx) + 1} (Ngày ${s.day ?? 1}) | Kênh: ${s.channel}`)
+      .join('\n');
+    const emailAudienceLine = targetAudience ? `\n- Đối tượng nhận tin: ${targetAudience}` : '';
+    const emailUserPrompt = `Hãy soạn thảo tiêu đề và nội dung email cho từng slot dưới đây.
+
+THÔNG TIN CHIẾN DỊCH:
+- Chủ đề chính: ${topicLine}${emailAudienceLine}
+- Giọng văn: ${tone}
+- Ngôn ngữ: ${locale === 'en' ? 'Tiếng Anh (English)' : 'Tiếng Việt'}
+${requestLine}
+
+${sharedContext}
+DANH SÁCH SLOTS CẦN ĐIỀN:
+${emailSlotsDescription}
+
+Yêu cầu trả về đúng định dạng JSON với mảng "slots", mỗi phần tử có slotId, subject (tiêu đề) và message (thân thư HTML).`;
+    return { systemPrompt: emailSystemPrompt, userPrompt: emailUserPrompt };
+  }
+
+  if (promptKind === 'zalo') {
+    const personalSystemPrompt = `Bạn là chuyên gia soạn thảo nội dung Marketing Automation cho kênh Zalo cá nhân (tin nhắn chat 1-1 tới từng khách).
+Nhiệm vụ của bạn là điền nội dung văn bản (message) cho các slot được chỉ định trong chiến dịch.
+
+QUY TẮC NỘI DUNG CHO ZALO CÁ NHÂN:
+1. Tin ngắn gọn, tự nhiên như một người thật nhắn riêng cho một người; tối đa khoảng 1000 ký tự; không dùng HTML/markdown nặng.
+2. Xưng hô 1-1: gọi khách là "bạn" (hoặc "anh/chị" nếu giọng văn yêu cầu trang trọng) và xưng "mình"/"em"/tên đơn vị. KHÔNG dùng lời chào gọi chung một đám đông hay cả nhóm — mỗi tin chỉ nói với MỘT người.
+3. ${languageRule(locale)}
+4. Bắt buộc có lời kêu gọi hành động (CTA) rõ ràng nhưng không thúc ép.
+5. TUYỆT ĐỐI KHÔNG để nội dung rỗng hoặc chỉ có khoảng trắng.
+6. Biến cá nhân hoá: chỉ được dùng {{ten}} (tên khách, ví dụ "Chào {{ten}},") nếu cần; KHÔNG bịa biến khác. Không chắc thì dùng câu chào chung 1-1 như "Chào bạn!".
+7. Mỗi slot trong kết quả trả về PHẢI mang đúng \`slotId\` tương ứng được yêu cầu.
+8. ${SLOT_ANTI_FABRICATION_RULE}`;
+    const personalSlotsDescription = slots
+      .map((s, idx) => `- Slot ID: "${s.slotId}" | Bước ${(s.stepIndex ?? idx) + 1} (Ngày ${s.day ?? 1}) | Kênh: ${s.channel}`)
+      .join('\n');
+    const personalAudienceLine = targetAudience ? `\n- Đối tượng nhận tin: ${targetAudience}` : '';
+    const personalUserPrompt = `Hãy soạn thảo nội dung tin nhắn Zalo cá nhân (1-1) cho từng slot dưới đây.
+
+THÔNG TIN CHIẾN DỊCH:
+- Chủ đề chính: ${topicLine}${personalAudienceLine}
+- Giọng văn: ${tone}
+- Ngôn ngữ: ${locale === 'en' ? 'Tiếng Anh (English)' : 'Tiếng Việt'}
+${requestLine}
+
+${sharedContext}
+DANH SÁCH SLOTS CẦN ĐIỀN:
+${personalSlotsDescription}
+
+Yêu cầu trả về đúng định dạng JSON với mảng "slots" chứa slotId và message đầy đủ.`;
+    return { systemPrompt: personalSystemPrompt, userPrompt: personalUserPrompt };
+  }
+
   const systemPrompt = `Bạn là chuyên gia soạn thảo nội dung Marketing Automation cho kênh Zalo Nhóm (Zalo Community/Group).
 Nhiệm vụ của bạn là điền nội dung văn bản (message) chất lượng cao cho các slot được chỉ định trong chiến dịch.
 
@@ -279,7 +379,7 @@ QUY TẮC NỘI DUNG CHO ZALO NHÓM:
 
 THÔNG TIN CHIẾN DỊCH:
 - Chủ đề chính: ${topicLine}
-- Đối tượng nhận tin: ${targetAudience}
+- Đối tượng nhận tin: ${targetAudience || 'Thành viên nhóm Zalo'}
 - Giọng văn: ${tone}
 - Ngôn ngữ: ${locale === 'en' ? 'Tiếng Anh (English)' : 'Tiếng Việt'}
 ${requestLine}
@@ -291,6 +391,37 @@ ${slotsDescription}
 Yêu cầu trả về đúng định dạng JSON với mảng "slots" chứa slotId và message đầy đủ.`;
 
   return { systemPrompt, userPrompt: userPromptText };
+}
+
+/** Tiêu đề email: một dòng, không xuống dòng/ký tự điều khiển, cắt ở 150 ký tự. */
+function normalizeEmailSubject(value) {
+  return String(value ?? '')
+    .replace(/[\u0000-\u001F\u007F]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 150);
+}
+
+/**
+ * Thân email: HTML đơn giản. Bỏ thẻ chủ động/nhúng (script, style, iframe, object, embed, form, link, meta) kèm nội dung,
+ * và thuộc tính xử lý sự kiện `on*=`. Model trả chữ thuần (không có thẻ nào) thì bọc theo đoạn <p>.
+ */
+function normalizeEmailBodyHtml(value) {
+  let html = String(value ?? '').trim();
+  html = html
+    .replace(/<\s*(script|style|iframe|object|embed|form)\b[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
+    .replace(/<\s*\/?\s*(script|style|iframe|object|embed|form|link|meta)\b[^>]*>/gi, '')
+    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
+  html = html.trim();
+  if (html && !/<[a-z][\s\S]*>/i.test(html)) {
+    html = html
+      .split(/\n{2,}/)
+      .map((para) => para.trim())
+      .filter(Boolean)
+      .map((para) => `<p>${para.replace(/\n/g, '<br>')}</p>`)
+      .join('\n');
+  }
+  return html;
 }
 
 /**
@@ -315,6 +446,11 @@ export function applySlotsToGraph(compiledGraph, filledSlots = []) {
       filledMap.set(item.slotId, item.message.trim());
     }
   }
+  const subjectOf = (slotId, index) => {
+    const bySlot = filledSlots.find((item) => item?.slotId === slotId);
+    const raw = bySlot ? bySlot.subject : filledSlots[index]?.subject;
+    return normalizeEmailSubject(raw);
+  };
 
   let appliedCount = 0;
 
@@ -391,12 +527,16 @@ export function applySlotsToGraph(compiledGraph, filledSlots = []) {
     } else if (subtype === 'send_email') {
       const steps = Array.isArray(node.config?.emailSteps) ? node.config.emailSteps : [];
       const stepIdx = slot.stepIndex ?? 0;
-
-      if (steps.length > 0 && steps[stepIdx]) {
-        steps[stepIdx].emailBody = message;
-      } else {
-        node.config.emailBody = message;
+      const body = normalizeEmailBodyHtml(message);
+      const target = steps.length > 0 && steps[stepIdx] ? steps[stepIdx] : node.config;
+      // Tiêu đề: ưu tiên cái model vừa trả, rồi tới tiêu đề đã có sẵn ở bước. Không có cả hai thì ném lỗi để caller rơi về
+      // luồng cũ (fail-open) — gửi thư không tiêu đề là lỗi thật, và assertNoEmptyContent cũng chặn đúng ca này.
+      const subject = subjectOf(slot.slotId, i) || normalizeEmailSubject(target.emailSubject);
+      if (!subject) {
+        throw new Error(`Slot ${slot.slotId || i} (email) thiếu tiêu đề`);
       }
+      target.emailSubject = subject;
+      target.emailBody = body;
       appliedCount++;
     }
   }
@@ -445,54 +585,60 @@ export async function fillContentSlots({
   }
 
   try {
-    // `userPrompt` (tham số hàm = câu yêu cầu thật) và prompt user gửi model là HAI thứ khác nhau — đặt tên riêng để khỏi che nhau.
-    const { systemPrompt, userPrompt: slotUserPrompt } = buildSlotFillingPrompt({
-      slots,
-      campaignIntent,
-      brief,
-      history,
-      userPrompt,
-      resolvedProducts,
-      businessProfileText,
-    });
-
     const modelName = await resolveAllowedModel(userId, requestedModel);
 
-    const res = await generateGeminiContent({
-      parts: [{ text: slotUserPrompt }],
-      systemInstruction: { parts: [{ text: systemPrompt }] },
-      responseSchema: SLOTS_RESPONSE_SCHEMA,
-      temperature: 0.7,
-      timeoutMs: 30000,
-      model: modelName,
-      feature: 'campaign_slots',
-      ownerUserId: userId ?? null,
-    });
+    // Mỗi kênh một prompt (Zalo cá nhân / email / Zalo nhóm / adapter khác hẳn nhau về xưng hô, biến và định dạng).
+    // Chỉ một kênh → đúng MỘT lượt gọi Gemini như trước.
+    const filledSlots = [];
+    for (const channelSlots of groupSlotsByChannel(slots)) {
+      // `userPrompt` (tham số hàm = câu yêu cầu thật) và prompt user gửi model là HAI thứ khác nhau — đặt tên riêng để khỏi che nhau.
+      const { systemPrompt, userPrompt: slotUserPrompt } = buildSlotFillingPrompt({
+        slots: channelSlots,
+        campaignIntent,
+        brief,
+        history,
+        userPrompt,
+        resolvedProducts,
+        businessProfileText,
+      });
 
-    // Ghi token `campaign_slots` NGAY sau lời gọi, trước mọi nhánh trả về lỗi bên dưới (rỗng / JSON hỏng / không đạt chất
-    // lượng): Google đã tính tiền dù nội dung bị bỏ. KHÔNG trừ credit — lượt sinh chiến dịch đã trừ 1 credit ở tầng
-    // controller (chargeAiCredit sau processSmartChat), slot filling nằm trong lượt đó. `record` không ném lỗi nên không
-    // phá đường fail-open của hàm này.
-    await aiUsageMeter.record(userId, res?.usage, {
-      feature: 'campaign_slots',
-      model: res?.modelUsed || modelName,
-    });
+      const res = await generateGeminiContent({
+        parts: [{ text: slotUserPrompt }],
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        responseSchema: SLOTS_RESPONSE_SCHEMA,
+        temperature: 0.7,
+        timeoutMs: 30000,
+        model: modelName,
+        feature: 'campaign_slots',
+        ownerUserId: userId ?? null,
+      });
 
-    const raw = res?.text || '';
-    if (!raw.trim()) {
-      return { success: false, error: 'empty_llm_response' };
-    }
+      // Ghi token `campaign_slots` NGAY sau lời gọi, trước mọi nhánh trả về lỗi bên dưới (rỗng / JSON hỏng / không đạt chất
+      // lượng): Google đã tính tiền dù nội dung bị bỏ. KHÔNG trừ credit — lượt sinh chiến dịch đã trừ 1 credit ở tầng
+      // controller (chargeAiCredit sau processSmartChat), slot filling nằm trong lượt đó. `record` không ném lỗi nên không
+      // phá đường fail-open của hàm này.
+      await aiUsageMeter.record(userId, res?.usage, {
+        feature: 'campaign_slots',
+        model: res?.modelUsed || modelName,
+      });
 
-    let parsed;
-    try {
-      parsed = parseAiJson(raw);
-    } catch (parseErr) {
-      return { success: false, error: `json_parse_error: ${parseErr.message}` };
-    }
+      const raw = res?.text || '';
+      if (!raw.trim()) {
+        return { success: false, error: 'empty_llm_response' };
+      }
 
-    const filledSlots = Array.isArray(parsed?.slots) ? parsed.slots : [];
-    if (filledSlots.length === 0) {
-      return { success: false, error: 'no_slots_in_llm_response' };
+      let parsed;
+      try {
+        parsed = parseAiJson(raw);
+      } catch (parseErr) {
+        return { success: false, error: `json_parse_error: ${parseErr.message}` };
+      }
+
+      const groupFilled = Array.isArray(parsed?.slots) ? parsed.slots : [];
+      if (groupFilled.length === 0) {
+        return { success: false, error: 'no_slots_in_llm_response' };
+      }
+      filledSlots.push(...groupFilled);
     }
 
     // Áp nội dung vào đồ thị compiledGraph
@@ -531,6 +677,7 @@ export async function fillContentSlots({
 export default {
   SLOTS_RESPONSE_SCHEMA,
   buildSlotFillingPrompt,
+  groupSlotsByChannel,
   applySlotsToGraph,
   fillContentSlots,
 };

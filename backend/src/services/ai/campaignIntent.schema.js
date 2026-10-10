@@ -226,6 +226,11 @@ export function deriveIntent(gates = {}, brief = null, options = {}) {
       ...(audType ? { type: audType } : {}),
       recipientKind,
       ...(gates?.sheetUrl ? { url: gates.sheetUrl } : {}),
+      // Khách đã ĐÍNH KÈM tệp bảng tính nhưng không có link: intent chưa có đường dữ liệu tất định cho tệp (đường duy nhất là FE đọc tệp
+      // rồi đổi nguồn sang 'manual' + directRecipients). Cờ này CHỈ để isCompilableIntent nói rõ lý do — không phải loại audience mới.
+      ...(audType === 'sheet' && !gates?.sheetUrl && gates?.hasAttachedSpreadsheet === true
+        ? { attachedSpreadsheet: true }
+        : {}),
       ...(Array.isArray(gates?.zaloGroupIds) && gates.zaloGroupIds.length > 0
         ? { groupIds: gates.zaloGroupIds }
         : {}),
@@ -378,6 +383,8 @@ export function detectLegacyAudienceFilters(script) {
  */
 export function isCompilableIntent(intent) {
   const missing = [];
+  // Lý do đọc được cho vài trường khuyết (chỉ để log/chẩn đoán). Chỉ xuất hiện trong kết quả khi có phần tử, nên kết quả ok vẫn là { ok, missing }.
+  const reasons = {};
   if (!intent || typeof intent !== 'object' || Array.isArray(intent)) {
     return { ok: false, missing: ['intent'] };
   }
@@ -426,6 +433,9 @@ export function isCompilableIntent(intent) {
     } else {
       if (intent.audience.type === 'sheet' && (!intent.audience.url || !String(intent.audience.url).trim())) {
         missing.push('audience.url');
+        reasons['audience.url'] = intent.audience.attachedSpreadsheet === true
+          ? 'nguồn là bảng tính ĐÍNH KÈM nhưng không có link Google Sheet — compiler không đọc được tệp đính kèm (chưa có đường dữ liệu tất định), giữ script LLM'
+          : 'nguồn Google Sheet nhưng chưa có link';
       }
       if (
         intent.audience.type === 'landing'
@@ -459,6 +469,7 @@ export function isCompilableIntent(intent) {
   return {
     ok: missing.length === 0,
     missing,
+    ...(Object.keys(reasons).length > 0 ? { reasons } : {}),
   };
 }
 
