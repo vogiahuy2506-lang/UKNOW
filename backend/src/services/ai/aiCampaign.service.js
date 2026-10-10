@@ -34,7 +34,6 @@ import {
   computeWizardMeta,
   hasLandingLeadsSelection,
   isContentPlanRevisionText,
-  mergeWizardState,
   normalizeWizardState,
   parseWizardMarker,
   isPlanTemplateDraftRequest,
@@ -47,7 +46,6 @@ import {
   PLAN_APPROVE_TEXT_RE,
 } from './aiCampaignWizard.service.js';
 import {
-  extractCampaignBriefFromHistory,
   mergeCampaignBrief,
   isCampaignBriefReady,
   resolveCampaignBrief,
@@ -63,6 +61,7 @@ import {
   isCampaignScriptShaped,
   pickChannelByExplicitSignal,
 } from '../../utils/campaignQuickSend.util.js';
+import { deriveWizardTurnState } from './wizardStateSource.service.js';
 import { runCompilerShadowCompare } from './campaignCompilerShadow.service.js';
 import { applyLandingAudienceResolution } from './landingAudienceResolver.service.js';
 import { isCompilableIntent, deriveIntent, detectLegacyAudienceFilters } from './campaignIntent.schema.js';
@@ -340,6 +339,10 @@ class AiCampaignService {
     localeContext = null,
     model = null,
     persistedWizardState = null,
+    // PR-C1: số tin của phiên trong ai_chat_messages lúc đọc đầu lượt (so với meta.foldedMessageCount) và cờ nguồn trạng thái
+    // (null = đọc từ env). Cả hai chỉ dùng để chọn đường dựng state, không đổi hành vi nào khác.
+    persistedMessageCount = null,
+    wizardStateSource = null,
     intent = null,
     planSlotKey = null,
     helpRoute = null,
@@ -421,13 +424,22 @@ QUY TẮC:
     // Wizard state: merge bản persist trong DB (sống sót qua reload) với bản derive
     // từ history của request này (marker tường minh luôn thắng).
     const persistedState = normalizeWizardState(persistedWizardState);
-    const derivedState = extractWizardState(history, {
-      routeSaysActionRequest,
-      intent,
-      abandonedAtMessageCount: persistedState.gates?.abandonedAtMessageCount,
-      files,
+    // PR-C1: nguồn trạng thái theo cờ WIZARD_STATE_SOURCE (history | shadow | db) — xem wizardStateSource.service.js.
+    const turnState = deriveWizardTurnState({
+      mode: wizardStateSource || undefined,
+      history,
+      options: {
+        routeSaysActionRequest,
+        intent,
+        abandonedAtMessageCount: persistedState.gates?.abandonedAtMessageCount,
+        files,
+      },
+      lastUserText,
+      persistedRaw: persistedWizardState,
+      persistedState,
+      messageCount: persistedMessageCount,
     });
-    const mergedGates = mergeWizardState(persistedState.gates, derivedState, { lastUserText });
+    const { derivedState, mergedGates } = turnState;
 
     const isRevision = isContentPlanRevisionText(lastUserText);
 
@@ -568,7 +580,7 @@ QUY TẮC:
     }
 
     const sourcePrompt = findOriginalCampaignPrompt(history);
-    const extracted = extractCampaignBriefFromHistory(history);
+    const extracted = turnState.extracted;
     let resolvedBriefContext = '';
     // Sản phẩm catalog đã giải từ brief (tên/giá/mô tả) — slot filling Zalo nhóm cần để viết đúng sản phẩm khách chọn.
     let resolvedBriefProducts = [];

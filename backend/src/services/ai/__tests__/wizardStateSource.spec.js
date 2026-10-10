@@ -1,7 +1,8 @@
-import { describe, expect, it } from '@jest/globals';
-import { applyAssistantResponseToGates } from '../aiCampaignWizard.service.js';
+import { describe, expect, it, jest } from '@jest/globals';
+import { applyAssistantResponseToGates, normalizeWizardState } from '../aiCampaignWizard.service.js';
 import {
   buildBackfillStamp,
+  deriveWizardTurnState,
   diffChangedKeys,
   isWizardStateInSync,
   resolveWizardStateSource,
@@ -88,5 +89,80 @@ describe('applyAssistantResponseToGates', () => {
   it('tin thường không đổi gates và không mutate đầu vào', () => {
     const gates = Object.freeze({ channel: 'email' });
     expect(applyAssistantResponseToGates(gates, { type: 'text' })).toEqual({ channel: 'email' });
+  });
+});
+
+describe('deriveWizardTurnState — chọn đường theo cờ', () => {
+  const raw = {
+    v: 1,
+    gates: { isCampaignFlow: true, channel: 'email', senderAccountId: 7 },
+    plan: {},
+    brief: {},
+    meta: { historyBackfilledAt: 'x', foldedMessageCount: 3 },
+  };
+  const history = [
+    { role: 'user', content: 'Tạo chiến dịch email' },
+    { role: 'assistant', type: 'ask_campaign_details', content: 'Kênh?' },
+    { role: 'user', content: '[wizard]{"gate":"dataSource","value":"db"}\nKhách hàng' },
+  ];
+  const run = (mode, extra = {}) => {
+    const log = jest.fn();
+    const result = deriveWizardTurnState({
+      mode, history, lastUserText: history[2].content, persistedRaw: raw, persistedState: normalizeWizardState(raw), messageCount: 3, log, ...extra,
+    });
+    return { result, log };
+  };
+
+  it('history: đường cũ, KHÔNG log', () => {
+    const { result, log } = run('history');
+    expect(result.source).toBe('history');
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it('shadow: phục vụ đường cũ và in đúng MỘT dòng', () => {
+    const { result, log } = run('shadow');
+    expect(result.source).toBe('history');
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(log.mock.calls[0][0]).toMatch(/^\[Compiler Shadow WizardState\] ✅ khớp$/);
+  });
+
+  it('db: phục vụ đường mới khi đủ điều kiện', () => {
+    const { result, log } = run('db');
+    expect(result.source).toBe('db');
+    expect(result.mergedGates.dataSource).toBe('db');
+    expect(result.mergedGates.senderAccountId).toBe(7);
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['count_mismatch', { messageCount: 5 }],
+    ['count_unknown', { messageCount: null }],
+    ['no_state', { persistedRaw: null }],
+  ])('db: không đủ điều kiện (%s) → rơi về đường cũ; shadow in dòng bỏ qua kèm lý do', (reason, extra) => {
+    const db = run('db', extra);
+    expect(db.result.source).toBe('history');
+    const shadow = run('shadow', extra);
+    expect(shadow.log).toHaveBeenCalledWith(`[Compiler Shadow WizardState] ⏭ bỏ qua (${reason})`);
+  });
+
+  it('tin cuối không phải tin user → bỏ qua (last_not_user)', () => {
+    const { result, log } = run('shadow', { history: [...history, { role: 'assistant', type: 'text', content: 'x' }] });
+    expect(result.source).toBe('history');
+    expect(log).toHaveBeenCalledWith('[Compiler Shadow WizardState] ⏭ bỏ qua (last_not_user)');
+  });
+
+  it('lệch → dòng ❌ chỉ liệt kê TÊN trường; so sánh nổ lỗi không làm hỏng lượt', () => {
+    // Bản đã lưu có sheetUrl nhưng lịch sử đầy đủ lại có link khác: đường cũ thấy link mới, đường mới không.
+    const withSheet = [{ role: 'user', content: 'https://docs.google.com/spreadsheets/d/AAA/edit' }, ...history];
+    const { log } = run('shadow', { history: withSheet });
+    const line = log.mock.calls[0][0];
+    expect(line).toMatch(/^\[Compiler Shadow WizardState\] ❌ lệch: sheetUrl/);
+    expect(line).not.toMatch(/AAA|docs\.google/);
+
+    const boom = jest.fn();
+    const result = deriveWizardTurnState({
+      mode: 'shadow', history, persistedRaw: raw, persistedState: { gates: null, get brief() { throw new TypeError('có giá trị bí mật'); } }, messageCount: 3, log: boom,
+    });
+    expect(result.source).toBe('history');
   });
 });

@@ -14,6 +14,14 @@
  */
 
 import { isDeepStrictEqual } from 'node:util';
+import {
+  GATE_MERGE_POLICIES,
+  createEmptyDerivedWizardState,
+  extractWizardState,
+  foldWizardMessages,
+  mergeWizardState,
+} from './aiCampaignWizard.service.js';
+import { extractCampaignBriefFromHistory, mergeCampaignBrief } from './campaignBrief.service.js';
 
 export const WIZARD_STATE_SOURCES = ['history', 'shadow', 'db'];
 export const DEFAULT_WIZARD_STATE_SOURCE = 'shadow';
@@ -63,4 +71,93 @@ export function diffChangedKeys(start, turn) {
     if (!isDeepStrictEqual(value, base[key])) out[key] = value;
   }
   return out;
+}
+
+const SHADOW_LOG_PREFIX = '[Compiler Shadow WizardState]';
+
+/** Tên các trường lệch giữa hai kết quả (CHỈ TÊN — không bao giờ trả giá trị để khỏi lọt PII/sheetUrl/nội dung vào log). */
+export function diffWizardTurnState(legacy, candidate) {
+  const names = [];
+  const fields = Object.keys(GATE_MERGE_POLICIES);
+  for (const field of fields) {
+    if (!isDeepStrictEqual(legacy.mergedGates?.[field], candidate.mergedGates?.[field])) names.push(field);
+  }
+  // Tín hiệu suy ra mà service dùng NGOÀI bước merge (quyền nhân viên, cổng tệp đính kèm).
+  for (const field of ['isCampaignFlow', 'hasAttachedFile', 'hasAttachedSpreadsheet']) {
+    if (Boolean(legacy.derivedState?.[field]) !== Boolean(candidate.derivedState?.[field])) names.push(`derived.${field}`);
+  }
+  if (!isDeepStrictEqual(legacy.briefSignature, candidate.briefSignature)) names.push('brief');
+  return names;
+}
+
+const briefSignature = (persistedBrief, extracted) => ({
+  invalid: Boolean(extracted?.invalid),
+  merged: extracted?.invalid ? null : mergeCampaignBrief(persistedBrief, extracted?.brief ?? null, { defaultContentLocale: 'vi' }),
+});
+
+/**
+ * Dựng trạng thái wizard của MỘT lượt chat theo cờ nguồn (xem đầu file).
+ *
+ * Đường cũ (luôn tính, vì shadow/db-rơi-về cần nó): replay TOÀN BỘ lịch sử client gửi rồi merge với bản đã lưu.
+ * Đường mới: bản đã lưu đã gồm mọi tin trước đó (đủ điều kiện = isWizardStateInSync) nên chỉ gấp tin user MỚI NHẤT
+ * (chỉ số tuyệt đối = history.length-1) rồi cũng merge với bản đã lưu — cùng một bảng chính sách `mergeWizardState`.
+ *
+ * @returns {{ derivedState, mergedGates, extracted, source: 'history'|'db' }}
+ *   `extracted` = kết quả extractCampaignBriefFromHistory (hoặc bản gấp riêng tin cuối ở đường mới).
+ */
+export function deriveWizardTurnState({
+  mode = resolveWizardStateSource(),
+  history = [],
+  options = {},
+  lastUserText = '',
+  persistedRaw = null,
+  persistedState,
+  messageCount = null,
+  log = (line) => console.log(line),
+}) {
+  const messages = Array.isArray(history) ? history : [];
+  const legacyDerived = extractWizardState(messages, options);
+  const legacyMerged = mergeWizardState(persistedState.gates, legacyDerived, { lastUserText });
+  const legacyExtracted = extractCampaignBriefFromHistory(messages);
+  const legacy = { derivedState: legacyDerived, mergedGates: legacyMerged, extracted: legacyExtracted, source: 'history' };
+  if (mode === 'history') return legacy;
+
+  try {
+    const sync = isWizardStateInSync(persistedRaw, messageCount);
+    const last = messages[messages.length - 1];
+    const skipReason = !sync.ok ? sync.reason : (last?.role === 'user' ? null : 'last_not_user');
+    if (skipReason) {
+      // Mỗi lượt đúng MỘT dòng, kể cả khi bỏ qua — để số liệu "đủ điều kiện / tổng lượt" đọc được từ file log.
+      if (mode === 'shadow') log(`${SHADOW_LOG_PREFIX} ⏭ bỏ qua (${skipReason})`);
+      return legacy;
+    }
+
+    const tailDerived = foldWizardMessages(createEmptyDerivedWizardState(), [last], { ...options, indexOffset: messages.length - 1 });
+    // Hai thói quen của đường replay được GIỮ NGUYÊN có chủ đích (PR-C1 không đổi hành vi):
+    //  (1) Tin `content_plan` cũ vẫn nằm trong lịch sử nên `hasContentPlan` suy ra vẫn true sau khi đổi kênh (chỉ planApproved bị
+    //      marker channel reset). Ở đường mới tin đó không còn trong tay → lấy từ bản đã lưu, trừ khi đã có mốc huỷ.
+    //  (2) Marker `channel` luôn xoá lịch suy từ câu yêu cầu đầu ("5 ngày") — lịch được hỏi lại ở cổng schedule.
+    if (options?.abandonedAtMessageCount == null && persistedState.gates?.hasContentPlan) tailDerived.hasContentPlan = true;
+    const tailMerged = mergeWizardState(persistedState.gates, tailDerived, { lastUserText });
+    if (tailDerived.markerGates.includes('channel')) tailMerged.schedule = tailDerived.schedule ?? null;
+    // Tín hiệu "có tệp / đang trong luồng" của đường cũ nhìn cả lịch sử; đường mới lấy từ bản đã gộp với bản lưu.
+    tailDerived.isCampaignFlow = Boolean(tailDerived.isCampaignFlow || tailMerged.isCampaignFlow);
+    tailDerived.hasAttachedFile = Boolean(tailDerived.hasAttachedFile || tailMerged.hasAttachedFile);
+    tailDerived.hasAttachedSpreadsheet = Boolean(tailDerived.hasAttachedSpreadsheet || tailMerged.hasAttachedSpreadsheet);
+    const tailExtracted = extractCampaignBriefFromHistory([last]);
+    const candidate = { derivedState: tailDerived, mergedGates: tailMerged, extracted: tailExtracted, source: 'db' };
+
+    if (mode === 'db') return candidate;
+
+    const names = diffWizardTurnState(
+      { ...legacy, briefSignature: briefSignature(persistedState.brief, legacyExtracted) },
+      { ...candidate, briefSignature: briefSignature(persistedState.brief, tailExtracted) },
+    );
+    log(names.length === 0 ? `${SHADOW_LOG_PREFIX} ✅ khớp` : `${SHADOW_LOG_PREFIX} ❌ lệch: ${names.join(', ')}`);
+    return legacy;
+  } catch (err) {
+    // So sánh lỗi KHÔNG được làm hỏng lượt. Chỉ in tên lỗi (message có thể chứa giá trị).
+    if (mode === 'shadow') log(`${SHADOW_LOG_PREFIX} ⚠️ lỗi so sánh (${err?.name || 'Error'})`);
+    return legacy;
+  }
 }

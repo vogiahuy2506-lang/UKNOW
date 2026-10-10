@@ -378,6 +378,8 @@ class AiController {
           localeContext,
           model,
           persistedWizardState,
+          persistedMessageCount,
+          wizardStateSource: wizardSourceMode,
           intent: sanitizedIntent,
           planSlotKey: sanitizedPlanSlotKey,
           helpRoute,
