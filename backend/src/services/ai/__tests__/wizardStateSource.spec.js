@@ -6,6 +6,7 @@ import {
   diffChangedKeys,
   isWizardStateInSync,
   resolveWizardStateSource,
+  toClientWizardState,
 } from '../wizardStateSource.service.js';
 
 const stateWithMeta = (meta) => ({ v: 1, gates: {}, plan: {}, brief: {}, meta });
@@ -164,5 +165,27 @@ describe('deriveWizardTurnState — chọn đường theo cờ', () => {
       mode: 'shadow', history, persistedRaw: raw, persistedState: { gates: null, get brief() { throw new TypeError('có giá trị bí mật'); } }, messageCount: 3, log: boom,
     });
     expect(result.source).toBe('history');
+  });
+});
+
+describe('toClientWizardState', () => {
+  it('chỉ giữ gates, plan.status/campaignId, meta cổng; bỏ brief và snapshot', () => {
+    const out = toClientWizardState({
+      v: 1,
+      gates: { channel: 'email' },
+      plan: { snapshot: { big: true }, savedTemplates: [1], status: 'completed', campaignId: 9 },
+      brief: { attachedFile: { text: 'dài' } },
+      meta: { lastGate: null, lastGateCount: 0, updatedAt: 't', conversationLocale: 'vi', foldedMessageCount: 3 },
+    });
+    expect(out).toEqual({
+      v: 1,
+      gates: { channel: 'email' },
+      plan: { status: 'completed', campaignId: 9 },
+      meta: { lastGate: null, lastGateCount: 0, updatedAt: 't' },
+    });
+  });
+
+  it.each([[null], [undefined], [{ v: 2, gates: {} }], ['x']])('đầu vào không hợp lệ (%j) → null', (input) => {
+    expect(toClientWizardState(input)).toBeNull();
   });
 });

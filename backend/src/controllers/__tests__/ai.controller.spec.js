@@ -2355,4 +2355,37 @@ describe('ai.controller — PR-C1: PATCH xen giữa lượt chat không bị ghi
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     expect(console.error).toHaveBeenCalledWith(expect.stringContaining('[AI][WizardState] Ghi wizard_state thất bại'));
   });
+  it('/ai/chat trả thêm data.wizardState = đúng state vừa ghi (v:1, gates, plan.status, meta) — KHÔNG kèm brief/snapshot', async () => {
+    processSmartChat.mockResolvedValue(wizardResponse());
+    getSessionWizardState.mockResolvedValue({ id: 77, wizard_state: START_STATE, message_count: 5 });
+    updateWizardStateSections.mockResolvedValue({
+      v: 1,
+      gates: { ...START_STATE.gates, senderAccountId: 7 },
+      plan: { snapshot: { days: [] }, savedTemplates: [{ slotId: 'd1-s1' }], status: 'waiting_day_confirm', campaignId: null },
+      brief: { attachedFile: { text: 'x'.repeat(50) } },
+      meta: { lastGate: 'schedule', lastGateCount: 1, updatedAt: 't', foldedMessageCount: 7, historyBackfilledAt: 'h' },
+    });
+
+    const res = makeRes();
+    await aiController.chat(chatReq(), res);
+
+    const data = res.json.mock.calls[0][0].data;
+    expect(data.wizardState).toEqual({
+      v: 1,
+      gates: { ...START_STATE.gates, senderAccountId: 7 },
+      plan: { status: 'waiting_day_confirm', campaignId: null },
+      meta: { lastGate: 'schedule', lastGateCount: 1, updatedAt: 't' },
+    });
+    expect(JSON.stringify(data.wizardState)).not.toContain('xxxxx');
+  });
+
+  it('ghi hỏng / repo không trả state → KHÔNG có data.wizardState (FE rơi về suy từ lịch sử)', async () => {
+    processSmartChat.mockResolvedValue(wizardResponse());
+    getSessionWizardState.mockResolvedValue({ id: 77, wizard_state: START_STATE, message_count: 5 });
+    updateWizardStateSections.mockResolvedValue(null);
+
+    const res = makeRes();
+    await aiController.chat(chatReq(), res);
+    expect(res.json.mock.calls[0][0].data).not.toHaveProperty('wizardState');
+  });
 });

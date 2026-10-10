@@ -16,7 +16,7 @@ import campaignController from './campaign.controller.js';
 import campaignCrudService from '../services/campaign/campaignCrud.service.js';
 import campaignNodeRegistryService from '../services/campaign/campaignNodeRegistry.service.js';
 import * as aiSessionRepo from '../repositories/aiSession.repository.js';
-import { buildBackfillStamp, diffChangedKeys, isWizardStateInSync, resolveWizardStateSource } from '../services/ai/wizardStateSource.service.js';
+import { buildBackfillStamp, diffChangedKeys, isWizardStateInSync, resolveWizardStateSource, toClientWizardState } from '../services/ai/wizardStateSource.service.js';
 import { withKeyedLock, wizardSessionLockKey } from '../utils/keyedMutex.util.js';
 import { applyAssistantResponseToGates, applyWizardStateAction, normalizeWizardState, isWizardAnswerTurn, isWizardMarkerMessage } from '../services/ai/aiCampaignWizard.service.js';
 import auditService, { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
@@ -201,9 +201,10 @@ async function logWorkspaceMutation(req, action, entityType, entityId, details =
  */
 async function writeWizardStateGuarded(sessionId, userId, sections) {
   try {
-    await withKeyedLock(wizardSessionLockKey(sessionId), () => aiSessionRepo.updateWizardStateSections(sessionId, userId, sections));
+    return await withKeyedLock(wizardSessionLockKey(sessionId), () => aiSessionRepo.updateWizardStateSections(sessionId, userId, sections));
   } catch (err) {
     console.error(`[AI][WizardState] Ghi wizard_state thất bại (phiên ${sessionId}, user ${userId}): ${err.message} — lượt sau sẽ rơi về replay lịch sử`);
+    return null;
   }
 }
 
@@ -463,6 +464,8 @@ class AiController {
 
       // Persist session + messages + wizard state (bỏ qua lỗi DB để không block chat)
       let finalSessionId = sessionId || null;
+      // wizard_state SAU lượt này (đúng giá trị vừa ghi) cho client — null nếu ghi hỏng / không có phiên.
+      let wizardStateForClient = null;
       let sessionTitle = null;
       let savedAssistantMessageId = null;
       try {
@@ -618,7 +621,7 @@ class AiController {
           // đúng hành vi cũ: không dấu, không áp tác động của phản hồi.
           const trackFold = wizardSourceMode !== 'history';
           const turnGates = trackFold ? applyAssistantResponseToGates(_wizard.gates, publicResponse) : _wizard.gates;
-          await writeWizardStateGuarded(finalSessionId, req.user.id, {
+          wizardStateForClient = await writeWizardStateGuarded(finalSessionId, req.user.id, {
             // Chỉ ghi phần lượt này ĐỔI so với bản đọc đầu lượt, gộp vào bản đang nằm trong DB (PATCH xen giữa không bị đè).
             gatesDelta: diffChangedKeys(normalizedPersisted.gates, turnGates),
             ...(trackFold ? { stampFoldedCount: true } : {}),
@@ -643,7 +646,7 @@ class AiController {
           // không bao giờ tự đặt historyBackfilledAt ở đây — lượt help không dựng lại gates nên không được tuyên bố "đã backfill".
           const wasInSync = wizardSourceMode !== 'history'
             && isWizardStateInSync(persistedWizardState, persistedMessageCount).ok;
-          await writeWizardStateGuarded(finalSessionId, req.user.id, {
+          wizardStateForClient = await writeWizardStateGuarded(finalSessionId, req.user.id, {
             ...(wasInSync ? { stampFoldedCount: true } : {}),
             meta: {
               ...persistedMeta,
@@ -672,6 +675,8 @@ class AiController {
           ...(savedAssistantMessageId ? { messageId: savedAssistantMessageId } : {}),
           sessionId: finalSessionId,
           sessionTitle,
+          // PR-C1: FE (PR-C2) dùng thay deriveWizardContext; FE cũ bỏ qua trường lạ. Không bump `v`.
+          ...(toClientWizardState(wizardStateForClient) ? { wizardState: toClientWizardState(wizardStateForClient) } : {}),
         },
       });
     } catch (error) {

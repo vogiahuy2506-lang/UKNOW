@@ -282,13 +282,15 @@ describe('PR-C1 — ghi wizard_state sau lượt chat (SQL thật)', () => {
     );
 
     // Lượt chat đọc đầu lượt (planApproved=false) và chỉ đổi senderAccountId.
-    await updateWizardStateSections(session.id, user.id, {
+    const returned = await updateWizardStateSections(session.id, user.id, {
       gatesDelta: { senderAccountId: 7 },
       stampFoldedCount: true,
       meta: { lastGate: 'schedule', historyBackfilledAt: '2026-10-10T00:00:00.000Z' },
     });
 
     const state = await readState(session.id);
+    // Hàm trả đúng state SAU khi ghi (controller đưa nó cho client làm data.wizardState).
+    expect(returned).toEqual(state);
     expect(state.gates.planApproved).toBe(true);
     expect(state.gates.senderAccountId).toBe(7);
     expect(state.gates.channel).toBe('email');

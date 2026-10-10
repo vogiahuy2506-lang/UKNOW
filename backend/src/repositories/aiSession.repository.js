@@ -172,12 +172,14 @@ export async function updateWizardStateSections(sessionId, userId, sections = {}
     // Dấu "đã gấp tới tin thứ N" — đếm ngay trong câu UPDATE (xem wizardStateSource.service.js).
     expr = `jsonb_set(${expr}, '{meta,foldedMessageCount}', to_jsonb((SELECT COUNT(*)::int FROM ai_chat_messages WHERE session_id = $1)), true)`;
   }
-  if (expr === base) return;
+  if (expr === base) return null;
 
-  await db.query(
-    `UPDATE ai_chat_sessions SET wizard_state = ${expr} WHERE id = $1 AND id_user = $2`,
+  const { rows } = await db.query(
+    `UPDATE ai_chat_sessions SET wizard_state = ${expr} WHERE id = $1 AND id_user = $2 RETURNING wizard_state`,
     params
   );
+  // Trả state SAU khi ghi (gộp với bản đang nằm trong DB) để controller đưa đúng giá trị đó cho client.
+  return rows?.[0]?.wizard_state ?? null;
 }
 
 // Overwrite toàn bộ wizard_state (dành cho PATCH path sau reducer)

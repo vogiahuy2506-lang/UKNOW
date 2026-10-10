@@ -161,3 +161,24 @@ export function deriveWizardTurnState({
     return legacy;
   }
 }
+
+/**
+ * Dạng wizard_state trả cho CLIENT sau mỗi lượt chat (`data.wizardState` của /ai/chat): CHỈ phần FE cần để bỏ suy diễn
+ * từ lịch sử — gates đã gộp, trạng thái kế hoạch, meta cổng. KHÔNG kèm `brief` (có thể chứa văn bản tệp đính kèm hàng trăm KB)
+ * và KHÔNG kèm snapshot/savedTemplates của kế hoạch (tải qua GET phiên). `v` giữ nguyên 1 — FE cũ đòi v===1.
+ */
+export function toClientWizardState(state) {
+  if (!state || typeof state !== 'object' || state.v !== 1) return null;
+  const meta = state.meta && typeof state.meta === 'object' ? state.meta : {};
+  const plan = state.plan && typeof state.plan === 'object' ? state.plan : {};
+  return {
+    v: 1,
+    gates: { ...(state.gates || {}) },
+    plan: { status: plan.status ?? null, campaignId: plan.campaignId ?? null },
+    meta: {
+      lastGate: meta.lastGate ?? null,
+      lastGateCount: meta.lastGateCount ?? 0,
+      updatedAt: meta.updatedAt ?? null,
+    },
+  };
+}
