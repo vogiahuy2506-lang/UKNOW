@@ -16,6 +16,7 @@ import campaignController from './campaign.controller.js';
 import campaignCrudService from '../services/campaign/campaignCrud.service.js';
 import campaignNodeRegistryService from '../services/campaign/campaignNodeRegistry.service.js';
 import * as aiSessionRepo from '../repositories/aiSession.repository.js';
+import { buildBackfillStamp, isWizardStateInSync } from '../services/ai/wizardStateSource.service.js';
 import { applyWizardStateAction, normalizeWizardState, isWizardAnswerTurn, isWizardMarkerMessage } from '../services/ai/aiCampaignWizard.service.js';
 import auditService, { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 import uploadController from './upload.controller.js';
@@ -257,10 +258,12 @@ class AiController {
 
       // Load wizard state once before help routing (conversation locale + campaign reuse).
       let persistedWizardState = null;
+      let persistedMessageCount = null;
       if (sessionId) {
         try {
           const row = await aiSessionRepo.getSessionWizardState(Number(sessionId), req.user.id);
           persistedWizardState = row?.wizard_state || null;
+          persistedMessageCount = Number.isInteger(row?.message_count) ? row.message_count : null;
         } catch (stateErr) {
           console.warn('[AI] Không đọc được wizard state:', stateErr.message);
         }
@@ -594,11 +597,15 @@ class AiController {
             });
           }
 
+          // Dấu "đã gấp hết lịch sử tới tin thứ N" (xem wizardStateSource.service.js) — lượt có wizard luôn được dựng từ
+          // replay lịch sử đầy đủ (hoặc đường DB đã đủ điều kiện) nên đủ tư cách đánh dấu backfill.
           await aiSessionRepo.updateWizardStateSections(finalSessionId, req.user.id, {
             gates: _wizard.gates,
+            stampFoldedCount: true,
             meta: {
               ...(_wizard.meta || {}),
               ...localeMetaPatch,
+              ...buildBackfillStamp(_wizard.meta),
             },
             ...(_wizard.brief ? { brief: _wizard.brief } : {}),
             ...(_wizard.planChanged
@@ -612,7 +619,11 @@ class AiController {
           });
         } else {
           // Help path: meta-only — never touch gates/brief/plan.
+          // Chỉ ĐẨY dấu tới số tin mới nếu bản đã lưu vốn đã khớp TRƯỚC lượt này (+ tin user và tin trợ lý của lượt help);
+          // không bao giờ tự đặt historyBackfilledAt ở đây — lượt help không dựng lại gates nên không được tuyên bố "đã backfill".
+          const wasInSync = isWizardStateInSync(persistedWizardState, persistedMessageCount).ok;
           await aiSessionRepo.updateWizardStateSections(finalSessionId, req.user.id, {
+            ...(wasInSync ? { stampFoldedCount: true } : {}),
             meta: {
               ...persistedMeta,
               ...localeMetaPatch,

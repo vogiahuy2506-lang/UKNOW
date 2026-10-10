@@ -100,10 +100,13 @@ export async function listUserFilesSinceLastLanding(sessionId, userId, ownerUser
 }
 
 
-// Trả { id, wizard_state } hoặc null (không tồn tại / không thuộc userId)
+// Trả { id, wizard_state, message_count } hoặc null (không tồn tại / không thuộc userId).
+// message_count = số tin của phiên trong ai_chat_messages — so với meta.foldedMessageCount để biết bản đã lưu còn khớp không.
 export async function getSessionWizardState(sessionId, userId) {
   const { rows } = await db.query(
-    `SELECT id, wizard_state FROM ai_chat_sessions WHERE id = $1 AND id_user = $2`,
+    `SELECT s.id, s.wizard_state,
+            (SELECT COUNT(*)::int FROM ai_chat_messages m WHERE m.session_id = s.id) AS message_count
+     FROM ai_chat_sessions s WHERE s.id = $1 AND s.id_user = $2`,
     [sessionId, userId]
   );
   return rows[0] || null;
@@ -120,7 +123,7 @@ const EMPTY_WIZARD_STATE_DEFAULT = {
 // Ghi state theo section từ chat path (gates/meta/plan/brief) bằng jsonb_set.
 // Khi KHÔNG có planReset/planSnapshot thì tuyệt đối không đụng section plan —
 // tránh clobber plan.savedTemplates do PATCH ghi song song.
-// sections = { gates?, meta?, brief?, planSnapshot?, planSourcePrompt?, planRequiresApproval?, planReset? }
+// sections = { gates?, meta?, brief?, planSnapshot?, planSourcePrompt?, planRequiresApproval?, planReset?, stampFoldedCount? }
 export async function updateWizardStateSections(sessionId, userId, sections = {}) {
   const base = `COALESCE(wizard_state, '${JSON.stringify(EMPTY_WIZARD_STATE_DEFAULT)}'::jsonb)`;
   let expr = base;
@@ -146,6 +149,10 @@ export async function updateWizardStateSections(sessionId, userId, sections = {}
   if (sections.gates) addSet('gates', sections.gates);
   if (sections.meta) addSet('meta', sections.meta);
   if (sections.brief) addSet('brief', sections.brief);
+  if (sections.stampFoldedCount) {
+    // Dấu "đã gấp tới tin thứ N" — đếm ngay trong câu UPDATE (xem wizardStateSource.service.js).
+    expr = `jsonb_set(${expr}, '{meta,foldedMessageCount}', to_jsonb((SELECT COUNT(*)::int FROM ai_chat_messages WHERE session_id = $1)), true)`;
+  }
   if (expr === base) return;
 
   await db.query(
