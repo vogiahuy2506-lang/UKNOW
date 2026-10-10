@@ -16,6 +16,7 @@
  * @returns {JSX.Element}
  */
 import { useI18n } from '../../../i18n';
+import { useAuthStore } from '../../../stores/authStore';
 
 export const NodeConfigSelectZaloAccountSection = ({
   formData,
@@ -26,6 +27,7 @@ export const NodeConfigSelectZaloAccountSection = ({
   onRetryZaloAccounts,
 }) => {
   const { t } = useI18n();
+  const isEmployeeContext = useAuthStore((state) => state.activeContext?.type) === 'employee';
   const isEmptyAfterSuccess = zaloAccountsStatus === 'loaded' && zaloAccounts.length === 0;
   const sortedAccounts = [...zaloAccounts].sort((a, b) => {
     if (a.isDefault && !b.isDefault) return -1;
@@ -190,7 +192,7 @@ export const NodeConfigSelectZaloAccountSection = ({
 
       {isEmptyAfterSuccess && (
         <div className="bg-amber-50 p-3 rounded-lg text-sm text-amber-700">
-          {t('zaloAccount.noAccountsAvailable')}
+          {isEmployeeContext ? t('zaloAccount.noAccountsAssigned') : t('zaloAccount.noAccountsAvailable')}
         </div>
       )}
 

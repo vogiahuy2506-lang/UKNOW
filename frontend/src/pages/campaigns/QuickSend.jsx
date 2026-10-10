@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
+import { useAuthStore } from '../../stores/authStore';
 import api from '../../services/api';
 import emailTemplateApiService from '../../features/templates/services/emailTemplateApi.service';
 import zaloTemplateApiService from '../../features/templates/services/zaloTemplateApi.service';
@@ -237,6 +238,7 @@ function resolveDeferredReasonLabel(t, reason) {
 
 const QuickSend = () => {
   const { t } = useI18n();
+  const isEmployeeContext = useAuthStore((state) => state.activeContext?.type) === 'employee';
   const location = useLocation();
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(QUICK_SEND_STEPS.RECIPIENTS);
@@ -499,8 +501,15 @@ const QuickSend = () => {
     setIsLoadingAccounts(true);
     try {
       const [emailRes, zaloRes] = await Promise.all([
-        emailSettingsApiService.listEmailSettings(),
-        zaloSettingsApiService.listAccounts(),
+        // Mỗi danh sách tự bắt lỗi: nhân viên thiếu `email_settings` bị 403 ở danh sách email nhưng vẫn phải thấy Zalo được giao.
+        emailSettingsApiService.listEmailSettings().catch((err) => {
+          console.error('Failed to fetch email accounts:', err);
+          return null;
+        }),
+        zaloSettingsApiService.listSelectableAccounts().catch((err) => {
+          console.error('Failed to fetch zalo accounts:', err);
+          return null;
+        }),
       ]);
       const emailItems = emailRes?.data?.data?.items || [];
       setEmailAccounts(emailItems);
@@ -1682,7 +1691,9 @@ const QuickSend = () => {
                     <div className="h-6 w-6 rounded-full border-2 border-orange-500 border-t-transparent animate-spin" />
                   </div>
                 ) : zaloAccounts.length === 0 ? (
-                  <p className="text-sm text-gray-500">{t('quickSend.noZaloAccounts')}</p>
+                  <p className="text-sm text-gray-500">
+                    {isEmployeeContext ? t('quickSend.noZaloAccountsAssigned') : t('quickSend.noZaloAccounts')}
+                  </p>
                 ) : (
                   <div className="space-y-2">
                     {zaloAccounts.map((account) => (
@@ -1703,7 +1714,7 @@ const QuickSend = () => {
                         />
                         <div className="flex-1">
                           <p className="font-medium text-gray-900">{account.displayName || account.zaloName || 'Tài khoản Zalo'}</p>
-                          <p className="text-sm text-gray-500">{account.zaloUserId || account.zaloPhone || ''}</p>
+                          <p className="text-sm text-gray-500">{account.zaloName && account.zaloName !== account.displayName ? account.zaloName : ''}</p>
                         </div>
                         {(account.isDefault || account.is_default) && (
                           <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">

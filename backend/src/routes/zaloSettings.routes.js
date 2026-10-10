@@ -3,13 +3,23 @@ import { body, param, query } from 'express-validator';
 import authMiddleware from '../middleware/auth.middleware.js';
 import handleValidationErrors from '../middleware/validate.middleware.js';
 import zaloSettingsController from '../controllers/zaloSettings.controller.js';
-import { requirePermission, requireActivePlan, requirePasswordChange, requirePhone } from '../middleware/authorization.middleware.js';
+import { requirePermission, requireAnyPermission, requireActivePlan, requirePasswordChange, requirePhone } from '../middleware/authorization.middleware.js';
 
 const router = express.Router();
 router.use(authMiddleware);
 router.use(requirePasswordChange);
 router.use(requirePhone);
 router.use(requireActivePlan);
+
+// Danh sách tối thiểu để CHỌN tài khoản gửi (trình dựng chiến dịch + Gửi nhanh). Đặt TRƯỚC cổng `zalo_settings` toàn
+// router: nhân viên chỉ có `campaigns_create` vẫn đọc được — nhưng chỉ tài khoản được giao (lọc trong controller) và chỉ
+// trường tối thiểu. Không quyền nào trong hai quyền → 403 như cũ.
+router.get(
+  '/accounts/selectable',
+  requireAnyPermission(['zalo_settings', 'campaigns_create']),
+  zaloSettingsController.getSelectableAccounts.bind(zaloSettingsController)
+);
+
 router.use(requirePermission('zalo_settings'));
 
 // Get accounts

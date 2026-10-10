@@ -1781,6 +1781,60 @@ class ZaloSettingsController {
   }
 
   /**
+   * Danh sách TỐI THIỂU tài khoản Zalo để chọn người gửi (ô chọn ở node Zalo của trình dựng chiến dịch + Gửi nhanh).
+   * Gác bằng `zalo_settings` HOẶC `campaigns_create` (xem route) và lọc qua việc giao như getAccounts: nhân viên chỉ thấy
+   * tài khoản được giao (0 tài khoản → items rỗng, KHÔNG 403). Chỉ trả trường cần để chọn — không ghi chú, giới hạn,
+   * tên người tạo, SĐT/uid Zalo; và không bao giờ cookie/imei/session.
+   *
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
+   */
+  async getSelectableAccounts(req, res) {
+    try {
+      const ctx = getWorkspaceContext(req.user);
+      const { workspaceOwnerId: userId } = ctx;
+      const isAdmin = isAdminRole(req.user?.role);
+      const accessibleIds = await getAccessibleZaloAccountIds(ctx);
+      const rows = await zaloSettingRepository.findAccountsList(isAdmin, userId, accessibleIds);
+
+      const disconnectedIds = new Set();
+      const ownerIds = isAdmin
+        ? [...new Set(rows.map((row) => String(row.id_user)))]
+        : [String(userId)];
+      for (const ownerUserId of ownerIds) {
+        const ownerAccounts = isAdmin ? rows.filter((row) => String(row.id_user) === ownerUserId) : rows;
+        campaignZaloSenderService
+          .findAccountsMissingLiveSession({ userId: ownerUserId, accounts: ownerAccounts })
+          .forEach((id) => disconnectedIds.add(String(id)));
+      }
+
+      return res.json({
+        success: true,
+        data: {
+          items: rows.map((row) => ({
+            id: row.id,
+            displayName: row.display_name,
+            zaloName: row.zalo_name || '',
+            status: disconnectedIds.has(String(row.id)) ? 'disconnected' : row.status,
+            isActive: row.is_active,
+            isDefault: row.is_default,
+            isLocked: Boolean(row.is_locked),
+            phoneLookupCooldownUntil: row.phone_lookup_cooldown_until
+              ? new Date(row.phone_lookup_cooldown_until).toISOString()
+              : null,
+          })),
+        },
+      });
+    } catch (error) {
+      if (error?.code === '42P01') {
+        return this.buildMissingTableResponse(res);
+      }
+      console.error('Get selectable zalo accounts error:', error);
+      return res.status(500).json({ success: false, message: 'Không thể tải danh sách tài khoản Zalo' });
+    }
+  }
+
+  /**
    * Xóa tài khoản Zalo theo ID của user hiện tại.
    * Params: { id }.
    * Response: { success, message }.

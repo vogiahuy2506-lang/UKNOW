@@ -6,6 +6,11 @@ const zaloSettingsApiService = {
     return api.get('/zalo/accounts');
   },
 
+  // Danh sách tối thiểu để CHỌN tài khoản gửi (trình dựng chiến dịch, Gửi nhanh); nhân viên chỉ có campaigns_create vẫn gọi được.
+  listSelectableAccounts() {
+    return api.get('/zalo/accounts/selectable');
+  },
+
   deleteAccount(accountId) {
     return api.delete(`/zalo/accounts/${accountId}`);
   },

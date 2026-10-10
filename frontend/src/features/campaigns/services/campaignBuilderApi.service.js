@@ -166,7 +166,7 @@ const campaignBuilderApiService = {
   },
 
   getZaloAccounts(options = {}) {
-    return api.get('/zalo/accounts', options);
+    return api.get('/zalo/accounts/selectable', options);
   },
 
   restoreZaloAccountSession(accountId, options = {}) {
