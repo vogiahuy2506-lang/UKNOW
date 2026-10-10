@@ -190,6 +190,26 @@ const adminNotificationApiService = {
   createTemplate(data) {
     return api.post('/admin/notifications/templates', data);
   },
+
+  // =====================
+  // Cau hinh kenh theo su kien (chuong / email) — /api/admin/notification-events
+  // =====================
+
+  /**
+   * Danh muc su kien + cau hinh hieu luc: { success, data: [{ key, label, labelEn, description, audience,
+   * defaults, catalogUserCanDisableEmail, settings: { inAppEnabled, emailEnabled, userCanDisableEmail, isDefault, ... } }] }
+   */
+  getNotificationEvents() {
+    return api.get('/admin/notification-events');
+  },
+
+  /**
+   * Luu cau hinh MOT su kien. Body: { inAppEnabled, emailEnabled, userCanDisableEmail } (moi truong la boolean, thieu thi giu nguyen).
+   * Tra ve muc sau khi cap nhat.
+   */
+  updateNotificationEvent(eventType, body) {
+    return api.put(`/admin/notification-events/${encodeURIComponent(eventType)}`, body);
+  },
 };
 
 export default adminNotificationApiService;

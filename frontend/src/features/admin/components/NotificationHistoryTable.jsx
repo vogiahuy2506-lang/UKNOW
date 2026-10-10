@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { FaTrash, FaEye, FaPaperPlane, FaClock, FaFilter, FaEnvelope, FaCopy, FaRedo, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import { HiOutlineMail, HiOutlineBell, HiOutlineClock, HiOutlineCheck, HiOutlineX } from 'react-icons/hi';
 import { TYPE_CONFIG } from './NotificationTypeSelector';
+import { useI18n } from '../../../i18n';
+import { channelsOfNotification } from '../utils/notificationChannels.util';
 
 const STATUS_CONFIG = {
   draft: { color: '#6b7280', bg: 'bg-gray-100', label: 'Nháp', icon: HiOutlineClock },
@@ -26,6 +28,7 @@ export default function NotificationHistoryTable({
   onSchedule,
   onDelete
 }) {
+  const { t } = useI18n();
   const [filterStatus, setFilterStatus] = useState('');
 
   const filteredNotifications = filterStatus
@@ -147,6 +150,19 @@ export default function NotificationHistoryTable({
                             {notification.title_en}
                           </p>
                         )}
+                        <div className="mt-1 flex flex-wrap gap-1" data-testid={`channel-chips-${notification.id}`}>
+                          {channelsOfNotification(notification).map((channel) => (
+                            <span
+                              key={channel}
+                              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                                channel === 'email' ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'
+                              }`}
+                            >
+                              {channel === 'email' ? <HiOutlineMail className="h-3 w-3" /> : <HiOutlineBell className="h-3 w-3" />}
+                              {channel === 'email' ? t('notificationCenter.channels.chipEmail') : t('notificationCenter.channels.chipInApp')}
+                            </span>
+                          ))}
+                        </div>
                       </td>
                       <td className="px-5 py-4">
                         <span
@@ -165,6 +181,11 @@ export default function NotificationHistoryTable({
                           Gửi: {notification.sent_count || 0}
                           {notification.open_rate > 0 && ` | Mở: ${notification.open_rate}%`}
                         </p>
+                        {channelsOfNotification(notification).includes('in_app') && (
+                          <p className="text-xs font-medium text-amber-700">
+                            {t('notificationCenter.channels.inAppCount', { count: notification.in_app_count || 0 })}
+                          </p>
+                        )}
                       </td>
                       <td className="px-5 py-4">
                         <p className="text-sm text-gray-600">

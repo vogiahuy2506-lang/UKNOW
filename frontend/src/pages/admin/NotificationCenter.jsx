@@ -19,6 +19,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
+  HiOutlineAdjustments,
   HiOutlineClock,
   HiOutlineCode,
   HiOutlineEye,
@@ -34,6 +35,12 @@ import PageContainer from '../../components/common/PageContainer';
 import { FaBell, FaClock } from 'react-icons/fa';
 import adminNotificationApiService from '../../features/admin/services/adminNotificationApi.service';
 import {
+  NOTIFICATION_CHANNEL_ORDER,
+  defaultChannelsFromSettings,
+  disabledChannelsFromSettings,
+  isValidBroadcastLink,
+} from '../../features/admin/utils/notificationChannels.util';
+import {
   renderFreeformPreview,
   TYPE_TEMPLATES,
 } from '../../features/admin/utils/notificationTemplates.util';
@@ -44,8 +51,11 @@ import {
   EmailPreviewModal,
   EmailLogsModal,
   SaveAsTemplateModal,
+  NotificationChannelSelector,
+  NotificationEventSettingsPanel,
 } from '../../features/admin/components';
 import { useAuthStore } from '../../stores/authStore.js';
+import { useI18n } from '../../i18n';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -55,6 +65,7 @@ const TABS = [
   { id: 'history', label: 'Lịch sử chiến dịch', icon: HiOutlineMailOpen },
   { id: 'templates', label: 'Soạn mẫu', icon: HiOutlineCode },
   { id: 'send', label: 'Chiến dịch mới', icon: HiOutlinePaperAirplane },
+  { id: 'events', labelKey: 'notificationCenter.tabs.eventConfig', icon: HiOutlineAdjustments },
 ];
 
 // ---------------------------------------------------------------------------
@@ -72,7 +83,7 @@ const formatDateTime = (value) => {
   });
 };
 
-function buildPayloadFromHtml({ subject, bodyHtml, type, targeting, schedule }) {
+function buildPayloadFromHtml({ subject, bodyHtml, type, targeting, schedule, channels, link }) {
   // Map từ form "Mẫu email" (bodyHtml = HTML admin soạn) sang payload BE.
   // QUAN TRỌNG (19/09):
   //  - `message` = text thuần (BE dùng cho email client text-mode fallback).
@@ -87,6 +98,9 @@ function buildPayloadFromHtml({ subject, bodyHtml, type, targeting, schedule }) 
     message: html ? htmlToPlainText(html) : '',
     message_en: '',
     html_content: html || null,
+    // Kênh gửi lúc này (email / chuông). Liên kết chỉ có nghĩa với chuông: backend đọc `metadata.link`.
+    channels,
+    ...(channels.includes('in_app') && String(link || '').trim() ? { metadata: { link: String(link).trim() } } : {}),
     target_roles: targeting.roles,
     target_plans: targeting.plans,
     target_statuses: targeting.statuses,
@@ -299,8 +313,13 @@ function LivePreview({ html, subject, templateKey }) {
 const VARIABLES = ['user_name', 'user_email', 'user_plan', 'product_name', 'current_date', 'dashboard_url', 'support_email'];
 
 export default function NotificationCenter() {
+  const { t } = useI18n();
   const [activeTab, setActiveTab] = useState('history');
   const [busy, setBusy] = useState(false);
+  const tabs = useMemo(
+    () => TABS.map((tab) => ({ ...tab, label: tab.labelKey ? t(tab.labelKey) : tab.label })),
+    [t],
+  );
 
   // Tab "Mẫu email" state
   const [typeKey, setTypeKey] = useState('announcement');
@@ -319,6 +338,13 @@ export default function NotificationCenter() {
   const [sendTypeKey, setSendTypeKey] = useState('announcement');
   const [targeting, setTargeting] = useState({});
   const [schedule, setSchedule] = useState({ schedule_type: 'now' });
+  // Kênh gửi của bản tin (email / chuông). Mặc định lấy theo cấu hình sự kiện `admin_broadcast` (tab "Cấu hình kênh"),
+  // cho tới khi admin tự bấm chọn.
+  const [channels, setChannels] = useState([...NOTIFICATION_CHANNEL_ORDER]);
+  const [broadcastLink, setBroadcastLink] = useState('');
+  // Kênh đang tắt trong tab "Cấu hình kênh": checkbox bị khoá, backend cũng trả 400 nếu cố chọn.
+  const [disabledChannels, setDisabledChannels] = useState([]);
+  const channelsTouchedRef = useRef(false);
 
   // History
   const [notifications, setNotifications] = useState([]);
@@ -373,6 +399,38 @@ export default function NotificationCenter() {
   useEffect(() => {
     loadNotifications();
   }, [loadNotifications]);
+
+  // Kênh mặc định cho bản tin mới theo cấu hình `admin_broadcast`. Lỗi đọc cấu hình → giữ mặc định cả hai kênh.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await adminNotificationApiService.getNotificationEvents();
+        if (cancelled || channelsTouchedRef.current || !response.data?.success) return;
+        const entry = (response.data.data || []).find((item) => item.key === 'admin_broadcast');
+        setDisabledChannels(disabledChannelsFromSettings(entry?.settings));
+        setChannels(defaultChannelsFromSettings(entry?.settings));
+      } catch (error) {
+        console.error('[NotificationCenter] load admin_broadcast channel defaults error:', error);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Admin vừa lưu cấu hình `admin_broadcast` ở tab "Cấu hình kênh": cập nhật kênh được phép và bỏ chọn kênh vừa tắt.
+  const onEventSaved = useCallback((entry) => {
+    if (entry?.key !== 'admin_broadcast') return;
+    const off = disabledChannelsFromSettings(entry.settings);
+    setDisabledChannels(off);
+    setChannels((current) => current.filter((channel) => !off.includes(channel)));
+  }, []);
+
+  const onChannelsChange = useCallback((next) => {
+    channelsTouchedRef.current = true;
+    setChannels(next);
+  }, []);
 
   // Load danh sach mau da luu (cho dropdown o tab "Gui")
   const loadSavedTemplates = useCallback(async () => {
@@ -487,10 +545,20 @@ export default function NotificationCenter() {
       type: sendTypeKey,
       targeting,
       schedule,
+      channels,
+      link: broadcastLink,
     });
     const validationError = validatePayload(payload);
     if (validationError) {
       toast.error(validationError);
+      return;
+    }
+    if (channels.length === 0) {
+      toast.error(t('notificationCenter.channels.noneSelected'));
+      return;
+    }
+    if (channels.includes('in_app') && !isValidBroadcastLink(broadcastLink)) {
+      toast.error(t('notificationCenter.channels.linkInvalid'));
       return;
     }
 
@@ -537,7 +605,7 @@ export default function NotificationCenter() {
     } finally {
       setBusy(false);
     }
-  }, [sendTypeKey, targeting, schedule, drafts, loadNotifications]);
+  }, [sendTypeKey, targeting, schedule, drafts, channels, broadcastLink, loadNotifications, t]);
 
   const sendOne = useCallback(
     async (notification) => {
@@ -579,6 +647,8 @@ export default function NotificationCenter() {
           target_emails: notification.target_emails,
           registered_before: notification.registered_before,
           registered_after: notification.registered_after,
+          channels: notification.channels,
+          metadata: notification.metadata,
         });
         if (response.data?.success) {
           toast.success(response.data.message);
@@ -666,7 +736,7 @@ export default function NotificationCenter() {
     >
 
       {/* Tabs */}
-      <PillTabs active={activeTab} onChange={setActiveTab} tabs={TABS} />
+      <PillTabs active={activeTab} onChange={setActiveTab} tabs={tabs} />
 
       {/* Tab content */}
       {activeTab === 'history' ? (
@@ -863,6 +933,17 @@ export default function NotificationCenter() {
             </section>
 
             <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              <NotificationChannelSelector
+                value={channels}
+                onChange={onChannelsChange}
+                link={broadcastLink}
+                onLinkChange={setBroadcastLink}
+                type={sendTypeKey}
+                disabledChannels={disabledChannels}
+              />
+            </section>
+
+            <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
               <header>
                 <h2 className="flex items-center gap-2 font-semibold text-slate-900">
                   <HiOutlineUserGroup className="h-5 w-5 text-orange-500" />
@@ -936,6 +1017,14 @@ export default function NotificationCenter() {
               <ul className="mt-2 list-disc space-y-1 pl-5 text-xs">
                 <li>Dạng: <strong>{TYPE_TEMPLATES[sendTypeKey]?.label || sendTypeKey}</strong></li>
                 <li>
+                  {t('notificationCenter.channels.summaryLabel')}:{' '}
+                  <strong>
+                    {channels.length
+                      ? channels.map((channel) => t(channel === 'email' ? 'notificationCenter.channels.chipEmail' : 'notificationCenter.channels.chipInApp')).join(' + ')
+                      : '—'}
+                  </strong>
+                </li>
+                <li>
                   Thời gian:{' '}
                   <strong>
                     {schedule.schedule_type === 'now'
@@ -950,6 +1039,8 @@ export default function NotificationCenter() {
           </div>
         </div>
       ) : null}
+
+      {activeTab === 'events' ? <NotificationEventSettingsPanel onEntrySaved={onEventSaved} /> : null}
 
       {/* Modals */}
       <EmailPreviewModal

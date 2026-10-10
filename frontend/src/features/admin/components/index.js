@@ -8,3 +8,5 @@ export { default as NotificationHistoryTable, STATUS_CONFIG } from './Notificati
 export { default as EmailPreviewModal } from './EmailPreviewModal';
 export { default as EmailLogsModal } from './EmailLogsModal';
 export { default as SaveAsTemplateModal } from './SaveAsTemplateModal';
+export { default as NotificationChannelSelector } from './NotificationChannelSelector';
+export { default as NotificationEventSettingsPanel } from './NotificationEventSettingsPanel';
