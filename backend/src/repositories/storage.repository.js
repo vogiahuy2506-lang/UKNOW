@@ -3,6 +3,13 @@ import { EFFECTIVE_PLAN_ID_SQL } from '../utils/billingCycle.util.js';
 
 export const QUOTA_USAGE_STATES = ['active', 'temp', 'cleanup_pending'];
 
+/**
+ * Trạng thái đối soát quét. Mảng RIÊNG, không gộp vào QUOTA_USAGE_STATES (hằng đó còn dùng để tính dung lượng).
+ * Thêm 'orphaned' để đối soát tự lành: dòng bị đánh dấu mất nhầm (vd mất quyền GCS) sẽ được đưa về active
+ * khi tệp còn trên kho.
+ */
+export const RECONCILE_SCAN_STATES = [...QUOTA_USAGE_STATES, 'orphaned'];
+
 export async function acquireStorageQuotaLock(client, ownerUserId) {
   await client.query(
     `SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))`,
@@ -92,9 +99,10 @@ export async function listStorageObjectsForReconcile({ afterId = 0, limit = 200 
        FROM storage_objects
       WHERE id > $1
         AND state = ANY($2::varchar[])
+        AND (state <> 'orphaned' OR storage_key IS NOT NULL)
       ORDER BY id ASC
       LIMIT $3`,
-    [afterId, QUOTA_USAGE_STATES, limit]
+    [afterId, RECONCILE_SCAN_STATES, limit]
   );
   return rows;
 }
@@ -116,6 +124,18 @@ export async function updateStorageObjectSize(id, sizeBytes, queryable = db) {
       WHERE id = $1
       RETURNING *`,
     [id, sizeBytes]
+  );
+  return rows[0] || null;
+}
+
+/** Đưa dòng 'orphaned' về 'active' (tệp còn trên kho). Chỉ đụng dòng đang orphaned. */
+export async function restoreOrphanedStorageObject(id, queryable = db) {
+  const { rows } = await queryable.query(
+    `UPDATE storage_objects
+        SET state = 'active', updated_at = NOW()
+      WHERE id = $1 AND state = 'orphaned' AND storage_key IS NOT NULL
+      RETURNING *`,
+    [id]
   );
   return rows[0] || null;
 }

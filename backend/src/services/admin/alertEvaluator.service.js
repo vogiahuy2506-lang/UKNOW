@@ -198,6 +198,22 @@ async function evaluateRule(rule) {
       }
       return null;
     }
+    case 'storage_reconcile_anomaly': {
+      const jobCode = config.jobCode || 'storage_objects_reconcile';
+      const withinHours = Number(config.withinHours) || 26;
+      const m = await alertRepo.metricLatestStorageReconcile(jobCode, rule.code, withinHours);
+      if (!m.found) return null;
+      const parts = [];
+      if (m.failedRun) parts.push('lượt đối soát hỏng hẳn');
+      if (m.orphanBrakeTripped) parts.push(`phanh hàng loạt đã chặn ${m.orphanCandidates} tệp có vẻ mất`);
+      if (m.inspectErrors > 0) parts.push(`${m.inspectErrors} tệp không kiểm được`);
+      if (parts.length === 0) return null;
+      return {
+        measuredValue: m.inspectErrors + m.orphanCandidates + (m.failedRun ? 1 : 0),
+        message: `Đối soát kho tệp bất thường: ${parts.join(', ')} — kiểm role IAM của service account GCS, GCS_BUCKET và khoá truy cập`,
+        payload: m,
+      };
+    }
     case 'einvoice_series_low': {
       const jobCode = config.jobCode || 'einvoice_series_check';
       const m = await alertRepo.metricLatestEinvoiceSeries(jobCode);

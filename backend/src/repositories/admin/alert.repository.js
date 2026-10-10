@@ -396,6 +396,55 @@ export async function metricLatestAffiliateClosingErrors(
 }
 
 /**
+ * Kết quả đối soát kho tệp (cron storage_objects_reconcile) gần nhất trong `withinHours` giờ.
+ *
+ * Chỉ đọc lượt đã kết thúc (`finished_at IS NOT NULL`) và chỉ lượt kết thúc SAU lần bắn gần nhất của chính luật này:
+ * cron chạy một lần/đêm, nếu cứ đọc "lượt gần nhất" thì cooldown sẽ gửi lại email nhiều lần cho cùng một lượt.
+ * Đọc thẳng `result.orphanBrakeTripped` / `result.inspectErrors`: lượt này vẫn ghi status success/noop dù
+ * không kiểm được tệp nào, nên status một mình không lộ sự cố (bài học 05–08/10/2026: mất role IAM của GCS).
+ *
+ * @param {string} [jobCode]
+ * @param {string} [ruleCode]
+ * @param {number} [withinHours]
+ * @returns {Promise<{ found: boolean, failedRun: boolean, orphanBrakeTripped: boolean, orphanCandidates: number, inspectErrors: number, result: object|null }>}
+ */
+export async function metricLatestStorageReconcile(
+  jobCode = 'storage_objects_reconcile',
+  ruleCode = 'storage_reconcile_anomaly',
+  withinHours = 26
+) {
+  const { rows } = await db.query(
+    `SELECT status, result
+     FROM cron_job_runs
+     WHERE job_code = $1
+       AND finished_at IS NOT NULL
+       AND finished_at > NOW() - make_interval(hours => $3::int)
+       AND finished_at > COALESCE(
+         (SELECT MAX(e.fired_at)
+            FROM alert_events e
+            JOIN alert_rules r ON r.id = e.rule_id
+           WHERE r.code = $2),
+         '-infinity'::timestamptz
+       )
+     ORDER BY started_at DESC
+     LIMIT 1`,
+    [jobCode, ruleCode, withinHours]
+  );
+  if (!rows.length) {
+    return { found: false, failedRun: false, orphanBrakeTripped: false, orphanCandidates: 0, inspectErrors: 0, result: null };
+  }
+  const result = rows[0].result || {};
+  return {
+    found: true,
+    failedRun: rows[0].status === 'failure',
+    orphanBrakeTripped: result.orphanBrakeTripped === true,
+    orphanCandidates: Number(result.orphanCandidates ?? 0) || 0,
+    inspectErrors: Number(result.inspectErrors ?? 0) || 0,
+    result,
+  };
+}
+
+/**
  * Latest einvoice series check result (series remaining count & year mismatch).
  *
  * CHỈ đọc run đã kết thúc (`finished_at IS NOT NULL`). `recordRun` chèn dòng

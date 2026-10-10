@@ -1488,6 +1488,7 @@ export const initScheduler = () => {
         console.log(
           `[Scheduler] Storage reconcile: processed=${summary.processed} `
           + `orphaned=${summary.orphanedCount} drift=${summary.driftCount} `
+          + `inspectErrors=${summary.inspectErrors} restored=${summary.restoredCount} brake=${summary.orphanBrakeTripped} `
           + `cleanup=${summary.cleanupRetryDeleted} untrackedDurableBytes=${summary.untrackedDurableBytes} `
           + `durableDeleteEnabled=${summary.untrackedDurableDeleteEnabled} `
           + `durableDeleteCandidates=${summary.untrackedDurableDeleteCandidateCount}`
@@ -1496,6 +1497,7 @@ export const initScheduler = () => {
           ...summary,
           synced: summary.orphanedCount
             + summary.driftCount
+            + summary.restoredCount
             + summary.cleanupRetryDeleted
             + summary.expiredTempDeleted
             + summary.untrackedDeletedCount,

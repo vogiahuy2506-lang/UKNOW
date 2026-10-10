@@ -10,6 +10,7 @@ import {
   markStorageObjectCleanupPending,
   markStorageObjectDeleted,
   markStorageObjectOrphaned,
+  restoreOrphanedStorageObject,
   updateStorageObjectSize,
 } from '../../repositories/storage.repository.js';
 import { normalizeStorageKey } from '../../utils/storageKey.util.js';
@@ -23,6 +24,9 @@ import { getStorageBackend } from './storageBackend.js';
 export const STORAGE_RECONCILE_JOB_CODE = 'storage_objects_reconcile';
 const LIVE_STATES = new Set(['active', 'temp', 'cleanup_pending']);
 const DEFAULT_UNTRACKED_REPORT_LIMIT = 500;
+const DEFAULT_ORPHAN_BRAKE_MIN = 20;
+const DEFAULT_ORPHAN_BRAKE_RATIO = 0.1;
+const INSPECT_ERROR_SAMPLE_LIMIT = 5;
 
 function isRemoteBackend() {
   const backend = getStorageBackend();
@@ -32,6 +36,19 @@ function isRemoteBackend() {
 function positiveInteger(raw, fallback) {
   const parsed = Number.parseInt(raw, 10);
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function positiveRatio(raw, fallback) {
+  const parsed = Number.parseFloat(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+/** Kiểm một dòng thất bại (mất quyền, mạng, đĩa...) -> KHÔNG kết luận gì về tệp, chỉ ghi nhận để cảnh báo. */
+function recordInspectError(metrics, row, error) {
+  metrics.inspectErrors += 1;
+  if (metrics.inspectErrorSamples.length < INSPECT_ERROR_SAMPLE_LIMIT) {
+    metrics.inspectErrorSamples.push({ id: row.id, code: error?.code || error?.name || 'UNKNOWN' });
+  }
 }
 
 function envFlagEnabled(raw) {
@@ -176,9 +193,15 @@ async function markMissingObject(row) {
   });
 }
 
-async function reconcileSize(row, roots) {
+async function reconcileSize(row, roots, metrics) {
   const currentSize = Number(row.size_bytes) || 0;
-  const initial = await inspectObject(row, roots);
+  let initial;
+  try {
+    initial = await inspectObject(row, roots);
+  } catch (error) {
+    recordInspectError(metrics, row, error);
+    return null;
+  }
   if (initial.invalid || initial.missing || initial.sizeBytes === currentSize) return null;
 
   return withTransaction(async (client) => {
@@ -189,7 +212,13 @@ async function reconcileSize(row, roots) {
     if (!current || !LIVE_STATES.has(current.state)) return null;
     if (current.storage_key !== row.storage_key || current.temp_key !== row.temp_key) return null;
 
-    const inspected = await inspectObject(current, roots);
+    let inspected;
+    try {
+      inspected = await inspectObject(current, roots);
+    } catch (error) {
+      recordInspectError(metrics, row, error);
+      return null;
+    }
     if (inspected.invalid || inspected.missing) return null;
     const previousSize = Number(current.size_bytes) || 0;
     if (inspected.sizeBytes === previousSize) return null;
@@ -199,7 +228,12 @@ async function reconcileSize(row, roots) {
   });
 }
 
-async function processLedgerRow(row, roots, metrics, now) {
+async function processLedgerRow(row, roots, metrics, now, missingRows) {
+  if (row.state === 'orphaned') {
+    await healOrphanedRow(row, roots, metrics);
+    return;
+  }
+
   if (row.state === 'cleanup_pending') {
     metrics.cleanupRetryScanned += 1;
     try {
@@ -248,12 +282,75 @@ async function processLedgerRow(row, roots, metrics, now) {
     return;
   }
 
-  const inspected = await inspectObject(row, roots);
+  let inspected;
+  try {
+    inspected = await inspectObject(row, roots);
+  } catch (error) {
+    recordInspectError(metrics, row, error);
+    return;
+  }
   if (inspected.invalid) {
     metrics.invalidKeyRows += 1;
     return;
   }
   if (inspected.missing) {
+    // Chưa đánh dấu ngay: gom lại, sau vòng lặp mới quyết định (phanh hàng loạt).
+    missingRows.push(row);
+    return;
+  }
+
+  await applyDrift(row, roots, metrics);
+}
+
+async function applyDrift(row, roots, metrics) {
+  const drift = await reconcileSize(row, roots, metrics);
+  if (drift) {
+    metrics.driftCount += 1;
+    metrics.driftDeltaBytes += drift.after - drift.before;
+  }
+}
+
+/**
+ * Dòng 'orphaned' còn tệp trên kho -> về 'active' (tự lành sau sự cố quyền/mạng).
+ * Vẫn 404 -> giữ nguyên. Lỗi kiểm -> ghi nhận, không đổi gì.
+ */
+async function healOrphanedRow(row, roots, metrics) {
+  let inspected;
+  try {
+    inspected = await inspectObject(row, roots);
+  } catch (error) {
+    recordInspectError(metrics, row, error);
+    return;
+  }
+  if (inspected.invalid || inspected.missing) return;
+  const restored = await restoreOrphanedStorageObject(row.id);
+  if (!restored) return;
+  metrics.restoredCount += 1;
+  console.warn('[StorageReconcile] Đã khôi phục dòng orphaned vì tệp vẫn còn trên kho', {
+    storageObjectId: row.id,
+    storageKey: row.storage_key,
+  });
+  await applyDrift({ ...row, state: 'active' }, roots, metrics);
+}
+
+/**
+ * Phanh hàng loạt: quá nhiều dòng "mất" cùng lúc gần như chắc chắn là sự cố hạ tầng (đặt sai GCS_BUCKET,
+ * khoá trỏ sang project khác -> GCS trả 404 thật cho mọi tệp), không phải người dùng cùng mất tệp.
+ */
+async function markMissingRows(missingRows, metrics, { processed, brakeMin, brakeRatio }) {
+  if (missingRows.length === 0) return;
+  const limit = Math.max(brakeMin, Math.ceil(processed * brakeRatio));
+  if (missingRows.length > limit) {
+    metrics.orphanBrakeTripped = true;
+    metrics.orphanCandidates = missingRows.length;
+    console.error(
+      `[StorageReconcile] PHANH: ${missingRows.length}/${processed} dòng có vẻ mất tệp (ngưỡng ${limit}) `
+      + '-> KHÔNG đánh dấu orphaned dòng nào. Kiểm GCS_BUCKET / khoá service account / role IAM.',
+      { sampleIds: missingRows.slice(0, 10).map((r) => r.id) }
+    );
+    return;
+  }
+  for (const row of missingRows) {
     if (await markMissingObject(row)) {
       metrics.orphanedCount += 1;
       metrics.orphanedBytes += Number(row.size_bytes) || 0;
@@ -263,13 +360,6 @@ async function processLedgerRow(row, roots, metrics, now) {
         referenceId: row.reference_id || null,
       });
     }
-    return;
-  }
-
-  const drift = await reconcileSize(row, roots);
-  if (drift) {
-    metrics.driftCount += 1;
-    metrics.driftDeltaBytes += drift.after - drift.before;
   }
 }
 
@@ -410,6 +500,11 @@ function createMetrics(deleteUntrackedDurable) {
     expiredTempFailed: 0,
     expiredTempBytes: 0,
     invalidKeyRows: 0,
+    inspectErrors: 0,
+    inspectErrorSamples: [],
+    restoredCount: 0,
+    orphanBrakeTripped: false,
+    orphanCandidates: 0,
     untrackedCount: 0,
     untrackedBytes: 0,
     untrackedRetainedCount: 0,
@@ -436,24 +531,33 @@ export async function reconcileStorageObjects({
     process.env.STORAGE_RECONCILE_UNTRACKED_REPORT_LIMIT,
     DEFAULT_UNTRACKED_REPORT_LIMIT
   ),
+  orphanBrakeMin = positiveInteger(process.env.STORAGE_RECONCILE_ORPHAN_BRAKE_MIN, DEFAULT_ORPHAN_BRAKE_MIN),
+  orphanBrakeRatio = positiveRatio(process.env.STORAGE_RECONCILE_ORPHAN_BRAKE_RATIO, DEFAULT_ORPHAN_BRAKE_RATIO),
   roots: rootOverrides = {},
   now = new Date(),
 } = {}) {
   const roots = resolveRoots(rootOverrides);
   const metrics = createMetrics(deleteUntrackedDurable);
   let afterId = 0;
+  const missingRows = [];
 
   while (true) {
     const rows = await listStorageObjectsForReconcile({ afterId, limit: batchSize });
     if (rows.length === 0) break;
     metrics.batches += 1;
     for (const row of rows) {
-      await processLedgerRow(row, roots, metrics, now);
+      await processLedgerRow(row, roots, metrics, now, missingRows);
       metrics.processed += 1;
     }
     afterId = rows[rows.length - 1].id;
     if (rows.length < batchSize) break;
   }
+
+  await markMissingRows(missingRows, metrics, {
+    processed: metrics.processed,
+    brakeMin: orphanBrakeMin,
+    brakeRatio: orphanBrakeRatio,
+  });
 
   const referenceIndex = await buildStorageReferenceIndex();
   await reconcileUntrackedFiles({

@@ -2590,6 +2590,17 @@ VALUES
   '{}'::jsonb
 );
 
+-- migration 287 (rule: storage_reconcile_anomaly)
+INSERT INTO alert_rules (code, name, description, threshold_value, window_minutes, channel, severity, cooldown_minutes, config)
+VALUES
+(
+  'storage_reconcile_anomaly',
+  'Doi soat kho tep bat thuong',
+  'Cron doi soat kho tep (storage_objects_reconcile) gan nhat co tep khong kiem duoc (loi quyen/mang), phanh hang loat da chan danh dau mat tep, hoac chay hong - kiem tra role IAM cua service account GCS',
+  1, NULL, 'email', 'critical', 360,
+  '{"jobCode": "storage_objects_reconcile", "withinHours": 26}'::jsonb
+);
+
 CREATE TABLE alert_events (
   id              BIGSERIAL PRIMARY KEY,
   rule_id         INT NOT NULL REFERENCES alert_rules(id) ON DELETE CASCADE,

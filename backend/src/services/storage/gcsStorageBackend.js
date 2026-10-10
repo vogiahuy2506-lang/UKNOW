@@ -1,5 +1,16 @@
 import { Storage } from '@google-cloud/storage';
 import { resolveFileServePolicy } from '../../utils/fileServePolicy.util.js';
+import {
+  StorageNotFoundError,
+  StorageUnavailableError,
+  STORAGE_UNAVAILABLE_MESSAGE,
+  isGcsNotFound,
+} from './storageErrors.js';
+
+/** Ghi lỗi gốc (có thể chứa tên service account/bucket) vào log server, KHÔNG đưa cho người dùng. */
+function logGcsError(op, key, err) {
+  console.error(`[GcsStorageBackend] ${op} thất bại (${key}):`, err?.code, err?.message);
+}
 
 export class GcsStorageBackend {
   constructor({
@@ -44,10 +55,15 @@ export class GcsStorageBackend {
     }
     const file = this.bucket.file(cleanKey);
     const content = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer, options.encoding || 'utf8');
-    await file.save(content, {
-      contentType: options.contentType || 'application/octet-stream',
-      resumable: false,
-    });
+    try {
+      await file.save(content, {
+        contentType: options.contentType || 'application/octet-stream',
+        resumable: false,
+      });
+    } catch (err) {
+      logGcsError('put', cleanKey, err);
+      throw new StorageUnavailableError(err);
+    }
   }
 
   /**
@@ -61,8 +77,14 @@ export class GcsStorageBackend {
       throw new Error(`Invalid storage key for GCS: ${key}`);
     }
     const file = this.bucket.file(cleanKey);
-    const [buf] = await file.download();
-    return buf;
+    try {
+      const [buf] = await file.download();
+      return buf;
+    } catch (err) {
+      if (isGcsNotFound(err)) throw new StorageNotFoundError(err);
+      logGcsError('getBuffer', cleanKey, err);
+      throw new StorageUnavailableError(err);
+    }
   }
 
   /**
@@ -77,8 +99,10 @@ export class GcsStorageBackend {
       const file = this.bucket.file(cleanKey);
       const [metadata] = await file.getMetadata();
       return metadata;
-    } catch {
-      return null;
+    } catch (err) {
+      if (isGcsNotFound(err)) return null;
+      logGcsError('getMetadata', cleanKey, err);
+      throw new StorageUnavailableError(err);
     }
   }
 
@@ -94,8 +118,10 @@ export class GcsStorageBackend {
       const file = this.bucket.file(cleanKey);
       const [exists] = await file.exists();
       return Boolean(exists);
-    } catch {
-      return false;
+    } catch (err) {
+      if (isGcsNotFound(err)) return false;
+      logGcsError('exists', cleanKey, err);
+      throw new StorageUnavailableError(err);
     }
   }
 
@@ -136,7 +162,22 @@ export class GcsStorageBackend {
     if (!cleanKey) return false;
 
     const file = this.bucket.file(cleanKey);
-    const [exists] = await file.exists().catch(() => [false]);
+    let exists;
+    try {
+      [exists] = await file.exists();
+    } catch (err) {
+      if (isGcsNotFound(err)) return false;
+      logGcsError('stream', cleanKey, err);
+      // Kho không truy cập được KHÁC với "tệp không có": trả 503 chung chung, không lộ message gốc của Google.
+      if (!res.headersSent) {
+        res.status(503).json({
+          success: false,
+          message: STORAGE_UNAVAILABLE_MESSAGE,
+          code: 'STORAGE_UNAVAILABLE',
+        });
+      }
+      return true;
+    }
     if (!exists) return false;
 
     const policy = resolveFileServePolicy({ mimeType, storageKey: cleanKey, fileName, preview });
@@ -179,7 +220,7 @@ export class GcsStorageBackend {
       await this.delete(testKey);
       return true;
     } catch (err) {
-      console.error('[GcsStorageBackend] Healthcheck failed:', err.message);
+      console.error('[GcsStorageBackend] Healthcheck failed:', err.cause?.message || err.message);
       return false;
     }
   }

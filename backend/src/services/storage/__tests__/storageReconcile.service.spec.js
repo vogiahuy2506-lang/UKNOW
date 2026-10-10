@@ -15,6 +15,7 @@ const listTrackedStorageKeys = jest.fn();
 const markStorageObjectCleanupPending = jest.fn();
 const markStorageObjectDeleted = jest.fn();
 const markStorageObjectOrphaned = jest.fn();
+const restoreOrphanedStorageObject = jest.fn();
 const updateStorageObjectSize = jest.fn();
 const buildStorageReferenceIndex = jest.fn();
 const getIndexedStorageReferences = jest.fn();
@@ -32,6 +33,7 @@ jest.unstable_mockModule('../../../repositories/storage.repository.js', () => ({
   markStorageObjectCleanupPending,
   markStorageObjectDeleted,
   markStorageObjectOrphaned,
+  restoreOrphanedStorageObject,
   updateStorageObjectSize,
 }));
 jest.unstable_mockModule('../storageReference.service.js', () => ({
@@ -41,6 +43,7 @@ jest.unstable_mockModule('../storageReference.service.js', () => ({
 }));
 
 const { reconcileStorageObjects } = await import('../storageReconcile.service.js');
+const { StorageUnavailableError } = await import('../storageErrors.js');
 const {
   setStorageBackendForTest,
   resetStorageBackendForTest,
@@ -333,6 +336,146 @@ describe('storageReconcile.service', () => {
       ]);
       expect(markStorageObjectDeleted).toHaveBeenCalledWith(3);
       expect(metrics.cleanupRetryDeleted).toBe(1);
+    });
+    // ── Mất quyền GCS không phải mất tệp (sự cố 05–08/10/2026: 688 tệp bị đánh dấu orphaned nhầm) ──
+    describe('lỗi quyền/mạng không được tính là tệp mất', () => {
+      const makeRows = (n, startId = 1) => Array.from({ length: n }, (_, i) => ({
+        id: startId + i, pool_type: 'workspace', owner_user_id: 42, state: 'active',
+        storage_key: `uploads/42/f${startId + i}.png`, temp_key: null, size_bytes: 10,
+      }));
+      // Metadata khớp size_bytes (10) để không phát sinh drift; sidecar .txt không có.
+      const healthyMetadata = async (key) => (key.endsWith('.txt') ? null : { size: 10 });
+
+      beforeEach(() => {
+        mockGcsBackend.getMetadata.mockImplementation(healthyMetadata);
+      });
+
+      it('30 dòng active, exists ném 403 cho cả 30 -> 0 dòng đổi state, inspectErrors=30', async () => {
+        const rows = makeRows(30);
+        listStorageObjectsForReconcile.mockResolvedValueOnce(rows);
+        findStorageObjectById.mockImplementation(async (id) => rows.find((r) => r.id === id));
+        mockGcsBackend.exists.mockRejectedValue(new StorageUnavailableError({ code: 403 }));
+
+        const metrics = await reconcileStorageObjects({ roots, batchSize: 500 });
+
+        expect(markStorageObjectOrphaned).not.toHaveBeenCalled();
+        expect(metrics.inspectErrors).toBe(30);
+        expect(metrics.inspectErrorSamples).toHaveLength(5);
+        expect(metrics.inspectErrorSamples[0]).toEqual({ id: 1, code: 'STORAGE_UNAVAILABLE' });
+        expect(metrics.orphanedCount).toBe(0);
+        expect(metrics.orphanBrakeTripped).toBe(false);
+      });
+
+      it('sidecar .txt lỗi 403 -> dòng chính cũng tính là lỗi kiểm, không đổi state', async () => {
+        const rows = makeRows(1);
+        listStorageObjectsForReconcile.mockResolvedValueOnce(rows);
+        findStorageObjectById.mockImplementation(async (id) => rows.find((r) => r.id === id));
+        mockGcsBackend.exists.mockResolvedValue(true);
+        mockGcsBackend.getMetadata.mockImplementation(async (key) => {
+          if (key.endsWith('.txt')) throw new StorageUnavailableError({ code: 403 });
+          return { size: 10 };
+        });
+
+        const metrics = await reconcileStorageObjects({ roots, batchSize: 500 });
+
+        expect(metrics.inspectErrors).toBe(1);
+        expect(markStorageObjectOrphaned).not.toHaveBeenCalled();
+        expect(updateStorageObjectSize).not.toHaveBeenCalled();
+      });
+
+      it('30 dòng active, 25 dòng 404 thật -> phanh: orphanCandidates=25, 0 dòng đổi state', async () => {
+        const rows = makeRows(30);
+        listStorageObjectsForReconcile.mockResolvedValueOnce(rows);
+        findStorageObjectById.mockImplementation(async (id) => rows.find((r) => r.id === id));
+        // 5 dòng đầu còn, 25 dòng sau 404 thật. Ngưỡng = max(20, ceil(30 * 0.1) = 3) = 20; 25 > 20.
+        mockGcsBackend.exists.mockImplementation(async (key) => Number(key.match(/f(\d+)\./)[1]) <= 5);
+
+        const metrics = await reconcileStorageObjects({ roots, batchSize: 500 });
+
+        expect(metrics.orphanBrakeTripped).toBe(true);
+        expect(metrics.orphanCandidates).toBe(25);
+        expect(metrics.orphanedCount).toBe(0);
+        expect(markStorageObjectOrphaned).not.toHaveBeenCalled();
+      });
+
+      it('200 dòng, 3 dòng 404 -> 3 dòng orphaned (dưới ngưỡng max(20, 20))', async () => {
+        const rows = makeRows(200);
+        listStorageObjectsForReconcile.mockResolvedValueOnce(rows);
+        findStorageObjectById.mockImplementation(async (id) => rows.find((r) => r.id === id));
+        mockGcsBackend.exists.mockImplementation(async (key) => ![7, 8, 9].includes(Number(key.match(/f(\d+)\./)[1])));
+
+        const metrics = await reconcileStorageObjects({ roots, batchSize: 500 });
+
+        expect(metrics.orphanBrakeTripped).toBe(false);
+        expect(metrics.orphanedCount).toBe(3);
+        expect(markStorageObjectOrphaned).toHaveBeenCalledTimes(3);
+        expect(metrics.orphanedBytes).toBe(30);
+      });
+
+      it('biên phanh: đúng 20/200 dòng mất vẫn đánh dấu; 21/200 thì phanh', async () => {
+        const rows = makeRows(200);
+        listStorageObjectsForReconcile.mockResolvedValueOnce(rows);
+        findStorageObjectById.mockImplementation(async (id) => rows.find((r) => r.id === id));
+        mockGcsBackend.exists.mockImplementation(async (key) => Number(key.match(/f(\d+)\./)[1]) > 20);
+        const atLimit = await reconcileStorageObjects({ roots, batchSize: 500 });
+        expect(atLimit.orphanBrakeTripped).toBe(false);
+        expect(atLimit.orphanedCount).toBe(20);
+
+        markStorageObjectOrphaned.mockClear();
+        listStorageObjectsForReconcile.mockResolvedValueOnce(rows);
+        mockGcsBackend.exists.mockImplementation(async (key) => Number(key.match(/f(\d+)\./)[1]) > 21);
+        const overLimit = await reconcileStorageObjects({ roots, batchSize: 500 });
+        expect(overLimit.orphanBrakeTripped).toBe(true);
+        expect(overLimit.orphanCandidates).toBe(21);
+        expect(markStorageObjectOrphaned).not.toHaveBeenCalled();
+      });
+
+      it('1 dòng orphaned, tệp có trên kho -> về active, restoredCount=1', async () => {
+        const row = {
+          id: 9, pool_type: 'workspace', owner_user_id: 42, state: 'orphaned',
+          storage_key: 'uploads/42/f9.png', temp_key: null, size_bytes: 10,
+        };
+        listStorageObjectsForReconcile.mockResolvedValueOnce([row]);
+        findStorageObjectById.mockResolvedValue({ ...row, state: 'active' });
+        restoreOrphanedStorageObject.mockResolvedValueOnce({ ...row, state: 'active' });
+        mockGcsBackend.exists.mockResolvedValue(true);
+
+        const metrics = await reconcileStorageObjects({ roots, batchSize: 500 });
+
+        expect(restoreOrphanedStorageObject).toHaveBeenCalledWith(9);
+        expect(metrics.restoredCount).toBe(1);
+        expect(markStorageObjectOrphaned).not.toHaveBeenCalled();
+      });
+
+      it('1 dòng orphaned, 404 -> vẫn orphaned (không khôi phục, không tính vào ứng viên phanh)', async () => {
+        const row = {
+          id: 9, pool_type: 'workspace', owner_user_id: 42, state: 'orphaned',
+          storage_key: 'uploads/42/f9.png', temp_key: null, size_bytes: 10,
+        };
+        listStorageObjectsForReconcile.mockResolvedValueOnce([row]);
+        mockGcsBackend.exists.mockResolvedValue(false);
+
+        const metrics = await reconcileStorageObjects({ roots, batchSize: 500 });
+
+        expect(restoreOrphanedStorageObject).not.toHaveBeenCalled();
+        expect(markStorageObjectOrphaned).not.toHaveBeenCalled();
+        expect(metrics.restoredCount).toBe(0);
+        expect(metrics.orphanCandidates).toBe(0);
+      });
+
+      it('1 dòng orphaned, exists ném 403 -> inspectErrors=1, không khôi phục', async () => {
+        const row = {
+          id: 9, pool_type: 'workspace', owner_user_id: 42, state: 'orphaned',
+          storage_key: 'uploads/42/f9.png', temp_key: null, size_bytes: 10,
+        };
+        listStorageObjectsForReconcile.mockResolvedValueOnce([row]);
+        mockGcsBackend.exists.mockRejectedValue(new StorageUnavailableError({ code: 403 }));
+
+        const metrics = await reconcileStorageObjects({ roots, batchSize: 500 });
+
+        expect(metrics.inspectErrors).toBe(1);
+        expect(restoreOrphanedStorageObject).not.toHaveBeenCalled();
+      });
     });
   });
 });

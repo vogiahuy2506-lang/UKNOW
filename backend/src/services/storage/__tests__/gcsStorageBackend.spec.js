@@ -1,5 +1,6 @@
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import { GcsStorageBackend } from '../gcsStorageBackend.js';
+import { StorageUnavailableError } from '../storageErrors.js';
 
 describe('GcsStorageBackend', () => {
   let mockFile;
@@ -13,6 +14,7 @@ describe('GcsStorageBackend', () => {
       download: jest.fn().mockResolvedValue([Buffer.from('gcs content')]),
       exists: jest.fn().mockResolvedValue([true]),
       delete: jest.fn().mockResolvedValue(undefined),
+      getMetadata: jest.fn().mockResolvedValue([{ size: '12' }]),
       getSignedUrl: jest.fn().mockResolvedValue(['https://storage.googleapis.com/signed-url']),
     };
 
@@ -152,5 +154,90 @@ describe('GcsStorageBackend', () => {
     expect(mockFile.save).toHaveBeenCalled();
     expect(mockFile.download).toHaveBeenCalled();
     expect(mockFile.delete).toHaveBeenCalled();
+  });
+  // ── Lỗi quyền/mạng KHÁC "tệp không có" (sự cố mất role IAM 05–08/10/2026) ──
+  // Hình dạng thật của @google-cloud/storage: file.exists() trả [boolean]; lỗi là ApiError có `.code` là SỐ HTTP
+  // và `.message` chứa tên service account + đường dẫn bucket.
+  const gcsError = (code) => Object.assign(
+    new Error('founderai-storage@x.iam.gserviceaccount.com does not have storage.objects.get access to the Google Cloud Storage object. https://storage.googleapis.com/b/founderai-storage/o/uploads%2F1%2Fdoc.pdf'),
+    { code }
+  );
+
+  describe('phân biệt 404 với lỗi quyền', () => {
+    beforeEach(() => {
+      jest.spyOn(console, 'error').mockImplementation(() => {});
+    });
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it('exists(): file.exists ném 403 -> throw StorageUnavailableError, KHÔNG trả false', async () => {
+      mockFile.exists.mockRejectedValueOnce(gcsError(403));
+      await expect(backend.exists('uploads/1/doc.pdf')).rejects.toBeInstanceOf(StorageUnavailableError);
+    });
+
+    it('exists(): file.exists ném 404 -> false; trả [false] -> false', async () => {
+      mockFile.exists.mockRejectedValueOnce(gcsError(404));
+      expect(await backend.exists('uploads/1/doc.pdf')).toBe(false);
+      mockFile.exists.mockResolvedValueOnce([false]);
+      expect(await backend.exists('uploads/1/doc.pdf')).toBe(false);
+    });
+
+    it('exists(): lỗi mạng không có code -> throw (không coi là mất tệp)', async () => {
+      mockFile.exists.mockRejectedValueOnce(new Error('socket hang up'));
+      await expect(backend.exists('uploads/1/doc.pdf')).rejects.toMatchObject({ code: 'STORAGE_UNAVAILABLE' });
+    });
+
+    it('getMetadata(): 403 -> throw; 404 -> null', async () => {
+      mockFile.getMetadata.mockRejectedValueOnce(gcsError(403));
+      await expect(backend.getMetadata('uploads/1/doc.pdf')).rejects.toBeInstanceOf(StorageUnavailableError);
+      mockFile.getMetadata.mockRejectedValueOnce(gcsError(404));
+      expect(await backend.getMetadata('uploads/1/doc.pdf')).toBeNull();
+    });
+
+    it('getBuffer(): 403 -> thông điệp tiếng Việt, không lộ tên service account/bucket, lỗi gốc nằm ở cause', async () => {
+      const original = gcsError(403);
+      mockFile.download.mockRejectedValueOnce(original);
+      const err = await backend.getBuffer('uploads/1/doc.pdf').catch((e) => e);
+      expect(err).toBeInstanceOf(StorageUnavailableError);
+      expect(err.message).toBe('Kho lưu trữ tệp tạm thời không truy cập được. Vui lòng thử lại sau hoặc liên hệ hỗ trợ.');
+      expect(err.message).not.toContain('iam.gserviceaccount.com');
+      expect(err.message).not.toContain('storage.googleapis.com');
+      expect(err.cause).toBe(original);
+    });
+
+    it('getBuffer(): 404 -> STORAGE_NOT_FOUND với câu tiếng Việt', async () => {
+      mockFile.download.mockRejectedValueOnce(gcsError(404));
+      await expect(backend.getBuffer('uploads/1/doc.pdf')).rejects.toMatchObject({
+        code: 'STORAGE_NOT_FOUND',
+        message: 'Tệp đính kèm không còn trong kho lưu trữ.',
+      });
+    });
+
+    it('put(): lỗi ghi -> StorageUnavailableError', async () => {
+      mockFile.save.mockRejectedValueOnce(gcsError(403));
+      await expect(backend.put('uploads/1/doc.pdf', Buffer.from('x'))).rejects.toBeInstanceOf(StorageUnavailableError);
+    });
+
+    it('stream(): 403 -> trả 503 chung chung, không redirect, không lộ message gốc', async () => {
+      mockFile.exists.mockRejectedValueOnce(gcsError(403));
+      const json = jest.fn();
+      const res = { headersSent: false, redirect: jest.fn(), status: jest.fn(() => ({ json })) };
+
+      const handled = await backend.stream('uploads/1/photo.jpg', res);
+
+      expect(handled).toBe(true);
+      expect(res.status).toHaveBeenCalledWith(503);
+      expect(json).toHaveBeenCalledWith(expect.objectContaining({ success: false, code: 'STORAGE_UNAVAILABLE' }));
+      expect(JSON.stringify(json.mock.calls[0][0])).not.toContain('iam.gserviceaccount.com');
+      expect(res.redirect).not.toHaveBeenCalled();
+    });
+
+    it('stream(): 404 -> false như cũ (caller tự trả 404)', async () => {
+      mockFile.exists.mockRejectedValueOnce(gcsError(404));
+      const res = { redirect: jest.fn(), status: jest.fn() };
+      expect(await backend.stream('uploads/1/photo.jpg', res)).toBe(false);
+      expect(res.status).not.toHaveBeenCalled();
+    });
   });
 });
