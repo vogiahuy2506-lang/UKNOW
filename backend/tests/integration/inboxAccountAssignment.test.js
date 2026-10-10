@@ -395,7 +395,8 @@ describe('báo cáo hoạt động AI + bật lại AI hàng loạt', () => {
     expect(employeeRes.body.data.stats.totalConversations).toBe(1);
 
     const ownerRes = await own(request(app).get(`${BASE}/inbox/ai-activity`), ctx);
-    expect(idsOf(ownerRes.body.data.conversations)).toEqual(sorted(ctx.convA, ctx.convB, ctx.groupB));
+    // H-19 (10/10/2026): báo cáo AI loại hội thoại nhóm — AI không bao giờ trả lời trong nhóm nên nhóm chỉ làm loãng số.
+    expect(idsOf(ownerRes.body.data.conversations)).toEqual(sorted(ctx.convA, ctx.convB));
   });
 
   it('bật lại AI hàng loạt: nhân viên chỉ bật hội thoại của tài khoản được giao; chủ bật hết', async () => {
