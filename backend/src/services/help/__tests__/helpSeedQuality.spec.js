@@ -286,6 +286,8 @@ const UI_LABELS_IN_ARTICLES = [
   ['pheu-ban-hang', 'products.priceAmount', 'Giá bán (VNĐ, số)'],
   ['pheu-ban-hang', 'products.priceAmountUse', 'Dùng số này'],
   ['pheu-ban-hang', 'products.funnel.periodLabel', 'Khoảng thời gian'],
+  ['pheu-ban-hang', 'products.viewCompact', 'Bảng gọn'],
+  ['pheu-ban-hang', 'products.viewFull', 'Đầy đủ phễu'],
   ['pheu-ban-hang', 'products.funnel.interested', 'Quan tâm'],
   ['pheu-ban-hang', 'products.funnel.leftContact', 'Để lại thông tin'],
   ['pheu-ban-hang', 'products.funnel.registered', 'Đăng ký'],
