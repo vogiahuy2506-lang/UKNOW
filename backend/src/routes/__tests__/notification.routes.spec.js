@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import express from 'express';
 import request from 'supertest';
+import { NOTIFICATION_EVENTS } from '../../config/notificationEventCatalog.js';
 
 /**
  * /api/notifications/* — route + controller + service THẬT, repository giả. authMiddleware giả theo header:
@@ -212,7 +213,18 @@ describe('/api/notifications', () => {
       ]);
     });
 
-    it('emailEnabled HIỆU LỰC: mặc định theo catalog; người dùng tắt → false; loại khoá luôn true dù có dòng tuỳ chọn false', async () => {
+    it('CHƯA có dòng cấu hình (mặc định catalog = chỉ chuông): mọi loại emailEnabled=false, systemEmailEnabled=false, chuông bật', async () => {
+      const res = await request(app).get('/api/notifications/preferences').set('Authorization', 'Bearer user');
+      expect(res.body.data.length).toBeGreaterThan(0);
+      for (const item of res.body.data) {
+        expect(item).toMatchObject({ emailEnabled: false, systemEmailEnabled: false, inAppEnabled: true });
+      }
+    });
+
+    it('emailEnabled HIỆU LỰC (super admin đã bật email các loại): người dùng tắt → false; loại khoá luôn true dù có dòng tuỳ chọn false', async () => {
+      mockListSettings.mockResolvedValue(NOTIFICATION_EVENTS.map((event) => ({
+        eventType: event.key, inAppEnabled: true, emailEnabled: !['campaign_run_completed', 'support_ticket_closed'].includes(event.key), userCanDisableEmail: event.userCanDisableEmail, updatedBy: 1, updatedAt: null,
+      })));
       mockListByUser.mockResolvedValue(new Map([
         ['campaign_run_failed', false],
         ['campaign_approval_required', false],
@@ -276,6 +288,10 @@ describe('/api/notifications', () => {
     });
 
     it('tắt email loại cho phép → 200, ghi theo id người gọi (nhân viên ghi cho chính mình), trả mục sau cập nhật', async () => {
+      mockListSettings.mockResolvedValue([{
+        eventType: 'campaign_run_failed', inAppEnabled: true, emailEnabled: true,
+        userCanDisableEmail: true, updatedBy: 1, updatedAt: null,
+      }]);
       const res = await put({ eventType: 'campaign_run_failed', emailEnabled: false }, 'Bearer employee');
       expect(res.status).toBe(200);
       expect(mockUpsertPreference).toHaveBeenCalledWith(12, 'campaign_run_failed', false);

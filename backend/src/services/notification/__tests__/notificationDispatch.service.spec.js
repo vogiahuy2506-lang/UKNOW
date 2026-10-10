@@ -28,6 +28,7 @@ jest.unstable_mockModule('../../../repositories/notification/notificationEventSe
 jest.unstable_mockModule('../../../repositories/admin/alert.repository.js', () => ({
   listAdminAlertEmails: mockListAdminAlertEmails,
 }));
+const { NOTIFICATION_EVENT_KEYS, NOTIFICATION_EVENTS } = await import('../../../config/notificationEventCatalog.js');
 const realSystemEmail = await import('../../../utils/systemEmail.util.js');
 jest.unstable_mockModule('../../../utils/systemEmail.util.js', () => ({
   ...realSystemEmail,
@@ -52,6 +53,12 @@ const settingRow = (eventType, over = {}) => ({
   updatedAt: null,
   ...over,
 });
+// Giả lập super admin đã bật email như seed cũ của migration 289 (trừ 2 loại vốn tắt email), giữ userCanDisableEmail theo catalog.
+const EMAIL_OFF_EVEN_WHEN_ADMIN_ENABLED = new Set(['campaign_run_completed', 'support_ticket_closed']);
+const ALL_EVENTS_EMAIL_ON = () => NOTIFICATION_EVENTS.map((event) => settingRow(event.key, {
+  emailEnabled: !EMAIL_OFF_EVEN_WHEN_ADMIN_ENABLED.has(event.key),
+  userCanDisableEmail: event.userCanDisableEmail,
+}));
 const base = (over = {}) => ({
   eventType: 'campaign_run_failed',
   userIds: [1, 2],
@@ -64,7 +71,8 @@ describe('notificationDispatch', () => {
   beforeEach(() => {
     jest.resetAllMocks();
     clearEventSettingsCache();
-    mockListSettings.mockResolvedValue([]);
+    // Mặc định catalog là CHỈ CHUÔNG (migration 293); các ca email bên dưới giả lập super admin đã bật email cho mọi sự kiện.
+    mockListSettings.mockResolvedValue(ALL_EVENTS_EMAIL_ON());
     mockInsertMany.mockImplementation(async ({ userIds }) => userIds);
     mockFindEmailContacts.mockImplementation(async (ids) => ids.map((id) => contact(id)));
     mockListEmailDisabledUserIds.mockResolvedValue(new Set());
@@ -197,7 +205,20 @@ describe('notificationDispatch', () => {
       expect(result.emailSent).toBe(2);
     });
 
-    it('email_enabled hệ thống tắt (mặc định campaign_run_completed) → không tra liên hệ, không gửi', async () => {
+    it('CHƯA có dòng cấu hình nào (mặc định catalog = chỉ chuông) → mọi sự kiện đều không gửi email', async () => {
+      mockListSettings.mockResolvedValue([]);
+
+      for (const eventType of NOTIFICATION_EVENT_KEYS.filter((key) => key !== 'support_ticket_created' && key !== 'support_ticket_user_replied')) {
+        const result = await notifyUsers(base({ eventType }));
+        expect(result.emailSent).toBe(0);
+        expect(result.inApp).toBe(2);
+      }
+      expect(mockFindEmailContacts).not.toHaveBeenCalled();
+      expect(mockSendSystemEmail).not.toHaveBeenCalled();
+    });
+
+    it('email_enabled hệ thống tắt (campaign_run_completed) → không tra liên hệ, không gửi', async () => {
+      mockListSettings.mockResolvedValue([settingRow('campaign_run_completed', { emailEnabled: false })]);
       const result = await notifyUsers(base({ eventType: 'campaign_run_completed' }));
 
       expect(mockFindEmailContacts).not.toHaveBeenCalled();

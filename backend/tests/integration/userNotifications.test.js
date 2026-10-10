@@ -13,6 +13,7 @@ import { createUser, truncateAll } from './helpers/db.js';
 import userNotificationRepository from '../../src/repositories/notification/userNotification.repository.js';
 import campaignRunRepository from '../../src/repositories/campaign/campaignRun.repository.js';
 import { notifyUsers, clearEventSettingsCache } from '../../src/services/notification/notificationDispatch.service.js';
+import { getNotificationEvent } from '../../src/config/notificationEventCatalog.js';
 import { cleanupUserNotifications } from '../../src/services/notification/userNotificationCleanup.service.js';
 import { notifyCampaignRunCompleted } from '../../src/utils/campaignRunCompletedNotify.util.js';
 import { notifyCampaignApprovalRequired, notifyCampaignRunFailed } from '../../src/utils/campaignQuotaPauseNotify.util.js';
@@ -189,8 +190,29 @@ describe('user_notifications — lược đồ + repository trên DB thật', ()
   });
 });
 
+// Mặc định hệ thống là CHỈ CHUÔNG (migration 293): ca nào cần email phải giả lập super admin đã bật email cho loại đó.
+async function enableEmailFor(...eventTypes) {
+  for (const eventType of eventTypes) {
+    await db.query(
+      `INSERT INTO notification_event_settings (event_type, email_enabled, user_can_disable_email) VALUES ($1, true, $2)
+       ON CONFLICT (event_type) DO UPDATE SET email_enabled = true`,
+      [eventType, getNotificationEvent(eventType).userCanDisableEmail]
+    );
+  }
+  clearEventSettingsCache();
+}
+
 describe('dispatcher trên DB thật', () => {
+  it('mặc định hệ thống chỉ chuông: chưa có dòng cấu hình → có dòng in-app, KHÔNG email', async () => {
+    const user = await createUser({ username: 'default_bell_only' });
+
+    const result = await notifyUsers({ eventType: 'campaign_run_failed', userIds: [user.id], title: 'T', message: 'M' });
+
+    expect(result).toMatchObject({ inApp: 1, emailSent: 0 });
+  });
+
   it('chuông + email theo tuỳ chọn: người tắt email chỉ có dòng in-app, người còn lại có cả email; gọi lại cùng dedupeKey → không gì thêm', async () => {
+    await enableEmailFor('campaign_run_failed');
     const a = await createUser({ username: 'disp_a' });
     const b = await createUser({ username: 'disp_b' });
     await db.query(`INSERT INTO notification_preferences (user_id, event_type, email_enabled) VALUES ($1, 'campaign_run_failed', false)`, [b.id]);
@@ -211,6 +233,7 @@ describe('dispatcher trên DB thật', () => {
   });
 
   it('loại KHÔNG cho tắt (campaign_approval_required): email vẫn tới người có dòng tuỳ chọn "tắt"', async () => {
+    await enableEmailFor('campaign_approval_required');
     const user = await createUser({ username: 'locked_user' });
     await db.query(`INSERT INTO notification_preferences (user_id, event_type, email_enabled) VALUES ($1, 'campaign_approval_required', false)`, [user.id]);
 
@@ -320,6 +343,7 @@ describe('API /api/notifications', () => {
   });
 
   it('preferences: GET 7 mục (audience=user); PUT khoá → 400 và KHÔNG ghi; PUT cho phép → ghi DB, GET phản ánh emailEnabled hiệu lực', async () => {
+    await enableEmailFor('campaign_run_failed', 'campaign_approval_required');
     const user = await createUser({ username: 'api_pref' });
 
     const list = await as('get', '/api/notifications/preferences', user);
@@ -369,6 +393,7 @@ describe('API /api/admin/notification-events', () => {
   });
 
   it('admin khoá email của loại không-cho-tắt → người dùng vẫn bị chặn; mở khoá → tắt được', async () => {
+    await enableEmailFor('campaign_approval_required');
     const admin = await createUser({ username: 'ev_admin2', role: 'admin' });
     const user = await createUser({ username: 'ev_user2' });
 

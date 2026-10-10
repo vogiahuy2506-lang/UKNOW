@@ -26,6 +26,12 @@ beforeEach(async () => {
   await truncateAll();
   await db.query('DELETE FROM notification_email_logs');
   await db.query('DELETE FROM notifications');
+  // Mặc định hệ thống là CHỈ CHUÔNG (migration 293); các ca dưới giả lập super admin đã bật email cho bản tin admin.
+  await db.query(
+    `INSERT INTO notification_event_settings (event_type, in_app_enabled, email_enabled, user_can_disable_email)
+     VALUES ('admin_broadcast', true, true, true)
+     ON CONFLICT (event_type) DO UPDATE SET email_enabled = true`
+  );
   clearEventSettingsCache();
   admin = await createUser({ role: 'admin', username: 'bc_admin' });
   u1 = await createUser({ username: 'bc_user1' });
@@ -151,7 +157,9 @@ describe('POST /api/admin/notifications/send-direct — kênh', () => {
   it('công tắc chuông hệ thống của admin_broadcast TẮT mà bản tin chọn chuông → 400 "Kênh Chuông đang tắt...", không tạo bản tin, không chèn dòng nào', async () => {
     await db.query(
       `INSERT INTO notification_event_settings (event_type, in_app_enabled, email_enabled, user_can_disable_email)
-       VALUES ('admin_broadcast', false, true, true)`
+       VALUES ('admin_broadcast', false, true, true)
+       ON CONFLICT (event_type) DO UPDATE SET in_app_enabled = EXCLUDED.in_app_enabled,
+         email_enabled = EXCLUDED.email_enabled, user_can_disable_email = EXCLUDED.user_can_disable_email`
     );
     clearEventSettingsCache();
 
@@ -171,7 +179,9 @@ describe('POST /api/admin/notifications/send-direct — kênh', () => {
   it('công tắc email hệ thống TẮT: tạo nháp / PATCH / gửi bản tin có email → 400; bản tin chỉ-chuông gửi được', async () => {
     await db.query(
       `INSERT INTO notification_event_settings (event_type, in_app_enabled, email_enabled, user_can_disable_email)
-       VALUES ('admin_broadcast', true, false, true)`
+       VALUES ('admin_broadcast', true, false, true)
+       ON CONFLICT (event_type) DO UPDATE SET in_app_enabled = EXCLUDED.in_app_enabled,
+         email_enabled = EXCLUDED.email_enabled, user_can_disable_email = EXCLUDED.user_can_disable_email`
     );
     clearEventSettingsCache();
 
@@ -195,7 +205,9 @@ describe('POST /api/admin/notifications/send-direct — kênh', () => {
     const id = draft.body.data.id;
     await db.query(
       `INSERT INTO notification_event_settings (event_type, in_app_enabled, email_enabled, user_can_disable_email)
-       VALUES ('admin_broadcast', false, true, true)`
+       VALUES ('admin_broadcast', false, true, true)
+       ON CONFLICT (event_type) DO UPDATE SET in_app_enabled = EXCLUDED.in_app_enabled,
+         email_enabled = EXCLUDED.email_enabled, user_can_disable_email = EXCLUDED.user_can_disable_email`
     );
     clearEventSettingsCache();
 
@@ -210,7 +222,9 @@ describe('POST /api/admin/notifications/send-direct — kênh', () => {
     await optOutEmail(u2);
     await db.query(
       `INSERT INTO notification_event_settings (event_type, in_app_enabled, email_enabled, user_can_disable_email)
-       VALUES ('admin_broadcast', true, true, false)`
+       VALUES ('admin_broadcast', true, true, false)
+       ON CONFLICT (event_type) DO UPDATE SET in_app_enabled = EXCLUDED.in_app_enabled,
+         email_enabled = EXCLUDED.email_enabled, user_can_disable_email = EXCLUDED.user_can_disable_email`
     );
     clearEventSettingsCache();
 

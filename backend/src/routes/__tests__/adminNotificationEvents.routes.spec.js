@@ -62,7 +62,7 @@ describe('/api/admin/notification-events', () => {
     expect(res.body.data).toHaveLength(9);
     const byKey = Object.fromEntries(res.body.data.map((item) => [item.key, item]));
     expect(byKey.campaign_run_failed.settings).toEqual({
-      inAppEnabled: true, emailEnabled: true, userCanDisableEmail: true, updatedBy: null, updatedAt: null, isDefault: true,
+      inAppEnabled: true, emailEnabled: false, userCanDisableEmail: true, updatedBy: null, updatedAt: null, isDefault: true,
     });
     expect(byKey.campaign_run_completed.defaults).toEqual({ inApp: true, email: false });
     expect(byKey.campaign_run_completed.settings).toMatchObject({ emailEnabled: true, isDefault: false, updatedBy: 1 });
@@ -101,17 +101,17 @@ describe('/api/admin/notification-events', () => {
 
   it('PUT xoá cache dispatcher NGAY: cấu hình mới có hiệu lực trước khi hết 60 giây', async () => {
     mockListSettings.mockResolvedValue([]);
-    expect((await getEffectiveEventSettings('campaign_run_failed')).emailEnabled).toBe(true); // nạp cache
+    expect((await getEffectiveEventSettings('campaign_run_failed')).emailEnabled).toBe(false); // nạp cache (mặc định chỉ chuông)
     const callsBefore = mockListSettings.mock.calls.length;
 
-    mockListSettings.mockResolvedValue([dbRow('campaign_run_failed', { emailEnabled: false })]);
+    mockListSettings.mockResolvedValue([dbRow('campaign_run_failed', { emailEnabled: true })]);
     await request(app)
       .put('/api/admin/notification-events/campaign_run_failed')
       .set('Authorization', 'Bearer admin')
-      .send({ emailEnabled: false })
+      .send({ emailEnabled: true })
       .expect(200);
 
     expect(mockListSettings.mock.calls.length).toBeGreaterThan(callsBefore);
-    expect((await getEffectiveEventSettings('campaign_run_failed')).emailEnabled).toBe(false);
+    expect((await getEffectiveEventSettings('campaign_run_failed')).emailEnabled).toBe(true);
   });
 });

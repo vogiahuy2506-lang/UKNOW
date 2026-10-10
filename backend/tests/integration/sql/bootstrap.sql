@@ -4155,6 +4155,12 @@ VALUES
   ('support_ticket_user_replied', true, true,  false)
 ON CONFLICT (event_type) DO NOTHING;
 
+-- --- Migration 293: mac dinh thong bao chi con chuong (email_enabled = false cho moi su kien) ---
+UPDATE notification_event_settings
+   SET email_enabled = false,
+       updated_at = NOW()
+ WHERE email_enabled IS DISTINCT FROM false;
+
 -- --- Migration 291: support_tickets + support_ticket_messages (PLAN_TICKET_GOP_Y_VA_CHUONG_THONG_BAO PR-4: ticket gop y / ho tro) ---
 CREATE TABLE IF NOT EXISTS support_tickets (
   id                  BIGSERIAL    PRIMARY KEY,

@@ -3,7 +3,8 @@
  *
  * Mỗi mục: { key, label, labelEn, description, audience: 'user'|'admin', defaults: { inApp, email }, userCanDisableEmail }.
  *  - `defaults`: bật/tắt chuông (in-app) và email khi super admin CHƯA cấu hình (thiếu dòng trong `notification_event_settings`).
- *    Migration 289 seed đúng các giá trị này — có spec ghim từng phần tử, đổi ở đây phải đổi cả migration mới.
+ *    MẶC ĐỊNH CHỈ CHUÔNG, KHÔNG EMAIL (user chốt 10/10/2026): email do super admin bật theo từng sự kiện ở tab "Cấu hình kênh".
+ *    Migration 289 seed giá trị cũ; migration 293 đưa email về false — có spec ghim, đổi ở đây phải đổi cả migration mới.
  *  - `userCanDisableEmail`: người dùng có tự tắt được email loại này không (chuông thì luôn bật phía người dùng).
  *    false cho loại bảo mật / thanh toán / nhân-viên-chờ-duyệt.
  *  - `audience: 'admin'`: sự kiện gửi cho super admin (không hiện ở trang tuỳ chọn của người dùng, không qua `notification_preferences`).
@@ -18,7 +19,7 @@ export const NOTIFICATION_EVENTS = Object.freeze([
     labelEn: 'Announcements from administrators',
     description: 'Bản tin, thông báo bảo trì, khuyến mãi do quản trị viên Founder AI gửi.',
     audience: 'user',
-    defaults: { inApp: true, email: true },
+    defaults: { inApp: true, email: false },
     userCanDisableEmail: true,
   },
   {
@@ -36,7 +37,7 @@ export const NOTIFICATION_EVENTS = Object.freeze([
     labelEn: 'Campaign run failed',
     description: 'Báo khi một lượt chạy chiến dịch hỏng hoặc bị hệ thống tự dừng, kèm lý do và cách xử lý.',
     audience: 'user',
-    defaults: { inApp: true, email: true },
+    defaults: { inApp: true, email: false },
     userCanDisableEmail: true,
   },
   {
@@ -45,7 +46,7 @@ export const NOTIFICATION_EVENTS = Object.freeze([
     labelEn: 'Campaign awaiting your approval',
     description: 'Báo chủ tài khoản khi chiến dịch của nhân viên vượt ngưỡng người nhận và cần được duyệt.',
     audience: 'user',
-    defaults: { inApp: true, email: true },
+    defaults: { inApp: true, email: false },
     userCanDisableEmail: false,
   },
   {
@@ -54,7 +55,7 @@ export const NOTIFICATION_EVENTS = Object.freeze([
     labelEn: 'Campaign schedule skipped',
     description: 'Báo khi lịch đến giờ chạy nhưng lượt chạy trước của chiến dịch chưa xong nên lượt này bị bỏ qua.',
     audience: 'user',
-    defaults: { inApp: true, email: true },
+    defaults: { inApp: true, email: false },
     userCanDisableEmail: true,
   },
   {
@@ -63,7 +64,7 @@ export const NOTIFICATION_EVENTS = Object.freeze([
     labelEn: 'Reply to your feedback',
     description: 'Báo khi quản trị viên trả lời một góp ý / yêu cầu hỗ trợ bạn đã gửi.',
     audience: 'user',
-    defaults: { inApp: true, email: true },
+    defaults: { inApp: true, email: false },
     userCanDisableEmail: false,
   },
   {
@@ -81,7 +82,7 @@ export const NOTIFICATION_EVENTS = Object.freeze([
     labelEn: 'New feedback ticket',
     description: 'Báo mọi quản trị viên khi có người dùng gửi góp ý / yêu cầu hỗ trợ mới.',
     audience: 'admin',
-    defaults: { inApp: true, email: true },
+    defaults: { inApp: true, email: false },
     userCanDisableEmail: false,
   },
   {
@@ -90,7 +91,7 @@ export const NOTIFICATION_EVENTS = Object.freeze([
     labelEn: 'User replied to a ticket',
     description: 'Báo mọi quản trị viên khi người dùng trả lời thêm trong một góp ý / yêu cầu hỗ trợ.',
     audience: 'admin',
-    defaults: { inApp: true, email: true },
+    defaults: { inApp: true, email: false },
     userCanDisableEmail: false,
   },
 ]);
