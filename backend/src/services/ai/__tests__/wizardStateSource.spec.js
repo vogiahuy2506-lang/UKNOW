@@ -62,6 +62,12 @@ describe('diffChangedKeys', () => {
     expect(diffChangedKeys(null, { a: 1 })).toEqual({ a: 1 });
     expect(diffChangedKeys({ a: 1 }, null)).toEqual({});
   });
+
+  it('khoá có lúc đầu lượt mà kết quả lượt không còn / mang undefined → null tường minh (gộp || không giữ giá trị cũ)', () => {
+    expect(diffChangedKeys({ sheetUrl: 'https://x', channel: 'zalo' }, { channel: 'zalo' })).toEqual({ sheetUrl: null });
+    expect(diffChangedKeys({ senderAccountId: 5 }, { senderAccountId: undefined })).toEqual({ senderAccountId: null });
+    expect(diffChangedKeys({ a: null }, {})).toEqual({});
+  });
 });
 
 describe('applyAssistantResponseToGates', () => {

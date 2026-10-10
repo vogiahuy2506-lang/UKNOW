@@ -64,11 +64,26 @@ export function buildBackfillStamp(prevMeta, now = new Date()) {
  * khi lượt chạy lâu (LLM 10–30 giây) một PATCH xen giữa (approve_plan, set_zalo_friends…) không bị ghi đè lại bằng
  * giá trị cũ của đầu lượt.
  */
+/** Giá trị mặc định "rỗng" của một cổng (null/false/''/[]/{}) — xoá nó đi hay giữ nguyên đều như nhau. */
+function isEmptyGateValue(value) {
+  if (value === null || value === undefined || value === false || value === '') return true;
+  if (Array.isArray(value)) return value.length === 0;
+  if (typeof value === 'object') return Object.keys(value).length === 0;
+  return false;
+}
+
 export function diffChangedKeys(start, turn) {
   const base = start && typeof start === 'object' ? start : {};
   const out = {};
-  for (const [key, value] of Object.entries(turn || {})) {
-    if (!isDeepStrictEqual(value, base[key])) out[key] = value;
+  if (!turn || typeof turn !== 'object') return out; // lượt không dựng gates → không đổi gì
+  const next = turn;
+  for (const [key, value] of Object.entries(next)) {
+    // `undefined` không qua được JSON → ghi `null` tường minh, nếu không phép gộp `||` sẽ giữ giá trị cũ.
+    if (!isDeepStrictEqual(value, base[key])) out[key] = value === undefined ? null : value;
+  }
+  // Khoá có lúc đầu lượt mà kết quả lượt không còn: bản cũ thay CẢ khối nên khoá đó mất — giữ đúng nghĩa đó bằng `null`.
+  for (const key of Object.keys(base)) {
+    if (!(key in next) && !isEmptyGateValue(base[key])) out[key] = null;
   }
   return out;
 }
