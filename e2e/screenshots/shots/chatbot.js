@@ -63,14 +63,14 @@ export default {
   timeoutMs: 480_000,
   shots: [
     {
-      // Cùng một màn hình với ô "menu-lich-su-tro-chuyen" bên bài inbox, nhưng
+      // Cùng một màn hình với ô "menu-hop-thu" bên bài inbox, nhưng
       // câu chú thích khác nên phải là ảnh riêng — khoá chèn bám theo chú thích.
-      name: 'menu-lich-su-tro-chuyen',
-      caption: 'menu bên trái, nhóm AI Chatbot đang mở, khoanh đỏ mục "Lịch sử trò chuyện"',
+      name: 'menu-hop-thu',
+      caption: 'menu bên trái, nhóm AI Chatbot đang mở, khoanh đỏ mục "Hộp thư"',
       async take(page, { baseURL }) {
         return sidebarShot(page, {
           groupName: 'AI Chatbot',
-          itemName: 'Lịch sử trò chuyện',
+          itemName: 'Hộp thư',
           baseURL,
         });
       },

@@ -14,7 +14,7 @@ const INBOX_PATH = '/app/settings/inbox';
 async function openFirstConversation(page) {
   await page.goto(INBOX_PATH);
   const list = page.locator('main').getByRole('button').filter({ hasText: /💬|·/ });
-  await page.locator('main input[placeholder*="hội thoại" i]').waitFor({ state: 'visible', timeout: 30_000 });
+  await page.locator('main input[placeholder*="tên khách" i]').waitFor({ state: 'visible', timeout: 30_000 });
   await settle(page);
 
   // Danh sách hội thoại không có vai trò ARIA riêng; lấy phần tử bấm được đầu
@@ -39,12 +39,12 @@ export default {
   slug: 'inbox',
   shots: [
     {
-      name: 'menu-lich-su-tro-chuyen',
-      caption: 'menu bên trái đang mở nhóm AI Chatbot, khoanh đỏ mục "Lịch sử trò chuyện"',
+      name: 'menu-hop-thu',
+      caption: 'menu bên trái đang mở nhóm AI Chatbot, khoanh đỏ mục "Hộp thư"',
       async take(page, { baseURL }) {
         return sidebarShot(page, {
           groupName: 'AI Chatbot',
-          itemName: 'Lịch sử trò chuyện',
+          itemName: 'Hộp thư',
           baseURL,
         });
       },
@@ -62,7 +62,7 @@ export default {
     },
     {
       name: 'toan-man-hinh-hop-thu',
-      caption: 'toàn màn hình Lịch sử trò chuyện',
+      caption: 'toàn màn hình Hộp thư',
       async take(page) {
         await openFirstConversation(page);
         await hideVolatileChrome(page);
@@ -71,7 +71,7 @@ export default {
     },
     {
       name: 'ba-khu-vuc',
-      caption: 'khoanh đỏ ba khu vực trên màn hình',
+      caption: 'khoanh đỏ các khu vực trên màn hình',
       async take(page) {
         await openFirstConversation(page);
         await hideVolatileChrome(page);
@@ -124,40 +124,35 @@ export default {
       },
     },
     {
-      // Bài viết từng nói nhãn là "AI đang tạm dừng". Giao diện thật ghi
-      // "AI tự động trả lời" kèm công tắc; chuỗi 'inbox.aiPausedHint'
-      // ("AI đang tạm dừng") có trong i18n nhưng KHÔNG được dùng ở đâu trong mã.
-      // Câu chữ trong bài đã sửa lại cho khớp — xem
-      // _internal/patch-inbox-2026-08-24.json. KHOÁ DƯỚI ĐÂY PHẢI CHẠY SAU bản
-      // vá đó, chạy trước thì không khớp ô nào.
+      // 04/10/2026: nhãn trong danh sách đổi thành "Bạn đang trả lời" / "AI tắt";
+      // đầu khung chat ghi "· AI tự bật lại sau …" (hoặc "Tự bật lại đang Tắt")
+      // dưới tên khách, công tắc "AI tự động trả lời" nằm bên phải.
       name: 'cong-tac-ai',
-      caption: 'khoanh đỏ dòng "AI tự động trả lời" và công tắc AI bên cạnh',
+      caption: 'đầu khung chat, khoanh đỏ công tắc AI và dòng chữ "AI tự bật lại sau" bên dưới tên khách',
       localOnly: true,
       async take(page) {
         await page.goto(INBOX_PATH);
-        await page.locator('main input[placeholder*="hội thoại" i]').waitFor({ state: 'visible', timeout: 30_000 });
+        await page.locator('main input[placeholder*="tên khách" i]').waitFor({ state: 'visible', timeout: 30_000 });
         await settle(page);
 
-        // Hội thoại đang tạm dừng AI mang nhãn "Tạm dừng" (hoặc "Thủ công" nếu
-        // dừng tay) trong danh sách bên trái. Bấm vào chính thẻ chứa nhãn đó.
-        const badge = page.locator('main span').filter({ hasText: /^(Tạm dừng|Thủ công)$/ }).first();
+        const badge = page.locator('main span').filter({ hasText: /^(Bạn đang trả lời|AI tắt)$/ }).first();
         if (!(await badge.isVisible({ timeout: 15_000 }).catch(() => false))) {
           throw new Error(
             'Không hội thoại nào đang tạm dừng AI. Nạp lại DB:\n'
             + '  E2E_SEED_DEMO=1 E2E_SEED_INBOX=1 node scripts/seed-test-db.js',
           );
         }
-        await badge.locator('xpath=ancestor::*[self::div or self::li or self::button][3]').click();
+        await badge.click();
         await page.waitForTimeout(1500);
 
-        const aiLabel = page.getByText('AI tự động trả lời', { exact: false }).first();
-        if (!(await aiLabel.isVisible({ timeout: 10_000 }).catch(() => false))) {
-          throw new Error('Mở được hội thoại nhưng không thấy nhãn AI ở đầu khung chat');
+        const toggle = page.locator('main button[role="switch"]').last();
+        if (!(await toggle.isVisible({ timeout: 10_000 }).catch(() => false))) {
+          throw new Error('Mở được hội thoại nhưng không thấy công tắc AI ở đầu khung chat');
         }
         await hideVolatileChrome(page);
-        await highlight(aiLabel);
-        const toggle = page.locator('main button[role="switch"], main input[type="checkbox"]').first();
-        if (await toggle.isVisible().catch(() => false)) await highlight(toggle);
+        const status = page.locator('main h2').last().locator('xpath=following-sibling::p[1]');
+        if (await status.isVisible().catch(() => false)) await highlight(status);
+        await highlight(toggle);
         await page.waitForTimeout(200);
         return contentShot(page, page.locator('main').first(), { maxHeight: 300 });
       },

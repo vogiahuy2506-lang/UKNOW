@@ -28,7 +28,7 @@ export default {
   shots: [
     {
       name: 'tab-lien-he-de-lai',
-      caption: 'trang Lịch sử trò chuyện, khoanh đỏ tab "Liên hệ để lại"',
+      caption: 'trang Hộp thư, khoanh đỏ tab "Liên hệ để lại"',
       async take(page) {
         await page.goto(INBOX_PATH);
         const tab = page.getByRole('button', { name: /Liên hệ để lại/ }).first();
