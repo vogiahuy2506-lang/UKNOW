@@ -18,6 +18,7 @@ const {
   assertCampaignNodesChannelAccountsAccessible,
   assertRunChannelAccountsAssigned,
   collectCampaignChannelAccountRefs,
+  createRunChannelAccessGuard,
   emptyChannelScope,
   findUnassignedChannelPairs,
   getChannelScopeForUser,
@@ -216,5 +217,84 @@ describe('assertCampaignNodesChannelAccountsAccessible (lưu / nhân bản)', ()
     await expect(assertCampaignNodesChannelAccountsAccessible(employeeCtx, [
       { nodeSubtype: 'send_whatsapp', config: { whatsappSessionKey: '10-b' } },
     ])).rejects.toMatchObject({ code: 'CHANNEL_ACCOUNT_NOT_ASSIGNED', channel: 'whatsapp_baileys' });
+  });
+});
+
+describe('createRunChannelAccessGuard (engine chạy chiến dịch)', () => {
+  const tgNodes = [{ node_subtype: 'send_telegram', config: { telegramAccountId: 8 } }];
+  let clock;
+  const makeGuard = (over = {}) => {
+    const onBlocked = jest.fn().mockResolvedValue(undefined);
+    const guard = createRunChannelAccessGuard({
+      ownerId: OWNER,
+      nodes: tgNodes,
+      getActorUserIds: () => [EMP],
+      onBlocked,
+      now: () => clock,
+      ...over,
+    });
+    return { guard, onBlocked };
+  };
+  beforeEach(() => {
+    clock = 1_000_000;
+    mockQuery.mockResolvedValue({ rows: [{ role: 'user' }] });
+  });
+
+  it('phạm vi mặc định RỖNG trước khi kiểm (hỏng thì chặn); enforce() xong → phạm vi của người kích hoạt', async () => {
+    givenScope({ telegram: ['8'], whatsapp_baileys: [] });
+    const { guard } = makeGuard();
+    expect(guard.getScope()).toEqual(emptyChannelScope());
+    await guard.enforce();
+    expect(guard.getScope()).toEqual({ telegram: ['8'], whatsapp_baileys: [] });
+  });
+
+  it('ensureFresh(): CHƯA quá 5 phút → KHÔNG kiểm lại; quá 5 phút → kiểm lại và thấy việc giao đã bị gỡ → đóng sổ + RUN_STOPPED', async () => {
+    givenScope({ telegram: ['8'], whatsapp_baileys: [] });
+    const { guard, onBlocked } = makeGuard();
+    await guard.enforce();
+    mockGetRefs.mockClear();
+
+    // Chủ gỡ giao giữa chừng.
+    givenScope({ telegram: [], whatsapp_baileys: [] });
+    clock += 4 * 60 * 1000;
+    await guard.ensureFresh();
+    expect(mockGetRefs).not.toHaveBeenCalled(); // vẫn còn "tươi"
+    expect(onBlocked).not.toHaveBeenCalled();
+
+    clock += 2 * 60 * 1000; // tổng 6 phút
+    await expect(guard.ensureFresh()).rejects.toMatchObject({ code: 'RUN_STOPPED', channelAccessBlocked: true });
+    expect(onBlocked).toHaveBeenCalledTimes(1);
+    expect(onBlocked.mock.calls[0][0]).toMatchObject({ code: 'CHANNEL_ACCOUNT_NOT_ASSIGNED' });
+    expect(guard.getScope()).toEqual(emptyChannelScope());
+  });
+
+  it('enforce() mỗi đầu chu kỳ LUÔN kiểm lại (không đợi 5 phút)', async () => {
+    givenScope({ telegram: ['8'], whatsapp_baileys: [] });
+    const { guard, onBlocked } = makeGuard();
+    await guard.enforce();
+    givenScope({ telegram: [], whatsapp_baileys: [] });
+    await expect(guard.enforce()).rejects.toMatchObject({ code: 'RUN_STOPPED' });
+    expect(onBlocked).toHaveBeenCalledTimes(1);
+  });
+
+  it('người kích hoạt là CHỦ → thấy hết, không đọc việc giao; lỗi KHÁC (không phải chưa giao) được ném nguyên, không đóng sổ', async () => {
+    const owner = makeGuard({ getActorUserIds: () => [OWNER] });
+    await owner.guard.enforce();
+    expect(owner.guard.getScope()).toEqual(unrestrictedChannelScope());
+    expect(mockGetRefs).not.toHaveBeenCalled();
+
+    const boom = makeGuard({ getActorUserIds: () => { throw new Error('boom'); } });
+    await expect(boom.guard.enforce()).rejects.toThrow('boom');
+    expect(boom.onBlocked).not.toHaveBeenCalled();
+  });
+
+  it('chiến dịch không có node Telegram / WhatsApp → no-op hoàn toàn', async () => {
+    const { guard, onBlocked } = makeGuard({ nodes: [{ node_subtype: 'send_email', config: {} }] });
+    expect(guard.hasChannelAccountNodes).toBe(false);
+    await guard.enforce();
+    await guard.ensureFresh();
+    expect(mockQuery).not.toHaveBeenCalled();
+    expect(mockGetRefs).not.toHaveBeenCalled();
+    expect(onBlocked).not.toHaveBeenCalled();
   });
 });

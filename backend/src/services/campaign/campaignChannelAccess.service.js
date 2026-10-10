@@ -271,11 +271,65 @@ export async function assertCampaignNodesChannelAccountsAccessible(ctx, nodes) {
   }
 }
 
+/** Sau tối đa từng này ms thì engine kiểm lại việc giao (chủ gỡ giao giữa chừng → lượt chạy dừng). */
+export const CHANNEL_ACCESS_RECHECK_MS = 5 * 60 * 1000;
+
+/**
+ * Bộ gác tài khoản Telegram / WhatsApp của MỘT lượt chạy (engine `campaignRun.service`). Tách ra để kiểm bằng đồng hồ giả:
+ *  - `enforce()`: kiểm theo NGƯỜI KÍCH HOẠT (`getActorUserIds()`); sai → `onBlocked(lỗi)` đóng sổ run 'failed' rồi ném `RUN_STOPPED`
+ *    (`channelAccessBlocked = true`). Gọi ở đầu MỖI chu kỳ chạy;
+ *  - `ensureFresh()`: chỉ kiểm lại khi đã quá `recheckMs` kể từ lần kiểm trước — gọi trước mỗi node gửi;
+ *  - `getScope()`: phạm vi truyền xuống adapter. Mặc định RỖNG tới khi tính xong (hỏng thì chặn); bị chặn → về rỗng.
+ * Chiến dịch không có node Telegram / WhatsApp → mọi hàm là no-op (không truy vấn gì).
+ *
+ * @param {{ ownerId: number|string, nodes: Array<object>, getActorUserIds: () => Array<number|string|null|undefined>,
+ *   onBlocked: (error: Error) => Promise<void>, recheckMs?: number, now?: () => number }} input
+ */
+export function createRunChannelAccessGuard({
+  ownerId,
+  nodes,
+  getActorUserIds,
+  onBlocked,
+  recheckMs = CHANNEL_ACCESS_RECHECK_MS,
+  now = () => Date.now(),
+}) {
+  const refs = collectCampaignChannelAccountRefs(nodes);
+  const hasChannelAccountNodes = refs[TELEGRAM_CHANNEL].length > 0 || refs[WHATSAPP_BAILEYS_CHANNEL].length > 0;
+  let scope = emptyChannelScope();
+  let checkedAtMs = 0;
+
+  const enforce = async () => {
+    if (!hasChannelAccountNodes) return;
+    try {
+      const result = await assertRunChannelAccountsAssigned({ ownerId, actorUserIds: getActorUserIds(), nodes });
+      scope = result.scope;
+      checkedAtMs = now();
+    } catch (accessError) {
+      if (accessError?.code !== CHANNEL_ACCOUNT_NOT_ASSIGNED_CODE) throw accessError;
+      scope = emptyChannelScope();
+      // Đóng sổ TRƯỚC khi ném (cùng khuôn Zalo): nhánh RUN_STOPPED ở catch tổng của engine chỉ log + return.
+      await onBlocked(accessError);
+      const stopError = new Error(accessError.message);
+      stopError.code = 'RUN_STOPPED';
+      stopError.channelAccessBlocked = true;
+      throw stopError;
+    }
+  };
+
+  const ensureFresh = async () => {
+    if (!hasChannelAccountNodes) return;
+    if (now() - checkedAtMs > recheckMs) await enforce();
+  };
+
+  return { enforce, ensureFresh, getScope: () => scope, hasChannelAccountNodes };
+}
+
 export default {
   assertCampaignNodesChannelAccountsAccessible,
   assertRunChannelAccountsAssigned,
   collectCampaignChannelAccountRefs,
   createChannelNotAssignedError,
+  createRunChannelAccessGuard,
   emptyChannelScope,
   findUnassignedChannelPairs,
   getChannelScopeForUser,

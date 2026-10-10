@@ -58,11 +58,7 @@ import {
   collectEffectiveZaloAccountIds,
   resolveRunTriggerUserId,
 } from './campaignZaloAccess.service.js';
-import {
-  assertRunChannelAccountsAssigned,
-  collectCampaignChannelAccountRefs,
-  emptyChannelScope,
-} from './campaignChannelAccess.service.js';
+import { createRunChannelAccessGuard } from './campaignChannelAccess.service.js';
 import {
   deriveVariablesForText,
   renderTemplateText,
@@ -3141,37 +3137,19 @@ class CampaignRunService {
       // kiểm theo NGƯỜI KÍCH HOẠT lượt chạy (không theo người tạo chiến dịch; chủ tự chạy thì luôn được). Sai thì đóng sổ run
       // 'failed' kèm lý do rõ và KHÔNG gửi tin. Kiểm đầu mỗi chu kỳ + sau tối đa 5 phút (chủ gỡ giao giữa chừng thì dừng).
       // Mặc định phạm vi RỖNG (hỏng thì chặn): chưa tính xong thì adapter chặn mọi tài khoản.
-      const channelRefsInCampaign = collectCampaignChannelAccountRefs(nodes);
-      const hasChannelAccountNodes = channelRefsInCampaign.telegram.length > 0 || channelRefsInCampaign.whatsapp_baileys.length > 0;
-      let channelAccessScope = emptyChannelScope();
-      let channelAccessCheckedAtMs = 0;
-      const enforceChannelAccessForRun = async () => {
-        if (!hasChannelAccountNodes) return;
-        try {
-          const result = await assertRunChannelAccountsAssigned({
-            ownerId: userId,
-            actorUserIds: [
-              resolveRunTriggerUserId({
-                metadataTriggeredBy: runRow?.run_metadata?.triggeredBy,
-                triggeredBy: runRow?.triggered_by,
-                scheduleCreatedBy: runRow?.schedule_created_by,
-                campaignCreatedBy: campaign?.created_by,
-              }),
-            ],
-            nodes,
-          });
-          channelAccessScope = result.scope;
-          channelAccessCheckedAtMs = Date.now();
-        } catch (accessError) {
-          if (accessError?.code !== 'CHANNEL_ACCOUNT_NOT_ASSIGNED') throw accessError;
-          channelAccessScope = emptyChannelScope();
-          await this._failRunAndNotify(runId, campaignId, accessError.message, 'channel_account_not_assigned');
-          const stopError = new Error(accessError.message);
-          stopError.code = 'RUN_STOPPED';
-          stopError.channelAccessBlocked = true;
-          throw stopError;
-        }
-      };
+      const channelAccessGuard = createRunChannelAccessGuard({
+        ownerId: userId,
+        nodes,
+        getActorUserIds: () => [
+          resolveRunTriggerUserId({
+            metadataTriggeredBy: runRow?.run_metadata?.triggeredBy,
+            triggeredBy: runRow?.triggered_by,
+            scheduleCreatedBy: runRow?.schedule_created_by,
+            campaignCreatedBy: campaign?.created_by,
+          }),
+        ],
+        onBlocked: (accessError) => this._failRunAndNotify(runId, campaignId, accessError.message, 'channel_account_not_assigned'),
+      });
 
       const orderMap = campaignFlowService.buildExecutionOrderMap(nodes, connections, {
         nodeIdKey: 'id',
@@ -3523,7 +3501,7 @@ class CampaignRunService {
       while (true) {
         // PR-G3 — kiểm tài khoản Zalo được giao trước MỖI chu kỳ (lần đầu = kiểm lúc bắt đầu, trước khi gửi bất kỳ tin nào).
         await enforceZaloAccessForRun();
-        await enforceChannelAccessForRun();
+        await channelAccessGuard.enforce();
         nextContinuousWakeAtMs = null;
         let shouldPauseUntilNextContinuousCycle = false;
         const isEmailRateLimitCooldownActive = (
@@ -8945,7 +8923,7 @@ class CampaignRunService {
           let adapterResult;
           try {
             // PR-H2 — chủ gỡ giao giữa chừng thì tối đa 5 phút sau lượt chạy dừng (kiểm lại cả lúc bắt đầu mỗi chu kỳ).
-            if (Date.now() - channelAccessCheckedAtMs > ZALO_ACCESS_RECHECK_MS) await enforceChannelAccessForRun();
+            await channelAccessGuard.ensureFresh();
             adapterResult = await campaignChannelRunner.runAdapterSendNode({
               descriptor: adapterDescriptor,
               runId,
@@ -8966,7 +8944,7 @@ class CampaignRunService {
               ensureRunStillRunning: () => this.ensureRunStillRunning(runId),
               logExecutionNode: campaignExecutionLogService.logExecutionNode,
               quotaGate: this.channelQuotaGate,
-              accessibleChannelRefs: channelAccessScope,
+              accessibleChannelRefs: channelAccessGuard.getScope(),
             });
           } catch (adapterError) {
             // F1 (review vòng 1 PR-3) — runner ném lỗi (quiet_hours/rate_limit/auth/not_configured/
@@ -9070,7 +9048,7 @@ class CampaignRunService {
             }
 
             // PR-H2 — tài khoản gửi bị gỡ giao trong khoảng giữa hai lần kiểm lại (`resolveAccount` chặn bằng phạm vi cũ): đóng sổ
-            // 'failed' với lý do rõ, giống nhánh kiểm đầu chu kỳ (`enforceChannelAccessForRun`), KHÔNG gửi tin.
+            // 'failed' với lý do rõ, giống nhánh kiểm đầu chu kỳ (`channelAccessGuard.enforce`), KHÔNG gửi tin.
             if (adapterError?.code === 'CHANNEL_ACCOUNT_NOT_ASSIGNED') {
               await this._failRunAndNotify(runId, campaignId, adapterError.message, 'channel_account_not_assigned');
               const stopError = new Error(adapterError.message);

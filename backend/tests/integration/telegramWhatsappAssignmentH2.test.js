@@ -569,6 +569,19 @@ describe('engine chạy nền (CSDL thật) — dừng ngay đầu lượt, khô
     expect(rows[0].error_message).toMatch(/chưa được giao cho nhân viên/);
   });
 
+  it('CHỦ là người kích hoạt, chiến dịch do NHÂN VIÊN (đã bị gỡ giao) tạo → engine KHÔNG dừng vì "chưa được giao" (kiểm theo người kích hoạt, không theo người tạo)', async () => {
+    const { owner, employee, t1 } = await setup();
+    const campaignId = await insertCampaign({ ownerId: owner.id, createdBy: employee.id });
+    await insertNode(campaignId, 'send_telegram', { telegramAccountId: t1, recipientSource: 'telegram_conversations' });
+    await db.query('DELETE FROM member_channel_accounts WHERE employee_id = $1', [employee.id]);
+    const runId = await createRun({ campaignId, ownerId: owner.id, triggeredBy: owner.id });
+
+    await realExecuteCampaign(campaignId, runId, owner.id);
+
+    const { rows } = await db.query('SELECT status, error_message FROM campaign_runs WHERE id = $1', [runId]);
+    expect(String(rows[0].error_message || '')).not.toMatch(/chưa được giao/);
+  });
+
   it('run cũ thiếu người kích hoạt → rơi về NGƯỜI TẠO chiến dịch, chưa được giao → failed', async () => {
     const { owner, employee, t2 } = await setup();
     const campaignId = await insertCampaign({ ownerId: owner.id, createdBy: employee.id });
