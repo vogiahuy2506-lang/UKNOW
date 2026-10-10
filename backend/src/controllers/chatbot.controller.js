@@ -23,6 +23,18 @@ const isTelegramStubOnly = () => isStubOnly({ channel: 'telegram' });
 
 /** Mã lỗi 409 khi bật chatbot thứ hai trên một tài khoản Zalo cá nhân (S-12). */
 const ZALO_ACCOUNT_BOUND_TO_OTHER_CHATBOT_CODE ='ZALO_ACCOUNT_BOUND_TO_OTHER_CHATBOT';
+/** Cùng quy tắc "1 tài khoản = 1 chatbot" cho WhatsApp / Telegram. */
+const CHANNEL_ACCOUNT_BOUND_TO_OTHER_CHATBOT_CODE = 'CHANNEL_ACCOUNT_BOUND_TO_OTHER_CHATBOT';
+
+function boundToOtherChatbotResponse(res, channelLabel, holder) {
+  return res.status(409).json({
+    success: false,
+    code: CHANNEL_ACCOUNT_BOUND_TO_OTHER_CHATBOT_CODE,
+    message: `Tài khoản ${channelLabel} này đang bật cho chatbot "${holder.name}". Mỗi tài khoản chỉ gắn một chatbot — hãy tắt bên đó trước khi bật ở đây.`,
+    chatbotId: holder.id,
+    chatbotName: holder.name,
+  });
+}
 import customChatService from '../services/ai/customChat.service.js';
 import aiCreditMeter, { VISITOR_CHAT_UNAVAILABLE_MESSAGE } from '../services/ai/aiCreditMeter.service.js';
 import zaloInboxService from '../services/chatbot/zaloInbox.service.js';
@@ -812,6 +824,14 @@ class ChatbotController {
           settings = null;
         }
         const isEnabled = settings?.is_enabled === true;
+        let otherBot = null;
+        if (chatbotId != null) {
+          try {
+            otherBot = await chatbotWhatsAppBaileysRepository.findOtherEnabledChatbot(userId, fullKey, chatbotId);
+          } catch (e) {
+            console.error('[ChatbotChannel] findOtherEnabledChatbot (baileys) failed for %s: %s', fullKey, e.message);
+          }
+        }
         const status = detail.status || 'closed';
         const phoneRaw = detail.userId || '';
         const phone = phoneRaw.split('@')[0] || '';
@@ -827,6 +847,8 @@ class ChatbotController {
           chatbot_enabled: isEnabled,
           settings_chatbot_id: settings?.id_chatbot ?? null,
           chatbot_name: null,                // chatbot join phức tạp — modal chỉ cần enabled
+          other_chatbot_id: otherBot?.id ?? null,
+          other_chatbot_name: otherBot?.name ?? null,
         };
       }));
 
@@ -872,6 +894,14 @@ class ChatbotController {
       let settings;
       if (session_key) {
         // ── Baileys path ───────────────────────────────────────────
+        // 1 tài khoản = 1 chatbot: bật bot thứ hai khi bot khác đang bật thì chặn (tắt luôn được).
+        if (enabled && normalizedChatbotId != null) {
+          await chatbotWhatsAppBaileysRepository.assertOwnedSession(ownerUserId, session_key);
+          const holder = await chatbotWhatsAppBaileysRepository.findOtherEnabledChatbot(
+            ownerUserId, session_key, normalizedChatbotId
+          );
+          if (holder) return boundToOtherChatbotResponse(res, 'WhatsApp', holder);
+        }
         settings = await chatbotWhatsAppBaileysRepository.setEnabled(
           ownerUserId,
           session_key,
@@ -888,6 +918,15 @@ class ChatbotController {
       } else if (Number.isFinite(Number(id_channel_connection))) {
         // ── Cloud API path ──────────────────────────────────────────
         const channelConnectionId = Number(id_channel_connection);
+        if (enabled && normalizedChatbotId != null) {
+          await chatbotWhatsAppAccountRepository.assertOwnedConfiguration(
+            ownerUserId, channelConnectionId, { idChatbot: normalizedChatbotId }
+          );
+          const holder = await chatbotWhatsAppAccountRepository.findOtherEnabledChatbot(
+            ownerUserId, channelConnectionId, normalizedChatbotId
+          );
+          if (holder) return boundToOtherChatbotResponse(res, 'WhatsApp', holder);
+        }
         settings = await chatbotWhatsAppAccountRepository.setEnabled(
           ownerUserId,
           channelConnectionId,
@@ -3085,6 +3124,15 @@ class ChatbotController {
       return res.json({ success: true, data: settings });
     } catch (err) {
       console.error('[Telegram] toggleTelegramAccountChatbot error:', err.message);
+      if (err.code === CHANNEL_ACCOUNT_BOUND_TO_OTHER_CHATBOT_CODE) {
+        return res.status(409).json({
+          success: false,
+          code: err.code,
+          message: err.message,
+          chatbotId: err.chatbotId,
+          chatbotName: err.chatbotName,
+        });
+      }
       return res.status(err.status || 500).json({ success: false, message: err.message });
     }
   }

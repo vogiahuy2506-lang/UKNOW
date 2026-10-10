@@ -231,6 +231,21 @@ class TelegramPersonalService {
   }
 
   async toggleAccountChatbot(userId, accountId, chatbotId, enabled) {
+    // 1 tài khoản = 1 chatbot: bật bot thứ hai khi bot khác đang bật thì chặn (tắt luôn được).
+    if (enabled && chatbotId != null) {
+      await chatbotTelegramRepository.assertOwned(userId, accountId);
+      const holder = await chatbotTelegramRepository.findOtherEnabledChatbot(userId, accountId, chatbotId);
+      if (holder) {
+        const err = new Error(
+          `Tài khoản Telegram này đang bật cho chatbot "${holder.name}". Mỗi tài khoản chỉ gắn một chatbot — hãy tắt bên đó trước khi bật ở đây.`
+        );
+        err.status = 409;
+        err.code = 'CHANNEL_ACCOUNT_BOUND_TO_OTHER_CHATBOT';
+        err.chatbotId = holder.id;
+        err.chatbotName = holder.name;
+        throw err;
+      }
+    }
     const settings = await chatbotTelegramRepository.setEnabled(
       userId,
       accountId,

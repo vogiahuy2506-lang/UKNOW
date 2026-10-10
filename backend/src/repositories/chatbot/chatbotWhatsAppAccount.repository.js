@@ -118,6 +118,26 @@ class ChatbotWhatsAppAccountRepository {
   }
 
   /**
+   * Chatbot KHÁC (còn hoạt động, cùng chủ) đang bật trên kết nối WhatsApp Cloud API này — quy tắc "1 tài khoản = 1 chatbot".
+   * @returns {Promise<{ id: number, name: string }|null>}
+   */
+  async findOtherEnabledChatbot(userId, channelConnectionId, chatbotId) {
+    const { rows } = await db.query(
+      `SELECT cb.id, cb.name
+       FROM chatbot_whatsapp_account_settings s
+       JOIN custom_chatbots cb
+         ON cb.id = s.id_chatbot AND cb.id_user = s.id_user AND cb.is_active = true
+       WHERE s.id_user = $1 AND s.id_channel_connection = $2
+         AND s.is_enabled = true AND s.id_chatbot IS NOT NULL
+         AND s.id_chatbot <> $3::bigint
+       ORDER BY s.updated_at DESC NULLS LAST, s.id DESC
+       LIMIT 1`,
+      [userId, channelConnectionId, chatbotId]
+    );
+    return rows[0] || null;
+  }
+
+  /**
    * Webhook-side lookup: did the user enable AI for this tuple?
    * If no settings row exists we treat it as disabled (user must opt in).
    */
@@ -166,6 +186,24 @@ class ChatbotWhatsAppAccountRepository {
            ON cws.id_channel_connection = ccc.id AND cws.id_user = $1
               AND cws.id_chatbot = $2`;
 
+    // 1 tài khoản = 1 chatbot: trả thêm chatbot KHÁC đang bật (join riêng vì join trên đã lọc theo chatbotId).
+    const otherChatbotColumns = chatbotId == null
+      ? ''
+      : `,
+              oth.id_chatbot AS other_chatbot_id,
+              oth.name AS other_chatbot_name`;
+    const otherChatbotJoin = chatbotId == null
+      ? ''
+      : `LEFT JOIN (
+           SELECT DISTINCT ON (o.id_channel_connection) o.id_channel_connection, o.id_chatbot, ocb.name
+           FROM chatbot_whatsapp_account_settings o
+           JOIN custom_chatbots ocb
+             ON ocb.id = o.id_chatbot AND ocb.id_user = o.id_user AND ocb.is_active = true
+           WHERE o.id_user = $1
+             AND o.is_enabled = true AND o.id_chatbot IS NOT NULL AND o.id_chatbot <> $2
+           ORDER BY o.id_channel_connection, o.updated_at DESC NULLS LAST, o.id DESC
+         ) oth ON oth.id_channel_connection = ccc.id`;
+
     const { rows } = await db.query(
       `SELECT ccc.id,
               ccc.id_chatbot,
@@ -182,10 +220,11 @@ class ChatbotWhatsAppAccountRepository {
               COALESCE(ccc.settings->>'is_default', 'false')::boolean AS is_default,
               cws.is_enabled AS chatbot_enabled,
               cws.id_chatbot AS settings_chatbot_id,
-              cb.name AS chatbot_name
+              cb.name AS chatbot_name${otherChatbotColumns}
        FROM chatbot_channel_connections ccc
        JOIN custom_chatbots cb ON cb.id = ccc.id_chatbot
        ${chatbotJoinClause}
+       ${otherChatbotJoin}
        WHERE ccc.channel_type = 'whatsapp'
          AND cb.id_user = $1
        ORDER BY (COALESCE(ccc.settings->>'is_default', 'false')::boolean) DESC, ccc.connected_at DESC NULLS LAST, ccc.created_at DESC`,

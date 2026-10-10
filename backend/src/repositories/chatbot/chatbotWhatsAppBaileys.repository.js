@@ -72,6 +72,26 @@ class ChatbotWhatsAppBaileysRepository {
   }
 
   /**
+   * Chatbot KHÁC (còn hoạt động, cùng chủ) đang bật trên session WhatsApp này — quy tắc "1 tài khoản = 1 chatbot".
+   * @returns {Promise<{ id: number, name: string }|null>}
+   */
+  async findOtherEnabledChatbot(userId, sessionKey, chatbotId) {
+    const { rows } = await db.query(
+      `SELECT cb.id, cb.name
+       FROM chatbot_whatsapp_baileys_settings s
+       JOIN custom_chatbots cb
+         ON cb.id = s.id_chatbot AND cb.id_user = s.id_user AND cb.is_active = true
+       WHERE s.id_user = $1 AND s.session_key = $2
+         AND s.is_enabled = true AND s.id_chatbot IS NOT NULL
+         AND s.id_chatbot <> $3::bigint
+       ORDER BY s.updated_at DESC NULLS LAST, s.id DESC
+       LIMIT 1`,
+      [userId, sessionKey, chatbotId]
+    );
+    return rows[0] || null;
+  }
+
+  /**
    * Webhook-side lookup: is AI enabled for this (session, chatbot)?
    */
   async isEnabledForChatbot(sessionKey, chatbotId) {

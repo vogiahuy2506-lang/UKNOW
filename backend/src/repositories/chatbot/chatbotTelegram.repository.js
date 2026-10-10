@@ -500,6 +500,25 @@ class ChatbotTelegramRepository {
       ) tcs ON true`;
     }
 
+    // 1 tài khoản = 1 chatbot (như Zalo S-12): khi biết đang xem chatbot nào, trả thêm chatbot KHÁC đang bật trên
+    // tài khoản này để modal hiện huy hiệu "Đang bật cho: <tên>". Truy vấn trên đã lọc theo đúng chatbotId nên
+    // `settings_chatbot_id` không bao giờ cho biết bot khác — phải join riêng.
+    const otherChatbotColumns = chatbotId == null
+      ? ''
+      : `,
+         oth.id_chatbot        AS other_chatbot_id,
+         oth.name              AS other_chatbot_name`;
+    const otherChatbotJoin = chatbotId == null
+      ? ''
+      : `LEFT JOIN (
+           SELECT DISTINCT ON (o.id_telegram_account) o.id_telegram_account, o.id_chatbot, ocb.name
+           FROM telegram_chatbot_settings o
+           JOIN custom_chatbots ocb
+             ON ocb.id = o.id_chatbot AND ocb.id_user = $1 AND ocb.is_active = true
+           WHERE o.is_enabled = true AND o.id_chatbot <> $2
+           ORDER BY o.id_telegram_account, o.updated_at DESC NULLS LAST, o.id DESC
+         ) oth ON oth.id_telegram_account = ta.id`;
+
     const { rows } = await db.query(
       `SELECT
          ta.id,
@@ -516,16 +535,38 @@ class ChatbotTelegramRepository {
          tcs.is_enabled_dm     AS chatbot_enabled_dm,
          tcs.is_enabled_group  AS chatbot_enabled_group,
          tcs.id_chatbot        AS settings_chatbot_id,
-         cb.name               AS chatbot_name
+         cb.name               AS chatbot_name${otherChatbotColumns}
        FROM telegram_accounts ta
        ${chatbotJoin}
        LEFT JOIN custom_chatbots cb
          ON cb.id = tcs.id_chatbot AND cb.id_user = ta.id_user AND cb.is_active = true
+       ${otherChatbotJoin}
        WHERE ta.id_user = $1 AND ta.is_active = true
        ORDER BY ta.created_at DESC`,
       params
     );
     return rows;
+  }
+
+  /**
+   * Chatbot KHÁC (còn hoạt động, cùng chủ) đang bật trên tài khoản Telegram này — quy tắc "1 tài khoản = 1 chatbot".
+   * @returns {Promise<{ id: number, name: string }|null>}
+   */
+  async findOtherEnabledChatbot(userId, telegramAccountId, chatbotId) {
+    const { rows } = await db.query(
+      `SELECT cb.id, cb.name
+       FROM telegram_chatbot_settings tcs
+       JOIN telegram_accounts ta ON ta.id = tcs.id_telegram_account AND ta.id_user = $1
+       JOIN custom_chatbots cb
+         ON cb.id = tcs.id_chatbot AND cb.id_user = ta.id_user AND cb.is_active = true
+       WHERE tcs.id_telegram_account = $2
+         AND tcs.is_enabled = true AND tcs.id_chatbot IS NOT NULL
+         AND tcs.id_chatbot <> $3::bigint
+       ORDER BY tcs.updated_at DESC NULLS LAST, tcs.id DESC
+       LIMIT 1`,
+      [userId, telegramAccountId, chatbotId]
+    );
+    return rows[0] || null;
   }
 
   async setEnabled(userId, telegramAccountId, chatbotId, enabled) {
