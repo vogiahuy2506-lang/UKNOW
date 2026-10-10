@@ -16,12 +16,14 @@ import {
   HiOutlineExternalLink,
   HiOutlineMenu,
   HiOutlineBell,
+  HiOutlineSupport,
 } from 'react-icons/hi';
 import { useAuthStore } from '../../../stores/authStore';
 import { useI18n } from '../../../i18n';
 import { useMarketplaceModal } from '../../../contexts/useMarketplaceModal';
 import NotificationBell from '../NotificationBell';
 import { notificationsPagePath } from '../../../features/notifications/utils/notificationPaths';
+import { supportListPath } from '../../../features/support/utils/supportConstants';
 import AccountProfileModal from '../../../features/auth/components/AccountProfileModal';
 import ChangePasswordModal from '../../../features/auth/components/ChangePasswordModal';
 import logoIcon from '../../../assets/icons/founderai-logo.png';
@@ -291,6 +293,13 @@ const Header = ({ onToggleSidebar }) => {
                 >
                   <HiOutlineBell className="w-4 h-4 text-gray-400" />
                   {t('header.notifications')}
+                </button>
+                <button
+                  onClick={() => { navigate(supportListPath(user)); setProfileOpen(false); }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-gray-700 hover:bg-gray-50 rounded-xl transition-colors"
+                >
+                  <HiOutlineSupport className="w-4 h-4 text-gray-400" />
+                  {t('header.support')}
                 </button>
                 <button
                   onClick={() => { setShowChangePassword(true); setProfileOpen(false); }}

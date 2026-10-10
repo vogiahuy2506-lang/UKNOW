@@ -28,6 +28,7 @@ import {
   HiOutlineFilter,
   HiOutlineShoppingCart,
   HiOutlineCollection,
+  HiOutlineSupport,
 } from 'react-icons/hi';
 
 /**
@@ -66,6 +67,7 @@ export const superAdminMenuItems = (t) => [
   { key: 'ai_usage_analytics', name: t('nav.aiUsageAnalytics'), defaultCategory: 'messaging', path: '/admin/ai-ops/usage', icon: HiOutlineSparkles },
   { key: 'ai_models', name: t('nav.aiModels'), defaultCategory: 'messaging', path: '/admin/ai-models', icon: HiOutlineCog },
   { key: 'notification_center', name: t('nav.emailCampaignCenter'), defaultCategory: 'messaging', path: '/admin/notification-center', icon: HiOutlineMailOpen },
+  { key: 'support_tickets', name: t('nav.supportTickets'), defaultCategory: 'messaging', path: '/admin/tickets', icon: HiOutlineChatAlt2 },
   { key: 'welcome_email', name: t('nav.welcomeEmail'), defaultCategory: 'messaging', path: '/admin/welcome-email', icon: HiOutlineMail },
   { key: 'help_articles', name: t('nav.helpArticles'), defaultCategory: 'messaging', path: '/admin/help-articles', icon: HiOutlineDocumentText },
   { key: 'help_unanswered', name: t('nav.helpUnanswered'), defaultCategory: 'messaging', path: '/admin/ai-ops/unanswered', icon: HiOutlineQuestionMarkCircle },
@@ -103,6 +105,8 @@ export const userMenuItems = (t) => [
   { key: 'employees', name: t('nav.employees'), defaultCategory: 'settings', path: '/app/settings/employees', icon: HiOutlineUserGroup, ownerOnly: true },
   { key: 'media_library', name: t('nav.mediaLibrary'), defaultCategory: 'settings', path: '/app/settings/media-library', icon: HiOutlinePhotograph, permission: ['media_library_view'] },
   { key: 'audit_logs', name: t('nav.auditLogs'), defaultCategory: 'settings', path: '/app/settings/audit-logs', icon: HiOutlineClipboard, ownerOnly: true },
+  // Không permission, không ownerOnly: nhân viên cũng gửi được góp ý (ticket thuộc người đăng nhập).
+  { key: 'support', name: t('nav.support'), defaultCategory: 'settings', path: '/app/support', icon: HiOutlineSupport },
 ];
 
 export const AVATAR_STYLES = {

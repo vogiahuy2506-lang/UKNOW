@@ -453,11 +453,11 @@ export const REFERENCE_CONFIGS = {
     url: '/app/settings/sub-assistants',
   },
   // Ảnh đính kèm ticket hỗ trợ (`activateSupportTicketStorageObjects` ghi reference_type 'support_ticket', reference_id = id ticket).
-  // PR-5 đổi url sang /app/support khi có route.
+  // Trang ticket của người dùng: route `/app/support` (App.jsx).
   support_ticket: {
     sql: `SELECT id, subject AS name FROM support_tickets WHERE id = $1 LIMIT 1`,
     label: 'Ticket hỗ trợ',
-    url: '/app/settings/media-library',
+    url: '/app/support',
   },
   template_file: {
     sql: `SELECT id, original_name AS name FROM template_files WHERE id = $1 LIMIT 1`,

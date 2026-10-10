@@ -110,6 +110,10 @@ const AuditLogsPage = lazyWithRetry(() => import('./pages/settings/AuditLogsPage
 const UserDeliveryMonitorPage = lazyWithRetry(() => import('./pages/campaigns/UserDeliveryMonitorPage'));
 const NotificationsPage = lazyWithRetry(() => import('./pages/notifications/NotificationsPage'));
 const NotificationPreferencesPage = lazyWithRetry(() => import('./pages/settings/NotificationPreferencesPage'));
+const SupportTicketsPage = lazyWithRetry(() => import('./pages/support/SupportTicketsPage'));
+const SupportTicketDetailPage = lazyWithRetry(() => import('./pages/support/SupportTicketDetailPage'));
+const AdminSupportTicketsPage = lazyWithRetry(() => import('./pages/admin/AdminSupportTicketsPage'));
+const AdminSupportTicketDetailPage = lazyWithRetry(() => import('./pages/admin/AdminSupportTicketDetailPage'));
 import UnauthorizedScreen from './pages/auth/UnauthorizedScreen';
 import LoadingScreen from './components/LoadingScreen';
 import ProtectedRoute from './components/routes/ProtectedRoute';
@@ -398,6 +402,10 @@ function AppContent() {
             <Route path="notifications" element={<NotificationsPage />} />
             <Route path="settings/notifications" element={<NotificationPreferencesPage />} />
 
+            {/* Góp ý & hỗ trợ: ticket thuộc NGƯỜI ĐĂNG NHẬP — nhân viên cũng gửi được, KHÔNG bọc OwnerRoute/PermissionRoute */}
+            <Route path="support" element={<SupportTicketsPage />} />
+            <Route path="support/:id" element={<SupportTicketDetailPage />} />
+
             {/* Settings — owner only */}
             <Route path="settings/channels" element={<PermissionRoute permission={['email_settings', 'zalo_settings', 'chatbot_channels_manage']}><ChannelSettings /></PermissionRoute>} />
             <Route path="settings/employees" element={<OwnerRoute><EmployeeManagement /></OwnerRoute>} />
@@ -495,6 +503,9 @@ function AppContent() {
             {/* Chuông thông báo của super admin: ProtectedRoute đá admin khỏi /app/*, nên cặp trang này có bản /admin riêng */}
             <Route path="notifications" element={<NotificationsPage />} />
             <Route path="settings/notifications" element={<NotificationPreferencesPage />} />
+            {/* Ticket góp ý của super admin (link trong chuông: /admin/tickets/<id>) */}
+            <Route path="tickets" element={<AdminSupportTicketsPage />} />
+            <Route path="tickets/:id" element={<AdminSupportTicketDetailPage />} />
             <Route path="landing-customizer" element={<LandingPageCustomizer />} />
           </Route>
 
