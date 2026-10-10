@@ -431,8 +431,15 @@ class ChatbotTelegramRepository {
    * Hard-delete an account row by `telegram_user_id`.
    */
   async deleteByTelegramUserId(telegramUserId) {
+    // `member_channel_accounts.account_ref` là TEXT (không FK được) nên xoá việc giao đi cùng một câu lệnh.
     const { rows } = await db.query(
-      `DELETE FROM telegram_accounts WHERE telegram_user_id = $1 RETURNING *`,
+      `WITH deleted AS (
+         DELETE FROM telegram_accounts WHERE telegram_user_id = $1 RETURNING *
+       ), cleanup AS (
+         DELETE FROM member_channel_accounts
+          WHERE channel = 'telegram' AND account_ref IN (SELECT id::text FROM deleted)
+       )
+       SELECT * FROM deleted`,
       [Number(telegramUserId)]
     );
     return rows[0] || null;
@@ -449,10 +456,17 @@ class ChatbotTelegramRepository {
   }
 
   async deleteAccount(userId, id) {
+    // `member_channel_accounts.account_ref` là TEXT (không FK được) nên xoá việc giao đi cùng một câu lệnh.
     const { rows } = await db.query(
-      `DELETE FROM telegram_accounts
-       WHERE id = $1 AND id_user = $2
-       RETURNING *`,
+      `WITH deleted AS (
+         DELETE FROM telegram_accounts
+          WHERE id = $1 AND id_user = $2
+          RETURNING *
+       ), cleanup AS (
+         DELETE FROM member_channel_accounts
+          WHERE channel = 'telegram' AND account_ref IN (SELECT id::text FROM deleted)
+       )
+       SELECT * FROM deleted`,
       [id, userId]
     );
     return rows[0] || null;

@@ -22,8 +22,10 @@ import {
   updateCampaignApprovalThreshold as updateCampaignApprovalThresholdInDb,
 } from '../../repositories/user/employee.repository.js';
 import {
+  listTelegramAssignmentsForOwner,
+  listWhatsAppAssignmentsForOwner,
   listZaloAssignmentsForOwner,
-  setZaloAssignmentsForEmployee,
+  setChannelAssignmentsForEmployee,
 } from './memberChannelAccess.service.js';
 import verificationService from '../verification.service.js';
 import sseService from '../sse.service.js';
@@ -414,47 +416,64 @@ export async function setEmployeeSendLimits(ownerId, employeeId, limits) {
 }
 
 /**
- * Danh sách tài khoản Zalo cá nhân của chủ + cờ đã giao cho nhân viên này (tab "Tài khoản Zalo").
+ * Danh sách tài khoản Zalo cá nhân + Telegram + WhatsApp (Baileys) của chủ, kèm cờ đã giao cho nhân viên này
+ * (tab "Tài khoản kênh").
  */
 export async function getEmployeeChannelAccounts(ownerId, employeeId) {
   const employee = await findEmployeeByIdAndOwner(employeeId, ownerId);
   if (!employee) {
     throw { status: 404, message: 'Không tìm thấy nhân viên' };
   }
-  return { zaloAccounts: await listZaloAssignmentsForOwner(ownerId, employeeId) };
+  const [zaloAccounts, telegramAccounts, whatsappAccounts] = await Promise.all([
+    listZaloAssignmentsForOwner(ownerId, employeeId),
+    listTelegramAssignmentsForOwner(ownerId, employeeId),
+    listWhatsAppAssignmentsForOwner(ownerId, employeeId),
+  ]);
+  return { zaloAccounts, telegramAccounts, whatsappAccounts };
 }
 
+const sameList = (a, b) => a.length === b.length && a.every((value, index) => String(value) === String(b[index]));
+
 /**
- * Thay toàn bộ việc giao Zalo cá nhân cho nhân viên. Id không thuộc chủ bị loại.
+ * Thay việc giao theo kênh cho nhân viên (một giao dịch). Khoá `undefined` trong `channels` = GIỮ NGUYÊN kênh đó
+ * (bản FE cũ chỉ gửi Zalo không được làm mất việc giao Telegram / WhatsApp). Id / khoá không thuộc chủ bị loại.
  *
- * @returns {Promise<{ zaloAccounts: object[], before: number[], after: number[] }>}
+ * @param {number} ownerId
+ * @param {number} employeeId
+ * @param {{ zaloAccountIds?: Array<number|string>, telegramAccountIds?: Array<number|string>, whatsappSessionKeys?: string[] }} channels
+ * @param {number} actorUserId
+ * @returns {Promise<{ zaloAccounts: object[], telegramAccounts: object[], whatsappAccounts: object[], changes: { zalo: object|null, telegram: object|null, whatsapp: object|null } }>}
  */
-export async function setEmployeeChannelAccounts(ownerId, employeeId, zaloAccountIds, actorUserId) {
+export async function setEmployeeChannelAccounts(ownerId, employeeId, channels, actorUserId) {
   const employee = await findEmployeeByIdAndOwner(employeeId, ownerId);
   if (!employee) {
     throw { status: 404, message: 'Không tìm thấy nhân viên' };
   }
-  const { before, after } = await setZaloAssignmentsForEmployee({
+  const { zaloAccountIds, telegramAccountIds, whatsappSessionKeys } = channels || {};
+  const changes = await setChannelAssignmentsForEmployee({
     ownerId,
     employeeId,
-    accountIds: zaloAccountIds,
     actorUserId,
+    zaloAccountIds,
+    telegramAccountIds,
+    whatsappSessionKeys,
   });
-  // Luồng SSE Hộp thư tính danh sách tài khoản Zalo được giao LÚC NỐI. Việc giao vừa đổi (gỡ HOẶC thêm) thì đóng các
-  // kết nối đang mở của nhân viên này để họ nối lại với danh sách mới — không thì nhân viên vừa bị gỡ tài khoản vẫn nhận
-  // tin của tài khoản đó đến lần nối lại kế tiếp. Lỗi ở đây không được làm hỏng việc giao đã lưu.
-  if (before.length !== after.length || before.some((id, index) => id !== after[index])) {
+  // Luồng SSE Hộp thư tính danh sách tài khoản được giao LÚC NỐI. Việc giao vừa đổi (gỡ HOẶC thêm) thì đóng các kết nối
+  // đang mở của nhân viên này để họ nối lại với danh sách mới. Lỗi ở đây không được làm hỏng việc giao đã lưu.
+  const changed = Object.values(changes).some((entry) => entry && !sameList(entry.before, entry.after));
+  if (changed) {
     try {
       sseService.disconnectActor(ownerId, employeeId);
     } catch (error) {
-      console.warn('[employee] Không đóng được luồng SSE sau khi đổi việc giao tài khoản Zalo:', error?.message || error);
+      console.warn('[employee] Không đóng được luồng SSE sau khi đổi việc giao tài khoản kênh:', error?.message || error);
     }
   }
-  return {
-    zaloAccounts: await listZaloAssignmentsForOwner(ownerId, employeeId),
-    before,
-    after,
-  };
+  const [zaloAccounts, telegramAccounts, whatsappAccounts] = await Promise.all([
+    listZaloAssignmentsForOwner(ownerId, employeeId),
+    listTelegramAssignmentsForOwner(ownerId, employeeId),
+    listWhatsAppAssignmentsForOwner(ownerId, employeeId),
+  ]);
+  return { zaloAccounts, telegramAccounts, whatsappAccounts, changes };
 }
 
 export async function deleteEmployee(ownerId, employeeId) {

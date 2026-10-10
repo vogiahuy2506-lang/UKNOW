@@ -18,6 +18,17 @@ import db from '../config/database.js';
 import { enforceResourceLimitTx } from '../utils/userResourceLimit.util.js';
 import * as whatsappBaileysModule from '../services/chatbot/whatsappBaileys.service.js';
 import { resolveWorkspaceOwnerId } from '../services/storage/storageQuota.service.js';
+import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
+import {
+  assertChannelAccountAccess,
+  CHANNEL_ACCOUNT_NOT_ASSIGNED_CODE,
+  isAssignmentScopedContext,
+} from '../services/user/memberChannelAccess.service.js';
+import {
+  deleteAssignmentsByRef,
+  insertSelfLoginChannelAssignment,
+  WHATSAPP_BAILEYS_CHANNEL,
+} from '../repositories/user/memberChannelAccount.repository.js';
 import { logWorkspace, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
 
@@ -59,9 +70,15 @@ function safeSessionKey(userId, sessionKey) {
  * song song của cùng chủ không cùng qua cổng; dòng creds do Baileys ghi ngay sau khi tạo socket nên cửa sổ hở còn lại rất hẹp.
  */
 async function connectWithAccountLimit(authUser, userId, sessionKey) {
+  // PLAN_GIAO_TK_TG_WA H1 — nhân viên (không phải chủ / super admin): nối lại khoá ĐÃ TỒN TẠI chỉ khi được giao (403 nếu
+  // không — trước đây `sessionKey: 'default'` nối lại đúng phiên của chủ); tạo khoá MỚI thì tự được giao (self_login) trong
+  // cùng giao dịch với việc kiểm hạn mức.
+  const workspaceCtx = getWorkspaceContext(authUser);
+  const scoped = isAssignmentScopedContext(workspaceCtx);
   const inMemory = whatsappBaileysService.getSession(sessionKey);
   const persisted = inMemory ? [] : await whatsappBaileysService.listPersistedSessions();
   if (inMemory || persisted.includes(sessionKey)) {
+    if (scoped) await assertChannelAccountAccess(workspaceCtx, WHATSAPP_BAILEYS_CHANNEL, sessionKey);
     return whatsappBaileysService.connectSession(sessionKey);
   }
   const client = await db.getClient();
@@ -72,6 +89,12 @@ async function connectWithAccountLimit(authUser, userId, sessionKey) {
       roleCode: authUser?.role,
       resourceKey: 'whatsappAccounts',
     });
+    if (scoped) {
+      await insertSelfLoginChannelAssignment(
+        { ownerId: userId, employeeId: workspaceCtx.actorUserId, channel: WHATSAPP_BAILEYS_CHANNEL, ref: sessionKey },
+        client
+      );
+    }
     const record = await whatsappBaileysService.connectSession(sessionKey);
     await client.query('COMMIT');
     return record;
@@ -112,6 +135,9 @@ class WhatsAppBaileysController {
       });
     } catch (err) {
       console.error('[WhatsApp/Baileys] connect error:', err.message);
+      if (err.code === CHANNEL_ACCOUNT_NOT_ASSIGNED_CODE) {
+        return res.status(403).json({ success: false, message: err.message, code: err.code });
+      }
       if (err.code === 'RESOURCE_LIMIT_EXCEEDED') {
         return res.status(400).json({
           success: false,
@@ -201,6 +227,14 @@ class WhatsAppBaileysController {
       const sessionKey = safeSessionKey(userId, req.params.key);
       // deleteSessionFiles là async — thiếu await thì `ok` là Promise (JSON ra `{}`) và xoá chưa xong đã trả lời.
       const ok = await whatsappBaileysService.deleteSessionFiles(sessionKey);
+      if (ok) {
+        // Khoá phiên dùng lại được sau khi xoá: hàng giao mồ côi sẽ "sống lại" cho nhân viên nếu không dọn (R1).
+        try {
+          await deleteAssignmentsByRef(WHATSAPP_BAILEYS_CHANNEL, sessionKey);
+        } catch (cleanupErr) {
+          console.warn('[WhatsApp/Baileys] không dọn được việc giao của phiên đã xoá:', cleanupErr.message);
+        }
+      }
       if (ok) await auditAccount(req, AUDIT_ACTIONS.WHATSAPP_ACCOUNT_DELETED, sessionKey);
       return res.json({ success: ok });
     } catch (err) {

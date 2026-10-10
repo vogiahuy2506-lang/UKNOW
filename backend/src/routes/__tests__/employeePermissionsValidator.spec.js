@@ -109,13 +109,35 @@ describe('PUT /api/employees/:id/channel-accounts — validator (giao tài kho�
   });
 
   it.each([
-    ['thiếu zaloAccountIds', {}],
+    ['không có danh sách kênh nào (body rỗng)', {}],
     ['không phải mảng', { zaloAccountIds: 5 }],
     ['chuỗi', { zaloAccountIds: 'all' }],
     ['phần tử không phải số', { zaloAccountIds: [5, 'abc'] }],
     ['phần tử <= 0', { zaloAccountIds: [0] }],
     ['phần tử âm', { zaloAccountIds: [-1] }],
   ])('%s → 400, không tới controller', async (_label, body) => {
+    const res = await put(body);
+    expect(res.status).toBe(400);
+    expect(mockUpdateChannelAccounts).not.toHaveBeenCalled();
+  });
+
+  it('PR-H1: chỉ Telegram / chỉ WhatsApp (khoá Zalo vắng) → tới controller; mảng rỗng cũng được', async () => {
+    expect((await put({ telegramAccountIds: [3, 4] })).status).toBe(200);
+    expect((await put({ whatsappSessionKeys: ['7-default'] })).status).toBe(200);
+    expect((await put({ telegramAccountIds: [], whatsappSessionKeys: [] })).status).toBe(200);
+    expect(mockUpdateChannelAccounts).toHaveBeenCalledTimes(3);
+  });
+
+  it.each([
+    ['telegramAccountIds không phải mảng', { telegramAccountIds: 3 }],
+    ['telegramAccountIds có phần tử chữ', { telegramAccountIds: [3, 'x'] }],
+    ['telegramAccountIds có phần tử <= 0', { telegramAccountIds: [0] }],
+    ['whatsappSessionKeys không phải mảng', { whatsappSessionKeys: '7-default' }],
+    ['whatsappSessionKeys có phần tử không phải chuỗi', { whatsappSessionKeys: [5] }],
+    ['whatsappSessionKeys có ký tự lạ', { whatsappSessionKeys: ['7-a b'] }],
+    ['whatsappSessionKeys có phần tử quá dài', { whatsappSessionKeys: [`7-${'a'.repeat(200)}`] }],
+    ['Zalo đúng nhưng Telegram sai', { zaloAccountIds: [1], telegramAccountIds: ['x'] }],
+  ])('PR-H1: %s → 400, không tới controller', async (_label, body) => {
     const res = await put(body);
     expect(res.status).toBe(400);
     expect(mockUpdateChannelAccounts).not.toHaveBeenCalled();

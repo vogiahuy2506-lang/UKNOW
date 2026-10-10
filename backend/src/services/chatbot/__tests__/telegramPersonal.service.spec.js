@@ -383,3 +383,73 @@ describe('telegramPersonalService.toggleAccountChatbot', () => {
     await expect(telegramPersonalService.toggleAccountChatbot(100, 1, 2, false)).resolves.toEqual({ enabled: true });
   });
 });
+
+// ─── PLAN_GIAO_TK_TG_WA PR-H1: người tạo phiên QR + tự giao khi nhân viên quét tài khoản MỚI ───────────────────────────
+describe('telegramPersonalService — phiên QR theo người tạo + self_login (PR-H1)', () => {
+  const successStatus = (id = 555) => ({ data: { status: 'success', user: { telegram_user_id: id, first_name: 'A' } } });
+  const startAs = async (sid, actor, owner = 100) => {
+    gatewayMock.createSession.mockResolvedValueOnce({ data: { session_id: sid, qr_image_base64: 'A', expires_at: 1 } });
+    await telegramPersonalService.startLogin(owner, 'user', actor);
+  };
+  const insertCalls = () => txClient.query.mock.calls.filter(([sql]) => /INSERT INTO member_channel_accounts/.test(String(sql)));
+
+  it('checkLoginStatus: chỉ NGƯỜI TẠO phiên poll được — người khác (kể cả chủ) nhận not_found và không chạm gateway', async () => {
+    await startAs('tg-h1-1', { actorUserId: 20, scopedToAssignments: true });
+    await expect(telegramPersonalService.checkLoginStatus('tg-h1-1', 21)).resolves.toEqual({ status: 'not_found' });
+    await expect(telegramPersonalService.checkLoginStatus('tg-h1-1', 100)).resolves.toEqual({ status: 'not_found' });
+    await expect(telegramPersonalService.checkLoginStatus('tg-h1-1')).resolves.toEqual({ status: 'not_found' });
+    expect(gatewayMock.getStatus).not.toHaveBeenCalled();
+    // phiên vẫn còn cho đúng người tạo
+    gatewayMock.getStatus.mockResolvedValueOnce({ data: { status: 'pending' } });
+    await expect(telegramPersonalService.checkLoginStatus('tg-h1-1', 20)).resolves.toMatchObject({ status: 'pending' });
+  });
+
+  it('cancelLogin: người khác huỷ không được (phiên vẫn sống, gateway không bị gọi); đúng người tạo huỷ được', async () => {
+    await startAs('tg-h1-2', { actorUserId: 20, scopedToAssignments: true });
+    await telegramPersonalService.cancelLogin('tg-h1-2', 21);
+    expect(gatewayMock.cancelSession).not.toHaveBeenCalled();
+    gatewayMock.getStatus.mockResolvedValueOnce({ data: { status: 'pending' } });
+    await expect(telegramPersonalService.checkLoginStatus('tg-h1-2', 20)).resolves.toMatchObject({ status: 'pending' });
+    await telegramPersonalService.cancelLogin('tg-h1-2', 20);
+    expect(gatewayMock.cancelSession).toHaveBeenCalledWith('tg-h1-2');
+  });
+
+  it('phiên không ghi người tạo (gọi nội bộ cũ) → giữ hành vi cũ, ai poll cũng được', async () => {
+    await startAs('tg-h1-3', undefined);
+    gatewayMock.getStatus.mockResolvedValueOnce({ data: { status: 'pending' } });
+    await expect(telegramPersonalService.checkLoginStatus('tg-h1-3')).resolves.toMatchObject({ status: 'pending' });
+  });
+
+  it('NHÂN VIÊN quét tài khoản MỚI → chèn self_login CÙNG giao dịch với INSERT tài khoản (trước COMMIT), đúng chủ + nhân viên + id tài khoản', async () => {
+    await startAs('tg-h1-4', { actorUserId: 20, scopedToAssignments: true });
+    gatewayMock.getStatus.mockResolvedValueOnce(successStatus());
+    const result = await telegramPersonalService.checkLoginStatus('tg-h1-4', 20);
+    expect(result.status).toBe('success');
+    const inserts = insertCalls();
+    expect(inserts).toHaveLength(1);
+    expect(String(inserts[0][0])).toMatch(/'self_login'/);
+    expect(inserts[0][1]).toEqual([100, 20, 'telegram', '7']);
+    const order = txClient.query.mock.calls.map(([sql]) => String(sql).replace(/\s+/g, ' ').slice(0, 40));
+    expect(order[0]).toBe('BEGIN');
+    expect(order.at(-1)).toBe('COMMIT');
+    expect(order.findIndex((sql) => sql.startsWith('INSERT INTO member_channel_accounts'))).toBeLessThan(order.indexOf('COMMIT'));
+  });
+
+  it('CHỦ quét (không scopedToAssignments) → KHÔNG chèn việc giao nào', async () => {
+    await startAs('tg-h1-5', { actorUserId: 100, scopedToAssignments: false });
+    gatewayMock.getStatus.mockResolvedValueOnce(successStatus());
+    await telegramPersonalService.checkLoginStatus('tg-h1-5', 100);
+    expect(insertCalls()).toHaveLength(0);
+  });
+
+  it('nhân viên quét lại tài khoản ĐÃ CÓ → KHÔNG tự cấp (không mở giao dịch, không chèn)', async () => {
+    repoStub.getAccountByTelegramUserId.mockResolvedValueOnce({ id: 7 });
+    await startAs('tg-h1-6', { actorUserId: 20, scopedToAssignments: true });
+    gatewayMock.getStatus.mockResolvedValueOnce(successStatus());
+    const result = await telegramPersonalService.checkLoginStatus('tg-h1-6', 20);
+    expect(result.status).toBe('success');
+    expect(insertCalls()).toHaveLength(0);
+    expect(txClient.query).not.toHaveBeenCalled();
+  });
+});
+

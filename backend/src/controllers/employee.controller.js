@@ -239,7 +239,8 @@ export async function updateLimits(req, res) {
 
 /**
  * GET /api/employees/:id/channel-accounts
- * Danh sách tài khoản Zalo cá nhân của chủ + cờ đã giao cho nhân viên này (chỉ chủ gọi được — requireSelfContext).
+ * Tài khoản Zalo cá nhân + Telegram + WhatsApp (Baileys) của chủ, kèm cờ đã giao cho nhân viên này (chỉ chủ gọi được —
+ * requireSelfContext).
  */
 export async function getChannelAccounts(req, res) {
   try {
@@ -253,26 +254,39 @@ export async function getChannelAccounts(req, res) {
 
 /**
  * PUT /api/employees/:id/channel-accounts
- * Thay TOÀN BỘ việc giao tài khoản Zalo cá nhân cho nhân viên.
- * Body: { zaloAccountIds: number[] } — id không thuộc chủ bị loại.
+ * Thay TOÀN BỘ việc giao tài khoản cho nhân viên theo kênh.
+ * Body: { zaloAccountIds?: number[], telegramAccountIds?: number[], whatsappSessionKeys?: string[] } — khoá VẮNG MẶT = giữ
+ * nguyên kênh đó (bản FE cũ chỉ gửi zaloAccountIds); id / khoá không thuộc chủ bị loại. Cần ít nhất một khoá.
  */
 export async function updateChannelAccounts(req, res) {
   try {
     const ownerId = req.user.id;
     const employeeId = Number(req.params.id);
-    const { zaloAccountIds } = req.body;
-    const { zaloAccounts, before, after } = await employeeService.setEmployeeChannelAccounts(
+    const { zaloAccountIds, telegramAccountIds, whatsappSessionKeys } = req.body || {};
+    if (zaloAccountIds === undefined && telegramAccountIds === undefined && whatsappSessionKeys === undefined) {
+      return res.status(400).json({ success: false, message: 'Cần ít nhất một danh sách tài khoản (zaloAccountIds, telegramAccountIds hoặc whatsappSessionKeys).' });
+    }
+    const { zaloAccounts, telegramAccounts, whatsappAccounts, changes } = await employeeService.setEmployeeChannelAccounts(
       ownerId,
       employeeId,
-      zaloAccountIds,
+      { zaloAccountIds, telegramAccountIds, whatsappSessionKeys },
       req.user.id
     );
-    await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.EMPLOYEE_CHANNEL_ACCOUNTS_UPDATED, AUDIT_ENTITY_TYPES.EMPLOYEE, employeeId, {
-      channel: 'zalo_personal',
-      before,
-      after,
-    });
-    return res.json({ success: true, message: 'Đã cập nhật tài khoản Zalo được giao', data: { zaloAccounts } });
+    const auditChannels = [
+      ['zalo_personal', changes?.zalo],
+      ['telegram', changes?.telegram],
+      ['whatsapp_baileys', changes?.whatsapp],
+    ];
+    for (const [channel, change] of auditChannels) {
+      if (!change) continue;
+      // eslint-disable-next-line no-await-in-loop
+      await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.EMPLOYEE_CHANNEL_ACCOUNTS_UPDATED, AUDIT_ENTITY_TYPES.EMPLOYEE, employeeId, {
+        channel,
+        before: change.before,
+        after: change.after,
+      });
+    }
+    return res.json({ success: true, message: 'Đã cập nhật tài khoản được giao', data: { zaloAccounts, telegramAccounts, whatsappAccounts } });
   } catch (err) {
     return handleServiceError(res, err);
   }

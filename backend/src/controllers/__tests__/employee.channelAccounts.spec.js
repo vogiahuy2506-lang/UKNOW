@@ -29,13 +29,18 @@ const owner = { id: 10, role: 'user', activeContext: { type: 'self', ownerId: 10
 describe('GET /employees/:id/channel-accounts', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('chủ lấy từ token; trả danh sách tài khoản kèm cờ đã giao', async () => {
-    mockGet.mockResolvedValue({ zaloAccounts: [{ id: 5, assigned: true, source: 'legacy' }] });
+  it('chủ lấy từ token; trả danh sách tài khoản (cả Telegram / WhatsApp) kèm cờ đã giao', async () => {
+    const payload = {
+      zaloAccounts: [{ id: 5, assigned: true, source: 'legacy' }],
+      telegramAccounts: [{ id: 3, assigned: false }],
+      whatsappAccounts: [{ sessionKey: '10-a', assigned: true }],
+    };
+    mockGet.mockResolvedValue(payload);
     const res = makeRes();
     await getChannelAccounts({ user: owner, params: { id: '20' }, query: { ownerId: '999' } }, res);
 
     expect(mockGet).toHaveBeenCalledWith(10, 20);
-    expect(res.json).toHaveBeenCalledWith({ success: true, data: { zaloAccounts: [{ id: 5, assigned: true, source: 'legacy' }] } });
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: payload });
   });
 
   it('nhân viên không thuộc chủ → 404 từ service, giữ nguyên mã', async () => {
@@ -49,8 +54,10 @@ describe('GET /employees/:id/channel-accounts', () => {
 describe('PUT /employees/:id/channel-accounts', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('lưu: gọi service với chủ + nhân viên + danh sách + người thao tác, ghi audit trước/sau', async () => {
-    mockSet.mockResolvedValue({ zaloAccounts: [{ id: 6, assigned: true }], before: [5], after: [6] });
+  const lists = { zaloAccounts: [{ id: 6, assigned: true }], telegramAccounts: [], whatsappAccounts: [] };
+
+  it('lưu: gọi service với chủ + nhân viên + từng danh sách + người thao tác, ghi audit trước/sau cho kênh có gửi', async () => {
+    mockSet.mockResolvedValue({ ...lists, changes: { zalo: { before: [5], after: [6] }, telegram: null, whatsapp: null } });
     const res = makeRes();
     await updateChannelAccounts({
       user: owner,
@@ -60,7 +67,7 @@ describe('PUT /employees/:id/channel-accounts', () => {
       get: () => 'jest',
     }, res);
 
-    expect(mockSet).toHaveBeenCalledWith(10, 20, [6, 777], 10);
+    expect(mockSet).toHaveBeenCalledWith(10, 20, { zaloAccountIds: [6, 777], telegramAccountIds: undefined, whatsappSessionKeys: undefined }, 10);
     expect(mockLogWorkspace).toHaveBeenCalledTimes(1);
     const [, action, entityType, entityId, details] = mockLogWorkspace.mock.calls[0];
     expect(action).toBe('EMPLOYEE_CHANNEL_ACCOUNTS_UPDATED');
@@ -69,9 +76,52 @@ describe('PUT /employees/:id/channel-accounts', () => {
     expect(details).toEqual({ channel: 'zalo_personal', before: [5], after: [6] });
     expect(res.json).toHaveBeenCalledWith({
       success: true,
-      message: 'Đã cập nhật tài khoản Zalo được giao',
-      data: { zaloAccounts: [{ id: 6, assigned: true }] },
+      message: 'Đã cập nhật tài khoản được giao',
+      data: lists,
     });
+  });
+
+  it('PR-H1: gửi cả ba kênh → ba dòng audit, mỗi dòng đúng tên kênh (zalo_personal / telegram / whatsapp_baileys)', async () => {
+    mockSet.mockResolvedValue({
+      ...lists,
+      changes: {
+        zalo: { before: [5], after: [6] },
+        telegram: { before: [], after: ['3'] },
+        whatsapp: { before: ['10-a'], after: [] },
+      },
+    });
+    const res = makeRes();
+    await updateChannelAccounts({
+      user: owner,
+      params: { id: '20' },
+      body: { zaloAccountIds: [6], telegramAccountIds: [3], whatsappSessionKeys: [] },
+      ip: '1.1.1.1',
+      get: () => 'jest',
+    }, res);
+
+    expect(mockSet).toHaveBeenCalledWith(10, 20, { zaloAccountIds: [6], telegramAccountIds: [3], whatsappSessionKeys: [] }, 10);
+    const details = mockLogWorkspace.mock.calls.map((c) => c[4]);
+    expect(details).toEqual([
+      { channel: 'zalo_personal', before: [5], after: [6] },
+      { channel: 'telegram', before: [], after: ['3'] },
+      { channel: 'whatsapp_baileys', before: ['10-a'], after: [] },
+    ]);
+  });
+
+  it('PR-H1: chỉ gửi Telegram (khoá Zalo vắng) → chỉ ghi audit kênh Telegram', async () => {
+    mockSet.mockResolvedValue({ ...lists, changes: { zalo: null, telegram: { before: [], after: ['3'] }, whatsapp: null } });
+    const res = makeRes();
+    await updateChannelAccounts({ user: owner, params: { id: '20' }, body: { telegramAccountIds: [3] }, ip: '1.1.1.1', get: () => 'jest' }, res);
+    expect(mockLogWorkspace).toHaveBeenCalledTimes(1);
+    expect(mockLogWorkspace.mock.calls[0][4].channel).toBe('telegram');
+  });
+
+  it('PR-H1: body không có khoá danh sách nào → 400, KHÔNG gọi service, KHÔNG ghi audit', async () => {
+    const res = makeRes();
+    await updateChannelAccounts({ user: owner, params: { id: '20' }, body: {} }, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(mockSet).not.toHaveBeenCalled();
+    expect(mockLogWorkspace).not.toHaveBeenCalled();
   });
 
   it('nhân viên không thuộc chủ → 404, không ghi audit', async () => {

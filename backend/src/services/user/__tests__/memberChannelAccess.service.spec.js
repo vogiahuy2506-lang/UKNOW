@@ -3,11 +3,23 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 const mockFindAssigned = jest.fn();
 const mockListOwnerAccounts = jest.fn();
 const mockReplace = jest.fn();
+const mockFindTelegram = jest.fn();
+const mockFindWhatsApp = jest.fn();
+const mockListTelegram = jest.fn();
+const mockListWhatsApp = jest.fn();
+const mockReplaceChannels = jest.fn();
 
 jest.unstable_mockModule('../../../repositories/user/memberChannelAccount.repository.js', () => ({
   findAssignedZaloAccountIds: mockFindAssigned,
   listOwnerZaloAccountsWithAssignment: mockListOwnerAccounts,
   replaceZaloAccountAssignments: mockReplace,
+  findAssignedTelegramAccountRefs: mockFindTelegram,
+  findAssignedWhatsAppSessionKeys: mockFindWhatsApp,
+  listOwnerTelegramAccountsWithAssignment: mockListTelegram,
+  listOwnerWhatsAppSessionsWithAssignment: mockListWhatsApp,
+  replaceChannelAssignments: mockReplaceChannels,
+  TELEGRAM_CHANNEL: 'telegram',
+  WHATSAPP_BAILEYS_CHANNEL: 'whatsapp_baileys',
 }));
 
 const {
@@ -18,6 +30,13 @@ const {
   isZaloAccountAccessible,
   listZaloAssignmentsForOwner,
   setZaloAssignmentsForEmployee,
+  getAccessibleChannelAccountRefs,
+  assertChannelAccountAccess,
+  assertChannelAccountInScope,
+  listTelegramAssignmentsForOwner,
+  listWhatsAppAssignmentsForOwner,
+  setChannelAssignmentsForEmployee,
+  CHANNEL_ACCOUNT_NOT_ASSIGNED_CODE,
   ZALO_ACCOUNT_NOT_ASSIGNED_CODE,
   ZALO_ACCOUNT_NOT_ASSIGNED_MESSAGE,
 } = await import('../memberChannelAccess.service.js');
@@ -177,3 +196,102 @@ describe('assertZaloAccountInScope', () => {
     }
   });
 });
+
+describe('getAccessibleChannelAccountRefs — Telegram / WhatsApp (PR-H1)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  it('chủ và super admin → null (thấy tất cả), không chạm CSDL', async () => {
+    await expect(getAccessibleChannelAccountRefs(ownerCtx, 'telegram')).resolves.toBeNull();
+    await expect(getAccessibleChannelAccountRefs(superAdminCtx, 'whatsapp_baileys')).resolves.toBeNull();
+    expect(mockFindTelegram).not.toHaveBeenCalled();
+    expect(mockFindWhatsApp).not.toHaveBeenCalled();
+  });
+
+  it('nhân viên: Telegram đọc theo (chủ, nhân viên); WhatsApp đọc khoá phiên', async () => {
+    mockFindTelegram.mockResolvedValue(['3', '4']);
+    mockFindWhatsApp.mockResolvedValue(['10-default']);
+    await expect(getAccessibleChannelAccountRefs(employeeCtx, 'telegram')).resolves.toEqual(['3', '4']);
+    await expect(getAccessibleChannelAccountRefs(employeeCtx, 'whatsapp_baileys')).resolves.toEqual(['10-default']);
+    expect(mockFindTelegram).toHaveBeenCalledWith(10, 20);
+    expect(mockFindWhatsApp).toHaveBeenCalledWith(10, 20);
+  });
+
+  it('FAIL-CLOSED: lỗi CSDL / ngữ cảnh thiếu / kênh lạ → [] (KHÔNG BAO GIỜ null)', async () => {
+    mockFindTelegram.mockRejectedValue(new Error('boom'));
+    await expect(getAccessibleChannelAccountRefs(employeeCtx, 'telegram')).resolves.toEqual([]);
+    await expect(getAccessibleChannelAccountRefs(undefined, 'telegram')).resolves.toEqual([]);
+    await expect(getAccessibleChannelAccountRefs({ contextType: 'employee' }, 'whatsapp_baileys')).resolves.toEqual([]);
+    await expect(getAccessibleChannelAccountRefs(employeeCtx, 'zalo_oa')).resolves.toEqual([]);
+  });
+});
+
+describe('assertChannelAccountInScope / assertChannelAccountAccess', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('null → qua; ref nằm trong mảng (so chuỗi) → qua', () => {
+    expect(() => assertChannelAccountInScope('telegram', 3, null)).not.toThrow();
+    expect(() => assertChannelAccountInScope('telegram', 3, ['3'])).not.toThrow();
+    expect(() => assertChannelAccountInScope('whatsapp_baileys', '10-a', ['10-a'])).not.toThrow();
+  });
+
+  it('ngoài mảng / mảng rỗng / thiếu phạm vi (undefined) → 403 CHANNEL_ACCOUNT_NOT_ASSIGNED, câu theo kênh', () => {
+    let err;
+    try { assertChannelAccountInScope('telegram', 9, ['3']); } catch (e) { err = e; }
+    expect(err).toMatchObject({ status: 403, statusCode: 403, code: CHANNEL_ACCOUNT_NOT_ASSIGNED_CODE, channel: 'telegram' });
+    expect(err.message).toBe('Tài khoản Telegram này chưa được giao cho bạn.');
+    expect(() => assertChannelAccountInScope('whatsapp_baileys', '10-a', [])).toThrow('Tài khoản WhatsApp này chưa được giao cho bạn.');
+    expect(() => assertChannelAccountInScope('telegram', 3, undefined)).toThrow();
+  });
+
+  it('assertChannelAccountAccess: nhân viên chưa được giao → 403; đã giao → qua; chủ → qua', async () => {
+    mockFindWhatsApp.mockResolvedValue(['10-a']);
+    await expect(assertChannelAccountAccess(employeeCtx, 'whatsapp_baileys', '10-default')).rejects.toMatchObject({ status: 403 });
+    await expect(assertChannelAccountAccess(employeeCtx, 'whatsapp_baileys', '10-a')).resolves.toBeUndefined();
+    await expect(assertChannelAccountAccess(ownerCtx, 'whatsapp_baileys', '10-default')).resolves.toBeUndefined();
+  });
+});
+
+describe('listTelegramAssignmentsForOwner / listWhatsAppAssignmentsForOwner', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('Telegram: map hàng DB → tên hiển thị (không lộ trường lạ), assigned/source theo cột nguồn', async () => {
+    mockListTelegram.mockResolvedValue([
+      { id: '3', first_name: 'An', last_name: 'Nguyen', username: 'an_shop', phone: '+84900000001', is_active: true, assignment_source: 'legacy' },
+      { id: '4', first_name: null, last_name: null, username: null, phone: null, is_active: false, assignment_source: null },
+    ]);
+    const rows = await listTelegramAssignmentsForOwner(10, 20);
+    expect(mockListTelegram).toHaveBeenCalledWith(10, 20);
+    expect(rows).toEqual([
+      { id: 3, displayName: 'An Nguyen', username: 'an_shop', phone: '+84900000001', isActive: true, assigned: true, source: 'legacy' },
+      { id: 4, displayName: 'Telegram #4', username: '', phone: '', isActive: false, assigned: false, source: null },
+    ]);
+  });
+
+  it('WhatsApp: khoá ngắn bỏ tiền tố chủ; assigned/source theo cột nguồn; không có phiên sống vẫn liệt kê được', async () => {
+    mockListWhatsApp.mockResolvedValue([
+      { session_key: '10-default', assignment_source: 'self_login' },
+      { session_key: '10-shop_2', assignment_source: null },
+    ]);
+    const rows = await listWhatsAppAssignmentsForOwner(10, 20);
+    expect(rows.map((r) => [r.sessionKey, r.shortKey, r.assigned, r.source])).toEqual([
+      ['10-default', 'default', true, 'self_login'],
+      ['10-shop_2', 'shop_2', false, null],
+    ]);
+  });
+});
+
+describe('setChannelAssignmentsForEmployee', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('chuyển nguyên input cho repository (khoá undefined giữ nguyên để repository bỏ qua kênh đó)', async () => {
+    mockReplaceChannels.mockResolvedValue({ zalo: null, telegram: { before: [], after: ['3'] }, whatsapp: null });
+    const input = { ownerId: 10, employeeId: 20, actorUserId: 10, telegramAccountIds: [3] };
+    await expect(setChannelAssignmentsForEmployee(input)).resolves.toEqual({ zalo: null, telegram: { before: [], after: ['3'] }, whatsapp: null });
+    expect(mockReplaceChannels).toHaveBeenCalledWith(input);
+    expect(Object.keys(mockReplaceChannels.mock.calls[0][0])).not.toContain('zaloAccountIds');
+  });
+});
+

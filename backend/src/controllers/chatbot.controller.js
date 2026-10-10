@@ -53,6 +53,7 @@ import { resolveWorkspaceOwnerId } from '../services/storage/storageQuota.servic
 import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
 import {
   getAccessibleZaloAccountIds,
+  isAssignmentScopedContext,
   isZaloAccountAccessible,
   ZALO_ACCOUNT_NOT_ASSIGNED_CODE,
   ZALO_ACCOUNT_NOT_ASSIGNED_MESSAGE,
@@ -2941,7 +2942,12 @@ class ChatbotController {
         });
       }
       const userId = resolveWorkspaceOwnerId(req.user);
-      const result = await telegramPersonalService.startLogin(userId, req.user?.role);
+      const loginCtx = getWorkspaceContext(req.user);
+      const result = await telegramPersonalService.startLogin(userId, req.user?.role, {
+        actorUserId: loginCtx.actorUserId,
+        // Nhân viên (không phải super admin) quét tài khoản MỚI → tự được giao (PLAN_GIAO_TK_TG_WA H1).
+        scopedToAssignments: isAssignmentScopedContext(loginCtx),
+      });
       return res.json({ success: true, data: result });
     } catch (err) {
       console.error('[Telegram] initTelegramLogin error:', err.message);
@@ -2970,7 +2976,7 @@ class ChatbotController {
    */
   async checkTelegramLoginStatus(req, res) {
     try {
-      const result = await telegramPersonalService.checkLoginStatus(req.params.sessionId);
+      const result = await telegramPersonalService.checkLoginStatus(req.params.sessionId, req.user?.id);
       if (result.status === 'not_found') {
         return res.status(404).json({ success: false, message: 'Phiên đăng nhập đã hết hạn' });
       }
@@ -3001,7 +3007,7 @@ class ChatbotController {
    */
   async cancelTelegramLogin(req, res) {
     try {
-      await telegramPersonalService.cancelLogin(req.params.sessionId);
+      await telegramPersonalService.cancelLogin(req.params.sessionId, req.user?.id);
       return res.json({ success: true });
     } catch (err) {
       return res.status(err.status || 500).json({ success: false, message: err.message });

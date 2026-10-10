@@ -14,12 +14,16 @@ import telegramGateway from './telegramGateway.client.js';
 import { hasPermanentAuthKey } from '../../utils/telegramSession.util.js';
 import db from '../../config/database.js';
 import { enforceResourceLimitTx } from '../../utils/userResourceLimit.util.js';
+import {
+  insertSelfLoginChannelAssignment,
+  TELEGRAM_CHANNEL,
+} from '../../repositories/user/memberChannelAccount.repository.js';
 
 const LOGIN_CONTEXT_TTL_SECONDS = 15 * 60;
 
 class TelegramPersonalService {
   constructor() {
-    // sessionId → { userId, roleCode, expiresAt }
+    // sessionId → { userId, roleCode, actorUserId, scopedToAssignments, expiresAt }
     this._loginContexts = new Map();
     this._sweepInterval = setInterval(() => this._sweepContexts(), 60 * 1000);
     // Allow Node to exit cleanly during tests.
@@ -41,7 +45,10 @@ class TelegramPersonalService {
    * Begin a new QR login flow for `userId`.
    * Returns the session_id + QR payload that the SPA renders.
    */
-  async startLogin(userId, roleCode = undefined) {
+  async startLogin(userId, roleCode = undefined, actor = {}) {
+    // `actor` = { actorUserId, scopedToAssignments } (PLAN_GIAO_TK_TG_WA H1): ghi NGƯỜI tạo phiên QR. Chỉ người đó poll /
+    // huỷ được phiên; nhân viên (scopedToAssignments) tạo tài khoản MỚI thì tự được giao (self_login).
+    const actorUserId = Number.parseInt(actor?.actorUserId, 10) || null;
     const { data } = await telegramGateway.createSession(userId);
     const sessionId = data.session_id;
     if (!sessionId) {
@@ -50,6 +57,8 @@ class TelegramPersonalService {
     this._loginContexts.set(sessionId, {
       userId,
       roleCode,
+      actorUserId,
+      scopedToAssignments: actor?.scopedToAssignments === true,
       expiresAt: Date.now() + LOGIN_CONTEXT_TTL_SECONDS * 1000,
     });
     return {
@@ -65,9 +74,14 @@ class TelegramPersonalService {
    * reports success we create the local account row and tell the gateway
    * to bind the session to it (so it knows which `account_id` to use).
    */
-  async checkLoginStatus(sessionId) {
+  async checkLoginStatus(sessionId, callerUserId = null) {
     const ctx = this._loginContexts.get(sessionId);
     if (!ctx) {
+      return { status: 'not_found' };
+    }
+    // Phiên QR chỉ người tạo xem được (nhân viên khác trong cùng workspace poll để lấy tài khoản vừa quét là lỗ cũ).
+    // Không phải người tạo → coi như không thấy phiên (không lộ phiên tồn tại).
+    if (ctx.actorUserId != null && Number(callerUserId) !== ctx.actorUserId) {
       return { status: 'not_found' };
     }
     const { data } = await telegramGateway.getStatus(sessionId);
@@ -107,6 +121,13 @@ class TelegramPersonalService {
           resourceKey: 'telegramAccounts',
         });
         account = await chatbotTelegramRepository.createAccount(accountInput, client);
+        // Nhân viên quét tài khoản MỚI → tự được giao, cùng giao dịch với việc tạo dòng (quét lại tài khoản cũ thì không).
+        if (ctx.scopedToAssignments && ctx.actorUserId && account?.id) {
+          await insertSelfLoginChannelAssignment(
+            { ownerId: ctx.userId, employeeId: ctx.actorUserId, channel: TELEGRAM_CHANNEL, ref: account.id },
+            client
+          );
+        }
         await client.query('COMMIT');
       } catch (error) {
         await client.query('ROLLBACK').catch(() => {});
@@ -142,7 +163,10 @@ class TelegramPersonalService {
     };
   }
 
-  async cancelLogin(sessionId) {
+  async cancelLogin(sessionId, callerUserId = null) {
+    const ctx = this._loginContexts.get(sessionId);
+    // Chỉ người tạo phiên huỷ được; người khác bị bỏ qua êm (phiên của người kia vẫn sống).
+    if (ctx && ctx.actorUserId != null && Number(callerUserId) !== ctx.actorUserId) return;
     this._loginContexts.delete(sessionId);
     try {
       await telegramGateway.cancelSession(sessionId);

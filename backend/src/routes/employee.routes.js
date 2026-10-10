@@ -146,7 +146,7 @@ router.patch(
   employeeController.updateLimits
 );
 
-// GET /api/employees/:id/channel-accounts — tài khoản Zalo của chủ + cờ đã giao cho nhân viên (chỉ chủ)
+// GET /api/employees/:id/channel-accounts — tài khoản Zalo + Telegram + WhatsApp (Baileys) của chủ + cờ đã giao cho nhân viên (chỉ chủ)
 router.get(
   '/:id/channel-accounts',
   [param('id').isInt({ min: 1 }).withMessage('ID nhân viên không hợp lệ')],
@@ -154,13 +154,21 @@ router.get(
   employeeController.getChannelAccounts
 );
 
-// PUT /api/employees/:id/channel-accounts — thay toàn bộ việc giao tài khoản Zalo cá nhân (chỉ chủ)
+// PUT /api/employees/:id/channel-accounts — thay toàn bộ việc giao tài khoản theo kênh (chỉ chủ). Khoá nào vắng mặt thì
+// kênh đó GIỮ NGUYÊN (bản FE cũ chỉ gửi zaloAccountIds); controller đòi ít nhất một khoá.
 router.put(
   '/:id/channel-accounts',
   [
     param('id').isInt({ min: 1 }).withMessage('ID nhân viên không hợp lệ'),
-    body('zaloAccountIds').isArray({ max: 500 }).withMessage('zaloAccountIds phải là mảng'),
+    body().custom((_value, { req }) => ['zaloAccountIds', 'telegramAccountIds', 'whatsappSessionKeys']
+      .some((key) => req.body?.[key] !== undefined))
+      .withMessage('Cần ít nhất một danh sách tài khoản (zaloAccountIds, telegramAccountIds hoặc whatsappSessionKeys)'),
+    body('zaloAccountIds').optional().isArray({ max: 500 }).withMessage('zaloAccountIds phải là mảng'),
     body('zaloAccountIds.*').isInt({ min: 1 }).withMessage('ID tài khoản Zalo không hợp lệ'),
+    body('telegramAccountIds').optional().isArray({ max: 500 }).withMessage('telegramAccountIds phải là mảng'),
+    body('telegramAccountIds.*').isInt({ min: 1 }).withMessage('ID tài khoản Telegram không hợp lệ'),
+    body('whatsappSessionKeys').optional().isArray({ max: 500 }).withMessage('whatsappSessionKeys phải là mảng'),
+    body('whatsappSessionKeys.*').isString().matches(/^[A-Za-z0-9_-]{1,128}$/).withMessage('Khoá phiên WhatsApp không hợp lệ'),
   ],
   handleValidationErrors,
   employeeController.updateChannelAccounts
