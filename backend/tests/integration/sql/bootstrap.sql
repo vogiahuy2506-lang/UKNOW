@@ -4095,3 +4095,57 @@ CREATE TABLE IF NOT EXISTS ai_call_events (
 );
 CREATE INDEX IF NOT EXISTS idx_ai_call_events_created ON ai_call_events (created_at);
 CREATE INDEX IF NOT EXISTS idx_ai_call_events_feature_created ON ai_call_events (feature, created_at);
+
+-- --- Migration 288: user_notifications (PLAN_TICKET_GOP_Y_VA_CHUONG_THONG_BAO PR-1: hop thu chuong thong bao trong app) ---
+CREATE TABLE IF NOT EXISTS user_notifications (
+  id              BIGSERIAL    PRIMARY KEY,
+  user_id         BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  event_type      VARCHAR(48)  NOT NULL,
+  title           VARCHAR(255) NOT NULL,
+  title_en        VARCHAR(255),
+  message         TEXT         NOT NULL,
+  message_en      TEXT,
+  link            VARCHAR(500),
+  severity        VARCHAR(16)  NOT NULL DEFAULT 'info'
+    CHECK (severity IN ('info', 'success', 'warning', 'error')),
+  metadata        JSONB        NOT NULL DEFAULT '{}'::jsonb,
+  notification_id INTEGER      REFERENCES notifications(id) ON DELETE SET NULL,
+  dedupe_key      VARCHAR(120),
+  read_at         TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_user_notifications_user_created
+  ON user_notifications (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_notifications_user_unread
+  ON user_notifications (user_id) WHERE read_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_user_notifications_dedupe
+  ON user_notifications (user_id, dedupe_key) WHERE dedupe_key IS NOT NULL;
+
+-- --- Migration 289: notification_preferences + notification_event_settings (tuy chon email + cau hinh mac dinh theo su kien) ---
+CREATE TABLE IF NOT EXISTS notification_preferences (
+  user_id       BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  event_type    VARCHAR(48)  NOT NULL,
+  email_enabled BOOLEAN      NOT NULL,
+  updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, event_type)
+);
+CREATE TABLE IF NOT EXISTS notification_event_settings (
+  event_type             VARCHAR(48)  PRIMARY KEY,
+  in_app_enabled         BOOLEAN      NOT NULL DEFAULT true,
+  email_enabled          BOOLEAN      NOT NULL DEFAULT true,
+  user_can_disable_email BOOLEAN      NOT NULL DEFAULT true,
+  updated_by             INTEGER      REFERENCES users(id) ON DELETE SET NULL,
+  updated_at             TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+INSERT INTO notification_event_settings (event_type, in_app_enabled, email_enabled, user_can_disable_email)
+VALUES
+  ('admin_broadcast',             true, true,  true),
+  ('campaign_run_completed',      true, false, true),
+  ('campaign_run_failed',         true, true,  true),
+  ('campaign_approval_required',  true, true,  false),
+  ('campaign_schedule_skipped',   true, true,  true),
+  ('support_ticket_replied',      true, true,  false),
+  ('support_ticket_closed',       true, false, true),
+  ('support_ticket_created',      true, true,  false),
+  ('support_ticket_user_replied', true, true,  false)
+ON CONFLICT (event_type) DO NOTHING;
