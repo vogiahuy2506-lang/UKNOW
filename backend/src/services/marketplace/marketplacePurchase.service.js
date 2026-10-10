@@ -69,7 +69,7 @@ class MarketplacePurchaseService {
       }
 
       // 3. Check buyer != seller
-      if (listing.id_user === buyerId) {
+      if (Number(listing.id_user) === Number(buyerId)) {
         const error = new Error('Bạn không thể mua listing của chính mình');
         error.status = 400;
         throw error;

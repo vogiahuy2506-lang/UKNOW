@@ -592,7 +592,8 @@ class MarketplaceListingService {
 
     // Verify ownership
     const ownerId = Number(landingPage.workspaceOwnerId || landingPage.idUser);
-    if (ownerId !== userId) {
+    // userId từ req.user.id là chuỗi (BIGINT) — chủ luôn bị 403 nếu so thẳng với Number.
+    if (ownerId !== Number(userId)) {
       const error = new Error('Bạn không có quyền tạo listing từ landing page này');
       error.status = 403;
       throw error;

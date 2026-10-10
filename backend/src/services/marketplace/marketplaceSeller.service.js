@@ -129,7 +129,7 @@ class MarketplaceSellerService {
    */
   async getListingStats(listingId, userId) {
     const listing = await marketplaceListingRepository.findById(listingId);
-    if (!listing || listing.id_user !== userId) {
+    if (!listing || Number(listing.id_user) !== Number(userId)) {
       return null;
     }
 
