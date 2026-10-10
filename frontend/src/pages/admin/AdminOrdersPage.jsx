@@ -2,8 +2,9 @@ import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
-import { HiOutlineRefresh, HiOutlineSearch, HiOutlineBan, HiOutlineShoppingBag } from 'react-icons/hi';
+import { HiOutlineRefresh, HiOutlineSearch, HiOutlineBan, HiOutlineShoppingBag, HiOutlineEye, HiOutlineClipboardCopy } from 'react-icons/hi';
 import PageContainer from '../../components/common/PageContainer';
+import Modal from '../../components/Modal';
 import adminOrdersApiService from '../../features/admin/services/adminOrdersApi.service';
 import RefundOrderModal from '../../features/admin/components/RefundOrderModal';
 import { orderStatusBadge } from './orderStatus.util';
@@ -84,7 +85,125 @@ const KpiCard = ({ label, value, sub, onClick, active, testId }) => {
 const StatusBadge = ({ status }) => {
   const { t } = useI18n();
   const s = orderStatusBadge(status, t);
-  return <span className={`badge ${s.className} text-xs`}>{s.label}</span>;
+  return <span className={`badge ${s.className} text-xs whitespace-nowrap`}>{s.label}</span>;
+};
+
+const DetailRow = ({ label, children, testId }) => (
+  <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-3 py-2.5 sm:grid-cols-[160px_minmax(0,1fr)]" data-testid={testId}>
+    <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-dk-text2">{label}</dt>
+    <dd className="min-w-0 break-words text-sm text-gray-900 dark:text-dk-text">{children}</dd>
+  </div>
+);
+
+// Modal chi tiết đơn — chỉ trình bày lại object đơn của dòng (không gọi API mới).
+const OrderDetailModal = ({ order, onClose }) => {
+  const { t } = useI18n();
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(String(order.orderCode));
+      toast.success(t('common.copied'));
+    } catch {
+      toast.error(t('adminOrders.detail.copyFailed'));
+    }
+  };
+
+  const periodLabel = order.isTopup
+    ? t('adminOrders.topup')
+    : order.billingPeriod === 'yearly' ? t('adminOrders.yearly') : t('adminOrders.monthly');
+  const hasDiscount = Number(order.discountAmount) > 0;
+  const hasOriginal = order.originalAmount != null && Number(order.originalAmount) !== Number(order.amount);
+
+  return (
+    <Modal isOpen onClose={onClose} size="lg">
+      <div className="space-y-4" data-testid="order-detail-modal">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="text-lg font-bold text-gray-900 dark:text-dk-text">{t('adminOrders.detail.title')}</h3>
+          <StatusBadge status={order.status} />
+        </div>
+
+        <dl className="divide-y divide-gray-100 rounded-lg border border-gray-100 px-4 dark:divide-dk-border dark:border-dk-border dark:bg-dk-surface">
+          <DetailRow label={t('adminOrders.orderCode')} testId="order-detail-code">
+            <span className="inline-flex flex-wrap items-center gap-2">
+              <span className="font-mono">{order.orderCode}</span>
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="inline-flex items-center gap-1 text-xs text-primary-600 hover:underline dark:text-primary-400"
+              >
+                <HiOutlineClipboardCopy className="h-3.5 w-3.5" />
+                {t('common.copy')}
+              </button>
+            </span>
+          </DetailRow>
+
+          <DetailRow label={t('adminOrders.customer')}>
+            {order.userFullName && <p className="font-medium">{order.userFullName}</p>}
+            <p className={order.userFullName ? 'text-xs text-gray-500 dark:text-dk-text2' : ''}>{order.userEmail || '—'}</p>
+            {order.userId != null && (
+              <p className="text-xs text-gray-400 dark:text-dk-muted">{t('adminOrders.detail.userId', { id: order.userId })}</p>
+            )}
+          </DetailRow>
+
+          <DetailRow label={t('adminOrders.servicePackage')}>
+            <span className="inline-flex flex-wrap items-center gap-1.5">
+              <span className="font-medium">{order.planName || '—'}</span>
+              {order.isCustom && (
+                <span className="rounded-full bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-600 dark:bg-purple-950/60 dark:text-purple-300">
+                  {t('adminOrders.custom')}
+                </span>
+              )}
+              {order.planCode && <span className="text-xs text-gray-400 dark:text-dk-muted">#{order.planCode}</span>}
+            </span>
+          </DetailRow>
+
+          <DetailRow label={t('adminOrders.billingPeriod')}>{periodLabel}</DetailRow>
+
+          <DetailRow label={t('adminOrders.promotion')}>
+            {order.voucherCode ? (
+              <span className="font-mono font-semibold text-violet-700 dark:text-violet-400">{order.voucherCode}</span>
+            ) : order.discountLabel || order.discountSource === 'automatic' ? (
+              <span className="text-violet-700 dark:text-violet-400">{order.discountLabel || t('adminOrders.automaticPromotion')}</span>
+            ) : (
+              <span className="text-gray-400 dark:text-dk-muted">{t('adminOrders.noVoucher')}</span>
+            )}
+          </DetailRow>
+
+          {hasOriginal && (
+            <DetailRow label={t('adminOrders.detail.originalAmount')}>{fmtVnd(order.originalAmount)}</DetailRow>
+          )}
+          {hasDiscount && (
+            <DetailRow label={t('adminOrders.detail.discountAmount')}>-{fmtVnd(order.discountAmount)}</DetailRow>
+          )}
+
+          <DetailRow label={t('adminOrders.amount')}>
+            <span className="font-semibold tabular-nums">{fmtVnd(order.amount)}</span>
+          </DetailRow>
+          <DetailRow label={t('adminOrders.detail.paymentMethod')}>{paymentLabel(order, t)}</DetailRow>
+          <DetailRow label={t('adminOrders.createdAt')}>{fmtDate(order.createdAt)}</DetailRow>
+          <DetailRow label={t('adminOrders.detail.updatedAt')}>{fmtDate(order.updatedAt)}</DetailRow>
+
+          {hasUnhandledPaidAfterCancelled(order) && (
+            <DetailRow label={t('adminOrders.detail.flag')}>
+              <span className="inline-block rounded bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 dark:border dark:border-rose-900/40 dark:bg-rose-950/40 dark:text-rose-300">
+                {t('adminOrders.paidAfterCancelledBadge')}
+              </span>
+            </DetailRow>
+          )}
+
+          {order.note && (
+            <DetailRow label={t('adminOrders.detail.note')}>
+              <pre className="whitespace-pre-wrap break-words rounded bg-gray-50 p-2 font-mono text-xs text-gray-700 dark:bg-dk-inset dark:text-dk-text">{order.note}</pre>
+            </DetailRow>
+          )}
+        </dl>
+
+        <div className="flex justify-end">
+          <button type="button" className="btn btn-secondary" onClick={onClose}>{t('common.close')}</button>
+        </div>
+      </div>
+    </Modal>
+  );
 };
 
 const PAGE_SIZE = 20;
@@ -103,6 +222,7 @@ const AdminOrdersPage = () => {
   const [draft, setDraft] = useState(initialFilters);
   const [cancellingCode, setCancellingCode] = useState(null); // orderCode đang confirm huỷ
   const [refundingCode, setRefundingCode] = useState(null); // orderCode đang mở modal hoàn tiền
+  const [detailOrderId, setDetailOrderId] = useState(null); // id đơn đang mở modal chi tiết
 
   const fetchOrders = useCallback(async (f, p) => {
     setIsLoading(true);
@@ -177,6 +297,8 @@ const AdminOrdersPage = () => {
   };
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
+  // Tra theo id trong danh sách hiện tại: tải lại sau huỷ/hoàn thì modal thấy dữ liệu mới, đổi trang thì tự đóng.
+  const detailOrder = detailOrderId == null ? null : orders.find((o) => o.id === detailOrderId) || null;
 
   return (
     <PageContainer
@@ -304,9 +426,21 @@ const AdminOrdersPage = () => {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 dark:bg-dk-raised border-b border-gray-200 dark:border-dk-border">
               <tr>
-                {[t('adminOrders.orderCode'), t('adminOrders.servicePackage'), t('adminOrders.billingPeriod'), t('adminOrders.promotion'), t('adminOrders.customer'), t('adminOrders.amount'), t('adminOrders.createdAt'), t('adminOrders.status'), t('adminOrders.actions')].map((h) => (
-                  <th key={h} className="text-left text-xs font-semibold text-gray-500 dark:text-dk-text2 uppercase tracking-wide px-4 py-3">
-                    {h}
+                {[
+                  { label: t('adminOrders.orderCode') },
+                  { label: t('adminOrders.packageAndPeriod') },
+                  { label: t('adminOrders.promotion') },
+                  { label: t('adminOrders.customer') },
+                  { label: t('adminOrders.amount'), right: true },
+                  { label: t('adminOrders.createdAt') },
+                  { label: t('adminOrders.status') },
+                  { label: t('adminOrders.actions') },
+                ].map(({ label, right }) => (
+                  <th
+                    key={label}
+                    className={`${right ? 'text-right' : 'text-left'} whitespace-nowrap text-xs font-semibold text-gray-500 dark:text-dk-text2 uppercase tracking-wide px-4 py-3`}
+                  >
+                    {label}
                   </th>
                 ))}
               </tr>
@@ -315,7 +449,7 @@ const AdminOrdersPage = () => {
               {isLoading ? (
                 [...Array(5)].map((_, i) => (
                   <tr key={i}>
-                    {[...Array(9)].map((__, j) => (
+                    {[...Array(8)].map((__, j) => (
                       <td key={j} className="px-4 py-3">
                         <div className="h-4 bg-gray-100 dark:bg-dk-raised rounded animate-pulse" />
                       </td>
@@ -324,15 +458,15 @@ const AdminOrdersPage = () => {
                 ))
               ) : orders.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-10 text-center text-gray-400 dark:text-dk-muted">
+                  <td colSpan={8} className="px-4 py-10 text-center text-gray-400 dark:text-dk-muted">
                     {t('adminOrders.noOrders')}
                   </td>
                 </tr>
               ) : orders.map((o) => (
                 <tr key={o.id} className="hover:bg-gray-50 dark:hover:bg-dk-raised/40 transition-colors">
-                  <td className="px-4 py-3 font-mono text-xs text-gray-600 dark:text-dk-text2">{o.orderCode}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-gray-600 dark:text-dk-text2 whitespace-nowrap">{o.orderCode}</td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 whitespace-nowrap">
                       <span className="font-medium text-gray-800 dark:text-dk-text">{o.planName || '—'}</span>
                       {o.isCustom && (
                         <span className="text-[10px] bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-300 px-1.5 py-0.5 rounded-full font-medium">
@@ -340,32 +474,37 @@ const AdminOrdersPage = () => {
                         </span>
                       )}
                     </div>
-                    {o.planCode && <p className="text-xs text-gray-400 dark:text-dk-muted">#{o.planCode}</p>}
+                    <p className="flex items-center gap-1 whitespace-nowrap text-xs text-gray-400 dark:text-dk-muted">
+                      {o.planCode && <><span>#{o.planCode}</span><span aria-hidden="true">·</span></>}
+                      <span>
+                        {o.isTopup
+                          ? t('adminOrders.topup')
+                          : o.billingPeriod === 'yearly' ? t('adminOrders.yearly') : t('adminOrders.monthly')}
+                      </span>
+                    </p>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <span className="badge badge-gray text-xs">
-                      {o.isTopup
-                        ? t('adminOrders.topup')
-                        : o.billingPeriod === 'yearly' ? t('adminOrders.yearly') : t('adminOrders.monthly')}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 min-w-[150px]">
                     {o.voucherCode ? (
                       <>
                         <p className="font-mono text-xs font-semibold text-violet-700 dark:text-violet-400">{o.voucherCode}</p>
                         {Number(o.discountAmount) > 0 && <p className="text-xs text-gray-500 dark:text-dk-text2">-{fmtVnd(o.discountAmount)}</p>}
                       </>
                     ) : o.discountLabel || o.discountSource === 'automatic' ? (
-                      <span className="text-xs text-violet-700 dark:text-violet-400">{o.discountLabel || t('adminOrders.automaticPromotion')}</span>
+                      <span className="block max-w-[180px] truncate text-xs text-violet-700 dark:text-violet-400" title={o.discountLabel || t('adminOrders.automaticPromotion')}>
+                        {o.discountLabel || t('adminOrders.automaticPromotion')}
+                      </span>
                     ) : (
-                      <span className="text-xs text-gray-400 dark:text-dk-muted">{t('adminOrders.noVoucher')}</span>
+                      <span className="text-xs text-gray-300 dark:text-dk-muted" title={t('adminOrders.noVoucher')}>
+                        <span aria-hidden="true">—</span>
+                        <span className="sr-only">{t('adminOrders.noVoucher')}</span>
+                      </span>
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <p className="text-gray-800 dark:text-dk-text">{o.userFullName || o.userEmail}</p>
-                    {o.userFullName && <p className="text-xs text-gray-400 dark:text-dk-text2">{o.userEmail}</p>}
+                    <p className="max-w-[220px] truncate text-gray-800 dark:text-dk-text" title={o.userFullName || o.userEmail}>{o.userFullName || o.userEmail}</p>
+                    {o.userFullName && <p className="max-w-[220px] truncate text-xs text-gray-400 dark:text-dk-text2" title={o.userEmail}>{o.userEmail}</p>}
                   </td>
-                  <td className="px-4 py-3 font-semibold text-gray-900 dark:text-dk-text whitespace-nowrap">
+                  <td className="px-4 py-3 text-right font-semibold tabular-nums text-gray-900 dark:text-dk-text whitespace-nowrap">
                     {fmtVnd(o.amount)}
                     <p className="text-[11px] font-normal text-gray-400 dark:text-dk-muted">{paymentLabel(o, t)}</p>
                   </td>
@@ -375,13 +514,22 @@ const AdminOrdersPage = () => {
                   <td className="px-4 py-3">
                     <StatusBadge status={o.status} />
                     {hasUnhandledPaidAfterCancelled(o) && (
-                      <span className="mt-1 block w-fit rounded bg-rose-50 dark:bg-rose-950/40 border border-transparent dark:border-rose-900/40 px-1.5 py-0.5 text-[10px] font-medium uppercase text-rose-700 dark:text-rose-300">
+                      <span className="mt-1 block max-w-[180px] w-fit rounded bg-rose-50 dark:bg-rose-950/40 border border-transparent dark:border-rose-900/40 px-1.5 py-0.5 text-[10px] font-medium uppercase text-rose-700 dark:text-rose-300">
                         {t('adminOrders.paidAfterCancelledBadge')}
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 w-px whitespace-nowrap">
                     <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setDetailOrderId(o.id)}
+                        title={t('adminOrders.viewDetails')}
+                        aria-label={t('adminOrders.viewDetails')}
+                        className="p-1.5 text-gray-400 dark:text-dk-text2 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-gray-100 dark:hover:bg-dk-raised rounded-lg transition-colors"
+                      >
+                        <HiOutlineEye className="w-4 h-4" />
+                      </button>
                       {o.status === 'pending' && (
                         cancellingCode === o.orderCode ? (
                           <div className="flex items-center gap-1.5">
@@ -415,7 +563,7 @@ const AdminOrdersPage = () => {
                         <button
                           type="button"
                           onClick={() => handleMarkPaidAfterCancelledHandled(o.orderCode)}
-                          className="text-xs px-2 py-1 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
+                          className="text-xs px-2 py-1 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors whitespace-nowrap"
                         >
                           {t('adminOrders.markPaidAfterCancelledHandled')}
                         </button>
@@ -424,7 +572,7 @@ const AdminOrdersPage = () => {
                         <button
                           type="button"
                           onClick={() => setRefundingCode(String(o.orderCode))}
-                          className="text-xs px-2 py-1 border border-red-200 dark:border-red-900/60 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+                          className="text-xs px-2 py-1 border border-red-200 dark:border-red-900/60 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors whitespace-nowrap"
                         >
                           {t('adminOrders.refundButton')}
                         </button>
@@ -478,6 +626,10 @@ const AdminOrdersPage = () => {
           </div>
         )}
       </div>
+
+      {detailOrder && (
+        <OrderDetailModal order={detailOrder} onClose={() => setDetailOrderId(null)} />
+      )}
 
       {refundingCode && (
         <RefundOrderModal

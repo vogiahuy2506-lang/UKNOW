@@ -438,3 +438,68 @@ describe('AdminOrdersPage — PR-9: KPI theo bộ lọc', () => {
     expect(screen.queryByTestId('orders-attention-chip')).not.toBeInTheDocument();
   });
 });
+
+// Bảng gọn (10/10/2026): gộp Gói + Kỳ hạn, nút mắt cho MỌI dòng mở modal chi tiết đơn (không gọi API mới).
+describe('AdminOrdersPage — modal chi tiết đơn', () => {
+  const renderPage = () => render(
+    <MemoryRouter>
+      <I18nProvider>
+        <AdminOrdersPage />
+      </I18nProvider>
+    </MemoryRouter>,
+  );
+
+  beforeEach(() => {
+    mockGetOrders.mockReset().mockResolvedValue(response);
+  });
+
+  it('mọi dòng đều có nút mắt (kể cả đơn không chờ thanh toán)', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByText('MONTHLY-1')).toBeInTheDocument());
+    expect(screen.getAllByRole('button', { name: 'Xem chi tiết đơn' })).toHaveLength(4);
+  });
+
+  it('bấm nút mắt mở modal hiện mã đơn, khách, gói, số tiền; sao chép mã đơn; Esc đóng', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await waitFor(() => expect(screen.getByText('MONTHLY-1')).toBeInTheDocument());
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    const row = screen.getByText('MONTHLY-1').closest('tr');
+    await user.click(within(row).getByRole('button', { name: 'Xem chi tiết đơn' }));
+
+    const dialog = await screen.findByRole('dialog', {}, { timeout: 5000 });
+    expect(within(dialog).getByText('Chi tiết đơn hàng')).toBeInTheDocument();
+    expect(within(screen.getByTestId('order-detail-code')).getByText('MONTHLY-1')).toBeInTheDocument();
+    expect(within(dialog).getByText('monthly@example.com')).toBeInTheDocument();
+    expect(within(dialog).getByText('Starter')).toBeInTheDocument();
+    expect(within(dialog).getByText('Theo tháng')).toBeInTheDocument();
+    expect(within(dialog).getByText('299.000 đ')).toBeInTheDocument();
+    expect(within(dialog).getByText('Thành công')).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole('button', { name: 'Sao chép' }));
+    await waitFor(async () => expect(await navigator.clipboard.readText()).toBe('MONTHLY-1'));
+
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('đơn có voucher và đơn PAID_AFTER_CANCELLED: modal hiện mã voucher, giảm giá, cờ và ghi chú hệ thống', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await waitFor(() => expect(screen.getByText('YEARLY-1')).toBeInTheDocument());
+
+    await user.click(within(screen.getByText('YEARLY-1').closest('tr')).getByRole('button', { name: 'Xem chi tiết đơn' }));
+    let dialog = await screen.findByRole('dialog', {}, { timeout: 5000 });
+    expect(within(dialog).getByText('VIP100')).toBeInTheDocument();
+    expect(within(dialog).getByText('-2.870.400 đ')).toBeInTheDocument();
+    expect(within(dialog).getByText('Theo năm')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Đóng' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    await user.click(within(screen.getByText('PAID-CANCELLED-1').closest('tr')).getByRole('button', { name: 'Xem chi tiết đơn' }));
+    dialog = await screen.findByRole('dialog', {}, { timeout: 5000 });
+    expect(within(dialog).getByText('PayOS báo đã trả dù đơn đã huỷ — cần xử lý tay')).toBeInTheDocument();
+    expect(within(dialog).getByText(/PAID_AFTER_CANCELLED order status=cancelled/)).toBeInTheDocument();
+  });
+});
