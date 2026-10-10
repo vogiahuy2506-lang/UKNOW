@@ -34,6 +34,10 @@ app.use('/', router);
 describe('web chat công khai — trần tải tệp', () => {
   beforeEach(() => uploadHandler.mockClear());
 
+  // Hai ca dưới đẩy 21 MB qua multipart: máy tải nặng (hook pre-push chạy chung với phiên khác) mất hơn 5–8 s và đỏ giả
+  // — đỏ giả đã chặn push 10/10. Nới riêng hai ca này; ca 1 MB giữ mặc định.
+  const LARGE_UPLOAD_TIMEOUT_MS = 30_000;
+
   it('trần công khai là 20 MB', () => {
     expect(MAX_PUBLIC_UPLOAD_FILE_MB).toBe(20);
     expect(MAX_PUBLIC_UPLOAD_FILE_BYTES).toBe(20 * 1024 * 1024);
@@ -47,14 +51,14 @@ describe('web chat công khai — trần tải tệp', () => {
     expect(res.body.message).toContain('20MB');
     expect(res.body.code).toBe('FILE_TOO_LARGE');
     expect(uploadHandler).not.toHaveBeenCalled();
-  });
+  }, LARGE_UPLOAD_TIMEOUT_MS);
 
   it('cả đường theo widgetKey cũng bị trần 20 MB', async () => {
     const res = await request(app)
       .post('/custom-chatbot/abc/attachment')
       .attach('file', Buffer.alloc(21 * 1024 * 1024, 1), 'to.pdf');
     expect(res.status).toBe(413);
-  });
+  }, LARGE_UPLOAD_TIMEOUT_MS);
 
   it('ĐỐI CHỨNG: tệp 1 MB đi qua tới controller', async () => {
     const res = await request(app)
