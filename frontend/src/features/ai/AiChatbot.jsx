@@ -67,7 +67,11 @@ import {
   normalizeChannel,
   parseWizardMarker,
   deriveWizardContext,
-  mergeClientWizardContext,
+  contextFromServerGates,
+  countUserMessages,
+  acceptServerWizardState,
+  extractServerWizardState,
+  resolveWizardContext,
   applyWizardSelectionsToScript,
   findLatestInteractiveIndex,
 } from './utils/wizardContext.js';
@@ -445,6 +449,10 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const sessionWizardStateCache = useRef(new Map()); // sessionId → wizard_state từ server (restore khi tab-switch)
   const wizardPatchQueueRef = useRef(Promise.resolve()); // serialize PATCH wizard-state (tránh interleave khi "Lưu tất cả")
   const [serverWizardGates, setServerWizardGates] = useState(null); // gates persist trên server của session hiện tại
+  // PR-C2: gates server nhận được kèm MỖI phản hồi /ai/chat và PATCH — { gates, userCount } (userCount = số tin user lúc nhận).
+  const [turnGatesMark, setTurnGatesMark] = useState(null);
+  const wizardStateStampRef = useRef(null); // meta.updatedAt mới nhất đã nhận — phản hồi cũ đến muộn không được đè phản hồi mới
+  const userCountRef = useRef(0);
   const pendingTabIdRef = useRef(new Set()); // non-rendering check
   const [pendingTabIds, setPendingTabIds] = useState(new Set()); // for tab dot indicator
   const navigate = useNavigate();
@@ -633,11 +641,26 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
   // Fire-and-forget PATCH wizard-state, serialize qua promise queue để "Lưu tất cả"
   // không gửi interleave. Chỉ gọi khi session đã tồn tại trên server.
+  // Nhận `wizardState` từ server (phản hồi chat hoặc PATCH): cập nhật gates + dấu để wizardContext dựng từ server.
+  // Trả gates đã nhận (hoặc null nếu thiếu/không hợp lệ/đã cũ hơn bản đang giữ).
+  const applyServerWizardState = (wizardState, userCount) => {
+    const parsed = acceptServerWizardState(wizardState, wizardStateStampRef.current);
+    if (!parsed) return null;
+    if (parsed.updatedAt) wizardStateStampRef.current = parsed.updatedAt;
+    setServerWizardGates(parsed.gates);
+    setTurnGatesMark({ gates: parsed.gates, userCount });
+    return parsed.gates;
+  };
+
   const enqueueWizardPatch = (action, payload = {}) => {
     const sessionId = currentSessionIdRef.current;
     if (!sessionId) return;
     wizardPatchQueueRef.current = wizardPatchQueueRef.current
       .then(() => aiApi.patchWizardState(sessionId, action, payload))
+      .then((res) => {
+        // Phản hồi PATCH mang state mới nhất (vd approve_plan, mark_campaign_created → gates rỗng).
+        if (currentSessionIdRef.current === sessionId) applyServerWizardState(res?.data?.wizardState, userCountRef.current);
+      })
       .catch(() => {});
   };
 
@@ -647,6 +670,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   // (serverWizardGates, contentPlanWorkflow) — chiến dịch tiếp theo trong CÙNG hội thoại
   // không kế thừa sender/nhóm/nguồn của chiến dịch vừa tạo.
   const closeWizardAfterCreate = ({ campaignId, content, type = 'campaign_created', data, appendMessage = setMessages }) => {
+    setTurnGatesMark(null);
+    wizardStateStampRef.current = null;
     enqueueWizardPatch('mark_campaign_created', { campaignId: campaignId ?? null, content });
     setServerWizardGates(null);
     setContentPlanWorkflow(null);
@@ -659,6 +684,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   // reset_plan, ngoài phạm vi). Trước đây 2 nơi này chỉ append tin "Đã dừng…" KHÔNG có `type`
   // → deriveWizardContext ở local không thấy ranh giới cho tới khi tải lại trang.
   const closeWizardAfterAbandon = ({ content, messageCount, extraUserMessage, appendMessage = setMessages }) => {
+    setTurnGatesMark(null);
+    wizardStateStampRef.current = null;
     enqueueWizardPatch('abandon_campaign_flow', { messageCount, content });
     setServerWizardGates(null);
     setContentPlanWorkflow(null);
@@ -677,6 +704,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     const gates = wizardState?.v === 1 ? wizardState.gates : null;
     const planSection = wizardState?.v === 1 ? wizardState.plan : null;
     setServerWizardGates(gates || null);
+    setTurnGatesMark(null);
+    wizardStateStampRef.current = null;
 
     if (!planSection?.snapshot || planSection.status === 'completed') return false;
     const normalizedPlan = normalizeContentPlanData(planSection.snapshot);
@@ -739,9 +768,13 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           restoreFromServerWizardState(cachedState);
         } else {
           setServerWizardGates(cachedState?.v === 1 ? cachedState.gates : null);
+          setTurnGatesMark(null);
+          wizardStateStampRef.current = null;
         }
       } else {
         setServerWizardGates(null);
+        setTurnGatesMark(null);
+        wizardStateStampRef.current = null;
       }
       return;
     }
@@ -806,6 +839,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         workflowRestored = restoreFromServerWizardState(serverWizardState, reconstructedDrafts);
       } else {
         setServerWizardGates(null);
+        setTurnGatesMark(null);
+        wizardStateStampRef.current = null;
       }
 
       // Restore pending state cho card tương tác cuối cùng
@@ -884,6 +919,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     setContentPlanWorkflow(null);
     setWizardContext(deriveWizardContext([]));
     setServerWizardGates(null);
+    setTurnGatesMark(null);
+    wizardStateStampRef.current = null;
     setGeneratingDay(null);
   };
 
@@ -974,9 +1011,9 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   }, [messages]);
 
   useEffect(() => {
-    const derived = deriveWizardContext(messages);
-    setWizardContext(serverWizardGates ? mergeClientWizardContext(derived, serverWizardGates) : derived);
-  }, [messages, serverWizardGates]);
+    userCountRef.current = countUserMessages(messages);
+    setWizardContext(resolveWizardContext({ messages, serverGates: serverWizardGates, turnMark: turnGatesMark }));
+  }, [messages, serverWizardGates, turnGatesMark]);
 
   useEffect(() => {
     setMessages(prev => {
@@ -1584,6 +1621,10 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           sessionTitle,
           messageId = null,
         } = response.data;
+        // PR-C2: gates SAU lượt do server trả (BE cũ / đường help không có → null → rơi về suy từ lịch sử).
+        const turnWizardGates = extractServerWizardState(response.data.wizardState)?.gates || null;
+        applyServerWizardState(response.data.wizardState, countUserMessages(newHistory));
+        const wizardContextAfterTurn = () => (turnWizardGates ? contextFromServerGates(turnWizardGates) : deriveWizardContext(newHistory));
         if (returnedSessionId && !currentSessionId) {
           mySessionId = returnedSessionId;
           markTabPending(mySessionId);
@@ -1689,7 +1730,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         if (type === 'confirm_create' && data) {
           // Derive từ newHistory (thay vì wizardContext state) để không bỏ sót
           // tin nhắn vừa gửi trong lượt này (ví dụ link Google Sheet vừa dán)
-          const mergedScript = applyWizardSelectionsToScript(data, deriveWizardContext(newHistory));
+          const mergedScript = applyWizardSelectionsToScript(data, wizardContextAfterTurn());
           await prepareAndShowCampaignConfirmation(mergedScript, { sessionId: mySessionId, update, content });
           return;
         }
@@ -1698,7 +1739,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           // Rà soát C P1-4: KHÔNG tạo + chạy thẳng từ câu trả lời của model nữa. BE chỉ giữ `create_and_run` khi người dùng GÕ rõ
           // "tạo và chạy"; dù vậy vẫn đi qua thẻ xác nhận (xem trước nội dung, người nhận, tài khoản gửi) và chỉ chạy khi họ bấm
           // nút "Tạo và chạy" (handleConfirmCreateAndRun).
-          const mergedScript = applyWizardSelectionsToScript(data, deriveWizardContext(newHistory));
+          const mergedScript = applyWizardSelectionsToScript(data, wizardContextAfterTurn());
           await prepareAndShowCampaignConfirmation(mergedScript, { sessionId: mySessionId, update, content, runAfterCreate: true });
           return;
         }

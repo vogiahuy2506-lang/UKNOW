@@ -173,6 +173,63 @@ export const mergeClientWizardContext = (derived, gates) => ({
   planApproved: Boolean(derived.planApproved || gates.planApproved),
 });
 
+// ---------------------------------------------------------------------------
+// PR-C2 (C-NO-GOC1) — trạng thái wizard lấy từ SERVER thay vì suy lại từ lịch sử.
+// Backend (PR-C1) trả `wizardState` (v:1, gates đã gộp, plan.status, meta) sau MỖI lượt /ai/chat và trong phản hồi PATCH.
+// Có nó thì FE dựng `wizardContext` thẳng từ gates; thiếu (BE cũ chưa deploy, hoặc đường không ghi state) thì rơi về
+// deriveWizardContext + mergeClientWizardContext như trước.
+// TODO(C-NO-GOC1): xoá đường suy từ lịch sử (deriveWizardContext, mergeClientWizardContext, nhánh fallback của
+// resolveWizardContext) khi đo được production không còn phản hồi /ai/chat thiếu `wizardState` (log shadow BE + nhật ký request).
+// ---------------------------------------------------------------------------
+
+/** Lấy { gates, updatedAt } từ phản hồi API khi hợp lệ (v === 1 và có gates), ngược lại null. */
+export const extractServerWizardState = (wizardState) => {
+  if (!wizardState || wizardState.v !== 1 || !wizardState.gates || typeof wizardState.gates !== 'object') return null;
+  return { gates: wizardState.gates, updatedAt: typeof wizardState.meta?.updatedAt === 'string' ? wizardState.meta.updatedAt : null };
+};
+
+/**
+ * Có nhận `wizardState` này không? null nếu thiếu/không hợp lệ HOẶC cũ hơn bản đã nhận (`lastStamp` = meta.updatedAt mới
+ * nhất): phản hồi PATCH và phản hồi chat có thể về sai thứ tự, bản cũ đến muộn không được đè bản mới.
+ */
+export const acceptServerWizardState = (wizardState, lastStamp = null) => {
+  const parsed = extractServerWizardState(wizardState);
+  if (!parsed) return null;
+  if (parsed.updatedAt && lastStamp && parsed.updatedAt < lastStamp) return null;
+  return parsed;
+};
+
+export const countUserMessages = (messages = []) => (Array.isArray(messages) ? messages : [])
+  .filter((message) => message?.role === 'user').length;
+
+/** Dựng context từ gates server — cùng hình dạng với deriveWizardContext. */
+export const contextFromServerGates = (gates = {}) => ({
+  channel: gates.channel ?? null,
+  senderAccountId: gates.senderAccountId ?? null,
+  senderAccountName: gates.senderAccountName ?? null,
+  dataSource: gates.dataSource ?? null,
+  sheetUrl: gates.sheetUrl ?? null,
+  zaloGroupIds: Array.isArray(gates.zaloGroupIds) ? gates.zaloGroupIds : [],
+  zaloFriendIds: Array.isArray(gates.zaloFriendIds) ? gates.zaloFriendIds : [],
+  landingLeadsSlugs: normalizeLandingSlugList(gates.landingLeadsSlugs),
+  landingLeadsAll: gates.landingLeadsAll === true,
+  schedule: gates.schedule ?? null,
+  planApproved: Boolean(gates.planApproved),
+});
+
+/**
+ * wizardContext cho UI. `turnMark` = { gates, userCount } ghi lúc nhận phản hồi server. Còn đúng chừng nào chưa có tin
+ * user mới (bấm nút/gõ thêm = thêm tin user → chờ phản hồi kế tiếp; trong lúc chờ dùng đường suy từ lịch sử như trước để
+ * lựa chọn vừa bấm hiện ngay).
+ */
+export const resolveWizardContext = ({ messages = [], serverGates = null, turnMark = null }) => {
+  if (turnMark?.gates && turnMark.userCount === countUserMessages(messages)) {
+    return contextFromServerGates(turnMark.gates);
+  }
+  const derived = deriveWizardContext(messages);
+  return serverGates ? mergeClientWizardContext(derived, serverGates) : derived;
+};
+
 export const applyWizardSelectionsToScript = (script, context = {}) => {
   if (!script) return script;
   const senderId = context.senderAccountId != null ? Number(context.senderAccountId) : null;
