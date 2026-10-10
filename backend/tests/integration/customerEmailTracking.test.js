@@ -414,24 +414,26 @@ describe('/api/customers/email-tracking/unsubscribe/:token', () => {
 
 // ─────────────────────────────────────────────────────────────────────────
 describe('Lớp gửi — findCustomerByEmail gộp mọi bản trùng email trong workspace', () => {
-  it('2 dòng trùng email, 1 đã huỷ → coi là đã huỷ (dù dòng còn đăng ký có id nhỏ hơn)', async () => {
+  it('2 dòng trùng email, 1 đã huỷ → coi là đã huỷ (dù dòng đã huỷ có id nhỏ hơn dòng còn đăng ký)', async () => {
     const { default: senderRepo } = await import('../../src/repositories/campaign/campaignEmailSender.repository.js');
     const user = await createUser();
     const first = await createCustomer({ userId: user.id, email: 'same@u.local' });
     const second = await createCustomer({ userId: user.id, email: 'SAME@u.local' });
-    await db.query(`UPDATE customers SET email_subscribed = false WHERE id = $1`, [second.id]);
+    // Bản ĐÃ HUỶ là dòng id nhỏ; bản còn đăng ký có id lớn — `LIMIT 1` theo bất kỳ thứ tự nào đều có thể chọn nhầm.
+    await db.query(`UPDATE customers SET email_subscribed = false WHERE id = $1`, [first.id]);
 
     const row = await senderRepo.findCustomerByEmail(user.id, 'same@u.local');
     expect(row.email_subscribed).toBe(false);
     expect(row.id).toBe(first.id); // id ổn định = dòng cũ nhất
+    expect(Number(second.id)).toBeGreaterThan(Number(first.id));
   });
 
   it('2 dòng trùng email, 1 hard bounce → email_hard_bounced = true', async () => {
     const { default: senderRepo } = await import('../../src/repositories/campaign/campaignEmailSender.repository.js');
     const user = await createUser();
+    const first = await createCustomer({ userId: user.id, email: 'bounce@u.local' });
     await createCustomer({ userId: user.id, email: 'bounce@u.local' });
-    const second = await createCustomer({ userId: user.id, email: 'bounce@u.local' });
-    await db.query(`UPDATE customers SET email_hard_bounced = true WHERE id = $1`, [second.id]);
+    await db.query(`UPDATE customers SET email_hard_bounced = true WHERE id = $1`, [first.id]);
 
     const row = await senderRepo.findCustomerByEmail(user.id, 'bounce@u.local');
     expect(row.email_hard_bounced).toBe(true);
