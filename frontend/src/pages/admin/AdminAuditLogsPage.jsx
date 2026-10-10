@@ -42,7 +42,7 @@ function ActionBadge({ action, t }) {
     ? 'bg-green-100 text-green-700 dark:bg-emerald-950/50 dark:text-emerald-300'
     : 'bg-blue-100 text-blue-700 dark:bg-sky-950/50 dark:text-sky-300';
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${color}`}>
+    <span className={`inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded text-xs font-medium ${color}`}>
       {auditLabel(t, 'actions', action)}
     </span>
   );
@@ -146,12 +146,12 @@ export default function AdminAuditLogsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 dark:border-dk-border">
-                <th className="pb-3 text-left text-xs font-semibold text-gray-500 dark:text-dk-text2 uppercase tracking-wide">{t('adminAuditLogs.colTime')}</th>
-                <th className="pb-3 text-left text-xs font-semibold text-gray-500 dark:text-dk-text2 uppercase tracking-wide">{t('adminAuditLogs.colActor')}</th>
-                <th className="pb-3 text-left text-xs font-semibold text-gray-500 dark:text-dk-text2 uppercase tracking-wide">{t('adminAuditLogs.colAction')}</th>
-                <th className="pb-3 text-left text-xs font-semibold text-gray-500 dark:text-dk-text2 uppercase tracking-wide">{t('adminAuditLogs.colEntity')}</th>
-                <th className="pb-3 text-left text-xs font-semibold text-gray-500 dark:text-dk-text2 uppercase tracking-wide">{t('adminAuditLogs.colDetails')}</th>
-                <th className="pb-3 text-left text-xs font-semibold text-gray-500 dark:text-dk-text2 uppercase tracking-wide">{t('adminAuditLogs.colIp')}</th>
+                <th className="w-px whitespace-nowrap pr-4 pb-3 text-left text-xs font-semibold text-gray-500 dark:text-dk-text2 uppercase tracking-wide">{t('adminAuditLogs.colTime')}</th>
+                <th className="w-px whitespace-nowrap pr-4 pb-3 text-left text-xs font-semibold text-gray-500 dark:text-dk-text2 uppercase tracking-wide">{t('adminAuditLogs.colActor')}</th>
+                <th className="w-px whitespace-nowrap pr-4 pb-3 text-left text-xs font-semibold text-gray-500 dark:text-dk-text2 uppercase tracking-wide">{t('adminAuditLogs.colAction')}</th>
+                <th className="w-px whitespace-nowrap pr-4 pb-3 text-left text-xs font-semibold text-gray-500 dark:text-dk-text2 uppercase tracking-wide">{t('adminAuditLogs.colEntity')}</th>
+                <th className="min-w-[260px] pr-4 pb-3 text-left text-xs font-semibold text-gray-500 dark:text-dk-text2 uppercase tracking-wide">{t('adminAuditLogs.colDetails')}</th>
+                <th className="w-px whitespace-nowrap pb-3 text-left text-xs font-semibold text-gray-500 dark:text-dk-text2 uppercase tracking-wide">{t('adminAuditLogs.colIp')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50 dark:divide-dk-border">
@@ -163,19 +163,24 @@ export default function AdminAuditLogsPage() {
               )}
               {!loading && logs.map((log) => (
                 <tr key={log.id} className="hover:bg-gray-50/60 dark:hover:bg-dk-raised/40 transition-colors">
-                  <td className="py-3 pr-4 text-gray-500 dark:text-dk-text2 whitespace-nowrap">{fmtDate(log.created_at, locale)}</td>
-                  <td className="py-3 pr-4">
-                    <div className="font-medium text-gray-900 dark:text-dk-text">
+                  <td className="py-3 pr-4 w-px text-gray-500 dark:text-dk-text2 whitespace-nowrap">{fmtDate(log.created_at, locale)}</td>
+                  <td className="py-3 pr-4 w-px">
+                    <div
+                      className="max-w-[200px] truncate font-medium text-gray-900 dark:text-dk-text"
+                      title={log.actor_name || log.actor_username || t('auditLogs.systemActor')}
+                    >
                       {log.actor_name || log.actor_username || t('auditLogs.systemActor')}
                     </div>
-                    {log.actor_email && <div className="text-xs text-gray-400 dark:text-dk-text2">{log.actor_email}</div>}
+                    {log.actor_email && (
+                      <div className="max-w-[200px] truncate text-xs text-gray-400 dark:text-dk-text2" title={log.actor_email}>{log.actor_email}</div>
+                    )}
                   </td>
-                  <td className="py-3 pr-4"><ActionBadge action={log.action} t={t} /></td>
-                  <td className="py-3 pr-4 text-gray-600 dark:text-dk-text">
+                  <td className="py-3 pr-4 w-px whitespace-nowrap"><ActionBadge action={log.action} t={t} /></td>
+                  <td className="py-3 pr-4 w-px whitespace-nowrap text-gray-600 dark:text-dk-text">
                     {auditLabel(t, 'entities', log.entity_type)}
                     {log.entity_id ? <span className="text-gray-400 dark:text-dk-text2 ml-1">#{log.entity_id}</span> : null}
                   </td>
-                  <td className="py-3 pr-4 text-gray-600 dark:text-dk-text text-xs max-w-md break-words">
+                  <td className="py-3 pr-4 min-w-[260px] text-gray-600 dark:text-dk-text text-xs break-words">
                     <div>{formatAuditDetails(log.action, log.details, t, locale)}</div>
                     {log.details && Object.keys(log.details).length > 0 && (
                       <button
@@ -188,7 +193,7 @@ export default function AdminAuditLogsPage() {
                       </button>
                     )}
                   </td>
-                  <td className="py-3 text-gray-400 dark:text-dk-text2 text-xs font-mono">{log.ip_address || '—'}</td>
+                  <td className="py-3 w-px whitespace-nowrap text-gray-400 dark:text-dk-text2 text-xs font-mono">{log.ip_address || '—'}</td>
                 </tr>
               ))}
             </tbody>

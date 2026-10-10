@@ -14,10 +14,15 @@ import PageContainer from '../../components/common/PageContainer';
 import { useI18n } from '../../i18n';
 import help from '../../services/help.service';
 
-const formatDate = (v) => {
-  if (!v) return '—';
+// Tách ngày / giờ để ô "Cập nhật" xuống dòng CÓ CHỦ ĐÍCH (ngày dòng 1, giờ dòng 2), không bao giờ vỡ giữa ngày.
+const formatDateParts = (v) => {
+  if (!v) return null;
   const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('vi-VN') + ' ' + d.toLocaleTimeString('vi-VN');
+  if (Number.isNaN(d.getTime())) return null;
+  return {
+    date: d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+    time: d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false }),
+  };
 };
 
 export default function AdminHelpArticlesPage() {
@@ -173,36 +178,37 @@ export default function AdminHelpArticlesPage() {
             <table className="min-w-full divide-y divide-slate-100 dark:divide-dk-border/60 text-sm">
               <thead className="bg-slate-50 dark:bg-dk-raised text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-dk-text2">
                 <tr>
-                  <th className="px-5 py-3">{t('adminHelp.article')}</th>
-                  <th className="px-5 py-3">{t('adminHelp.locale')}</th>
-                  <th className="px-5 py-3">{t('adminHelp.featureKey')}</th>
-                  <th className="px-5 py-3">{t('adminHelp.published')}</th>
-                  <th className="px-5 py-3">{t('adminHelp.updatedAt')}</th>
-                  <th className="px-5 py-3 text-right">{t('common.actions')}</th>
+                  <th className="whitespace-nowrap px-5 py-3">{t('adminHelp.article')}</th>
+                  <th className="whitespace-nowrap px-5 py-3">{t('adminHelp.locale')}</th>
+                  <th className="whitespace-nowrap px-5 py-3">{t('adminHelp.featureKey')}</th>
+                  <th className="whitespace-nowrap px-5 py-3">{t('adminHelp.published')}</th>
+                  <th className="whitespace-nowrap px-5 py-3">{t('adminHelp.updatedAt')}</th>
+                  <th className="whitespace-nowrap px-5 py-3 text-right">{t('common.actions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-dk-border/60">
                 {rows.map((article) => {
                   const busy = savingId === article.id;
+                  const updated = formatDateParts(article.updated_at);
                   return (
                     <tr key={article.slug} className="align-top hover:bg-slate-50/50 dark:hover:bg-dk-raised/30 transition-colors">
-                      <td className="px-5 py-4">
-                        <p className="font-medium text-slate-900 dark:text-dk-text">{article.title}</p>
-                        <p className="mt-0.5 text-xs text-slate-500 dark:text-dk-text2">/huong-dan/{article.slug}</p>
+                      <td className="min-w-[280px] px-5 py-4">
+                        <p className="line-clamp-2 font-medium text-slate-900 dark:text-dk-text" title={article.title}>{article.title}</p>
+                        <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-dk-text2">/huong-dan/{article.slug}</p>
                       </td>
                       <td className="px-5 py-4">
-                        <div className="flex flex-wrap gap-1">
+                        <div className="flex flex-nowrap gap-1">
                           {article._hasVi ? (
-                            <span className="rounded bg-slate-100 dark:bg-dk-raised px-1.5 py-0.5 text-xs font-medium text-slate-700 dark:text-dk-text">
+                            <span className="whitespace-nowrap rounded bg-slate-100 dark:bg-dk-raised px-1.5 py-0.5 text-xs font-medium text-slate-700 dark:text-dk-text">
                               {t('adminHelp.localeVi')}
                             </span>
                           ) : (
-                            <span className="rounded bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 px-1.5 py-0.5 text-xs text-red-600 dark:text-red-400 font-medium" title="Lỗi: Bài viết này bị mất bản gốc tiếng Việt!">
+                            <span className="whitespace-nowrap rounded bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 px-1.5 py-0.5 text-xs text-red-600 dark:text-red-400 font-medium" title="Lỗi: Bài viết này bị mất bản gốc tiếng Việt!">
                               Thiếu VI
                             </span>
                           )}
                           {article._hasEn ? (
-                            <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${
+                            <span className={`whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-medium ${
                               article._enStale
                                 ? 'bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-400'
                                 : 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-400'
@@ -211,15 +217,15 @@ export default function AdminHelpArticlesPage() {
                               {article._enStale ? t('adminHelp.enStale') : t('adminHelp.hasEn')}
                             </span>
                           ) : (
-                            <span className="rounded bg-slate-50 dark:bg-dk-raised/60 px-1.5 py-0.5 text-xs text-slate-400 dark:text-dk-muted">
+                            <span className="whitespace-nowrap rounded bg-slate-50 dark:bg-dk-raised/60 px-1.5 py-0.5 text-xs text-slate-400 dark:text-dk-muted">
                               {t('adminHelp.noEn')}
                             </span>
                           )}
                         </div>
                       </td>
-                      <td className="px-5 py-4 text-slate-600 dark:text-dk-text2">{article.feature_key}</td>
-                      <td className="px-5 py-4">
-                        <label className="inline-flex cursor-pointer items-center gap-2">
+                      <td className="whitespace-nowrap px-5 py-4 text-slate-600 dark:text-dk-text2">{article.feature_key}</td>
+                      <td className="whitespace-nowrap px-5 py-4">
+                        <label className="inline-flex cursor-pointer items-center gap-2 whitespace-nowrap">
                           <input
                             type="checkbox"
                             className="h-4 w-4 rounded border-slate-300 dark:border-dk-border text-primary-600"
@@ -232,8 +238,15 @@ export default function AdminHelpArticlesPage() {
                           </span>
                         </label>
                       </td>
-                      <td className="px-5 py-4 text-slate-500 dark:text-dk-text2">{formatDate(article.updated_at)}</td>
-                      <td className="px-5 py-4 text-right">
+                      <td className="whitespace-nowrap px-5 py-4 text-slate-500 dark:text-dk-text2">
+                        {updated ? (
+                          <>
+                            <p className="tabular-nums">{updated.date}</p>
+                            <p className="text-xs tabular-nums text-slate-400 dark:text-dk-muted">{updated.time}</p>
+                          </>
+                        ) : '—'}
+                      </td>
+                      <td className="whitespace-nowrap px-5 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button
                             type="button"
