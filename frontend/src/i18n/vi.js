@@ -1671,7 +1671,7 @@ export default {
     channelGroupZalo: 'Zalo cá nhân',
     channelGroupTelegram: 'Telegram',
     channelGroupWhatsApp: 'WhatsApp',
-    channelGroupExtraHint: 'Nhân viên chỉ thấy và dùng được các tài khoản Telegram, WhatsApp được chọn ở đây (quản lý kênh, Studio, chiến dịch, Gửi nhanh). Tài khoản do nhân viên tự đăng nhập được tự động giao.',
+    channelGroupExtraHint: 'Nhân viên chỉ thấy và dùng được các tài khoản Telegram, WhatsApp được chọn ở đây (quản lý kênh, Hộp thư, Studio, chiến dịch, Gửi nhanh). Tài khoản do nhân viên tự đăng nhập được tự động giao.',
     channelGroupTelegramEmpty: 'Bạn chưa kết nối tài khoản Telegram nào.',
     channelGroupWhatsAppEmpty: 'Bạn chưa kết nối tài khoản WhatsApp nào.',
     updateChannelAccountsSuccess: 'Đã cập nhật tài khoản được giao',
@@ -8473,6 +8473,9 @@ export default {
     addStep: '+ Thêm bước',
     addHint: 'Tối đa {max} bước. Bước sau chỉ gửi cho người đã nhận bước trước, sau đúng khoảng chờ bạn đặt.',
     maxReached: 'Đã đủ {max} bước (tối đa).',
+  },
+  channelAccountScope: {
+    employeeNote: 'Tài khoản của chủ chỉ hiện khi được giao cho bạn.',
   },
   telegramNodeSend: {
     nodeName: 'Tên node',

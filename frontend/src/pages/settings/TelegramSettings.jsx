@@ -21,6 +21,7 @@ import { AccountListSkeleton } from '../../components/common/Skeleton';
 import { FaTelegramPlane } from 'react-icons/fa';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import ChannelAccountSendSettings from '../../features/settings/components/ChannelAccountSendSettings';
+import EmployeeChannelScopeNote from '../../features/settings/components/EmployeeChannelScopeNote';
 import ChannelAccountLockNotice, { ChannelAccountLockBadge } from '../../features/settings/components/ChannelAccountLockNotice';
 import { useI18n } from '../../i18n';
 
@@ -692,6 +693,9 @@ export default function TelegramSettings({ readOnly = false } = {}) {
             </span>
           )}
         </div>
+
+        {/* H3: nhân viên chỉ thấy tài khoản được giao */}
+        <EmployeeChannelScopeNote className="px-4 sm:px-5 pt-3 text-xs text-slate-500" />
 
         {/* Content */}
         {loading ? (

@@ -21,6 +21,7 @@ import { FaWhatsapp } from 'react-icons/fa';
 import whatsappSettingsApiService from '../../features/settings/services/whatsappSettingsApi.service';
 import ChannelAccountSendSettings from '../../features/settings/components/ChannelAccountSendSettings';
 import WhatsAppTestSend from '../../features/settings/components/WhatsAppTestSend';
+import EmployeeChannelScopeNote from '../../features/settings/components/EmployeeChannelScopeNote';
 import ChannelAccountLockNotice, { ChannelAccountLockBadge } from '../../features/settings/components/ChannelAccountLockNotice';
 import { useI18n } from '../../i18n';
 import ConfirmModal from '../../components/common/ConfirmModal';
@@ -246,6 +247,7 @@ export default function WhatsAppSettings({ readOnly = false } = {}) {
     >
 
       {/* ── Accounts list (mỗi session = 1 card riêng, giống Zalo) ──── */}
+      <EmployeeChannelScopeNote />
       {loading ? (
         <AccountListSkeleton count={2} />
       ) : sessions.length === 0 ? (

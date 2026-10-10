@@ -1668,7 +1668,7 @@ export default {
     channelGroupZalo: 'Personal Zalo',
     channelGroupTelegram: 'Telegram',
     channelGroupWhatsApp: 'WhatsApp',
-    channelGroupExtraHint: 'Employees can only see and use the Telegram and WhatsApp accounts selected here (channel management, Studio, campaigns, Quick Send). Accounts an employee signs in to themselves are assigned automatically.',
+    channelGroupExtraHint: 'Employees can only see and use the Telegram and WhatsApp accounts selected here (channel management, Inbox, Studio, campaigns, Quick Send). Accounts an employee signs in to themselves are assigned automatically.',
     channelGroupTelegramEmpty: 'You have not connected any Telegram account yet.',
     channelGroupWhatsAppEmpty: 'You have not connected any WhatsApp account yet.',
     updateChannelAccountsSuccess: 'Assigned accounts updated',
@@ -8464,6 +8464,9 @@ export default {
     addStep: '+ Add step',
     addHint: 'Up to {max} steps. Each later step is only sent to people who received the previous one, after exactly the wait you set.',
     maxReached: 'Reached the maximum of {max} steps.',
+  },
+  channelAccountScope: {
+    employeeNote: "The owner's accounts only appear once they are assigned to you.",
   },
   telegramNodeSend: {
     nodeName: 'Node name',
