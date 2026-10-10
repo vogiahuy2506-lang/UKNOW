@@ -6484,6 +6484,11 @@ export default {
     clearSearch: 'Xoá tìm kiếm',
     noMatchInPage: 'Không có dòng nào trong trang này khớp "{query}".',
     showingOf: 'đang hiển thị {shown}/{total}',
+    // Modal chi tiết khách (bấm dòng hoặc nút mắt): hiện đủ mọi trường mà ô "Thông tin thêm" cắt bớt.
+    viewDetail: 'Xem chi tiết',
+    detailTitle: 'Chi tiết khách hàng',
+    copy: 'Sao chép',
+    moreFieldsTitle: 'Còn {count} trường nữa — mở chi tiết để xem đầy đủ',
   },
 
   landingInbox: {

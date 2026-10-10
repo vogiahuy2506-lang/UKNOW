@@ -6470,6 +6470,11 @@ export default {
     clearSearch: 'Clear search',
     noMatchInPage: 'No rows on this page match "{query}".',
     showingOf: 'showing {shown}/{total}',
+    // Lead detail modal (click a row or the eye button): shows every field the "Extra info" cell truncates.
+    viewDetail: 'View details',
+    detailTitle: 'Lead details',
+    copy: 'Copy',
+    moreFieldsTitle: '{count} more fields — open details to see everything',
   },
 
   landingInbox: {

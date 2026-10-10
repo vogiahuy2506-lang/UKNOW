@@ -95,25 +95,60 @@ export function normalizeCustomFieldEntry(key, entry, locale = 'vi') {
  * @returns {string}
  */
 export function renderLeadExtraInfo(row, definitions = [], locale = 'vi') {
+  return formatLeadExtraEntries(getLeadExtraEntries(row, definitions, locale));
+}
+
+/**
+ * Danh sách TỪNG trường của cột "Thông tin thêm": Nghề nghiệp, Lĩnh vực rồi các trường cf_*.
+ * Nguồn duy nhất cho cả chuỗi tóm tắt ở bảng (renderLeadExtraInfo) lẫn modal chi tiết khách —
+ * hai nơi không được lệch nhau (modal phải hiện đủ những gì ô bảng cắt bớt).
+ *
+ * @param {{ occupation?: string, interestArea?: string, customFields?: object }} row
+ * @param {Array} [definitions]
+ * @param {'vi'|'en'} [locale='vi']
+ * @returns {{ key: string, label: string, value: string }[]}
+ */
+export function getLeadExtraEntries(row, definitions = [], locale = 'vi') {
   const occupation = String(row?.occupation ?? '').trim();
   const interestArea = String(row?.interestArea ?? row?.interest_area ?? '').trim();
-  const parts = [];
-  if (occupation) parts.push(`${locale === 'en' ? 'Occupation' : 'Nghề nghiệp'}: ${occupation}`);
-  if (interestArea) parts.push(`${locale === 'en' ? 'Interest' : 'Lĩnh vực'}: ${interestArea}`);
-  const custom = renderCustomFieldsSummary(row?.customFields, definitions, locale);
-  if (custom) parts.push(custom);
-  return parts.join(' · ');
+  const entries = [];
+  if (occupation) entries.push({ key: 'occupation', label: locale === 'en' ? 'Occupation' : 'Nghề nghiệp', value: occupation });
+  if (interestArea) entries.push({ key: 'interestArea', label: locale === 'en' ? 'Interest' : 'Lĩnh vực', value: interestArea });
+  entries.push(...getCustomFieldEntries(row?.customFields, definitions, locale));
+  return entries;
+}
+
+/**
+ * Ghép danh sách trường thành chuỗi `Nhãn: giá trị · Nhãn: giá trị`.
+ *
+ * @param {{ label: string, value: string }[]} entries
+ * @returns {string}
+ */
+export function formatLeadExtraEntries(entries) {
+  return (entries || []).map((entry) => `${entry.label}: ${entry.value}`).join(' · ');
 }
 
 export function renderCustomFieldsSummary(customFields, definitions = [], locale = 'vi') {
-  if (!customFields || typeof customFields !== 'object') return '';
+  return formatLeadExtraEntries(getCustomFieldEntries(customFields, definitions, locale));
+}
+
+/**
+ * Từng trường cf_* của lead thành `{ key, label, value }` (value là chữ hiển thị).
+ *
+ * @param {object|undefined|null} customFields
+ * @param {Array} [definitions]
+ * @param {'vi'|'en'} [locale='vi']
+ * @returns {{ key: string, label: string, value: string }[]}
+ */
+export function getCustomFieldEntries(customFields, definitions = [], locale = 'vi') {
+  if (!customFields || typeof customFields !== 'object') return [];
   const keys = Object.keys(customFields);
-  if (keys.length === 0) return '';
+  if (keys.length === 0) return [];
   const defByKey = new Map();
   for (const def of definitions || []) {
     if (def?.key) defByKey.set(def.key, def);
   }
-  const parts = keys.map((key) => {
+  return keys.map((key) => {
     const raw = customFields[key];
     const def = defByKey.get(key);
     // Dạng (A) — snapshot backend (buildTrustedCustomFieldsSnapshot): { type, labelVi, labelEn,
@@ -125,7 +160,7 @@ export function renderCustomFieldsSummary(customFields, definitions = [], locale
       const empty = value === null || value === undefined || value === '' || value === false
         || (Array.isArray(value) && value.length === 0);
       if (empty) return null;
-      return `${label}: ${display}`;
+      return { key, label, value: display };
     }
     // Dạng (B) — giá trị thuần, tra nhãn/option từ definitions.
     const label = def?.labelVi || def?.labelEn || key;
@@ -140,9 +175,8 @@ export function renderCustomFieldsSummary(customFields, definitions = [], locale
       }
     }
     const { display } = normalizeCustomFieldEntry(key, entry, locale);
-    return `${label}: ${display}`;
+    return { key, label, value: display };
   }).filter(Boolean);
-  return parts.join(' · ');
 }
 
 /**

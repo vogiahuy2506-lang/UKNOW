@@ -12,20 +12,28 @@ import {
   HiOutlineUsers,
   HiOutlineChevronLeft,
   HiOutlineChevronRight,
+  HiOutlineEye,
 } from 'react-icons/hi';
 import PageHeader from '../../components/common/PageHeader';
 import useLandingLeadsList from '../../features/landing/hooks/useLandingLeadsList.js';
 import { LandingLeadsAdminFilters } from '../../features/landing/components/LandingLeadsAdminFilters.jsx';
 import { fetchLandingLeadsCustomFieldDefinitions } from '../../features/landing/services/landingLeadsAdminApi.service.js';
+import LandingLeadConsentBadge from '../../features/landing/components/LandingLeadConsentBadge.jsx';
+import LandingLeadDetailModal from '../../features/landing/components/LandingLeadDetailModal.jsx';
 import {
+  formatLeadExtraEntries,
+  getLeadExtraEntries,
   getLeadFullName,
   getLeadInitials,
-  renderLeadExtraInfo,
 } from '../../features/landing/utils/leadFields.js';
 import { useI18n } from '../../i18n';
 
 // eslint-disable-next-line no-unused-vars
 const PAGE_SIZE = 20;
+
+// Ô "Thông tin thêm" của bảng chỉ có một dòng: hiện tối đa ngần này trường, phần còn lại gom vào "+N"
+// (đọc đủ trong modal chi tiết khách).
+const EXTRA_INLINE_FIELD_LIMIT = 2;
 
 /**
  * Trang quản lý Lead đổ về từ form landing (/embed/lead-form, snippet HTML, form trong landing page).
@@ -54,6 +62,9 @@ export default function LandingLeadsListPage() {
   } = useLandingLeadsList();
 
   const [customDefs, setCustomDefs] = useState([]);
+  // Dòng đang xem trong modal chi tiết (null = đóng).
+  const [selectedLead, setSelectedLead] = useState(null);
+  const closeLeadDetail = useCallback(() => setSelectedLead(null), []);
 
   // Quick search trong trang hiện tại (FE-only, không gọi lại API).
   // Backend chưa hỗ trợ filter theo text nên search chỉ áp dụng cho items đã load.
@@ -252,30 +263,33 @@ export default function LandingLeadsListPage() {
           <table className="min-w-full divide-y divide-slate-100 dark:divide-dk-border">
             <thead className="bg-slate-50/80 dark:bg-dk-raised/50">
               <tr>
-                <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">
+                <th className="pl-6 pr-3 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">
                   {t('landingLeads.fullName')}
                 </th>
-                <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">
+                <th className="px-3 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">
                   {t('landingLeads.email')}
                 </th>
-                <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">
+                <th className="px-3 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">
                   {t('landingLeads.phone')}
                 </th>
-                <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">
+                <th className="px-3 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">
                   {t('landingLeads.landingSlug')}
                 </th>
-                <th className="px-6 py-3.5 text-center text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">
+                <th className="px-3 py-3.5 text-center text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap">
                   {t('forms.submissionsPage.colConsent', { defaultValue: 'Đồng ý tiếp thị' })}
                 </th>
-                <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">
+                <th className="px-3 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">
                   {t('landingLeads.extraInfo')}
+                </th>
+                <th className="w-px pl-1 pr-5 py-3.5">
+                  <span className="sr-only">{t('landingLeads.viewDetail')}</span>
                 </th>
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-dk-surface divide-y divide-slate-100 dark:divide-dk-border">
               {isLoading && items.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-sm text-slate-500 dark:text-dk-text2">
+                  <td colSpan={7} className="px-6 py-12 text-center text-sm text-slate-500 dark:text-dk-text2">
                     <span className="inline-block w-4 h-4 mr-2 align-[-2px] border-2 border-slate-300 dark:border-dk-border-strong border-t-orange-500 rounded-full animate-spin" />
                     {t('landingLeads.loading')}
                   </td>
@@ -284,7 +298,7 @@ export default function LandingLeadsListPage() {
 
               {!isLoading && visibleItems.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-16 text-center">
+                  <td colSpan={7} className="px-6 py-16 text-center">
                     <HiOutlineSearch className="w-10 h-10 text-slate-300 dark:text-dk-muted mx-auto mb-2" />
                     {debouncedSearch ? (
                       <>
@@ -320,13 +334,32 @@ export default function LandingLeadsListPage() {
               {visibleItems.map((row) => {
                 const fullName = getLeadFullName(row);
                 const initials = getLeadInitials(row);
-                const cfSummary = renderLeadExtraInfo(row, customDefs, 'vi');
+                const extraEntries = getLeadExtraEntries(row, customDefs, 'vi');
+                const extraSummary = formatLeadExtraEntries(extraEntries);
+                const extraInlineSummary = formatLeadExtraEntries(extraEntries.slice(0, EXTRA_INLINE_FIELD_LIMIT));
+                const extraHiddenCount = Math.max(0, extraEntries.length - EXTRA_INLINE_FIELD_LIMIT);
                 const publicUrl = row.landingPageSlug
                   ? `${window.location.origin}/${row.landingPageSlug}`
                   : null;
                 return (
-                  <tr key={row.id ?? row.leadId} className="hover:bg-slate-50/70 dark:hover:bg-dk-raised/40 transition-colors">
-                    <td className="px-6 py-4 text-xs sm:text-sm whitespace-nowrap">
+                  <tr
+                    key={row.id ?? row.leadId}
+                    tabIndex={0}
+                    onClick={(event) => {
+                      // Bấm vào link/nút trong dòng (trang nguồn, sao chép, xem) thì để chúng tự xử lý.
+                      if (event.target.closest('a, button')) return;
+                      setSelectedLead(row);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.target !== event.currentTarget) return;
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        setSelectedLead(row);
+                      }
+                    }}
+                    className="cursor-pointer hover:bg-slate-50/70 dark:hover:bg-dk-raised/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-500/40 transition-colors"
+                  >
+                    <td className="pl-6 pr-3 py-4 text-xs sm:text-sm whitespace-nowrap max-w-[210px]">
                       <div className="flex items-center gap-2.5">
                         <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gradient-to-br from-orange-400 to-amber-500 text-white text-[11px] font-semibold shrink-0 shadow-2xs">
                           {initials}
@@ -341,7 +374,7 @@ export default function LandingLeadsListPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-xs sm:text-sm text-slate-700 dark:text-dk-text max-w-[240px]">
+                    <td className="px-3 py-4 text-xs sm:text-sm text-slate-700 dark:text-dk-text max-w-[200px]">
                       {row.email ? (
                         <div className="flex items-center gap-1.5 group">
                           <HiOutlineMail className="w-3.5 h-3.5 text-slate-400 dark:text-dk-muted shrink-0" />
@@ -359,7 +392,7 @@ export default function LandingLeadsListPage() {
                         '—'
                       )}
                     </td>
-                    <td className="px-6 py-4 text-xs sm:text-sm text-slate-700 dark:text-dk-text whitespace-nowrap">
+                    <td className="px-3 py-4 text-xs sm:text-sm text-slate-700 dark:text-dk-text whitespace-nowrap">
                       {row.phone ? (
                         <div className="flex items-center gap-1.5 group">
                           <HiOutlinePhone className="w-3.5 h-3.5 text-slate-400 dark:text-dk-muted shrink-0" />
@@ -377,56 +410,52 @@ export default function LandingLeadsListPage() {
                         '—'
                       )}
                     </td>
-                    <td className="px-6 py-4 text-xs sm:text-sm text-slate-700 dark:text-dk-text whitespace-nowrap">
+                    <td className="px-3 py-4 text-xs sm:text-sm text-slate-700 dark:text-dk-text whitespace-nowrap max-w-[180px]">
                       {row.landingPageSlug ? (
                         <a
                           href={publicUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-dk-raised hover:bg-orange-50 dark:hover:bg-orange-950/30 hover:text-orange-700 dark:hover:text-orange-400 border border-slate-200/60 dark:border-dk-border transition-colors font-medium text-xs text-slate-700 dark:text-dk-text"
+                          className="inline-flex max-w-full items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-dk-raised hover:bg-orange-50 dark:hover:bg-orange-950/30 hover:text-orange-700 dark:hover:text-orange-400 border border-slate-200/60 dark:border-dk-border transition-colors font-medium text-xs text-slate-700 dark:text-dk-text"
                           title={publicUrl}
                         >
-                          /{row.landingPageSlug}
-                          <HiOutlineExternalLink className="w-3 h-3 opacity-60" />
+                          <span className="min-w-0 truncate">/{row.landingPageSlug}</span>
+                          <HiOutlineExternalLink className="w-3 h-3 shrink-0 opacity-60" />
                         </a>
                       ) : (
                         <span className="text-slate-400 dark:text-dk-muted">—</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-xs sm:text-sm text-center whitespace-nowrap">
-                      {row.consentWithdrawnAt ? (
-                        <span
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border border-amber-200/80 dark:border-amber-900/50 shadow-2xs"
-                          title={new Date(row.consentWithdrawnAt).toLocaleString('vi-VN')}
-                        >
-                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                          {t('forms.submissionsPage.consentWithdrawn', {
-                            date: new Date(row.consentWithdrawnAt).toLocaleDateString('vi-VN'),
-                            defaultValue: `Đã rút · ${new Date(row.consentWithdrawnAt).toLocaleDateString('vi-VN')}`,
-                          })}
-                        </span>
-                      ) : row.marketingConsent === true ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-900/50 shadow-2xs">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                          {t('forms.submissionsPage.consentYes', { defaultValue: 'Có' })}
-                        </span>
-                      ) : row.marketingConsent === false ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-dk-raised text-slate-600 dark:text-dk-text border border-slate-200 dark:border-dk-border shadow-2xs">
-                          <span className="h-1.5 w-1.5 rounded-full bg-slate-400 dark:bg-dk-strong" />
-                          {t('forms.submissionsPage.consentNo', { defaultValue: 'Không' })}
-                        </span>
-                      ) : (
-                        <span className="text-slate-400 dark:text-dk-muted font-medium">
-                          {t('forms.submissionsPage.consentNone', { defaultValue: '—' })}
-                        </span>
-                      )}
+                    <td className="px-3 py-4 text-xs sm:text-sm text-center whitespace-nowrap">
+                      <LandingLeadConsentBadge row={row} />
                     </td>
-                    <td className="px-6 py-4 text-xs sm:text-sm text-slate-600 dark:text-dk-text max-w-[280px]">
-                      {cfSummary ? (
-                        <p className="truncate" title={cfSummary}>{cfSummary}</p>
+                    <td className="px-3 py-4 text-xs sm:text-sm text-slate-600 dark:text-dk-text max-w-[210px]">
+                      {extraEntries.length > 0 ? (
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <p className="truncate min-w-0" title={extraSummary}>{extraInlineSummary}</p>
+                          {extraHiddenCount > 0 ? (
+                            <span
+                              className="shrink-0 rounded-full bg-slate-100 dark:bg-dk-raised px-1.5 py-0.5 text-[10px] font-semibold text-slate-500 dark:text-dk-text2"
+                              title={t('landingLeads.moreFieldsTitle', { count: extraHiddenCount })}
+                            >
+                              +{extraHiddenCount}
+                            </span>
+                          ) : null}
+                        </div>
                       ) : (
                         <span className="text-slate-400 dark:text-dk-muted italic text-xs">{t('landingLeads.extraEmpty')}</span>
                       )}
+                    </td>
+                    <td className="w-px pl-1 pr-5 py-4 whitespace-nowrap text-right">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedLead(row)}
+                        className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface text-slate-500 dark:text-dk-text2 hover:text-orange-600 dark:hover:text-orange-400 hover:bg-slate-50 dark:hover:bg-dk-raised transition-colors"
+                        title={t('landingLeads.viewDetail')}
+                        aria-label={t('landingLeads.viewDetail')}
+                      >
+                        <HiOutlineEye className="w-4 h-4" />
+                      </button>
                     </td>
                   </tr>
                 );
@@ -461,6 +490,13 @@ export default function LandingLeadsListPage() {
           </div>
         ) : null}
       </div>
+
+      <LandingLeadDetailModal
+        lead={selectedLead}
+        customDefs={customDefs}
+        onClose={closeLeadDetail}
+        onCopy={handleCopy}
+      />
     </div>
   );
 }

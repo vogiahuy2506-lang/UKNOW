@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { renderCustomFieldsSummary, renderLeadExtraInfo } from '../leadFields.js';
+import {
+  formatLeadExtraEntries,
+  getLeadExtraEntries,
+  renderCustomFieldsSummary,
+  renderLeadExtraInfo,
+} from '../leadFields.js';
 
 /**
  * Nghiệm thu 09/09 (test-slug): lead có Nghề nghiệp "Freelancer" lưu đúng nhưng cột "Thông tin
@@ -59,5 +64,41 @@ describe('renderCustomFieldsSummary — snapshot backend', () => {
   it('dạng giá trị thuần vẫn tra nhãn từ definitions như cũ (hồi quy)', () => {
     const defs = [{ key: 'cf_size', type: 'select', labelVi: 'Quy mô', options: [{ value: 'opt_1', labelVi: 'Nhỏ' }] }];
     expect(renderCustomFieldsSummary({ cf_size: 'opt_1' }, defs, 'vi')).toBe('Quy mô: Nhỏ');
+  });
+});
+
+/**
+ * Modal chi tiết khách (10/10/2026) hiện từng trường; ô bảng hiện chuỗi tóm tắt. Hai nơi dùng
+ * CHUNG getLeadExtraEntries nên không được lệch nhau.
+ */
+describe('getLeadExtraEntries — nguồn chung cho ô bảng và modal chi tiết', () => {
+  const row = {
+    occupation: 'Kế toán',
+    interestArea: 'AI cho Giáo dục',
+    customFields: {
+      cf_company: { type: 'text', labelVi: 'Công ty', value: 'ACME', displayVi: 'ACME' },
+      cf_empty: { type: 'text', labelVi: 'Quy mô', value: '', displayVi: '' },
+      cf_size: 'opt_1',
+    },
+  };
+  const defs = [{ key: 'cf_size', type: 'select', labelVi: 'Cỡ', options: [{ value: 'opt_1', labelVi: 'Nhỏ' }] }];
+
+  it('trả từng trường theo thứ tự cố định: Nghề nghiệp, Lĩnh vực, rồi cf_*; bỏ trường rỗng', () => {
+    expect(getLeadExtraEntries(row, defs, 'vi')).toEqual([
+      { key: 'occupation', label: 'Nghề nghiệp', value: 'Kế toán' },
+      { key: 'interestArea', label: 'Lĩnh vực', value: 'AI cho Giáo dục' },
+      { key: 'cf_company', label: 'Công ty', value: 'ACME' },
+      { key: 'cf_size', label: 'Cỡ', value: 'Nhỏ' },
+    ]);
+  });
+
+  it('chuỗi tóm tắt của ô bảng đúng bằng ghép các trường — không thể lệch với modal', () => {
+    expect(renderLeadExtraInfo(row, defs, 'vi')).toBe(formatLeadExtraEntries(getLeadExtraEntries(row, defs, 'vi')));
+    expect(renderLeadExtraInfo(row, defs, 'vi')).toBe('Nghề nghiệp: Kế toán · Lĩnh vực: AI cho Giáo dục · Công ty: ACME · Cỡ: Nhỏ');
+  });
+
+  it('dòng rỗng / null → danh sách rỗng', () => {
+    expect(getLeadExtraEntries(null)).toEqual([]);
+    expect(getLeadExtraEntries({ customFields: {} })).toEqual([]);
   });
 });
