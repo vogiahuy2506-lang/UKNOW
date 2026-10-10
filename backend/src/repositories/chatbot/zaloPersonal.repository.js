@@ -418,6 +418,7 @@ class ZaloPersonalRepository {
        JOIN zalo_personal_messages m ON m.id_conversation = c.id
        WHERE c.id_user = $1
          AND m.created_at >= $2 AND m.created_at < $3
+         AND NOT COALESCE((c.visitor_info->>'is_group')::boolean, false)
          ${accountFilter}
        GROUP BY c.id
        ORDER BY tin_cuoi DESC`,

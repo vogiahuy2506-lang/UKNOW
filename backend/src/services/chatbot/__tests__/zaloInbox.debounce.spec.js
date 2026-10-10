@@ -172,6 +172,36 @@ describe('zaloInbox.service - Debounced Auto Reply', () => {
 
   // PLAN_GIAO_TAI_KHOAN_ZALO G2: MỌI sự kiện Zalo cá nhân phát qua SSE đều mang id tài khoản, nếu không bộ lọc theo
   // nhân viên (sse.service.js clientMayReceive) sẽ chặn luôn cả với tài khoản được giao.
+  // H-18: tin nhóm phải phát SSE (đẩy nhóm lên đầu danh sách) nhưng AI không bao giờ trả lời trong nhóm.
+  describe('H-18 — tin nhóm', () => {
+    it('tin nhóm đến: phát SSE isGroup + role visitor, KHÔNG gọi AI, KHÔNG trả lời', async () => {
+      const handler = zaloInboxService.createMessageHandler(1, 10, 77);
+
+      await handler(
+        { msgId: 'zmsg_grp_1', fromUid: 'u_5', senderName: 'Lan', groupName: 'Nhóm bán hàng', threadId: 'g123', clientGroupId: 'g123', content: 'ai còn hàng', type: 1 },
+        { conversationId: 300, messageId: 801 }
+      );
+      await jest.advanceTimersByTimeAsync(20000);
+
+      const evt = mockBroadcast.mock.calls.map(([, , d]) => d).find((d) => d.message === 'ai còn hàng');
+      expect(evt).toMatchObject({ isGroup: true, role: 'visitor', channel: 'zalo_personal', zaloAccountId: 77 });
+      expect(mockRouteMessageWithSettings).not.toHaveBeenCalled();
+      expect(mockSendReply).not.toHaveBeenCalled();
+    });
+
+    it('chính chủ gõ trong nhóm (isSelf): không phát SSE, không tạm dừng AI', async () => {
+      const handler = zaloInboxService.createMessageHandler(1, 10, 77);
+
+      await handler(
+        { msgId: 'zmsg_grp_2', fromUid: 'me', threadId: 'g123', clientGroupId: 'g123', content: 'mình trả lời', type: 1, isSelf: true },
+        { conversationId: 300, messageId: 802 }
+      );
+
+      expect(mockBroadcast).not.toHaveBeenCalled();
+      expect(mockSetAiPaused).not.toHaveBeenCalled();
+    });
+  });
+
   describe('G2 — payload SSE mang zaloAccountId', () => {
     it('tin khách đến: sự kiện inbox:new_message có zaloAccountId của tài khoản nhận tin', async () => {
       const handler = zaloInboxService.createMessageHandler(1, 10, 77);

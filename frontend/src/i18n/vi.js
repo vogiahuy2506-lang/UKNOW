@@ -3249,7 +3249,7 @@ export default {
     syncSuccessGroupPartialWarning: 'Đã đồng bộ danh bạ & nhóm. Một số nhóm không kéo được lịch sử (đã rời/Zalo giới hạn).',
     syncPersonal1on1Notice: 'Chat 1-1 không kéo lịch sử được. Đã làm mới kết nối — nhờ đối phương nhắn tin mới.',
     aiReport: {
-      title: 'Báo cáo AI phản hồi khách hàng',
+      title: 'Báo cáo AI phản hồi khách hàng (Zalo cá nhân)',
       subtitle: 'Theo dõi trong ngày AI đã tư vấn cho ai, ai đang cần người thật hỗ trợ',
       today: 'Hôm nay',
       refreshTitle: 'Làm mới dữ liệu',
@@ -3268,7 +3268,7 @@ export default {
       kpiIncoming: 'Khách gửi đến',
       kpiAiReplied: 'AI đã phản hồi',
       kpiHumanReplied: 'Người trực trả lời',
-      kpiUnread: 'Chưa đọc trên web',
+      kpiUnread: 'Tin chưa đọc',
       kpiAiPaused: 'Đang tạm dừng AI',
       messagesUnit: 'tin',
       peopleUnit: 'người',

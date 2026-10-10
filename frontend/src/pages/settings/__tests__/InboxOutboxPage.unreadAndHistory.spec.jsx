@@ -225,6 +225,25 @@ describe('InboxOutboxPage — tin đến qua SSE (H-25, H-27)', () => {
     expect(screen.getByTestId('conv-zalo_personal-41').textContent).toBe('Hải:3');
   });
 
+  it('tin NHÓM mới: nhóm lên đầu danh sách nhưng số chưa đọc không đổi và không hỏi lại tổng', async () => {
+    renderPage();
+    await screen.findByTestId('conv-zalo_personal-41');
+    vi.useFakeTimers();
+    chatbotApi.getUnreadCount.mockClear();
+
+    act(() => {
+      sse.onNewMessage({
+        conversationId: 77, type: 'zalo_personal', channel: 'zalo_personal', role: 'visitor', isGroup: true,
+        groupName: 'Nhóm A', visitorName: 'Nhóm A', senderName: 'Lan', message: 'xin chào', timestamp: '2026-10-04T02:00:00.000Z',
+      });
+    });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1500); });
+
+    expect(chatbotApi.getUnreadCount).not.toHaveBeenCalled();
+    expect(screen.getByTestId('conv-zalo_personal-77').textContent).toBe('Nhóm A:0');
+    expect(screen.getByTestId('conv-zalo_personal-41').textContent).toBe('Hải:3');
+  });
+
   it('trùng số id nhưng khác LOẠI: tin Zalo id 41 không chui vào hội thoại Web chat id 41 đang mở', async () => {
     renderPage();
     fireEvent.click(await screen.findByTestId('conv-webchat-41'));

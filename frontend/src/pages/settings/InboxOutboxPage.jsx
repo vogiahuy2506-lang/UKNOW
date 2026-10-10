@@ -604,7 +604,8 @@ const InboxPage = () => {
     const isThisConversation = !!selected && getConversationKey(selected) === eventKey;
     const msgRole = data.role || 'visitor';
     // Chỉ TIN KHÁCH mới tăng chưa đọc / bắn thông báo; tin AI hoặc chính chủ gửi từ điện thoại thì không.
-    const isVisitorMessage = msgRole === 'visitor';
+    // Nhóm Zalo không tính vào số đỏ chưa đọc (luật 04/10): chỉ cập nhật danh sách / đẩy lên đầu, không +1, không toast.
+    const isVisitorMessage = msgRole === 'visitor' && data.isGroup !== true;
 
     setConversations(prev => {
       const existingIndex = prev.findIndex(c => getConversationKey(c) === eventKey);

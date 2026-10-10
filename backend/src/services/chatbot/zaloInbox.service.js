@@ -348,8 +348,9 @@ class ZaloPersonalInboxService {
       const rawData = rawMessage?._raw || rawMessage;
       const isGroup = zaloThreadType === 1 || zaloThreadType === 2;
 
-      // Skip entire AI routing for group messages (no AI reply for group chats)
-      if (isGroup) {
+      // Nhóm: AI không bao giờ trả lời (skipAiRouting bên dưới). Tin nhóm vẫn phải phát SSE để hội thoại nhảy lên đầu danh sách
+      // (H-18). Tin chính chủ gõ trong nhóm thì giữ nguyên hành vi cũ: bỏ qua, không đụng trạng thái AI.
+      if (isGroup && rawMessage?.isSelf === true) {
         return;
       }
 
@@ -483,7 +484,7 @@ class ZaloPersonalInboxService {
 
       // Resolve sender name via API if not available
       let resolvedSenderName = senderName;
-      if (!senderName && senderId) {
+      if (!senderName && senderId && !isGroup) {
         try {
           const profile = await this.getUserProfile(accountId, senderId);
           if (profile) {
@@ -543,7 +544,7 @@ class ZaloPersonalInboxService {
       //     enabled chatbots doesn't change.
       let idChatbotForConv = null;
       try {
-        idChatbotForConv = await chatbotZaloAccountRepository.pickEnabledChatbotForZalo(
+        if (!isGroup) idChatbotForConv = await chatbotZaloAccountRepository.pickEnabledChatbotForZalo(
           userId,
           zaloSettingId,
           hashStringToSeed(externalId || displayName || String(Date.now()))
@@ -600,6 +601,8 @@ class ZaloPersonalInboxService {
         groupId: isGroup ? groupId : null,
         groupName: isGroup ? (resolvedGroupName || groupName) : null,
         visitorName: displayName,
+        // Tường minh: FE chỉ +1 chưa đọc / toast khi role === 'visitor'; tin nhóm không tính vào số đỏ (FE loại theo isGroup).
+        role: 'visitor',
         timestamp,
       });
 

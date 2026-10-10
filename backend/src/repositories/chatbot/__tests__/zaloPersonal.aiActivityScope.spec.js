@@ -25,6 +25,12 @@ describe('getAiActivityReport', () => {
     expect(params).toEqual([100, 'a', 'b', [5, 9]]);
   });
 
+  it('H-19: chỉ đếm hội thoại 1-1 (loại nhóm) — AI không bao giờ trả lời trong nhóm', async () => {
+    await repo.getAiActivityReport({ userId: 100, startIso: 'a', endIso: 'b', accessibleZaloAccountIds: null });
+
+    expect(db.query.mock.calls[0][0]).toMatch(/NOT COALESCE\(\(c\.visitor_info->>'is_group'\)::boolean, false\)/);
+  });
+
   it('AND với accountId đang chọn', async () => {
     await repo.getAiActivityReport({ userId: 100, startIso: 'a', endIso: 'b', accountId: 7, accessibleZaloAccountIds: [5] });
 

@@ -3240,7 +3240,7 @@ export default {
     syncSuccessGroupPartialWarning: 'Synced contacts & groups. Some group history could not be pulled (left group/Zalo limit).',
     syncPersonal1on1Notice: 'Direct chat history cannot be back-filled. Connection refreshed — please have the contact send a new message.',
     aiReport: {
-      title: 'Customer AI Response Report',
+      title: 'Customer AI Response Report (personal Zalo)',
       subtitle: 'Track daily AI customer consultations and identify who needs human assistance',
       today: 'Today',
       refreshTitle: 'Refresh data',
@@ -3259,7 +3259,7 @@ export default {
       kpiIncoming: 'Customer Inquiries',
       kpiAiReplied: 'AI Replied',
       kpiHumanReplied: 'Agent Replied',
-      kpiUnread: 'Unread on Web',
+      kpiUnread: 'Unread messages',
       kpiAiPaused: 'AI Paused',
       messagesUnit: 'msgs',
       peopleUnit: 'people',
