@@ -5581,6 +5581,7 @@ export default {
     wizardLandingSelectAllHint: 'Gửi cho mọi lead của mọi landing page trong tài khoản — chỉ chọn nếu đúng ý bạn.',
     wizardDisplayPickedLandings: 'Đã chọn {count} landing: {names}.',
     wizardDisplayPickedAllLandings: 'Đã chọn tất cả landing.',
+    wizardDisplayPickedForm: 'Đã chọn biểu mẫu {name}.',
     wizardDisplayPickedTelegramAccount: 'Đã chọn tài khoản Telegram «{name}».',
     wizardDisplayPickedWhatsAppAccount: 'Đã chọn tài khoản WhatsApp «{name}».',
     landingSelectionMissing: 'Chưa chọn landing nào cho nguồn "Đăng ký từ Landing Page". Hãy chọn landing (hoặc "Tất cả landing") rồi tạo lại để không gửi nhầm người.',

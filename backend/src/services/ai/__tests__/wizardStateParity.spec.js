@@ -38,6 +38,7 @@ import zaloCustomSenderAccountToNodes from './fixtures/golden/zaloCustomSenderAc
 import imageAttachedSurvivesNextTurn from './fixtures/golden/imageAttachedSurvivesNextTurn.fixture.js';
 import sheetThieuCotLienHe from './fixtures/golden/sheetThieuCotLienHe.fixture.js';
 import secondCampaignSameChatReasksGates from './fixtures/golden/secondCampaignSameChatReasksGates.fixture.js';
+import formSourceRequiresFormPick from './fixtures/golden/formSourceRequiresFormPick.fixture.js';
 
 const FIXTURES = [
   emailSheetUrlAfterDrafts,
@@ -58,6 +59,7 @@ const FIXTURES = [
   imageAttachedSurvivesNextTurn,
   sheetThieuCotLienHe,
   secondCampaignSameChatReasksGates,
+  formSourceRequiresFormPick,
 ];
 
 const clone = (value) => JSON.parse(JSON.stringify(value));

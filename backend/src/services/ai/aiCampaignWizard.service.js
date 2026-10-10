@@ -54,6 +54,28 @@ export const normalizeLandingSlugs = (raw) => {
 export const hasLandingLeadsSelection = (state) => Boolean(state?.landingLeadsAll)
   || (Array.isArray(state?.landingLeadsSlugs) && state.landingLeadsSlugs.length > 0);
 
+/**
+ * Chuẩn hoá id Biểu mẫu từ marker/state: số nguyên dương hoặc null. Chuỗi số ("7") được chấp nhận (thẻ chọn gửi `value` dạng chuỗi);
+ * mọi thứ khác (rỗng, 0, âm, số thực, chữ) là CHƯA chọn — không bao giờ suy ra "biểu mẫu nào đó".
+ */
+export const normalizeFormId = (raw) => {
+  if (raw == null || raw === '' || typeof raw === 'boolean') return null;
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : null;
+};
+
+/** Người dùng đã CHỌN biểu mẫu cho nguồn "Người điền Biểu mẫu" chưa. */
+export const hasFormSelection = (state) => normalizeFormId(state?.formId) != null;
+
+/**
+ * Nguồn "Người điền Biểu mẫu" mà workspace chỉ có ĐÚNG MỘT biểu mẫu thì không bắt người dùng chọn (như cổng tài khoản chỉ có 1 lựa chọn):
+ * trả id biểu mẫu duy nhất để nơi gọi ghi vào gate `formId`; còn lại trả null. `picker`: `{ forms: [{ id, ... }] }` từ `getFormPickerOptions`.
+ */
+export const pickSoleFormId = (picker) => {
+  const forms = Array.isArray(picker?.forms) ? picker.forms : [];
+  return forms.length === 1 ? normalizeFormId(forms[0]?.id) : null;
+};
+
 const CAMPAIGN_RESPONSE_TYPES = new Set([
   'ask_campaign_details',
   'ask_campaign_type',
@@ -326,6 +348,8 @@ export function createEmptyDerivedWizardState() {
     // Rà soát C P2-7 — lựa chọn landing của nguồn "Đăng ký từ Landing Page" (cổng `landingLeads`).
     landingLeadsSlugs: [],
     landingLeadsAll: false,
+    // Biểu mẫu đã chọn ở cổng `formId` của nguồn "Người điền Biểu mẫu" (số nguyên dương hoặc null).
+    formId: null,
     schedule: null,
     planApproved: false,
     senderOtherRequested: false,
@@ -404,6 +428,7 @@ export function foldWizardMessages(initialState, history = [], options = {}) {
       state.zaloFriendCount = null;
       state.landingLeadsSlugs = [];
       state.landingLeadsAll = false;
+      state.formId = null;
       state.schedule = null;
       state.planApproved = false;
       state.hasContentPlan = false;
@@ -538,6 +563,7 @@ export function foldWizardMessages(initialState, history = [], options = {}) {
       state.zaloFriendCount = null;
       state.landingLeadsSlugs = [];
       state.landingLeadsAll = false;
+      state.formId = null;
       state.schedule = null;
       state.planApproved = false;
       state.senderOtherRequested = false;
@@ -566,6 +592,7 @@ export function foldWizardMessages(initialState, history = [], options = {}) {
       // Chọn lại nguồn người nhận = làm lại từ đầu: lựa chọn landing của lần trước không được sống sót.
       state.landingLeadsSlugs = [];
       state.landingLeadsAll = false;
+      state.formId = null;
       if (marker.sheetUrl && GOOGLE_SHEET_URL_RE.test(marker.sheetUrl)) {
         state.sheetUrl = marker.sheetUrl.trim();
       }
@@ -577,6 +604,10 @@ export function foldWizardMessages(initialState, history = [], options = {}) {
       // `all: true` là lựa chọn TƯỜNG MINH "Tất cả landing"; còn lại phải có ≥ 1 slug hợp lệ. Marker rỗng không được coi là "tất cả".
       state.landingLeadsAll = marker.all === true;
       state.landingLeadsSlugs = state.landingLeadsAll ? [] : normalizeLandingSlugs(marker.slugs);
+    } else if (marker.gate === 'formId') {
+      recordMarkerGate('formId');
+      // Marker không có id hợp lệ → CHƯA chọn (cổng hỏi lại), không bao giờ coi là "biểu mẫu nào cũng được".
+      state.formId = normalizeFormId(marker.formId ?? marker.value);
     } else if (marker.gate === 'zaloGroups') {
       recordMarkerGate('zaloGroups');
       state.senderAccountId = marker.accountId ?? state.senderAccountId;
@@ -948,6 +979,7 @@ export const GATE_PROPAGATION = {
   zaloFriendIds: 'direct_recipients',
   landingLeadsSlugs: 'prompt+patch',
   landingLeadsAll: 'prompt+patch',
+  formId: 'prompt+patch',
   schedule: 'prompt+patch',
   isCampaignFlow: 'internal',
   planApproved: 'internal',
@@ -969,6 +1001,7 @@ export function buildCampaignPromptWithWizardState(state, basePrompt = '', local
     state?.dataSource ||
     state?.sheetUrl ||
     hasLandingLeadsSelection(state) ||
+    hasFormSelection(state) ||
     (Array.isArray(state?.zaloGroupIds) && state.zaloGroupIds.length > 0)
   ) {
     const lines = [];
@@ -1004,6 +1037,9 @@ export function buildCampaignPromptWithWizardState(state, basePrompt = '', local
       lines.push(`- landingLeadsSlugs: [${state.landingLeadsSlugs.map((slug) => `"${slug}"`).join(', ')}] (BẮT BUỘC dùng ĐÚNG mảng này cho config.landingLeadsSlugs của read_landing_leads)`);
     } else if (state.landingLeadsAll) {
       lines.push('- landingLeadsAll: true (người dùng đã CHỌN TẤT CẢ landing → read_landing_leads với landingLeadsSlugs: [])');
+    }
+    if (hasFormSelection(state)) {
+      lines.push(`- formId: ${normalizeFormId(state.formId)} (BẮT BUỘC dùng ĐÚNG id này cho config.formId của read_form_submissions)`);
     }
     if (Array.isArray(state.zaloGroupIds) && state.zaloGroupIds.length > 0) {
       lines.push(`- zaloGroupIds: [${state.zaloGroupIds.map((id) => `"${id}"`).join(', ')}]`);
@@ -1234,6 +1270,89 @@ export function buildZaloNotAssignedGuide(locale = 'vi') {
   };
 }
 
+/**
+ * Thẻ CHỌN BIỂU MẪU của nguồn "Người điền Biểu mẫu". Trước đây wizard không lưu biểu mẫu nào: intent `form` luôn thiếu `audience.formId`
+ * nên compiler từ chối, kịch bản rơi về model thuần và node `read_form_submissions` mang `formId: ''`. Dùng lại thẻ `ask_campaign_details`
+ * (câu hỏi một lựa chọn, `wizardGate: 'formId'`) — FE gửi marker `{gate:'formId', formId}`.
+ *
+ * @param {{ forms: Array<{ id: number, title: string, consentEnabled: boolean, consentedCount: number }> }} picker `aiPromptResources.getFormPickerOptions`
+ */
+export function buildFormPickerQuestion(picker, locale = 'vi') {
+  const isEnglish = locale === 'en';
+  const forms = Array.isArray(picker?.forms) ? picker.forms : [];
+  return {
+    type: 'ask_campaign_details',
+    content: isEnglish
+      ? 'Which form should this campaign go to? I will send to people who submitted it and agreed to receive messages.'
+      : 'Bạn muốn gửi cho người đã nộp biểu mẫu nào? Mình chỉ gửi cho người đã nộp và đồng ý nhận tin.',
+    missing_fields: [],
+    data: {
+      questions: [
+        {
+          id: 'formId',
+          label: isEnglish ? 'Form' : 'Biểu mẫu',
+          wizardGate: 'formId',
+          options: forms.map((form) => ({
+            value: String(form.id),
+            label: String(form.title || `#${form.id}`),
+            description: form.consentEnabled
+              ? (isEnglish
+                ? `${Number(form.consentedCount) || 0} people agreed to receive messages`
+                : `${Number(form.consentedCount) || 0} người đã đồng ý nhận tin`)
+              : (isEnglish
+                ? 'This form does not ask for consent yet, so nobody would receive messages'
+                : 'Biểu mẫu này chưa bật hỏi đồng ý nhận tin nên sẽ không có ai nhận'),
+          })),
+        },
+      ],
+    },
+  };
+}
+
+/**
+ * Cổng chọn biểu mẫu theo kết quả tải danh sách (cùng khuôn `buildLandingLeadsGate`):
+ *  - chưa biết (`picker` null/thiếu: tra DB lỗi) → chặn bằng câu nhắn thử lại, KHÔNG đi tiếp;
+ *  - workspace chưa có biểu mẫu xuất bản → quay về thẻ chọn nguồn kèm lời giải thích (gate `dataSource`);
+ *  - còn lại → thẻ chọn biểu mẫu (gate `formId`).
+ */
+export function buildFormGate(picker, state, locale = 'vi') {
+  const isEnglish = locale === 'en';
+  if (!picker || !Array.isArray(picker.forms)) {
+    return {
+      gate: 'formId',
+      response: {
+        type: 'text',
+        content: isEnglish
+          ? 'I could not load your forms right now. Please send any message to try again, or type **cancel** to stop.'
+          : 'Mình chưa tải được danh sách biểu mẫu của bạn. Bạn gửi một tin bất kỳ để thử lại, hoặc gõ **huỷ** để dừng nhé.',
+        missing_fields: [],
+        data: null,
+      },
+    };
+  }
+  if (picker.forms.length === 0) {
+    const question = buildDataSourceQuestion(locale, state);
+    return {
+      gate: 'dataSource',
+      response: {
+        ...question,
+        content: isEnglish
+          ? 'Your account has no published form yet, so there are no respondents to send to. Publish a form first, or pick another recipient source:'
+          : 'Tài khoản chưa có biểu mẫu nào xuất bản nên chưa có người nộp để gửi. Bạn xuất bản một biểu mẫu trước, hoặc chọn nguồn người nhận khác nhé:',
+      },
+    };
+  }
+  return { gate: 'formId', response: buildFormPickerQuestion(picker, locale) };
+}
+
+/** Cổng chọn biểu mẫu: chỉ áp cho nguồn "Người điền Biểu mẫu" của Email / Zalo cá nhân (như cổng landing). `resources.formPicker`: `{ forms }`. */
+function evaluateFormGate(state, resources, locale) {
+  if (state.dataSource !== 'form') return null;
+  if (state.channel !== 'email' && state.channel !== 'zalo') return null;
+  if (hasFormSelection(state)) return null;
+  return buildFormGate(resources?.formPicker, state, locale);
+}
+
 function evaluateEmailZaloSenderAndSourceGates(state, resources, locale) {
   const accountsForChannel = state.channel === 'email' ? resources.emailSenders : resources.zaloAccounts;
   const accounts = Array.isArray(accountsForChannel) ? accountsForChannel : [];
@@ -1420,6 +1539,8 @@ export function evaluateNextGate(state, resources = {}, locale = 'vi') {
     if (senderAndSourceGate) return senderAndSourceGate;
     const landingLeadsGate = evaluateLandingLeadsGate(state, resources, locale);
     if (landingLeadsGate) return landingLeadsGate;
+    const formGate = evaluateFormGate(state, resources, locale);
+    if (formGate) return formGate;
   }
 
   const hasSpreadsheetSource = Boolean(
@@ -1557,6 +1678,10 @@ export const GATE_MERGE_POLICIES = {
   landingLeadsSlugs: { policy: 'custom' },
   landingLeadsAll: { policy: 'custom' },
 
+  // Biểu mẫu đã chọn (nguồn "Người điền Biểu mẫu"): 'custom' vì phải reset khi marker `formId` HOẶC `dataSource` xuất hiện (chọn lại nguồn
+  // thì biểu mẫu cũ không được sống sót) — cùng lý do với landingLeadsSlugs.
+  formId: { policy: 'custom' },
+
   // derived-first: (channelSwitched || hasAbandonMark) ? (d[field] ?? null) : (d[field] ?? p[field] ?? null)
   sheetUrl: { policy: 'derived-first' },
 
@@ -1590,6 +1715,7 @@ export function createEmptyWizardState() {
       zaloFriendIds: [],
       landingLeadsSlugs: [],
       landingLeadsAll: false,
+      formId: null,
       schedule: null,
       planApproved: false,
       senderOtherRequested: false,
@@ -1748,6 +1874,14 @@ export function mergeWizardState(persistedGates, derived, { lastUserText = '' } 
         } else {
           merged.zaloFriendIds = persistedIds.length > 0 ? persistedIds : derivedIds;
         }
+      } else if (field === 'formId') {
+        const resetForm = markerGates.includes('formId')
+          || markerGates.includes('dataSource')
+          || channelSwitched
+          || hasAbandonMark;
+        const derivedId = normalizeFormId(d.formId);
+        const persistedId = normalizeFormId(p.formId);
+        merged.formId = resetForm ? derivedId : (persistedId ?? derivedId);
       } else if (field === 'landingLeadsSlugs' || field === 'landingLeadsAll') {
         const resetLanding = markerGates.includes('landingLeads')
           || markerGates.includes('dataSource')

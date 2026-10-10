@@ -74,6 +74,7 @@ import {
   resolveWizardContext,
   applyWizardSelectionsToScript,
   findLatestInteractiveIndex,
+  normalizeFormId,
 } from './utils/wizardContext.js';
 import { isValidGoogleSheetUrl } from './utils/googleSheetUrl.js';
 import {
@@ -224,6 +225,11 @@ const formatUserMessageForDisplay = (content = '', t, locale = 'vi') => {
       const slugs = Array.isArray(marker.slugs) ? marker.slugs : [];
       return t('aiChatbot.wizardDisplayPickedLandings', { count: slugs.length, names: slugs.join(', ') })
         || `Đã chọn ${slugs.length} landing: ${slugs.join(', ')}.`;
+    }
+    case 'formId': {
+      const formName = marker.formTitle || `#${marker.formId ?? marker.value}`;
+      return t('aiChatbot.wizardDisplayPickedForm', { name: formName })
+        || `Đã chọn biểu mẫu ${formName}.`;
     }
     case 'zaloFriends':
       return t('aiChatbot.wizardDisplayPickedFriends', { count: marker.friendCount || marker.friendIds?.length || marker.friendUids?.length || 0 })
@@ -2907,6 +2913,17 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           { gate: 'dataSource', value: answers.dataSource },
           summaryText
         );
+        return;
+      }
+      if (wizardQuestion.wizardGate === 'formId') {
+        // Thẻ chọn biểu mẫu (backend buildFormPickerQuestion): option.value = id biểu mẫu dạng chuỗi.
+        const formId = normalizeFormId(answers.formId);
+        if (formId == null) {
+          toast.error(t('aiChatbot.selectAllAbove') || 'Vui lòng chọn đầy đủ thông tin');
+          return;
+        }
+        const formTitle = wizardQuestion.options?.find((option) => option.value === String(formId))?.label || '';
+        await emitWizardAnswer({ gate: 'formId', formId, ...(formTitle ? { formTitle } : {}) }, summaryText);
         return;
       }
       if (wizardQuestion.wizardGate === 'schedule') {

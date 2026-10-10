@@ -325,6 +325,30 @@ class AiPromptResourcesService {
   }
 
   /**
+   * Dữ liệu cho thẻ CHỌN BIỂU MẫU của wizard (nguồn "Người điền Biểu mẫu"): cùng danh sách `getForms` (đã xuất bản, chưa bị tắt, tối đa 20)
+   * nhưng LỖI tra cứu trả `null` ("chưa biết", cổng chặn và nhắn thử lại) thay vì `[]` ("workspace chưa có biểu mẫu nào").
+   * @param {number} ownerId workspace owner id
+   * @returns {Promise<{ forms: Array<{ id: number, title: string, consentEnabled: boolean, consentedCount: number }> }|null>}
+   */
+  async getFormPickerOptions(ownerId) {
+    if (!ownerId) return { forms: [] };
+    try {
+      const rows = await aiCampaignRepository.getForms(ownerId);
+      return {
+        forms: (Array.isArray(rows) ? rows : []).map((r) => ({
+          id: Number(r.id),
+          title: String(r.title || `#${r.id}`),
+          consentEnabled: Boolean(r.consent_enabled),
+          consentedCount: Number(r.consented_count) || 0,
+        })),
+      };
+    } catch (e) {
+      console.warn('[AI] Không lấy được danh sách biểu mẫu cho thẻ chọn nguồn:', e.message);
+      return null;
+    }
+  }
+
+  /**
    * PR-6c — danh sách Biểu mẫu (đã xuất bản, chưa bị tắt) để trợ lý AI gợi ý `formId` cho node
    * `read_form_submissions` trong prompt đường tự do.
    * @param {number} userId

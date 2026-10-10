@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   FLOW_BOUNDARY_TYPES,
   deriveWizardContext,
+  contextFromServerGates,
+  normalizeFormId,
   mergeClientWizardContext,
   applyWizardSelectionsToScript,
   findLatestInteractiveIndex,
@@ -263,5 +265,53 @@ describe('C P2-7: nguồn landing — deriveWizardContext + applyWizardSelection
     const next = applyWizardSelectionsToScript(scriptWithDbNode(), { dataSource: 'db', senderAccountId: 7 });
     expect(next.nodes[0].nodeSubtype).toBe('interested_customers');
     expect(next.landingSelectionMissing).toBeUndefined();
+  });
+});
+
+/**
+ * Cổng formId (10/10/2026) — nguồn "Người điền Biểu mẫu". Trước đây không ai ghi `context.formId` nên node read_form_submissions luôn
+ * mang formId ''. Mirror backend wizardFormGate.spec.js.
+ */
+describe('cổng formId — deriveWizardContext / contextFromServerGates / applyWizardSelectionsToScript', () => {
+  const formHistory = (...extra) => [
+    { role: 'user', content: marker({ gate: 'channel', channel: 'email' }) },
+    { role: 'user', content: marker({ gate: 'senderAccount', channel: 'email', accountId: 7, accountName: 'Shop' }) },
+    { role: 'user', content: marker({ gate: 'dataSource', value: 'form' }) },
+    ...extra,
+  ];
+  const pick = (formId) => ({ role: 'user', content: marker({ gate: 'formId', formId }) });
+  const scriptWithDbNode = () => ({
+    campaignType: 'email',
+    nodes: [{ nodeSubtype: 'interested_customers', config: {} }],
+  });
+
+  it('marker formId → context.formId là số; id rác là null', () => {
+    expect(deriveWizardContext(formHistory(pick(7))).formId).toBe(7);
+    expect(deriveWizardContext(formHistory(pick('7'))).formId).toBe(7);
+    [0, -1, 1.5, 'abc', '', null].forEach((bad) => {
+      expect(deriveWizardContext(formHistory(pick(bad))).formId).toBeNull();
+    });
+    expect(normalizeFormId(undefined)).toBeNull();
+  });
+
+  it('chọn lại nguồn / đổi kênh / ranh giới chiến dịch → xoá biểu mẫu cũ', () => {
+    const picked = formHistory(pick(7));
+    expect(deriveWizardContext([...picked, { role: 'user', content: marker({ gate: 'dataSource', value: 'form' }) }]).formId).toBeNull();
+    expect(deriveWizardContext([...picked, { role: 'user', content: marker({ gate: 'channel', channel: 'zalo' }) }]).formId).toBeNull();
+    expect(deriveWizardContext([...picked, { role: 'assistant', type: 'campaign_created', content: 'xong' }]).formId).toBeNull();
+  });
+
+  it('contextFromServerGates mang formId của gates server; mergeClientWizardContext lấp chỗ trống khi marker mất (F5)', () => {
+    expect(contextFromServerGates({ dataSource: 'form', formId: 7 }).formId).toBe(7);
+    expect(contextFromServerGates({}).formId).toBeNull();
+    expect(mergeClientWizardContext(deriveWizardContext([]), { formId: 7 }).formId).toBe(7);
+    expect(mergeClientWizardContext(deriveWizardContext(formHistory(pick(9))), { formId: 7 }).formId).toBe(9);
+  });
+
+  it('đã chọn biểu mẫu → node khách DB thành read_form_submissions với ĐÚNG formId đã chọn', () => {
+    const context = contextFromServerGates({ channel: 'email', senderAccountId: 7, dataSource: 'form', formId: 7 });
+    const next = applyWizardSelectionsToScript(scriptWithDbNode(), context);
+    expect(next.nodes[0].nodeSubtype).toBe('read_form_submissions');
+    expect(next.nodes[0].config.formId).toBe(7);
   });
 });

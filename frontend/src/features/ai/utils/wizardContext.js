@@ -54,6 +54,13 @@ export const parseWizardMarker = (content = '') => {
 export const GOOGLE_SHEET_URL_RE = /https?:\/\/docs\.google\.com\/spreadsheets\/\S+/i;
 
 // Khai lại chuẩn hoá slug landing của backend (aiCampaignWizard.service.js normalizeLandingSlugs): chuỗi, thường hoá, bỏ "/" đầu cuối, bỏ trùng.
+// Khai lại normalizeFormId của backend (aiCampaignWizard.service.js): số nguyên dương hoặc null; chuỗi số ("7") được nhận.
+export const normalizeFormId = (raw) => {
+  if (raw == null || raw === '' || typeof raw === 'boolean') return null;
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : null;
+};
+
 const normalizeLandingSlugList = (raw) => {
   if (!Array.isArray(raw)) return [];
   const out = [];
@@ -76,6 +83,8 @@ export const deriveWizardContext = (items = []) => {
     // Rà soát C P2-7 — lựa chọn landing của nguồn "Đăng ký từ Landing Page" (cổng landingLeads của backend).
     landingLeadsSlugs: [],
     landingLeadsAll: false,
+    // Biểu mẫu đã chọn ở cổng formId của nguồn "Người điền Biểu mẫu" (số nguyên dương hoặc null).
+    formId: null,
     schedule: null,
     planApproved: false,
   };
@@ -92,6 +101,7 @@ export const deriveWizardContext = (items = []) => {
       context.zaloFriendIds = [];
       context.landingLeadsSlugs = [];
       context.landingLeadsAll = false;
+      context.formId = null;
       context.schedule = null;
       context.planApproved = false;
       return;
@@ -113,6 +123,7 @@ export const deriveWizardContext = (items = []) => {
       context.zaloFriendIds = [];
       context.landingLeadsSlugs = [];
       context.landingLeadsAll = false;
+      context.formId = null;
       context.schedule = null;
       context.planApproved = false;
     } else if (marker.gate === 'senderAccount') {
@@ -124,6 +135,7 @@ export const deriveWizardContext = (items = []) => {
       // Chọn lại nguồn người nhận = làm lại từ đầu (backend cũng reset ở marker dataSource).
       context.landingLeadsSlugs = [];
       context.landingLeadsAll = false;
+      context.formId = null;
       if (marker.sheetUrl) {
         context.sheetUrl = marker.sheetUrl;
       }
@@ -134,6 +146,8 @@ export const deriveWizardContext = (items = []) => {
       // `all: true` = "Tất cả landing" TƯỜNG MINH; marker rỗng không bao giờ được hiểu là "tất cả".
       context.landingLeadsAll = marker.all === true;
       context.landingLeadsSlugs = context.landingLeadsAll ? [] : normalizeLandingSlugList(marker.slugs);
+    } else if (marker.gate === 'formId') {
+      context.formId = normalizeFormId(marker.formId ?? marker.value);
     } else if (marker.gate === 'zaloGroups') {
       context.senderAccountId = marker.accountId ?? context.senderAccountId;
       context.zaloGroupIds = Array.isArray(marker.groupIds) ? marker.groupIds : [];
@@ -169,6 +183,7 @@ export const mergeClientWizardContext = (derived, gates) => ({
     ? derived.landingLeadsSlugs
     : normalizeLandingSlugList(gates.landingLeadsSlugs),
   landingLeadsAll: Boolean(derived.landingLeadsAll || gates.landingLeadsAll),
+  formId: normalizeFormId(derived.formId) ?? normalizeFormId(gates.formId),
   schedule: derived.schedule ?? gates.schedule ?? null,
   planApproved: Boolean(derived.planApproved || gates.planApproved),
 });
@@ -213,6 +228,7 @@ export const contextFromServerGates = (gates = {}) => ({
   zaloFriendIds: Array.isArray(gates.zaloFriendIds) ? gates.zaloFriendIds : [],
   landingLeadsSlugs: normalizeLandingSlugList(gates.landingLeadsSlugs),
   landingLeadsAll: gates.landingLeadsAll === true,
+  formId: normalizeFormId(gates.formId),
   schedule: gates.schedule ?? null,
   planApproved: Boolean(gates.planApproved),
 });
@@ -293,7 +309,7 @@ export const applyWizardSelectionsToScript = (script, context = {}) => {
             nodeSubtype: 'read_form_submissions',
             nodeName: 'Dữ liệu Biểu mẫu',
             nodeDescription: 'Người đã nộp Biểu mẫu và đồng ý nhận tin.',
-            config: { formId: context.formId || '' },
+            config: { formId: normalizeFormId(context.formId) ?? '' },
           };
         }
         return { ...node, config };

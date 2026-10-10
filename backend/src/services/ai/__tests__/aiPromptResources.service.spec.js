@@ -3,9 +3,10 @@ import { describe, it, expect, jest } from '@jest/globals';
 const getLandingPages = jest.fn();
 const getLandingPickerPages = jest.fn();
 const getLeadCountsBySlug = jest.fn();
+const getForms = jest.fn();
 
 jest.unstable_mockModule('../../../repositories/ai/aiCampaign.repository.js', () => ({
-  default: { getLandingPages, getLandingPickerPages, getLeadCountsBySlug },
+  default: { getLandingPages, getLandingPickerPages, getLeadCountsBySlug, getForms },
 }));
 
 const { default: aiPromptResourcesService } = await import('../aiPromptResources.service.js');
@@ -82,5 +83,32 @@ describe('aiPromptResourcesService.getLandingPickerOptions — C P2-7', () => {
     getLandingPickerPages.mockClear();
     await expect(aiPromptResourcesService.getLandingPickerOptions(null)).resolves.toEqual({ landings: [], totalLeads: 0 });
     expect(getLandingPickerPages).not.toHaveBeenCalled();
+  });
+});
+
+/** Cổng `formId` (10/10/2026): dữ liệu cho thẻ chọn biểu mẫu của wizard. */
+describe('aiPromptResourcesService.getFormPickerOptions', () => {
+  it('map cột snake_case của repo sang camelCase, id là số', async () => {
+    getForms.mockResolvedValueOnce([
+      { id: '7', title: 'Đăng ký tư vấn', is_published: true, consent_enabled: true, consented_count: 12 },
+      { id: 9, title: '', is_published: true, consent_enabled: false, consented_count: 0 },
+    ]);
+    await expect(aiPromptResourcesService.getFormPickerOptions(9)).resolves.toEqual({
+      forms: [
+        { id: 7, title: 'Đăng ký tư vấn', consentEnabled: true, consentedCount: 12 },
+        { id: 9, title: '#9', consentEnabled: false, consentedCount: 0 },
+      ],
+    });
+  });
+
+  it('repository lỗi → null (CHƯA BIẾT), KHÔNG phải rỗng — để cổng chặn thay vì kết luận "không có biểu mẫu"', async () => {
+    getForms.mockRejectedValueOnce(new Error('db down'));
+    await expect(aiPromptResourcesService.getFormPickerOptions(9)).resolves.toBeNull();
+  });
+
+  it('không có ownerId → rỗng, không chạm DB', async () => {
+    getForms.mockClear();
+    await expect(aiPromptResourcesService.getFormPickerOptions(null)).resolves.toEqual({ forms: [] });
+    expect(getForms).not.toHaveBeenCalled();
   });
 });

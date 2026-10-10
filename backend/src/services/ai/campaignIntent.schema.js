@@ -247,6 +247,11 @@ export function deriveIntent(gates = {}, brief = null, options = {}) {
         && !(Array.isArray(gates?.landingLeadsSlugs) && gates.landingLeadsSlugs.length > 0)
         ? { slugs: [], allLandings: true }
         : {}),
+      // Biểu mẫu người dùng ĐÃ CHỌN ở cổng `formId` (nguồn "Người điền Biểu mẫu"). Chỉ nhận số nguyên dương — id rác thì để khuyết
+      // (isCompilableIntent báo thiếu audience.formId, giữ đường model thuần) thay vì bịa một id.
+      ...(audType === 'form' && Number.isInteger(Number(gates?.formId)) && Number(gates.formId) > 0
+        ? { formId: Number(gates.formId) }
+        : {}),
     };
   }
 

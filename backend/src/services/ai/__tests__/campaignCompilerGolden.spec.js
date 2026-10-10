@@ -33,6 +33,7 @@ import zaloCustomSenderAccountToNodes from './fixtures/golden/zaloCustomSenderAc
 import imageAttachedSurvivesNextTurn from './fixtures/golden/imageAttachedSurvivesNextTurn.fixture.js';
 import sheetThieuCotLienHe from './fixtures/golden/sheetThieuCotLienHe.fixture.js';
 import secondCampaignSameChatReasksGates from './fixtures/golden/secondCampaignSameChatReasksGates.fixture.js';
+import formSourceRequiresFormPick from './fixtures/golden/formSourceRequiresFormPick.fixture.js';
 
 const FIXTURES = [
   emailSheetUrlAfterDrafts,
@@ -53,6 +54,7 @@ const FIXTURES = [
   imageAttachedSurvivesNextTurn,
   sheetThieuCotLienHe,
   secondCampaignSameChatReasksGates,
+  formSourceRequiresFormPick,
 ];
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -137,6 +139,16 @@ describe('PR-2.4: Replay 18 golden fixtures qua Intent Compiler', () => {
       const { brief, ...gates } = finalState;
       const { intent } = deriveIntent(gates, brief);
       const check = isCompilableIntent(intent);
+
+      if (fixture.expectIntentAudience) {
+        // Fixture khai báo audience mong đợi: intent PHẢI mang đủ (vd nguồn biểu mẫu → formId) và compile được, không được rơi về model thuần.
+        expect(intent.audience).toMatchObject(fixture.expectIntentAudience);
+        expect(check.ok).toBe(true);
+        expect(check.missing).toEqual([]);
+        const formNodes = compileCampaign(intent).nodes.filter((node) => node.nodeSubtype === 'read_form_submissions');
+        expect(formNodes).toHaveLength(1);
+        expect(formNodes[0].config.formId).toBe(fixture.expectIntentAudience.formId);
+      }
 
       if (check.ok) {
         // Mọi fixture compilable (Email, Zalo, Zalo Group) đều biên dịch hợp lệ 100%

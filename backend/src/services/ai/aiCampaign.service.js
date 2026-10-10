@@ -33,6 +33,8 @@ import {
   buildLandingLeadsGate,
   computeWizardMeta,
   hasLandingLeadsSelection,
+  hasFormSelection,
+  pickSoleFormId,
   isContentPlanRevisionText,
   normalizeWizardState,
   parseWizardMarker,
@@ -860,6 +862,22 @@ QUY TẮC:
     ) {
       gateResources.landingPicker = await aiPromptResources.getLandingPickerOptions(ownerId);
     }
+    // Cổng chọn biểu mẫu (nguồn "Người điền Biểu mẫu"): cùng khuôn cổng landing. Workspace chỉ có ĐÚNG MỘT biểu mẫu thì tự chọn và ghi vào gate
+    // (như tài khoản duy nhất) — không bắt bấm một thẻ chỉ có một nút.
+    if (
+      gatesForPersist.isCampaignFlow
+      && gatesForPersist.dataSource === 'form'
+      && (gatesForPersist.channel === 'email' || gatesForPersist.channel === 'zalo')
+      && !hasFormSelection(gatesForPersist)
+    ) {
+      gateResources.formPicker = await aiPromptResources.getFormPickerOptions(ownerId);
+      const soleFormId = pickSoleFormId(gateResources.formPicker);
+      if (soleFormId != null) {
+        gatesForPersist.formId = soleFormId;
+        gateState.formId = soleFormId;
+        mergedGates.formId = soleFormId;
+      }
+    }
 
     // Free-text cancel must beat deterministic re-ask (dead-end nudge says "gõ huỷ").
     if (
@@ -1054,6 +1072,10 @@ Luồng Zalo cá nhân ĐÚNG: trigger→select_zalo_account→interested_custom
         lines.push(`- landingLeadsSlugs: [${mergedGates.landingLeadsSlugs.map((slug) => JSON.stringify(slug)).join(', ')}] (BẮT BUỘC dùng ĐÚNG mảng này cho config.landingLeadsSlugs của read_landing_leads; KHÔNG để trống, KHÔNG thêm slug khác)`);
       } else if (mergedGates.landingLeadsAll) {
         lines.push('- landingLeadsAll: true (người dùng đã CHỌN TẤT CẢ landing → read_landing_leads với config.landingLeadsSlugs: [])');
+      }
+      // Biểu mẫu người dùng ĐÃ CHỌN (hoặc tự chọn vì chỉ có một) ở cổng `formId` — id do hệ thống ghi, model không được tự chọn.
+      if (hasFormSelection(mergedGates)) {
+        lines.push(`- formId: ${Number(mergedGates.formId)} (BẮT BUỘC dùng ĐÚNG id này cho config.formId của read_form_submissions)`);
       }
       // C P1-6: thông tin về Google Sheet người nhận do HỆ THỐNG đọc tất định (checkSheetForChannel ở trên) — thay cho việc đính
       // 300 dòng tên/SĐT/email khách cuối vào prompt rồi bắt model tự đọc cột / đếm. Chỉ tên cột + số liệu, không có dòng dữ liệu.
@@ -1756,6 +1778,8 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
             sheetUrl: gateState?.sheetUrl,
             zaloGroupIds: gateState?.zaloGroupIds,
             zaloFriendIds: gateState?.zaloFriendIds,
+            // Biểu mẫu đã chọn ở cổng `formId` (null khi chưa chọn → bản vá bỏ qua).
+            formId: hasFormSelection(gateState) ? Number(gateState.formId) : null,
             // Chỉ truyền khi CÓ slug đã chọn: mảng rỗng là truthy trong bản vá (`if (effectiveLandingSlug)`) và sẽ xoá slug model điền.
             landingPageSlug: gateState?.landingPageSlug
               || (Array.isArray(gateState?.landingLeadsSlugs) && gateState.landingLeadsSlugs.length > 0 ? gateState.landingLeadsSlugs : undefined),
