@@ -1531,6 +1531,7 @@ export default {
     createFirstWorkflow: 'Create workflow',
     createdBy: 'Created by',
     updatedAt: 'Last updated',
+    createdOnShort: 'Created {date}',
     notRunning: 'Not running',
     // PR-8a (UI nói thật) Việc 3 — red line under campaign name when the most recent run (7 days) failed.
     lastRunFailed: 'Last run failed: {label}',

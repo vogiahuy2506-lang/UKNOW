@@ -111,3 +111,59 @@ export const getTodayDateInHanoiForInput = () => {
   return `${year}-${month}-${day}`;
 };
 
+/**
+ * Tách ngày giờ theo múi giờ Hà Nội thành các phần đã đệm số 0 (dd, MM, yyyy, HH, mm).
+ *
+ * @param {Date} date Date hợp lệ
+ * @returns {{day:string, month:string, year:string, hour:string, minute:string}}
+ */
+const getHanoiDateParts = (date) => {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23', // h23 = 0–23; hour12:false render nửa đêm thành "24"
+    timeZone: HANOI_TIME_ZONE,
+  }).formatToParts(date);
+  const getPart = (type) => parts.find((part) => part.type === type)?.value || '';
+  return {
+    day: getPart('day'),
+    month: getPart('month'),
+    year: getPart('year'),
+    hour: getPart('hour'),
+    minute: getPart('minute'),
+  };
+};
+
+/**
+ * Ngày giờ gọn cho ô bảng: `HH:mm dd/MM/yyyy` (giờ Hà Nội, bỏ giây, luôn đệm số 0).
+ *
+ * Khác `formatCampaignDateTime` (toLocaleString vi-VN → "11:16:03 29/9/2026": có giây, ngày không
+ * đệm 0) — chuỗi dài, dễ dính vào ô bên cạnh khi bảng hẹp.
+ *
+ * @param {string|number|Date|null|undefined} value giá trị thời gian đầu vào
+ * @param {string} fallback text fallback khi value không hợp lệ
+ * @returns {string}
+ */
+export const formatCampaignDateTimeShort = (value, fallback = '-') => {
+  const date = toCampaignDate(value);
+  if (!date) return fallback;
+  const { day, month, year, hour, minute } = getHanoiDateParts(date);
+  return `${hour}:${minute} ${day}/${month}/${year}`;
+};
+
+/**
+ * Chỉ ngày `dd/MM/yyyy` theo giờ Hà Nội, luôn đệm số 0.
+ *
+ * @param {string|number|Date|null|undefined} value giá trị thời gian đầu vào
+ * @param {string} fallback text fallback khi value không hợp lệ
+ * @returns {string}
+ */
+export const formatCampaignDateShort = (value, fallback = '-') => {
+  const date = toCampaignDate(value);
+  if (!date) return fallback;
+  const { day, month, year } = getHanoiDateParts(date);
+  return `${day}/${month}/${year}`;
+};

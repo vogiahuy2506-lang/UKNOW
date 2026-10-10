@@ -1535,6 +1535,7 @@ export default {
     createFirstWorkflow: 'Tạo quy trình',
     createdBy: 'Người tạo',
     updatedAt: 'Cập nhật cuối',
+    createdOnShort: 'Tạo {date}',
     notRunning: 'Không chạy',
     // PR-8a (UI nói thật) Việc 3 — dòng đỏ dưới tên chiến dịch khi lượt chạy gần nhất (7 ngày) lỗi.
     lastRunFailed: 'Lượt chạy gần nhất lỗi: {label}',

@@ -31,7 +31,11 @@ import {
 } from 'react-icons/hi';
 import { FaTelegramPlane, FaWhatsapp } from 'react-icons/fa';
 import { getCampaignTypeMeta } from '../../utils/campaignTypeDisplay';
-import { formatCampaignDateTime } from '../../features/campaigns/utils/campaignDateTime.helpers';
+import {
+  formatCampaignDateTime,
+  formatCampaignDateTimeShort,
+  formatCampaignDateShort,
+} from '../../features/campaigns/utils/campaignDateTime.helpers';
 import { getActiveRunPause, getRunPauseI18nKey } from '../../features/campaigns/utils/campaignQuotaPause.helpers';
 import { useAuthStore } from '../../stores/authStore';
 import { useChannelEntitlements } from '../../hooks/queries/useChannelEntitlements';
@@ -56,6 +60,14 @@ import CampaignSchedulesTable from '../../features/campaigns/components/Campaign
  * @returns {boolean} Trạng thái chiến dịch có đang chạy hay không.
  */
 const isCampaignCurrentlyRunning = (campaign) => Number(campaign?.runningCount || 0) > 0;
+
+// Nút biểu tượng (Lên lịch / Nhật ký) trong cột Hành động. KHÔNG dùng `.btn`: index.css định nghĩa
+// `.btn` SAU `@tailwind utilities` nên padding/cỡ chữ của nó thắng `px-3 text-xs` ở cùng độ ưu tiên.
+const ROW_ICON_BUTTON_BASE_CLASS =
+  'inline-flex items-center justify-center w-9 h-9 md:w-8 md:h-8 rounded-lg border transition-colors';
+const ROW_ICON_BUTTON_IDLE_CLASS =
+  'bg-white dark:bg-dk-surface text-slate-600 dark:text-dk-text border-slate-300 dark:border-dk-border/80 hover:bg-slate-50 dark:hover:bg-dk-raised';
+const ROW_ICON_BUTTON_CLASS = `${ROW_ICON_BUTTON_BASE_CLASS} ${ROW_ICON_BUTTON_IDLE_CLASS}`;
 
 const Campaigns = () => {
   const { t } = useI18n();
@@ -663,18 +675,16 @@ const Campaigns = () => {
               </div>
             ) : (
               <div className="overflow-x-auto w-full">
-                <table className="min-w-[1180px] w-full divide-y divide-slate-100 dark:divide-dk-border/80">
+                {/* Bảng 5 cột (10/10/2026): Loại + Người tạo gộp vào ô tên, Trạng thái + Vận hành xếp dọc,
+                    Ngày tạo thành dòng phụ của Cập nhật. Vừa ~1210px không cần cuộn ngang; màn hẹp cuộn trong khung. */}
+                <table className="min-w-[880px] w-full divide-y divide-slate-100 dark:divide-dk-border/80">
                   <thead className="bg-slate-50/80 dark:bg-dk-surface/70">
                     <tr>
                       <th className="px-5 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap">{t('campaigns.campaignName')}</th>
                       <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap">{t('common.status')}</th>
-                      <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap">{t('campaigns.operation')}</th>
-                      <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap">{t('campaigns.campaignType')}</th>
-                      <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap">{t('campaigns.createdBy')}</th>
-                      <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap">{t('campaigns.createdAt')}</th>
                       <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap">{t('campaigns.updatedAt')}</th>
                       <th className="px-4 py-3.5 text-center text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap" title={t('campaigns.completedRunsHint')}>{t('campaigns.completedRuns')}</th>
-                      <th className="px-5 py-3.5 text-right text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap">{t('common.actions')}</th>
+                      <th className="w-px px-5 py-3.5 text-right text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap">{t('common.actions')}</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white dark:bg-dk-surface divide-y divide-slate-100 dark:divide-dk-border/80">
@@ -704,31 +714,56 @@ const Campaigns = () => {
                       const isShowingLogs = runController.isShowingLogsForCampaign(campaign.id);
                       const runId = Number.parseInt(runningRun?.id, 10);
                       const isStopping = Number.isFinite(runId) && runController.stoppingRunIds.has(runId);
+                      const typeMeta = getCampaignTypeMeta(campaign.campaignType);
+                      const typeKey = String(campaign.campaignType || '').trim().toLowerCase();
+                      let TypeIcon = null;
+                      if (typeKey === 'email') TypeIcon = HiOutlineMail;
+                      else if (typeKey === 'zalo') TypeIcon = HiOutlineChat;
+                      else if (typeKey === 'zalo_group') TypeIcon = HiOutlineUserGroup;
+                      else if (typeKey.includes('telegram')) TypeIcon = FaTelegramPlane;
+                      else if (typeKey === 'whatsapp') TypeIcon = FaWhatsapp;
+                      else if (typeKey === 'mixed') TypeIcon = HiOutlineSparkles;
+                      const creatorName = campaign.createdBy?.name || campaign.createdBy || 'Unknown';
 
                       return (
                         <tr key={campaign.id} className="hover:bg-slate-50/70 dark:hover:bg-dk-raised/60 transition-colors">
-                          <td className="px-5 py-4 min-w-[240px] max-w-[340px]">
-                            <div className="flex flex-col py-0.5">
+                          <td className="px-5 py-3.5 min-w-[240px] max-w-[420px]">
+                            <div className="flex flex-col gap-1.5">
+                              {/* Tên có thể rất dài: cắt 2 dòng, `title` giữ tên đầy đủ (không nowrap kẻo đẩy bảng rộng ra). */}
                               <Link
                                 to={`/app/campaigns/${campaign.id}/builder`}
-                                className="font-semibold text-slate-900 dark:text-dk-text hover:text-orange-600 dark:hover:text-orange-400 transition-colors inline-flex items-center gap-1.5 flex-wrap group text-sm"
+                                title={campaign.campaignName}
+                                className="font-semibold text-slate-900 dark:text-dk-text hover:text-orange-600 dark:hover:text-orange-400 transition-colors inline-flex max-w-full items-start gap-1.5 group text-sm"
                               >
-                                <span className="group-hover:underline">{campaign.campaignName}</span>
+                                <span className="min-w-0 line-clamp-2 break-words group-hover:underline">{campaign.campaignName}</span>
                                 {campaign.origin === 'marketplace_purchased' && (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60">
+                                  <span className="inline-flex shrink-0 items-center whitespace-nowrap px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60">
                                     {t('campaigns.marketplace') || 'Marketplace'}
                                   </span>
                                 )}
                                 {campaign.origin === 'shared_received' && (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60">
+                                  <span className="inline-flex shrink-0 items-center whitespace-nowrap px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60">
                                     {t('campaigns.shared') || 'Được chia sẻ'}
                                   </span>
                                 )}
                               </Link>
+                              {/* Dòng phụ: loại chiến dịch · người tạo */}
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                                <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${typeMeta.className}`}>
+                                  {TypeIcon && <TypeIcon className="w-3 h-3 shrink-0" aria-hidden="true" />}
+                                  <span>{typeMeta.label}</span>
+                                </span>
+                                <span className="inline-flex min-w-0 items-center gap-1.5" title={`${t('campaigns.createdBy')}: ${creatorName}`}>
+                                  <span className="w-5 h-5 bg-gradient-to-tr from-orange-500 to-amber-500 rounded-full flex items-center justify-center shrink-0 shadow-2xs">
+                                    <span className="text-white text-[10px] font-bold">{(campaign.createdBy?.name || 'A')[0]?.toUpperCase()}</span>
+                                  </span>
+                                  <span className="text-xs font-medium text-slate-600 dark:text-dk-text2 truncate max-w-[140px]">{creatorName}</span>
+                                </span>
+                              </div>
                               {Number(campaign.failedCount || 0) > 0 && campaign.lastFailedRun && (
-                                <p className="mt-1 text-xs text-rose-500 dark:text-rose-400 flex items-start gap-1 leading-snug">
+                                <p className="text-xs text-rose-500 dark:text-rose-400 flex items-start gap-1 leading-snug">
                                   <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0 mt-1" />
-                                  <span>
+                                  <span className="min-w-0 line-clamp-2 break-words">
                                     {t('campaigns.lastRunFailed', {
                                       label: campaign.lastFailedRun.label || campaign.lastFailedRun.errorMessage || '',
                                     })}
@@ -737,125 +772,103 @@ const Campaigns = () => {
                               )}
                             </div>
                           </td>
-                          <td className="px-4 py-4 whitespace-nowrap">
-                            {campaign.status === 'active' ? (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/60 shadow-2xs">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                <span>{t('campaigns.active')}</span>
-                              </span>
-                            ) : campaign.status === 'draft' ? (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-dk-raised text-slate-600 dark:text-dk-text border border-slate-200 dark:border-dk-border shadow-2xs">
-                                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-                                <span>{t('campaigns.draft')}</span>
-                              </span>
-                            ) : campaign.status === 'paused' ? (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800/60 shadow-2xs">
-                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                                <span>{t('campaigns.paused')}</span>
-                              </span>
-                            ) : campaign.status === 'pending_owner_approval' ? (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/60 shadow-2xs">
-                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                                <span>{t('campaigns.pendingOwnerApproval')}</span>
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-dk-raised text-slate-700 dark:text-dk-text border border-slate-200 dark:border-dk-border">
-                                {campaign.status}
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap">
-                            {isRunning ? (
-                              <div className="flex flex-col items-start gap-1">
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-600/25 dark:ring-emerald-500/40 shadow-2xs">
-                                  <HiOutlineRefresh className="w-3 h-3 animate-spin text-emerald-600 dark:text-emerald-400" />
-                                  <span>{t('campaigns.operationRunning')}</span>
+                          <td className="px-4 py-3.5">
+                            <div className="flex flex-col items-start gap-1.5">
+                              {campaign.status === 'active' ? (
+                                <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/60 shadow-2xs">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                  <span>{t('campaigns.active')}</span>
                                 </span>
-                                {isContinuous && (
-                                  <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium pl-1">
-                                    {pollIntervalMinutes
-                                      ? t('campaignRun.continuousRunningEvery', { interval: pollIntervalMinutes })
-                                      : t('campaignRun.continuousRunning')}
+                              ) : campaign.status === 'draft' ? (
+                                <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-dk-raised text-slate-600 dark:text-dk-text border border-slate-200 dark:border-dk-border shadow-2xs">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                                  <span>{t('campaigns.draft')}</span>
+                                </span>
+                              ) : campaign.status === 'paused' ? (
+                                <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800/60 shadow-2xs">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                  <span>{t('campaigns.paused')}</span>
+                                </span>
+                              ) : campaign.status === 'pending_owner_approval' ? (
+                                <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/60 shadow-2xs">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                  <span>{t('campaigns.pendingOwnerApproval')}</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center whitespace-nowrap px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-dk-raised text-slate-700 dark:text-dk-text border border-slate-200 dark:border-dk-border">
+                                  {campaign.status}
+                                </span>
+                              )}
+                              {/* Vận hành: chip cỡ nhỏ hơn chip trạng thái, đặt ngay dưới */}
+                              {isRunning ? (
+                                <div className="flex flex-col items-start gap-1">
+                                  <span className="inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-600/25 dark:ring-emerald-500/40 shadow-2xs">
+                                    <HiOutlineRefresh className="w-3 h-3 animate-spin text-emerald-600 dark:text-emerald-400" />
+                                    <span>{t('campaigns.operationRunning')}</span>
                                   </span>
-                                )}
-                                {activePause && (
-                                  <>
-                                    <span className="badge badge-warning text-xs font-normal">
-                                      {t(getRunPauseI18nKey(activePause), {
-                                        until: formatCampaignDateTime(activePause.untilIso),
-                                        account: activePause.accountName || t('campaignRun.zaloAccountFallback'),
-                                      })}
+                                  {isContinuous && (
+                                    <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium pl-1">
+                                      {pollIntervalMinutes
+                                        ? t('campaignRun.continuousRunningEvery', { interval: pollIntervalMinutes })
+                                        : t('campaignRun.continuousRunning')}
                                     </span>
-                                    {activePause.kind === 'plan_quota' && (
-                                      <Link
-                                        to="/app/topup"
-                                        className="text-xs font-medium text-orange-600 dark:text-orange-400 hover:text-orange-800 dark:hover:text-orange-300 hover:underline pl-1"
-                                      >
-                                        {t('campaignRun.buyTopup')}
-                                      </Link>
-                                    )}
-                                  </>
-                                )}
-                              </div>
-                            ) : hasSchedules ? (
-                              <button
-                                type="button"
-                                onClick={() => runController.openCampaignSchedulesSummaryModal(campaign)}
-                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/60 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors shadow-2xs"
-                                title={t('campaignRun.viewSchedules')}
-                              >
-                                <HiOutlineClock className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                                <span>
-                                  {t('campaigns.operationScheduledCount', { count: campaign.enabledScheduleCount })}
+                                  )}
+                                  {activePause && (
+                                    <>
+                                      <span className="badge badge-warning max-w-[240px] text-xs font-normal">
+                                        {t(getRunPauseI18nKey(activePause), {
+                                          until: formatCampaignDateTime(activePause.untilIso),
+                                          account: activePause.accountName || t('campaignRun.zaloAccountFallback'),
+                                        })}
+                                      </span>
+                                      {activePause.kind === 'plan_quota' && (
+                                        <Link
+                                          to="/app/topup"
+                                          className="text-xs font-medium text-orange-600 dark:text-orange-400 hover:text-orange-800 dark:hover:text-orange-300 hover:underline pl-1"
+                                        >
+                                          {t('campaignRun.buyTopup')}
+                                        </Link>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              ) : hasSchedules ? (
+                                <button
+                                  type="button"
+                                  onClick={() => runController.openCampaignSchedulesSummaryModal(campaign)}
+                                  className="inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/60 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors shadow-2xs"
+                                  title={t('campaignRun.viewSchedules')}
+                                >
+                                  <HiOutlineClock className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+                                  <span>
+                                    {t('campaigns.operationScheduledCount', { count: campaign.enabledScheduleCount })}
+                                  </span>
+                                </button>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2 py-0.5 rounded-full text-[11px] text-slate-500 dark:text-dk-text2 bg-slate-50/80 dark:bg-dk-surface border border-slate-200/60 dark:border-dk-border">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-dk-strong" />
+                                  <span>{t('campaigns.inactive')}</span>
                                 </span>
-                              </button>
-                            ) : (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs text-gray-500 dark:text-dk-text2 bg-gray-50/80 dark:bg-dk-surface border border-gray-200/60 dark:border-dk-border">
-                                <span className="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-dk-strong" />
-                                <span>{t('campaigns.inactive')}</span>
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap">
-                            {(() => {
-                              const typeMeta = getCampaignTypeMeta(campaign.campaignType);
-                              const typeKey = String(campaign.campaignType || '').trim().toLowerCase();
-                              let Icon = null;
-                              if (typeKey === 'email') Icon = HiOutlineMail;
-                              else if (typeKey === 'zalo') Icon = HiOutlineChat;
-                              else if (typeKey === 'zalo_group') Icon = HiOutlineUserGroup;
-                              else if (typeKey.includes('telegram')) Icon = FaTelegramPlane;
-                              else if (typeKey === 'whatsapp') Icon = FaWhatsapp;
-                              else if (typeKey === 'mixed') Icon = HiOutlineSparkles;
-
-                              return (
-                                <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${typeMeta.className}`}>
-                                  {Icon && <Icon className="w-3 h-3 shrink-0" aria-hidden="true" />}
-                                  <span>{typeMeta.label}</span>
-                                </span>
-                              );
-                            })()}
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              <div className="w-6 h-6 bg-gradient-to-tr from-orange-500 to-amber-500 rounded-full flex items-center justify-center shrink-0 shadow-2xs">
-                                <span className="text-white text-[11px] font-bold">{(campaign.createdBy?.name || 'A')[0]?.toUpperCase()}</span>
-                              </div>
-                              <span className="text-xs font-medium text-gray-700 dark:text-dk-text truncate max-w-[130px]">{campaign.createdBy?.name || campaign.createdBy || 'Unknown'}</span>
+                              )}
                             </div>
                           </td>
-                          <td className="px-4 py-4 text-xs text-gray-500 dark:text-dk-text2 whitespace-nowrap">
-                            {formatCampaignDateTime(campaign.createdAt)}
+                          <td className="px-4 py-3.5 whitespace-nowrap">
+                            <div className="text-xs font-medium text-slate-700 dark:text-dk-text tabular-nums">
+                              {formatCampaignDateTimeShort(campaign.updatedAt)}
+                            </div>
+                            <div
+                              className="mt-0.5 text-[11px] text-slate-500 dark:text-dk-text2 tabular-nums"
+                              title={`${t('campaigns.createdAt')}: ${formatCampaignDateTime(campaign.createdAt)}`}
+                            >
+                              {t('campaigns.createdOnShort', { date: formatCampaignDateShort(campaign.createdAt) })}
+                            </div>
                           </td>
-                          <td className="px-4 py-4 text-xs text-gray-500 dark:text-dk-text2 whitespace-nowrap">
-                            {formatCampaignDateTime(campaign.updatedAt)}
-                          </td>
-                          <td className="px-4 py-4 text-center text-xs font-medium text-slate-700 dark:text-dk-text whitespace-nowrap">
+                          <td className="px-4 py-3.5 text-center text-sm font-semibold text-slate-700 dark:text-dk-text tabular-nums whitespace-nowrap">
                             {campaign.completedCount ?? 0}
                           </td>
-                          <td className="px-5 py-4 whitespace-nowrap text-right">
+                          <td className="px-5 py-3.5 w-px whitespace-nowrap text-right">
                             <div className="flex items-center justify-end gap-1.5">
-                              {/* Nút hành động vận hành (Chạy/Dừng, Lịch, Nhật ký) */}
+                              {/* Nút hành động vận hành: Chạy/Dừng giữ chữ, Lịch + Nhật ký thu thành nút biểu tượng (có title + aria-label) */}
                               {campaign.status === 'active' && canRun && (
                                 <>
                                   {isRunning ? (
@@ -869,7 +882,7 @@ const Campaigns = () => {
                                         runController.openStopRunConfirmModal(runningRun);
                                       }}
                                       disabled={isStopping || !runningRun?.id}
-                                      className="btn btn-sm btn-danger inline-flex items-center gap-1"
+                                      className="inline-flex items-center justify-center gap-1 whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-500 text-white hover:bg-red-600 active:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
                                       title={t('campaignRun.stopRun')}
                                     >
                                       <HiOutlinePause className="w-3.5 h-3.5" />
@@ -881,7 +894,7 @@ const Campaigns = () => {
                                     <button
                                       type="button"
                                       onClick={() => runController.openRunConfirmModal(campaign)}
-                                      className="btn btn-sm btn-primary inline-flex items-center gap-1"
+                                      className="inline-flex items-center justify-center gap-1 whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-semibold bg-orange-500 text-white hover:bg-orange-600 active:bg-orange-700 transition-colors"
                                       title={t('campaignRun.runNow')}
                                     >
                                       <HiOutlinePlay className="w-3.5 h-3.5" />
@@ -898,29 +911,30 @@ const Campaigns = () => {
                                       }
                                       runController.openScheduleModal(campaign);
                                     }}
-                                    className="btn btn-sm btn-secondary inline-flex items-center gap-1"
+                                    className={ROW_ICON_BUTTON_CLASS}
                                     title={t('campaignRun.setupSchedule')}
+                                    aria-label={t('campaignRun.schedule')}
                                   >
-                                    <HiOutlineClock className="w-3.5 h-3.5" />
-                                    <span>{t('campaignRun.schedule')}</span>
+                                    <HiOutlineClock className="w-4 h-4" />
                                   </button>
                                 </>
                               )}
 
                               {hasRuns && (
                                 <button
-                                    type="button"
-                                    onClick={() => runController.toggleCampaignLogs(campaign)}
-                                    className={`btn btn-sm inline-flex items-center gap-1 ${
-                                      isShowingLogs
-                                        ? 'bg-blue-600 text-white hover:bg-blue-700 border-blue-600'
-                                        : 'btn-secondary'
-                                    }`}
-                                    title={isShowingLogs ? t('campaignRun.hideLog') : t('campaignRun.viewLog')}
-                                  >
-                                    <HiOutlineEye className="w-3.5 h-3.5" />
-                                    <span>{t('campaigns.logs')}</span>
-                                  </button>
+                                  type="button"
+                                  onClick={() => runController.toggleCampaignLogs(campaign)}
+                                  className={`${ROW_ICON_BUTTON_BASE_CLASS} ${
+                                    isShowingLogs
+                                      ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700'
+                                      : ROW_ICON_BUTTON_IDLE_CLASS
+                                  }`}
+                                  title={isShowingLogs ? t('campaignRun.hideLog') : t('campaignRun.viewLog')}
+                                  aria-label={t('campaigns.logs')}
+                                  aria-pressed={isShowingLogs}
+                                >
+                                  <HiOutlineEye className="w-4 h-4" />
+                                </button>
                               )}
 
                               {campaign.status === 'pending_owner_approval' && isOwner && (
