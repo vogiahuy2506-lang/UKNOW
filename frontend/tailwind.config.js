@@ -12,6 +12,18 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
+      // Tailwind 3 chỉ có spacing thập phân tới 3.5; mã viết theo kiểu Tailwind 4 (`p-4.5`, `w-4.5`)
+      // sinh ra CSS rỗng → đệm 0, icon không có cỡ (10/10/2026: modal Sản phẩm sát lề). Bổ sung 4.5
+      // thay vì sửa ~15 chỗ; chốt tailwindClassesExist.spec.js chặn mọi số thập phân khác.
+      spacing: {
+        4.5: '1.125rem',
+      },
+      // Tailwind 3 không có shadow-xs / shadow-2xs (có từ bản 4). Giá trị đúng như Tailwind 4:
+      // 2xs là vệt mảnh nhất, xs ngang shadow-sm của bản 3.
+      boxShadow: {
+        '2xs': '0 1px rgb(0 0 0 / 0.05)',
+        xs: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
+      },
       colors: {
         dk: {
           inset: 'rgb(var(--dk-inset) / <alpha-value>)',

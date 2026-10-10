@@ -1064,7 +1064,7 @@ const InboxPage = () => {
               <HiOutlineInbox className="w-4 h-4 shrink-0" />
               <span className="truncate">{t('inbox.title')}</span>
               {unreadCount > 0 && (
-                <span className="text-[10px] bg-rose-500 text-white px-1.5 py-0.2 rounded-full font-bold shrink-0">
+                <span className="text-[10px] bg-rose-500 text-white px-1.5 py-0.5 rounded-full font-bold shrink-0">
                   {unreadCount > 99 ? '99+' : unreadCount}
                 </span>
               )}
@@ -1093,7 +1093,7 @@ const InboxPage = () => {
               <HiOutlinePhone className="w-4 h-4 text-rose-500 shrink-0" />
               <span className="truncate">{t('inbox.contactAlertsTab')}</span>
               {contactAlertsOpenCount > 0 && (
-                <span className="text-[10px] bg-rose-500 text-white px-1.5 py-0.2 rounded-full font-bold shrink-0">
+                <span className="text-[10px] bg-rose-500 text-white px-1.5 py-0.5 rounded-full font-bold shrink-0">
                   {contactAlertsOpenCount}
                 </span>
               )}

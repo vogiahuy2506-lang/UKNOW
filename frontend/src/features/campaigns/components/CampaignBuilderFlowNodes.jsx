@@ -10,7 +10,7 @@ const NODE_CARD_CONTAINER_CLASS =
 const NODE_TITLE_CLASS =
   'text-[12px] sm:text-sm font-semibold text-gray-800 dark:text-dk-text leading-4 sm:leading-5 line-clamp-2 min-h-[2.15rem] sm:min-h-[2.35rem] break-words';
 const NODE_DESCRIPTION_CLASS =
-  'text-[10px] sm:text-[11px] text-gray-500 dark:text-dk-text2 mt-0.1 leading-4 line-clamp-2 min-h-[1.1rem] sm:min-h-[1.85rem] break-words';
+  'text-[10px] sm:text-[11px] text-gray-500 dark:text-dk-text2 mt-0.5 leading-4 line-clamp-2 min-h-[1.1rem] sm:min-h-[1.85rem] break-words';
 
 // Factory function to get translated node configs
 export function getNodeConfigs(t) {
