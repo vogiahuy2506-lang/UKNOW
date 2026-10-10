@@ -182,10 +182,15 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
 
-    // Tự động gắn X-Owner-Context khi user đang ở ngữ cảnh employee
-    const { activeContext } = authStore?.getState() || {};
-    if (activeContext?.type === 'employee' && activeContext.ownerId) {
-      config.headers['X-Owner-Context'] = String(activeContext.ownerId);
+    // Tự động gắn X-Owner-Context khi user đang ở ngữ cảnh employee.
+    // `skipOwnerContext: true` (người gọi tự đặt trong config) bỏ qua bước này: chuông thông báo và tuỳ chọn thông báo
+    // thuộc về NGƯỜI đăng nhập chứ không thuộc không gian làm việc, và gắn header sẽ khiến authMiddleware trả 403
+    // (EMPLOYEE_LOCKED / INVALID_CONTEXT) khi nhân viên bị khoá ở công ty đó — làm chuông câm đúng lúc cần báo.
+    if (!config.skipOwnerContext) {
+      const { activeContext } = authStore?.getState() || {};
+      if (activeContext?.type === 'employee' && activeContext.ownerId) {
+        config.headers['X-Owner-Context'] = String(activeContext.ownerId);
+      }
     }
 
     return config;
