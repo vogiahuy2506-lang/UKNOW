@@ -2230,3 +2230,129 @@ describe('ai.controller — lượt trợ lý hỏng để lại dấu vết b�
   });
 });
 
+describe('ai.controller — PR-C1: PATCH xen giữa lượt chat không bị ghi đè (mutex + ghi delta)', () => {
+  const START_STATE = {
+    v: 1,
+    gates: { isCampaignFlow: true, channel: 'email', hasContentPlan: true, planApproved: false },
+    plan: {},
+    brief: {},
+    meta: {},
+  };
+  const deferred = () => {
+    let resolve;
+    const promise = new Promise((r) => { resolve = r; });
+    return { promise, resolve };
+  };
+  const tick = () => new Promise((resolve) => { setImmediate(resolve); });
+  const chatReq = () => ({
+    body: { history: [{ role: 'user', content: 'Tạo chiến dịch gửi email cho khách cũ' }], locale: 'vi', sessionId: 77 },
+    user: { id: 42, role: 'user' },
+  });
+  const wizardResponse = () => ({
+    type: 'text',
+    content: 'ok',
+    missing_fields: [],
+    data: null,
+    // Lượt chat đọc đầu lượt planApproved=false và KHÔNG đổi nó; chỉ thêm senderAccountId.
+    _wizard: {
+      gates: { ...START_STATE.gates, senderAccountId: 7 },
+      brief: null,
+      gateAsked: null,
+      meta: { lastGate: null, lastGateCount: 0, deadEndLoggedAt: null, updatedAt: null },
+      planChanged: false,
+    },
+  });
+
+  beforeEach(() => {
+    processSmartChat.mockReset();
+    chargeAiCredit.mockReset();
+    createSession.mockReset();
+    saveMessages.mockReset();
+    saveMessages.mockResolvedValue(true);
+    tryHandleHelpChat.mockReset();
+    tryHandleHelpChat.mockResolvedValue(null);
+    getSessionWizardState.mockReset();
+    updateWizardStateSections.mockReset();
+    updateWizardStateSections.mockResolvedValue(undefined);
+    writeWizardState.mockReset();
+    jest.spyOn(auditServiceInstance, 'log').mockResolvedValue(undefined);
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('approve_plan chen vào GIỮA lượt chat: chat chỉ ghi phần nó đổi (gatesDelta), KHÔNG kéo planApproved về false', async () => {
+    const llm = deferred();
+    processSmartChat.mockImplementation(() => llm.promise);
+    getSessionWizardState.mockResolvedValue({ id: 77, wizard_state: START_STATE, message_count: 5 });
+    writeWizardState.mockImplementation(async (_sid, _uid, state) => state);
+
+    const chatDone = aiController.chat(chatReq(), makeRes());
+    await tick();
+    expect(processSmartChat).toHaveBeenCalledTimes(1); // đang chờ LLM — KHÔNG giữ khoá
+
+    // PATCH chạy trọn vẹn trong lúc LLM còn đang nghĩ (khoá không bị giữ suốt lượt gọi LLM).
+    await aiController.patchWizardState({
+      user: { id: 42, role: 'user' },
+      params: { id: '77' },
+      body: { action: 'approve_plan' },
+    }, makeRes());
+    expect(writeWizardState).toHaveBeenCalledTimes(1);
+    expect(writeWizardState.mock.calls[0][2].gates.planApproved).toBe(true);
+
+    llm.resolve(wizardResponse());
+    await chatDone;
+
+    expect(updateWizardStateSections).toHaveBeenCalledTimes(1);
+    const sections = updateWizardStateSections.mock.calls[0][2];
+    expect(sections.gatesDelta).toEqual({ senderAccountId: 7 });
+    expect(sections.gatesDelta).not.toHaveProperty('planApproved');
+    expect(sections.gates).toBeUndefined(); // không còn ghi đè cả khối gates bằng bản đầu lượt
+    expect(writeWizardState.mock.invocationCallOrder[0]).toBeLessThan(updateWizardStateSections.mock.invocationCallOrder[0]);
+  });
+
+  it('chat ghi sau lượt phải ĐỢI PATCH đang đọc-rồi-ghi dở (cùng khoá theo phiên), không chen giữa hai bước của PATCH', async () => {
+    const patchRead = deferred();
+    // Thứ tự lời gọi getSessionWizardState: PATCH vào khoá trước (đọc chậm), rồi chat đọc đầu lượt.
+    getSessionWizardState
+      .mockImplementationOnce(() => patchRead.promise)
+      .mockResolvedValue({ id: 77, wizard_state: START_STATE, message_count: 5 });
+    processSmartChat.mockResolvedValue(wizardResponse());
+    writeWizardState.mockImplementation(async (_sid, _uid, state) => state);
+
+    const patchDone = aiController.patchWizardState({
+      user: { id: 42, role: 'user' },
+      params: { id: '77' },
+      body: { action: 'approve_plan' },
+    }, makeRes());
+    await tick();
+    const chatDone = aiController.chat(chatReq(), makeRes());
+    await tick();
+    await tick();
+    // Chat đã tới bước ghi (processSmartChat trả ngay) nhưng PATCH đang giữ khoá → chat xếp hàng.
+    expect(writeWizardState).not.toHaveBeenCalled();
+    expect(updateWizardStateSections).not.toHaveBeenCalled();
+
+    patchRead.resolve({ id: 77, wizard_state: START_STATE, message_count: 5 });
+    await patchDone;
+    await chatDone;
+
+    expect(writeWizardState).toHaveBeenCalledTimes(1);
+    expect(updateWizardStateSections).toHaveBeenCalledTimes(1);
+    expect(writeWizardState.mock.invocationCallOrder[0]).toBeLessThan(updateWizardStateSections.mock.invocationCallOrder[0]);
+  });
+
+  it('ghi wizard_state hỏng: lượt chat KHÔNG hỏng, nhưng có log rõ', async () => {
+    processSmartChat.mockResolvedValue(wizardResponse());
+    getSessionWizardState.mockResolvedValue({ id: 77, wizard_state: START_STATE, message_count: 5 });
+    updateWizardStateSections.mockRejectedValue(new Error('connection reset'));
+
+    const res = makeRes();
+    await aiController.chat(chatReq(), res);
+
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('[AI][WizardState] Ghi wizard_state thất bại'));
+  });
+});

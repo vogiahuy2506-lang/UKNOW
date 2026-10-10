@@ -36,4 +36,32 @@ describe('aiSession.repository — wizard_state', () => {
     await updateWizardStateSections(5, 3, { meta: { lastGate: null } });
     expect(mockQuery.mock.calls[0][0]).not.toMatch(/foldedMessageCount/);
   });
+
+  it('gatesDelta gộp THEO KHOÁ vào gates đang nằm trong DB lúc UPDATE (không thay cả khối)', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    await updateWizardStateSections(5, 3, { gatesDelta: { senderAccountId: 7 } });
+    const [sql, params] = mockQuery.mock.calls[0];
+    expect(sql).toMatch(/jsonb_set\(.*'\{gates\}', COALESCE\(wizard_state->'gates', '\{\}'::jsonb\) \|\| \$3::jsonb/s);
+    expect(params).toEqual([5, 3, JSON.stringify({ senderAccountId: 7 })]);
+  });
+
+  it('meta cũng gộp theo khoá (giữ foldedMessageCount/historyBackfilledAt do nơi khác ghi)', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    await updateWizardStateSections(5, 3, { meta: { lastGate: 'schedule' } });
+    expect(mockQuery.mock.calls[0][0]).toMatch(/'\{meta\}', COALESCE\(wizard_state->'meta', '\{\}'::jsonb\) \|\| \$3::jsonb/);
+  });
+
+  it('briefExpected: chỉ ghi brief khi bản trong DB vẫn đúng bằng bản đọc đầu lượt', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    await updateWizardStateSections(5, 3, { brief: { topicText: 'mới' }, briefExpected: { topicText: 'cũ' } });
+    const [sql, params] = mockQuery.mock.calls[0];
+    expect(sql).toMatch(/CASE WHEN COALESCE\(wizard_state->'brief', 'null'::jsonb\) = \$4::jsonb THEN \$3::jsonb ELSE/);
+    expect(params.slice(2)).toEqual([JSON.stringify({ topicText: 'mới' }), JSON.stringify({ topicText: 'cũ' })]);
+  });
+
+  it('không có briefExpected thì ghi brief như cũ (thay thẳng)', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    await updateWizardStateSections(5, 3, { brief: { topicText: 'mới' } });
+    expect(mockQuery.mock.calls[0][0]).not.toMatch(/CASE WHEN/);
+  });
 });

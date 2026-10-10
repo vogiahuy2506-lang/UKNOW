@@ -123,7 +123,7 @@ const EMPTY_WIZARD_STATE_DEFAULT = {
 // Ghi state theo section từ chat path (gates/meta/plan/brief) bằng jsonb_set.
 // Khi KHÔNG có planReset/planSnapshot thì tuyệt đối không đụng section plan —
 // tránh clobber plan.savedTemplates do PATCH ghi song song.
-// sections = { gates?, meta?, brief?, planSnapshot?, planSourcePrompt?, planRequiresApproval?, planReset?, stampFoldedCount? }
+// sections = { gates? (thay cả khối), gatesDelta? (gộp theo khoá), meta? (gộp theo khoá), brief?, briefExpected?, planSnapshot?, planSourcePrompt?, planRequiresApproval?, planReset?, stampFoldedCount? }
 export async function updateWizardStateSections(sessionId, userId, sections = {}) {
   const base = `COALESCE(wizard_state, '${JSON.stringify(EMPTY_WIZARD_STATE_DEFAULT)}'::jsonb)`;
   let expr = base;
@@ -146,9 +146,28 @@ export async function updateWizardStateSections(sessionId, userId, sections = {}
       status: 'waiting_day_confirm',
     });
   }
+  // Gộp theo khoá (`||`) vào bản ĐANG nằm trong DB tại thời điểm UPDATE — không thay cả khối bằng bản đầu lượt, để một
+  // PATCH xen giữa lượt chat (approve_plan, set_zalo_friends…) không bị ghi đè lại bằng giá trị cũ.
+  const addMerge = (key, value) => {
+    params.push(JSON.stringify(value ?? {}));
+    expr = `jsonb_set(${expr}, '{${key}}', COALESCE(wizard_state->'${key}', '{}'::jsonb) || $${params.length}::jsonb, true)`;
+  };
   if (sections.gates) addSet('gates', sections.gates);
-  if (sections.meta) addSet('meta', sections.meta);
-  if (sections.brief) addSet('brief', sections.brief);
+  if (sections.gatesDelta) addMerge('gates', sections.gatesDelta);
+  if (sections.meta) addMerge('meta', sections.meta);
+  if (sections.brief) {
+    if (sections.briefExpected !== undefined) {
+      // Chỉ ghi brief khi nó vẫn đúng bằng bản đọc lúc đầu lượt; ai đó (reducer ranh giới) đã đổi thì giữ bản của họ.
+      params.push(JSON.stringify(sections.brief));
+      const nextIdx = params.length;
+      params.push(JSON.stringify(sections.briefExpected ?? null));
+      const expectedIdx = params.length;
+      const current = `COALESCE(wizard_state->'brief', 'null'::jsonb)`;
+      expr = `jsonb_set(${expr}, '{brief}', CASE WHEN ${current} = $${expectedIdx}::jsonb THEN $${nextIdx}::jsonb ELSE ${current} END, true)`;
+    } else {
+      addSet('brief', sections.brief);
+    }
+  }
   if (sections.stampFoldedCount) {
     // Dấu "đã gấp tới tin thứ N" — đếm ngay trong câu UPDATE (xem wizardStateSource.service.js).
     expr = `jsonb_set(${expr}, '{meta,foldedMessageCount}', to_jsonb((SELECT COUNT(*)::int FROM ai_chat_messages WHERE session_id = $1)), true)`;

@@ -16,8 +16,9 @@ import campaignController from './campaign.controller.js';
 import campaignCrudService from '../services/campaign/campaignCrud.service.js';
 import campaignNodeRegistryService from '../services/campaign/campaignNodeRegistry.service.js';
 import * as aiSessionRepo from '../repositories/aiSession.repository.js';
-import { buildBackfillStamp, isWizardStateInSync } from '../services/ai/wizardStateSource.service.js';
-import { applyWizardStateAction, normalizeWizardState, isWizardAnswerTurn, isWizardMarkerMessage } from '../services/ai/aiCampaignWizard.service.js';
+import { buildBackfillStamp, diffChangedKeys, isWizardStateInSync, resolveWizardStateSource } from '../services/ai/wizardStateSource.service.js';
+import { withKeyedLock, wizardSessionLockKey } from '../utils/keyedMutex.util.js';
+import { applyAssistantResponseToGates, applyWizardStateAction, normalizeWizardState, isWizardAnswerTurn, isWizardMarkerMessage } from '../services/ai/aiCampaignWizard.service.js';
 import auditService, { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 import uploadController from './upload.controller.js';
 import recipientExtractorService from '../services/ai/recipientExtractor.service.js';
@@ -194,6 +195,18 @@ async function logWorkspaceMutation(req, action, entityType, entityId, details =
   });
 }
 
+/**
+ * Ghi wizard_state sau lượt chat: tuần tự theo phiên (cùng khoá với PATCH) và KHÔNG làm hỏng lượt khi lỗi — nhưng log
+ * rõ. Lượt ghi hỏng để lại `foldedMessageCount` cũ nên lượt sau tự rơi về replay lịch sử (xem wizardStateSource.service.js).
+ */
+async function writeWizardStateGuarded(sessionId, userId, sections) {
+  try {
+    await withKeyedLock(wizardSessionLockKey(sessionId), () => aiSessionRepo.updateWizardStateSections(sessionId, userId, sections));
+  } catch (err) {
+    console.error(`[AI][WizardState] Ghi wizard_state thất bại (phiên ${sessionId}, user ${userId}): ${err.message} — lượt sau sẽ rơi về replay lịch sử`);
+  }
+}
+
 class AiController {
   async prepareCampaign(req, res) {
     try {
@@ -269,6 +282,7 @@ class AiController {
         }
       }
       const normalizedPersisted = normalizeWizardState(persistedWizardState);
+      const wizardSourceMode = resolveWizardStateSource();
       const persistedMeta = normalizedPersisted.meta || {};
       const localeContext = resolveAssistantLocaleContext({
         history,
@@ -598,16 +612,20 @@ class AiController {
           }
 
           // Dấu "đã gấp hết lịch sử tới tin thứ N" (xem wizardStateSource.service.js) — lượt có wizard luôn được dựng từ
-          // replay lịch sử đầy đủ (hoặc đường DB đã đủ điều kiện) nên đủ tư cách đánh dấu backfill.
-          await aiSessionRepo.updateWizardStateSections(finalSessionId, req.user.id, {
-            gates: _wizard.gates,
-            stampFoldedCount: true,
+          // replay lịch sử đầy đủ (hoặc đường DB đã đủ điều kiện) nên đủ tư cách đánh dấu backfill. Chế độ `history` giữ
+          // đúng hành vi cũ: không dấu, không áp tác động của phản hồi.
+          const trackFold = wizardSourceMode !== 'history';
+          const turnGates = trackFold ? applyAssistantResponseToGates(_wizard.gates, publicResponse) : _wizard.gates;
+          await writeWizardStateGuarded(finalSessionId, req.user.id, {
+            // Chỉ ghi phần lượt này ĐỔI so với bản đọc đầu lượt, gộp vào bản đang nằm trong DB (PATCH xen giữa không bị đè).
+            gatesDelta: diffChangedKeys(normalizedPersisted.gates, turnGates),
+            ...(trackFold ? { stampFoldedCount: true } : {}),
             meta: {
               ...(_wizard.meta || {}),
               ...localeMetaPatch,
-              ...buildBackfillStamp(_wizard.meta),
+              ...(trackFold ? buildBackfillStamp(persistedMeta) : {}),
             },
-            ...(_wizard.brief ? { brief: _wizard.brief } : {}),
+            ...(_wizard.brief ? { brief: _wizard.brief, briefExpected: persistedWizardState?.brief ?? null } : {}),
             ...(_wizard.planChanged
               ? {
                 planSnapshot: _wizard.planSnapshot ?? null,
@@ -621,8 +639,9 @@ class AiController {
           // Help path: meta-only — never touch gates/brief/plan.
           // Chỉ ĐẨY dấu tới số tin mới nếu bản đã lưu vốn đã khớp TRƯỚC lượt này (+ tin user và tin trợ lý của lượt help);
           // không bao giờ tự đặt historyBackfilledAt ở đây — lượt help không dựng lại gates nên không được tuyên bố "đã backfill".
-          const wasInSync = isWizardStateInSync(persistedWizardState, persistedMessageCount).ok;
-          await aiSessionRepo.updateWizardStateSections(finalSessionId, req.user.id, {
+          const wasInSync = wizardSourceMode !== 'history'
+            && isWizardStateInSync(persistedWizardState, persistedMessageCount).ok;
+          await writeWizardStateGuarded(finalSessionId, req.user.id, {
             ...(wasInSync ? { stampFoldedCount: true } : {}),
             meta: {
               ...persistedMeta,
@@ -708,11 +727,17 @@ class AiController {
    * Không tính AI credit vì không gọi model.
    */
   async patchWizardState(req, res) {
+    const sessionId = Number(req.params.id);
+    if (!Number.isFinite(sessionId)) {
+      return res.status(400).json({ success: false, message: 'Session id không hợp lệ' });
+    }
+    // Đọc → áp reducer → ghi là đoạn NGẮN nhưng không nguyên tử; cùng khoá với ghi sau lượt chat để hai bên không đè nhau.
+    // Mutex trong tiến trình (một replica) — scale-out thì đổi sang advisory lock.
+    return withKeyedLock(wizardSessionLockKey(sessionId), () => this._patchWizardStateLocked(req, res, sessionId));
+  }
+
+  async _patchWizardStateLocked(req, res, sessionId) {
     try {
-      const sessionId = Number(req.params.id);
-      if (!Number.isFinite(sessionId)) {
-        return res.status(400).json({ success: false, message: 'Session id không hợp lệ' });
-      }
       const { action, payload } = req.body || {};
       const userId = req.user.id;
 
@@ -743,11 +768,18 @@ class AiController {
       }
 
       result.state.meta.updatedAt = new Date().toISOString();
+      const boundaryMessage = BOUNDARY_MESSAGE_BY_ACTION[action];
+      // Bản đã lưu đang khớp số tin → tin ranh giới sắp ghi cũng là một tin đã được gấp vào state (reducer vừa đóng luồng),
+      // nên đẩy dấu lên +1. Không khớp thì để nguyên: lượt chat kế sẽ rơi về replay rồi tự ghi lại dấu.
+      if (boundaryMessage
+        && resolveWizardStateSource() !== 'history'
+        && isWizardStateInSync(row.wizard_state, Number.isInteger(row.message_count) ? row.message_count : null).ok) {
+        result.state.meta.foldedMessageCount = row.message_count + 1;
+      }
       const saved = await aiSessionRepo.writeWizardState(sessionId, userId, result.state);
 
       // Ranh giới "chiến dịch đã tạo xong / đã bỏ dở" phải SỐNG TRÊN SERVER (không chỉ local)
       // — tải lại trang là ai_chat_messages vẫn còn tin này, ba nơi suy trạng thái đều thấy được.
-      const boundaryMessage = BOUNDARY_MESSAGE_BY_ACTION[action];
       if (boundaryMessage) {
         const content = String(payload?.content || '').trim().slice(0, 500) || boundaryMessage.defaultContent;
         await aiSessionRepo.saveAssistantMessage(sessionId, userId, {

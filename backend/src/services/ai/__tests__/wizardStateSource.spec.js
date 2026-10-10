@@ -1,6 +1,8 @@
 import { describe, expect, it } from '@jest/globals';
+import { applyAssistantResponseToGates } from '../aiCampaignWizard.service.js';
 import {
   buildBackfillStamp,
+  diffChangedKeys,
   isWizardStateInSync,
   resolveWizardStateSource,
 } from '../wizardStateSource.service.js';
@@ -44,5 +46,47 @@ describe('buildBackfillStamp', () => {
   });
   it('đặt mốc mới khi chưa có', () => {
     expect(buildBackfillStamp({}, new Date('2026-10-10T01:00:00Z')).historyBackfilledAt).toBe('2026-10-10T01:00:00.000Z');
+  });
+});
+
+describe('diffChangedKeys', () => {
+  it('chỉ trả khoá khác bản đầu lượt (so sâu)', () => {
+    const start = { channel: 'email', zaloGroupIds: ['a'], planApproved: false, schedule: { mode: 'once' } };
+    const turn = { channel: 'email', zaloGroupIds: ['a'], planApproved: false, schedule: { mode: 'drip', days: 3 }, senderAccountId: 7 };
+    expect(diffChangedKeys(start, turn)).toEqual({ schedule: { mode: 'drip', days: 3 }, senderAccountId: 7 });
+  });
+
+  it('khoá mới (không có ở bản đầu lượt) được tính là thay đổi; đầu vào null an toàn', () => {
+    expect(diffChangedKeys(null, { a: 1 })).toEqual({ a: 1 });
+    expect(diffChangedKeys({ a: 1 }, null)).toEqual({});
+  });
+});
+
+describe('applyAssistantResponseToGates', () => {
+  it('content_plan: bật luồng, hasContentPlan, lịch drip mặc định và kênh từ ngày đầu', () => {
+    const next = applyAssistantResponseToGates({ channel: null, schedule: null }, {
+      type: 'content_plan',
+      data: { totalDays: 3, days: [{ day: 1, channel: 'zalo_group' }] },
+    });
+    expect(next).toMatchObject({ isCampaignFlow: true, hasContentPlan: true, channel: 'zalo_group', schedule: { mode: 'drip', days: 3 } });
+  });
+
+  it('không đè kênh/lịch đã có', () => {
+    const next = applyAssistantResponseToGates({ channel: 'email', schedule: { mode: 'once' } }, {
+      type: 'content_plan',
+      data: { totalDays: 3, days: [{ channel: 'zalo' }] },
+    });
+    expect(next.channel).toBe('email');
+    expect(next.schedule).toEqual({ mode: 'once' });
+  });
+
+  it('template_draft sau content_plan ⇒ planApproved; không có kế hoạch thì không', () => {
+    expect(applyAssistantResponseToGates({ hasContentPlan: true }, { type: 'template_draft' }).planApproved).toBe(true);
+    expect(applyAssistantResponseToGates({ hasContentPlan: false }, { type: 'template_draft' }).planApproved).toBeUndefined();
+  });
+
+  it('tin thường không đổi gates và không mutate đầu vào', () => {
+    const gates = Object.freeze({ channel: 'email' });
+    expect(applyAssistantResponseToGates(gates, { type: 'text' })).toEqual({ channel: 'email' });
   });
 });

@@ -13,6 +13,8 @@
  *    bản đã lưu chưa gấp (lượt ghi hỏng, tin landing, tin lỗi…) → lượt đó rơi về replay, rồi ghi lại dấu mới (tự chữa).
  */
 
+import { isDeepStrictEqual } from 'node:util';
+
 export const WIZARD_STATE_SOURCES = ['history', 'shadow', 'db'];
 export const DEFAULT_WIZARD_STATE_SOURCE = 'shadow';
 
@@ -47,4 +49,18 @@ export function isWizardStateInSync(persistedRaw, messageCount) {
  */
 export function buildBackfillStamp(prevMeta, now = new Date()) {
   return { historyBackfilledAt: prevMeta?.historyBackfilledAt || now.toISOString() };
+}
+
+/**
+ * Các khoá của `turn` khác `start` (so sâu). Lượt chat chỉ ghi phần NÓ THAY ĐỔI so với bản đã đọc lúc đầu lượt, để
+ * khi lượt chạy lâu (LLM 10–30 giây) một PATCH xen giữa (approve_plan, set_zalo_friends…) không bị ghi đè lại bằng
+ * giá trị cũ của đầu lượt.
+ */
+export function diffChangedKeys(start, turn) {
+  const base = start && typeof start === 'object' ? start : {};
+  const out = {};
+  for (const [key, value] of Object.entries(turn || {})) {
+    if (!isDeepStrictEqual(value, base[key])) out[key] = value;
+  }
+  return out;
 }

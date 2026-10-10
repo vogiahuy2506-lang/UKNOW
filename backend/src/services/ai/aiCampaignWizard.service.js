@@ -1774,6 +1774,29 @@ export function mergeWizardState(persistedGates, derived, { lastUserText = '' } 
   return merged;
 }
 
+/**
+ * Áp tác động của PHẢN HỒI trợ lý vừa phát lên gates — đúng những gì `foldWizardMessages` sẽ suy ra từ chính tin
+ * trợ lý đó khi nó nằm trong lịch sử ở lượt sau (isCampaignFlow/channel từ loại tin chiến dịch, content_plan →
+ * hasContentPlan + lịch drip mặc định, template_draft sau content_plan → planApproved). Ghi ngay lúc phát để bản
+ * lưu trong DB không phải đợi lượt sau mới "biết" mình vừa phát gì — điều kiện để đọc DB thay replay lịch sử.
+ * Không mutate đầu vào.
+ */
+export function applyAssistantResponseToGates(gates, response) {
+  const next = { ...(gates || {}) };
+  const type = response?.type;
+  if (CAMPAIGN_RESPONSE_TYPES.has(type)) {
+    const data = response?.data || null;
+    next.isCampaignFlow = true;
+    next.channel ||= normalizeChannel(data?.campaignType || data?.channel || data?.days?.[0]?.channel || data?.days?.[0]?.slots?.[0]?.channel) || null;
+    if (type === 'content_plan') {
+      next.hasContentPlan = true;
+      next.schedule ||= { mode: 'drip', days: Number(data?.totalDays) || data?.days?.length || null };
+    }
+  }
+  if (type === 'template_draft' && next.hasContentPlan) next.planApproved = true;
+  return next;
+}
+
 export function computeWizardMeta(prevMeta = {}, gateAsked = null) {
   const now = new Date().toISOString();
   const {

@@ -15,7 +15,7 @@ import jwt from 'jsonwebtoken';
 import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
 import { truncateAll, createUser } from './helpers/db.js';
-import { createSession } from '../../src/repositories/aiSession.repository.js';
+import { createSession, saveMessages, updateWizardStateSections } from '../../src/repositories/aiSession.repository.js';
 
 let app;
 
@@ -259,5 +259,108 @@ describe('PATCH /api/ai/sessions/:id/wizard-state — abandon_campaign_flow', ()
       .set('Authorization', `Bearer ${token}`);
     const boundaryMsgs = msgsRes.body.data.filter((m) => m.type === 'campaign_abandoned');
     expect(boundaryMsgs).toHaveLength(1);
+  });
+});
+
+async function readState(sessionId) {
+  const { rows } = await db.query('SELECT wizard_state FROM ai_chat_sessions WHERE id = $1', [sessionId]);
+  return rows[0].wizard_state;
+}
+
+describe('PR-C1 — ghi wizard_state sau lượt chat (SQL thật)', () => {
+  it('gatesDelta gộp theo khoá: không kéo planApproved (PATCH vừa bật) về false; meta giữ khoá của nơi khác; foldedMessageCount = số tin thật', async () => {
+    const user = await createUser({ email: 'wizard-delta@test.com', username: 'wizard_delta' });
+    const session = await createSession(user.id, 'Chat wizard delta');
+    await saveMessages(session.id, user.id, 'Tạo chiến dịch', { content: 'ok', type: 'text', data: null });
+    await saveMessages(session.id, user.id, 'tiếp', { content: 'ok', type: 'text', data: null });
+
+    // Trạng thái SAU khi PATCH approve_plan đã ghi: planApproved=true, meta có dấu cũ.
+    await seedWizardState(session.id, { isCampaignFlow: true, channel: 'email', hasContentPlan: true, planApproved: true });
+    await db.query(
+      `UPDATE ai_chat_sessions SET wizard_state = jsonb_set(wizard_state, '{meta}', '{"keepMe":"x","foldedMessageCount":1}'::jsonb) WHERE id = $1`,
+      [session.id],
+    );
+
+    // Lượt chat đọc đầu lượt (planApproved=false) và chỉ đổi senderAccountId.
+    await updateWizardStateSections(session.id, user.id, {
+      gatesDelta: { senderAccountId: 7 },
+      stampFoldedCount: true,
+      meta: { lastGate: 'schedule', historyBackfilledAt: '2026-10-10T00:00:00.000Z' },
+    });
+
+    const state = await readState(session.id);
+    expect(state.gates.planApproved).toBe(true);
+    expect(state.gates.senderAccountId).toBe(7);
+    expect(state.gates.channel).toBe('email');
+    expect(state.meta.keepMe).toBe('x');
+    expect(state.meta.lastGate).toBe('schedule');
+    expect(state.meta.historyBackfilledAt).toBe('2026-10-10T00:00:00.000Z');
+    expect(state.meta.foldedMessageCount).toBe(4);
+  });
+
+  it('briefExpected: ghi brief khi vẫn đúng bản đầu lượt; giữ bản mới hơn nếu ai đó đã đổi', async () => {
+    const user = await createUser({ email: 'wizard-brief-cas@test.com', username: 'wizard_brief_cas' });
+    const session = await createSession(user.id, 'Chat wizard brief');
+    await db.query(
+      `UPDATE ai_chat_sessions SET wizard_state = '{"v":1,"gates":{},"plan":{},"brief":{"topicText":"cũ"},"meta":{}}'::jsonb WHERE id = $1`,
+      [session.id],
+    );
+
+    await updateWizardStateSections(session.id, user.id, { brief: { topicText: 'mới' }, briefExpected: { topicText: 'cũ' } });
+    expect((await readState(session.id)).brief).toEqual({ topicText: 'mới' });
+
+    // Reducer ranh giới vừa reset brief trong lúc lượt chat chạy → lượt chat (đọc brief 'mới') KHÔNG được ghi lại.
+    await db.query(`UPDATE ai_chat_sessions SET wizard_state = jsonb_set(wizard_state, '{brief}', '{"topicText":null}'::jsonb) WHERE id = $1`, [session.id]);
+    await updateWizardStateSections(session.id, user.id, { brief: { topicText: 'từ lượt cũ' }, briefExpected: { topicText: 'mới' } });
+    expect((await readState(session.id)).brief).toEqual({ topicText: null });
+  });
+
+  it('PATCH mark_campaign_created khi bản lưu đang khớp số tin: foldedMessageCount tăng +1 theo tin ranh giới; brief về rỗng', async () => {
+    const user = await createUser({ email: 'wizard-fold-bump@test.com', username: 'wizard_fold_bump' });
+    const session = await createSession(user.id, 'Chat wizard bump');
+    await saveMessages(session.id, user.id, 'Tạo chiến dịch', { content: 'ok', type: 'text', data: null });
+    await db.query(
+      `UPDATE ai_chat_sessions SET wizard_state = $2::jsonb WHERE id = $1`,
+      [session.id, JSON.stringify({
+        v: 1,
+        gates: { isCampaignFlow: true, channel: 'email' },
+        plan: {},
+        brief: { version: 1, contentMode: 'custom_topic', topicText: 'Lịch nghỉ Tết', contentLocale: 'vi' },
+        meta: { historyBackfilledAt: '2026-10-10T00:00:00.000Z', foldedMessageCount: 2 },
+      })],
+    );
+
+    const token = createAuthToken(user);
+    const res = await request(app)
+      .patch(`/api/ai/sessions/${session.id}/wizard-state`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ action: 'mark_campaign_created', payload: { campaignId: 9 } });
+    expect(res.status).toBe(200);
+
+    const state = await readState(session.id);
+    expect(state.meta.foldedMessageCount).toBe(3);
+    expect(state.brief.topicText).toBeNull();
+    expect(state.brief.contentMode).toBeNull();
+    const { rows } = await db.query('SELECT COUNT(*)::int AS n FROM ai_chat_messages WHERE session_id = $1', [session.id]);
+    expect(rows[0].n).toBe(3);
+  });
+
+  it('PATCH khi bản lưu KHÔNG khớp số tin: không đẩy dấu (lượt chat kế sẽ rơi về replay)', async () => {
+    const user = await createUser({ email: 'wizard-fold-nobump@test.com', username: 'wizard_fold_nobump' });
+    const session = await createSession(user.id, 'Chat wizard nobump');
+    await saveMessages(session.id, user.id, 'Tạo chiến dịch', { content: 'ok', type: 'text', data: null });
+    await seedWizardState(session.id, { isCampaignFlow: true, channel: 'email' });
+    await db.query(
+      `UPDATE ai_chat_sessions SET wizard_state = jsonb_set(wizard_state, '{meta}', '{"historyBackfilledAt":"x","foldedMessageCount":1}'::jsonb) WHERE id = $1`,
+      [session.id],
+    );
+
+    const token = createAuthToken(user);
+    await request(app)
+      .patch(`/api/ai/sessions/${session.id}/wizard-state`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ action: 'mark_campaign_created', payload: { campaignId: 9 } });
+
+    expect((await readState(session.id)).meta.foldedMessageCount).toBe(1);
   });
 });
