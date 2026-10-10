@@ -29,6 +29,8 @@ vi.mock('../../../contexts/useMarketplaceModal', () => ({
 }));
 vi.mock('../../../features/auth/components/AccountProfileModal', () => ({ default: () => null }));
 vi.mock('../../../features/auth/components/ChangePasswordModal', () => ({ default: () => null }));
+// Chuông cần QueryClientProvider; bài này chỉ kiểm menu avatar. Chuông có spec riêng (Header.notificationBell.spec.jsx).
+vi.mock('../NotificationBell', () => ({ default: () => null }));
 
 const renderHeader = () =>
   render(

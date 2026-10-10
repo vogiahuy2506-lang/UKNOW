@@ -108,6 +108,8 @@ const AdminAuditLogsPage = lazyWithRetry(() => import('./pages/admin/AdminAuditL
 const LandingPageCustomizer = lazyWithRetry(() => import('./pages/superadmin/LandingPageCustomizer'));
 const AuditLogsPage = lazyWithRetry(() => import('./pages/settings/AuditLogsPage'));
 const UserDeliveryMonitorPage = lazyWithRetry(() => import('./pages/campaigns/UserDeliveryMonitorPage'));
+const NotificationsPage = lazyWithRetry(() => import('./pages/notifications/NotificationsPage'));
+const NotificationPreferencesPage = lazyWithRetry(() => import('./pages/settings/NotificationPreferencesPage'));
 import UnauthorizedScreen from './pages/auth/UnauthorizedScreen';
 import LoadingScreen from './components/LoadingScreen';
 import ProtectedRoute from './components/routes/ProtectedRoute';
@@ -392,6 +394,10 @@ function AppContent() {
             <Route path="customers/:campaignId" element={<PermissionRoute permission="customers"><CampaignCustomers /></PermissionRoute>} />
             <Route path="customers/:campaignId/:customerId" element={<PermissionRoute permission="customers"><CampaignCustomers /></PermissionRoute>} />
 
+            {/* Thông báo của CHÍNH người đăng nhập — mọi vai trò (kể cả nhân viên) vào được: KHÔNG bọc OwnerRoute/PermissionRoute */}
+            <Route path="notifications" element={<NotificationsPage />} />
+            <Route path="settings/notifications" element={<NotificationPreferencesPage />} />
+
             {/* Settings — owner only */}
             <Route path="settings/channels" element={<PermissionRoute permission={['email_settings', 'zalo_settings', 'chatbot_channels_manage']}><ChannelSettings /></PermissionRoute>} />
             <Route path="settings/employees" element={<OwnerRoute><EmployeeManagement /></OwnerRoute>} />
@@ -486,6 +492,9 @@ function AppContent() {
             <Route path="welcome-email" element={<AdminWelcomeEmailPage />} />
             <Route path="audit-logs" element={<AdminAuditLogsPage />} />
             <Route path="notification-center" element={<NotificationCenter />} />
+            {/* Chuông thông báo của super admin: ProtectedRoute đá admin khỏi /app/*, nên cặp trang này có bản /admin riêng */}
+            <Route path="notifications" element={<NotificationsPage />} />
+            <Route path="settings/notifications" element={<NotificationPreferencesPage />} />
             <Route path="landing-customizer" element={<LandingPageCustomizer />} />
           </Route>
 

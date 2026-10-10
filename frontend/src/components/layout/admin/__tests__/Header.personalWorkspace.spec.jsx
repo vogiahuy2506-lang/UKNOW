@@ -24,6 +24,8 @@ vi.mock('../../../../i18n', async () => (await import('../../../../test/realI18n
 vi.mock('../../../../services/api', () => ({ default: { get: vi.fn(), post: vi.fn() }, setAuthStore: vi.fn() }));
 // Header dùng context Marketplace ở tầng App; bài này chỉ quan tâm menu đổi không gian.
 vi.mock('../../../../contexts/useMarketplaceModal', () => ({ useMarketplaceModal: () => ({ showMarketplace: vi.fn() }) }));
+// Chuông cần QueryClientProvider; bài này chỉ kiểm menu đổi không gian. Chuông có spec riêng (Header.notificationBell.spec.jsx).
+vi.mock('../../NotificationBell', () => ({ default: () => null }));
 
 const { useAuthStore } = await import('../../../../stores/authStore');
 const { default: Header } = await import('../Header');

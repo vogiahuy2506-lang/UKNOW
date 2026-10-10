@@ -15,10 +15,13 @@ import {
   HiOutlineDocumentText,
   HiOutlineExternalLink,
   HiOutlineMenu,
+  HiOutlineBell,
 } from 'react-icons/hi';
 import { useAuthStore } from '../../../stores/authStore';
 import { useI18n } from '../../../i18n';
 import { useMarketplaceModal } from '../../../contexts/useMarketplaceModal';
+import NotificationBell from '../NotificationBell';
+import { notificationsPagePath } from '../../../features/notifications/utils/notificationPaths';
 import AccountProfileModal from '../../../features/auth/components/AccountProfileModal';
 import ChangePasswordModal from '../../../features/auth/components/ChangePasswordModal';
 import logoIcon from '../../../assets/icons/founderai-logo.png';
@@ -181,6 +184,9 @@ const Header = ({ onToggleSidebar }) => {
           <HiOutlineShoppingCart className="w-4 h-4" />
         </button>
 
+        {/* Chuông thông báo — desktop lẫn mobile (mobile chỉ là icon), cả /app và /admin */}
+        <NotificationBell />
+
         {/* Right: profile dropdown */}
         <div className="relative shrink-0" ref={profileRef}>
           <button
@@ -278,6 +284,13 @@ const Header = ({ onToggleSidebar }) => {
                 >
                   <HiOutlineUserCircle className="w-4 h-4 text-gray-400" />
                   {t('sidebar.accountInfo')}
+                </button>
+                <button
+                  onClick={() => { navigate(notificationsPagePath(user)); setProfileOpen(false); }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-gray-700 hover:bg-gray-50 rounded-xl transition-colors"
+                >
+                  <HiOutlineBell className="w-4 h-4 text-gray-400" />
+                  {t('header.notifications')}
                 </button>
                 <button
                   onClick={() => { setShowChangePassword(true); setProfileOpen(false); }}
