@@ -33,10 +33,16 @@ const SEVERITIES = new Set(['info', 'success', 'warning', 'error']);
 
 /** @type {{ loadedAt: number, byEvent: Map<string, object> }|null} */
 let settingsCache = null;
+/** Lần đọc DB đang bay — nhiều lời gọi đồng thời lúc cache nguội dùng chung MỘT truy vấn. */
+let settingsInflight = null;
+/** Tăng mỗi lần xoá cache: kết quả của lần đọc bắt đầu TRƯỚC khi xoá (có thể là dữ liệu cũ) không được ghi lại vào cache. */
+let settingsGeneration = 0;
 
 /** Xoá cache cấu hình sự kiện — gọi sau khi admin PUT cấu hình, và trong test. */
 export function clearEventSettingsCache() {
   settingsCache = null;
+  settingsInflight = null;
+  settingsGeneration += 1;
 }
 
 async function loadSettingsMap() {
@@ -44,10 +50,20 @@ async function loadSettingsMap() {
   if (settingsCache && now - settingsCache.loadedAt < SETTINGS_CACHE_TTL_MS) {
     return settingsCache.byEvent;
   }
-  const rows = await notificationEventSettingRepository.listAll();
-  const byEvent = new Map(rows.map((row) => [row.eventType, row]));
-  settingsCache = { loadedAt: now, byEvent };
-  return byEvent;
+  if (!settingsInflight) {
+    const generation = settingsGeneration;
+    const pending = notificationEventSettingRepository.listAll()
+      .then((rows) => {
+        const byEvent = new Map(rows.map((row) => [row.eventType, row]));
+        if (generation === settingsGeneration) settingsCache = { loadedAt: now, byEvent };
+        return byEvent;
+      })
+      .finally(() => {
+        if (settingsInflight === pending) settingsInflight = null;
+      });
+    settingsInflight = pending;
+  }
+  return settingsInflight;
 }
 
 /**

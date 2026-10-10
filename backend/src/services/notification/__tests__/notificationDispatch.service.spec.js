@@ -372,6 +372,41 @@ describe('notificationDispatch', () => {
       expect(mockListSettings).toHaveBeenCalledTimes(3);
     });
 
+    it('nhiều lời gọi ĐỒNG THỜI lúc cache nguội dùng chung MỘT truy vấn DB', async () => {
+      let release;
+      mockListSettings.mockImplementation(() => new Promise((resolve) => { release = () => resolve([]); }));
+
+      const calls = Promise.all([
+        getEffectiveEventSettings('campaign_run_failed'),
+        getEffectiveEventSettings('campaign_run_completed'),
+        getEffectiveEventSettings('admin_broadcast'),
+      ]);
+      await Promise.resolve();
+      release();
+      await calls;
+
+      expect(mockListSettings).toHaveBeenCalledTimes(1);
+    });
+
+    it('lần đọc bắt đầu TRƯỚC khi xoá cache không được ghi dữ liệu cũ trở lại cache', async () => {
+      let releaseStale;
+      mockListSettings
+        .mockImplementationOnce(() => new Promise((resolve) => {
+          releaseStale = () => resolve([settingRow('campaign_run_failed', { emailEnabled: false })]);
+        }))
+        .mockResolvedValue([settingRow('campaign_run_failed', { emailEnabled: true })]);
+
+      const stale = getEffectiveEventSettings('campaign_run_failed'); // đọc bay, sắp trả dữ liệu cũ
+      await Promise.resolve();
+      clearEventSettingsCache(); // admin vừa PUT
+      releaseStale();
+      expect((await stale).emailEnabled).toBe(false); // lời gọi cũ nhận đúng kết quả của nó…
+
+      // …nhưng cache KHÔNG bị nhiễm: lời gọi kế tiếp đọc lại DB và thấy giá trị mới.
+      expect((await getEffectiveEventSettings('campaign_run_failed')).emailEnabled).toBe(true);
+      expect(mockListSettings).toHaveBeenCalledTimes(2);
+    });
+
     it('đọc cấu hình lỗi → dùng mặc định catalog (chuông bật, email theo mặc định) và KHÔNG cache lỗi', async () => {
       mockListSettings.mockRejectedValueOnce(new Error('db down'));
       expect(await getEffectiveEventSettings('campaign_run_completed')).toEqual({
