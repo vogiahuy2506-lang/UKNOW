@@ -3,6 +3,7 @@ import { isSuperAdmin } from '../../utils/roleScope.util.js';
 import {
   CHANNEL_ACCOUNT_NOT_ASSIGNED_CODE,
   getAccessibleChannelAccountRefs,
+  getAccessibleChannelScope,
 } from '../user/memberChannelAccess.service.js';
 import {
   TELEGRAM_CHANNEL,
@@ -271,6 +272,27 @@ export async function assertCampaignNodesChannelAccountsAccessible(ctx, nodes) {
   }
 }
 
+/**
+ * Phạm vi tài khoản Telegram / WhatsApp của NHÂN VIÊN đang chat với trợ lý AI (không có ngữ cảnh HTTP, chỉ có `actor` + `owner`) —
+ * khuôn `resolveActorZaloAccessibleIds`. Actor khác chủ ⇔ đang ở ngữ cảnh nhân viên (`resolveOwnerUserId` chỉ đổi sang id chủ khi
+ * `activeContext.type === 'employee'`). Trả:
+ *  - `null`  → không lọc (chủ tự chat, hoặc không có người thao tác = gọi nội bộ);
+ *  - `{ telegram: string[]|null, whatsapp_baileys: string[]|null }` → nhân viên (lỗi đọc việc giao → mảng rỗng, KHÔNG bao giờ null);
+ *  - có người thao tác mà không biết chủ → phạm vi RỖNG (hỏng thì chặn).
+ * KHÔNG tra vai super admin (như bản Zalo): super admin đứng ở ngữ cảnh nhân viên của một chủ (hiếm) bị lọc như nhân viên.
+ *
+ * @param {{ actorUserId?: number|string|null, ownerUserId?: number|string|null }} input
+ * @returns {Promise<{ telegram: string[]|null, whatsapp_baileys: string[]|null }|null>}
+ */
+export async function resolveActorChannelAccessibleRefs({ actorUserId = null, ownerUserId = null } = {}) {
+  const actor = toPositiveInt(actorUserId);
+  const owner = toPositiveInt(ownerUserId);
+  if (!actor) return null;
+  if (!owner) return emptyChannelScope();
+  if (actor === owner) return null;
+  return getAccessibleChannelScope({ actorUserId: actor, workspaceOwnerId: owner, contextType: 'employee', isSuperAdmin: false });
+}
+
 /** Sau tối đa từng này ms thì engine kiểm lại việc giao (chủ gỡ giao giữa chừng → lượt chạy dừng). */
 export const CHANNEL_ACCESS_RECHECK_MS = 5 * 60 * 1000;
 
@@ -333,6 +355,7 @@ export default {
   emptyChannelScope,
   findUnassignedChannelPairs,
   getChannelScopeForUser,
+  resolveActorChannelAccessibleRefs,
   resolveChannelAccessScope,
   unrestrictedChannelScope,
 };

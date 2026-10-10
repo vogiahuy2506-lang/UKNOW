@@ -4,7 +4,9 @@ import campaignNodeRegistryService from '../campaign/campaignNodeRegistry.servic
 import { getNodeSubtype } from '../../utils/nodeSubtype.util.js';
 import { resolveLandingAudienceToForm } from './landingAudienceResolver.service.js';
 import { resolveActorZaloAccessibleIds } from '../campaign/campaignZaloAccess.service.js';
+import { resolveActorChannelAccessibleRefs } from '../campaign/campaignChannelAccess.service.js';
 import { stripZaloAccountIdsNotAccessible } from '../../utils/campaignZaloAccountResolve.util.js';
+import { stripChannelAccountsNotAccessible } from '../../utils/channelAccessScope.util.js';
 
 const NODE_REFERENCE_KEYS = [
   'saveCustomerNodeId', 'recipientNodeId', 'ccNodeId', 'bccNodeId',
@@ -222,8 +224,11 @@ class AiCampaignDraftService {
    * P8a — node gửi Telegram/WhatsApp chưa có tài khoản mà workspace chỉ có ĐÚNG 1 tài khoản dùng được → điền nó
    * (như autoFillZaloAccounts với tài khoản Zalo mặc định). Nhiều hơn/không có → để trống: thẻ xác nhận báo
    * `missing_sender` (chặn tạo) chứ KHÔNG tự chọn hộ — gửi nhầm số/tài khoản là gửi cho khách thật.
+   *
+   * @param {{ accessibleChannelRefs?: object|null }} [options] PLAN_GIAO_TK_TG_WA H4 — phạm vi tài khoản nhân viên ĐƯỢC GIAO (null /
+   *   bỏ trống = chủ hoặc gọi nội bộ): "tài khoản duy nhất" của nhân viên là tài khoản duy nhất TRONG SỐ ĐƯỢC GIAO.
    */
-  async autoFillAdapterChannelAccounts(nodes, ownerUserId) {
+  async autoFillAdapterChannelAccounts(nodes, ownerUserId, { accessibleChannelRefs = null } = {}) {
     const adapterNodes = nodes.filter((node) => {
       const st = node.node_subtype || node.nodeSubtype || '';
       return st === 'send_telegram' || st === 'send_whatsapp';
@@ -232,7 +237,7 @@ class AiCampaignDraftService {
     try {
       // Nạp động: đường thường (không có node adapter) không phải kéo cả aiPromptResources vào module này.
       const { default: aiPromptResources } = await import('./aiPromptResources.service.js');
-      const accounts = await aiPromptResources.getAdapterChannelAccounts(ownerUserId);
+      const accounts = await aiPromptResources.getAdapterChannelAccounts(ownerUserId, accessibleChannelRefs);
       const usableTelegram = accounts.telegram.filter((a) => a.usable);
       const usableWhatsApp = accounts.whatsapp.filter((a) => a.usable);
       for (const node of adapterNodes) {
@@ -936,7 +941,14 @@ class AiCampaignDraftService {
     if (removedZaloAccountIds.length > 0) {
       console.warn(`[AI] Gỡ ${removedZaloAccountIds.length} tài khoản Zalo chưa giao cho nhân viên ${userId} khỏi bản nháp (workspace ${ownerUserId}):`, removedZaloAccountIds.join(','));
     }
-    await this.autoFillAdapterChannelAccounts(nodes, ownerUserId);
+    // H4: cùng khuôn Zalo — mặc định "tài khoản duy nhất" lấy trong số được giao; id chưa giao còn sót (mô hình bịa / wizard giữ từ
+    // lượt trước) bị gỡ SAU khi điền để thẻ xác nhận báo `missing_sender`, KHÔNG thay bằng tài khoản khác.
+    const channelAccessibleRefs = await resolveActorChannelAccessibleRefs({ actorUserId: userId, ownerUserId });
+    await this.autoFillAdapterChannelAccounts(nodes, ownerUserId, { accessibleChannelRefs: channelAccessibleRefs });
+    const removedChannelAccounts = stripChannelAccountsNotAccessible(nodes, channelAccessibleRefs);
+    if (removedChannelAccounts.length > 0) {
+      console.warn(`[AI] Gỡ ${removedChannelAccounts.length} tài khoản Telegram/WhatsApp chưa giao cho nhân viên ${userId} khỏi bản nháp (workspace ${ownerUserId}):`, removedChannelAccounts.join(','));
+    }
     return { ...canonical, nodes };
   }
 }

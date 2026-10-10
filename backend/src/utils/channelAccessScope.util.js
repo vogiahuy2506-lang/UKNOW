@@ -40,6 +40,52 @@ export function isChannelScopeUnrestricted(scope) {
 }
 
 /**
+ * Một ref có được dùng không theo phạm vi MỘT kênh (`null` = thấy hết; mảng = chỉ các ref này; khác = không). So sánh theo chuỗi.
+ *
+ * @param {string|number} ref
+ * @param {unknown} refsOfChannel phần tử `normalizeChannelAccessScope(scope)[channel]`
+ * @returns {boolean}
+ */
+export function isRefInChannelScope(ref, refsOfChannel) {
+  if (refsOfChannel === null) return true;
+  return Array.isArray(refsOfChannel) && refsOfChannel.map(String).includes(String(ref));
+}
+
+/** subtype node → (kênh, khoá cấu hình chứa tài khoản). Node adapter chỉ có MỘT tài khoản. */
+const ADAPTER_NODE_ACCOUNT_FIELDS = Object.freeze({
+  send_telegram: { channel: 'telegram', field: 'telegramAccountId' },
+  send_whatsapp: { channel: 'whatsapp_baileys', field: 'whatsappSessionKey' },
+});
+
+/**
+ * Trợ lý AI dựng cho NHÂN VIÊN: tài khoản Telegram / WhatsApp chưa được giao (wizard giữ sót / marker giả / mô hình bịa) bị GỠ khỏi
+ * node `send_telegram` / `send_whatsapp` để thẻ xác nhận báo "thiếu tài khoản gửi", thay vì âm thầm gửi bằng tài khoản khác.
+ * `scope` null / undefined (chủ, hoặc gọi nội bộ không có người thao tác) → không đụng gì. Có scope mà thiếu khoá kênh → coi như [].
+ *
+ * @param {Array<{ node_subtype?: string, nodeSubtype?: string, config?: object }>} nodes
+ * @param {{ telegram?: string[]|null, whatsapp_baileys?: string[]|null }|null|undefined} scope
+ * @returns {string[]} các ref đã bị gỡ (không trùng)
+ */
+export function stripChannelAccountsNotAccessible(nodes, scope) {
+  if (scope === null || scope === undefined) return [];
+  const normalized = normalizeChannelAccessScope(scope);
+  const removed = new Set();
+  for (const node of Array.isArray(nodes) ? nodes : []) {
+    const subtype = String(node?.node_subtype ?? node?.nodeSubtype ?? '').trim();
+    const spec = ADAPTER_NODE_ACCOUNT_FIELDS[subtype];
+    const config = node?.config;
+    if (!spec || !config || typeof config !== 'object') continue;
+    const raw = config[spec.field];
+    if (raw === undefined || raw === null || raw === '') continue;
+    if (!isRefInChannelScope(raw, normalized[spec.channel])) {
+      removed.add(String(raw));
+      delete config[spec.field];
+    }
+  }
+  return [...removed];
+}
+
+/**
  * Đẩy mảng ref vào `params` và trả đoạn SQL `AND (...)` lọc theo `<alias>.channel` + `<alias>.external_channel_id`; chủ / super
  * admin (cả hai `null`) → chuỗi rỗng, không đẩy gì. Kênh ngoài phạm vi giao (Zalo OA, Facebook...) luôn qua.
  * `params` là mảng tham số ĐÃ có sẵn (đánh số tiếp từ độ dài hiện tại).

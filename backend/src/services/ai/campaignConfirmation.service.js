@@ -6,6 +6,8 @@ import campaignZaloSenderRepository from '../../repositories/campaign/campaignZa
 import chatbotTelegramRepository from '../../repositories/chatbot/chatbotTelegram.repository.js';
 import { isAdapterCampaignChannelEnabled } from '../campaign/campaignChannelFlags.util.js';
 import { resolveActorZaloAccessibleIds } from '../campaign/campaignZaloAccess.service.js';
+import { resolveActorChannelAccessibleRefs } from '../campaign/campaignChannelAccess.service.js';
+import { isRefInChannelScope, normalizeChannelAccessScope } from '../../utils/channelAccessScope.util.js';
 
 const EMAIL_TYPES = new Set(['send_email', 'email', 'email_send']);
 const ZALO_PERSONAL_TYPES = new Set(['send_zalo_personal', 'zalo_personal', 'zalo']);
@@ -168,6 +170,14 @@ class CampaignConfirmationService {
       zaloAccessiblePromise ||= resolveActorZaloAccessibleIds({ actorUserId: userId, ownerUserId: channelOwnerId });
       return zaloAccessiblePromise;
     };
+    // PLAN_GIAO_TK_TG_WA H4 — như Zalo: nhân viên chỉ gửi bằng tài khoản Telegram / WhatsApp ĐƯỢC GIAO. Tài khoản trong bản nháp chưa
+    // giao → `missing_sender` (chặn tạo), không tra DB (không lộ tồn tại / tên). null = chủ / gọi nội bộ → không lọc. Tính LƯỜI.
+    let channelAccessiblePromise = null;
+    const getChannelAccessibleRefs = () => {
+      channelAccessiblePromise ||= resolveActorChannelAccessibleRefs({ actorUserId: userId, ownerUserId: channelOwnerId })
+        .then((refs) => (refs == null ? null : normalizeChannelAccessScope(refs)));
+      return channelAccessiblePromise;
+    };
     const nodes = Array.isArray(script?.nodes) ? script.nodes : [];
     const issues = [];
     const resourceVersions = [];
@@ -301,7 +311,9 @@ class CampaignConfirmationService {
 
       if (channel === 'telegram') {
         const telegramId = asNumber(config?.telegramAccountId);
-        const account = telegramId ? await chatbotTelegramRepository.getAccountById(telegramId, { userId: channelOwnerId }) : null;
+        const channelScope = await getChannelAccessibleRefs();
+        const telegramAssigned = channelScope === null || (telegramId != null && isRefInChannelScope(telegramId, channelScope.telegram));
+        const account = telegramId && telegramAssigned ? await chatbotTelegramRepository.getAccountById(telegramId, { userId: channelOwnerId }) : null;
         if (!account || account.is_active === false) {
           addIssue({ code: 'missing_sender', nodeId: issueNodeId });
           return { id: null, label: null };
@@ -311,7 +323,9 @@ class CampaignConfirmationService {
 
       if (channel === 'whatsapp') {
         const sessionKey = String(config?.whatsappSessionKey ?? '').trim();
-        if (!WHATSAPP_SESSION_KEY_PATTERN.test(sessionKey) || !sessionKey.startsWith(`${Number(channelOwnerId)}-`)) {
+        const channelScope = await getChannelAccessibleRefs();
+        const sessionAssigned = channelScope === null || isRefInChannelScope(sessionKey, channelScope.whatsapp_baileys);
+        if (!sessionAssigned || !WHATSAPP_SESSION_KEY_PATTERN.test(sessionKey) || !sessionKey.startsWith(`${Number(channelOwnerId)}-`)) {
           addIssue({ code: 'missing_sender', nodeId: issueNodeId });
           return { id: null, label: null };
         }

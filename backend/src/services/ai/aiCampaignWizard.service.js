@@ -1258,6 +1258,23 @@ export function buildSheetProblemMessage(state, locale = 'vi') {
  * PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3 — nhân viên chưa được giao tài khoản Zalo nào: nói thẳng cần nhờ chủ giao (không
  * phải thẻ "mất kết nối" / quét QR như chủ chưa kết nối tài khoản nào).
  */
+/**
+ * PLAN_GIAO_TK_TG_WA H4 — nhân viên chưa được giao tài khoản Telegram / WhatsApp nào: câu rõ ràng (không bịa tài khoản khác, không
+ * nói "chưa kết nối" vì chủ có thể đã kết nối đủ).
+ */
+export function buildAdapterNotAssignedGuide(channel, locale = 'vi') {
+  const isEnglish = locale === 'en';
+  const name = channel === 'telegram' ? 'Telegram' : 'WhatsApp';
+  return {
+    type: 'text',
+    content: isEnglish
+      ? `You have not been assigned any ${name} account to send campaigns from. Ask the account owner to assign one in Settings › Employees › Channel accounts, then come back and tell me to continue.`
+      : `Bạn chưa được giao tài khoản ${name} nào để gửi chiến dịch. Bạn nhờ chủ tài khoản vào Cài đặt › Nhân viên › Tài khoản kênh để giao cho bạn, rồi quay lại nói mình tiếp tục nhé.`,
+    missing_fields: [],
+    data: { adapterNotAssigned: true, channel },
+  };
+}
+
 export function buildZaloNotAssignedGuide(locale = 'vi') {
   const isEnglish = locale === 'en';
   return {
@@ -1503,9 +1520,20 @@ function evaluateAdapterSenderGate(state, resources, locale) {
   const raw = state.channel === 'telegram' ? resources.telegramAccounts : resources.whatsappAccounts;
   const accounts = Array.isArray(raw) ? raw : [];
   const usable = accounts.filter((account) => account.usable !== false);
+  // H4: danh sách đã lọc theo việc giao (nhân viên). Rỗng = "chưa được giao gì", không phải "chưa kết nối".
+  const accessRestricted = resources?.adapterAccessRestricted === true;
+  if (accessRestricted && accounts.length === 0) {
+    return { gate: 'senderAccount', response: buildAdapterNotAssignedGuide(state.channel, locale) };
+  }
   if (usable.length === 0) {
     return { gate: 'senderAccount', response: buildAdapterChannelSetupGuide(state.channel, locale) };
   }
+  // H4: id sender đã chọn mà KHÔNG có trong danh sách được giao (marker giả / giữ từ lượt trước / chủ vừa gỡ giao) là CHƯA CHỌN —
+  // hỏi lại trong số tài khoản được giao, kể cả khi chỉ còn một (không âm thầm đổi sang tài khoản khác, id cũ không được qua cổng).
+  const staleChosen = accessRestricted
+    && state.senderAccountId != null && state.senderAccountId !== ''
+    && !accounts.some((account) => String(account.id) === String(state.senderAccountId));
+  if (staleChosen) return { gate: 'senderAccount', response: buildAdapterSenderQuestion(state.channel, usable, locale) };
   const chosen = state.senderAccountId
     ? usable.find((account) => String(account.id) === String(state.senderAccountId))
     : null;

@@ -3,6 +3,7 @@ import productRepository from '../../repositories/products/product.repository.js
 import aiCampaignRepository from '../../repositories/ai/aiCampaign.repository.js';
 import { getEnabledAdapterCampaignChannels, isChannelBlockedByPlan } from '../campaign/campaignChannelFlags.util.js';
 import { canonicalLandingPageSlug } from '../../utils/landingPageSlugCanonical.util.js';
+import { isRefInChannelScope, normalizeChannelAccessScope } from '../../utils/channelAccessScope.util.js';
 
 /**
  * Format user resources for AI campaign prompts.
@@ -15,16 +16,22 @@ class AiPromptResourcesService {
    * chạm DB/Baileys). `id` Telegram là số; `id` WhatsApp là MÃ PHIÊN chuỗi ("<idChủ>-<tên>"). `usable`: Telegram =
    * còn active; WhatsApp = phiên đang mở (status 'open').
    * @param {number} ownerId workspace owner
+   * @param {{ telegram?: string[]|null, whatsapp_baileys?: string[]|null }|null} [accessibleChannelRefs] PLAN_GIAO_TK_TG_WA H4 —
+   *   tài khoản nhân viên ĐƯỢC GIAO (`resolveActorChannelAccessibleRefs`); `null`/bỏ trống = chủ hoặc gọi nội bộ, không lọc; có phạm
+   *   vi mà thiếu khoá kênh = [] (hỏng thì chặn). Lọc NGAY TỪ KHI liệt kê nên tài khoản chưa giao không lọt vào prompt, wizard,
+   *   mặc định "tài khoản duy nhất" hay thẻ chọn.
    * @returns {Promise<{telegram: Array, whatsapp: Array}>}
    */
-  async getAdapterChannelAccounts(ownerId) {
+  async getAdapterChannelAccounts(ownerId, accessibleChannelRefs = null) {
     const result = { telegram: [], whatsapp: [] };
     if (!ownerId) return result;
+    const scope = accessibleChannelRefs == null ? null : normalizeChannelAccessScope(accessibleChannelRefs);
     const enabled = getEnabledAdapterCampaignChannels();
     if (enabled.includes('telegram')) {
       try {
         const { default: chatbotTelegramRepository } = await import('../../repositories/chatbot/chatbotTelegram.repository.js');
-        const rows = await chatbotTelegramRepository.listAccountsByUser(ownerId);
+        const rows = (await chatbotTelegramRepository.listAccountsByUser(ownerId))
+          .filter((r) => scope === null || isRefInChannelScope(r.id, scope.telegram));
         result.telegram = rows.map((r) => ({
           id: r.id,
           name: r.username || r.first_name || r.phone || `Telegram #${r.id}`,
@@ -40,6 +47,7 @@ class AiPromptResourcesService {
         const prefix = `${Number(ownerId)}-`;
         result.whatsapp = listSessions()
           .filter((session) => String(session.sessionKey || '').startsWith(prefix))
+          .filter((session) => scope === null || isRefInChannelScope(session.sessionKey, scope.whatsapp_baileys))
           .map((session) => ({
             id: session.sessionKey,
             name: session.userName || session.sessionKey,
@@ -84,23 +92,29 @@ class AiPromptResourcesService {
    * P8a — đoạn "tài khoản Telegram/WhatsApp" nối vào TÀI NGUYÊN CÓ SẴN của prompt chiến dịch. Rỗng khi cả hai cờ
    * tắt (prompt cũ giữ nguyên từng byte); khi có nội dung, bắt đầu bằng xuống dòng để nối thẳng vào cuối dòng trước.
    * @param {number} ownerId
+   * @param {{ telegram?: string[]|null, whatsapp_baileys?: string[]|null }|null} [accessibleChannelRefs] xem getAdapterChannelAccounts
    * @returns {Promise<string>}
    */
-  async getAdapterAccountsPromptBlock(ownerId) {
+  async getAdapterAccountsPromptBlock(ownerId, accessibleChannelRefs = null) {
     if (getEnabledAdapterCampaignChannels().length === 0) return '';
-    const accounts = await this.getAdapterChannelAccounts(ownerId);
+    const restricted = accessibleChannelRefs != null;
+    const accounts = await this.getAdapterChannelAccounts(ownerId, accessibleChannelRefs);
     const lines = [];
     if (getEnabledAdapterCampaignChannels().includes('telegram')) {
       lines.push('✈️ Tài khoản Telegram (telegramAccountId của send_telegram):');
       lines.push(accounts.telegram.length > 0
         ? accounts.telegram.map((a) => `  - ID: ${a.id} | ${a.name}${a.usable ? '' : ' (đã ngắt kết nối)'}`).join('\n')
-        : '  (chưa kết nối — đặt telegramAccountId: null)');
+        : (restricted
+          ? '  (chủ tài khoản chưa giao tài khoản Telegram nào cho người dùng này — đặt telegramAccountId: null, KHÔNG tự chọn tài khoản khác)'
+          : '  (chưa kết nối — đặt telegramAccountId: null)'));
     }
     if (getEnabledAdapterCampaignChannels().includes('whatsapp')) {
       lines.push('🟢 Tài khoản WhatsApp (whatsappSessionKey của send_whatsapp — dùng NGUYÊN mã phiên):');
       lines.push(accounts.whatsapp.length > 0
         ? accounts.whatsapp.map((a) => `  - Mã phiên: "${a.id}" | ${a.name}${a.usable ? '' : ' (chưa kết nối)'}`).join('\n')
-        : '  (chưa kết nối — đặt whatsappSessionKey: null)');
+        : (restricted
+          ? '  (chủ tài khoản chưa giao tài khoản WhatsApp nào cho người dùng này — đặt whatsappSessionKey: null, KHÔNG tự chọn tài khoản khác)'
+          : '  (chưa kết nối — đặt whatsappSessionKey: null)'));
     }
     lines.push('Nếu có NHIỀU tài khoản cùng kênh mà người dùng chưa nói dùng cái nào → HỎI lại, KHÔNG tự chọn.');
     return `\n${lines.join('\n')}`;

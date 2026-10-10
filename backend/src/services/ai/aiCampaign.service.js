@@ -73,6 +73,7 @@ import { fillContentSlots } from './campaignSlotFiller.service.js';
 import { isAdapterCampaignChannel } from '../campaign/campaignChannelFlags.util.js';
 import aiCampaignDraftService from './aiCampaignDraft.service.js';
 import { resolveActorZaloAccessibleIds } from '../campaign/campaignZaloAccess.service.js';
+import { resolveActorChannelAccessibleRefs } from '../campaign/campaignChannelAccess.service.js';
 import { resolveLandingAudienceChoice } from '../../utils/campaignLandingAudience.util.js';
 import { UNTRUSTED_CONTENT_RULE } from '../../utils/untrustedContent.util.js';
 
@@ -261,15 +262,18 @@ class AiCampaignService {
    * @param {number[]|null} [zaloAccessibleIds] tài khoản Zalo nhân viên ĐƯỢC GIAO (null = chủ, không lọc). `zaloAccessRestricted`
    *   báo cho cổng wizard biết danh sách đã bị lọc: id sender đã chọn mà không nằm trong danh sách này là KHÔNG hợp lệ (cổng
    *   không được coi "danh sách rỗng" là "id nào cũng hợp lệ" như với chủ chưa kết nối tài khoản nào).
+   * @param {{ telegram?: string[]|null, whatsapp_baileys?: string[]|null }|null} [channelAccessibleRefs] PLAN_GIAO_TK_TG_WA H4 —
+   *   tài khoản Telegram / WhatsApp nhân viên ĐƯỢC GIAO (null = chủ, không lọc). `adapterAccessRestricted` báo cho cổng wizard biết
+   *   danh sách đã bị lọc (rỗng = "chưa được giao", id sender đã chọn mà không có trong danh sách là CHƯA CHỌN).
    */
-  async _getWizardResources(userId, zaloAccessibleIds = null) {
-    if (!userId) return { zaloAccounts: [], emailSenders: [], courses: [], telegramAccounts: [], whatsappAccounts: [], zaloAccessRestricted: false };
+  async _getWizardResources(userId, zaloAccessibleIds = null, channelAccessibleRefs = null) {
+    if (!userId) return { zaloAccounts: [], emailSenders: [], courses: [], telegramAccounts: [], whatsappAccounts: [], zaloAccessRestricted: false, adapterAccessRestricted: false };
     const [zaloAccounts, emailSenders, courses, adapterAccounts] = await Promise.all([
       aiPromptResources.getZaloAccountsFull(userId, zaloAccessibleIds),
       aiPromptResources.getActiveEmailSenders(userId),
       aiPromptResources.getCourses(userId),
       // P8a — rỗng khi cờ Telegram/WhatsApp tắt (không chạm DB/Baileys).
-      aiPromptResources.getAdapterChannelAccounts(userId),
+      aiPromptResources.getAdapterChannelAccounts(userId, channelAccessibleRefs),
     ]);
     return {
       zaloAccounts,
@@ -278,6 +282,7 @@ class AiCampaignService {
       telegramAccounts: adapterAccounts.telegram,
       whatsappAccounts: adapterAccounts.whatsapp,
       zaloAccessRestricted: Array.isArray(zaloAccessibleIds),
+      adapterAccessRestricted: channelAccessibleRefs != null,
     };
   }
 
@@ -286,8 +291,9 @@ class AiCampaignService {
    * chọn); nhiều hơn/không có thì trả null (wizard nhả cho LLM hỏi / hướng dẫn kết nối).
    * @returns {Promise<string|number|null>}
    */
-  async _resolveOnlyAdapterAccountId(ownerId, channel) {
-    const accounts = await aiPromptResources.getAdapterChannelAccounts(ownerId);
+  async _resolveOnlyAdapterAccountId(ownerId, channel, channelAccessibleRefs = null) {
+    // H4: nhân viên chỉ được "tài khoản duy nhất" trong số tài khoản ĐƯỢC GIAO — không bao giờ là tài khoản chưa giao của chủ.
+    const accounts = await aiPromptResources.getAdapterChannelAccounts(ownerId, channelAccessibleRefs);
     const usable = (channel === 'telegram' ? accounts.telegram : accounts.whatsapp).filter((a) => a.usable);
     return usable.length === 1 ? usable[0].id : null;
   }
@@ -428,7 +434,8 @@ QUY TẮC:
     // PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3 — nhân viên (userId ≠ chủ) chỉ thấy / được gợi ý tài khoản Zalo ĐƯỢC GIAO;
     // chủ → null. Một lần cho cả lượt: danh sách cho wizard, ngữ cảnh prompt và tài khoản mặc định đều theo đúng danh sách này.
     const zaloAccessibleIds = await resolveActorZaloAccessibleIds({ actorUserId: userId, ownerUserId: ownerId });
-    const wizardResources = await this._getWizardResources(ownerId, zaloAccessibleIds);
+    const channelAccessibleRefs = await resolveActorChannelAccessibleRefs({ actorUserId: userId, ownerUserId: ownerId });
+    const wizardResources = await this._getWizardResources(ownerId, zaloAccessibleIds, channelAccessibleRefs);
     const lastUserText = lastUserMessageContent(history);
 
     // Wizard state: merge bản persist trong DB (sống sót qua reload) với bản derive
@@ -990,7 +997,7 @@ ${zaloTemplates.length > 0 ? zaloTemplates.map(t => `  - ID: ${t.id} | "${t.name
 
 🔑 Zalo Accounts (zaloAccountId):
 ${zaloAccounts.length > 0 ? zaloAccounts.map(a => `  - ID: ${a.id} | ${a.displayName}`).join('\n') : '  (chưa kết nối — đặt null)'}
-Tài khoản Zalo mặc định: ${firstZaloAccountId ?? 'null'}${await aiPromptResources.getAdapterAccountsPromptBlock(ownerId)}
+Tài khoản Zalo mặc định: ${firstZaloAccountId ?? 'null'}${await aiPromptResources.getAdapterAccountsPromptBlock(ownerId, channelAccessibleRefs)}
 
 ${zaloGroups.length > 0 ? `👥 Nhóm Zalo:\n${zaloGroups.map(g => `  - "${g.groupName}"`).join('\n')}` : ''}
 
@@ -1821,7 +1828,7 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
           // P8a — kênh adapter chưa có tài khoản được chốt mà workspace chỉ có ĐÚNG 1 tài khoản dùng được → dùng nó.
           let gateStateForIntent = gateState;
           if (isAdapterCampaignChannel(gateState?.channel) && gateState?.senderAccountId == null) {
-            const onlyAccountId = await this._resolveOnlyAdapterAccountId(ownerId, gateState.channel);
+            const onlyAccountId = await this._resolveOnlyAdapterAccountId(ownerId, gateState.channel, channelAccessibleRefs);
             if (onlyAccountId != null) gateStateForIntent = { ...gateState, senderAccountId: onlyAccountId };
           }
           const { intent: campaignIntent } = deriveIntent(gateStateForIntent, briefForState || null, { files });
