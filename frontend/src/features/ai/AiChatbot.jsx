@@ -2387,7 +2387,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         if (slot.sendTime) slotPromptParts.push(`Khung giờ gửi: ${slot.sendTime}`);
         const slotPrompt = slotPromptParts.filter(Boolean).join(' ');
 
-        const slotUserMsg = { role: 'user', content: slotPrompt };
+        const slotUserMsg = { role: 'user', content: slotPrompt, data: { internalPrompt: 'plan_template', planSlotKey: slotKey } };
         workingHistory = [...workingHistory, slotUserMsg];
         // Gửi slotKey TƯỜNG MINH. Trước đây backend regex lại `slotPrompt` để lần ra
         // "ngày N, slot M" — biến câu chữ trên thành thứ gánh dữ liệu, sửa lời văn là

@@ -165,13 +165,20 @@ export async function writeWizardState(sessionId, userId, state) {
   return rows[0]?.wizard_state ?? null;
 }
 
+// `data` của tin user: tệp đính kèm + cờ tường minh cho tin máy sinh (vd `{ internalPrompt: 'plan_template', planSlotKey }`),
+// để bộ lọc lịch sử không phải dò chữ. null nếu không có gì để lưu.
+function buildUserMessageData(userFiles, userMeta) {
+  const data = {};
+  if (Array.isArray(userFiles) && userFiles.length) data.files = userFiles;
+  if (userMeta && typeof userMeta === 'object') Object.assign(data, userMeta);
+  return Object.keys(data).length ? JSON.stringify(data) : null;
+}
+
 // Lưu cặp user + assistant message và cập nhật updated_at của session.
 // INSERT được gate bằng ownership (WHERE EXISTS) — không ghi được vào session của
 // người khác kể cả khi sessionId bị giả mạo. Trả true nếu đã ghi.
-export async function saveMessages(sessionId, userId, userContent, assistantMsg, userFiles = []) {
-  const userData = Array.isArray(userFiles) && userFiles.length
-    ? JSON.stringify({ files: userFiles })
-    : null;
+export async function saveMessages(sessionId, userId, userContent, assistantMsg, userFiles = [], userMeta = null) {
+  const userData = buildUserMessageData(userFiles, userMeta);
   const { rowCount } = await db.query(
     `INSERT INTO ai_chat_messages (session_id, role, content, type, data, missing_fields)
      SELECT * FROM (VALUES
@@ -201,10 +208,8 @@ export async function saveMessages(sessionId, userId, userContent, assistantMsg,
 // Cùng SQL với saveMessages, thêm RETURNING để biết id tin vừa lưu (thẻ landing cần id để vòng tự
 // sửa đếm trần lượt theo từng tin). saveMessages giữ nguyên trả boolean — nhiều nơi đang dùng.
 // Trả { userMessageId, assistantMessageId } hoặc null nếu không ghi được.
-export async function saveMessagesReturningIds(sessionId, userId, userContent, assistantMsg, userFiles = []) {
-  const userData = Array.isArray(userFiles) && userFiles.length
-    ? JSON.stringify({ files: userFiles })
-    : null;
+export async function saveMessagesReturningIds(sessionId, userId, userContent, assistantMsg, userFiles = [], userMeta = null) {
+  const userData = buildUserMessageData(userFiles, userMeta);
   const { rowCount, rows } = await db.query(
     `INSERT INTO ai_chat_messages (session_id, role, content, type, data, missing_fields)
      SELECT * FROM (VALUES

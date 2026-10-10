@@ -226,7 +226,7 @@ describe('ai.controller', () => {
     // saveMessages nay nhận tham số thứ 5 (safeFiles) — request này không có tệp → [].
     expect(saveMessages).toHaveBeenCalledWith(123, 42, expect.any(String), expect.not.objectContaining({
       wizardShortCircuit: true,
-    }), []);
+    }), [], null);
     expect(res.json).toHaveBeenCalledWith({
       success: true,
       data: expect.not.objectContaining({ wizardShortCircuit: true }),
@@ -853,6 +853,28 @@ describe('ai.controller', () => {
     expect(processSmartChat).toHaveBeenCalledWith(
       expect.objectContaining({ planSlotKey: 'd2-s1' })
     );
+  });
+
+  it('lượt có planSlotKey: lưu cờ internalPrompt vào data của tin user; không cờ thì null', async () => {
+    processSmartChat.mockResolvedValue({ type: 'template_draft', content: 'ok', data: {} });
+    const make = (planSlotKey) => ({
+      body: {
+        history: [{ role: 'user', content: 'Tạo chi tiết template cho ngày 2, slot 1 (Email).' }],
+        locale: 'vi',
+        sessionId: 5,
+        ...(planSlotKey ? { planSlotKey } : {}),
+      },
+      user: { id: 9, role: 'user' },
+    });
+    saveMessages.mockClear();
+    await aiController.chat(make('d2-s1'), makeRes());
+    expect(saveMessages).toHaveBeenCalledWith(
+      5, 9, expect.any(String), expect.any(Object), [],
+      { internalPrompt: 'plan_template', planSlotKey: 'd2-s1' }
+    );
+    saveMessages.mockClear();
+    await aiController.chat(make(null), makeRes());
+    expect(saveMessages).toHaveBeenCalledWith(5, 9, expect.any(String), expect.any(Object), [], null);
   });
 
   it('KHÔNG nhận planSlotKey sai khuôn — client không nhét được chuỗi tuỳ ý vào DB', async () => {
@@ -1948,7 +1970,7 @@ describe('ai.controller — nhân viên (G3a)', () => {
       }, makeRes());
 
       expect(createSession).toHaveBeenCalledWith(EMPLOYEE, expect.any(String));
-      expect(saveMessages).toHaveBeenCalledWith(77, EMPLOYEE, expect.any(String), expect.any(Object), []);
+      expect(saveMessages).toHaveBeenCalledWith(77, EMPLOYEE, expect.any(String), expect.any(Object), [], null);
     });
 
     it('chat(): repo báo không lưu được tin (saveMessages=false) → log cảnh báo, lượt chat vẫn trả lời', async () => {

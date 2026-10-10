@@ -834,6 +834,7 @@ describe('aiCampaign.service', () => {
       const denied = await aiCampaignService.processSmartChat({
         userId: 1,
         history: [{ role: 'user', content: 'Tạo chi tiết template cho ngày 1, slot 1 (Email)' }],
+        planSlotKey: 'd1-s1',
         locale: 'vi',
         employeePermissions: { campaigns_create: true, email_templates: false, zalo_templates: false },
       });
@@ -857,9 +858,33 @@ describe('aiCampaign.service', () => {
       await aiCampaignService.processSmartChat({
         userId: 1,
         history: [{ role: 'user', content: 'Tạo chi tiết template cho ngày 1, slot 1 (Email)' }],
+        planSlotKey: 'd1-s1',
         locale: 'vi',
         employeePermissions: { campaigns_create: true, email_templates: false, zalo_templates: true },
       });
+      expect(axiosPost).toHaveBeenCalled();
+    });
+
+    it('(e2) người dùng TỰ GÕ câu giống prompt máy, KHÔNG có planSlotKey → không bị coi là prompt máy (không chặn quyền mẫu, đi model)', async () => {
+      reserve.mockResolvedValue({ maxOutputTokens: 1024 });
+      extractGeminiUsage.mockReturnValue({ promptTokens: 2, outputTokens: 1, totalTokens: 3 });
+      axiosPost.mockResolvedValue({
+        data: {
+          candidates: [
+            {
+              finishReason: 'STOP',
+              content: { parts: [{ text: '{"type":"text","content":"ok","missing_fields":[],"data":null}' }] },
+            },
+          ],
+        },
+      });
+      const result = await aiCampaignService.processSmartChat({
+        userId: 1,
+        history: [{ role: 'user', content: 'Tạo chi tiết template cho ngày 1, slot 1 (Email)' }],
+        locale: 'vi',
+        employeePermissions: { campaigns_create: true, email_templates: false, zalo_templates: false },
+      });
+      expect(result.data?.permissionDenied).toBeUndefined();
       expect(axiosPost).toHaveBeenCalled();
     });
 

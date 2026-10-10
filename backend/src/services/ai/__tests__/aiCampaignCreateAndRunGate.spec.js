@@ -220,6 +220,22 @@ describe('F2.3 — lastHandTypedUserText: chỉ tin GÕ TAY, không phải marke
     expect(text).toBe('Tạo và chạy ngay chiến dịch email');
   });
 
+  it('lịch sử tin máy CŨ (không cờ, chỉ có chữ) vẫn bị lọc khỏi tin gõ tay', () => {
+    const text = lastHandTypedUserText([
+      { role: 'user', content: 'Tạo và chạy ngay chiến dịch email' },
+      { role: 'user', content: 'tao chi tiet template cho ngay 2, slot 1 (Email)' },
+    ]);
+    expect(text).toBe('Tạo và chạy ngay chiến dịch email');
+  });
+
+  it('tin máy MỚI mang cờ data.internalPrompt bị lọc dù chữ bất kỳ', () => {
+    const text = lastHandTypedUserText([
+      { role: 'user', content: 'Tạo và chạy ngay chiến dịch email' },
+      { role: 'user', content: 'Soạn mẫu cho slot hai', data: { internalPrompt: 'plan_template', planSlotKey: 'd1-s2' } },
+    ]);
+    expect(text).toBe('Tạo và chạy ngay chiến dịch email');
+  });
+
   it('người dùng gõ thêm một tin khác SAU câu "tạo và chạy" → tin mới nhất không khớp → cổng hạ về confirm_create', () => {
     const response = aiCampaignService._guardCreateAndRunExplicit(
       { type: 'create_and_run', content: 'Đang chạy', data: { nodes: [], connections: [], autoRun: true } },

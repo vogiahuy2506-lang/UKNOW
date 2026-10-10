@@ -92,6 +92,16 @@ export const EXPLICIT_CREATE_AND_RUN_RE = /tạo\s*và\s*chạy|tao\s*va\s*chay|
  * Tệp đính kèm / nội dung Google Docs-Sheet đi vào Gemini bằng `parts`, KHÔNG nằm trong `content` của lịch sử nên không bao giờ
  * lọt vào đây — một câu "tạo và chạy" chèn trong PDF/Docs không thể tự bật chế độ chạy ngay.
  */
+/**
+ * Bộ lọc LỊCH SỬ: tin user là prompt máy "soạn template cho slot kế hoạch"? Ưu tiên cờ lưu cùng tin
+ * (`data.internalPrompt === 'plan_template'`, ghi từ PR-B); dò chữ CHỈ còn ở đây, để tương thích tin cũ đã lưu không có cờ.
+ * Lượt HIỆN TẠI không dùng hàm này — quyết định theo `planSlotKey` do client gửi tường minh.
+ */
+export function isMachinePlanTemplateMessage(message) {
+  if (message?.data && typeof message.data === 'object' && message.data.internalPrompt === 'plan_template') return true;
+  return isPlanTemplateDraftRequest(String(message?.content || ''));
+}
+
 export function lastHandTypedUserText(history = []) {
   const messages = Array.isArray(history) ? history : [];
   for (let index = messages.length - 1; index >= 0; index -= 1) {
@@ -99,7 +109,7 @@ export function lastHandTypedUserText(history = []) {
     if (message?.role !== 'user') continue;
     const content = String(message?.content || '');
     if (!content.trim()) continue;
-    if (isWizardMarkerMessage(content) || isPlanTemplateDraftRequest(content)) continue;
+    if (isWizardMarkerMessage(content) || isMachinePlanTemplateMessage(message)) continue;
     return content;
   }
   return '';
@@ -276,9 +286,8 @@ class AiCampaignService {
   // mergedGates: state đã merge persisted + derived (bước wizard-state DB); nếu không
   // truyền thì tự derive từ history — tương đương behavior cũ.
   // Return { response, gateAsked } để caller persist meta dead-end.
-  _guardWizardGates(response, history = [], resources = {}, locale = 'vi', mergedGates = null) {
-    const lastUserText = lastUserMessageContent(history);
-    if (isPlanTemplateDraftRequest(lastUserText)) return { response, gateAsked: null };
+  _guardWizardGates(response, history = [], resources = {}, locale = 'vi', mergedGates = null, isPlanTemplateTurn = false) {
+    if (isPlanTemplateTurn) return { response, gateAsked: null };
     if (!shouldGuardCampaignResponse(response)) return { response, gateAsked: null };
 
     const state = { ...(mergedGates || extractWizardState(history)) };
@@ -477,7 +486,7 @@ QUY TẮC:
           };
         }
         if (
-          isPlanTemplateDraftRequest(lastUserText)
+          planSlotKey
           && employeePermissions.email_templates !== true
           && employeePermissions.zalo_templates !== true
         ) {
@@ -828,7 +837,7 @@ QUY TẮC:
       gatesForPersist.isCampaignFlow
       && isPlanCancelText(lastUserText)
       && !isWizardMarkerMessage(lastUserText)
-      && !isPlanTemplateDraftRequest(lastUserText)
+      && !planSlotKey
     ) {
       const empty = createEmptyWizardState();
       briefForState = createEmptyCampaignBrief(defaultContentLocale);
@@ -855,7 +864,7 @@ QUY TẮC:
     // Guard: if this turn is landing-page-oriented, skip the campaign wizard gate entirely.
     // The AI will produce ask_landing_details or landing_page instead.
     if (gatesForPersist.isCampaignFlow
-      && !isPlanTemplateDraftRequest(lastUserText)
+      && !planSlotKey
       && !isLandingOrientedTurn(history)) {
       const nextGate = evaluateNextGate(gateState, gateResources, locale);
       if (nextGate?.response) {
@@ -1614,7 +1623,8 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
       history,
       gateResources,
       locale,
-      gateState
+      gateState,
+      Boolean(planSlotKey)
     );
     let finalResponse = guarded.response;
 
@@ -1636,14 +1646,8 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
      */
     if (finalResponse?.type === 'template_draft' && finalResponse.data) {
       if (!finalResponse.data.planSlotKey) {
-        if (planSlotKey) {
-          finalResponse.data.planSlotKey = planSlotKey;
-        } else {
-          const slotMatch = String(lastUserText).match(/ngày\s*(\d+)[,\s]+slot\s*(\d+)/i);
-          if (slotMatch) {
-            finalResponse.data.planSlotKey = `d${slotMatch[1]}-s${slotMatch[2]}`;
-          }
-        }
+        // Chỉ nhận cờ tường minh từ client; không suy ngược từ chữ của prompt nữa.
+        if (planSlotKey) finalResponse.data.planSlotKey = planSlotKey;
       }
     }
 

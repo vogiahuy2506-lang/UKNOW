@@ -449,6 +449,10 @@ class AiController {
       try {
         const lastUserMsg = history[history.length - 1];
         const userContent = lastUserMsg?.content ?? '';
+        // Tin máy sinh (soạn template theo slot) mang cờ tường minh xuống `data` của tin user: lần sau bộ lọc lịch sử đọc cờ thay vì dò chữ.
+        const userMsgMeta = sanitizedPlanSlotKey
+          ? { internalPrompt: 'plan_template', planSlotKey: sanitizedPlanSlotKey }
+          : null;
 
         if (!finalSessionId) {
           const title = userContent.slice(0, 80).trim() || 'Cuộc trò chuyện mới';
@@ -531,7 +535,8 @@ class AiController {
             req.user.id,
             userContent,
             publicResponse,
-            safeFiles
+            safeFiles,
+            userMsgMeta
           );
           if (saved?.assistantMessageId) {
             savedAssistantMessageId = saved.assistantMessageId;
@@ -549,7 +554,8 @@ class AiController {
             req.user.id,
             userContent,
             responseToPersist,
-            safeFiles
+            safeFiles,
+            userMsgMeta
           );
           if (savedOk === false) {
             console.warn(`[AI] Không lưu được tin vào phiên ${finalSessionId}: phiên không tồn tại hoặc không thuộc user ${req.user.id}`);
