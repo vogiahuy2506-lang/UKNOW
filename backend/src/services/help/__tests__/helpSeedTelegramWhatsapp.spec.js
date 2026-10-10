@@ -67,7 +67,7 @@ describe('bài hướng dẫn Telegram/WhatsApp (W7c)', () => {
     const md = bySlug('campaign-create').body_md;
     expect(md).not.toContain('chưa dựng hộ');
     expect(md).toContain('Trợ lý AI dựng hộ được');
-    expect(md).toContain('một tin, gửi ngay');
+    expect(md).toContain('chuỗi tối đa 5 bước');
     expect(md).toContain('Giới hạn & tốc độ gửi chiến dịch');
     // 03/10/2026 (PR-T): ô đổi nhãn "…(dùng chung với Zalo)" → "…(dùng chung Zalo, Telegram, WhatsApp)".
     expect(md).toContain('Mẫu tin nhắn (dùng chung Zalo, Telegram, WhatsApp)');
