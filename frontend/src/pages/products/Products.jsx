@@ -208,7 +208,7 @@ function ProductDetailModal({ product, funnel, canViewFunnel, onClose, onEdit })
     try {
       await navigator.clipboard.writeText(product.productUrl);
       setCopiedLink(true);
-      toast.success(t('products.copiedProductUrl') || 'Đã sao chép liên kết sản phẩm');
+      toast.success(t('products.copiedProductUrl'));
       setTimeout(() => setCopiedLink(false), 2000);
     } catch {
       toast.error('Không thể sao chép liên kết');
@@ -231,15 +231,15 @@ function ProductDetailModal({ product, funnel, canViewFunnel, onClose, onEdit })
         aria-hidden="true"
         tabIndex={-1}
       />
-      <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-200/80 z-10 animate-in fade-in zoom-in-95 duration-150">
+      <div className="relative bg-white dark:bg-dk-surface rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-200/80 dark:border-dk-border z-10 animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
-        <div className="px-6 py-4.5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-50/80 via-white to-orange-50/20 shrink-0">
+        <div className="px-6 py-4.5 border-b border-slate-100 dark:border-dk-border flex items-center justify-between bg-gradient-to-r from-slate-50/80 via-white to-orange-50/20 dark:bg-none dark:bg-dk-surface shrink-0">
           <div className="flex items-center gap-3.5 min-w-0">
             {product.thumbnailUrl ? (
               <img
                 src={product.thumbnailUrl}
                 alt={product.productName}
-                className="w-11 h-11 rounded-2xl object-cover border border-slate-200 shadow-xs shrink-0"
+                className="w-11 h-11 rounded-2xl object-cover border border-slate-200 dark:border-dk-border shadow-xs shrink-0"
               />
             ) : (
               <div className="flex items-center justify-center w-11 h-11 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20 shrink-0">
@@ -248,29 +248,29 @@ function ProductDetailModal({ product, funnel, canViewFunnel, onClose, onEdit })
             )}
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-lg font-bold text-slate-900 truncate">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-dk-text truncate">
                   {product.productName}
                 </h3>
                 <StatusBadge status={product.status} kind={product.kind} />
                 {product.kind === 'event' && (
-                  <span className="badge bg-purple-100 text-purple-700 text-xs">
+                  <span className="badge bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 text-xs">
                     {t('products.kindEventBadge')}
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+              <p className="text-xs text-slate-500 dark:text-dk-text2 mt-0.5 flex items-center gap-2 flex-wrap">
                 <span>{t('products.productDetail')}</span>
                 {product.productCode && (
                   <>
-                    <span className="text-slate-300">·</span>
-                    <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-[11px] text-slate-600">
+                    <span className="text-slate-300 dark:text-dk-muted">·</span>
+                    <span className="font-mono bg-slate-100 dark:bg-dk-raised px-1.5 py-0.5 rounded text-[11px] text-slate-600 dark:text-dk-text2">
                       {product.productCode}
                     </span>
                   </>
                 )}
                 {product.category && (
                   <>
-                    <span className="text-slate-300">·</span>
+                    <span className="text-slate-300 dark:text-dk-muted">·</span>
                     <span>{product.category}</span>
                   </>
                 )}
@@ -280,7 +280,7 @@ function ProductDetailModal({ product, funnel, canViewFunnel, onClose, onEdit })
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            className="rounded-xl p-2 text-slate-400 dark:text-dk-muted hover:text-slate-700 dark:hover:text-dk-text hover:bg-slate-100 dark:hover:bg-dk-raised transition-colors"
             aria-label={t('common.close')}
           >
             <HiOutlineX className="w-5 h-5" />
@@ -293,19 +293,19 @@ function ProductDetailModal({ product, funnel, canViewFunnel, onClose, onEdit })
             {/* Cột trái (5 cols) - Ảnh & Link & Giá */}
             <div className="lg:col-span-5 space-y-4">
               {/* Card Ảnh sản phẩm */}
-              <div className="bg-slate-50/70 border border-slate-200/80 rounded-2xl p-4 space-y-3">
+              <div className="bg-slate-50/70 dark:bg-dk-raised border border-slate-200/80 dark:border-dk-border rounded-2xl p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  <span className="text-xs font-bold text-slate-700 dark:text-dk-text uppercase tracking-wider">
                     {t('products.thumbnailPreview')}
                   </span>
                   {product.thumbnailUrl && (
-                    <span className="text-[11px] font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800/60">
                       Đã có ảnh
                     </span>
                   )}
                 </div>
                 {product.thumbnailUrl ? (
-                  <div className="rounded-xl overflow-hidden border border-slate-200 bg-white shadow-2xs">
+                  <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset shadow-2xs">
                     <img
                       src={product.thumbnailUrl}
                       alt={product.productName}
@@ -313,13 +313,13 @@ function ProductDetailModal({ product, funnel, canViewFunnel, onClose, onEdit })
                     />
                   </div>
                 ) : (
-                  <div className="w-full h-40 rounded-xl border border-dashed border-slate-200 bg-white flex flex-col items-center justify-center p-4 text-center">
-                    <HiOutlinePhotograph className="w-8 h-8 text-slate-300 mb-2" />
-                    <p className="text-xs font-medium text-slate-500">{t('products.noThumbnail') || 'Chưa có ảnh sản phẩm'}</p>
+                  <div className="w-full h-40 rounded-xl border border-dashed border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset flex flex-col items-center justify-center p-4 text-center">
+                    <HiOutlinePhotograph className="w-8 h-8 text-slate-300 dark:text-dk-muted mb-2" />
+                    <p className="text-xs font-medium text-slate-500 dark:text-dk-text2">{t('products.noThumbnail')}</p>
                     <button
                       type="button"
                       onClick={() => { onClose(); onEdit(product); }}
-                      className="mt-2 text-xs font-semibold text-orange-600 hover:text-orange-700 hover:underline"
+                      className="mt-2 text-xs font-semibold text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 hover:underline"
                     >
                       + {t('products.uploadImage')}
                     </button>
@@ -328,50 +328,50 @@ function ProductDetailModal({ product, funnel, canViewFunnel, onClose, onEdit })
               </div>
 
               {/* Card Link URL sản phẩm */}
-              <div className="bg-slate-50/70 border border-slate-200/80 rounded-2xl p-4 space-y-2.5">
-                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+              <div className="bg-slate-50/70 dark:bg-dk-raised border border-slate-200/80 dark:border-dk-border rounded-2xl p-4 space-y-2.5">
+                <span className="text-xs font-bold text-slate-700 dark:text-dk-text uppercase tracking-wider block">
                   {t('products.productUrl')}
                 </span>
                 {product.productUrl ? (
-                  <div className="bg-white rounded-xl border border-slate-200 p-3 space-y-2">
-                    <div className="flex items-center gap-2 text-xs text-slate-700 break-all">
+                  <div className="bg-white dark:bg-dk-inset rounded-xl border border-slate-200 dark:border-dk-border p-3 space-y-2">
+                    <div className="flex items-center gap-2 text-xs text-slate-700 dark:text-dk-text break-all">
                       <HiOutlineLink className="w-4 h-4 text-orange-500 shrink-0" />
                       <a
                         href={product.productUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="hover:underline text-primary-600 font-medium"
+                        className="hover:underline text-primary-600 dark:text-primary-400 font-medium"
                       >
                         {product.productUrl}
                       </a>
                     </div>
-                    <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                    <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-dk-border">
                       <a
                         href={product.productUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-slate-900 py-1 px-2.5 rounded-lg hover:bg-slate-100 transition-colors"
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-dk-text2 hover:text-slate-900 dark:hover:text-dk-text py-1 px-2.5 rounded-lg hover:bg-slate-100 dark:hover:bg-dk-raised transition-colors"
                       >
                         <HiOutlineExternalLink className="w-3.5 h-3.5" />
-                        <span>{t('products.openProductUrl') || 'Mở liên kết'}</span>
+                        <span>{t('products.openProductUrl')}</span>
                       </a>
                       <button
                         type="button"
                         onClick={handleCopyLink}
-                        className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-slate-900 py-1 px-2.5 rounded-lg hover:bg-slate-100 transition-colors"
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-dk-text2 hover:text-slate-900 dark:hover:text-dk-text py-1 px-2.5 rounded-lg hover:bg-slate-100 dark:hover:bg-dk-raised transition-colors"
                       >
-                        {copiedLink ? <HiOutlineCheck className="w-3.5 h-3.5 text-emerald-600" /> : <HiOutlineClipboardCopy className="w-3.5 h-3.5" />}
-                        <span>{copiedLink ? 'Đã sao chép' : (t('products.copyProductUrl') || 'Sao chép')}</span>
+                        {copiedLink ? <HiOutlineCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> : <HiOutlineClipboardCopy className="w-3.5 h-3.5" />}
+                        <span>{copiedLink ? 'Đã sao chép' : t('products.copyProductUrl')}</span>
                       </button>
                     </div>
                   </div>
                 ) : (
-                  <div className="bg-white rounded-xl border border-dashed border-slate-200 p-3 text-center">
-                    <p className="text-xs text-slate-500">{t('products.noProductUrl') || 'Chưa thiết lập liên kết'}</p>
+                  <div className="bg-white dark:bg-dk-inset rounded-xl border border-dashed border-slate-200 dark:border-dk-border p-3 text-center">
+                    <p className="text-xs text-slate-500 dark:text-dk-text2">{t('products.noProductUrl')}</p>
                     <button
                       type="button"
                       onClick={() => { onClose(); onEdit(product); }}
-                      className="mt-1 text-xs font-semibold text-orange-600 hover:text-orange-700 hover:underline"
+                      className="mt-1 text-xs font-semibold text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 hover:underline"
                     >
                       + Thiết lập URL
                     </button>
@@ -380,29 +380,29 @@ function ProductDetailModal({ product, funnel, canViewFunnel, onClose, onEdit })
               </div>
 
               {/* Card Giá bán & Thông tin gốc */}
-              <div className="bg-slate-50/70 border border-slate-200/80 rounded-2xl p-4 space-y-2.5">
-                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+              <div className="bg-slate-50/70 dark:bg-dk-raised border border-slate-200/80 dark:border-dk-border rounded-2xl p-4 space-y-2.5">
+                <span className="text-xs font-bold text-slate-700 dark:text-dk-text uppercase tracking-wider block">
                   Giá & Phân loại
                 </span>
-                <div className="bg-white rounded-xl border border-slate-200 p-3 space-y-2 text-sm">
+                <div className="bg-white dark:bg-dk-inset rounded-xl border border-slate-200 dark:border-dk-border p-3 space-y-2 text-sm">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-slate-500">Giá hiển thị:</span>
-                    <span className="font-bold text-slate-900">
+                    <span className="text-xs text-slate-500 dark:text-dk-text2">Giá hiển thị:</span>
+                    <span className="font-bold text-slate-900 dark:text-dk-text">
                       {product.price || (product.kind === 'event' ? t('products.priceFreePlaceholder') : '—')}
                     </span>
                   </div>
                   {product.priceAmount != null && (
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-500">Số tiền chuẩn:</span>
-                      <span className="font-semibold text-emerald-700 font-mono text-xs bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200/60">
+                      <span className="text-xs text-slate-500 dark:text-dk-text2">Số tiền chuẩn:</span>
+                      <span className="font-semibold text-emerald-700 dark:text-emerald-300 font-mono text-xs bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-200/60 dark:border-emerald-800/60">
                         {formatMoney(product.priceAmount)}
                       </span>
                     </div>
                   )}
                   {product.originalPrice && (
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-500">Giá gốc:</span>
-                      <span className="line-through text-xs text-slate-400">{product.originalPrice}</span>
+                      <span className="text-xs text-slate-500 dark:text-dk-text2">Giá gốc:</span>
+                      <span className="line-through text-xs text-slate-400 dark:text-dk-muted">{product.originalPrice}</span>
                     </div>
                   )}
                 </div>
@@ -413,17 +413,17 @@ function ProductDetailModal({ product, funnel, canViewFunnel, onClose, onEdit })
             <div className="lg:col-span-7 space-y-4">
               {/* Phễu chuyển đổi */}
               {canViewFunnel && (
-                <div className="bg-slate-50/70 border border-slate-200/80 rounded-2xl p-4.5 space-y-3.5">
+                <div className="bg-slate-50/70 dark:bg-dk-raised border border-slate-200/80 dark:border-dk-border rounded-2xl p-4.5 space-y-3.5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <HiOutlineTrendingUp className="w-4 h-4 text-orange-600" />
-                      <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                        {t('products.salesPerformance') || 'Hiệu quả kinh doanh & Phễu chuyển đổi'}
+                      <HiOutlineTrendingUp className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+                      <span className="text-xs font-bold text-slate-700 dark:text-dk-text uppercase tracking-wider">
+                        {t('products.salesPerformance')}
                       </span>
                     </div>
-                    <div className="text-right">
-                      <span className="text-[11px] text-slate-500 uppercase font-semibold mr-1.5">Doanh thu:</span>
-                      <span className="text-base font-bold text-emerald-600">
+                    <div className="text-right shrink-0 whitespace-nowrap">
+                      <span className="text-[11px] text-slate-500 dark:text-dk-text2 uppercase font-semibold mr-1.5">{t('products.funnel.revenue')}:</span>
+                      <span className="text-base font-bold text-emerald-600 dark:text-emerald-400">
                         {noMoney ? '—' : formatMoney(funnel?.revenue)}
                       </span>
                     </div>
@@ -433,7 +433,7 @@ function ProductDetailModal({ product, funnel, canViewFunnel, onClose, onEdit })
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                     {/* 1. Quan tâm */}
                     <div
-                      className="bg-white rounded-xl border border-slate-200 p-3 shadow-2xs"
+                      className="bg-white dark:bg-dk-inset rounded-xl border border-slate-200 dark:border-dk-border p-3 shadow-2xs"
                       title={
                         funnel?.interested
                           ? t('products.funnel.interestedBreakdown', {
@@ -444,111 +444,111 @@ function ProductDetailModal({ product, funnel, canViewFunnel, onClose, onEdit })
                           : undefined
                       }
                     >
-                      <span className="text-[11px] font-semibold text-slate-500 uppercase block">1. Quan tâm</span>
-                      <div className="text-lg font-bold text-slate-900 mt-0.5" data-testid="funnel-detail-interested">
+                      <span className="text-[11px] font-semibold text-slate-500 dark:text-dk-text2 uppercase block">1. Quan tâm</span>
+                      <div className="text-lg font-bold text-slate-900 dark:text-dk-text mt-0.5" data-testid="funnel-detail-interested">
                         {funnel?.interested ?? 0}
                       </div>
-                      <span className="text-[10px] text-slate-400 block mt-0.5 truncate">
+                      <span className="text-[10px] text-slate-400 dark:text-dk-muted block mt-0.5 truncate">
                         {funnel?.landingViews ?? 0} view · {funnel?.campaignClicks ?? 0} click
                       </span>
                     </div>
 
                     {/* 2. Để lại thông tin */}
-                    <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-2xs">
-                      <span className="text-[11px] font-semibold text-slate-500 uppercase block">2. Để lại TT</span>
-                      <div className="text-lg font-bold text-slate-900 mt-0.5" data-testid="funnel-detail-left-contact">
+                    <div className="bg-white dark:bg-dk-inset rounded-xl border border-slate-200 dark:border-dk-border p-3 shadow-2xs">
+                      <span className="text-[11px] font-semibold text-slate-500 dark:text-dk-text2 uppercase block">2. Để lại TT</span>
+                      <div className="text-lg font-bold text-slate-900 dark:text-dk-text mt-0.5" data-testid="funnel-detail-left-contact">
                         {funnel?.leftContact ?? 0}
                       </div>
-                      <span className="text-[10px] text-slate-400 block mt-0.5">leads từ landing</span>
+                      <span className="text-[10px] text-slate-400 dark:text-dk-muted block mt-0.5">leads từ landing</span>
                     </div>
 
                     {/* 3. Đăng ký */}
-                    <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-2xs">
-                      <span className="text-[11px] font-semibold text-slate-500 uppercase block">3. Đăng ký</span>
-                      <div className="text-lg font-bold text-slate-900 mt-0.5" data-testid="funnel-detail-registered">
+                    <div className="bg-white dark:bg-dk-inset rounded-xl border border-slate-200 dark:border-dk-border p-3 shadow-2xs">
+                      <span className="text-[11px] font-semibold text-slate-500 dark:text-dk-text2 uppercase block">3. Đăng ký</span>
+                      <div className="text-lg font-bold text-slate-900 dark:text-dk-text mt-0.5" data-testid="funnel-detail-registered">
                         {formTarget ? (
-                          <Link to={formTarget} className="text-primary-600 hover:underline">
+                          <Link to={formTarget} className="text-primary-600 dark:text-primary-400 hover:underline">
                             {registered}
                           </Link>
                         ) : (
                           registered
                         )}
                       </div>
-                      <span className="text-[10px] text-slate-400 block mt-0.5">người nộp form</span>
+                      <span className="text-[10px] text-slate-400 dark:text-dk-muted block mt-0.5">người nộp form</span>
                     </div>
 
                     {/* 4. Chờ xác nhận */}
-                    <div className={`bg-white rounded-xl border p-3 shadow-2xs ${awaiting > 0 ? 'border-amber-300 bg-amber-50/40' : 'border-slate-200'}`}>
-                      <span className="text-[11px] font-semibold text-slate-500 uppercase block">4. Chờ xác nhận</span>
-                      <div className={`text-lg font-bold mt-0.5 ${awaiting > 0 ? 'text-amber-600' : 'text-slate-900'}`} data-testid="funnel-detail-awaiting">
+                    <div className={`rounded-xl border p-3 shadow-2xs ${awaiting > 0 ? 'border-amber-300 dark:border-amber-800/60 bg-amber-50/40 dark:bg-amber-950/30' : 'border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset'}`}>
+                      <span className="text-[11px] font-semibold text-slate-500 dark:text-dk-text2 uppercase block">4. Chờ xác nhận</span>
+                      <div className={`text-lg font-bold mt-0.5 ${awaiting > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-900 dark:text-dk-text'}`} data-testid="funnel-detail-awaiting">
                         {noMoney ? (
                           '—'
                         ) : formTarget && awaiting > 0 ? (
-                          <Link to={formTarget} className="text-amber-600 hover:underline">
+                          <Link to={formTarget} className="text-amber-600 dark:text-amber-400 hover:underline">
                             {awaiting}
                           </Link>
                         ) : (
                           awaiting
                         )}
                       </div>
-                      <span className="text-[10px] text-slate-400 block mt-0.5 truncate">
+                      <span className="text-[10px] text-slate-400 dark:text-dk-muted block mt-0.5 truncate">
                         {awaiting > 0 ? `Chờ ${formatMoney(funnel?.awaitingAmount)}` : 'đã duyệt hết'}
                       </span>
                     </div>
 
                     {/* 5. Đã trả */}
                     <div
-                      className="bg-white rounded-xl border border-slate-200 p-3 shadow-2xs"
+                      className="bg-white dark:bg-dk-inset rounded-xl border border-slate-200 dark:border-dk-border p-3 shadow-2xs"
                       title={
                         !noMoney && paidOrders > paidPeople
                           ? t('products.funnel.paidPeopleOrdersTooltip', { people: paidPeople, orders: paidOrders })
                           : undefined
                       }
                     >
-                      <span className="text-[11px] font-semibold text-slate-500 uppercase block">5. Đã trả</span>
-                      <div className="text-lg font-bold text-slate-900 mt-0.5" data-testid="funnel-detail-paid">
+                      <span className="text-[11px] font-semibold text-slate-500 dark:text-dk-text2 uppercase block">5. Đã trả</span>
+                      <div className="text-lg font-bold text-slate-900 dark:text-dk-text mt-0.5" data-testid="funnel-detail-paid">
                         {noMoney ? '—' : paidPeople}
                       </div>
-                      <span className="text-[10px] text-slate-400 block mt-0.5">
+                      <span className="text-[10px] text-slate-400 dark:text-dk-muted block mt-0.5">
                         {noMoney ? 'miễn phí' : `${paidOrders} đơn`}
                       </span>
                     </div>
 
                     {/* 6. Doanh thu */}
-                    <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-2xs">
-                      <span className="text-[11px] font-semibold text-slate-500 uppercase block">6. Doanh thu</span>
-                      <div className="text-lg font-bold text-emerald-600 mt-0.5" data-testid="funnel-detail-revenue">
+                    <div className="bg-white dark:bg-dk-inset rounded-xl border border-slate-200 dark:border-dk-border p-3 shadow-2xs">
+                      <span className="text-[11px] font-semibold text-slate-500 dark:text-dk-text2 uppercase block">6. Doanh thu</span>
+                      <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400 mt-0.5" data-testid="funnel-detail-revenue">
                         {noMoney ? '—' : formatMoney(funnel?.revenue)}
                       </div>
-                      <span className="text-[10px] text-slate-400 block mt-0.5">tiền thực thu</span>
+                      <span className="text-[10px] text-slate-400 dark:text-dk-muted block mt-0.5">tiền thực thu</span>
                     </div>
                   </div>
                 </div>
               )}
 
               {/* Thông tin mô tả & AI Chatbot */}
-              <div className="bg-slate-50/70 border border-slate-200/80 rounded-2xl p-4.5 space-y-3">
+              <div className="bg-slate-50/70 dark:bg-dk-raised border border-slate-200/80 dark:border-dk-border rounded-2xl p-4.5 space-y-3">
                 <div className="flex items-center gap-2">
-                  <HiOutlineSparkles className="w-4 h-4 text-orange-600" />
-                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    {t('products.marketingAi') || 'Mô tả & Kịch bản trợ lý AI'}
+                  <HiOutlineSparkles className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+                  <span className="text-xs font-bold text-slate-700 dark:text-dk-text uppercase tracking-wider">
+                    {t('products.marketingAi')}
                   </span>
                 </div>
 
-                <div className="bg-white rounded-xl border border-slate-200 p-3.5 space-y-3 text-xs">
+                <div className="bg-white dark:bg-dk-inset rounded-xl border border-slate-200 dark:border-dk-border p-3.5 space-y-3 text-xs">
                   <div>
-                    <span className="font-semibold text-slate-700 block mb-1">Mô tả sản phẩm:</span>
-                    <p className="text-slate-600 whitespace-pre-line leading-relaxed">
-                      {product.description || <span className="italic text-slate-400">Chưa có mô tả</span>}
+                    <span className="font-semibold text-slate-700 dark:text-dk-text block mb-1">Mô tả sản phẩm:</span>
+                    <p className="text-slate-600 dark:text-dk-text2 whitespace-pre-line leading-relaxed">
+                      {product.description || <span className="italic text-slate-400 dark:text-dk-muted">Chưa có mô tả</span>}
                     </p>
                   </div>
 
                   {product.usp && (
-                    <div className="pt-2 border-t border-slate-100">
-                      <span className="font-semibold text-slate-700 block mb-1">Điểm nổi bật (USP):</span>
+                    <div className="pt-2 border-t border-slate-100 dark:border-dk-border">
+                      <span className="font-semibold text-slate-700 dark:text-dk-text block mb-1">Điểm nổi bật (USP):</span>
                       <div className="space-y-1">
                         {product.usp.split('\n').filter(Boolean).map((line, idx) => (
-                          <div key={idx} className="flex items-start gap-1.5 text-slate-600">
+                          <div key={idx} className="flex items-start gap-1.5 text-slate-600 dark:text-dk-text2">
                             <span className="text-orange-500 mt-0.5">•</span>
                             <span>{line}</span>
                           </div>
@@ -558,9 +558,9 @@ function ProductDetailModal({ product, funnel, canViewFunnel, onClose, onEdit })
                   )}
 
                   {product.targetAudience && (
-                    <div className="pt-2 border-t border-slate-100">
-                      <span className="font-semibold text-slate-700 block mb-1">Đối tượng mục tiêu:</span>
-                      <p className="text-slate-600">{product.targetAudience}</p>
+                    <div className="pt-2 border-t border-slate-100 dark:border-dk-border">
+                      <span className="font-semibold text-slate-700 dark:text-dk-text block mb-1">Đối tượng mục tiêu:</span>
+                      <p className="text-slate-600 dark:text-dk-text2">{product.targetAudience}</p>
                     </div>
                   )}
                 </div>
@@ -570,7 +570,7 @@ function ProductDetailModal({ product, funnel, canViewFunnel, onClose, onEdit })
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/80 flex items-center justify-between shrink-0">
+        <div className="px-6 py-4 border-t border-slate-100 dark:border-dk-border bg-slate-50/80 dark:bg-dk-raised/60 flex items-center justify-between shrink-0">
           <button
             type="button"
             onClick={() => { onClose(); onEdit(product); }}
@@ -582,7 +582,7 @@ function ProductDetailModal({ product, funnel, canViewFunnel, onClose, onEdit })
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors shadow-2xs"
+            className="px-4 py-2 text-xs font-semibold text-slate-700 dark:text-dk-text bg-white dark:bg-dk-inset border border-slate-200 dark:border-dk-border hover:bg-slate-50 dark:hover:bg-dk-raised rounded-xl transition-colors shadow-2xs"
           >
             {t('common.close')}
           </button>
