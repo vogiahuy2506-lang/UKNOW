@@ -50,8 +50,16 @@ jest.unstable_mockModule('../../services/audit.service.js', () => ({
   AUDIT_ENTITY_TYPES: { USER: 'USER' },
 }));
 
+// Trả về một gói dùng thử THẬT (không phải null) để ca mời chứng minh được là controller không gọi tới — mock trả
+// null thì "không có trial" đúng cả khi controller vẫn gọi.
+const mockGrantSignupTrialInTx = jest.fn().mockResolvedValue({
+  activePlanId: 7,
+  expiresAt: '2026-10-24T00:00:00.000Z',
+  planCode: 'trial',
+  planName: 'Gói dùng thử',
+});
 jest.unstable_mockModule('../../services/user/signupTrialTx.service.js', () => ({
-  grantSignupTrialInTx: jest.fn().mockResolvedValue(null),
+  grantSignupTrialInTx: mockGrantSignupTrialInTx,
 }));
 
 jest.unstable_mockModule('../../repositories/landingPageShare.repository.js', () => ({
@@ -198,6 +206,12 @@ describe('auth.controller invite registration flow', () => {
 
       expect(mockMarkCodeAsUsed).toHaveBeenCalledWith(99);
       expect(res.status).toHaveBeenCalledWith(201);
+      // Nhân viên qua link mời KHÔNG được tặng gói dùng thử riêng — có gói riêng thì frontend chọn không gian riêng
+      // làm mặc định và nhân viên mới không vào được không gian công ty (lỗi 26/09).
+      expect(mockGrantSignupTrialInTx).not.toHaveBeenCalled();
+      const payload = res.json.mock.calls[0][0];
+      expect(payload.data.trial).toBeNull();
+      expect(payload.data.user.active_plan_id ?? null).toBeNull();
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
           success: true,

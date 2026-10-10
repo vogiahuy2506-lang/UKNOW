@@ -438,6 +438,9 @@ describe('POST /api/auth/register — chiếm lại tài khoản pending do ch�
   // đã chấp nhận, vào được không gian công ty ngay. Bản đầu PR-2 đổi luôn sang 'linked' + NULL.
   it('nhân viên mới kích hoạt bằng LINK MỜI → giữ origin created + accepted_at, vào context chủ được ngay', async () => {
     const plan = await createPlan({ maxEmployees: 5 });
+    // Có gói dùng thử thật trong hệ thống: đăng ký thường sẽ được tặng (ca 'có gói trial' phía trên) — đăng ký qua
+    // link mời thì KHÔNG (nhân viên dùng gói của chủ; có gói riêng thì frontend mặc định vào không gian riêng).
+    await createPlan({ code: 'trial', name: 'Gói dùng thử', price: 0, durationDays: 10, isActive: true });
     const owner = await createUser({ username: 'ownerlinkmoi', role: 'user' });
     await db.query(
       `UPDATE users SET active_plan_id = $1, subscription_expires_at = NOW() + INTERVAL '365 days',
@@ -477,6 +480,10 @@ describe('POST /api/auth/register — chiếm lại tài khoản pending do ch�
         consents: { terms: true, privacy: true, dpa: true },
       });
     expect(registerRes.status).toBe(201);
+    expect(registerRes.body.data.trial).toBeNull();
+    const planRow = await db.query('SELECT active_plan_id, subscription_expires_at FROM users WHERE id = $1', [employeeId]);
+    expect(planRow.rows[0].active_plan_id).toBeNull();
+    expect(planRow.rows[0].subscription_expires_at).toBeNull();
 
     const row = await db.query(
       'SELECT origin, accepted_at FROM user_members WHERE employee_id = $1 AND owner_id = $2',

@@ -346,7 +346,13 @@ class AuthController {
       // Auto-grant trial trong cùng transaction. Lỗi cấu hình trial được cô lập
       // ở savepoint; lỗi hạ tầng hoặc không khôi phục được savepoint sẽ throw để
       // handler rollback toàn bộ đăng ký.
-      const trial = await grantSignupTrialInTx(client, { userId: user.id, userEmail: user.email });
+      // Đăng ký qua LINK MỜI (nhân viên) thì KHÔNG tặng gói dùng thử riêng: nhân viên làm việc bằng gói của chủ.
+      // Có gói riêng thì `pickDefaultContext` (frontend/src/stores/authStore.js) chọn không gian RIÊNG làm mặc định
+      // → mỗi lần đăng nhập nhân viên mới rơi vào không gian trống thay vì không gian công ty (lỗi báo 26/09).
+      // Cùng luật với đường Google kích hoạt tài khoản pending_activation (googleLogin không cấp trial).
+      const trial = invitation
+        ? null
+        : await grantSignupTrialInTx(client, { userId: user.id, userEmail: user.email });
       if (trial) {
         user.active_plan_id = trial.activePlanId;
         user.subscription_expires_at = trial.expiresAt;
