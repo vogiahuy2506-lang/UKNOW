@@ -10,9 +10,11 @@
  *     update campaigns.total_opened, dedup customer_journey event.
  *   - Click: 302 redirect tới `url`, append UTM, tăng click_count, set status='clicked',
  *     auto-infer email_opened nếu chưa có, dedup theo (email_message, customer, linkKey).
- *   - Unsubscribe: customers.email_subscribed=false, journey event 'email_unsubscribed'.
+ *   - Unsubscribe: GET chỉ hiện trang xác nhận (KHÔNG đổi gì); POST mới đặt customers.email_subscribed=false,
+ *     journey event 'email_unsubscribed', và huỷ mọi dòng khách trùng email trong workspace.
+ *   - Open redirect: token sai/không có → về FRONTEND_URL, không chuyển tới URL tuỳ ý.
  */
-import { describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
@@ -307,14 +309,14 @@ describe('GET /api/customers/email-tracking/click/:token', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────
-describe('GET /api/customers/email-tracking/unsubscribe/:token', () => {
-  it('token không tồn tại → 200 HTML "Đã hủy đăng ký" (graceful)', async () => {
-    const res = await request(app).get('/api/customers/email-tracking/unsubscribe/no-such-token');
+describe('/api/customers/email-tracking/unsubscribe/:token', () => {
+  it('POST token không tồn tại → 200 HTML "Đã hủy đăng ký" (graceful)', async () => {
+    const res = await request(app).post('/api/customers/email-tracking/unsubscribe/no-such-token');
     expect(res.status).toBe(200);
     expect(res.text).toMatch(/Đã hủy đăng ký|Unsubscribed/);
   });
 
-  it('token match → set customers.email_subscribed=false + ghi journey email_unsubscribed', async () => {
+  it('POST token match → set customers.email_subscribed=false + ghi journey email_unsubscribed', async () => {
     const user = await createUser();
     const customer = await createCustomer({ userId: user.id });
     const campaign = await createCampaign({ userId: user.id });
@@ -326,7 +328,7 @@ describe('GET /api/customers/email-tracking/unsubscribe/:token', () => {
     // customers.email_subscribed default TRUE
     expect((await db.query(`SELECT email_subscribed FROM customers WHERE id = $1`, [customer.id])).rows[0].email_subscribed).toBe(true);
 
-    const res = await request(app).get('/api/customers/email-tracking/unsubscribe/unsub-token-1');
+    const res = await request(app).post('/api/customers/email-tracking/unsubscribe/unsub-token-1');
     expect(res.status).toBe(200);
 
     const { rows: cuRows } = await db.query(
@@ -348,7 +350,7 @@ describe('GET /api/customers/email-tracking/unsubscribe/:token', () => {
     expect(cjRows[0].event_data).toMatchObject({ trackingToken: 'unsub-token-1' });
   });
 
-  it('unsubscribe 2 lần → vẫn 200 nhưng journey chỉ ghi 1 event (dedup)', async () => {
+  it('POST unsubscribe 2 lần → vẫn 200 nhưng journey chỉ ghi 1 event (dedup)', async () => {
     const user = await createUser();
     const customer = await createCustomer({ userId: user.id });
     const campaign = await createCampaign({ userId: user.id });
@@ -357,8 +359,8 @@ describe('GET /api/customers/email-tracking/unsubscribe/:token', () => {
       campaignId: campaign.id,
       customerId: customer.id,
     });
-    await request(app).get('/api/customers/email-tracking/unsubscribe/unsub-dup');
-    await request(app).get('/api/customers/email-tracking/unsubscribe/unsub-dup');
+    await request(app).post('/api/customers/email-tracking/unsubscribe/unsub-dup');
+    await request(app).post('/api/customers/email-tracking/unsubscribe/unsub-dup');
 
     const { rows } = await db.query(
       `SELECT COUNT(*)::int AS c FROM customer_journey
@@ -366,5 +368,107 @@ describe('GET /api/customers/email-tracking/unsubscribe/:token', () => {
       [customer.id]
     );
     expect(rows[0].c).toBe(1);
+  });
+
+  it('GET chỉ hiện trang xác nhận có nút POST — KHÔNG đổi email_subscribed (trình quét link tự mở GET)', async () => {
+    const user = await createUser();
+    const customer = await createCustomer({ userId: user.id });
+    const campaign = await createCampaign({ userId: user.id });
+    const em = await createEmailMessage({ token: 'unsub-get-only', campaignId: campaign.id, customerId: customer.id });
+
+    const res = await request(app).get('/api/customers/email-tracking/unsubscribe/unsub-get-only');
+    expect(res.status).toBe(200);
+    expect(res.text).toMatch(/<form method="POST">/);
+
+    const { rows } = await db.query(`SELECT email_subscribed, email_unsubscribed_at FROM customers WHERE id = $1`, [customer.id]);
+    expect(rows[0].email_subscribed).toBe(true);
+    expect(rows[0].email_unsubscribed_at).toBeNull();
+    expect((await db.query(`SELECT status FROM email_messages WHERE id = $1`, [em.id])).rows[0].status).toBe('sent');
+    expect((await db.query(`SELECT COUNT(*)::int AS c FROM customer_journey WHERE id_customer = $1`, [customer.id])).rows[0].c).toBe(0);
+  });
+
+  it('POST huỷ mọi dòng khách cùng email (khác hoa/thường) trong workspace; KHÔNG đụng workspace khác', async () => {
+    const user = await createUser();
+    const other = await createUser({ username: 'unsub_other_tenant' });
+    const c1 = await createCustomer({ userId: user.id, email: 'Dup@u.local' });
+    const c2 = await createCustomer({ userId: user.id, email: 'dup@u.local' });
+    const c3 = await createCustomer({ userId: user.id, email: 'khac@u.local' });
+    const otherTenant = await createCustomer({ userId: other.id, email: 'dup@u.local' });
+    const campaign = await createCampaign({ userId: user.id });
+    await createEmailMessage({ token: 'unsub-dup-email', campaignId: campaign.id, customerId: c1.id });
+
+    const res = await request(app).post('/api/customers/email-tracking/unsubscribe/unsub-dup-email');
+    expect(res.status).toBe(200);
+
+    const { rows } = await db.query(
+      `SELECT id, email_subscribed FROM customers WHERE id = ANY($1::int[]) ORDER BY id`,
+      [[c1.id, c2.id, c3.id, otherTenant.id]]
+    );
+    const byId = Object.fromEntries(rows.map((r) => [r.id, r.email_subscribed]));
+    expect(byId[c1.id]).toBe(false);
+    expect(byId[c2.id]).toBe(false);
+    expect(byId[c3.id]).toBe(true);
+    expect(byId[otherTenant.id]).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+describe('Lớp gửi — findCustomerByEmail gộp mọi bản trùng email trong workspace', () => {
+  it('2 dòng trùng email, 1 đã huỷ → coi là đã huỷ (dù dòng còn đăng ký có id nhỏ hơn)', async () => {
+    const { default: senderRepo } = await import('../../src/repositories/campaign/campaignEmailSender.repository.js');
+    const user = await createUser();
+    const first = await createCustomer({ userId: user.id, email: 'same@u.local' });
+    const second = await createCustomer({ userId: user.id, email: 'SAME@u.local' });
+    await db.query(`UPDATE customers SET email_subscribed = false WHERE id = $1`, [second.id]);
+
+    const row = await senderRepo.findCustomerByEmail(user.id, 'same@u.local');
+    expect(row.email_subscribed).toBe(false);
+    expect(row.id).toBe(first.id); // id ổn định = dòng cũ nhất
+  });
+
+  it('2 dòng trùng email, 1 hard bounce → email_hard_bounced = true', async () => {
+    const { default: senderRepo } = await import('../../src/repositories/campaign/campaignEmailSender.repository.js');
+    const user = await createUser();
+    await createCustomer({ userId: user.id, email: 'bounce@u.local' });
+    const second = await createCustomer({ userId: user.id, email: 'bounce@u.local' });
+    await db.query(`UPDATE customers SET email_hard_bounced = true WHERE id = $1`, [second.id]);
+
+    const row = await senderRepo.findCustomerByEmail(user.id, 'bounce@u.local');
+    expect(row.email_hard_bounced).toBe(true);
+    expect(row.email_subscribed).toBe(true);
+  });
+
+  it('không có dòng nào → null; dòng của workspace khác không bị tính', async () => {
+    const { default: senderRepo } = await import('../../src/repositories/campaign/campaignEmailSender.repository.js');
+    const user = await createUser();
+    const other = await createUser({ username: 'sender_other_tenant' });
+    const foreign = await createCustomer({ userId: other.id, email: 'x@u.local' });
+    await db.query(`UPDATE customers SET email_subscribed = false WHERE id = $1`, [foreign.id]);
+
+    expect(await senderRepo.findCustomerByEmail(user.id, 'x@u.local')).toBeNull();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+describe('Open redirect — click email với token sai', () => {
+  const OLD = process.env.FRONTEND_URL;
+  beforeAll(() => { process.env.FRONTEND_URL = 'https://app.example.test'; });
+  afterAll(() => { if (OLD === undefined) delete process.env.FRONTEND_URL; else process.env.FRONTEND_URL = OLD; });
+
+  it('token không tồn tại + url ngoài → về FRONTEND_URL, không tới trang kẻ lạ', async () => {
+    const dest = encodeURIComponent('https://evil.example/phish');
+    const res = await request(app).get(`/api/customers/email-tracking/click/khong-co-token?url=${dest}`);
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe('https://app.example.test');
+  });
+
+  it('token hợp lệ + url https → vẫn chuyển hướng tới url đó', async () => {
+    const user = await createUser();
+    const customer = await createCustomer({ userId: user.id });
+    const campaign = await createCampaign({ userId: user.id });
+    await createEmailMessage({ token: 'redir-ok', campaignId: campaign.id, customerId: customer.id });
+    const dest = encodeURIComponent('https://example.com/ok');
+    const res = await request(app).get(`/api/customers/email-tracking/click/redir-ok?url=${dest}`);
+    expect(res.headers.location).toMatch(/^https:\/\/example\.com\/ok/);
   });
 });

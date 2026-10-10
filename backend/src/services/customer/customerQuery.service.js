@@ -78,6 +78,31 @@ class CustomerQueryService {
   }
 
   /**
+   * Chuẩn hoá `page`/`limit` của danh sách khách: số nguyên dương, `limit` trần 100.
+   * Sai kiểu (chữ, âm, 0, số thập phân) → lỗi 400 thay vì đẩy NaN xuống SQL gây 500.
+   *
+   * @param {{ page: any, limit: any }} input
+   * @returns {{ page: number, limit: number }}
+   */
+  parsePagination({ page, limit }) {
+    const toPositiveInt = (value, label) => {
+      const text = String(value ?? '').trim();
+      if (!/^\d+$/.test(text) || Number(text) < 1) {
+        const error = new Error(`Tham số ${label} không hợp lệ`);
+        error.statusCode = 400;
+        throw error;
+      }
+      return Number(text);
+    };
+    const MAX_LIMIT = 100;
+    const MAX_PAGE = 1000000;
+    return {
+      page: Math.min(toPositiveInt(page, 'page'), MAX_PAGE),
+      limit: Math.min(toPositiveInt(limit, 'limit'), MAX_LIMIT),
+    };
+  }
+
+  /**
    * Query paginated customer list with campaign/status/source filters.
    *
    * @param {object} input
@@ -94,10 +119,12 @@ class CustomerQueryService {
     campaignId,
     purchaseOrderStatusExpr,
   }) {
+    const { page: safePage, limit: safeLimit } = this.parsePagination({ page, limit });
+
     const { rows, total } = await customerReadRepository.getAllCustomerRows({
       userId,
-      page,
-      limit,
+      page: safePage,
+      limit: safeLimit,
       status,
       search,
       source,
@@ -130,10 +157,10 @@ class CustomerQueryService {
         updatedAt: item.updated_at,
       })),
       pagination: {
-        page: parseInt(page, 10),
-        limit: parseInt(limit, 10),
+        page: safePage,
+        limit: safeLimit,
         total,
-        totalPages: Math.ceil(total / limit),
+        totalPages: Math.ceil(total / safeLimit),
       },
     };
   }

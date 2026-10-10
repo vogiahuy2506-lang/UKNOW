@@ -1,5 +1,6 @@
 import campaignCustomerRepository from '../../repositories/campaign/campaignCustomer.repository.js';
 import customerMutationRepository from '../../repositories/customer/customerMutation.repository.js';
+import customerReadRepository from '../../repositories/customer/customerRead.repository.js';
 import customerHelperService from './customerHelper.service.js';
 
 function createServiceError(message, statusCode) {
@@ -82,6 +83,14 @@ class CustomerMutationService {
     }
 
     const campaignIdNum = parseInt(campaignId, 10);
+
+    // Chiến dịch phải thuộc đúng workspace — không cho ghi khách vào chiến dịch của tenant khác.
+    if (Number.isFinite(campaignIdNum)) {
+      const ownedCampaign = await customerReadRepository.getOwnedCampaign(campaignIdNum, workspaceOwnerId);
+      if (!ownedCampaign) {
+        throw createServiceError('Không tìm thấy chiến dịch', 404);
+      }
+    }
 
     return customerMutationRepository.withTransaction(async (client) => {
       let inserted = 0;

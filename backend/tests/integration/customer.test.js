@@ -610,3 +610,67 @@ describe('POST /api/customers/bulk — bulk upsert', () => {
     ]);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────
+describe('PR-C1 — bulk không ghi vào chiến dịch của workspace khác', () => {
+  it('campaignId của tenant khác → 404, KHÔNG tạo khách, KHÔNG ghi campaign_customers/participations', async () => {
+    const attacker = await createUser({ username: 'bulk_attacker' });
+    const victim = await createUser({ username: 'bulk_victim' });
+    const victimCampaign = await createCampaignRow({ userId: victim.id, name: 'Của nạn nhân' });
+    const token = await loginAs(attacker);
+
+    const res = await request(app)
+      .post('/api/customers/bulk')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ items: [{ email: 'inject@u.local' }], campaignId: victimCampaign.id });
+    expect(res.status).toBe(404);
+
+    expect((await db.query(`SELECT COUNT(*)::int AS c FROM customers`)).rows[0].c).toBe(0);
+    expect((await db.query(`SELECT COUNT(*)::int AS c FROM campaign_customers WHERE id_campaign = $1`, [victimCampaign.id])).rows[0].c).toBe(0);
+    expect((await db.query(`SELECT COUNT(*)::int AS c FROM campaign_participations WHERE id_campaign = $1`, [victimCampaign.id])).rows[0].c).toBe(0);
+  });
+
+  it('campaignId không tồn tại → 404', async () => {
+    const user = await createUser();
+    const token = await loginAs(user);
+    const res = await request(app)
+      .post('/api/customers/bulk')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ items: [{ email: 'x@u.local' }], campaignId: 99999999 });
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('PR-C1 — GET /api/customers: page/limit và :id', () => {
+  it('limit > 100 bị chặn trần 100', async () => {
+    const user = await createUser();
+    const token = await loginAs(user);
+    const res = await request(app).get('/api/customers?limit=100000').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.pagination.limit).toBe(100);
+  });
+
+  it.each([
+    ['limit=abc'],
+    ['limit=-5'],
+    ['limit=0'],
+    ['page=abc'],
+    ['page=0'],
+    ['page=1.5'],
+  ])('tham số sai kiểu (%s) → 400, không phải 500', async (qs) => {
+    const user = await createUser();
+    const token = await loginAs(user);
+    const res = await request(app).get(`/api/customers?${qs}`).set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(400);
+  });
+
+  it('GET/PUT/DELETE /:id với id không phải số → 400 (không phải 500)', async () => {
+    const user = await createUser();
+    const token = await loginAs(user);
+    const auth = { Authorization: `Bearer ${token}` };
+    expect((await request(app).get('/api/customers/abc').set(auth)).status).toBe(400);
+    expect((await request(app).get('/api/customers/abc/journey').set(auth)).status).toBe(400);
+    expect((await request(app).put('/api/customers/abc').set(auth).send({ fullName: 'x' })).status).toBe(400);
+    expect((await request(app).delete('/api/customers/abc').set(auth)).status).toBe(400);
+  });
+});

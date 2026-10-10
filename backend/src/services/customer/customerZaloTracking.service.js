@@ -197,16 +197,20 @@ class CustomerZaloTrackingService {
    * @returns {Promise<import('express').Response>}
    */
   async trackZaloClick({ token, redirectUrl, linkKey }) {
+    // Token sai/không có → về trang mặc định, không chuyển hướng tới URL do người ngoài tự đặt (open redirect).
+    const defaultRedirect = process.env.FRONTEND_URL || 'http://localhost:5173';
+    if (!token) return { redirectUrl: defaultRedirect };
+
     const client = await db.getClient();
+    let tokenVerified = false;
 
     try {
-      if (!token) return { redirectUrl };
-
       await client.query('BEGIN');
 
       const message = await customerZaloTrackingRepository.findZaloMessageByToken(client, token);
 
       if (message) {
+        tokenVerified = true;
         const clickMetadata = {
           lastClickedUrl: redirectUrl,
           lastClickedAt: new Date().toISOString(),
@@ -219,7 +223,22 @@ class CustomerZaloTrackingService {
         const rawUtmSource = this.parseUtmSourceFromRedirectUrl(redirectUrl);
         const normalizedUtmSource = this.normalizeZaloUtmSource(rawUtmSource);
         const zaloUidFromUrl = this.parseZaloUidFromRedirectUrl(redirectUrl);
-        let trackedCustomerId = Number.isFinite(messageCustomerId) ? messageCustomerId : parsedCustomerId;
+        // Workspace của chiến dịch — mọi khách gán/ghi từ URL công khai phải nằm trong đúng workspace này.
+        const rawWorkspaceOwnerId = await customerZaloTrackingRepository.getCampaignUserId(client, message.id_campaign);
+        const workspaceOwnerId = Number.parseInt(rawWorkspaceOwnerId, 10);
+        const hasWorkspace = Number.isFinite(workspaceOwnerId);
+
+        // `utm_customer` trên URL do người ngoài tự đặt được: chỉ tin khi khách thuộc workspace của chiến dịch.
+        let verifiedParsedCustomerId = null;
+        if (!Number.isFinite(messageCustomerId) && Number.isFinite(parsedCustomerId) && hasWorkspace) {
+          const inWorkspace = await customerZaloTrackingRepository.isCustomerInWorkspace(
+            client,
+            parsedCustomerId,
+            workspaceOwnerId
+          );
+          if (inWorkspace) verifiedParsedCustomerId = parsedCustomerId;
+        }
+        let trackedCustomerId = Number.isFinite(messageCustomerId) ? messageCustomerId : verifiedParsedCustomerId;
         if (
           !isZaloGroup &&
           !Number.isFinite(trackedCustomerId) &&
@@ -244,9 +263,15 @@ class CustomerZaloTrackingService {
           !isZaloGroup &&
           zaloUidFromUrl &&
           normalizedUtmSource === 'zalo_person_campaign' &&
-          Number.isFinite(trackedCustomerId)
+          Number.isFinite(trackedCustomerId) &&
+          hasWorkspace
         ) {
-          await customerZaloTrackingRepository.linkZaloUidToCustomer(client, trackedCustomerId, zaloUidFromUrl);
+          await customerZaloTrackingRepository.linkZaloUidToCustomer(
+            client,
+            trackedCustomerId,
+            zaloUidFromUrl,
+            workspaceOwnerId
+          );
         }
 
         if (canTrackJourney) {
@@ -297,7 +322,7 @@ class CustomerZaloTrackingService {
       client.release();
     }
 
-    return { redirectUrl };
+    return { redirectUrl: tokenVerified ? redirectUrl : defaultRedirect };
   }
 
 }

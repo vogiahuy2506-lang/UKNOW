@@ -4,13 +4,23 @@ class CampaignEmailSenderRepository {
   /**
    * Fetch a customer's subscription and bounce status by email.
    *
+   * Một email có thể nằm ở nhiều dòng `customers` trong cùng workspace (nhập tay/landing/chiến dịch…).
+   * Gộp mọi dòng: chỉ cần MỘT dòng đã huỷ đăng ký (hoặc hard bounce) là cả email bị chặn gửi —
+   * không để `LIMIT 1` tình cờ chọn đúng bản còn đăng ký. `id` trả về là dòng cũ nhất (ổn định).
+   *
    * @param {number} userId
    * @param {string} emailLower lowercase email address
    * @returns {Promise<{id: number, email_subscribed: boolean, email_hard_bounced: boolean}|null>}
    */
   async findCustomerByEmail(userId, emailLower) {
     const result = await db.query(
-      'SELECT id, email_subscribed, email_hard_bounced FROM customers WHERE id_user = $1 AND LOWER(email) = $2 LIMIT 1',
+      `SELECT (array_agg(id ORDER BY id ASC))[1] AS id,
+              bool_and(COALESCE(email_subscribed, TRUE)) AS email_subscribed,
+              bool_or(COALESCE(email_hard_bounced, FALSE)) AS email_hard_bounced
+         FROM customers
+        WHERE (COALESCE(workspace_owner_id, id_user) = $1 OR id_user = $1)
+          AND LOWER(email) = $2
+       HAVING COUNT(*) > 0`,
       [userId, emailLower]
     );
     return result.rows[0] || null;

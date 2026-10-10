@@ -63,6 +63,9 @@ class CustomerController {
         data,
       });
     } catch (error) {
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({ success: false, message: error.message });
+      }
       console.error('Get customers error:', error);
       res.status(500).json({
         success: false,
@@ -358,7 +361,11 @@ class CustomerController {
     const token = String(req.params.token || '').trim();
     const privacyPolicyUrl = String(process.env.PRIVACY_POLICY_URL || '').trim()
       || 'https://campaign.digiso.vn/privacy-policy';
-    const { statusCode, html } = await customerEmailTrackingService.trackEmailUnsubscribe({ token, privacyPolicyUrl });
+    const { statusCode, html } = await customerEmailTrackingService.trackEmailUnsubscribe({
+      token,
+      privacyPolicyUrl,
+      confirm: req.method === 'POST',
+    });
     return res.status(statusCode).send(html);
   }
 

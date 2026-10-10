@@ -1,5 +1,5 @@
 import express from 'express';
-import { body } from 'express-validator';
+import { body, param } from 'express-validator';
 import customerController from '../controllers/customer.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 import handleValidationErrors from '../middleware/validate.middleware.js';
@@ -7,10 +7,15 @@ import { requirePermission, requireActivePlan, requirePasswordChange, requirePho
 
 const router = express.Router();
 
+// `:id` phải là số nguyên dương — chặn sớm bằng 400 thay vì để NaN chạy xuống SQL (500).
+const idParamValidator = param('id').isInt({ min: 1 }).withMessage('ID khách hàng không hợp lệ');
+
 // Public email tracking routes (không yêu cầu auth)
 router.get('/email-tracking/open/:token', customerController.trackEmailOpen.bind(customerController));
 router.get('/email-tracking/click/:token', customerController.trackEmailClick.bind(customerController));
+// GET chỉ hiện trang xác nhận (trình quét link tự mở GET); POST mới đổi trạng thái huỷ đăng ký.
 router.get('/email-tracking/unsubscribe/:token', customerController.trackEmailUnsubscribe.bind(customerController));
+router.post('/email-tracking/unsubscribe/:token', customerController.trackEmailUnsubscribe.bind(customerController));
 router.get('/zalo-tracking/click/:token', customerController.trackZaloClick.bind(customerController));
 
 router.use(authMiddleware);
@@ -33,12 +38,12 @@ router.get('/interested-courses', customerController.getInterestedCustomersWithC
 router.get('/interested-courses-from-api', customerController.getInterestedCustomersFromUknowApi.bind(customerController));
 
 // Journey
-router.get('/:id/journey', customerController.getJourney.bind(customerController));
-router.get('/:id/campaign-participations', customerController.getCampaignParticipations.bind(customerController));
-router.get('/:id/campaigns/:campaignId/journey', customerController.getCampaignJourneyDetail.bind(customerController));
+router.get('/:id/journey', idParamValidator, handleValidationErrors, customerController.getJourney.bind(customerController));
+router.get('/:id/campaign-participations', idParamValidator, handleValidationErrors, customerController.getCampaignParticipations.bind(customerController));
+router.get('/:id/campaigns/:campaignId/journey', idParamValidator, handleValidationErrors, customerController.getCampaignJourneyDetail.bind(customerController));
 
 // Get by id — chỉ cần auth
-router.get('/:id', customerController.getById.bind(customerController));
+router.get('/:id', idParamValidator, handleValidationErrors, customerController.getById.bind(customerController));
 
 // Create — cần quyền customers
 router.post('/',
@@ -59,6 +64,7 @@ router.post('/bulk', requirePermission('customers'), customerController.bulkUpse
 router.put('/:id',
   requirePermission('customers'),
   [
+    idParamValidator,
     body('email').optional().isEmail().withMessage('Email không hợp lệ')
   ],
   handleValidationErrors,
@@ -66,7 +72,7 @@ router.put('/:id',
 );
 
 // Delete — cần quyền customers
-router.delete('/:id', requirePermission('customers'), customerController.delete.bind(customerController));
+router.delete('/:id', requirePermission('customers'), idParamValidator, handleValidationErrors, customerController.delete.bind(customerController));
 
 export default router;
 

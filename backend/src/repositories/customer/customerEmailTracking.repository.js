@@ -183,6 +183,8 @@ class CustomerEmailTrackingRepository {
 
   /**
    * Mark customer as unsubscribed from email.
+   * Huỷ cho MỌI dòng khách cùng email (không phân biệt hoa/thường) trong cùng workspace —
+   * lớp gửi gộp theo email nên một bản trùng còn "đăng ký" không được phép lách lệnh huỷ.
    * Runs inside a transaction — accepts client.
    *
    * @param {object} client pg transaction client
@@ -191,11 +193,22 @@ class CustomerEmailTrackingRepository {
    */
   async unsubscribeCustomerEmail(client, customerId) {
     await client.query(
-      `UPDATE customers
+      `UPDATE customers c
        SET email_subscribed = false,
            email_unsubscribed_at = CURRENT_TIMESTAMP,
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $1 AND (email_subscribed IS DISTINCT FROM false)`,
+       FROM customers me
+       WHERE me.id = $1
+         AND (
+           c.id = me.id
+           OR (
+             me.email IS NOT NULL
+             AND c.email IS NOT NULL
+             AND LOWER(c.email) = LOWER(me.email)
+             AND COALESCE(c.workspace_owner_id, c.id_user) = COALESCE(me.workspace_owner_id, me.id_user)
+           )
+         )
+         AND (c.email_subscribed IS DISTINCT FROM false)`,
       [customerId]
     );
   }

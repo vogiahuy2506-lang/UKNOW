@@ -80,10 +80,14 @@ class CustomerEmailTrackingService {
    * - Ghi customer_journey event 'email_unsubscribed'
    * - Trả về trang HTML xác nhận hủy đăng ký
    *
+   * `confirm=false` (GET từ link trong email): CHỈ hiện trang có nút xác nhận, KHÔNG đổi trạng thái —
+   * trình quét link của hộp thư/antivirus tự mở mọi link trong email nên GET không được tự huỷ đăng ký.
+   * `confirm=true` (POST từ nút trên trang đó): mới thực sự huỷ.
+   *
    * @param {import('express').Request} req
    * @param {import('express').Response} res
    */
-  async trackEmailUnsubscribe({ token, privacyPolicyUrl }) {
+  async trackEmailUnsubscribe({ token, privacyPolicyUrl, confirm = false }) {
 
     /**
      * Render trang phản hồi hủy đăng ký song ngữ Việt/Anh.
@@ -109,6 +113,8 @@ class CustomerEmailTrackingService {
   .block{padding:12px 0}
   .block + .block{border-top:1px solid #e5e7eb}
   .lang-label{display:inline-block;font-size:12px;font-weight:700;color:#6b7280;margin-bottom:6px}
+  form{margin:16px 0 0 0}
+  button{background:#1a1a1a;color:#fff;border:0;border-radius:6px;padding:10px 18px;font-size:15px;cursor:pointer}
   .helper{margin-top:14px;font-size:13px;color:#6b7280}
   .helper a{color:#4b5563;text-decoration:underline}
 </style>
@@ -125,6 +131,7 @@ class CustomerEmailTrackingService {
       <h1>${body.headingEn}</h1>
       <p>${body.textEn}</p>
     </div>
+    ${body.formHtml || ''}
     <p class="helper">
       <a href="${privacyPolicyUrl}">Chính sách bảo mật / Privacy Policy</a>
     </p>
@@ -138,6 +145,17 @@ class CustomerEmailTrackingService {
         textVi: 'Liên kết hủy đăng ký không hợp lệ hoặc đã hết hạn.',
         headingEn: 'Invalid link',
         textEn: 'The unsubscribe link is invalid or has expired.',
+      }) };
+    }
+
+    if (!confirm) {
+      // Form không có `action` → trình duyệt POST về chính URL hiện tại (không phản chiếu token vào HTML).
+      return { statusCode: 200, html: confirmHtml('Xác nhận hủy đăng ký', {
+        headingVi: 'Xác nhận hủy đăng ký nhận email',
+        textVi: 'Nhấn nút bên dưới để không nhận email từ chúng tôi nữa.',
+        headingEn: 'Confirm unsubscribe',
+        textEn: 'Press the button below to stop receiving emails from us.',
+        formHtml: '<form method="POST"><button type="submit">Hủy đăng ký / Unsubscribe</button></form>',
       }) };
     }
 
@@ -221,14 +239,18 @@ class CustomerEmailTrackingService {
       }
     }
 
+    // Token sai/không tồn tại → về trang mặc định, không chuyển hướng tới URL người ngoài tự đặt (open redirect).
+    let tokenVerified = false;
+
     try {
-      if (!token) return { redirectUrl };
+      if (!token) return { redirectUrl: defaultRedirect };
 
       await client.query('BEGIN');
 
       const message = await customerEmailTrackingRepository.findEmailMessageByTokenForUpdate(client, token);
 
       if (message) {
+        tokenVerified = true;
 
         if (message.id_campaign && message.id_customer && redirectUrl !== defaultRedirect) {
           try {
@@ -304,7 +326,7 @@ class CustomerEmailTrackingService {
       client.release();
     }
 
-    return { redirectUrl };
+    return { redirectUrl: tokenVerified ? redirectUrl : defaultRedirect };
   }
 }
 

@@ -73,7 +73,26 @@ class CustomerZaloTrackingRepository {
     );
   }
 
-  async linkZaloUidToCustomer(client, customerId, zaloUid) {
+  /**
+   * Khách có thuộc cùng workspace với chiến dịch không (chặn gán chéo tenant qua `utm_customer`).
+   *
+   * @param {object} client
+   * @param {number} customerId
+   * @param {number} workspaceOwnerId
+   * @returns {Promise<boolean>}
+   */
+  async isCustomerInWorkspace(client, customerId, workspaceOwnerId) {
+    const result = await client.query(
+      `SELECT 1
+       FROM customers
+       WHERE id = $1 AND COALESCE(workspace_owner_id, id_user) = $2
+       LIMIT 1`,
+      [customerId, workspaceOwnerId]
+    );
+    return result.rows.length > 0;
+  }
+
+  async linkZaloUidToCustomer(client, customerId, zaloUid, workspaceOwnerId) {
     await client.query(
       `UPDATE customers
        SET zalo_id = CASE
@@ -81,8 +100,9 @@ class CustomerZaloTrackingRepository {
                        ELSE zalo_id
                      END,
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $2`,
-      [zaloUid, customerId]
+       WHERE id = $2
+         AND COALESCE(workspace_owner_id, id_user) = $3`,
+      [zaloUid, customerId, workspaceOwnerId]
     );
   }
 
