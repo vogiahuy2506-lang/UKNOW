@@ -389,4 +389,26 @@ describe('telegram.campaignChannel — P6: tài khoản bị khoá do vượt h�
       telegramChannelAdapter.resolveAccount({ workspaceOwnerId: 99, config: { telegramAccountId: 7 }, node: { id: 1 } })
     ).resolves.toMatchObject({ accountId: 7, accountKey: '7' });
   });
+
+  describe('PLAN_GIAO_TK_TG_WA H2 — chốt chung: nhân viên chỉ dùng tài khoản được giao (accessibleChannelRefs)', () => {
+    const resolve = (accessibleChannelRefs) => telegramChannelAdapter.resolveAccount({
+      workspaceOwnerId: 99, config: { telegramAccountId: 7 }, node: { id: 1 }, accessibleChannelRefs,
+    });
+
+    it('ngoài phạm vi / phạm vi rỗng / thiếu khoá kênh trong phạm vi → 403 CHANNEL_ACCOUNT_NOT_ASSIGNED, KHÔNG tra tài khoản', async () => {
+      getAccountByIdMock.mockClear();
+      await expect(resolve({ telegram: ['8'], whatsapp_baileys: null })).rejects.toMatchObject({ status: 403, code: 'CHANNEL_ACCOUNT_NOT_ASSIGNED' });
+      await expect(resolve({ telegram: [], whatsapp_baileys: null })).rejects.toMatchObject({ code: 'CHANNEL_ACCOUNT_NOT_ASSIGNED' });
+      await expect(resolve({ whatsapp_baileys: null })).rejects.toMatchObject({ code: 'CHANNEL_ACCOUNT_NOT_ASSIGNED' }); // hỏng thì chặn
+      await expect(resolve(null)).rejects.toMatchObject({ code: 'CHANNEL_ACCOUNT_NOT_ASSIGNED' });
+      expect(getAccountByIdMock).not.toHaveBeenCalled();
+    });
+
+    it('trong phạm vi (so chuỗi) hoặc null (chủ / super admin) hoặc không truyền (gọi nội bộ) → qua', async () => {
+      resourceIsLockedMock.mockResolvedValue(false);
+      await expect(resolve({ telegram: ['7'], whatsapp_baileys: [] })).resolves.toMatchObject({ accountId: 7 });
+      await expect(resolve({ telegram: null, whatsapp_baileys: null })).resolves.toMatchObject({ accountId: 7 });
+      await expect(resolve(undefined)).resolves.toMatchObject({ accountId: 7 });
+    });
+  });
 });

@@ -207,6 +207,30 @@ export async function assertChannelAccountAccess(ctx, channel, ref) {
 }
 
 /**
+ * Tên kênh trong ĐƯỜNG DẪN API (`telegram` | `whatsapp`) → tên kênh trong bảng giao. Kênh khác → null (không phải kênh giao).
+ *
+ * @param {string} routeChannel
+ * @returns {'telegram'|'whatsapp_baileys'|null}
+ */
+export function accessChannelOfRoute(routeChannel) {
+  if (routeChannel === 'telegram') return TELEGRAM_CHANNEL;
+  if (routeChannel === 'whatsapp') return WHATSAPP_BAILEYS_CHANNEL;
+  return null;
+}
+
+/**
+ * Ref có nằm trong phạm vi không (không ném). `null` = thấy hết; mọi giá trị khác mảng = không thấy gì.
+ *
+ * @param {string|number} ref
+ * @param {string[]|null|undefined} accessibleRefs
+ * @returns {boolean}
+ */
+export function isChannelAccountAccessible(ref, accessibleRefs) {
+  if (accessibleRefs === null) return true;
+  return Array.isArray(accessibleRefs) && accessibleRefs.map(String).includes(String(ref));
+}
+
+/**
  * @param {unknown} error
  * @returns {boolean}
  */

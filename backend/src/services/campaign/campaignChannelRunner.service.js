@@ -452,6 +452,9 @@ export async function runAdapterSendNode(ctx) {
     // P7 — chu kỳ replay của run continuous: danh sách người nhận rỗng là bình thường (chưa có hội thoại mới) nên
     // KHÔNG được ném CHANNEL_NO_RECIPIENTS làm run failed.
     allowEmptyRecipients = false,
+    // PLAN_GIAO_TK_TG_WA H2 — phạm vi tài khoản Telegram / WhatsApp của NGƯỜI KÍCH HOẠT lượt chạy (engine tính, xem
+    // campaignChannelAccess.service); adapter chặn tài khoản ngoài phạm vi ở `resolveAccount`. undefined = không lọc.
+    accessibleChannelRefs,
   } = ctx;
 
   let total = 0;
@@ -466,7 +469,7 @@ export async function runAdapterSendNode(ctx) {
 
   // PR-6 — resolveAccount TRƯỚC resolveRecipients (đổi thứ tự so với PR-3): nguồn "hội thoại"
   // (Telegram) cần biết account để đọc đúng danh sách hội thoại của account đó.
-  const account = await descriptor.adapter.resolveAccount({ userId, workspaceOwnerId, node, config });
+  const account = await descriptor.adapter.resolveAccount({ userId, workspaceOwnerId, node, config, accessibleChannelRefs });
   const rows = resolveRecipientRows({ config, nodeOutputs, lastOutputItems });
   const recipients = await descriptor.adapter.resolveRecipients({ rows, config, account });
   // PLAN_TELEGRAM_0_NGUOI_NHAN_2026-09-29 Việc 2 — lưới cuối: không có người nhận thì KHÔNG trả

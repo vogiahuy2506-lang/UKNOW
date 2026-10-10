@@ -23,6 +23,7 @@
  */
 
 import { ChannelSendError } from '../campaignChannelRegistry.service.js';
+import { assertChannelAccountInScope } from '../../user/memberChannelAccess.service.js';
 import whatsappCampaignConversationRepository, {
   extractPhoneFromExternalId,
 } from '../../../repositories/chatbot/whatsappCampaignConversation.repository.js';
@@ -311,9 +312,13 @@ function assertStepAttachmentsWithinLimits(node) {
  * @param {{workspaceOwnerId: number, config: object, node?: object}} input
  * @returns {Promise<{accountKey: string, sessionKey: string, display: string}>}
  */
-async function resolveAccount({ workspaceOwnerId, config, node }) {
+async function resolveAccount({ workspaceOwnerId, config, node, accessibleChannelRefs }) {
   assertOwnerPresent(workspaceOwnerId, node?.id);
   const sessionKey = assertSessionOwnedBy(workspaceOwnerId, config?.whatsappSessionKey);
+  // PLAN_GIAO_TK_TG_WA H2 — chốt chung của tầng gửi: nhân viên chỉ dùng phiên được giao (xem telegram.campaignChannel).
+  if (accessibleChannelRefs !== undefined) {
+    assertChannelAccountInScope('whatsapp_baileys', sessionKey, accessibleChannelRefs?.whatsapp_baileys);
+  }
   await assertChannelInPlan(workspaceOwnerId);
   await assertSessionNotLocked(sessionKey);
   const { getSession } = await loadWhatsAppService();

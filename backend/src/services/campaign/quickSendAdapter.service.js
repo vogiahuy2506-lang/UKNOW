@@ -48,6 +48,12 @@ import {
 } from '../../utils/channelMediaSend.util.js';
 import { getWorkspaceContext } from '../../utils/workspaceContext.util.js';
 import { assertChannelEntitled } from './channelEntitlement.service.js';
+import {
+  accessChannelOfRoute,
+  assertChannelAccountInScope,
+  CHANNEL_ACCOUNT_NOT_ASSIGNED_CODE,
+  getAccessibleChannelAccountRefs,
+} from '../user/memberChannelAccess.service.js';
 
 const TELEGRAM_CHAT_ID_PATTERN = /^-?\d+$/;
 const DEFAULT_RATE_LIMIT_RETRY_MS = 15 * 60 * 1000;
@@ -316,6 +322,14 @@ export async function sendQuickAdapterMessage({ channel, authUser, body = {}, id
     ownerUserId: workspaceOwnerId,
     roleCode: contextType === 'self' ? roleCode : undefined,
   });
+  // PLAN_GIAO_TK_TG_WA PR-H2 — nhân viên chỉ gửi bằng tài khoản ĐƯỢC GIAO: kiểm TRƯỚC mọi việc chạm tài khoản (403
+  // CHANNEL_ACCOUNT_NOT_ASSIGNED). Chủ / super admin: phạm vi null = qua. Phạm vi cũng được truyền xuống `resolveAccount`
+  // (chốt chung của tầng gửi, cùng với đường chạy chiến dịch).
+  const accessChannel = accessChannelOfRoute(channel);
+  const accessibleRefs = await getAccessibleChannelAccountRefs(getWorkspaceContext(authUser), accessChannel);
+  assertChannelAccountInScope(accessChannel, accountRef, accessibleRefs);
+  const accessibleChannelRefs = { [accessChannel]: accessibleRefs };
+
   const nodeConfig = cfg.buildNodeConfig(accountRef);
   const attachments = sanitizeQuickSendAttachments(body?.attachments, {
     ownerUserId: workspaceOwnerId,
@@ -332,8 +346,9 @@ export async function sendQuickAdapterMessage({ channel, authUser, body = {}, id
   // 4. Tài khoản — LUÔN kèm chủ workspace.
   let account;
   try {
-    account = await adapter.resolveAccount({ workspaceOwnerId, config: nodeConfig });
+    account = await adapter.resolveAccount({ workspaceOwnerId, config: nodeConfig, accessibleChannelRefs });
   } catch (err) {
+    if (err?.code === CHANNEL_ACCOUNT_NOT_ASSIGNED_CODE) throw err;
     throw httpError(409, err?.code || 'CHANNEL_NOT_READY', err?.message || 'Không xác định được tài khoản gửi.');
   }
   const accountKey = account.accountKey;

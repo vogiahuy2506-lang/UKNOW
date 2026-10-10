@@ -39,6 +39,13 @@ import { listTelegramGroupsForAccount } from '../services/campaign/telegramGroup
 import { listWhatsAppGroupsForSession } from '../services/campaign/whatsappGroups.service.js';
 import { listWhatsAppAccountsForOwner } from '../services/campaign/channels/whatsapp.campaignChannel.js';
 import {
+  accessChannelOfRoute,
+  assertChannelAccountAccess,
+  getAccessibleChannelAccountRefs,
+  isChannelAccountAccessible,
+  CHANNEL_ACCOUNT_NOT_ASSIGNED_CODE,
+} from '../services/user/memberChannelAccess.service.js';
+import {
   isQuickSendAdapterChannel,
   listQuickSendConversations,
   estimateQuickSendAdapter,
@@ -330,7 +337,7 @@ class CampaignController {
       console.error('Create campaign error:', error);
       // PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3: nhân viên dùng tài khoản Zalo chưa được giao (cả đường trợ lý AI,
       // `ai.controller.executeCampaign` gọi lại hàm này và chuyển nguyên status/body).
-      if (error?.code === 'ZALO_ACCOUNT_NOT_ASSIGNED') {
+      if (error?.code === 'ZALO_ACCOUNT_NOT_ASSIGNED' || error?.code === CHANNEL_ACCOUNT_NOT_ASSIGNED_CODE) {
         return res.status(403).json({
           success: false,
           code: error.code,
@@ -929,7 +936,7 @@ class CampaignController {
       res.status(statusCode).json({
         success: false,
         message: statusCode === 500 ? 'Lỗi server' : (error?.message || 'Không thể nhân bản chiến dịch'),
-        ...(error?.code === 'ZALO_ACCOUNT_NOT_ASSIGNED' && { code: error.code }),
+        ...((error?.code === 'ZALO_ACCOUNT_NOT_ASSIGNED' || error?.code === CHANNEL_ACCOUNT_NOT_ASSIGNED_CODE) && { code: error.code }),
         ...(error?.limitReached && { limitReached: true }),
       });
     }
@@ -1003,8 +1010,10 @@ class CampaignController {
   async getTelegramAccountsForBuilder(req, res) {
     try {
       const ownerUserId = resolveWorkspaceOwnerId(req.user);
+      // PLAN_GIAO_TK_TG_WA PR-H2: nhân viên chỉ thấy tài khoản ĐƯỢC GIAO (chủ / super admin: null = tất cả; lỗi đọc → []).
+      const accessible = await getAccessibleChannelAccountRefs(getWorkspaceContext(req.user), 'telegram');
       const accounts = await chatbotTelegramRepository.listAccountsForUser(ownerUserId);
-      const activeAccounts = accounts.filter((a) => a.is_active !== false);
+      const activeAccounts = accounts.filter((a) => a.is_active !== false && isChannelAccountAccessible(a.id, accessible));
       // Một truy vấn gom cho mọi tài khoản (không N+1) — FE cảnh báo khi nguồn hội thoại mà tài khoản có 0.
       const openCounts = await chatbotTelegramRepository.countOpenConversationsByAccountIds(
         activeAccounts.map((a) => a.id)
@@ -1034,7 +1043,10 @@ class CampaignController {
   async getWhatsAppAccountsForBuilder(req, res) {
     try {
       const ownerUserId = resolveWorkspaceOwnerId(req.user);
-      const data = await listWhatsAppAccountsForOwner(ownerUserId);
+      // PR-H2: nhân viên chỉ thấy phiên ĐƯỢC GIAO.
+      const accessible = await getAccessibleChannelAccountRefs(getWorkspaceContext(req.user), 'whatsapp_baileys');
+      const accounts = await listWhatsAppAccountsForOwner(ownerUserId);
+      const data = accounts.filter((a) => isChannelAccountAccessible(a.sessionKey, accessible));
       res.json({ success: true, data });
     } catch (error) {
       console.error('Get WhatsApp accounts for builder error:', error);
@@ -1050,11 +1062,13 @@ class CampaignController {
   async getTelegramAccountGroups(req, res) {
     try {
       const ownerUserId = resolveWorkspaceOwnerId(req.user);
+      // PR-H2: kiểm tài khoản được giao TRƯỚC khi chạm Telegram.
+      await assertChannelAccountAccess(getWorkspaceContext(req.user), 'telegram', req.params.id);
       const data = await listTelegramGroupsForAccount({ ownerUserId, accountId: req.params.id });
       res.json({ success: true, data });
     } catch (error) {
       if (error?.status && error.status < 600) {
-        return res.status(error.status).json({ success: false, message: error.message });
+        return res.status(error.status).json({ success: false, message: error.message, ...(error.code === CHANNEL_ACCOUNT_NOT_ASSIGNED_CODE && { code: error.code }) });
       }
       console.error('Get Telegram account groups error:', error);
       res.status(500).json({ success: false, message: 'Lỗi server khi lấy danh sách nhóm Telegram' });
@@ -1069,11 +1083,13 @@ class CampaignController {
   async getWhatsAppAccountGroups(req, res) {
     try {
       const ownerUserId = resolveWorkspaceOwnerId(req.user);
+      // PR-H2: kiểm phiên được giao TRƯỚC khi chạm WhatsApp.
+      await assertChannelAccountAccess(getWorkspaceContext(req.user), 'whatsapp_baileys', req.params.sessionKey);
       const data = await listWhatsAppGroupsForSession({ ownerUserId, sessionKey: req.params.sessionKey });
       res.json({ success: true, data });
     } catch (error) {
       if (error?.status && error.status < 600) {
-        return res.status(error.status).json({ success: false, message: error.message });
+        return res.status(error.status).json({ success: false, message: error.message, ...(error.code === CHANNEL_ACCOUNT_NOT_ASSIGNED_CODE && { code: error.code }) });
       }
       console.error('Get WhatsApp account groups error:', error);
       res.status(500).json({ success: false, message: 'Lỗi server khi lấy danh sách nhóm WhatsApp' });
@@ -1088,6 +1104,11 @@ class CampaignController {
   async getQuickSendAdapterConversations(req, res) {
     try {
       const ownerUserId = resolveWorkspaceOwnerId(req.user);
+      // PR-H2: kiểm tài khoản được giao TRƯỚC khi liệt kê hội thoại. Kênh lạ → bỏ qua kiểm, service trả 404 như cũ.
+      const accessChannel = accessChannelOfRoute(req.params.channel);
+      if (accessChannel) {
+        await assertChannelAccountAccess(getWorkspaceContext(req.user), accessChannel, req.params.accountRef);
+      }
       const data = await listQuickSendConversations({
         channel: req.params.channel,
         ownerUserId,

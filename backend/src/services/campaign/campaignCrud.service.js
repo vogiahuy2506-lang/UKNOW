@@ -8,6 +8,7 @@ import uploadController from '../../controllers/upload.controller.js';
 import { getWorkspaceContext } from '../../utils/workspaceContext.util.js';
 import { labelCampaignRunFailure } from '../../utils/campaignRunFailureLabel.util.js';
 import { assertCampaignNodesZaloAccountsAccessible } from './campaignZaloAccess.service.js';
+import { assertCampaignNodesChannelAccountsAccessible } from './campaignChannelAccess.service.js';
 
 /**
  * PR-8a (UI nói thật) Việc 3 — DTO lượt failed mới nhất trong 7 ngày cho dòng đỏ ở FE. Nhãn Việt
@@ -238,6 +239,8 @@ class CampaignCrudService {
     // PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3 — nhân viên chỉ lưu được chiến dịch dùng tài khoản Zalo được giao (kể cả
     // node get_all_*). Kiểm TRƯỚC khi mở giao dịch; chủ / super admin qua. Trợ lý AI cũng tạo chiến dịch qua đây.
     await assertCampaignNodesZaloAccountsAccessible(context, nodes);
+    // PLAN_GIAO_TK_TG_WA PR-H2 — như Zalo: node send_telegram / send_whatsapp chỉ dùng tài khoản được giao.
+    await assertCampaignNodesChannelAccountsAccessible(context, nodes);
     // 'mixed', 'telegram', 'telegram_group' và 'whatsapp': không có hạn mức số chiến dịch riêng theo loại → null (chỉ chịu trần 'campaigns' chung).
     const typeResourceKey = campaignType === 'email'
       ? 'emailCampaigns'
@@ -396,6 +399,7 @@ class CampaignCrudService {
     // PR-G3 — chỉ khi body THAY node: nhân viên không được cài tài khoản Zalo chưa giao (xem createCampaign).
     if (nodes !== undefined) {
       await assertCampaignNodesZaloAccountsAccessible(context, nodes);
+      await assertCampaignNodesChannelAccountsAccessible(context, nodes);
     }
     const client = await db.getClient();
     try {
@@ -683,6 +687,7 @@ class CampaignCrudService {
       // chiến dịch gốc đã giao cho họ (không thì bản sao là đường vòng cài tài khoản chưa giao). Chủ / super admin qua.
       const originalNodesRows = await campaignCrudRepository.findNodesByCampaignIdTx(client, campaignId);
       await assertCampaignNodesZaloAccountsAccessible(context, originalNodesRows);
+      await assertCampaignNodesChannelAccountsAccessible(context, originalNodesRows);
 
       await enforceResourceLimitTx(client, {
         userId: context.workspaceOwnerId,

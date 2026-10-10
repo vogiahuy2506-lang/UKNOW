@@ -185,3 +185,46 @@ describe('campaignChannelRunner.runAdapterSendNode — PR-E2: nguồn người n
     expect(resolveRecipients.mock.calls[0][0].rows).toBe(last);
   });
 });
+
+describe('campaignChannelRunner.runAdapterSendNode — PLAN_GIAO_TK_TG_WA H2: phạm vi tài khoản của người kích hoạt', () => {
+  const buildCtx = (extra = {}) => {
+    const resolveAccount = jest.fn(async () => ({ accountKey: '7' }));
+    return {
+      resolveAccount,
+      ctx: {
+        descriptor: { key: 'telegram', adapter: { resolveAccount, resolveRecipients: async () => [] } },
+        runId: 1,
+        campaignId: 2,
+        userId: 3,
+        workspaceOwnerId: 3,
+        node: { id: 4152 },
+        config: { recipientSource: 'telegram_conversations', steps: [{ message: 'hi' }] },
+        nodeOutputs: {},
+        lastOutputItems: [],
+        ensureRunStillRunning: async () => {},
+        ...extra,
+      },
+    };
+  };
+
+  it('chuyển nguyên accessibleChannelRefs xuống adapter.resolveAccount (chốt chung của tầng gửi)', async () => {
+    const refs = { telegram: ['7'], whatsapp_baileys: [] };
+    const { ctx, resolveAccount } = buildCtx({ accessibleChannelRefs: refs });
+    await runAdapterSendNode(ctx).catch(() => {});
+    expect(resolveAccount).toHaveBeenCalledTimes(1);
+    expect(resolveAccount.mock.calls[0][0].accessibleChannelRefs).toBe(refs);
+  });
+
+  it('lỗi 403 CHANNEL_ACCOUNT_NOT_ASSIGNED của adapter được ném nguyên, KHÔNG gọi resolveRecipients', async () => {
+    const resolveRecipients = jest.fn(async () => []);
+    const notAssigned = Object.assign(new Error('Tài khoản Telegram này chưa được giao cho bạn.'), { status: 403, code: 'CHANNEL_ACCOUNT_NOT_ASSIGNED' });
+    const ctx = {
+      descriptor: { key: 'telegram', adapter: { resolveAccount: async () => { throw notAssigned; }, resolveRecipients } },
+      runId: 1, campaignId: 2, userId: 3, workspaceOwnerId: 3, node: { id: 1 }, config: {}, nodeOutputs: {}, lastOutputItems: [],
+      ensureRunStillRunning: async () => {},
+      accessibleChannelRefs: { telegram: [], whatsapp_baileys: [] },
+    };
+    await expect(runAdapterSendNode(ctx)).rejects.toBe(notAssigned);
+    expect(resolveRecipients).not.toHaveBeenCalled();
+  });
+});

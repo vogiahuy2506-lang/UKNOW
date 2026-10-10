@@ -206,6 +206,25 @@ describe('resolveAccount', () => {
       whatsappChannelAdapter.resolveAccount({ workspaceOwnerId: 41, config: { whatsappSessionKey: '40-default' }, node: { id: 1 } })
     ).rejects.toMatchObject({ code: 'WHATSAPP_ACCOUNT_NOT_READY' });
   });
+
+  describe('PLAN_GIAO_TK_TG_WA H2 — chốt chung: nhân viên chỉ dùng phiên được giao (accessibleChannelRefs)', () => {
+    const resolve = (accessibleChannelRefs) => whatsappChannelAdapter.resolveAccount({
+      workspaceOwnerId: 40, config: { whatsappSessionKey: '40-default' }, node: { id: 1 }, accessibleChannelRefs,
+    });
+
+    it('ngoài phạm vi / rỗng / thiếu khoá kênh → 403 CHANNEL_ACCOUNT_NOT_ASSIGNED', async () => {
+      await expect(resolve({ telegram: null, whatsapp_baileys: ['40-khac'] })).rejects.toMatchObject({ status: 403, code: 'CHANNEL_ACCOUNT_NOT_ASSIGNED' });
+      await expect(resolve({ telegram: null, whatsapp_baileys: [] })).rejects.toMatchObject({ code: 'CHANNEL_ACCOUNT_NOT_ASSIGNED' });
+      await expect(resolve({ telegram: null })).rejects.toMatchObject({ code: 'CHANNEL_ACCOUNT_NOT_ASSIGNED' }); // hỏng thì chặn
+      await expect(resolve(null)).rejects.toMatchObject({ code: 'CHANNEL_ACCOUNT_NOT_ASSIGNED' });
+    });
+
+    it('trong phạm vi / null / không truyền → qua', async () => {
+      await expect(resolve({ telegram: [], whatsapp_baileys: ['40-default'] })).resolves.toMatchObject({ sessionKey: '40-default' });
+      await expect(resolve({ telegram: null, whatsapp_baileys: null })).resolves.toMatchObject({ sessionKey: '40-default' });
+      await expect(resolve(undefined)).resolves.toMatchObject({ sessionKey: '40-default' });
+    });
+  });
 });
 
 describe('resolveRecipients', () => {

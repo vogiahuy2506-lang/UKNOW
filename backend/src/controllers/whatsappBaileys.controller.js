@@ -22,8 +22,11 @@ import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
 import {
   assertChannelAccountAccess,
   CHANNEL_ACCOUNT_NOT_ASSIGNED_CODE,
+  getAccessibleChannelAccountRefs,
   isAssignmentScopedContext,
+  isChannelAccountAccessible,
 } from '../services/user/memberChannelAccess.service.js';
+import { respondIfChannelNotAssigned } from '../utils/channelAccountHttp.util.js';
 import {
   deleteAssignmentsByRef,
   insertSelfLoginChannelAssignment,
@@ -155,10 +158,13 @@ class WhatsAppBaileysController {
     try {
       const userId = resolveWorkspaceOwnerId(req.user);
       const sessionKey = safeSessionKey(userId, req.params.key);
+      // PLAN_GIAO_TK_TG_WA PR-H2: nhân viên chỉ thao tác phiên ĐƯỢC GIAO (chủ / super admin qua).
+      await assertChannelAccountAccess(getWorkspaceContext(req.user), WHATSAPP_BAILEYS_CHANNEL, sessionKey);
       const rec = whatsappBaileysService.getSession(sessionKey);
       if (!rec) return res.json({ success: true, data: { sessionKey, status: 'closed', qr: null } });
       return res.json({ success: true, data: rec });
     } catch (err) {
+      if (respondIfChannelNotAssigned(res, err)) return;
       console.error('[WhatsApp/Baileys] status error:', err.message);
       return res.status(500).json({ success: false, message: err.message });
     }
@@ -178,10 +184,12 @@ class WhatsAppBaileysController {
       const myPersisted = persisted
         .filter((k) => k.startsWith(myPrefix))
         .map((k) => k.substring(myPrefix.length));
+      // PR-H2: nhân viên chỉ thấy phiên ĐƯỢC GIAO (chủ / super admin: null = tất cả; lỗi đọc việc giao → []).
+      const accessible = await getAccessibleChannelAccountRefs(getWorkspaceContext(req.user), WHATSAPP_BAILEYS_CHANNEL);
       const shortKeys = Array.from(new Set([
         ...mine.map((m) => m.sessionKey.substring(myPrefix.length)),
         ...myPersisted,
-      ]));
+      ])).filter((shortKey) => isChannelAccountAccessible(`${myPrefix}${shortKey}`, accessible));
 
       // P6 — phiên bị khoá do vượt hạn mức gói (hạ gói / slot hết hạn): trang Quản lý kênh gắn nhãn + link mua thêm.
       const { lockedChannelAccountRefs } = await import('../utils/topupLockGate.util.js');
@@ -212,10 +220,13 @@ class WhatsAppBaileysController {
     try {
       const userId = resolveWorkspaceOwnerId(req.user);
       const sessionKey = safeSessionKey(userId, req.params.key);
+      // PLAN_GIAO_TK_TG_WA PR-H2: nhân viên chỉ thao tác phiên ĐƯỢC GIAO (chủ / super admin qua).
+      await assertChannelAccountAccess(getWorkspaceContext(req.user), WHATSAPP_BAILEYS_CHANNEL, sessionKey);
       const ok = await whatsappBaileysService.disconnectSession(sessionKey);
       if (ok) await auditAccount(req, AUDIT_ACTIONS.WHATSAPP_ACCOUNT_DISCONNECTED, sessionKey);
       return res.json({ success: ok });
     } catch (err) {
+      if (respondIfChannelNotAssigned(res, err)) return;
       console.error('[WhatsApp/Baileys] disconnect error:', err.message);
       return res.status(500).json({ success: false, message: err.message });
     }
@@ -225,6 +236,8 @@ class WhatsAppBaileysController {
     try {
       const userId = resolveWorkspaceOwnerId(req.user);
       const sessionKey = safeSessionKey(userId, req.params.key);
+      // PLAN_GIAO_TK_TG_WA PR-H2: nhân viên chỉ thao tác phiên ĐƯỢC GIAO (chủ / super admin qua).
+      await assertChannelAccountAccess(getWorkspaceContext(req.user), WHATSAPP_BAILEYS_CHANNEL, sessionKey);
       // deleteSessionFiles là async — thiếu await thì `ok` là Promise (JSON ra `{}`) và xoá chưa xong đã trả lời.
       const ok = await whatsappBaileysService.deleteSessionFiles(sessionKey);
       if (ok) {
@@ -238,6 +251,7 @@ class WhatsAppBaileysController {
       if (ok) await auditAccount(req, AUDIT_ACTIONS.WHATSAPP_ACCOUNT_DELETED, sessionKey);
       return res.json({ success: ok });
     } catch (err) {
+      if (respondIfChannelNotAssigned(res, err)) return;
       console.error('[WhatsApp/Baileys] remove error:', err.message);
       return res.status(500).json({ success: false, message: err.message });
     }
@@ -247,6 +261,8 @@ class WhatsAppBaileysController {
     try {
       const userId = resolveWorkspaceOwnerId(req.user);
       const sessionKey = safeSessionKey(userId, req.params.key);
+      // PLAN_GIAO_TK_TG_WA PR-H2: nhân viên chỉ thao tác phiên ĐƯỢC GIAO (chủ / super admin qua).
+      await assertChannelAccountAccess(getWorkspaceContext(req.user), WHATSAPP_BAILEYS_CHANNEL, sessionKey);
       const { nickname } = req.body || {};
       // nickname cho phép empty string để xoá tên, max 255 chars
       const trimmed = typeof nickname === 'string' ? nickname.trim().slice(0, 255) : null;
@@ -254,6 +270,7 @@ class WhatsAppBaileysController {
       await auditAccount(req, AUDIT_ACTIONS.WHATSAPP_ACCOUNT_RENAMED, sessionKey, { nickname: trimmed });
       return res.json({ success: true });
     } catch (err) {
+      if (respondIfChannelNotAssigned(res, err)) return;
       console.error('[WhatsApp/Baileys] updateSession error:', err.message);
       return res.status(500).json({ success: false, message: err.message });
     }
@@ -263,6 +280,8 @@ class WhatsAppBaileysController {
     try {
       const userId = resolveWorkspaceOwnerId(req.user);
       const sessionKey = safeSessionKey(userId, req.params.key);
+      // PLAN_GIAO_TK_TG_WA PR-H2: nhân viên chỉ thao tác phiên ĐƯỢC GIAO (chủ / super admin qua).
+      await assertChannelAccountAccess(getWorkspaceContext(req.user), WHATSAPP_BAILEYS_CHANNEL, sessionKey);
       const { to, text } = req.body || {};
       if (!to || !text) {
         return res.status(400).json({ success: false, message: 'to và text là bắt buộc' });
@@ -280,6 +299,7 @@ class WhatsAppBaileysController {
       const result = await whatsappBaileysService.sendMessage(sessionKey, recipient, String(text).slice(0, 1000));
       return res.json({ success: true, data: { messageId: result?.key?.id } });
     } catch (err) {
+      if (respondIfChannelNotAssigned(res, err)) return;
       console.error('[WhatsApp/Baileys] sendMessage error:', err.message);
       return res.status(500).json({ success: false, message: err.message });
     }
@@ -300,6 +320,8 @@ class WhatsAppBaileysController {
     try {
       const userId = resolveWorkspaceOwnerId(req.user);
       const sessionKey = safeSessionKey(userId, req.params.key);
+      // PLAN_GIAO_TK_TG_WA PR-H2: nhân viên chỉ thao tác phiên ĐƯỢC GIAO (chủ / super admin qua).
+      await assertChannelAccountAccess(getWorkspaceContext(req.user), WHATSAPP_BAILEYS_CHANNEL, sessionKey);
       const sessions = whatsappBaileysService.listSessions();
       const target = sessions.find((s) => s.sessionKey === sessionKey);
       if (!target?.emitter) {
@@ -320,6 +342,7 @@ class WhatsAppBaileysController {
       target.emitter.emit('message', { sessionKey, message: fakeMsg });
       return res.json({ success: true, data: { listeners: listenerCount } });
     } catch (err) {
+      if (respondIfChannelNotAssigned(res, err)) return;
       console.error('[WhatsApp/Baileys] inject error:', err.message);
       return res.status(500).json({ success: false, message: err.message });
     }

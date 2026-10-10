@@ -30,6 +30,7 @@
  */
 
 import { ChannelSendError } from '../campaignChannelRegistry.service.js';
+import { assertChannelAccountInScope } from '../../user/memberChannelAccess.service.js';
 import telegramGateway from '../../chatbot/telegramGateway.client.js';
 import { isStubOnly } from '../../chatbot/inProcChannelGateway/stubCheck.js';
 import chatbotTelegramRepository from '../../../repositories/chatbot/chatbotTelegram.repository.js';
@@ -259,9 +260,16 @@ async function assertHasRecipients({ node, account }) {
  * @param {{workspaceOwnerId: number, config: object}} input
  * @returns {Promise<{accountKey: string, accountId: number, telegramUserId: number, display: string}>}
  */
-async function resolveAccount({ workspaceOwnerId, config, node }) {
+async function resolveAccount({ workspaceOwnerId, config, node, accessibleChannelRefs }) {
   assertOwnerPresent(workspaceOwnerId, node?.id);
   const accountId = config?.telegramAccountId;
+  // PLAN_GIAO_TK_TG_WA H2 — chốt chung của tầng gửi (chiến dịch + Gửi nhanh): nhân viên chỉ dùng tài khoản được giao.
+  // `accessibleChannelRefs` = phạm vi người kích hoạt ({ telegram: string[]|null, whatsapp_baileys: ... }, null = thấy hết).
+  // Có truyền phạm vi mà thiếu / sai kiểu ở kênh này → chặn (hỏng thì chặn). Không truyền (undefined) = gọi nội bộ không có
+  // người thao tác (vd bộ ước tính thời gian) — mọi đường GỬI đều truyền.
+  if (accessibleChannelRefs !== undefined) {
+    assertChannelAccountInScope('telegram', accountId, accessibleChannelRefs?.telegram);
+  }
   const account = await chatbotTelegramRepository.getAccountById(accountId, {
     userId: workspaceOwnerId,
   });

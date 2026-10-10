@@ -59,6 +59,11 @@ import {
   resolveRunTriggerUserId,
 } from './campaignZaloAccess.service.js';
 import {
+  assertRunChannelAccountsAssigned,
+  collectCampaignChannelAccountRefs,
+  emptyChannelScope,
+} from './campaignChannelAccess.service.js';
+import {
   deriveVariablesForText,
   renderTemplateText,
   neutralizeUnresolvedTemplateVariables,
@@ -3132,6 +3137,42 @@ class CampaignRunService {
         return campaignZaloSenderService.getCampaignZaloAccount({ ...args, accessibleAccountIds: zaloAccessibleIds });
       };
 
+      // PLAN_GIAO_TK_TG_WA PR-H2 — cùng khuôn với Zalo cho node Telegram / WhatsApp: nhân viên chỉ gửi bằng tài khoản ĐƯỢC GIAO,
+      // kiểm theo NGƯỜI KÍCH HOẠT lượt chạy (không theo người tạo chiến dịch; chủ tự chạy thì luôn được). Sai thì đóng sổ run
+      // 'failed' kèm lý do rõ và KHÔNG gửi tin. Kiểm đầu mỗi chu kỳ + sau tối đa 5 phút (chủ gỡ giao giữa chừng thì dừng).
+      // Mặc định phạm vi RỖNG (hỏng thì chặn): chưa tính xong thì adapter chặn mọi tài khoản.
+      const channelRefsInCampaign = collectCampaignChannelAccountRefs(nodes);
+      const hasChannelAccountNodes = channelRefsInCampaign.telegram.length > 0 || channelRefsInCampaign.whatsapp_baileys.length > 0;
+      let channelAccessScope = emptyChannelScope();
+      let channelAccessCheckedAtMs = 0;
+      const enforceChannelAccessForRun = async () => {
+        if (!hasChannelAccountNodes) return;
+        try {
+          const result = await assertRunChannelAccountsAssigned({
+            ownerId: userId,
+            actorUserIds: [
+              resolveRunTriggerUserId({
+                metadataTriggeredBy: runRow?.run_metadata?.triggeredBy,
+                triggeredBy: runRow?.triggered_by,
+                scheduleCreatedBy: runRow?.schedule_created_by,
+                campaignCreatedBy: campaign?.created_by,
+              }),
+            ],
+            nodes,
+          });
+          channelAccessScope = result.scope;
+          channelAccessCheckedAtMs = Date.now();
+        } catch (accessError) {
+          if (accessError?.code !== 'CHANNEL_ACCOUNT_NOT_ASSIGNED') throw accessError;
+          channelAccessScope = emptyChannelScope();
+          await this._failRunAndNotify(runId, campaignId, accessError.message, 'channel_account_not_assigned');
+          const stopError = new Error(accessError.message);
+          stopError.code = 'RUN_STOPPED';
+          stopError.channelAccessBlocked = true;
+          throw stopError;
+        }
+      };
+
       const orderMap = campaignFlowService.buildExecutionOrderMap(nodes, connections, {
         nodeIdKey: 'id',
         sourceKey: 'source_node_id',
@@ -3482,6 +3523,7 @@ class CampaignRunService {
       while (true) {
         // PR-G3 — kiểm tài khoản Zalo được giao trước MỖI chu kỳ (lần đầu = kiểm lúc bắt đầu, trước khi gửi bất kỳ tin nào).
         await enforceZaloAccessForRun();
+        await enforceChannelAccessForRun();
         nextContinuousWakeAtMs = null;
         let shouldPauseUntilNextContinuousCycle = false;
         const isEmailRateLimitCooldownActive = (
@@ -8902,6 +8944,8 @@ class CampaignRunService {
         if (adapterDescriptor) {
           let adapterResult;
           try {
+            // PR-H2 — chủ gỡ giao giữa chừng thì tối đa 5 phút sau lượt chạy dừng (kiểm lại cả lúc bắt đầu mỗi chu kỳ).
+            if (Date.now() - channelAccessCheckedAtMs > ZALO_ACCESS_RECHECK_MS) await enforceChannelAccessForRun();
             adapterResult = await campaignChannelRunner.runAdapterSendNode({
               descriptor: adapterDescriptor,
               runId,
@@ -8922,6 +8966,7 @@ class CampaignRunService {
               ensureRunStillRunning: () => this.ensureRunStillRunning(runId),
               logExecutionNode: campaignExecutionLogService.logExecutionNode,
               quotaGate: this.channelQuotaGate,
+              accessibleChannelRefs: channelAccessScope,
             });
           } catch (adapterError) {
             // F1 (review vòng 1 PR-3) — runner ném lỗi (quiet_hours/rate_limit/auth/not_configured/
@@ -9022,6 +9067,16 @@ class CampaignRunService {
               );
               pauseNote.code = 'CAMPAIGN_PAUSED_BY_CHANNEL_ACCOUNT_UNAVAILABLE';
               throw pauseNote;
+            }
+
+            // PR-H2 — tài khoản gửi bị gỡ giao trong khoảng giữa hai lần kiểm lại (`resolveAccount` chặn bằng phạm vi cũ): đóng sổ
+            // 'failed' với lý do rõ, giống nhánh kiểm đầu chu kỳ (`enforceChannelAccessForRun`), KHÔNG gửi tin.
+            if (adapterError?.code === 'CHANNEL_ACCOUNT_NOT_ASSIGNED') {
+              await this._failRunAndNotify(runId, campaignId, adapterError.message, 'channel_account_not_assigned');
+              const stopError = new Error(adapterError.message);
+              stopError.code = 'RUN_STOPPED';
+              stopError.channelAccessBlocked = true;
+              throw stopError;
             }
 
             // Mã khác (not_configured/RUN_STOPPED/RUN_YIELD_SLOT/…) → ném tiếp như cũ, run failed.
@@ -9280,8 +9335,8 @@ class CampaignRunService {
       if (error?.code === 'RUN_STOPPED') {
         console.log(error?.quotaBlocked
           ? `[Campaign ${campaignId}] Run ${runId} dừng do hết hạn mức gói: ${error.message}`
-          : error?.zaloAccessBlocked
-            ? `[Campaign ${campaignId}] Run ${runId} dừng vì tài khoản Zalo chưa được giao: ${error.message}`
+          : (error?.zaloAccessBlocked || error?.channelAccessBlocked)
+            ? `[Campaign ${campaignId}] Run ${runId} dừng vì tài khoản ${error.channelAccessBlocked ? 'Telegram/WhatsApp' : 'Zalo'} chưa được giao: ${error.message}`
             : `[Campaign ${campaignId}] Lượt chạy ${runId} đã được dừng bởi người dùng`);
         return;
       }

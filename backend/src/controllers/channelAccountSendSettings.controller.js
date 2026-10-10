@@ -4,6 +4,18 @@ import {
   updateChannelAccountSendSettings,
 } from '../services/campaign/channelAccountSendSettings.service.js';
 import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
+import { accessChannelOfRoute, assertChannelAccountAccess } from '../services/user/memberChannelAccess.service.js';
+
+/**
+ * PLAN_GIAO_TK_TG_WA PR-H2 — nhân viên (có `chatbot_channels_manage`) chỉ xem / đổi cấu hình gửi của tài khoản ĐƯỢC GIAO
+ * (403 CHANNEL_ACCOUNT_NOT_ASSIGNED). Kênh lạ → bỏ qua, service trả lỗi như cũ.
+ */
+async function assertAssignedSendSettingsAccount(req) {
+  const accessChannel = accessChannelOfRoute(req.params.channel);
+  if (accessChannel) {
+    await assertChannelAccountAccess(getWorkspaceContext(req.user), accessChannel, req.params.accountRef);
+  }
+}
 
 /**
  * PLAN_TG_WA_DAY_DU_2026-09-29 P4 — trần gửi/ngày + tốc độ gửi theo tài khoản Telegram/WhatsApp.
@@ -15,6 +27,7 @@ class ChannelAccountSendSettingsController {
    */
   async get(req, res) {
     try {
+      await assertAssignedSendSettingsAccount(req);
       const { workspaceOwnerId } = getWorkspaceContext(req.user);
       const data = await getChannelAccountSendSettings({
         channel: req.params.channel,
@@ -33,6 +46,7 @@ class ChannelAccountSendSettingsController {
    */
   async update(req, res) {
     try {
+      await assertAssignedSendSettingsAccount(req);
       const { actorUserId, workspaceOwnerId } = getWorkspaceContext(req.user);
       const channel = req.params.channel;
       const result = await updateChannelAccountSendSettings({

@@ -15,6 +15,7 @@ import { validateChannelSteps } from '../../utils/channelSteps.util.js';
 import { assertChannelEntitled } from './channelEntitlement.service.js';
 import { resolveZaloAccountEntries } from '../../utils/campaignZaloAccountResolve.util.js';
 import { assertRunZaloAccountsAssigned } from './campaignZaloAccess.service.js';
+import { assertRunChannelAccountsAssigned } from './campaignChannelAccess.service.js';
 
 // PR-1 (tách tầng kênh gửi) — nguồn kênh gửi đọc từ registry thay vì ghi cứng. `send_zalo` (chuỗi
 // cũ) đã BỎ: 0 node trên production, engine không còn xử lý (xem fallback bên dưới ~dòng 177 và
@@ -35,6 +36,9 @@ export const SEND_NODE_SUBTYPES = new Set(campaignChannelRegistry.getSendNodeSub
  *   ném 403 ZALO_ACCOUNT_NOT_ASSIGNED (PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3). Chủ tạo + chủ chạy → không lọc.
  *   Engine kiểm lại ở đầu mỗi chu kỳ chạy nên bỏ trống ở đây không mở lối gửi — chỉ mất lời báo sớm.
  * @param {Function} [params.assertZaloAccountsAssignedFn] - Optional override for unit tests
+ * @param {Function} [params.assertChannelAccountsAssignedFn] - Optional override for unit tests. PLAN_GIAO_TK_TG_WA PR-H2: cùng
+ *   khuôn `actorUserIds` ở trên cho node Telegram / WhatsApp — nhân viên có trong đó mà chưa được giao tài khoản của node →
+ *   ném 403 CHANNEL_ACCOUNT_NOT_ASSIGNED TRƯỚC kiểm kết nối (lời báo đúng là "chưa được giao", không phải "mất kết nối").
  * @returns {Promise<{ valid: true, nodes: Array }>}
  */
 export async function validateCampaignPreflight({
@@ -45,6 +49,7 @@ export async function validateCampaignPreflight({
   resourceIsLockedFn = resourceIsLocked,
   assertChannelEntitledFn = assertChannelEntitled,
   assertZaloAccountsAssignedFn = assertRunZaloAccountsAssigned,
+  assertChannelAccountsAssignedFn = assertRunChannelAccountsAssigned,
 }) {
   const parsedCampaignId = parseInt(campaignId, 10);
   if (!Number.isFinite(parsedCampaignId)) {
@@ -90,6 +95,10 @@ export async function validateCampaignPreflight({
   // 1c. PR-3 (tách tầng kênh gửi) — node kênh 'adapter' (Telegram/WhatsApp từ PR-6+, mock ở test)
   // phải qua checkReadiness ở preflight, cùng tinh thần kiểm kết nối Zalo ở mục 2 dưới đây: phát
   // hiện thiếu cấu hình/tài khoản mất kết nối TRƯỚC khi chạy, không để tới lúc engine gửi mới lộ.
+  if (Array.isArray(actorUserIds) && actorUserIds.length > 0
+    && nodes.some((node) => campaignChannelRegistry.getAdapterDescriptorBySubtype(String(node.node_subtype || '').trim()))) {
+    await assertChannelAccountsAssignedFn({ ownerId: workspaceOwnerId, actorUserIds, nodes });
+  }
   for (const node of nodes) {
     const subtype = String(node.node_subtype || '').trim();
     const adapterDescriptor = campaignChannelRegistry.getAdapterDescriptorBySubtype(subtype);

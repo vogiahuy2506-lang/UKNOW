@@ -24,6 +24,7 @@ jest.unstable_mockModule('../../config/database.js', () => ({
 jest.unstable_mockModule('../../utils/userResourceLimit.util.js', () => ({ enforceResourceLimitTx }));
 jest.unstable_mockModule('../../utils/topupLockGate.util.js', () => ({
   whatsappSessionIsLocked,
+  lockedChannelAccountRefs: jest.fn(async () => new Set()),
   CHANNEL_ACCOUNT_LOCKED_MESSAGE: 'Tài khoản đang bị khoá do vượt hạn mức gói',
 }));
 const logWorkspace = jest.fn(async () => {});
@@ -328,5 +329,78 @@ describe('whatsappBaileys.controller — giao tài khoản cho nhân viên (PR-H
     svc.deleteSessionFiles.mockResolvedValue(false);
     await controller.remove(makeReq(), makeRes());
     expect(dbQuery.mock.calls.filter((c) => /member_channel_accounts/.test(String(c[0])))).toHaveLength(0);
+  });
+});
+
+// ─── PLAN_GIAO_TK_TG_WA PR-H2: nhân viên chỉ thao tác phiên ĐƯỢC GIAO ───────────────────────────────────────────────────
+describe('whatsappBaileys.controller — chặn phiên chưa giao (PR-H2)', () => {
+  const employee = { id: 20, role: 'user', activeContext: { type: 'employee', ownerId: 7, membershipId: 3, permissions: {} } };
+  const assigned = (...keys) => dbQuery.mockImplementation(async () => ({ rows: keys.map((account_ref) => ({ account_ref })) }));
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    svc.getSession.mockReturnValue(undefined);
+    svc.listPersistedSessions.mockResolvedValue([]);
+    svc.listSessions.mockReturnValue([]);
+    dbQuery.mockImplementation(async () => ({ rows: [] }));
+  });
+
+  const cases = [
+    ['status', (req) => controller.status(req, makeRes())],
+    ['disconnect', (req) => controller.disconnect(req, makeRes())],
+    ['remove', (req) => controller.remove(req, makeRes())],
+    ['updateSession', (req) => controller.updateSession(req, makeRes())],
+    ['sendMessage', (req) => controller.sendMessage(req, makeRes())],
+  ];
+
+  it.each(cases)('%s trên phiên CHƯA giao → 403 CHANNEL_ACCOUNT_NOT_ASSIGNED, KHÔNG chạm dịch vụ WhatsApp', async (name) => {
+    const res = makeRes();
+    const req = makeReq({ user: employee, params: { key: 'hai' }, body: { to: '0912345678', text: 'hi', nickname: 'x' } });
+    await controller[name](req, res);
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toMatchObject({ success: false, code: 'CHANNEL_ACCOUNT_NOT_ASSIGNED' });
+    expect(svc.disconnectSession).not.toHaveBeenCalled();
+    expect(svc.deleteSessionFiles).not.toHaveBeenCalled();
+    expect(svc.updateSessionNickname).not.toHaveBeenCalled();
+    expect(svc.sendMessage).not.toHaveBeenCalled();
+    expect(svc.getSession).not.toHaveBeenCalled();
+  });
+
+  it('phiên ĐƯỢC giao → qua cổng (status trả bản ghi phiên)', async () => {
+    assigned('7-mot');
+    svc.getSession.mockReturnValue({ sessionKey: '7-mot', status: 'open' });
+    const res = makeRes();
+    await controller.status(makeReq({ user: employee, params: { key: 'mot' } }), res);
+    expect(res.body).toEqual({ success: true, data: { sessionKey: '7-mot', status: 'open' } });
+  });
+
+  it('CHỦ làm được trên phiên bất kỳ, không đọc bảng giao', async () => {
+    svc.disconnectSession.mockResolvedValue(true);
+    const res = makeRes();
+    await controller.disconnect(makeReq({ params: { key: 'hai' } }), res);
+    expect(res.body).toEqual({ success: true });
+    expect(dbQuery).not.toHaveBeenCalled();
+  });
+
+  it('list: nhân viên chỉ thấy phiên được giao; chủ thấy hết', async () => {
+    svc.listSessions.mockReturnValue([]);
+    svc.listPersistedSessions.mockResolvedValue(['7-mot', '7-hai']);
+    assigned('7-mot');
+    const emp = makeRes();
+    await controller.list(makeReq({ user: employee }), emp);
+    expect(emp.body.data.map((s) => s.sessionKey)).toEqual(['7-mot']);
+
+    const own = makeRes();
+    await controller.list(makeReq(), own);
+    expect(own.body.data.map((s) => s.sessionKey).sort()).toEqual(['7-hai', '7-mot']);
+  });
+
+  it('list: lỗi đọc việc giao → danh sách RỖNG (hỏng thì chặn), không lộ phiên', async () => {
+    svc.listPersistedSessions.mockResolvedValue(['7-mot']);
+    dbQuery.mockRejectedValue(new Error('db down'));
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    const res = makeRes();
+    await controller.list(makeReq({ user: employee }), res);
+    expect(res.body.data).toEqual([]);
   });
 });

@@ -51,7 +51,11 @@ import chatbotActiveHoursService from '../services/chatbot/chatbotActiveHours.se
 import { consumeWidgetUploadBytes } from '../services/storage/widgetUploadCap.service.js';
 import { resolveWorkspaceOwnerId } from '../services/storage/storageQuota.service.js';
 import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
+import { respondIfChannelNotAssigned } from '../utils/channelAccountHttp.util.js';
 import {
+  assertChannelAccountAccess,
+  getAccessibleChannelAccountRefs,
+  isChannelAccountAccessible,
   getAccessibleZaloAccountIds,
   isAssignmentScopedContext,
   isZaloAccountAccessible,
@@ -800,6 +804,8 @@ class ChatbotController {
       const userPrefix = `${userId}-`;
       const safeAllBaileys = Array.isArray(allBaileys) ? allBaileys : [];
       const safePersistedBaileys = Array.isArray(persistedBaileys) ? persistedBaileys : [];
+      // PLAN_GIAO_TK_TG_WA PR-H2: nhân viên chỉ thấy phiên Baileys ĐƯỢC GIAO (Cloud API không thuộc phạm vi giao — giữ nguyên).
+      const accessibleWhatsApp = await getAccessibleChannelAccountRefs(getWorkspaceContext(req.user), 'whatsapp_baileys');
       const shortKeys = Array.from(new Set([
         ...safeAllBaileys
           .filter((s) => s?.sessionKey?.startsWith?.(userPrefix))
@@ -807,7 +813,7 @@ class ChatbotController {
         ...safePersistedBaileys
           .filter((k) => typeof k === 'string' && k.startsWith(userPrefix))
           .map((k) => k.substring(userPrefix.length)),
-      ]));
+      ])).filter((shortKey) => isChannelAccountAccessible(`${userPrefix}${shortKey}`, accessibleWhatsApp));
 
       const baileysAccounts = await Promise.all(shortKeys.map(async (shortKey) => {
         const fullKey = `${userId}-${shortKey}`;
@@ -895,6 +901,9 @@ class ChatbotController {
       let settings;
       if (session_key) {
         // ── Baileys path ───────────────────────────────────────────
+        // PR-H2: nhân viên chỉ bật / tắt chatbot cho phiên ĐƯỢC GIAO — kiểm TRƯỚC `findOtherEnabledChatbot` (câu 409 nêu tên
+        // chatbot đang giữ phiên, kiểm sau sẽ lộ tên bot của phiên chưa giao). Tắt cũng phải được giao.
+        await assertChannelAccountAccess(getWorkspaceContext(req.user), 'whatsapp_baileys', session_key);
         // 1 tài khoản = 1 chatbot: bật bot thứ hai khi bot khác đang bật thì chặn (tắt luôn được).
         if (enabled && normalizedChatbotId != null) {
           await chatbotWhatsAppBaileysRepository.assertOwnedSession(ownerUserId, session_key);
@@ -947,6 +956,7 @@ class ChatbotController {
 
       return res.json({ success: true, data: settings });
     } catch (err) {
+      if (respondIfChannelNotAssigned(res, err)) return;
       console.error('[ChatbotChannel] toggleWhatsAppAccountChatbot error:', err);
       return res.status(err.status || 500).json({ success: false, message: err.message });
     }
@@ -3021,7 +3031,10 @@ class ChatbotController {
   async listTelegramAccounts(req, res) {
     try {
       const userId = resolveWorkspaceOwnerId(req.user);
-      const accounts = await telegramPersonalService.listAccounts(userId);
+      // PLAN_GIAO_TK_TG_WA PR-H2: nhân viên chỉ thấy tài khoản ĐƯỢC GIAO (chủ / super admin: null = tất cả; lỗi đọc → []).
+      const accessible = await getAccessibleChannelAccountRefs(getWorkspaceContext(req.user), 'telegram');
+      const accounts = (await telegramPersonalService.listAccounts(userId))
+        .filter((account) => isChannelAccountAccessible(account.id, accessible));
       return res.json({ success: true, data: accounts });
     } catch (err) {
       return res.status(err.status || 500).json({ success: false, message: err.message });
@@ -3039,6 +3052,7 @@ class ChatbotController {
       if (!Number.isFinite(id)) {
         return res.status(400).json({ success: false, message: 'Invalid Telegram account ID' });
       }
+      await assertChannelAccountAccess(getWorkspaceContext(req.user), 'telegram', id);
       const deleted = await telegramPersonalService.deleteAccount(userId, id);
       if (!deleted) {
         return res.status(404).json({ success: false, message: 'Không tìm thấy tài khoản Telegram' });
@@ -3046,6 +3060,7 @@ class ChatbotController {
       await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CHATBOT_CHANNEL_DISCONNECTED, AUDIT_ENTITY_TYPES.CHATBOT_CHANNEL, id, { channelType: 'telegram_personal' });
       return res.json({ success: true, message: 'Đã xóa tài khoản Telegram' });
     } catch (err) {
+      if (respondIfChannelNotAssigned(res, err)) return;
       console.error('[Telegram] deleteTelegramAccount error:', err.message);
       return res.status(err.status || 500).json({ success: false, message: err.message });
     }
@@ -3062,6 +3077,7 @@ class ChatbotController {
       if (!Number.isFinite(id)) {
         return res.status(400).json({ success: false, message: 'Invalid Telegram account ID' });
       }
+      await assertChannelAccountAccess(getWorkspaceContext(req.user), 'telegram', id);
       const updated = await telegramPersonalService.logoutAccount(userId, id);
       if (!updated) {
         return res.status(404).json({ success: false, message: 'Không tìm thấy tài khoản Telegram' });
@@ -3069,6 +3085,7 @@ class ChatbotController {
       await auditTelegramAccount(req, AUDIT_ACTIONS.TELEGRAM_ACCOUNT_LOGOUT, id);
       return res.json({ success: true, data: updated, message: 'Đã ngắt kết nối Telegram' });
     } catch (err) {
+      if (respondIfChannelNotAssigned(res, err)) return;
       return res.status(err.status || 500).json({ success: false, message: err.message });
     }
   }
@@ -3089,7 +3106,10 @@ class ChatbotController {
         return res.status(400).json({ success: false, message: 'chatbot_id must be a number or empty' });
       }
       const userId = resolveWorkspaceOwnerId(req.user);
-      const accounts = await telegramPersonalService.listAccountsWithChatbotSettings(userId, chatbotId);
+      // PR-H2: nhân viên chỉ thấy tài khoản ĐƯỢC GIAO (kể cả huy hiệu "đang bật cho bot khác" — không lộ tên bot của tài khoản chưa giao).
+      const accessible = await getAccessibleChannelAccountRefs(getWorkspaceContext(req.user), 'telegram');
+      const accounts = (await telegramPersonalService.listAccountsWithChatbotSettings(userId, chatbotId))
+        .filter((account) => isChannelAccountAccessible(account.id, accessible));
       return res.json({ success: true, data: accounts });
     } catch (err) {
       console.error('[Telegram] listTelegramAccountsWithChatbotSettings error:', err.message);
@@ -3118,6 +3138,9 @@ class ChatbotController {
         return res.status(400).json({ success: false, message: 'id_chatbot must be a number or null' });
       }
       const userId = resolveWorkspaceOwnerId(req.user);
+      // PR-H2: kiểm tài khoản được giao TRƯỚC `findOtherEnabledChatbot` (trong service) — câu 409 nêu tên chatbot đang giữ tài
+      // khoản, nên kiểm sau sẽ lộ tên bot của tài khoản chưa giao.
+      await assertChannelAccountAccess(getWorkspaceContext(req.user), 'telegram', accountId);
       const settings = await telegramPersonalService.toggleAccountChatbot(
         userId, accountId, normalizedChatbotId, enabled
       );
@@ -3129,6 +3152,7 @@ class ChatbotController {
       });
       return res.json({ success: true, data: settings });
     } catch (err) {
+      if (respondIfChannelNotAssigned(res, err)) return;
       console.error('[Telegram] toggleTelegramAccountChatbot error:', err.message);
       if (err.code === CHANNEL_ACCOUNT_BOUND_TO_OTHER_CHATBOT_CODE) {
         return res.status(409).json({
