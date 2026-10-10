@@ -281,11 +281,15 @@ describe('AdminMembersPage — PR-9: đầu trang, nhóm, cột, lý do nguy cơ
     expect(screen.queryByRole('columnheader', { name: 'Đăng nhập gần nhất' })).not.toBeInTheDocument();
   });
 
-  it('"Nguy cơ" kèm lý do bằng chữ; tài khoản đã xoá hiện "Đã gỡ", không phải "Đã khóa"', async () => {
+  it('"Nguy cơ" kèm lý do bằng chữ trong tooltip (không chiếm dòng ở bảng); tài khoản đã xoá hiện "Đã gỡ", không phải "Đã khóa"', async () => {
     renderPage();
     await waitFor(() => expect(screen.getByText('c@test.local')).toBeInTheDocument());
-    expect(screen.getByText('Nguy cơ')).toBeInTheDocument();
-    expect(screen.getByText('Hơn 21 ngày không hoạt động')).toBeInTheDocument();
+    expect(screen.getByText('Nguy cơ')).toHaveAttribute('title', 'Hơn 21 ngày không hoạt động');
+    // Bảng gọn 10/10/2026: lý do rủi ro không còn là dòng chữ trong ô Trạng thái (đã có trong modal chi tiết).
+    expect(screen.queryByText('Hơn 21 ngày không hoạt động')).not.toBeInTheDocument();
+    // Chip trạng thái và chip "Nguy cơ" cùng một hàng, không chip nào xuống dòng.
+    expect(screen.getByText('Nguy cơ').parentElement).toHaveClass('flex-nowrap');
+    expect(screen.getByText('Nguy cơ')).toHaveClass('whitespace-nowrap');
     const goneRow = screen.getByText('freed+13@deleted.local').closest('tr');
     expect(within(goneRow).getByText('Đã gỡ')).toBeInTheDocument();
     expect(within(goneRow).queryByText('Đã khóa')).not.toBeInTheDocument();

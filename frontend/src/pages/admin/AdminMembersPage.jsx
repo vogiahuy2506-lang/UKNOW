@@ -887,7 +887,7 @@ const AdminMembersPage = () => {
 
       {/* Filters — 1 hàng */}
       <div className="card p-3">
-        <form onSubmit={handleSearch} className="flex items-center gap-2">
+        <form onSubmit={handleSearch} className="flex flex-wrap items-center gap-2">
           <div className="flex rounded-lg border border-gray-300 dark:border-dk-border overflow-hidden shrink-0">
             <button
               type="button"
@@ -914,7 +914,7 @@ const AdminMembersPage = () => {
           </div>
           {!isAdminView && (
             <select
-              className="input py-1.5 text-sm shrink-0"
+              className="input !w-auto py-1.5 text-sm shrink-0"
               value={segmentFilter}
               onChange={(e) => handleSegmentChange(e.target.value)}
               aria-label={t('adminMembers.table.segment')}
@@ -926,7 +926,7 @@ const AdminMembersPage = () => {
               <option value="all">{t('adminMembers.segment.all')}</option>
             </select>
           )}
-          <div className="flex flex-[2] min-w-0 items-center rounded-lg border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-raised px-3 focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-500">
+          <div className="flex flex-[2] min-w-[180px] items-center rounded-lg border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-raised px-3 focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-500">
             <HiOutlineSearch className="w-4 h-4 text-gray-400 dark:text-dk-muted shrink-0" />
             <input
               type="text"
@@ -937,7 +937,7 @@ const AdminMembersPage = () => {
             />
           </div>
           <select
-            className="input py-1.5 text-sm flex-1 min-w-0"
+            className="input py-1.5 text-sm flex-1 min-w-[120px]"
             value={planFilter}
             onChange={(e) => setPlanFilter(e.target.value)}
           >
@@ -950,7 +950,7 @@ const AdminMembersPage = () => {
           </select>
           {phoneOtpEnabled && (
             <select
-              className="input py-1.5 text-sm flex-1 min-w-0"
+              className="input py-1.5 text-sm flex-1 min-w-[120px]"
               value={phoneVerifiedFilter}
               onChange={(e) => setPhoneVerifiedFilter(e.target.value)}
             >
@@ -960,7 +960,7 @@ const AdminMembersPage = () => {
             </select>
           )}
           <select
-            className="input py-1.5 text-sm flex-1 min-w-0"
+            className="input py-1.5 text-sm flex-1 min-w-[120px]"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
           >
@@ -969,7 +969,7 @@ const AdminMembersPage = () => {
             <option value="inactive">{t('adminMembers.filter.inactive')}</option>
           </select>
           <select
-            className="input py-1.5 text-sm flex-1 min-w-0"
+            className="input py-1.5 text-sm flex-1 min-w-[120px]"
             value={expiryFilter}
             onChange={(e) => setExpiryFilter(e.target.value)}
           >
@@ -992,12 +992,12 @@ const AdminMembersPage = () => {
             <table className="table !min-w-0">
               <thead>
                 <tr>
-                  <th>{t('adminMembers.table.member')}</th>
-                  <th>{t('adminMembers.table.segment')}</th>
-                  <th>{t('adminMembers.table.servicePlan')}</th>
-                  <th>{t('adminMembers.table.lastActivity')}</th>
-                  <th>{t('adminMembers.table.status')}</th>
-                  <th>{t('adminMembers.table.expiry')}</th>
+                  <th className="whitespace-nowrap">{t('adminMembers.table.member')}</th>
+                  <th className="whitespace-nowrap">{t('adminMembers.table.segment')}</th>
+                  <th className="whitespace-nowrap">{t('adminMembers.table.servicePlan')}</th>
+                  <th className="whitespace-nowrap">{t('adminMembers.table.lastActivity')}</th>
+                  <th className="whitespace-nowrap">{t('adminMembers.table.status')}</th>
+                  <th className="whitespace-nowrap">{t('adminMembers.table.expiry')}</th>
                   <th className="whitespace-nowrap w-px px-2">{t('adminMembers.table.actions')}</th>
                 </tr>
               </thead>
@@ -1041,11 +1041,11 @@ const AdminMembersPage = () => {
                           </div>
                         </div>
                       </td>
-                      <td className="text-sm text-gray-600 dark:text-dk-text">{segmentLabel(m)}</td>
-                      <td>
+                      <td className="text-sm text-gray-600 dark:text-dk-text whitespace-nowrap">{segmentLabel(m)}</td>
+                      <td className="whitespace-nowrap">
                         {m.planName
-                          ? <span className="badge badge-success">{m.planName}</span>
-                          : <span className="badge badge-gray">{t('adminMembers.noPlan')}</span>
+                          ? <span className="badge badge-success whitespace-nowrap">{m.planName}</span>
+                          : <span className="badge badge-gray whitespace-nowrap">{t('adminMembers.noPlan')}</span>
                         }
                         {(m.planState === 'paying' || m.planState === 'trial') && (
                           <p className="text-xs text-gray-400 dark:text-dk-text2 mt-0.5">{t(`adminMembers.planState.${m.planState}`)}</p>
@@ -1055,28 +1055,28 @@ const AdminMembersPage = () => {
                         {m.lastActivityAt ? new Date(m.lastActivityAt).toLocaleDateString('vi-VN') : '—'}
                       </td>
                       <td>
-                        <div>
+                        <div className="flex flex-nowrap items-center gap-1.5">
                           {m.status === 'deleted' ? (
-                            <span className="badge badge-gray">{t('adminMembers.statusDeleted')}</span>
+                            <span className="badge badge-gray whitespace-nowrap">{t('adminMembers.statusDeleted')}</span>
                           ) : (
-                            <span className={`badge ${isActive ? 'badge-success' : 'badge-gray'}`}>
+                            <span className={`badge ${isActive ? 'badge-success' : 'badge-gray'} whitespace-nowrap`}>
                               {isActive ? t('adminMembers.statusActive') : t('adminMembers.statusLocked')}
                             </span>
                           )}
                           {m.twoFactorEnabled && (
-                            <span className="badge badge-success ml-1.5">{t('adminMembers.twoFactorBadge')}</span>
+                            <span className="badge badge-success whitespace-nowrap">{t('adminMembers.twoFactorBadge')}</span>
+                          )}
+                          {m.churnRisk && (
+                            <span
+                              className="badge badge-warning whitespace-nowrap"
+                              title={m.churnRiskReason ? t(`adminMembers.churnReason.${m.churnRiskReason}`) : undefined}
+                            >
+                              {t('adminMembers.table.churnRiskBadge')}
+                            </span>
                           )}
                         </div>
-                        {m.churnRisk && (
-                          <div className="mt-1">
-                            <span className="badge badge-warning">{t('adminMembers.table.churnRiskBadge')}</span>
-                            {m.churnRiskReason && (
-                              <p className="text-xs text-gray-500 dark:text-dk-text2 mt-0.5">{t(`adminMembers.churnReason.${m.churnRiskReason}`)}</p>
-                            )}
-                          </div>
-                        )}
                       </td>
-                      <td>
+                      <td className="whitespace-nowrap">
                         <ExpiryBadge expiresAt={m.subscriptionExpiresAt} hasPlan={!!m.activePlanId} />
                       </td>
                       <td className="whitespace-nowrap w-px px-2" onClick={(e) => e.stopPropagation()}>
@@ -1092,7 +1092,7 @@ const AdminMembersPage = () => {
                           </Tooltip>
 
                           {/* Chi tiết người dùng */}
-                          <Tooltip label={t('adminMembers.viewDetails', 'Xem chi tiết')}>
+                          <Tooltip label={t('adminMembers.viewDetails')}>
                             <button
                               onClick={() => setDetailMemberId(m.id)}
                               className="p-2 rounded hover:bg-gray-100 dark:hover:bg-dk-raised transition-colors text-gray-500 dark:text-dk-text2 hover:text-primary-600 dark:hover:text-primary-400"
