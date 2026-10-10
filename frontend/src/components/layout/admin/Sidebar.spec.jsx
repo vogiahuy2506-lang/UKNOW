@@ -149,7 +149,7 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
       ],
       'Landing page': ['Khách hàng từ Landing page', 'Tạo Landing page', 'Biểu mẫu'],
       'Gói & Thanh toán': ['Tổng quan gói', 'Mua thêm hạn mức'],
-      'Cài đặt': ['Hồ sơ doanh nghiệp', 'Nhân viên', 'Tệp & dung lượng', 'Nhật ký hoạt động'],
+      'Cài đặt': ['Hồ sơ doanh nghiệp', 'Nhân viên', 'Tệp & dung lượng', 'Nhật ký hoạt động', 'Góp ý & hỗ trợ'],
     };
 
     for (const [groupTitle, children] of Object.entries(expected)) {
@@ -174,7 +174,8 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
     // Không có bất kỳ nhóm/mục nào khác rò ra — đúng 2 nút: mục main không gate (Trợ lý AI) + duy nhất 1
     // nhóm "Chiến dịch". "Báo cáo" (menu /app/reports, trước 30/09 ghi "Tổng quan") từng hiện ở đây dù route /app/reports đòi reports_view (nhân viên bấm
     // vào là bị chặn) — PLAN_NHAN_VIEN PR-3 mục 5 (P2) đã gắn permission reports_view cho mục này.
-    expect(titles).toEqual(['Trợ lý AI', 'Chiến dịch']);
+    // + nhóm "Cài đặt" chỉ chứa "Góp ý & hỗ trợ" (key `support`, không permission/ownerOnly: nhân viên cũng gửi được góp ý).
+    expect(titles).toEqual(['Trợ lý AI', 'Chiến dịch', 'Cài đặt']);
 
     const campaignsButton = screen.getByRole('button', { name: 'Chiến dịch' });
     fireEvent.click(campaignsButton);
@@ -202,16 +203,17 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
       return screen.getAllByRole('link').map((l) => l.textContent);
     };
 
-    it('không có quyền nào: chỉ còn "Trợ lý AI" — không có "Báo cáo", không nhóm nào', () => {
-      expect(employeeTitles({})).toEqual(['Trợ lý AI']);
+    it('không có quyền nào: "Trợ lý AI" + nhóm Cài đặt chỉ có "Góp ý & hỗ trợ" — không có "Báo cáo", không nhóm nào khác', () => {
+      expect(employeeTitles({})).toEqual(['Trợ lý AI', 'Cài đặt']);
+      expect(openGroupLinks('Cài đặt')).toEqual(['Góp ý & hỗ trợ']);
     });
 
     it('reports_view → hiện "Báo cáo" (tên menu = tiêu đề trang /app/reports)', () => {
-      expect(employeeTitles({ reports_view: true })).toEqual(['Trợ lý AI', 'Báo cáo']);
+      expect(employeeTitles({ reports_view: true })).toEqual(['Trợ lý AI', 'Báo cáo', 'Cài đặt']);
     });
 
     it('inbox_view → nhóm AI Chatbot chỉ có "Hộp thư"', () => {
-      expect(employeeTitles({ inbox_view: true })).toEqual(['Trợ lý AI', 'AI Chatbot']);
+      expect(employeeTitles({ inbox_view: true })).toEqual(['Trợ lý AI', 'AI Chatbot', 'Cài đặt']);
       expect(openGroupLinks('AI Chatbot')).toEqual(['Hộp thư']);
     });
 
@@ -222,17 +224,17 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
 
     // 04/10/2026: "Thư viện media" đổi tên "Tệp & dung lượng" và chuyển từ nhóm AI Chatbot sang Cài đặt — nhưng vẫn gắn đúng
     // quyền media_library_view (nhân viên có quyền này thấy nhóm Cài đặt với ĐÚNG một mục, không thấy Hồ sơ/Nhân viên/Nhật ký).
-    it('media_library_view → nhóm Cài đặt chỉ có "Tệp & dung lượng"', () => {
+    it('media_library_view → nhóm Cài đặt chỉ có "Tệp & dung lượng" (+ Góp ý & hỗ trợ, ai cũng thấy)', () => {
       expect(employeeTitles({ media_library_view: true })).toEqual(['Trợ lý AI', 'Cài đặt']);
-      expect(openGroupLinks('Cài đặt')).toEqual(['Tệp & dung lượng']);
+      expect(openGroupLinks('Cài đặt')).toEqual(['Tệp & dung lượng', 'Góp ý & hỗ trợ']);
     });
 
     it('quyền sai chỗ không mở nhầm mục: inbox_reply đơn lẻ (không có inbox_view) không hiện "Hộp thư"', () => {
-      expect(employeeTitles({ inbox_reply: true })).toEqual(['Trợ lý AI']);
+      expect(employeeTitles({ inbox_reply: true })).toEqual(['Trợ lý AI', 'Cài đặt']);
     });
 
     it('courses → hiện "Sản phẩm"', () => {
-      expect(employeeTitles({ courses: true })).toEqual(['Trợ lý AI', 'Sản phẩm']);
+      expect(employeeTitles({ courses: true })).toEqual(['Trợ lý AI', 'Sản phẩm', 'Cài đặt']);
     });
   });
 
