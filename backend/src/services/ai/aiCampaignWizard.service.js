@@ -307,19 +307,9 @@ const isSpreadsheetFile = (f) => {
   );
 };
 
-export function extractWizardState(history = [], options = {}) {
-  const {
-    routeSaysActionRequest = false,
-    intent = null,
-    abandonedAtMessageCount = null,
-  } = options || {};
-
-  const rawAbandon = abandonedAtMessageCount;
-  const abandonMark = rawAbandon != null && Number.isFinite(Number(rawAbandon)) && Number(rawAbandon) >= 0
-    ? Number(rawAbandon)
-    : null;
-
-  const state = {
+/** Trạng thái suy ra (derived) rỗng — điểm xuất phát của phép gấp trái trên danh sách tin. */
+export function createEmptyDerivedWizardState() {
+  return {
     isCampaignFlow: false,
     channel: null,
     senderAccountId: null,
@@ -351,6 +341,31 @@ export function extractWizardState(history = [], options = {}) {
     // Index của tin nhắn gần nhất kích hoạt campaign flow trong history
     latestCampaignMessageIndex: null,
   };
+}
+
+/**
+ * Phép gấp trái (reducer) trên danh sách tin nhắn: áp từng tin vào `initialState` rồi trả state mới.
+ * `extractWizardState` = gấp TOÀN BỘ lịch sử từ state rỗng. Đường đọc-từ-DB gấp riêng tin mới nhất.
+ *
+ * `options.indexOffset`: chỉ số tuyệt đối của `messages[0]` trong lịch sử đầy đủ (mặc định 0). Mọi chỉ số
+ * (mốc huỷ, mốc channel, tin mở luồng, `latestCampaignMessageIndex`) tính theo chỉ số tuyệt đối để gấp một
+ * đoạn đuôi cho kết quả cùng hệ quy chiếu với gấp cả lịch sử.
+ */
+export function foldWizardMessages(initialState, history = [], options = {}) {
+  const {
+    routeSaysActionRequest = false,
+    intent = null,
+    abandonedAtMessageCount = null,
+    indexOffset = 0,
+  } = options || {};
+
+  const rawAbandon = abandonedAtMessageCount;
+  const abandonMark = rawAbandon != null && Number.isFinite(Number(rawAbandon)) && Number(rawAbandon) >= 0
+    ? Number(rawAbandon)
+    : null;
+
+  const offset = Number.isInteger(indexOffset) && indexOffset > 0 ? indexOffset : 0;
+  const state = initialState;
 
   const recordMarkerGate = (gate) => {
     if (!state.markerGates.includes(gate)) state.markerGates.push(gate);
@@ -366,7 +381,8 @@ export function extractWizardState(history = [], options = {}) {
     if (campaignFlowStartIndex == null) campaignFlowStartIndex = idx;
   };
 
-  messages.forEach((message, index) => {
+  messages.forEach((message, relativeIndex) => {
+    const index = relativeIndex + offset;
     // Khi session đã bị huỷ ở mốc abandonedAtMessageCount, toàn bộ tin nhắn / marker
     // trước mốc đó thuộc về chiến dịch đã bỏ → không được dùng để suy ra gates cho phiên mới.
     if (abandonMark != null && index < abandonMark) return;
@@ -408,7 +424,7 @@ export function extractWizardState(history = [], options = {}) {
     const content = message?.content || '';
     const marker = message?.role === 'user' ? parseWizardMarker(content) : null;
     const isMachinePlanPrompt = isContentPlanRequestPrompt(content)
-      || (index === messages.length - 1 && intent === 'content_plan_request');
+      || (relativeIndex === messages.length - 1 && intent === 'content_plan_request');
 
     if (message?.role === 'user' && isContentPlanRevisionText(content)) {
       state.hasContentPlan = false;
@@ -610,10 +626,10 @@ export function extractWizardState(history = [], options = {}) {
   // kích hoạt isCampaignFlow song song với regex từ khoá cũ.
   if (routeSaysActionRequest) {
     state.isCampaignFlow = true;
-    markCampaignFlowStart(messages.length > 0 ? messages.length - 1 : 0);
+    markCampaignFlowStart(offset + (messages.length > 0 ? messages.length - 1 : 0));
     state.latestCampaignMessageIndex = Math.max(
       state.latestCampaignMessageIndex ?? -1,
-      messages.length > 0 ? messages.length - 1 : 0,
+      offset + (messages.length > 0 ? messages.length - 1 : 0),
     );
     const lastUserMsg = messages.slice().reverse().find((m) => m?.role === 'user');
     const lastContent = lastUserMsg?.content || '';
@@ -635,7 +651,7 @@ export function extractWizardState(history = [], options = {}) {
   const campaignFiles = [
     ...(Array.isArray(options?.files) ? options.files : []),
     ...messages
-      .filter((m, idx) => m?.role === 'user' && Array.isArray(m?.files) && (state.isCampaignFlow ? idx >= minCampaignFileIndex : true))
+      .filter((m, idx) => m?.role === 'user' && Array.isArray(m?.files) && (state.isCampaignFlow ? idx + offset >= minCampaignFileIndex : true))
       .flatMap((m) => m.files),
   ];
 
@@ -656,6 +672,10 @@ export function extractWizardState(history = [], options = {}) {
   }
 
   return state;
+}
+
+export function extractWizardState(history = [], options = {}) {
+  return foldWizardMessages(createEmptyDerivedWizardState(), history, { ...(options || {}), indexOffset: 0 });
 }
 
 export function buildChannelQuestion(locale = 'vi') {
