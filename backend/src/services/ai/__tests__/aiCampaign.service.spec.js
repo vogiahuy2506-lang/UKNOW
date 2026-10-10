@@ -72,6 +72,8 @@ jest.unstable_mockModule('../../../utils/googleUrlFetch.util.js', () => ({
   attachGoogleUrlParts,
 }));
 
+const getAdapterChannelAccounts = jest.fn(async () => ({ telegram: [], whatsapp: [] }));
+const getAdapterAccountsPromptBlock = jest.fn(async () => '');
 jest.unstable_mockModule('../aiPromptResources.service.js', () => ({
   default: {
     getZaloAccountsFull,
@@ -86,8 +88,8 @@ jest.unstable_mockModule('../aiPromptResources.service.js', () => ({
     getLandingPages,
     getForms,
     // P8a — cờ Telegram/WhatsApp tắt trong spec này: không có tài khoản/dòng prompt nào.
-    getAdapterChannelAccounts: async () => ({ telegram: [], whatsapp: [] }),
-    getAdapterAccountsPromptBlock: async () => '',
+    getAdapterChannelAccounts,
+    getAdapterAccountsPromptBlock,
     getAdapterNodeTypesPromptLines: () => '',
     getBlockedZaloPromptNotice: () => '',
   },
@@ -107,12 +109,13 @@ jest.unstable_mockModule('../aiModelPolicy.service.js', () => ({
 
 // PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3 — nhân viên (userId ≠ chủ) chỉ thấy tài khoản Zalo ĐƯỢC GIAO; bảng giao được mock.
 const mockFindAssigned = jest.fn();
+const mockFindAssignedTelegram = jest.fn(async () => []);
 const realMemberRepo = await import('../../../repositories/user/memberChannelAccount.repository.js');
 jest.unstable_mockModule('../../../repositories/user/memberChannelAccount.repository.js', () => ({
   ...realMemberRepo,
   findAssignedZaloAccountIds: mockFindAssigned,
   // PLAN_GIAO_TK_TG_WA H4 — nhân viên cũng được lọc tài khoản Telegram / WhatsApp; spec này không kiểm việc giao kênh đó.
-  findAssignedTelegramAccountRefs: jest.fn(async () => []),
+  findAssignedTelegramAccountRefs: mockFindAssignedTelegram,
   findAssignedWhatsAppSessionKeys: jest.fn(async () => []),
 }));
 
@@ -627,6 +630,50 @@ describe('aiCampaign.service', () => {
       expect((await aiCampaignService._getWizardResources(3, [])).zaloAccessRestricted).toBe(true);
       expect((await aiCampaignService._getWizardResources(3, null)).zaloAccessRestricted).toBe(false);
       expect((await aiCampaignService._getWizardResources(3)).zaloAccessRestricted).toBe(false);
+    });
+
+    // PLAN_GIAO_TK_TG_WA H4 — Telegram / WhatsApp: cùng một khuôn, phạm vi tính từ bảng giao và truyền xuống mọi nơi liệt kê.
+    describe('tài khoản Telegram / WhatsApp được giao (H4)', () => {
+      const scope = { telegram: ['12'], whatsapp_baileys: [] };
+      beforeEach(() => {
+        getAdapterChannelAccounts.mockClear();
+        getAdapterAccountsPromptBlock.mockClear();
+        mockFindAssignedTelegram.mockReset();
+        mockFindAssignedTelegram.mockResolvedValue(['12']);
+      });
+
+      it('nhân viên chat: danh sách wizard + khối prompt đều lọc theo phạm vi được giao', async () => {
+        textReply();
+        await aiCampaignService.processSmartChat({
+          userId: 9, resourceOwnerUserId: 3, history: [{ role: 'user', content: 'Xin chào trợ lý' }], locale: 'vi',
+        });
+        expect(getAdapterChannelAccounts).toHaveBeenCalledWith(3, scope);
+        expect(getAdapterAccountsPromptBlock).toHaveBeenCalledWith(3, scope);
+      });
+
+      it('CHỦ chat: không lọc (null), không đọc bảng giao Telegram', async () => {
+        textReply();
+        await aiCampaignService.processSmartChat({
+          userId: 3, resourceOwnerUserId: 3, history: [{ role: 'user', content: 'Xin chào trợ lý' }], locale: 'vi',
+        });
+        expect(getAdapterChannelAccounts).toHaveBeenCalledWith(3, null);
+        expect(getAdapterAccountsPromptBlock).toHaveBeenCalledWith(3, null);
+        expect(mockFindAssignedTelegram).not.toHaveBeenCalled();
+      });
+
+      it('_getWizardResources: truyền phạm vi xuống danh sách và đánh dấu adapterAccessRestricted', async () => {
+        expect((await aiCampaignService._getWizardResources(3, null, scope)).adapterAccessRestricted).toBe(true);
+        expect(getAdapterChannelAccounts).toHaveBeenLastCalledWith(3, scope);
+        expect((await aiCampaignService._getWizardResources(3, null, { telegram: [], whatsapp_baileys: [] })).adapterAccessRestricted).toBe(true);
+        expect((await aiCampaignService._getWizardResources(3, null, null)).adapterAccessRestricted).toBe(false);
+        expect((await aiCampaignService._getWizardResources(3)).adapterAccessRestricted).toBe(false);
+      });
+
+      it('_resolveOnlyAdapterAccountId: "tài khoản duy nhất" tính trong phạm vi được giao', async () => {
+        getAdapterChannelAccounts.mockResolvedValueOnce({ telegram: [{ id: 12, name: 'a', usable: true }], whatsapp: [] });
+        await expect(aiCampaignService._resolveOnlyAdapterAccountId(3, 'telegram', scope)).resolves.toBe(12);
+        expect(getAdapterChannelAccounts).toHaveBeenLastCalledWith(3, scope);
+      });
     });
 
     // (Ca `generateCampaignScript (nhân viên)` của G3 đã gỡ cùng hàm — PR-13 C P3-2 xoá route /generate-campaign không ai gọi.)
