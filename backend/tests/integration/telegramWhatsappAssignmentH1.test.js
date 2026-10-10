@@ -1,7 +1,7 @@
 /**
  * PLAN_GIAO_TK_TG_WA PR-H1 — giao tài khoản Telegram / WhatsApp (Baileys) cho nhân viên (CSDL thật).
  *
- * Gồm: migration 290 (legacy + chạy lại không cấp lại + bỏ `zalo_settings`), API giao `GET/PUT /api/employees/:id/channel-accounts`
+ * Gồm: migration 292 (legacy + chạy lại không cấp lại + bỏ `zalo_settings`), API giao `GET/PUT /api/employees/:id/channel-accounts`
  * mở rộng ba kênh (KHOÁ VẮNG = GIỮ NGUYÊN, id/khoá của chủ khác bị loại, audit từng kênh), dọn việc giao khi xoá tài khoản
  * Telegram / phiên WhatsApp (khoá WhatsApp dùng lại được), nhân viên nối lại khoá WhatsApp chưa được giao → 403, FAIL-CLOSED.
  * H1 KHÔNG lọc danh sách nào khác (đó là H2-H4).
@@ -27,7 +27,7 @@ const { createUser, truncateAll } = await import('./helpers/db.js');
 const { getAccessibleChannelAccountRefs } = await import('../../src/services/user/memberChannelAccess.service.js');
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const MIGRATION_SQL = fs.readFileSync(path.resolve(__dirname, '../../migrations/290_member_channel_accounts_telegram_whatsapp.sql'), 'utf8');
+const MIGRATION_SQL = fs.readFileSync(path.resolve(__dirname, '../../migrations/292_member_channel_accounts_telegram_whatsapp.sql'), 'utf8');
 
 let app;
 
@@ -116,10 +116,10 @@ const asEmployee = (req, token, ownerId) => req.set('Authorization', `Bearer ${t
 const asOwner = (req, token) => req.set('Authorization', `Bearer ${token}`);
 const put = (employeeId, token, body) => asOwner(request(app).put(`/api/employees/${employeeId}/channel-accounts`), token).send(body);
 
-describe('migration 290 — legacy Telegram / WhatsApp + chạy lại không cấp lại', () => {
+describe('migration 292 — legacy Telegram / WhatsApp + chạy lại không cấp lại', () => {
   async function seed() {
-    const owner = await createUser({ username: 'chu_mig290', role: 'user' });
-    const otherOwner = await createUser({ username: 'chu_khac_mig290', role: 'user' });
+    const owner = await createUser({ username: 'chu_mig292', role: 'user' });
+    const otherOwner = await createUser({ username: 'chu_khac_mig292', role: 'user' });
     const t1 = await createTelegram(owner.id);
     const t2 = await createTelegram(owner.id);
     const tOther = await createTelegram(otherOwner.id);

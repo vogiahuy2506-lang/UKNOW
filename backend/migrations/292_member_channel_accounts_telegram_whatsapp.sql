@@ -1,4 +1,4 @@
--- Migration 290: giao tung tai khoan Telegram / WhatsApp (Baileys) cho nhan vien - backfill 'legacy'
+-- Migration 292: giao tung tai khoan Telegram / WhatsApp (Baileys) cho nhan vien - backfill 'legacy'
 -- (PLAN_GIAO_TK_TG_WA PR-H1; nen la bang member_channel_accounts cua migration 283, KHONG doi cau truc).
 --
 -- Bang 283 da co `channel VARCHAR(30)` (khong CHECK) + `account_ref TEXT` nen chi them hai gia tri `channel`:
