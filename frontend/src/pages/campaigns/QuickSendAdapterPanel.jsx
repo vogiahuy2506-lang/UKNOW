@@ -54,9 +54,10 @@ const CHANNELS_SETTINGS_PATH = '/app/settings/channels';
  *
  * Gắn `key={channel}` ở chỗ dùng để đổi kênh Telegram <-> WhatsApp không mang người nhận/khoá sang kênh kia.
  *
- * @param {{ channel: 'telegram'|'whatsapp', channelLabel?: string }} props
+ * @param {{ channel: 'telegram'|'whatsapp', channelLabel?: string, isEmployeeContext?: boolean }} props
+ *   `isEmployeeContext`: do trang cha (đã đọc authStore) truyền xuống — panel không import authStore để spec giả `services/api` vẫn chạy.
  */
-const QuickSendAdapterPanel = ({ channel, channelLabel }) => {
+const QuickSendAdapterPanel = ({ channel, channelLabel, isEmployeeContext = false }) => {
   const { t } = useI18n();
   const navigate = useNavigate();
   const cfg = ADAPTER_CHANNELS[channel];
@@ -668,7 +669,11 @@ const QuickSendAdapterPanel = ({ channel, channelLabel }) => {
           <p className="text-sm text-red-600">{t('quickSendAdapter.accountsLoadFailed')}</p>
         ) : accounts.length === 0 ? (
           <div className="space-y-3">
-            <p className="text-sm text-gray-500">{t('quickSendAdapter.noAccounts', { channel: label })}</p>
+            <p className="text-sm text-gray-500">
+              {isEmployeeContext
+                ? t('quickSendAdapter.noAccountsAssigned', { channel: label })
+                : t('quickSendAdapter.noAccounts', { channel: label })}
+            </p>
             <button
               type="button"
               onClick={() => navigate(CHANNELS_SETTINGS_PATH)}

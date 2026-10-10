@@ -18,6 +18,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '../../../i18n';
+import { useAuthStore } from '../../../stores/authStore';
 import { fetchTelegramGroupOptions } from '../utils/nodeConfigModal.helpers';
 import ChannelStepsEditor from './ChannelStepsEditor';
 
@@ -38,6 +39,8 @@ export const NodeConfigSendTelegramSection = ({
   fetchTemplateById,
 }) => {
   const { t } = useI18n();
+  // PLAN_GIAO_TK_TG_WA H2: nhân viên 0 tài khoản được giao thì câu nhắc là "chưa giao", không phải "chưa kết nối".
+  const isEmployeeContext = useAuthStore((state) => state.activeContext?.type) === 'employee';
   const recipientSource = formData.recipientSource || (campaignType === 'telegram_group' ? 'telegram_groups' : 'telegram_conversations');
   // Nguồn nhóm: chiến dịch 'telegram_group' luôn có; chiến dịch khác chỉ hiện khi config đã lưu nguồn này.
   const showGroupsOption = campaignType === 'telegram_group' || recipientSource === 'telegram_groups';
@@ -179,7 +182,7 @@ export const NodeConfigSendTelegramSection = ({
 
         {isEmptyAfterSuccess && (
           <div className="mt-2 bg-amber-50 p-3 rounded-lg text-sm text-amber-700">
-            {t('telegramNodeSend.noAccountsAvailable')}
+            {isEmployeeContext ? t('telegramNodeSend.noAccountsAssigned') : t('telegramNodeSend.noAccountsAvailable')}
           </div>
         )}
       </div>

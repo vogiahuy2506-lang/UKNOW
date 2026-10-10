@@ -8,6 +8,7 @@ import {
 import toast from 'react-hot-toast';
 import chatbotApi from '../../chatbot/services/chatbotApi.service';
 import { useI18n } from '../../../i18n';
+import { useAuthStore } from '../../../stores/authStore';
 
 /**
  * WhatsAppChannelModal — bật/tắt chatbot cho từng tài khoản WhatsApp đã liên kết.
@@ -17,6 +18,8 @@ import { useI18n } from '../../../i18n';
  */
 export default function WhatsAppChannelModal({ open, onClose, chatbotId }) {
   const { t } = useI18n();
+  // PLAN_GIAO_TK_TG_WA H2: nhân viên 0 tài khoản được giao thì câu nhắc là "chưa giao", không phải "chưa kết nối".
+  const isEmployeeContext = useAuthStore((state) => state.activeContext?.type) === 'employee';
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [togglingId, setTogglingId] = useState(null);
@@ -177,7 +180,7 @@ export default function WhatsAppChannelModal({ open, onClose, chatbotId }) {
                   <HiOutlineChatAlt2 className="w-5 h-5 text-slate-400" />
                 </div>
                 <p className="text-sm font-medium text-slate-700">
-                  Chưa liên kết tài khoản WhatsApp
+                  {isEmployeeContext ? t('whatsappNodeSend.noAccountsAssigned') : 'Chưa liên kết tài khoản WhatsApp'}
                 </p>
                 <p className="text-xs text-slate-400 mt-1 px-6 leading-relaxed">
                   Vào{' '}

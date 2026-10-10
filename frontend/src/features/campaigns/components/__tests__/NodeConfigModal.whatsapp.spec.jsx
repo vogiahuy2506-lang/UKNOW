@@ -8,6 +8,7 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import NodeConfigModal from '../NodeConfigModal';
 import campaignBuilderApiService from '../../services/campaignBuilderApi.service';
 import viTranslations from '../../../../i18n/vi';
+import { useAuthStore } from '../../../../stores/authStore';
 import toast from 'react-hot-toast';
 
 const mockT = (key, params = {}) => {
@@ -60,6 +61,18 @@ describe('NodeConfigModal — send_whatsapp: danh sách tài khoản', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
     await waitFor(() => expect(screen.getByRole('option', { name: /Phúc/ })).toBeInTheDocument());
     expect(campaignBuilderApiService.getWhatsAppAccountsForBuilder).toHaveBeenCalledTimes(2);
+  });
+
+  it('PLAN_GIAO_TK_TG_WA H2: nhân viên 0 phiên được giao → "Chủ tài khoản chưa giao tài khoản WhatsApp nào cho bạn"', async () => {
+    useAuthStore.setState({ activeContext: { type: 'employee', ownerId: 1 } });
+    try {
+      campaignBuilderApiService.getWhatsAppAccountsForBuilder.mockResolvedValue(ok([]));
+      renderModal();
+      expect(await screen.findByText('Chủ tài khoản chưa giao tài khoản WhatsApp nào cho bạn.')).toBeInTheDocument();
+      expect(screen.queryByText(/Chưa có tài khoản WhatsApp nào/)).not.toBeInTheDocument();
+    } finally {
+      useAuthStore.setState({ activeContext: null });
+    }
   });
 
   it('rỗng -> báo chưa có tài khoản WhatsApp', async () => {

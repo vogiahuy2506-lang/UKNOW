@@ -1635,6 +1635,7 @@ const QuickSend = () => {
                 key={selectedChannel}
                 channel={selectedChannel}
                 channelLabel={adapterChannels.find((c) => c.key === selectedChannel)?.label}
+                isEmployeeContext={isEmployeeContext}
               />
             )}
 

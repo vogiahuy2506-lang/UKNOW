@@ -237,6 +237,13 @@ describe('QuickSendAdapterPanel — Telegram', () => {
     expect(screen.getByText('quickSendAdapter.goConnect')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /quickSendAdapter\.sendButton/ })).toBeDisabled();
   });
+
+  it('PLAN_GIAO_TK_TG_WA H2: nhân viên 0 tài khoản được giao -> câu "chưa giao" (không phải "chưa kết nối")', async () => {
+    campaignBuilderApiService.getTelegramAccountsForBuilder.mockResolvedValue({ data: { data: [] } });
+    render(<QuickSendAdapterPanel channel="telegram" channelLabel="Telegram" isEmployeeContext />);
+    expect(await screen.findByText(/quickSendAdapter\.noAccountsAssigned/)).toBeInTheDocument();
+    expect(screen.queryByText(/quickSendAdapter\.noAccounts:/)).not.toBeInTheDocument();
+  });
 });
 
 describe('QuickSendAdapterPanel — WhatsApp', () => {

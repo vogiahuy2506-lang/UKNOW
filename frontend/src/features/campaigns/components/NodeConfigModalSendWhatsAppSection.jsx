@@ -23,6 +23,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '../../../i18n';
+import { useAuthStore } from '../../../stores/authStore';
 import { fetchWhatsAppGroupOptions, parseWhatsAppPhoneList } from '../utils/nodeConfigModal.helpers';
 import ChannelStepsEditor from './ChannelStepsEditor';
 
@@ -46,6 +47,8 @@ export const NodeConfigSendWhatsAppSection = ({
   fetchTemplateById,
 }) => {
   const { t } = useI18n();
+  // PLAN_GIAO_TK_TG_WA H2: nhân viên 0 tài khoản được giao thì câu nhắc là "chưa giao", không phải "chưa kết nối".
+  const isEmployeeContext = useAuthStore((state) => state.activeContext?.type) === 'employee';
   const recipientSource = formData.recipientSource || 'whatsapp_conversations';
   const isConversationSource = recipientSource === 'whatsapp_conversations';
   const isGroupsSource = recipientSource === 'whatsapp_groups';
@@ -193,7 +196,7 @@ export const NodeConfigSendWhatsAppSection = ({
 
         {isEmptyAfterSuccess && (
           <div className="mt-2 bg-amber-50 p-3 rounded-lg text-sm text-amber-700">
-            {t('whatsappNodeSend.noAccountsAvailable')}
+            {isEmployeeContext ? t('whatsappNodeSend.noAccountsAssigned') : t('whatsappNodeSend.noAccountsAvailable')}
           </div>
         )}
 

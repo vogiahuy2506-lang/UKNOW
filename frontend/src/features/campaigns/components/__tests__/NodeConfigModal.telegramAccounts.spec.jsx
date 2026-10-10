@@ -7,6 +7,7 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import NodeConfigModal from '../NodeConfigModal';
 import campaignBuilderApiService from '../../services/campaignBuilderApi.service';
 import viTranslations from '../../../../i18n/vi';
+import { useAuthStore } from '../../../../stores/authStore';
 
 const mockT = (key, params = {}) => {
   const val = key.split('.').reduce((acc, part) => acc?.[part], viTranslations);
@@ -56,6 +57,18 @@ describe('NodeConfigModal — send_telegram: danh sách tài khoản Telegram', 
     campaignBuilderApiService.getTelegramAccountsForBuilder.mockResolvedValue(ok([]));
     renderModal();
     expect(await screen.findByText(/Chưa có tài khoản Telegram nào đang hoạt động/)).toBeInTheDocument();
+  });
+
+  it('PLAN_GIAO_TK_TG_WA H2: nhân viên 0 tài khoản được giao → "Chủ tài khoản chưa giao tài khoản Telegram nào cho bạn", không nói "chưa kết nối"', async () => {
+    useAuthStore.setState({ activeContext: { type: 'employee', ownerId: 1 } });
+    try {
+      campaignBuilderApiService.getTelegramAccountsForBuilder.mockResolvedValue(ok([]));
+      renderModal();
+      expect(await screen.findByText('Chủ tài khoản chưa giao tài khoản Telegram nào cho bạn.')).toBeInTheDocument();
+      expect(screen.queryByText(/Chưa có tài khoản Telegram nào đang hoạt động/)).not.toBeInTheDocument();
+    } finally {
+      useAuthStore.setState({ activeContext: null });
+    }
   });
 
   it('nút Thử lại gọi lại API', async () => {
