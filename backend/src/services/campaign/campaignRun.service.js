@@ -48,6 +48,10 @@ import {
   notifyCampaignQuotaStopped,
   notifyCampaignRunFailed,
 } from '../../utils/campaignQuotaPauseNotify.util.js';
+import {
+  shouldNotifyRunCompleted,
+  notifyCampaignRunCompleted,
+} from '../../utils/campaignRunCompletedNotify.util.js';
 import { validateCampaignPreflight } from './campaignPreflight.service.js';
 import {
   assertRunZaloAccountsAssigned,
@@ -9200,7 +9204,7 @@ class CampaignRunService {
           nonContinuousDeferredAt: new Date().toISOString(),
         }
         : null;
-      await campaignRunRepository.finalizeRun(
+      const finalizedRun = await campaignRunRepository.finalizeRun(
         runId,
         hasPendingRecipientDue && !isContinuousMode,
         { totalRecipients, successfulSends, failedSends, skippedSends },
@@ -9208,6 +9212,39 @@ class CampaignRunService {
       );
 
       await campaignCrudRepository.updateCampaignLastRunStats(campaignId);
+
+      // Chuông "chiến dịch chạy xong" (PLAN_TICKET_GOP_Y_VA_CHUONG_THONG_BAO PR-1): CHỈ khi UPDATE vừa ghi 'completed' thật
+      // (finalizeRun trả null khi lượt đã bị dừng/huỷ, trả 'running' khi còn người nhận chờ thử lại) và không phải chạy liên tục.
+      // Fire-and-forget: thông báo hỏng không được làm hỏng lượt chạy.
+      if (shouldNotifyRunCompleted({
+        finalized: finalizedRun,
+        isContinuousMode,
+        totalRecipients,
+        successfulSends,
+        failedSends,
+        skippedSends,
+      })) {
+        notifyCampaignRunCompleted({
+          runId,
+          campaignId,
+          campaignName: campaign?.campaign_name,
+          ownerId: campaign?.workspace_owner_id || campaign?.id_user,
+          triggeredBy: resolveRunTriggerUserId({
+            metadataTriggeredBy: runRow?.run_metadata?.triggeredBy,
+            triggeredBy: runRow?.triggered_by,
+            scheduleCreatedBy: runRow?.schedule_created_by,
+          }),
+          totalRecipients,
+          successfulSends,
+          failedSends,
+          skippedSends,
+        }).catch((err) => {
+          console.warn(
+            `[CampaignRunCompletedNotify] thông báo lỗi run=${runId} campaign=${campaignId}:`,
+            err?.message || err
+          );
+        });
+      }
 
       if (hasPendingRecipientDue && !isContinuousMode) {
         const ledgerRetryHint = pendingRecipientWithRetryMetaInLedger !== null

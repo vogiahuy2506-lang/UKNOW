@@ -451,7 +451,8 @@ class CampaignRunRepository {
    * @param {boolean} hasPendingRecipientDue keep running when true
    * @param {{totalRecipients: number, successfulSends: number, failedSends: number, skippedSends: number}} counts
    * @param {object|null} [runMetadataPatch] metadata cần ghi atomically khi giữ run running
-   * @returns {Promise<void>}
+   * @returns {Promise<{ status: string }|null>} trạng thái SAU khi ghi (`completed` / `running`); null khi UPDATE không chạm dòng nào
+   *   (lượt đã bị dừng/huỷ/đóng sổ bởi luồng khác, không còn `running`) — caller chỉ phát thông báo "chạy xong" khi `status === 'completed'`
    */
   async finalizeRun(
     runId,
@@ -461,7 +462,7 @@ class CampaignRunRepository {
   ) {
     const metadataPatchJson = JSON.stringify(runMetadataPatch || {});
     if (!(await this.hasSkippedSendsColumn())) {
-      await db.query(
+      const legacyResult = await db.query(
         hasPendingRecipientDue
           ? `UPDATE campaign_runs SET
              status = 'running',
@@ -471,7 +472,8 @@ class CampaignRunRepository {
              failed_sends = $3,
              run_metadata = COALESCE(run_metadata, '{}'::jsonb) || $4::jsonb
              WHERE id = $5
-               AND status = 'running'`
+               AND status = 'running'
+             RETURNING status`
           : `UPDATE campaign_runs SET
              status = 'completed',
              completed_at = CURRENT_TIMESTAMP,
@@ -479,15 +481,16 @@ class CampaignRunRepository {
              successful_sends = $2,
              failed_sends = $3
              WHERE id = $4
-               AND status = 'running'`,
+               AND status = 'running'
+             RETURNING status`,
         hasPendingRecipientDue
           ? [totalRecipients, successfulSends, failedSends, metadataPatchJson, runId]
           : [totalRecipients, successfulSends, failedSends, runId]
       );
-      return;
+      return legacyResult?.rows?.[0] ? { status: legacyResult.rows[0].status } : null;
     }
 
-    await db.query(
+    const result = await db.query(
       hasPendingRecipientDue
         ? `UPDATE campaign_runs SET
            status = 'running',
@@ -498,7 +501,8 @@ class CampaignRunRepository {
            skipped_sends = $4,
            run_metadata = COALESCE(run_metadata, '{}'::jsonb) || $5::jsonb
            WHERE id = $6
-             AND status = 'running'`
+             AND status = 'running'
+           RETURNING status`
         : `UPDATE campaign_runs SET
            status = 'completed',
            completed_at = CURRENT_TIMESTAMP,
@@ -507,11 +511,13 @@ class CampaignRunRepository {
            failed_sends = $3,
            skipped_sends = $4
            WHERE id = $5
-             AND status = 'running'`,
+             AND status = 'running'
+           RETURNING status`,
       hasPendingRecipientDue
         ? [totalRecipients, successfulSends, failedSends, skippedSends, metadataPatchJson, runId]
         : [totalRecipients, successfulSends, failedSends, skippedSends, runId]
     );
+    return result?.rows?.[0] ? { status: result.rows[0].status } : null;
   }
 
   /**

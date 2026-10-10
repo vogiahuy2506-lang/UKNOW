@@ -41,6 +41,13 @@ jest.unstable_mockModule('../../repositories/campaign/campaignCrud.repository.js
   },
 }));
 
+// PLAN_TICKET_GOP_Y_VA_CHUONG_THONG_BAO PR-1 — chạy lỗi / chờ duyệt đi qua dispatcher (chuông + email), không gọi sendSystemEmail trực tiếp.
+// Spec này mock dispatcher; hành vi gửi/lọc của dispatcher có spec riêng (notificationDispatch.service.spec.js).
+const mockNotifyUsers = jest.fn();
+jest.unstable_mockModule('../../services/notification/notificationDispatch.service.js', () => ({
+  notifyUsers: mockNotifyUsers,
+}));
+
 jest.unstable_mockModule('../systemEmail.util.js', () => ({
   sendSystemEmail: mockSendSystemEmail,
   buildCampaignPausedEmail: mockBuildPaused,
@@ -69,6 +76,8 @@ describe('campaignQuotaPauseNotify.util', () => {
     mockClaimRunFailureNotification.mockReset();
     mockFindCampaignById.mockReset();
     mockSendSystemEmail.mockReset();
+    mockNotifyUsers.mockReset();
+    mockNotifyUsers.mockResolvedValue({ inApp: 1, emailSent: 1, emailSkipped: 0, emailFailed: 0 });
     mockBuildPaused.mockClear();
     mockBuildStopped.mockClear();
     mockBuildRunFailed.mockClear();
@@ -269,10 +278,11 @@ describe('campaignQuotaPauseNotify.util', () => {
       expect(result).toEqual({ skipped: true, reason: 'already_notified' });
       expect(mockClaimRunFailureNotification).toHaveBeenCalledWith(200);
       expect(mockFindCampaignById).not.toHaveBeenCalled();
+      expect(mockNotifyUsers).not.toHaveBeenCalled();
       expect(mockSendSystemEmail).not.toHaveBeenCalled();
     });
 
-    it('claim trả true → sendSystemEmail đúng 1 lần với câu đã Việt hoá (qua labelCampaignRunFailure)', async () => {
+    it('claim trả true → notifyUsers đúng 1 lần: sự kiện campaign_run_failed, userIds = [campaign.id_user], dedupe theo run, câu đã Việt hoá', async () => {
       mockClaimRunFailureNotification.mockResolvedValue(true);
 
       const result = await notifyCampaignRunFailed({
@@ -283,12 +293,36 @@ describe('campaignQuotaPauseNotify.util', () => {
       });
 
       expect(result).toEqual({ sent: true });
-      expect(mockSendSystemEmail).toHaveBeenCalledTimes(1);
-      expect(mockSendSystemEmail).toHaveBeenCalledWith(
-        expect.objectContaining({ to: 'owner@example.com', subject: 'run-failed:Promo X' })
-      );
+      expect(mockNotifyUsers).toHaveBeenCalledTimes(1);
+      const call = mockNotifyUsers.mock.calls[0][0];
+      expect(call.eventType).toBe('campaign_run_failed');
+      expect(call.userIds).toEqual([42]);
+      expect(call.dedupeKey).toBe('run:200:failed');
+      expect(call.severity).toBe('error');
+      expect(call.link).toBe('/app/campaigns');
+      expect(call.title).toContain('Promo X');
+      expect(call.message).toContain('Tài khoản Zalo dùng để gửi chưa sẵn sàng (có thể đang mất kết nối).');
+      expect(call.metadata).toEqual({ runId: 200, campaignId: 5, source: 'catch_all' });
+      // Không còn gửi email trực tiếp — email đi qua dispatcher.
+      expect(mockSendSystemEmail).not.toHaveBeenCalled();
+    });
+
+    it('mẫu email riêng truyền cho dispatcher vẫn là buildCampaignRunFailedEmail với tên người nhận do dispatcher cấp', async () => {
+      mockClaimRunFailureNotification.mockResolvedValue(true);
+
+      await notifyCampaignRunFailed({
+        runId: 200,
+        campaignId: 5,
+        reason: 'Tài khoản Zalo đã chọn chưa ở trạng thái sẵn sàng',
+        source: 'catch_all',
+      });
+
+      const { email } = mockNotifyUsers.mock.calls[0][0];
+      const built = email({ id: 42, email: 'owner@example.com', fullName: 'Chủ Shop' });
+      expect(built).toEqual({ subject: 'run-failed:Promo X', html: expect.stringContaining('<p>') });
       expect(mockBuildRunFailed).toHaveBeenCalledWith(
         expect.objectContaining({
+          fullName: 'Chủ Shop',
           campaignName: 'Promo X',
           reason: 'Tài khoản Zalo dùng để gửi chưa sẵn sàng (có thể đang mất kết nối).',
           actionHint: expect.stringContaining('Cài đặt Zalo'),
@@ -297,7 +331,22 @@ describe('campaignQuotaPauseNotify.util', () => {
       );
     });
 
-    it('claim trả true nhưng thiếu owner email → skip, không gửi mail', async () => {
+    it('chủ chiến dịch KHÔNG có email vẫn được báo trong app (không còn skip no_owner_email)', async () => {
+      mockClaimRunFailureNotification.mockResolvedValue(true);
+      mockQuery.mockResolvedValue({ rows: [{ email: null, full_name: 'Owner' }] });
+
+      const result = await notifyCampaignRunFailed({
+        runId: 200,
+        campaignId: 5,
+        reason: 'Lỗi lạ chưa từng thấy',
+        source: 'catch_all',
+      });
+
+      expect(result).toEqual({ sent: true });
+      expect(mockNotifyUsers).toHaveBeenCalledTimes(1);
+    });
+
+    it('không tìm thấy người dùng của chiến dịch → skip no_owner, không báo ai', async () => {
       mockClaimRunFailureNotification.mockResolvedValue(true);
       mockQuery.mockResolvedValue({ rows: [] });
 
@@ -308,8 +357,17 @@ describe('campaignQuotaPauseNotify.util', () => {
         source: 'catch_all',
       });
 
-      expect(result).toEqual({ skipped: true, reason: 'no_owner_email' });
-      expect(mockSendSystemEmail).not.toHaveBeenCalled();
+      expect(result).toEqual({ skipped: true, reason: 'no_owner' });
+      expect(mockNotifyUsers).not.toHaveBeenCalled();
+    });
+
+    it('dispatcher không giao được cho ai (trùng / tắt kênh) → skipped no_delivery', async () => {
+      mockClaimRunFailureNotification.mockResolvedValue(true);
+      mockNotifyUsers.mockResolvedValue({ inApp: 0, emailSent: 0, emailSkipped: 1, emailFailed: 0 });
+
+      const result = await notifyCampaignRunFailed({ runId: 200, campaignId: 5, reason: 'x', source: 'catch_all' });
+
+      expect(result).toEqual({ skipped: true, reason: 'no_delivery' });
     });
   });
 
@@ -317,7 +375,7 @@ describe('campaignQuotaPauseNotify.util', () => {
   // (không có runId để claimRunFailureNotification), nên hàm này KHÔNG chống gửi trùng qua run —
   // chỉ dựa vào việc scheduler tắt lịch (enabled=false) ngay sau đó để không bắn lại.
   describe('notifyCampaignApprovalRequired', () => {
-    it('gửi mail cho đúng CHỦ theo ownerId truyền vào (không qua campaign.id_user)', async () => {
+    it('báo đúng CHỦ theo ownerId truyền vào (không qua campaign.id_user), sự kiện campaign_approval_required', async () => {
       const result = await notifyCampaignApprovalRequired({
         campaignId: 5,
         ownerId: 99,
@@ -327,11 +385,29 @@ describe('campaignQuotaPauseNotify.util', () => {
 
       expect(result).toEqual({ sent: true });
       expect(mockClaimRunFailureNotification).not.toHaveBeenCalled();
-      expect(mockQuery).toHaveBeenCalledWith(expect.stringMatching(/SELECT email, full_name FROM users WHERE id = \$1/i), [99]);
-      expect(mockSendSystemEmail).toHaveBeenCalledTimes(1);
-      expect(mockSendSystemEmail).toHaveBeenCalledWith(
-        expect.objectContaining({ to: 'owner@example.com', subject: 'approval-required:Promo X' })
-      );
+      expect(mockNotifyUsers).toHaveBeenCalledTimes(1);
+      const call = mockNotifyUsers.mock.calls[0][0];
+      expect(call.eventType).toBe('campaign_approval_required');
+      expect(call.userIds).toEqual([99]);
+      expect(call.severity).toBe('warning');
+      expect(call.link).toBe('/app/campaigns');
+      expect(call.title).toContain('Promo X');
+      expect(call.message).toContain('2 người nhận');
+      expect(call.message).toContain('(1)');
+      expect(call.metadata).toEqual({ campaignId: 5, threshold: 1, totalCustomers: 2 });
+      expect(mockSendSystemEmail).not.toHaveBeenCalled();
+    });
+
+    it('mẫu email riêng truyền cho dispatcher là buildCampaignApprovalRequiredEmail với tên người nhận do dispatcher cấp', async () => {
+      await notifyCampaignApprovalRequired({
+        campaignId: 5,
+        ownerId: 99,
+        threshold: 1,
+        totalCustomers: 2,
+      });
+
+      const { email } = mockNotifyUsers.mock.calls[0][0];
+      expect(email({ id: 99, email: 'owner@example.com', fullName: 'Owner' }).subject).toBe('approval-required:Promo X');
       expect(mockBuildApprovalRequired).toHaveBeenCalledWith(
         expect.objectContaining({
           fullName: 'Owner',
@@ -343,8 +419,8 @@ describe('campaignQuotaPauseNotify.util', () => {
       );
     });
 
-    it('không có email chủ → skip, không gửi mail', async () => {
-      mockQuery.mockResolvedValue({ rows: [] });
+    it('dispatcher không giao được cho ai → skipped no_delivery', async () => {
+      mockNotifyUsers.mockResolvedValue({ inApp: 0, emailSent: 0, emailSkipped: 0, emailFailed: 0 });
 
       const result = await notifyCampaignApprovalRequired({
         campaignId: 5,
@@ -353,8 +429,7 @@ describe('campaignQuotaPauseNotify.util', () => {
         totalCustomers: 2,
       });
 
-      expect(result).toEqual({ skipped: true, reason: 'no_owner_email' });
-      expect(mockSendSystemEmail).not.toHaveBeenCalled();
+      expect(result).toEqual({ skipped: true, reason: 'no_delivery' });
     });
 
     it('campaign không tìm thấy tên → dùng "Chiến dịch #<id>" mặc định', async () => {
@@ -367,6 +442,9 @@ describe('campaignQuotaPauseNotify.util', () => {
         totalCustomers: 2,
       });
 
+      expect(mockNotifyUsers.mock.calls[0][0].title).toContain('Chiến dịch #7');
+      const { email } = mockNotifyUsers.mock.calls[0][0];
+      email({ fullName: 'X' });
       expect(mockBuildApprovalRequired).toHaveBeenCalledWith(
         expect.objectContaining({ campaignName: 'Chiến dịch #7' })
       );

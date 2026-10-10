@@ -9,6 +9,7 @@ import {
   buildCampaignApprovalRequiredEmail,
 } from './systemEmail.util.js';
 import { labelCampaignRunFailure } from './campaignRunFailureLabel.util.js';
+import { notifyUsers } from '../services/notification/notificationDispatch.service.js';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://founderai.vn';
 
@@ -64,9 +65,11 @@ function frontendAppUrl(path) {
 
 /**
  * @param {number} campaignId
- * @returns {Promise<{ email: string, fullName: string|null, campaignName: string }|null>}
+ * @param {{ requireEmail?: boolean }} [options] `requireEmail:false` — sự kiện đã đi qua chuông (notifyUsers) nên chủ không có
+ *   email vẫn nhận được thông báo trong app; mặc định true giữ nguyên hành vi email-only của các hàm quota.
+ * @returns {Promise<{ userId: number, email: string|null, fullName: string|null, campaignName: string }|null>}
  */
-async function loadOwnerContact(campaignId) {
+async function loadOwnerContact(campaignId, { requireEmail = true } = {}) {
   const campaign = await campaignCrudRepository.findCampaignById({
     campaignId,
     isAdmin: true,
@@ -79,10 +82,13 @@ async function loadOwnerContact(campaignId) {
     [campaign.id_user]
   );
   const user = rows[0];
-  if (!user?.email) return null;
+  if (!user) return null;
+  if (requireEmail && !user.email) return null;
 
   return {
-    email: String(user.email).trim(),
+    // `id_user` = người tạo chiến dịch (có thể là nhân viên — cùng hiện trạng với email trước đây).
+    userId: Number(campaign.id_user),
+    email: user.email ? String(user.email).trim() : null,
     fullName: user.full_name || null,
     campaignName: campaign.campaign_name || `Chiến dịch #${campaignId}`,
   };
@@ -171,6 +177,9 @@ export async function notifyCampaignQuotaStopped({ campaignId, reason }) {
  * Chống gửi trùng bằng claimRunFailureNotification() — một câu UPDATE giành cờ nguyên tử, không
  * đọc-rồi-ghi, và không lọc theo status nên vẫn giành được cờ dù run đã 'failed'.
  *
+ * Từ PLAN_TICKET_GOP_Y_VA_CHUONG_THONG_BAO PR-1: đi qua dispatcher (`notifyUsers`, sự kiện `campaign_run_failed`) — chuông trong app
+ * + email theo cấu hình hệ thống / tuỳ chọn người dùng. Nội dung email vẫn là buildCampaignRunFailedEmail như cũ.
+ *
  * @param {{ runId: number, campaignId: number, reason: string, source?: string }} input
  * @returns {Promise<{ sent?: boolean, skipped?: boolean, reason?: string }>}
  */
@@ -180,29 +189,41 @@ export async function notifyCampaignRunFailed({ runId, campaignId, reason, sourc
     return { skipped: true, reason: 'already_notified' };
   }
 
-  const owner = await loadOwnerContact(campaignId);
-  if (!owner?.email) {
+  const owner = await loadOwnerContact(campaignId, { requireEmail: false });
+  if (!owner) {
     console.warn(
-      `[CampaignRunFailedNotify] skip email — no owner email campaign=${campaignId} run=${runId}`
+      `[CampaignRunFailedNotify] skip — no owner campaign=${campaignId} run=${runId}`
     );
-    return { skipped: true, reason: 'no_owner_email' };
+    return { skipped: true, reason: 'no_owner' };
   }
 
   const { message: reasonLabel, actionHint } = labelCampaignRunFailure(reason);
-  const { subject, html } = buildCampaignRunFailedEmail({
-    fullName: owner.fullName,
-    campaignName: owner.campaignName,
-    reason: reasonLabel,
-    actionHint,
-    appUrl: frontendAppUrl('/app/campaigns'),
+  const delivery = await notifyUsers({
+    eventType: 'campaign_run_failed',
+    userIds: [owner.userId],
+    title: `Chiến dịch «${owner.campaignName}» gặp lỗi, lượt chạy đã dừng`,
+    titleEn: `Campaign "${owner.campaignName}" failed and the run was stopped`,
+    message: actionHint ? `${reasonLabel} ${actionHint}` : reasonLabel,
+    link: '/app/campaigns',
+    severity: 'error',
+    metadata: { runId, campaignId, source: source || null },
+    dedupeKey: `run:${runId}:failed`,
+    email: ({ fullName }) => buildCampaignRunFailedEmail({
+      fullName: fullName ?? owner.fullName,
+      campaignName: owner.campaignName,
+      reason: reasonLabel,
+      actionHint,
+      appUrl: frontendAppUrl('/app/campaigns'),
+    }),
   });
 
-  await sendSystemEmail({ to: owner.email, subject, html });
   console.log(
-    `[CampaignRunFailedNotify] email sent campaign=${campaignId} run=${runId} `
-    + `source=${source || 'unknown'} to=${owner.email}`
+    `[CampaignRunFailedNotify] notified campaign=${campaignId} run=${runId} `
+    + `source=${source || 'unknown'} owner=${owner.userId} inApp=${delivery.inApp} emailSent=${delivery.emailSent}`
   );
-  return { sent: true };
+  return delivery.inApp + delivery.emailSent > 0
+    ? { sent: true }
+    : { skipped: true, reason: 'no_delivery' };
 }
 
 /**
@@ -214,32 +235,42 @@ export async function notifyCampaignRunFailed({ runId, campaignId, reason, sourc
  * Lấy contact theo `ownerId` truyền thẳng vào (KHÔNG qua campaign.id_user như loadOwnerContact — sai
  * nếu chiến dịch do nhân viên tạo, id_user khi đó là nhân viên chứ không phải chủ).
  *
+ * Từ PLAN_TICKET_GOP_Y_VA_CHUONG_THONG_BAO PR-1: đi qua dispatcher (sự kiện `campaign_approval_required`, người dùng KHÔNG tắt được
+ * email loại này) — chuông trong app + email (mẫu buildCampaignApprovalRequiredEmail như cũ).
+ *
  * @param {{ campaignId: number, ownerId: number, threshold: number, totalCustomers: number }} input
  * @returns {Promise<{ sent?: boolean, skipped?: boolean, reason?: string }>}
  */
 export async function notifyCampaignApprovalRequired({ campaignId, ownerId, threshold, totalCustomers }) {
   const campaign = await campaignCrudRepository.findCampaignById({ campaignId, isAdmin: true, userId: null });
-  const { rows } = await db.query(`SELECT email, full_name FROM users WHERE id = $1 LIMIT 1`, [ownerId]);
-  const owner = rows[0];
-  if (!owner?.email) {
-    console.warn(
-      `[CampaignApprovalNotify] skip email — no owner email campaign=${campaignId} owner=${ownerId}`
-    );
-    return { skipped: true, reason: 'no_owner_email' };
-  }
+  const campaignName = campaign?.campaign_name || `Chiến dịch #${campaignId}`;
 
-  const { subject, html } = buildCampaignApprovalRequiredEmail({
-    fullName: owner.full_name,
-    campaignName: campaign?.campaign_name || `Chiến dịch #${campaignId}`,
-    totalCustomers,
-    threshold,
-    appUrl: frontendAppUrl('/app/campaigns'),
+  const delivery = await notifyUsers({
+    eventType: 'campaign_approval_required',
+    userIds: [ownerId],
+    title: `Chiến dịch «${campaignName}» đang chờ bạn duyệt`,
+    titleEn: `Campaign "${campaignName}" is waiting for your approval`,
+    message: `Lịch hẹn đến giờ chạy nhưng có ${totalCustomers} người nhận, vượt ngưỡng yêu cầu phê duyệt (${threshold}) bạn đã đặt cho nhân viên. `
+      + 'Duyệt sẽ chạy ngay một lần cho lượt này; lịch hẹn định kỳ đã bị tắt, muốn tiếp tục lịch tự động thì bật lại sau khi duyệt.',
+    messageEn: `The schedule is due but has ${totalCustomers} recipients, above the approval threshold (${threshold}) you set for employees. `
+      + 'Approving runs it once now; the recurring schedule was turned off, turn it back on after approving to keep it automatic.',
+    link: '/app/campaigns',
+    severity: 'warning',
+    metadata: { campaignId, threshold, totalCustomers },
+    email: ({ fullName }) => buildCampaignApprovalRequiredEmail({
+      fullName,
+      campaignName,
+      totalCustomers,
+      threshold,
+      appUrl: frontendAppUrl('/app/campaigns'),
+    }),
   });
 
-  await sendSystemEmail({ to: owner.email, subject, html });
   console.log(
-    `[CampaignApprovalNotify] email sent campaign=${campaignId} owner=${ownerId} `
-    + `threshold=${threshold} totalCustomers=${totalCustomers} to=${owner.email}`
+    `[CampaignApprovalNotify] notified campaign=${campaignId} owner=${ownerId} `
+    + `threshold=${threshold} totalCustomers=${totalCustomers} inApp=${delivery.inApp} emailSent=${delivery.emailSent}`
   );
-  return { sent: true };
+  return delivery.inApp + delivery.emailSent > 0
+    ? { sent: true }
+    : { skipped: true, reason: 'no_delivery' };
 }

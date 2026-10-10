@@ -63,6 +63,48 @@ describe('CampaignRunRepository finalizeRun', () => {
       43,
     ]);
   });
+
+  // PLAN_TICKET_GOP_Y_VA_CHUONG_THONG_BAO PR-1 — engine chỉ phát "chiến dịch chạy xong" khi UPDATE vừa ghi 'completed' THẬT.
+  describe('giá trị trả về (cho thông báo "chạy xong")', () => {
+    const counts = { totalRecipients: 8, successfulSends: 3, failedSends: 1, skippedSends: 4 };
+
+    it("kết thúc hẳn (không còn người nhận chờ) → SQL có RETURNING status và trả { status: 'completed' }", async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [{ status: 'completed' }] });
+
+      const result = await campaignRunRepository.finalizeRun(50, false, counts);
+
+      const [sql] = mockQuery.mock.calls[0];
+      expect(sql).toContain("status = 'completed'");
+      expect(sql).toContain("AND status = 'running'");
+      expect(sql).toContain('RETURNING status');
+      expect(result).toEqual({ status: 'completed' });
+    });
+
+    it("còn người nhận chờ thử lại → giữ running và trả { status: 'running' } (KHÔNG phải completed)", async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [{ status: 'running' }] });
+
+      const result = await campaignRunRepository.finalizeRun(51, true, counts, { nonContinuousDeferredUntil: 'x' });
+
+      expect(mockQuery.mock.calls[0][0]).toContain('RETURNING status');
+      expect(result).toEqual({ status: 'running' });
+    });
+
+    it('lượt đã bị dừng/huỷ/đóng sổ bởi luồng khác (UPDATE không chạm dòng nào) → trả null', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+      expect(await campaignRunRepository.finalizeRun(52, false, counts)).toBeNull();
+    });
+
+    it("schema cũ chưa có skipped_sends cũng trả { status: 'completed' } và có RETURNING status", async () => {
+      campaignRunRepository._hasSkippedSendsColumn = false;
+      mockQuery.mockResolvedValueOnce({ rows: [{ status: 'completed' }] });
+
+      const result = await campaignRunRepository.finalizeRun(53, false, counts);
+
+      expect(mockQuery.mock.calls[0][0]).toContain('RETURNING status');
+      expect(result).toEqual({ status: 'completed' });
+    });
+  });
 });
 
 describe('CampaignRunRepository getRunForExecution', () => {
