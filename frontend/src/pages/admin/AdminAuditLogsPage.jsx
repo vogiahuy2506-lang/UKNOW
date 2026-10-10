@@ -193,7 +193,10 @@ export default function AdminAuditLogsPage() {
                       </button>
                     )}
                   </td>
-                  <td className="py-3 w-px whitespace-nowrap text-gray-400 dark:text-dk-text2 text-xs font-mono">{log.ip_address || '—'}</td>
+                  {/* IPv6 dài tới 39 ký tự đẩy bảng tràn ngang (đo 1470px, menu mở: bảng 1251px trong khung 1170px) → cắt + title. */}
+                  <td className="py-3 w-px whitespace-nowrap text-gray-400 dark:text-dk-text2 text-xs font-mono">
+                    <span className="block max-w-[120px] truncate" title={log.ip_address || undefined}>{log.ip_address || '—'}</span>
+                  </td>
                 </tr>
               ))}
             </tbody>
