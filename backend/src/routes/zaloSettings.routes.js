@@ -20,6 +20,119 @@ router.get(
   zaloSettingsController.getSelectableAccounts.bind(zaloSettingsController)
 );
 
+// Route trình dựng chiến dịch dùng được với `campaigns_create` (nhân viên được giao tài khoản) — đặt TRƯỚC cổng
+// `zalo_settings` toàn router. MỖI handler đã kiểm tài khoản được giao (rejectIfAccountNotAssigned /
+// resolvePreviewAccountAndApi -> 403 ZALO_ACCOUNT_NOT_ASSIGNED). Thêm route mới vào đây PHẢI kiểm tương tự.
+const builderAccess = requireAnyPermission(['zalo_settings', 'campaigns_create']);
+
+// Restore session — trình dựng chiến dịch tự khôi phục phiên: zalo_settings HOẶC campaigns_create
+router.post(
+  '/accounts/:id/restore-session',
+  builderAccess,
+  [param('id').isInt({ min: 1 }).withMessage('ID tài khoản không hợp lệ')],
+  handleValidationErrors,
+  zaloSettingsController.restoreAccountSessionByCookie.bind(zaloSettingsController)
+);
+
+// Clear needs_reauth fail window so keep-alive/cron will try again
+router.post(
+  '/accounts/:id/retry-restore',
+  builderAccess,
+  [param('id').isInt({ min: 1 }).withMessage('ID tài khoản không hợp lệ')],
+  handleValidationErrors,
+  zaloSettingsController.retryRestore.bind(zaloSettingsController)
+);
+
+/**
+ * POST /api/zalo/preview/send-personal
+ * Purpose: Gửi tin nhắn Zalo cá nhân trong preview Campaign Builder.
+ * Body: { accountId, recipients: string[], recipientType?: 'phone'|'uid', message }.
+ * Response: { success, data: { items, meta } }.
+ */
+router.post(
+  '/preview/send-personal',
+  builderAccess,
+  [
+    body('accountId').notEmpty().withMessage('accountId là bắt buộc'),
+    body('recipients').isArray({ min: 1 }).withMessage('recipients phải là mảng và không được rỗng'),
+    body('recipientType')
+      .optional()
+      .isIn(['phone', 'uid'])
+      .withMessage('recipientType phải là phone hoặc uid'),
+    body('message').trim().notEmpty().withMessage('message là bắt buộc'),
+  ],
+  handleValidationErrors,
+  zaloSettingsController.previewSendPersonalMessage.bind(zaloSettingsController)
+);
+
+/**
+ * POST /api/zalo/preview/send-friend-request
+ * Purpose: Gửi lời mời kết bạn Zalo trong preview Campaign Builder.
+ * Body: { accountId, recipients: string[], message }.
+ * Response: { success, data: { items, meta } }.
+ */
+router.post(
+  '/preview/send-friend-request',
+  builderAccess,
+  [
+    body('accountId').notEmpty().withMessage('accountId là bắt buộc'),
+    body('recipients').isArray({ min: 1 }).withMessage('recipients phải là mảng và không được rỗng'),
+    body('message').trim().notEmpty().withMessage('message là bắt buộc'),
+  ],
+  handleValidationErrors,
+  zaloSettingsController.previewSendFriendRequest.bind(zaloSettingsController)
+);
+
+/**
+ * POST /api/zalo/preview/send-group
+ * Purpose: Gửi tin nhắn nhóm Zalo trong preview Campaign Builder.
+ * Body: { accountId, groupIds: string[], message }.
+ * Response: { success, data: { items, meta } }.
+ */
+router.post(
+  '/preview/send-group',
+  builderAccess,
+  [
+    body('accountId').notEmpty().withMessage('accountId là bắt buộc'),
+    body('groupIds').isArray({ min: 1 }).withMessage('groupIds phải là mảng và không được rỗng'),
+    body('message').trim().notEmpty().withMessage('message là bắt buộc'),
+  ],
+  handleValidationErrors,
+  zaloSettingsController.previewSendGroupMessage.bind(zaloSettingsController)
+);
+
+/**
+ * GET /api/zalo/preview/friends
+ * Purpose: Lấy danh sách bạn bè từ tài khoản Zalo đã chọn.
+ * Query: { accountId, count?, page? }.
+ * Response: { success, data: { items, meta } }.
+ */
+router.get(
+  '/preview/friends',
+  builderAccess,
+  [
+    query('accountId').trim().notEmpty().withMessage('accountId là bắt buộc'),
+    query('count').optional().isInt({ min: 1 }).withMessage('count không hợp lệ'),
+    query('page').optional().isInt({ min: 1 }).withMessage('page không hợp lệ'),
+  ],
+  handleValidationErrors,
+  zaloSettingsController.previewGetAllFriends.bind(zaloSettingsController)
+);
+
+/**
+ * GET /api/zalo/preview/groups
+ * Purpose: Lấy danh sách nhóm từ tài khoản Zalo đã chọn.
+ * Query: { accountId }.
+ * Response: { success, data: { items, meta } }.
+ */
+router.get(
+  '/preview/groups',
+  builderAccess,
+  [query('accountId').trim().notEmpty().withMessage('accountId là bắt buộc')],
+  handleValidationErrors,
+  zaloSettingsController.previewGetAllGroups.bind(zaloSettingsController)
+);
+
 router.use(requirePermission('zalo_settings'));
 
 // Get accounts
@@ -96,24 +209,6 @@ router.patch(
   zaloSettingsController.updateSendSpeed.bind(zaloSettingsController)
 );
 
-// Restore session — cần quyền zalo_settings
-router.post(
-  '/accounts/:id/restore-session',
-  requirePermission('zalo_settings'),
-  [param('id').isInt({ min: 1 }).withMessage('ID tài khoản không hợp lệ')],
-  handleValidationErrors,
-  zaloSettingsController.restoreAccountSessionByCookie.bind(zaloSettingsController)
-);
-
-// Clear needs_reauth fail window so keep-alive/cron will try again
-router.post(
-  '/accounts/:id/retry-restore',
-  requirePermission('zalo_settings'),
-  [param('id').isInt({ min: 1 }).withMessage('ID tài khoản không hợp lệ')],
-  handleValidationErrors,
-  zaloSettingsController.retryRestore.bind(zaloSettingsController)
-);
-
 // Restore account session by cookie — cần quyền zalo_settings
 router.post(
   '/accounts/:id/restore-session-by-cookie',
@@ -121,91 +216,6 @@ router.post(
   [param('id').isInt({ min: 1 }).withMessage('ID tài khoản không hợp lệ')],
   handleValidationErrors,
   zaloSettingsController.restoreAccountSessionByCookie.bind(zaloSettingsController)
-);
-
-/**
- * POST /api/zalo/preview/send-personal
- * Purpose: Gửi tin nhắn Zalo cá nhân trong preview Campaign Builder.
- * Body: { accountId, recipients: string[], recipientType?: 'phone'|'uid', message }.
- * Response: { success, data: { items, meta } }.
- */
-router.post(
-  '/preview/send-personal',
-  [
-    body('accountId').notEmpty().withMessage('accountId là bắt buộc'),
-    body('recipients').isArray({ min: 1 }).withMessage('recipients phải là mảng và không được rỗng'),
-    body('recipientType')
-      .optional()
-      .isIn(['phone', 'uid'])
-      .withMessage('recipientType phải là phone hoặc uid'),
-    body('message').trim().notEmpty().withMessage('message là bắt buộc'),
-  ],
-  handleValidationErrors,
-  zaloSettingsController.previewSendPersonalMessage.bind(zaloSettingsController)
-);
-
-/**
- * POST /api/zalo/preview/send-friend-request
- * Purpose: Gửi lời mời kết bạn Zalo trong preview Campaign Builder.
- * Body: { accountId, recipients: string[], message }.
- * Response: { success, data: { items, meta } }.
- */
-router.post(
-  '/preview/send-friend-request',
-  [
-    body('accountId').notEmpty().withMessage('accountId là bắt buộc'),
-    body('recipients').isArray({ min: 1 }).withMessage('recipients phải là mảng và không được rỗng'),
-    body('message').trim().notEmpty().withMessage('message là bắt buộc'),
-  ],
-  handleValidationErrors,
-  zaloSettingsController.previewSendFriendRequest.bind(zaloSettingsController)
-);
-
-/**
- * POST /api/zalo/preview/send-group
- * Purpose: Gửi tin nhắn nhóm Zalo trong preview Campaign Builder.
- * Body: { accountId, groupIds: string[], message }.
- * Response: { success, data: { items, meta } }.
- */
-router.post(
-  '/preview/send-group',
-  [
-    body('accountId').notEmpty().withMessage('accountId là bắt buộc'),
-    body('groupIds').isArray({ min: 1 }).withMessage('groupIds phải là mảng và không được rỗng'),
-    body('message').trim().notEmpty().withMessage('message là bắt buộc'),
-  ],
-  handleValidationErrors,
-  zaloSettingsController.previewSendGroupMessage.bind(zaloSettingsController)
-);
-
-/**
- * GET /api/zalo/preview/friends
- * Purpose: Lấy danh sách bạn bè từ tài khoản Zalo đã chọn.
- * Query: { accountId, count?, page? }.
- * Response: { success, data: { items, meta } }.
- */
-router.get(
-  '/preview/friends',
-  [
-    query('accountId').trim().notEmpty().withMessage('accountId là bắt buộc'),
-    query('count').optional().isInt({ min: 1 }).withMessage('count không hợp lệ'),
-    query('page').optional().isInt({ min: 1 }).withMessage('page không hợp lệ'),
-  ],
-  handleValidationErrors,
-  zaloSettingsController.previewGetAllFriends.bind(zaloSettingsController)
-);
-
-/**
- * GET /api/zalo/preview/groups
- * Purpose: Lấy danh sách nhóm từ tài khoản Zalo đã chọn.
- * Query: { accountId }.
- * Response: { success, data: { items, meta } }.
- */
-router.get(
-  '/preview/groups',
-  [query('accountId').trim().notEmpty().withMessage('accountId là bắt buộc')],
-  handleValidationErrors,
-  zaloSettingsController.previewGetAllGroups.bind(zaloSettingsController)
 );
 
 export default router;
