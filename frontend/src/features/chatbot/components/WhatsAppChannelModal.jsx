@@ -53,8 +53,10 @@ export default function WhatsAppChannelModal({ open, onClose, chatbotId }) {
       const normalized = rawList.map((row) => {
         const provider = row.provider || (typeof row.id === 'string' && row.id.includes('-') ? 'baileys' : 'cloud_api');
         const linkedChatbotId = row.settings_chatbot_id ?? row.id_chatbot ?? null;
-        const linkedToOtherChatbot =
-          chatbotId != null && linkedChatbotId != null && Number(linkedChatbotId) !== Number(chatbotId);
+        // 1 tài khoản = 1 chatbot: backend trả other_chatbot_name khi một chatbot KHÁC đang bật trên tài khoản này
+        // (settings_chatbot_id chỉ là dòng của đúng chatbot đang xem nên không dùng để suy ra bot khác).
+        const otherChatbotName = row.other_chatbot_name || '';
+        const linkedToOtherChatbot = Boolean(otherChatbotName);
         const isEnabledForCurrent = !!(row.chatbot_enabled ?? row.is_enabled);
         // Baileys: trạng thái connected = is_active. Cloud API: row.is_active.
         const isConnected = row.is_active === true || row.isActive === true || provider === 'baileys';
@@ -70,7 +72,7 @@ export default function WhatsAppChannelModal({ open, onClose, chatbotId }) {
           isActive: isConnected,
           isEnabled: isEnabledForCurrent,
           linkedChatbotId,
-          linkedChatbotName: row.chatbot_name || '',
+          linkedChatbotName: otherChatbotName,
           linkedToOtherChatbot,
         };
       });
@@ -110,6 +112,8 @@ export default function WhatsAppChannelModal({ open, onClose, chatbotId }) {
     } catch (err) {
       console.error('[WhatsAppChannelModal] toggle failed:', err);
       toast.error(err?.response?.data?.message || 'Không thể cập nhật.');
+      // 409: tài khoản đã gắn chatbot khác (dữ liệu trên màn đã cũ) → tải lại để hiện huy hiệu.
+      if (err?.response?.status === 409) fetchAccounts();
     } finally {
       setTogglingId(null);
     }
@@ -191,6 +195,7 @@ export default function WhatsAppChannelModal({ open, onClose, chatbotId }) {
             ) : (
               accounts.map((acc) => {
                 const isOn = !!acc.isEnabled;
+                const blockedByOther = acc.linkedToOtherChatbot && !isOn;
                 const busy = togglingId === acc.id;
                 const displayName = acc.displayName || 'WhatsApp Account';
                 const avatarChar = (displayName || 'W').charAt(0).toUpperCase();
@@ -240,10 +245,10 @@ export default function WhatsAppChannelModal({ open, onClose, chatbotId }) {
                         )}
                         {acc.linkedToOtherChatbot && (
                           <span
-                            className="text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-100 px-1.5 py-0.5 rounded shrink-0"
-                            title={`Tài khoản này hiện đang được bật AI cho chatbot khác: ${acc.linkedChatbotName || `#${acc.linkedChatbotId}`}`}
+                            className="text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-100 px-1.5 py-0.5 rounded shrink-0 max-w-[140px] truncate"
+                            title={t(isOn ? 'chatbot.studio.zaloBoundBothTitle' : 'chatbot.studio.zaloBoundBlockedTitle', { name: acc.linkedChatbotName })}
                           >
-                            {acc.linkedChatbotName ? `${acc.linkedChatbotName}` : `Khác chatbot`}
+                            {t('chatbot.studio.zaloBoundBadge', { name: acc.linkedChatbotName })}
                           </span>
                         )}
                       </div>
@@ -258,18 +263,18 @@ export default function WhatsAppChannelModal({ open, onClose, chatbotId }) {
                       role="switch"
                       aria-checked={isOn}
                       aria-label={isOn ? 'Tắt chatbot' : 'Bật chatbot'}
-                      disabled={busy || !isConnected}
+                      disabled={busy || !isConnected || blockedByOther}
                       title={
                         !isConnected
                           ? t('chatbot.studio.channelsActivateFirst')
-                          : acc.linkedToOtherChatbot
-                            ? `Bật sẽ tạo thêm 1 cấu hình AI cho chatbot hiện tại (không ảnh hưởng ${acc.linkedChatbotName})`
+                          : blockedByOther
+                            ? t('chatbot.studio.zaloBoundBlockedTitle', { name: acc.linkedChatbotName })
                             : undefined
                       }
                       onClick={() => handleToggle(acc, !isOn)}
                       className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors shrink-0 ${
                         isOn ? 'bg-emerald-600' : 'bg-slate-200'
-                      } ${busy || !isConnected ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      } ${busy || !isConnected || blockedByOther ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       <span
                         className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
