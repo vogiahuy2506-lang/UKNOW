@@ -22,6 +22,17 @@ jest.unstable_mockModule('../../../repositories/chatbot/whatsappCampaignConversa
   extractPhoneFromExternalId: (externalId) => String(externalId ?? '').split(':').pop().trim(),
 }));
 
+// PLAN_GIAO_TK_TG_WA H4 — nhân viên (userId ≠ chủ) chỉ dùng tài khoản Telegram / WhatsApp ĐƯỢC GIAO; bảng giao được mock.
+const mockFindAssignedTelegram = jest.fn(async () => []);
+const mockFindAssignedWhatsApp = jest.fn(async () => []);
+const realMemberRepo = await import('../../../repositories/user/memberChannelAccount.repository.js');
+jest.unstable_mockModule('../../../repositories/user/memberChannelAccount.repository.js', () => ({
+  ...realMemberRepo,
+  findAssignedZaloAccountIds: jest.fn(async () => []),
+  findAssignedTelegramAccountRefs: mockFindAssignedTelegram,
+  findAssignedWhatsAppSessionKeys: mockFindAssignedWhatsApp,
+}));
+
 const registry = (await import('../../campaign/campaignNodeRegistry.service.js')).default;
 const channelFlags = await import('../../campaign/campaignChannelFlags.util.js');
 const channelRegistry = await import('../../campaign/campaignChannelRegistry.service.js');
@@ -32,6 +43,7 @@ const { applySlotsToGraph, buildSlotFillingPrompt } = await import('../campaignS
 const wizard = await import('../aiCampaignWizard.service.js');
 const confirmation = (await import('../campaignConfirmation.service.js')).default;
 const aiPromptResources = (await import('../aiPromptResources.service.js')).default;
+const aiCampaignDraft = (await import('../aiCampaignDraft.service.js')).default;
 
 const TG_FLAG = 'CAMPAIGN_CHANNEL_TELEGRAM_ENABLED';
 const WA_FLAG = 'CAMPAIGN_CHANNEL_WHATSAPP_ENABLED';
@@ -435,6 +447,7 @@ describe('P8a — assistant Telegram/WhatsApp', () => {
 
     it('cờ BẬT: Telegram đủ tài khoản + nội dung → readyToCreate, kênh telegram, sender có nhãn', async () => {
       setFlags({ telegram: true });
+      mockFindAssignedTelegram.mockResolvedValueOnce(['12']); // nhân viên được giao tài khoản 12
       telegramRepo.getAccountById.mockResolvedValue({ id: 12, username: 'shop_bot', is_active: true });
       const view = await confirmation.buildConfirmationView({
         userId: 99, // nhân viên
@@ -584,6 +597,143 @@ describe('P8a — assistant Telegram/WhatsApp', () => {
       expect(block).toContain('telegramAccountId');
       expect(block).toContain(WA_KEY);
       expect(block).not.toContain('8-khac');
+    });
+  });
+
+  // PLAN_GIAO_TK_TG_WA H4 — nhân viên chỉ thấy / dùng tài khoản ĐƯỢC GIAO; tài khoản chưa giao → câu rõ ràng, không bịa tài khoản khác.
+  describe('H4 — nhân viên chỉ dùng tài khoản được giao', () => {
+    const scopeOf = (telegram, whatsapp_baileys) => ({ telegram, whatsapp_baileys });
+    const seedAccounts = () => {
+      telegramRepo.listAccountsByUser.mockResolvedValue([
+        { id: 1, username: 'a', is_active: true },
+        { id: 2, username: 'b', is_active: true },
+      ]);
+      whatsappService.listSessions.mockReturnValue([
+        { sessionKey: WA_KEY, status: 'open', userName: 'Shop' },
+        { sessionKey: '7-khac', status: 'open', userName: 'Khác' },
+      ]);
+    };
+
+    it('getAdapterChannelAccounts: scope mảng chỉ trả tài khoản được giao; null = hết; thiếu khoá kênh = rỗng', async () => {
+      setFlags({ telegram: true, whatsapp: true });
+      seedAccounts();
+      const some = await aiPromptResources.getAdapterChannelAccounts(7, scopeOf(['2'], [WA_KEY]));
+      expect(some.telegram.map((a) => a.id)).toEqual([2]);
+      expect(some.whatsapp.map((a) => a.id)).toEqual([WA_KEY]);
+      const all = await aiPromptResources.getAdapterChannelAccounts(7, scopeOf(null, null));
+      expect(all.telegram).toHaveLength(2);
+      expect(all.whatsapp).toHaveLength(2);
+      const none = await aiPromptResources.getAdapterChannelAccounts(7, {});
+      expect(none).toEqual({ telegram: [], whatsapp: [] });
+    });
+
+    it('getAdapterAccountsPromptBlock: không lộ tài khoản chưa giao; rỗng do chưa giao thì dặn KHÔNG tự chọn tài khoản khác', async () => {
+      setFlags({ telegram: true, whatsapp: true });
+      seedAccounts();
+      const block = await aiPromptResources.getAdapterAccountsPromptBlock(7, scopeOf(['2'], []));
+      expect(block).toContain('ID: 2');
+      expect(block).not.toContain('ID: 1');
+      expect(block).not.toContain(WA_KEY);
+      expect(block).toContain('chưa giao tài khoản WhatsApp nào');
+      expect(block).toContain('KHÔNG tự chọn tài khoản khác');
+      const owner = await aiPromptResources.getAdapterAccountsPromptBlock(7);
+      expect(owner).toContain('ID: 1');
+      expect(owner).toContain(WA_KEY);
+    });
+
+    const base = (channel, senderAccountId = null) => ({
+      isCampaignFlow: true, channel, senderAccountId, dataSource: null, zaloGroupIds: [], zaloFriendIds: [], schedule: null, brief: null,
+    });
+
+    it('wizard: danh sách đã lọc rỗng (chưa được giao) → câu "chưa được giao", KHÔNG phải hướng dẫn kết nối', () => {
+      setFlags({ telegram: true });
+      const gate = wizard.evaluateNextGate(base('telegram'), { telegramAccounts: [], adapterAccessRestricted: true }, 'vi');
+      expect(gate.gate).toBe('senderAccount');
+      expect(gate.response.content).toContain('chưa được giao');
+      expect(gate.response.data).toMatchObject({ adapterNotAssigned: true, channel: 'telegram' });
+      const owner = wizard.evaluateNextGate(base('telegram'), { telegramAccounts: [], adapterAccessRestricted: false }, 'vi');
+      expect(owner.response.data?.adapterNotAssigned).toBeUndefined();
+    });
+
+    it('wizard: id đã chọn không nằm trong danh sách được giao (kể cả chỉ còn 1 tài khoản) → hỏi lại, không âm thầm qua cổng', () => {
+      setFlags({ telegram: true });
+      const gate = wizard.evaluateNextGate(base('telegram', 1), {
+        telegramAccounts: [{ id: 2, name: 'b', usable: true }], adapterAccessRestricted: true,
+      }, 'vi');
+      expect(gate.gate).toBe('senderAccount');
+      expect(gate.response.type).toBe('ask_sender_account');
+      expect(gate.response.data.accounts.map((a) => a.id)).toEqual([2]);
+    });
+
+    it('autoFillAdapterChannelAccounts: "tài khoản duy nhất" của nhân viên lấy TRONG SỐ ĐƯỢC GIAO, không phải của cả workspace', async () => {
+      setFlags({ telegram: true, whatsapp: true });
+      seedAccounts();
+      const nodes = [
+        { node_subtype: 'send_telegram', config: {} },
+        { node_subtype: 'send_whatsapp', config: {} },
+      ];
+      await aiCampaignDraft.autoFillAdapterChannelAccounts(nodes, 7, { accessibleChannelRefs: scopeOf(['2'], [WA_KEY]) });
+      expect(nodes[0].config.telegramAccountId).toBe(2);
+      expect(nodes[1].config.whatsappSessionKey).toBe(WA_KEY);
+      const blank = [{ node_subtype: 'send_telegram', config: {} }];
+      await aiCampaignDraft.autoFillAdapterChannelAccounts(blank, 7, { accessibleChannelRefs: scopeOf([], []) });
+      expect(blank[0].config.telegramAccountId).toBeUndefined();
+      // Không scope (chủ): 2 tài khoản → không tự chọn hộ (như cũ).
+      const ownerNodes = [{ node_subtype: 'send_telegram', config: {} }];
+      await aiCampaignDraft.autoFillAdapterChannelAccounts(ownerNodes, 7);
+      expect(ownerNodes[0].config.telegramAccountId).toBeUndefined();
+    });
+
+    it('prepareScript của nhân viên: tài khoản chưa giao bị gỡ khỏi bản nháp; tài khoản đã giao được giữ', async () => {
+      setFlags({ telegram: true, whatsapp: true });
+      seedAccounts();
+      mockFindAssignedTelegram.mockResolvedValueOnce(['2']);
+      mockFindAssignedWhatsApp.mockResolvedValueOnce([]);
+      draftRepo.findDefaultEmailSettingId.mockResolvedValue(null);
+      draftRepo.findDefaultZaloSettingId.mockResolvedValue(null);
+      const prepared = await aiCampaignDraft.prepareScript({
+        campaignName: 'x',
+        compilerApplied: true,
+        nodes: [
+          { id: 'n1', tempId: 'n1', nodeType: 'trigger', nodeSubtype: 'manual', nodeName: 'Bắt đầu', config: {} },
+          { id: 'n2', tempId: 'n2', nodeType: 'action', nodeSubtype: 'send_telegram', nodeName: 'TG', config: { telegramAccountId: 1, steps: [{ message: 'a' }] } },
+          { id: 'n3', tempId: 'n3', nodeType: 'action', nodeSubtype: 'send_whatsapp', nodeName: 'WA', config: { whatsappSessionKey: WA_KEY, steps: [{ message: 'a' }] } },
+        ],
+        connections: [],
+      }, 99, { ownerUserId: 7 });
+      const sub = (n) => n.node_subtype || n.nodeSubtype;
+      const tg = prepared.nodes.find((n) => sub(n) === 'send_telegram');
+      const wa = prepared.nodes.find((n) => sub(n) === 'send_whatsapp');
+      expect(tg.config.telegramAccountId).toBeUndefined();
+      expect(wa.config.whatsappSessionKey).toBeUndefined();
+    });
+
+    it('thẻ xác nhận: nhân viên chưa được giao tài khoản trong bản nháp → missing_sender, KHÔNG tra DB tài khoản', async () => {
+      setFlags({ telegram: true, whatsapp: true });
+      telegramRepo.getAccountById.mockResolvedValue({ id: 12, username: 'shop_bot', is_active: true });
+      const tg = await confirmation.buildConfirmationView({
+        userId: 99, ownerUserId: 7,
+        script: { campaignName: 'TG', nodes: [{ tempId: 't', nodeType: 'action', nodeSubtype: 'send_telegram', config: { telegramAccountId: 12, recipientSource: 'telegram_conversations', steps: [{ message: 'x' }] } }] },
+      });
+      expect(tg.readyToCreate).toBe(false);
+      expect(tg.blockingIssues.map((i) => i.code)).toContain('missing_sender');
+      expect(telegramRepo.getAccountById).not.toHaveBeenCalled();
+      const wa = await confirmation.buildConfirmationView({
+        userId: 99, ownerUserId: 7,
+        script: { campaignName: 'WA', nodes: [{ tempId: 'w', nodeType: 'action', nodeSubtype: 'send_whatsapp', config: { whatsappSessionKey: WA_KEY, recipientSource: 'whatsapp_conversations', steps: [{ message: 'x' }] } }] },
+      });
+      expect(wa.blockingIssues.map((i) => i.code)).toContain('missing_sender');
+    });
+
+    it('thẻ xác nhận: chủ (userId = ownerUserId) không bị lọc', async () => {
+      setFlags({ telegram: true });
+      telegramRepo.getAccountById.mockResolvedValue({ id: 12, username: 'shop_bot', is_active: true });
+      const view = await confirmation.buildConfirmationView({
+        userId: 7, ownerUserId: 7,
+        script: { campaignName: 'TG', nodes: [{ tempId: 't', nodeType: 'action', nodeSubtype: 'send_telegram', config: { telegramAccountId: 12, recipientSource: 'telegram_conversations', steps: [{ message: 'x' }] } }] },
+      });
+      expect(view.blockingIssues.map((i) => i.code)).not.toContain('missing_sender');
+      expect(telegramRepo.getAccountById).toHaveBeenCalled();
     });
   });
 });

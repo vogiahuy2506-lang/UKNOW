@@ -84,6 +84,9 @@ const realMemberRepo = await import('../../../repositories/user/memberChannelAcc
 jest.unstable_mockModule('../../../repositories/user/memberChannelAccount.repository.js', () => ({
   ...realMemberRepo,
   findAssignedZaloAccountIds: mockFindAssigned,
+  // PLAN_GIAO_TK_TG_WA H4 — nhân viên cũng được lọc tài khoản Telegram / WhatsApp; spec này không kiểm việc giao kênh đó.
+  findAssignedTelegramAccountRefs: jest.fn(async () => []),
+  findAssignedWhatsAppSessionKeys: jest.fn(async () => []),
 }));
 
 const { runChat } = await import('../aiChatTransport.service.js');

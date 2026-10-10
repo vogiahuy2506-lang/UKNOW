@@ -4,6 +4,8 @@
 import { describe, expect, it } from '@jest/globals';
 import {
   isChannelScopeUnrestricted,
+  isRefInChannelScope,
+  stripChannelAccountsNotAccessible,
   normalizeChannelAccessScope,
   pushChannelAccessCondition,
   pushChannelAccessFilter,
@@ -74,5 +76,52 @@ describe('pushChannelAccessFilter', () => {
 
   it('SCOPED_CHANNELS đúng hai kênh trong bảng giao', () => {
     expect([...SCOPED_CHANNELS]).toEqual(['telegram', 'whatsapp_baileys']);
+  });
+});
+
+describe('isRefInChannelScope — PR-H4', () => {
+  it('null = thấy hết; mảng = chỉ ref có trong mảng (so theo chuỗi); khác = không', () => {
+    expect(isRefInChannelScope('12', null)).toBe(true);
+    expect(isRefInChannelScope(12, ['12'])).toBe(true);
+    expect(isRefInChannelScope('13', ['12'])).toBe(false);
+    expect(isRefInChannelScope('12', [])).toBe(false);
+    expect(isRefInChannelScope('12', undefined)).toBe(false);
+  });
+});
+
+describe('stripChannelAccountsNotAccessible — PR-H4', () => {
+  const mk = () => ([
+    { node_subtype: 'send_telegram', config: { telegramAccountId: 12 } },
+    { nodeSubtype: 'send_whatsapp', config: { whatsappSessionKey: '7-shop' } },
+    { node_subtype: 'send_email', config: { fromEmailId: 5 } },
+  ]);
+
+  it('scope null/undefined (chủ, gọi nội bộ) → không đụng gì', () => {
+    for (const scope of [null, undefined]) {
+      const nodes = mk();
+      expect(stripChannelAccountsNotAccessible(nodes, scope)).toEqual([]);
+      expect(nodes[0].config.telegramAccountId).toBe(12);
+      expect(nodes[1].config.whatsappSessionKey).toBe('7-shop');
+    }
+  });
+
+  it('gỡ tài khoản chưa giao, giữ tài khoản đã giao, không đụng node khác', () => {
+    const nodes = mk();
+    const removed = stripChannelAccountsNotAccessible(nodes, { telegram: ['12'], whatsapp_baileys: [] });
+    expect(removed).toEqual(['7-shop']);
+    expect(nodes[0].config.telegramAccountId).toBe(12);
+    expect(nodes[1].config).not.toHaveProperty('whatsappSessionKey');
+    expect(nodes[2].config.fromEmailId).toBe(5);
+  });
+
+  it('có scope mà thiếu khoá kênh → coi như rỗng (hỏng thì chặn)', () => {
+    const nodes = mk();
+    expect(stripChannelAccountsNotAccessible(nodes, {}).sort()).toEqual(['12', '7-shop']);
+    expect(nodes[0].config).not.toHaveProperty('telegramAccountId');
+  });
+
+  it('scope null theo kênh (thấy hết) giữ nguyên', () => {
+    const nodes = mk();
+    expect(stripChannelAccountsNotAccessible(nodes, { telegram: null, whatsapp_baileys: null })).toEqual([]);
   });
 });
