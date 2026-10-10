@@ -13,6 +13,7 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MIGRATION_289 = path.resolve(__dirname, '../../../migrations/289_notification_preferences_and_event_settings.sql');
 const MIGRATION_293 = path.resolve(__dirname, '../../../migrations/293_notification_default_in_app_only.sql');
+const MIGRATION_294 = path.resolve(__dirname, '../../../migrations/294_notification_events_legacy_emails.sql');
 const BOOTSTRAP = path.resolve(__dirname, '../../../tests/integration/sql/bootstrap.sql');
 
 /**
@@ -30,7 +31,20 @@ const EXPECTED = {
   support_ticket_closed: ['user', true, false, true],
   support_ticket_created: ['admin', true, false, false],
   support_ticket_user_replied: ['admin', true, false, false],
+  // PR-6 (10/10/2026) — 5 loại email cũ vào chuông, migration 294. Plan mục 10: plan_expiring / plan_expired (thanh toán) không cho tắt email.
+  campaign_quota_exhausted: ['user', true, false, true],
+  chatbot_contact_left: ['user', true, false, true],
+  channel_disconnected: ['user', true, false, true],
+  // Ngoại lệ "chỉ chuông" (quyết định 10/10): nhắc gia hạn MẶC ĐỊNH BẬT EMAIL — khách không đăng nhập thì không thấy chuông.
+  plan_expiring: ['user', true, true, false],
+  plan_expired: ['user', true, true, false],
+  ai_unavailable: ['user', true, false, true],
 };
+
+/** 9 khoá của PR-1 (migration 289 + 293). */
+const KEYS_PR1 = Object.keys(EXPECTED).slice(0, 9);
+/** 6 khoá của PR-6 (migration 294). */
+const KEYS_PR6 = Object.keys(EXPECTED).slice(9);
 
 /** Giá trị email do migration 289 seed (lịch sử, KHÔNG đổi): email bật cho 7/9 sự kiện, 293 mới đưa về false. */
 const SEED_289_EMAIL = {
@@ -46,7 +60,8 @@ const SEED_289_EMAIL = {
 };
 
 describe('notificationEventCatalog', () => {
-  it('đúng 9 khoá của plan, không thừa không thiếu', () => {
+  it('đúng 15 khoá của plan (9 của PR-1 + 6 của PR-6), không thừa không thiếu', () => {
+    expect(Object.keys(EXPECTED)).toHaveLength(15);
     expect([...NOTIFICATION_EVENT_KEYS].sort()).toEqual(Object.keys(EXPECTED).sort());
     expect(new Set(NOTIFICATION_EVENT_KEYS).size).toBe(NOTIFICATION_EVENT_KEYS.length);
   });
@@ -95,10 +110,10 @@ function parseSeedRows(sql) {
 
 describe('seed của migration 289 + bootstrap.sql (lịch sử) và migration 293 (mặc định chỉ chuông)', () => {
   const seed289 = Object.fromEntries(
-    Object.entries(EXPECTED).map(([key, [, inApp, , canDisable]]) => [key, [inApp, SEED_289_EMAIL[key], canDisable]])
+    KEYS_PR1.map((key) => [key, [EXPECTED[key][1], SEED_289_EMAIL[key], EXPECTED[key][3]]])
   );
   const effective = Object.fromEntries(
-    Object.entries(EXPECTED).map(([key, [, inApp, email, canDisable]]) => [key, [inApp, email, canDisable]])
+    KEYS_PR1.map((key) => [key, [EXPECTED[key][1], EXPECTED[key][2], EXPECTED[key][3]]])
   );
 
   it('migration 289 giữ nguyên seed cũ (đủ 9 khoá)', () => {
@@ -107,22 +122,55 @@ describe('seed của migration 289 + bootstrap.sql (lịch sử) và migration 2
   });
 
   it('bootstrap.sql seed 289 y hệt migration 289', () => {
-    const rows = parseSeedRows(fs.readFileSync(BOOTSTRAP, 'utf8').split('-- --- Migration 289')[1]);
-    expect(rows).toEqual(seed289);
+    // Cắt tới dấu mốc Migration kế tiếp — các khối sau (294...) cũng có dạng INSERT ('khoá', bool, bool, bool).
+    const block = fs.readFileSync(BOOTSTRAP, 'utf8').split('-- --- Migration 289')[1].split('-- --- Migration')[0];
+    expect(parseSeedRows(block)).toEqual(seed289);
   });
 
-  it('migration 293 chèn đủ 9 khoá với giá trị hiệu lực, khớp catalog (đổi catalog mà quên migration mới thì đỏ)', () => {
+  it('migration 293 chèn đủ 9 khoá của PR-1 với giá trị hiệu lực, khớp catalog (đổi catalog mà quên migration mới thì đỏ)', () => {
     const rows = parseSeedRows(fs.readFileSync(MIGRATION_293, 'utf8'));
     expect(rows).toEqual(effective);
-    for (const event of NOTIFICATION_EVENTS) {
-      expect(rows[event.key]).toEqual([event.defaults.inApp, event.defaults.email, event.userCanDisableEmail]);
+    for (const key of KEYS_PR1) {
+      const event = getNotificationEvent(key);
+      expect(rows[key]).toEqual([event.defaults.inApp, event.defaults.email, event.userCanDisableEmail]);
     }
   });
 
-  it('trạng thái hiệu lực sau 289 + 293: mọi email = false', () => {
+  it('migration 294 seed đủ 6 khoá của PR-6, khớp catalog từng khoá (catalog thiếu / thừa một khoá thì đỏ)', () => {
+    const rows = parseSeedRows(fs.readFileSync(MIGRATION_294, 'utf8'));
+    expect(Object.keys(rows).sort()).toEqual([...KEYS_PR6].sort());
+    for (const key of KEYS_PR6) {
+      const event = getNotificationEvent(key);
+      expect(event).not.toBeNull();
+      expect(rows[key]).toEqual([event.defaults.inApp, event.defaults.email, event.userCanDisableEmail]);
+    }
+    expect(fs.readFileSync(MIGRATION_294, 'utf8')).toMatch(/ON CONFLICT \(event_type\) DO NOTHING/);
+  });
+
+  it('mọi khoá catalog đều có dòng seed trong 289 + 294 (không khoá nào rơi khỏi migration)', () => {
+    const seeded = {
+      ...parseSeedRows(fs.readFileSync(MIGRATION_289, 'utf8')),
+      ...parseSeedRows(fs.readFileSync(MIGRATION_294, 'utf8')),
+    };
+    expect(Object.keys(seeded).sort()).toEqual([...NOTIFICATION_EVENT_KEYS].sort());
+  });
+
+  it('bootstrap.sql có khối Migration 294 với đúng 6 dòng của migration', () => {
+    const boot = fs.readFileSync(BOOTSTRAP, 'utf8');
+    expect(boot).toContain('-- --- Migration 294');
+    const block = boot.split('-- --- Migration 294')[1].split('-- --- Migration')[0];
+    expect(parseSeedRows(block)).toEqual(parseSeedRows(fs.readFileSync(MIGRATION_294, 'utf8')));
+  });
+
+  it('trạng thái hiệu lực sau 289 + 293 + 294: email = false, TRỪ plan_expiring / plan_expired (mặc định bật email)', () => {
     const sql293 = fs.readFileSync(MIGRATION_293, 'utf8');
     expect(sql293).toMatch(/UPDATE notification_event_settings\s+SET email_enabled = false/);
-    for (const event of NOTIFICATION_EVENTS) expect(event.defaults.email).toBe(false);
+    const emailOn = NOTIFICATION_EVENTS.filter((event) => event.defaults.email).map((event) => event.key).sort();
+    expect(emailOn).toEqual(['plan_expired', 'plan_expiring']);
+    // 294: đúng hai khoá đó bật email, bốn khoá còn lại chỉ chuông.
+    const rows294 = parseSeedRows(fs.readFileSync(MIGRATION_294, 'utf8'));
+    const emailOn294 = Object.entries(rows294).filter(([, [, email]]) => email).map(([key]) => key).sort();
+    expect(emailOn294).toEqual(['plan_expired', 'plan_expiring']);
   });
 
   it('bootstrap.sql có khối Migration 293 với đúng UPDATE của migration', () => {

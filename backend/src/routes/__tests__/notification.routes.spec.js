@@ -199,7 +199,7 @@ describe('/api/notifications', () => {
   });
 
   describe('GET /preferences', () => {
-    it('chỉ liệt kê sự kiện audience=user (7 mục), không có sự kiện của admin', async () => {
+    it('chỉ liệt kê sự kiện audience=user (13 mục: 7 của PR-1 + 6 của PR-6), không có sự kiện của admin', async () => {
       const res = await request(app).get('/api/notifications/preferences').set('Authorization', 'Bearer user');
       expect(res.status).toBe(200);
       expect(res.body.data.map((item) => item.eventType)).toEqual([
@@ -210,14 +210,21 @@ describe('/api/notifications', () => {
         'campaign_schedule_skipped',
         'support_ticket_replied',
         'support_ticket_closed',
+        'campaign_quota_exhausted',
+        'chatbot_contact_left',
+        'channel_disconnected',
+        'plan_expiring',
+        'plan_expired',
+        'ai_unavailable',
       ]);
     });
 
-    it('CHƯA có dòng cấu hình (mặc định catalog = chỉ chuông): mọi loại emailEnabled=false, systemEmailEnabled=false, chuông bật', async () => {
+    it('CHƯA có dòng cấu hình (mặc định catalog = chỉ chuông, TRỪ nhắc gia hạn): emailEnabled=false, systemEmailEnabled=false, chuông bật; plan_expiring / plan_expired mặc định bật email', async () => {
       const res = await request(app).get('/api/notifications/preferences').set('Authorization', 'Bearer user');
       expect(res.body.data.length).toBeGreaterThan(0);
       for (const item of res.body.data) {
-        expect(item).toMatchObject({ emailEnabled: false, systemEmailEnabled: false, inAppEnabled: true });
+        const emailOn = item.eventType === 'plan_expiring' || item.eventType === 'plan_expired';
+        expect(item).toMatchObject({ emailEnabled: emailOn, systemEmailEnabled: emailOn, inAppEnabled: true });
       }
     });
 

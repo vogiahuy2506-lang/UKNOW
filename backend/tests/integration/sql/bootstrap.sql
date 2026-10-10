@@ -4194,3 +4194,14 @@ CREATE TABLE IF NOT EXISTS support_ticket_messages (
 );
 CREATE INDEX IF NOT EXISTS idx_support_ticket_messages_ticket_created
   ON support_ticket_messages (ticket_id, created_at);
+
+-- --- Migration 294: 6 su kien thong bao cu vao chuong (PLAN_TICKET_GOP_Y_VA_CHUONG_THONG_BAO PR-6) ---
+INSERT INTO notification_event_settings (event_type, in_app_enabled, email_enabled, user_can_disable_email)
+VALUES
+  ('campaign_quota_exhausted', true, false, true),
+  ('chatbot_contact_left',     true, false, true),
+  ('channel_disconnected',     true, false, true),
+  ('plan_expiring',            true, true,  false),
+  ('plan_expired',             true, true,  false),
+  ('ai_unavailable',           true, false, true)
+ON CONFLICT (event_type) DO NOTHING;

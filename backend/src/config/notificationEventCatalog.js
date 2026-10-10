@@ -9,8 +9,10 @@
  *    false cho loại bảo mật / thanh toán / nhân-viên-chờ-duyệt.
  *  - `audience: 'admin'`: sự kiện gửi cho super admin (không hiện ở trang tuỳ chọn của người dùng, không qua `notification_preferences`).
  *
- * Chưa đưa vào đợt này (giữ email như cũ): hết hạn mức (quotaPaused/Stopped), khách để lại liên hệ trong chat (đã có công tắc riêng),
- * kênh mất kết nối, gói sắp hết hạn, AI không sẵn sàng.
+ * PR-6 (10/10/2026): 6 khoá cuối (hết hạn mức, khách để lại liên hệ, kênh mất kết nối, gói sắp hết hạn / đã hết hạn, AI không sẵn sàng)
+ * là 5 loại email cũ đưa vào chuông. Migration 294 seed 6 dòng — thêm khoá vào catalog mà quên migration thì spec catalog đỏ.
+ * NGOẠI LỆ "chỉ chuông": `plan_expiring` / `plan_expired` MẶC ĐỊNH BẬT EMAIL (quyết định 10/10): khách không đăng nhập thì không thấy chuông,
+ * mất nhắc gia hạn là mất doanh thu; super admin vẫn tắt được ở tab "Cấu hình kênh".
  */
 export const NOTIFICATION_EVENTS = Object.freeze([
   {
@@ -93,6 +95,60 @@ export const NOTIFICATION_EVENTS = Object.freeze([
     audience: 'admin',
     defaults: { inApp: true, email: false },
     userCanDisableEmail: false,
+  },
+  {
+    key: 'campaign_quota_exhausted',
+    label: 'Chiến dịch dừng vì hết hạn mức gửi',
+    labelEn: 'Campaign paused: sending quota reached',
+    description: 'Báo khi chiến dịch tạm dừng hoặc bị dừng vì chạm hạn mức gửi của gói (hoặc giới hạn ngày bạn tự đặt cho tài khoản gửi).',
+    audience: 'user',
+    defaults: { inApp: true, email: false },
+    userCanDisableEmail: true,
+  },
+  {
+    key: 'chatbot_contact_left',
+    label: 'Khách để lại liên hệ trong chatbot',
+    labelEn: 'Customer left contact info in chatbot',
+    description: 'Báo khi khách để lại số điện thoại hoặc email trong hội thoại với chatbot. Công tắc email riêng trong cài đặt Hộp thư vẫn có hiệu lực.',
+    audience: 'user',
+    defaults: { inApp: true, email: false },
+    userCanDisableEmail: true,
+  },
+  {
+    key: 'channel_disconnected',
+    label: 'Kênh mất kết nối',
+    labelEn: 'Channel disconnected',
+    description: 'Báo khi tài khoản Zalo cá nhân, Telegram hoặc WhatsApp của bạn mất kết nối quá 15 phút và cần quét lại.',
+    audience: 'user',
+    defaults: { inApp: true, email: false },
+    userCanDisableEmail: true,
+  },
+  {
+    key: 'plan_expiring',
+    label: 'Gói sắp hết hạn',
+    labelEn: 'Plan expiring soon',
+    description: 'Nhắc gia hạn trước khi gói dịch vụ hết hạn (theo các mốc ngày quản trị viên cấu hình).',
+    audience: 'user',
+    defaults: { inApp: true, email: true },
+    userCanDisableEmail: false,
+  },
+  {
+    key: 'plan_expired',
+    label: 'Gói đã hết hạn',
+    labelEn: 'Plan expired',
+    description: 'Báo khi gói dịch vụ đã hết hạn và quyền lợi của gói bị thu hồi.',
+    audience: 'user',
+    defaults: { inApp: true, email: true },
+    userCanDisableEmail: false,
+  },
+  {
+    key: 'ai_unavailable',
+    label: 'Chatbot không trả lời được khách',
+    labelEn: 'Chatbot unable to reply to customers',
+    description: 'Báo khi chatbot không trả lời được khách vì hết lượt AI, hết hạn gói hoặc chạm hạn mức AI. Nhắc tối đa một lần mỗi 24 giờ.',
+    audience: 'user',
+    defaults: { inApp: true, email: false },
+    userCanDisableEmail: true,
   },
 ]);
 
