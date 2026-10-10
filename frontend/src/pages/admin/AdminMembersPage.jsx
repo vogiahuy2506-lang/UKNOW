@@ -7,7 +7,8 @@ import { useI18n } from '../../i18n';
 const Tooltip = ({ label, children }) => (
   <div className="relative group inline-flex">
     {children}
-    <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-20">
+    {/* hidden (display:none) thay opacity-0: chú thích ẩn của nút ngoài cùng bên phải vẫn tính vào vùng cuộn ngang của bảng */}
+    <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap hidden group-hover:block z-20">
       {label}
       <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
     </div>
@@ -926,7 +927,7 @@ const AdminMembersPage = () => {
               <option value="all">{t('adminMembers.segment.all')}</option>
             </select>
           )}
-          <div className="flex flex-[2] min-w-[180px] items-center rounded-lg border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-raised px-3 focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-500">
+          <div className="flex flex-[2] min-w-[140px] items-center rounded-lg border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-raised px-3 focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-500">
             <HiOutlineSearch className="w-4 h-4 text-gray-400 dark:text-dk-muted shrink-0" />
             <input
               type="text"
@@ -937,7 +938,7 @@ const AdminMembersPage = () => {
             />
           </div>
           <select
-            className="input py-1.5 text-sm flex-1 min-w-[120px]"
+            className="input py-1.5 text-sm flex-1 min-w-[130px]"
             value={planFilter}
             onChange={(e) => setPlanFilter(e.target.value)}
           >
@@ -950,7 +951,7 @@ const AdminMembersPage = () => {
           </select>
           {phoneOtpEnabled && (
             <select
-              className="input py-1.5 text-sm flex-1 min-w-[120px]"
+              className="input py-1.5 text-sm flex-1 min-w-[130px]"
               value={phoneVerifiedFilter}
               onChange={(e) => setPhoneVerifiedFilter(e.target.value)}
             >
@@ -960,7 +961,7 @@ const AdminMembersPage = () => {
             </select>
           )}
           <select
-            className="input py-1.5 text-sm flex-1 min-w-[120px]"
+            className="input py-1.5 text-sm flex-1 min-w-[130px]"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
           >
@@ -969,7 +970,7 @@ const AdminMembersPage = () => {
             <option value="inactive">{t('adminMembers.filter.inactive')}</option>
           </select>
           <select
-            className="input py-1.5 text-sm flex-1 min-w-[120px]"
+            className="input py-1.5 text-sm flex-1 min-w-[130px]"
             value={expiryFilter}
             onChange={(e) => setExpiryFilter(e.target.value)}
           >
@@ -989,7 +990,7 @@ const AdminMembersPage = () => {
           <div className="py-16 text-center text-gray-400 dark:text-dk-muted">{t('adminMembers.noMembersFound')}</div>
         ) : (
           <div className="table-container">
-            <table className="table !min-w-0">
+            <table className="table !min-w-0 [&_th]:!px-3 [&_td]:!px-3">
               <thead>
                 <tr>
                   <th className="whitespace-nowrap">{t('adminMembers.table.member')}</th>
@@ -1023,15 +1024,15 @@ const AdminMembersPage = () => {
                             </p>
                             <p className="text-xs text-gray-400 dark:text-dk-text2 truncate">{m.email}</p>
                             {m.phone && (
-                              <div className="text-xs text-gray-500 dark:text-dk-text2 flex items-center gap-1.5 mt-0.5">
+                              <div className="text-xs text-gray-500 dark:text-dk-text2 flex flex-wrap items-center gap-x-1.5 mt-0.5">
                                 <span className="font-mono">{m.phone}</span>
                                 {phoneOtpEnabled && (
                                   m.phoneVerifiedAt ? (
-                                    <span className="text-green-600 dark:text-green-400 text-[11px]">
+                                    <span className="text-green-600 dark:text-green-400 text-[11px] whitespace-nowrap">
                                       {t('adminMembers.phoneVerified', { date: fmtDate(m.phoneVerifiedAt) })}
                                     </span>
                                   ) : (
-                                    <span className="text-amber-600 dark:text-amber-400 text-[11px]">
+                                    <span className="text-amber-600 dark:text-amber-400 text-[11px] whitespace-nowrap">
                                       {t('adminMembers.phoneNotVerified')}
                                     </span>
                                   )
@@ -1080,12 +1081,12 @@ const AdminMembersPage = () => {
                         <ExpiryBadge expiresAt={m.subscriptionExpiresAt} hasPlan={!!m.activePlanId} />
                       </td>
                       <td className="whitespace-nowrap w-px px-2" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-0.5">
                           {/* Gán gói */}
                           <Tooltip label={t('adminMembers.assignPlan')}>
                             <button
                               onClick={() => setAssignMember(m)}
-                              className="p-2 rounded hover:bg-gray-100 dark:hover:bg-dk-raised transition-colors text-gray-500 dark:text-dk-text2 hover:text-primary-600 dark:hover:text-primary-400"
+                              className="p-1 rounded hover:bg-gray-100 dark:hover:bg-dk-raised transition-colors text-gray-500 dark:text-dk-text2 hover:text-primary-600 dark:hover:text-primary-400"
                             >
                               <HiOutlineCurrencyDollar className="w-5 h-5" />
                             </button>
@@ -1095,7 +1096,7 @@ const AdminMembersPage = () => {
                           <Tooltip label={t('adminMembers.viewDetails')}>
                             <button
                               onClick={() => setDetailMemberId(m.id)}
-                              className="p-2 rounded hover:bg-gray-100 dark:hover:bg-dk-raised transition-colors text-gray-500 dark:text-dk-text2 hover:text-primary-600 dark:hover:text-primary-400"
+                              className="p-1 rounded hover:bg-gray-100 dark:hover:bg-dk-raised transition-colors text-gray-500 dark:text-dk-text2 hover:text-primary-600 dark:hover:text-primary-400"
                             >
                               <HiOutlineEye className="w-5 h-5" />
                             </button>
@@ -1106,7 +1107,7 @@ const AdminMembersPage = () => {
                             <Tooltip label={t('adminMembers.unassignPlan')}>
                               <button
                                 onClick={() => setUnassignConfirm(m)}
-                                className="p-2 rounded hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors text-gray-400 dark:text-dk-text2 hover:text-red-600 dark:hover:text-red-400"
+                                className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors text-gray-400 dark:text-dk-text2 hover:text-red-600 dark:hover:text-red-400"
                               >
                                 <HiOutlineXCircle className="w-5 h-5" />
                               </button>
@@ -1118,7 +1119,7 @@ const AdminMembersPage = () => {
                             <button
                               onClick={() => handleToggleStatus(m)}
                               disabled={statusUpdatingId === m.id}
-                              className={`p-2 rounded hover:bg-gray-100 dark:hover:bg-dk-raised transition-colors ${isActive ? 'text-yellow-500 hover:text-yellow-600 dark:text-yellow-400 dark:hover:text-yellow-300' : 'text-green-500 hover:text-green-600 dark:text-green-400 dark:hover:text-green-300'}`}
+                              className={`p-1 rounded hover:bg-gray-100 dark:hover:bg-dk-raised transition-colors ${isActive ? 'text-yellow-500 hover:text-yellow-600 dark:text-yellow-400 dark:hover:text-yellow-300' : 'text-green-500 hover:text-green-600 dark:text-green-400 dark:hover:text-green-300'}`}
                             >
                               {statusUpdatingId === m.id
                                 ? <div className="spinner w-5 h-5" />
@@ -1134,7 +1135,7 @@ const AdminMembersPage = () => {
                             <Tooltip label={t('adminMembers.promoteToAdmin')}>
                               <button
                                 onClick={() => setPromoteConfirm(m)}
-                                className="p-2 rounded hover:bg-purple-50 dark:hover:bg-purple-950/40 transition-colors text-gray-400 dark:text-dk-text2 hover:text-purple-600 dark:hover:text-purple-400"
+                                className="p-1 rounded hover:bg-purple-50 dark:hover:bg-purple-950/40 transition-colors text-gray-400 dark:text-dk-text2 hover:text-purple-600 dark:hover:text-purple-400"
                               >
                                 <HiOutlineShieldCheck className="w-5 h-5" />
                               </button>
@@ -1146,7 +1147,7 @@ const AdminMembersPage = () => {
                             <Tooltip label={t('adminMembers.demote')}>
                               <button
                                 onClick={() => setDemoteConfirm(m)}
-                                className="p-2 rounded hover:bg-orange-50 dark:hover:bg-orange-950/40 transition-colors text-gray-400 dark:text-dk-text2 hover:text-orange-600 dark:hover:text-orange-400"
+                                className="p-1 rounded hover:bg-orange-50 dark:hover:bg-orange-950/40 transition-colors text-gray-400 dark:text-dk-text2 hover:text-orange-600 dark:hover:text-orange-400"
                               >
                                 <HiOutlineShieldExclamation className="w-5 h-5" />
                               </button>
@@ -1158,7 +1159,7 @@ const AdminMembersPage = () => {
                             <Tooltip label={t('adminMembers.resetTwoFactor')}>
                               <button
                                 onClick={() => setResetTwoFactorConfirm(m)}
-                                className="p-2 rounded hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-colors text-gray-400 dark:text-dk-text2 hover:text-amber-600 dark:hover:text-amber-400"
+                                className="p-1 rounded hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-colors text-gray-400 dark:text-dk-text2 hover:text-amber-600 dark:hover:text-amber-400"
                               >
                                 <HiOutlineKey className="w-5 h-5" />
                               </button>
@@ -1170,7 +1171,7 @@ const AdminMembersPage = () => {
                             <Tooltip label={t('adminMembers.detachEmail')}>
                               <button
                                 onClick={() => setDetachEmailConfirm(m)}
-                                className="p-2 rounded hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-colors text-gray-400 dark:text-dk-text2 hover:text-amber-600 dark:hover:text-amber-400"
+                                className="p-1 rounded hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-colors text-gray-400 dark:text-dk-text2 hover:text-amber-600 dark:hover:text-amber-400"
                               >
                                 <HiOutlineMailOpen className="w-5 h-5" />
                               </button>
@@ -1182,7 +1183,7 @@ const AdminMembersPage = () => {
                             <Tooltip label={t('adminMembers.purge')}>
                               <button
                                 onClick={() => setPurgeConfirm(m)}
-                                className="p-2 rounded hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors text-gray-400 dark:text-dk-text2 hover:text-red-700 dark:hover:text-red-400"
+                                className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors text-gray-400 dark:text-dk-text2 hover:text-red-700 dark:hover:text-red-400"
                               >
                                 <HiOutlineTrash className="w-5 h-5" />
                               </button>

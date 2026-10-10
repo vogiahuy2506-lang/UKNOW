@@ -361,7 +361,7 @@ const AdminOrdersPage = () => {
             <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-dk-muted" />
             <input
               type="text"
-              className="input pl-9 w-full"
+              className="input !pl-9 w-full"
               placeholder={t('adminOrders.searchPlaceholder')}
               value={draft.search}
               onChange={(e) => setDraft((p) => ({ ...p, search: e.target.value }))}
@@ -467,9 +467,9 @@ const AdminOrdersPage = () => {
                   <td className="px-4 py-3 font-mono text-xs text-gray-600 dark:text-dk-text2 whitespace-nowrap">{o.orderCode}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5 whitespace-nowrap">
-                      <span className="font-medium text-gray-800 dark:text-dk-text">{o.planName || '—'}</span>
+                      <span className="max-w-[130px] truncate font-medium text-gray-800 dark:text-dk-text" title={o.planName || undefined}>{o.planName || '—'}</span>
                       {o.isCustom && (
-                        <span className="text-[10px] bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-300 px-1.5 py-0.5 rounded-full font-medium">
+                        <span className="shrink-0 text-[10px] bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-300 px-1.5 py-0.5 rounded-full font-medium">
                           {t('adminOrders.custom')}
                         </span>
                       )}
@@ -520,45 +520,57 @@ const AdminOrdersPage = () => {
                     )}
                   </td>
                   <td className="px-4 py-3 w-px whitespace-nowrap">
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setDetailOrderId(o.id)}
-                        title={t('adminOrders.viewDetails')}
-                        aria-label={t('adminOrders.viewDetails')}
-                        className="p-1.5 text-gray-400 dark:text-dk-text2 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-gray-100 dark:hover:bg-dk-raised rounded-lg transition-colors"
-                      >
-                        <HiOutlineEye className="w-4 h-4" />
-                      </button>
-                      {o.status === 'pending' && (
-                        cancellingCode === o.orderCode ? (
-                          <div className="flex items-center gap-1.5">
+                    <div className="flex flex-col items-start gap-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setDetailOrderId(o.id)}
+                          title={t('adminOrders.viewDetails')}
+                          aria-label={t('adminOrders.viewDetails')}
+                          className="p-1.5 text-gray-400 dark:text-dk-text2 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-gray-100 dark:hover:bg-dk-raised rounded-lg transition-colors"
+                        >
+                          <HiOutlineEye className="w-4 h-4" />
+                        </button>
+                        {o.status === 'pending' && (
+                          cancellingCode === o.orderCode ? (
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleCancel(o.orderCode)}
+                                className="text-xs px-2 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                              >
+                                {t('adminOrders.confirm')}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setCancellingCode(null)}
+                                className="text-xs px-2 py-1 bg-gray-100 dark:bg-dk-raised text-gray-600 dark:text-dk-text rounded-lg hover:bg-gray-200 dark:hover:bg-dk-strong transition-colors"
+                              >
+                                {t('adminOrders.cancel')}
+                              </button>
+                            </div>
+                          ) : (
                             <button
                               type="button"
-                              onClick={() => handleCancel(o.orderCode)}
-                              className="text-xs px-2 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                              onClick={() => setCancellingCode(o.orderCode)}
+                              title={t('adminOrders.cancelOrderAndDisableQR')}
+                              className="p-1.5 text-gray-400 dark:text-dk-text2 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors"
                             >
-                              {t('adminOrders.confirm')}
+                              <HiOutlineBan className="w-4 h-4" />
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => setCancellingCode(null)}
-                              className="text-xs px-2 py-1 bg-gray-100 dark:bg-dk-raised text-gray-600 dark:text-dk-text rounded-lg hover:bg-gray-200 dark:hover:bg-dk-strong transition-colors"
-                            >
-                              {t('adminOrders.cancel')}
-                            </button>
-                          </div>
-                        ) : (
+                          )
+                        )}
+                        {canOfferRefund(o) && (
                           <button
                             type="button"
-                            onClick={() => setCancellingCode(o.orderCode)}
-                            title={t('adminOrders.cancelOrderAndDisableQR')}
-                            className="p-1.5 text-gray-400 dark:text-dk-text2 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors"
+                            onClick={() => setRefundingCode(String(o.orderCode))}
+                            className="text-xs px-2 py-1 border border-red-200 dark:border-red-900/60 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors whitespace-nowrap"
                           >
-                            <HiOutlineBan className="w-4 h-4" />
+                            {t('adminOrders.refundButton')}
                           </button>
-                        )
-                      )}
+                        )}
+                      </div>
+                      {/* Nút "Đánh dấu đã xử lý" (hiếm, chữ dài) xuống hàng riêng để không kéo rộng cả cột Hành động */}
                       {hasUnhandledPaidAfterCancelled(o) && (
                         <button
                           type="button"
@@ -566,15 +578,6 @@ const AdminOrdersPage = () => {
                           className="text-xs px-2 py-1 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors whitespace-nowrap"
                         >
                           {t('adminOrders.markPaidAfterCancelledHandled')}
-                        </button>
-                      )}
-                      {canOfferRefund(o) && (
-                        <button
-                          type="button"
-                          onClick={() => setRefundingCode(String(o.orderCode))}
-                          className="text-xs px-2 py-1 border border-red-200 dark:border-red-900/60 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors whitespace-nowrap"
-                        >
-                          {t('adminOrders.refundButton')}
                         </button>
                       )}
                     </div>
