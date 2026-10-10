@@ -7,7 +7,7 @@
  * gửi 85 / 500). Backend chạy với `SCHEDULER_ENABLED=false`, kẻo worker nền đánh lượt đang gửi thành lỗi.
  */
 import {
-  sidebarShot, highlight, hideVolatileChrome, settle, contentShot, bandShot, boxAround, drawBoxes,
+  sidebarShot, highlight, hideVolatileChrome, settle, contentShot, bandShot, boxAround, drawBoxes, paddedShot,
 } from '../lib/shotHelpers.js';
 
 const MONITOR_PATH = '/app/delivery-monitor';
@@ -37,6 +37,28 @@ export default {
         await highlight(statusLine);
         await page.waitForTimeout(200);
         return contentShot(page, list);
+      },
+    },
+    {
+      name: 'o-toc-do-va-gioi-han-gui',
+      caption: 'thẻ Zalo trong trang Quản lý kênh gửi, khoanh đỏ ô Tốc độ gửi và ô Giới hạn gửi/ngày',
+      localOnly: true,
+      async take(page) {
+        await page.goto(CHANNELS_PATH);
+        const tab = page.getByRole('button', { name: 'Zalo', exact: true }).first();
+        await tab.waitFor({ state: 'visible', timeout: 30_000 });
+        await tab.click();
+        const limit = page.locator('[id^="send-limit-"]').first();
+        const speed = page.locator('[id^="send-speed-"]').first();
+        await limit.waitFor({ state: 'visible', timeout: 30_000 });
+        await settle(page);
+        await hideVolatileChrome(page);
+        // Khoanh riêng hai Ô (không kèm nút Lưu). CHỈ khoanh, KHÔNG bấm Lưu.
+        await highlight(speed);
+        await highlight(limit.locator('xpath=ancestor::div[1]'));
+        await page.waitForTimeout(200);
+        const card = limit.locator('xpath=ancestor::div[contains(@class,"rounded-xl")][1]');
+        return paddedShot(page, card, { pad: 14 });
       },
     },
     {

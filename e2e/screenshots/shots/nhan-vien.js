@@ -78,6 +78,74 @@ export default {
       },
     },
     {
+      name: 'tab-tai-khoan-kenh',
+      caption: 'hộp thoại nhân viên đang ở tab "Tài khoản kênh", khoanh đỏ ba nhóm Zalo cá nhân / Telegram / WhatsApp và nút "Lưu tài khoản được giao"',
+      localOnly: true,
+      async take(page) {
+        // DB e2e không có phiên Telegram/WhatsApp thật (và cấm tạo) — trả danh sách tài khoản MẪU, đúng hình dạng
+        // `GET /employees/:id/channel-accounts` ({ zaloAccounts, telegramAccounts, whatsappAccounts }).
+        await page.route('**/api/employees/*/channel-accounts', async (route) => {
+          if (route.request().method() !== 'GET') return route.continue();
+          return route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              success: true,
+              data: {
+                zaloAccounts: [
+                  { id: 101, displayName: 'Zalo Tư vấn bán hàng', zaloName: 'Tư vấn bán hàng', zaloPhone: '0901 234 567', status: 'connected', isActive: true, isDefault: true, assigned: true, source: 'assigned' },
+                  { id: 102, displayName: 'Zalo Chăm sóc khách', zaloName: 'Chăm sóc khách', zaloPhone: '0902 345 678', status: 'connected', isActive: true, isDefault: false, assigned: false, source: null },
+                ],
+                telegramAccounts: [
+                  { id: 201, displayName: 'Telegram Bán hàng', username: 'banhang_demo', phone: '+84 903 456 789', isActive: true, assigned: true, source: 'assigned' },
+                  { id: 202, displayName: 'Telegram Hỗ trợ', username: 'hotro_demo', phone: '+84 904 567 890', isActive: true, assigned: false, source: null },
+                ],
+                whatsappAccounts: [
+                  { sessionKey: 'wa-demo-1', shortKey: 'wa-demo-1', displayName: 'WhatsApp Khách quốc tế', phone: '+84 905 678 901', status: 'open', assigned: true, source: 'assigned' },
+                  { sessionKey: 'wa-demo-2', shortKey: 'wa-demo-2', displayName: 'WhatsApp Đối tác', phone: '+84 906 789 012', status: 'open', assigned: false, source: null },
+                ],
+              },
+            }),
+          });
+        });
+        await page.goto('/app/settings/employees');
+        const firstRow = page.locator('main table tbody tr').first();
+        await firstRow.waitFor({ state: 'visible', timeout: 30_000 });
+        await settle(page);
+        await firstRow.click();
+        const dialog = page.locator('div.fixed.inset-0').last();
+        await dialog.waitFor({ state: 'visible', timeout: 15_000 });
+        await dialog.getByRole('button', { name: 'Tài khoản kênh', exact: true }).first().click();
+        const save = dialog.getByRole('button', { name: 'Lưu tài khoản được giao', exact: true });
+        await save.waitFor({ state: 'visible', timeout: 15_000 });
+        await dialog.getByText('Telegram Bán hàng').first().waitFor({ state: 'visible', timeout: 15_000 });
+        const viewport = page.viewportSize();
+        await page.setViewportSize({ width: viewport.width, height: 1300 });
+        const restore = () => page.setViewportSize(viewport);
+        try {
+          await page.waitForTimeout(600);
+          await hideVolatileChrome(page);
+          // Ba nhóm: tiêu đề nhóm + các dòng tài khoản của nhóm. Zalo cá nhân là <h3>; Telegram/WhatsApp là tiêu đề của
+          // EmployeeChannelAccountGroup — khoanh tiêu đề cùng khối chứa nó.
+          for (const label of ['Zalo cá nhân', 'Telegram', 'WhatsApp']) {
+            const heading = dialog.getByText(label, { exact: true }).first();
+            await highlight(heading);
+          }
+          await highlight(save);
+          await page.waitForTimeout(200);
+          const shot = await contentShot(page, dialog.locator('> div').last());
+          return {
+            screenshot: async (options = {}) => {
+              try { return await shot.screenshot(options); } finally { await restore(); }
+            },
+          };
+        } catch (error) {
+          await restore();
+          throw error;
+        }
+      },
+    },
+    {
       name: 'hoat-dong-nhom',
       caption: 'khối Hoạt động nhóm ở cuối trang Nhân viên, khoanh đỏ dòng Cả công ty',
       localOnly: true,

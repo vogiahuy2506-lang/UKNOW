@@ -5,7 +5,7 @@
  * trong đó 1 hội thoại đặt `ai_paused = true` cho ô "AI đang tạm dừng".
  */
 import {
-  sidebarShot, regionShot, highlight, hideVolatileChrome, settle, contentShot,
+  sidebarShot, regionShot, highlight, hideVolatileChrome, settle, contentShot, bandShot,
 } from '../lib/shotHelpers.js';
 
 const INBOX_PATH = '/app/settings/inbox';
@@ -104,6 +104,60 @@ export default {
         });
         await page.waitForTimeout(200);
         return contentShot(page, page.locator('main').first());
+      },
+    },
+    {
+      // Tab "Báo cáo AI": số liệu đọc từ GET /ai/chatbot/inbox/ai-activity. DB e2e không có hội thoại Zalo cá nhân do AI trả lời,
+      // và nút "Bật lại tất cả AI" chỉ hiện khi có hội thoại tạm dừng quá 24 giờ — nên trả dữ liệu MẪU đúng hình dạng API.
+      name: 'bao-cao-ai',
+      caption: 'tab Báo cáo AI, khoanh đỏ các thẻ số, hàng bộ lọc và nút "Bật lại tất cả AI"',
+      localOnly: true,
+      async take(page) {
+        const at = (h, m) => { const d = new Date(); d.setHours(h, m, 0, 0); return d.toISOString(); };
+        const conv = (id, name, khach, ai, nguoi, chuaDoc, aiPaused) => ({
+          id, visitorName: name, khachNhan: khach, aiTraLoi: ai, nguoiTraLoi: nguoi, chuaDoc, aiPaused,
+          tinDau: at(8, 10 + id), tinCuoi: at(10, 5 + id), summary: null,
+        });
+        await page.route('**/api/ai/chatbot/inbox/ai-activity**', (route) => route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: true,
+            data: {
+              hasSummaryCache: false,
+              stats: {
+                totalConversations: 12, totalKhachNhan: 58, totalAiTraLoi: 41, totalNguoiTraLoi: 9,
+                totalChuaDoc: 4, totalAiPaused: 3, stalePausedCount: 2,
+              },
+              conversations: [
+                conv(1, 'Nguyễn Minh Anh', 6, 5, 0, 0, false),
+                conv(2, 'Trần Quốc Bảo', 9, 4, 3, 2, true),
+                conv(3, 'Lê Thu Hà', 4, 4, 0, 0, false),
+                conv(4, 'Phạm Gia Hân', 7, 2, 4, 2, true),
+              ],
+            },
+          }),
+        }));
+        await page.goto(INBOX_PATH);
+        const tab = page.locator('main').getByRole('button', { name: /Báo cáo AI/ }).first();
+        await tab.waitFor({ state: 'visible', timeout: 30_000 });
+        await tab.click();
+        const resume = page.getByRole('button', { name: 'Bật lại tất cả AI', exact: true });
+        await resume.waitFor({ state: 'visible', timeout: 20_000 });
+        await settle(page);
+        await hideVolatileChrome(page);
+
+        const kpi = page.getByText('Hội thoại phát sinh', { exact: true }).first().locator('xpath=ancestor::div[contains(@class,"grid")][1]');
+        const filters = page.getByRole('button', { name: /^Tất cả \(/ }).first().locator('xpath=..');
+        // Khoanh từng thẻ số (khối lưới bao ngoài có đệm, viền khoanh bị cắt ở mép ảnh).
+        const cards = kpi.locator('> div');
+        for (let i = 0; i < await cards.count(); i += 1) await highlight(cards.nth(i));
+        await highlight(filters);
+        await highlight(resume);
+        await page.waitForTimeout(200);
+        // Từ đầu báo cáo (tiêu đề + dải cảnh báo) tới hết hàng bộ lọc.
+        const top = page.getByRole('heading', { name: /Báo cáo AI phản hồi/ }).first().locator('xpath=ancestor::div[contains(@class,"shrink-0")][1]');
+        return bandShot(page, top, filters.locator('xpath=..'), { pad: 10, padTop: 0 });
       },
     },
     {

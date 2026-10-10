@@ -6,7 +6,7 @@
  * tài khoản KHÔNG phải mặc định, nên một tài khoản là không chụp được ô đó.
  */
 import {
-  highlight, hideVolatileChrome, settle, contentShot, enclosingSection,
+  highlight, hideVolatileChrome, settle, contentShot, enclosingSection, paddedShot,
 } from '../lib/shotHelpers.js';
 
 const CHANNELS_PATH = '/app/settings/channels';
@@ -22,6 +22,13 @@ async function openZaloTab(page) {
     .catch(() => {});
   await settle(page);
   await hideVolatileChrome(page);
+}
+
+/** Thẻ của tài khoản Zalo đầu tiên (đã kết nối, có sẵn ô giới hạn + tốc độ gửi). */
+async function zaloAccountCard(page) {
+  const input = page.locator('[id^="send-limit-"]').first();
+  await input.waitFor({ state: 'visible', timeout: 30_000 });
+  return input.locator('xpath=ancestor::div[contains(@class,"rounded-xl")][1]');
 }
 
 export default {
@@ -74,6 +81,20 @@ export default {
         await highlight(setDefault);
         await page.waitForTimeout(200);
         return contentShot(page, page.locator('main').first());
+      },
+    },
+    {
+      name: 'gioi-han-va-toc-do-gui',
+      caption: 'thẻ một tài khoản Zalo, khoanh đỏ ô "Giới hạn gửi/ngày" và ô chọn "Tốc độ gửi" cùng hai nút Lưu',
+      localOnly: true,
+      async take(page) {
+        await openZaloTab(page);
+        const card = await zaloAccountCard(page);
+        // Khoanh hai HÀNG (nhãn + ô + nút Lưu). CHỈ khoanh, KHÔNG bấm Lưu.
+        await highlight(card.locator('[id^="send-limit-"]').first().locator('xpath=ancestor::div[contains(@class,"mt-2")][1]'));
+        await highlight(card.locator('[id^="send-speed-"]').first().locator('xpath=ancestor::div[contains(@class,"mt-2")][1]'));
+        await page.waitForTimeout(200);
+        return paddedShot(page, card, { pad: 14 });
       },
     },
   ],

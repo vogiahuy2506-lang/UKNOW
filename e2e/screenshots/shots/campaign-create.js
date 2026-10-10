@@ -19,7 +19,7 @@
  * Không có luồng thì trình dựng mở ra một khung trắng, chẳng chụp được gì.
  */
 import {
-  sidebarShot, highlight, hideVolatileChrome, settle, contentShot,
+  sidebarShot, highlight, hideVolatileChrome, settle, contentShot, paddedShot,
 } from '../lib/shotHelpers.js';
 
 /**
@@ -168,6 +168,53 @@ export default {
         }
         await page.waitForTimeout(200);
         return contentShot(page, page.locator('main').first(), { maxHeight: 130 });
+      },
+    },
+    {
+      // Ước tính do server tính từ chiến dịch + tài khoản gửi; DB e2e chưa có kênh Zalo thật nên trả bản MẪU đúng hợp đồng
+      // `GET /campaigns/:id/estimate` (ba ngày, một tài khoản email gửi, kèm cảnh báo nhiều ngày). CHỈ mở hộp, KHÔNG bấm "Xác nhận chạy".
+      name: 'hop-xac-nhan-chay-uoc-tinh',
+      caption: 'hộp Xác nhận chạy chiến dịch, khoanh đỏ khối "Ước tính thời gian gửi" với dòng Dự kiến xong và bảng theo ngày',
+      localOnly: true,
+      async take(page) {
+        const now = Date.now();
+        const vnDay = (offsetDays) => new Date(now + offsetDays * 86_400_000 + 7 * 3_600_000).toISOString().slice(0, 10);
+        const startAt = new Date(now).toISOString();
+        const finishAtEarliest = new Date(now + 2 * 86_400_000 + 5 * 3_600_000).toISOString();
+        const finishAtLatest = new Date(now + 2 * 86_400_000 + 11 * 3_600_000).toISOString();
+        await page.route('**/api/campaigns/*/estimate**', (route) => route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: true,
+            data: {
+              startAt,
+              finishAtEarliest,
+              finishAtLatest,
+              totalActions: 240,
+              accounts: [{ key: 'email:1', label: 'Email CSKH UKNOW' }],
+              perDay: [
+                { date: vnDay(0), actions: 90, perAccount: { 'email:1': 90 } },
+                { date: vnDay(1), actions: 90, perAccount: { 'email:1': 90 } },
+                { date: vnDay(2), actions: 60, perAccount: { 'email:1': 60 } },
+              ],
+              warnings: [{ code: 'multi_day', params: { days: 3, finishAtLatest } }],
+            },
+          }),
+        }));
+        await openBuilder(page);
+        const run = page.getByRole('button', { name: 'Chạy ngay', exact: true }).first();
+        await run.waitFor({ state: 'visible', timeout: 10_000 });
+        await run.click();
+        const estimate = page.getByTestId('campaign-estimate');
+        await estimate.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(500);
+        await hideVolatileChrome(page);
+        await highlight(estimate);
+        await page.waitForTimeout(200);
+        // Khung trắng của hộp thoại (con của lớp phủ toàn màn hình), cao tới hết hộp.
+        const dialog = estimate.locator('xpath=ancestor::div[contains(@class,"fixed")][1]').locator('> div').first();
+        return paddedShot(page, dialog, { pad: 16 });
       },
     },
   ],

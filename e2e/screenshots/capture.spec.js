@@ -30,6 +30,8 @@ const SHEETS = [
   'chatbot-khung-gio', 'tro-ly-ai-landing', 'chatbot-telegram-whatsapp', 'dong-y-nhan-tin',
   // Lô vá 28/09/2026 — ô bước "Nội dung" (giao diện đổi, ảnh chèn tay cũ đã bỏ).
   'quick-send',
+  // Lô 10/10/2026 — đợt 2 ảnh hướng dẫn (trợ lý AI chiến dịch, hạn mức email).
+  'email-account', 'tro-ly-ai-chien-dich',
 ];
 
 // HELP_SHOT_ONLY=ten-anh-1,ten-anh-2 — chỉ chụp đúng những ảnh đó (tên trong shots/<slug>.js), bỏ qua phần còn lại của bài.
