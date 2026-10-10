@@ -23,6 +23,7 @@ export const REFERENCE_LABEL_KEYS = Object.freeze({
   landing_page_template: 'mediaLibrary.reference.landing_page_template',
   landing_testimonial: 'mediaLibrary.reference.landing_testimonial',
   sub_assistant: 'mediaLibrary.reference.sub_assistant',
+  support_ticket: 'mediaLibrary.reference.support_ticket',
   template_file: 'mediaLibrary.reference.template_file',
   web_widget_config: 'mediaLibrary.reference.web_widget_config',
   zalo_template: 'mediaLibrary.reference.zalo_template',

@@ -95,8 +95,9 @@ describe('cronJobRegistry ↔ scheduler recordRun', () => {
     // 33 → 34: thêm channel_disconnect_alert (P3 PLAN_TG_WA_DAY_DU_2026-09-29 — báo chủ khi kênh mất kết nối).
     // 34 → 35: thêm product_chat_mention_scan (PLAN_PHEU_NGUOI_GIA_SO_HOI_CHATBOT PR-D — đếm lượt hỏi chatbot về sản phẩm).
     // 35 → 36: thêm user_notifications_cleanup (PLAN_TICKET_GOP_Y_VA_CHUONG_THONG_BAO PR-1 — dọn thông báo chuông cũ 03:10).
-    expect(CRON_JOBS).toHaveLength(36);
+    // 36 → 37: thêm support_ticket_auto_close (PLAN_TICKET_GOP_Y_VA_CHUONG_THONG_BAO PR-4 — đóng ticket chờ khách quá 7 ngày, 03:20).
+    expect(CRON_JOBS).toHaveLength(37);
     const codes = CRON_JOBS.map((j) => j.code);
-    expect(new Set(codes).size).toBe(36);
+    expect(new Set(codes).size).toBe(37);
   });
 });

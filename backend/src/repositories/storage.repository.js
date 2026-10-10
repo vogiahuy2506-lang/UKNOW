@@ -237,3 +237,58 @@ export async function activateFormAssetStorageObjects(
   return rows;
 }
 
+
+/**
+ * PLAN_TICKET_GOP_Y_VA_CHUONG_THONG_BAO PR-4 — gắn tệp đính kèm ticket hỗ trợ: `temp` → `active` + tham chiếu ticket.
+ * Hàm riêng (không dùng `promoteTempStorageObject`): tệp đã nằm sẵn ở kho dưới `storage_key` ở trạng thái `temp`, không có bản
+ * trong thư mục tải tạm để sao chép — chỉ cần đổi dòng sổ cái.
+ *
+ * Mỗi id phải: do CHÍNH người thao tác tải lên (`actor_user_id`), thuộc category `support_ticket`, còn `temp` và CHƯA hết hạn.
+ * Id nào không thoả sẽ không có trong kết quả — caller so số dòng trả về với số id gửi lên để từ chối cả lô.
+ * Chạy trong cùng giao dịch với việc chèn tin để lỗi giữa chừng không để lại tệp active mồ côi.
+ *
+ * @param {{ objectIds: number[], actorUserId: number, ticketId: number|string }} params
+ * @param {object} [queryable]
+ * @returns {Promise<Array<{ id: string, storage_key: string, size_bytes: string }>>}
+ */
+export async function activateSupportTicketStorageObjects(
+  { objectIds, actorUserId, ticketId },
+  queryable = db
+) {
+  if (!Array.isArray(objectIds) || objectIds.length === 0) return [];
+  const { rows } = await queryable.query(
+    `UPDATE storage_objects
+        SET state = 'active',
+            expires_at = NULL,
+            reference_type = 'support_ticket',
+            reference_id = $3,
+            updated_at = NOW()
+      WHERE id = ANY($1::bigint[])
+        AND actor_user_id = $2
+        AND category = 'support_ticket'
+        AND state = 'temp'
+        AND storage_key IS NOT NULL
+        AND (expires_at IS NULL OR expires_at > NOW())
+    RETURNING id, storage_key, size_bytes`,
+    [objectIds, actorUserId, String(ticketId)]
+  );
+  return rows;
+}
+
+/**
+ * Dòng sổ cái của các tệp đính kèm ticket (dùng khi phát tệp: xác nhận tệp còn `active` và đúng ticket).
+ *
+ * @param {number|string} objectId
+ * @param {object} [queryable]
+ * @returns {Promise<object|null>}
+ */
+export async function findSupportTicketStorageObject(objectId, queryable = db) {
+  const { rows } = await queryable.query(
+    `SELECT id, storage_key, size_bytes, state, reference_type, reference_id
+       FROM storage_objects
+      WHERE id = $1 AND category = 'support_ticket'
+      LIMIT 1`,
+    [objectId]
+  );
+  return rows[0] || null;
+}

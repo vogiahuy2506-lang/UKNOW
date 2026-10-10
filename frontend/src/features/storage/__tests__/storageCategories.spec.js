@@ -23,6 +23,7 @@ const EXPECTED = [
   ['logo', 'Logo & Thương hiệu', 'Logo & Brand'],
   ['campaign', 'Chiến dịch', 'Campaign'],
   ['quick_send', 'Gửi nhanh', 'Quick send'],
+  ['support_ticket', 'Ảnh ticket hỗ trợ', 'Support ticket images'],
   ['help', 'Trợ giúp', 'Help'],
   ['temp', 'Tệp chưa lưu (tự xoá)', 'Unsaved files (auto-deleted)'],
   ['other', 'Khác', 'Other'],

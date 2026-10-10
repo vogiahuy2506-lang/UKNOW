@@ -181,6 +181,14 @@ export const CRON_JOBS = [
     tracked: true,
   },
   {
+    code: 'support_ticket_auto_close',
+    label: 'Tự đóng ticket hỗ trợ quá hạn',
+    schedule: '03:20 hàng ngày',
+    description: 'Đóng ticket góp ý ở trạng thái "chờ người dùng" quá 7 ngày không ai hồi âm (đổi qua SUPPORT_TICKET_AUTO_CLOSE_DAYS) và báo người tạo ticket qua chuông.',
+    impact: 'Ticket đã trả lời xong nhưng khách không phản hồi nằm ở trạng thái chờ mãi, danh sách ticket của admin lẫn lộn việc đã xong.',
+    tracked: true,
+  },
+  {
     code: 'courses_daily_sync',
     label: 'Đồng bộ khoá học & dọn voucher',
     schedule: '00:30',

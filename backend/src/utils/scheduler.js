@@ -881,6 +881,24 @@ export const initScheduler = () => {
     }
   }, { timezone: HANOI_TIME_ZONE });
 
+  // ── Tự đóng ticket hỗ trợ chờ khách quá 7 ngày (support_ticket_auto_close) — 03:20 mỗi ngày ──────────
+  cron.schedule('20 3 * * *', async () => {
+    try {
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      await cronJobRunRepository.recordRun('support_ticket_auto_close', async () => {
+        const { autoCloseStaleTickets } = await import('../services/support/supportTicket.service.js');
+        const result = await autoCloseStaleTickets();
+        console.log(
+          `[Scheduler] support_ticket_auto_close: closed=${result.closed} notified=${result.notified} `
+          + `notifyFailed=${result.notifyFailed} days=${result.days}`
+        );
+        return result;
+      });
+    } catch (error) {
+      console.error('[Scheduler] Lỗi khi tự đóng ticket hỗ trợ:', error.message);
+    }
+  }, { timezone: HANOI_TIME_ZONE });
+
   // ── Subscription reminder & expiry — chạy lúc 08:00 mỗi ngày ──────────────
   cron.schedule('0 8 * * *', async () => {
     console.log('[Subscription] Bắt đầu kiểm tra gói hết hạn...');

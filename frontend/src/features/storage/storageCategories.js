@@ -20,6 +20,7 @@ export const STORAGE_CATEGORIES = Object.freeze([
   { value: 'logo', labelKey: 'mediaLibrary.categoryLogo', color: 'bg-pink-50 text-pink-700 border-pink-100' },
   { value: 'campaign', labelKey: 'mediaLibrary.categoryCampaign', color: 'bg-amber-50 text-amber-700 border-amber-100' },
   { value: 'quick_send', labelKey: 'mediaLibrary.categoryQuickSend', color: 'bg-amber-50 text-amber-700 border-amber-100' },
+  { value: 'support_ticket', labelKey: 'mediaLibrary.categorySupportTicket', color: 'bg-rose-50 text-rose-700 border-rose-100' },
   { value: 'help', labelKey: 'mediaLibrary.categoryHelp', color: 'bg-teal-50 text-teal-700 border-teal-100' },
   { value: 'temp', labelKey: 'mediaLibrary.categoryTemp', color: 'bg-slate-100 text-slate-700 border-slate-200' },
   { value: 'other', labelKey: 'mediaLibrary.categoryOther', color: 'bg-slate-100 text-slate-700 border-slate-200' },

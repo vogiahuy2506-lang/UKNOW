@@ -68,6 +68,8 @@ import adminBulkNotificationRoutes from './routes/adminBulkNotification.routes.j
 import adminNotificationRoutes from './routes/adminNotification.routes.js';
 import adminNotificationEventsRoutes from './routes/adminNotificationEvents.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
+import supportTicketRoutes from './routes/supportTicket.routes.js';
+import adminSupportTicketRoutes from './routes/adminSupportTicket.routes.js';
 import adminMenuRoutes from './routes/adminMenu.routes.js';
 import adminSystemEmailTemplateRoutes from './routes/adminSystemEmailTemplate.routes.js';
 import adminSubscriptionReminderSettingsRoutes from './routes/adminSubscriptionReminderSettings.routes.js';
@@ -243,6 +245,9 @@ export function createApp() {
   app.use('/api/admin/bulk-notification', adminBulkNotificationRoutes);
   app.use('/api/admin/notifications', adminNotificationRoutes);
   app.use('/api/admin/notification-events', adminNotificationEventsRoutes);
+  // Ticket góp ý / hỗ trợ: user (chỉ authMiddleware) và super admin.
+  app.use('/api/support/tickets', supportTicketRoutes);
+  app.use('/api/admin/support', adminSupportTicketRoutes);
   app.use('/api/admin/menu-layout', adminMenuRoutes);
   app.use('/api/admin/system-email-templates', adminSystemEmailTemplateRoutes);
   app.use('/api/admin/subscription-reminder-settings', adminSubscriptionReminderSettingsRoutes);

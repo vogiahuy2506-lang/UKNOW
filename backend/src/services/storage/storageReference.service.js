@@ -9,6 +9,7 @@ const MESSAGE_REFERENCE_CONFIGS = [
   { table: 'channel_messages', column: 'attachments' },
   { table: 'zalo_personal_messages', column: 'attachments' },
   { table: 'ai_chat_messages', column: 'data' },
+  { table: 'support_ticket_messages', column: 'attachments' },
 ];
 
 async function queryOptional(queryable, sql) {
@@ -450,6 +451,13 @@ export const REFERENCE_CONFIGS = {
     sql: `SELECT id, name FROM sub_assistants WHERE id = $1 LIMIT 1`,
     label: 'Trợ lý AI',
     url: '/app/settings/sub-assistants',
+  },
+  // Ảnh đính kèm ticket hỗ trợ (`activateSupportTicketStorageObjects` ghi reference_type 'support_ticket', reference_id = id ticket).
+  // PR-5 đổi url sang /app/support khi có route.
+  support_ticket: {
+    sql: `SELECT id, subject AS name FROM support_tickets WHERE id = $1 LIMIT 1`,
+    label: 'Ticket hỗ trợ',
+    url: '/app/settings/media-library',
   },
   template_file: {
     sql: `SELECT id, original_name AS name FROM template_files WHERE id = $1 LIMIT 1`,

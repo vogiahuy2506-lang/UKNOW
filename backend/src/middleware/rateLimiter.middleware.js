@@ -261,6 +261,22 @@ export const uploadLimiter = rateLimit({
   keyGenerator: (req) => rateLimitKeyForRequest(req, 'upload:'),
 });
 
+// Ticket hỗ trợ (tạo ticket / nhắn thêm / admin trả lời) - 30 lượt ghi per 15 minutes per user.
+// Mỗi tin của người dùng bắn chuông + email tới MỌI super admin nên cần trần riêng, ngoài trần 10 ticket/ngày ở service.
+export const supportTicketWriteLimiter = rateLimit({
+  skip: skipInTest,
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: {
+    success: false,
+    message: 'Bạn gửi quá nhanh. Vui lòng thử lại sau ít phút.',
+    code: 'SUPPORT_TICKET_RATE_LIMIT_EXCEEDED',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => rateLimitKeyForRequest(req, 'support-write:'),
+});
+
 // Webhook limiter - 500 requests per 15 minutes
 export const webhookLimiter = rateLimit({
   skip: skipInTest,

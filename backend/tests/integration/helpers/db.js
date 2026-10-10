@@ -49,6 +49,8 @@ async function retryOnCleanupContention(operation, maxRetries = 10) {
 const TRUNCATE_ALL_SQL = `
     TRUNCATE TABLE
       ai_call_events,
+      support_ticket_messages,
+      support_tickets,
       user_notifications,
       notification_preferences,
       notification_event_settings,

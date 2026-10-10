@@ -4154,3 +4154,37 @@ VALUES
   ('support_ticket_created',      true, true,  false),
   ('support_ticket_user_replied', true, true,  false)
 ON CONFLICT (event_type) DO NOTHING;
+
+-- --- Migration 291: support_tickets + support_ticket_messages (PLAN_TICKET_GOP_Y_VA_CHUONG_THONG_BAO PR-4: ticket gop y / ho tro) ---
+CREATE TABLE IF NOT EXISTS support_tickets (
+  id                  BIGSERIAL    PRIMARY KEY,
+  user_id             BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  workspace_owner_id  BIGINT       REFERENCES users(id) ON DELETE SET NULL,
+  subject             VARCHAR(200) NOT NULL,
+  category            VARCHAR(24)  NOT NULL
+    CHECK (category IN ('feedback', 'bug', 'billing', 'other')),
+  status              VARCHAR(24)  NOT NULL DEFAULT 'open'
+    CHECK (status IN ('open', 'awaiting_user', 'closed')),
+  last_message_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  last_admin_reply_at TIMESTAMPTZ,
+  closed_at           TIMESTAMPTZ,
+  closed_by           INTEGER      REFERENCES users(id) ON DELETE SET NULL,
+  created_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_support_tickets_status_last_message
+  ON support_tickets (status, last_message_at DESC);
+CREATE INDEX IF NOT EXISTS idx_support_tickets_user_created
+  ON support_tickets (user_id, created_at DESC);
+CREATE TABLE IF NOT EXISTS support_ticket_messages (
+  id             BIGSERIAL   PRIMARY KEY,
+  ticket_id      BIGINT      NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+  author_user_id BIGINT      REFERENCES users(id) ON DELETE SET NULL,
+  author_role    VARCHAR(8)  NOT NULL
+    CHECK (author_role IN ('user', 'admin')),
+  body           TEXT        NOT NULL,
+  attachments    JSONB       NOT NULL DEFAULT '[]'::jsonb,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_support_ticket_messages_ticket_created
+  ON support_ticket_messages (ticket_id, created_at);
