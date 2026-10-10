@@ -14,7 +14,7 @@ vi.mock('../../../features/auth/services/authApi.service', () => ({
   getMyProfile: vi.fn().mockResolvedValue({ data: null }),
 }));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
-vi.mock('../../../i18n', () => ({ useI18n: () => ({ t: (key) => key }) }));
+vi.mock('../../../i18n', async () => (await import('./studioTestI18n.js')).i18nMock);
 vi.mock('../KnowledgeTab', () => ({ default: () => null }));
 vi.mock('../../../features/chatbot/components/ChatbotReplyLimitsCard', () => ({ default: () => null }));
 vi.mock('../../../features/chatbot/components/ChatbotActiveHoursCard', () => ({ default: () => null }));

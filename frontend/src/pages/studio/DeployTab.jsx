@@ -53,15 +53,15 @@ const CHANNEL_TILES = [
   {
     key: 'facebook',
     title: 'Facebook',
-    tooltip: 'Facebook Messenger — Bật chatbot trả lời tin nhắn trên Fanpage',
+    tooltipKey: 'chatbot.studio.tipFacebook',
     icon: 'f',
     iconClass: 'bg-blue-50 text-blue-600',
     countField: 'facebook_count',
   },
   {
     key: 'zalo_personal',
-    title: 'Zalo cá nhân',
-    tooltip: 'Zalo cá nhân — Bật chatbot cho từng tài khoản',
+    titleKey: 'chatbot.studio.channelZaloPersonal',
+    tooltipKey: 'chatbot.studio.tipZaloPersonal',
     icon: 'Z',
     iconClass: 'bg-orange-50 text-orange-600',
     countField: 'zalo_personal_count',
@@ -69,7 +69,7 @@ const CHANNEL_TILES = [
   {
     key: 'whatsapp',
     title: 'WhatsApp',
-    tooltip: 'WhatsApp Business — Gán AI reply cho từng tài khoản',
+    tooltipKey: 'chatbot.studio.tipWhatsApp',
     icon: 'W',
     iconClass: 'bg-emerald-50 text-emerald-600',
     countField: 'whatsapp_count',
@@ -77,7 +77,7 @@ const CHANNEL_TILES = [
   {
     key: 'telegram_personal',
     title: 'Telegram',
-    tooltip: 'Telegram cá nhân — Quét QR để liên kết, bật chatbot cho từng tài khoản',
+    tooltipKey: 'chatbot.studio.tipTelegram',
     icon: 'T',
     iconClass: 'bg-sky-50 text-sky-600',
     countField: 'telegram_count',
@@ -149,7 +149,7 @@ export default function DeployTab({
   if (!chatbot) {
     return (
       <div className="flex items-center justify-center h-full text-slate-400 text-sm">
-        Chọn chatbot để xem triển khai
+        {t('chatbot.studio.selectBotForDeployView')}
       </div>
     );
   }
@@ -220,8 +220,8 @@ export default function DeployTab({
                     key={tile.key}
                     onClick={() => setChannelModal(tile.key)}
                     iconBg={tile.iconClass}
-                    tooltip={tile.tooltip}
-                    label={tile.title}
+                    tooltip={t(tile.tooltipKey)}
+                    label={tile.titleKey ? t(tile.titleKey) : tile.title}
                     sublabel={count > 0 ? t('chatbot.studio.tileOn', { count }) : t('chatbot.studio.tileOff')}
                     sublabelOn={count > 0}
                   >
@@ -359,9 +359,9 @@ function EmbedModal({ kind, chatbot, onClose, onOpenWidgetSettings }) {
     public_link: t('chatbot.studio.embedLinkModalTitle'),
   };
   const descs = {
-    script: 'Dán đoạn script dưới đây vào trước thẻ đóng </body> của website.',
-    iframe: 'Dán đoạn iframe vào bất kỳ vị trí nào trong trang để hiển thị khung chat.',
-    public_link: 'Mở hoặc chia sẻ liên kết công khai tới trang chat của chatbot.',
+    script: t('chatbot.studio.embedDescScript'),
+    iframe: t('chatbot.studio.embedDescIframe'),
+    public_link: t('chatbot.studio.embedDescLink'),
   };
 
   const codeMap = { script: scriptCode, iframe: iframeCode };
@@ -376,7 +376,7 @@ function EmbedModal({ kind, chatbot, onClose, onOpenWidgetSettings }) {
       return;
     }
     setCopied(true);
-    toast.success('Đã copy');
+    toast.success(t('chatbot.studio.fbCopied'));
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -424,7 +424,7 @@ function EmbedModal({ kind, chatbot, onClose, onOpenWidgetSettings }) {
                   className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold rounded-lg transition-colors"
                 >
                   {copied ? <HiOutlineCheckCircle className="w-4 h-4" /> : <HiOutlineClipboardCopy className="w-4 h-4" />}
-                  {copied ? 'Đã copy' : 'Copy URL'}
+                  {copied ? t('chatbot.studio.fbCopied') : t('chatbot.studio.copyUrl')}
                 </button>
                 <button
                   type="button"
@@ -432,14 +432,14 @@ function EmbedModal({ kind, chatbot, onClose, onOpenWidgetSettings }) {
                   className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 border border-slate-200 text-slate-700 hover:bg-slate-50 text-sm font-semibold rounded-lg transition-colors"
                 >
                   <HiOutlineExternalLink className="w-4 h-4" />
-                  Mở liên kết
+                  {t('chatbot.studio.openLink')}
                 </button>
               </div>
             </div>
           ) : (
             <div>
               <label className="text-xs font-medium text-slate-700 block mb-1.5">
-                {kind === 'script' ? 'Mã script' : 'Mã iFrame'}
+                {kind === 'script' ? t('chatbot.studio.scriptCodeLabel') : t('chatbot.studio.iframeCodeLabel')}
               </label>
               <pre className="bg-slate-900 text-slate-100 rounded-lg p-3 text-[11px] font-mono leading-relaxed overflow-x-auto max-h-48">
                 {code}
@@ -450,7 +450,7 @@ function EmbedModal({ kind, chatbot, onClose, onOpenWidgetSettings }) {
                 className="mt-3 w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold rounded-lg transition-colors"
               >
                 {copied ? <HiOutlineCheckCircle className="w-4 h-4" /> : <HiOutlineClipboardCopy className="w-4 h-4" />}
-                {copied ? 'Đã copy' : 'Copy mã'}
+                {copied ? t('chatbot.studio.fbCopied') : t('chatbot.studio.copyCode')}
               </button>
             </div>
           )}
@@ -461,7 +461,7 @@ function EmbedModal({ kind, chatbot, onClose, onOpenWidgetSettings }) {
               <HiOutlineColorSwatch className="w-4 h-4 text-primary-600 mt-0.5 shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-slate-700">
-                  Bạn có thể tuỳ chỉnh giao diện nhúng của chatbot.
+                  {t('chatbot.studio.widgetCustomHint')}
                 </p>
               </div>
               <button
@@ -469,7 +469,7 @@ function EmbedModal({ kind, chatbot, onClose, onOpenWidgetSettings }) {
                 onClick={onOpenWidgetSettings}
                 className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white border border-primary-200 text-primary-700 text-xs font-medium hover:bg-primary-100 transition-colors shrink-0"
               >
-                Tuỳ chỉnh
+                {t('chatbot.studio.customizeBtn')}
               </button>
             </div>
           )}
@@ -481,7 +481,7 @@ function EmbedModal({ kind, chatbot, onClose, onOpenWidgetSettings }) {
             onClick={onClose}
             className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 rounded-lg transition-colors"
           >
-            Đóng
+            {t('chatbot.studio.close')}
           </button>
         </div>
       </div>

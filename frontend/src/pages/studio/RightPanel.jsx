@@ -1,4 +1,5 @@
 import DeployTab from './DeployTab';
+import { useI18n } from '../../i18n';
 
 /**
  * Cột phải "Triển khai". Bản cũ vẽ thêm một thanh tab chỉ có MỘT tab (chữ "Triển khai" lặp hai lần) cùng
@@ -9,11 +10,12 @@ export default function RightPanel({
   onOpenWidgetSettings,
   onUpdate,
 }) {
+  const { t } = useI18n();
   // Guard: không render gì khi không có chatbot
   if (!chatbot) {
     return (
       <div className="h-full bg-white flex items-center justify-center">
-        <p className="text-sm text-slate-400">Chọn chatbot để xem cấu hình</p>
+        <p className="text-sm text-slate-400">{t('chatbot.studio.selectBotForDeploy')}</p>
       </div>
     );
   }

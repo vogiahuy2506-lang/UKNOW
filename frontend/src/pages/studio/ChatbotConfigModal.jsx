@@ -30,11 +30,11 @@ import {
 import { useI18n } from '../../i18n';
 
 const ANCHOR_SECTIONS = [
-  { id: 'basic',     label: 'Thông tin cơ bản',  icon: HiOutlineChatAlt2 },
-  { id: 'ai',        label: 'Hướng dẫn AI',      icon: HiOutlineSparkles },
-  { id: 'knowledge', label: 'Kiến thức',          icon: HiOutlineBookOpen },
-  { id: 'questions', label: 'Câu hỏi gợi ý',     icon: HiOutlineQuestionMarkCircle },
-  { id: 'limits',    label: 'Giới hạn',          icon: HiOutlineShieldCheck },
+  { id: 'basic',     labelKey: 'chatbot.studio.secBasic',  icon: HiOutlineChatAlt2 },
+  { id: 'ai',        labelKey: 'chatbot.studio.secAi',      icon: HiOutlineSparkles },
+  { id: 'knowledge', labelKey: 'chatbot.studio.secKnowledge',          icon: HiOutlineBookOpen },
+  { id: 'questions', labelKey: 'chatbot.studio.secQuestions',     icon: HiOutlineQuestionMarkCircle },
+  { id: 'limits',    labelKey: 'chatbot.studio.secLimits',          icon: HiOutlineShieldCheck },
 ];
 
 export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate, initialSection = null }) {
@@ -127,7 +127,7 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate, i
       return;
     }
     if (!form.name.trim()) {
-      toast.error('Vui lòng nhập tên chatbot');
+      toast.error(t('chatbot.studio.nameRequired'));
       return;
     }
     if (activeHoursError) {
@@ -161,11 +161,11 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate, i
       try {
         const res = await chatbotApi.updateChatbot(chatbot.id, updateData);
         if (!res?.success || !res?.data) {
-          throw new Error(res?.message || 'Lưu thất bại');
+          throw new Error(res?.message || t('chatbot.studio.saveFailed'));
         }
         updatedBot = { ...chatbot, ...res.data, suggested_questions: form.suggested_questions || [] };
       } catch (apiError) {
-        toast.error(apiError?.response?.data?.message || apiError?.message || 'Lưu thất bại');
+        toast.error(apiError?.response?.data?.message || apiError?.message || t('chatbot.studio.saveFailed'));
         return;
       }
 
@@ -174,10 +174,10 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate, i
 
       onUpdate?.(updatedBot);
       setInitialSnapshot(form);
-      toast.success(t('common.success') || 'Đã lưu cấu hình');
+      toast.success(t('common.success'));
       onClose?.();
     } catch (err) {
-      toast.error(err.message || 'Lưu thất bại');
+      toast.error(err.message || t('chatbot.studio.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -191,7 +191,7 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate, i
   const addSuggestedQuestion = () => {
     if (!newQuestion.trim()) return;
     if ((form.suggested_questions || []).length >= 5) {
-      toast.error('Tối đa 5 câu hỏi gợi ý');
+      toast.error(t('chatbot.studio.maxSuggested'));
       return;
     }
     update({ suggested_questions: [...(form.suggested_questions || []), newQuestion.trim()] });
@@ -221,7 +221,7 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate, i
             </div>
             <div className="min-w-0">
               <h2 className="text-base md:text-lg font-semibold text-slate-900 truncate">
-                Cấu hình chatbot
+                {t('chatbot.studio.configModalTitle')}
               </h2>
               <p className="text-xs text-slate-500 truncate">{chatbot.name}</p>
             </div>
@@ -230,7 +230,7 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate, i
             type="button"
             onClick={handleCancel}
             className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-            title="Đóng"
+            title={t('chatbot.studio.close')}
           >
             <HiOutlineX className="w-5 h-5" />
           </button>
@@ -240,7 +240,7 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate, i
         <div className="flex flex-1 min-h-0">
           <nav className="hidden md:flex flex-col w-60 lg:w-64 border-r border-slate-100 bg-slate-50/50 px-3 py-4 gap-0.5 overflow-y-auto shrink-0">
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-3 mb-2">
-              Cấu hình
+              {t('chatbot.studio.configNavLabel')}
             </p>
             {ANCHOR_SECTIONS.map((section) => {
               const Icon = section.icon;
@@ -257,7 +257,7 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate, i
                   }`}
                 >
                   <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-primary-600' : 'text-slate-400'}`} />
-                  <span className="truncate">{section.label}</span>
+                  <span className="truncate">{t(section.labelKey)}</span>
                 </button>
               );
             })}
@@ -265,18 +265,18 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate, i
 
           <div className="md:hidden border-b border-slate-100 bg-white px-4 py-2 shrink-0">
             <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-              Cấu hình
+              {t('chatbot.studio.configNavLabel')}
             </label>
             <div className="relative">
               <select
                 value={activeAnchor}
                 onChange={(e) => scrollToAnchor(e.target.value)}
                 className="w-full appearance-none bg-slate-50 border border-slate-200 rounded-lg pl-3 pr-9 py-2 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-200 focus:border-primary-400"
-                aria-label="Chuyển nhanh đến mục cấu hình"
+                aria-label={t('chatbot.studio.configJumpAria')}
               >
                 {ANCHOR_SECTIONS.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.label}
+                    {t(s.labelKey)}
                   </option>
                 ))}
               </select>
@@ -290,8 +290,8 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate, i
               <section id="config-anchor-basic">
                 <SectionCard
                   icon={HiOutlineChatAlt2}
-                  title="Thông tin cơ bản"
-                  subtitle="Tên, mô tả và ảnh đại diện chatbot"
+                  title={t('chatbot.studio.secBasic')}
+                  subtitle={t('chatbot.studio.basicSubtitle')}
                   accent="purple"
                 >
                   <div className="space-y-4">
@@ -300,33 +300,33 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate, i
                         <ImageUrlInput
                           value={form.avatar_url}
                           onChange={(url) => update({ avatar_url: url })}
-                          label="Ảnh đại diện"
+                          label={t('chatbot.studio.avatarLabel')}
                           placeholder="https://example.com/avatar.png"
-                          help="Hiển thị trong danh sách chatbot và tiện ích chat nhúng."
+                          help={t('chatbot.studio.avatarHelp')}
                         />
                       </div>
                       <div className="flex-1 min-w-0 space-y-3">
-                        <FieldRow label="Tên chatbot" hint="Tên hiển thị của chatbot">
+                        <FieldRow label={t('chatbot.studio.botName')} hint={t('chatbot.studio.botNameFieldHint')}>
                           <TextInput
                             value={form.name}
                             onChange={(e) => update({ name: e.target.value })}
-                            placeholder="VD: Trợ lý AI"
+                            placeholder={t('chatbot.studio.botNameExampleAi')}
                           />
                         </FieldRow>
                       </div>
                     </div>
-                    <FieldRow label="Mô tả" hint="Mô tả ngắn về chatbot">
+                    <FieldRow label={t('chatbot.studio.descriptionLabel')} hint={t('chatbot.studio.descriptionHint')}>
                       <Textarea
                         value={form.description}
                         onChange={(e) => update({ description: e.target.value })}
-                        placeholder="VD: Hỗ trợ tư vấn sản phẩm..."
+                        placeholder={t('chatbot.studio.descriptionExample')}
                         rows={2}
                       />
                     </FieldRow>
                     <div className="flex items-center justify-between py-2">
                       <div>
-                        <p className="text-sm font-medium text-slate-700">Trạng thái hoạt động</p>
-                        <p className="text-xs text-slate-400">Tắt thì chatbot không tự trả lời ở mọi kênh; tin khách vẫn vào Hộp thư để bạn trả lời tay.</p>
+                        <p className="text-sm font-medium text-slate-700">{t('chatbot.studio.activeStatusTitle')}</p>
+                        <p className="text-xs text-slate-400">{t('chatbot.studio.activeStatusHelp')}</p>
                       </div>
                       <Toggle
                         checked={form.replies_enabled !== false}
@@ -335,8 +335,8 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate, i
                     </div>
                     <div className="flex items-center justify-between py-2">
                       <div>
-                        <p className="text-sm font-medium text-slate-700">Cho khách gửi tệp đính kèm</p>
-                        <p className="text-xs text-slate-400">PDF, Word, Excel, ảnh...</p>
+                        <p className="text-sm font-medium text-slate-700">{t('chatbot.studio.allowAttachmentsTitle')}</p>
+                        <p className="text-xs text-slate-400">{t('chatbot.studio.allowAttachmentsHelp')}</p>
                       </div>
                       <Toggle
                         checked={form.allow_attachments === true}
@@ -351,8 +351,8 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate, i
               <section id="config-anchor-ai">
                 <SectionCard
                   icon={HiOutlineSparkles}
-                  title="Hướng dẫn AI"
-                  subtitle="Cấu hình model, phong cách và hướng dẫn"
+                  title={t('chatbot.studio.secAi')}
+                  subtitle={t('chatbot.studio.aiSubtitle')}
                   accent="blue"
                 >
                   <AIConfig
@@ -374,8 +374,8 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate, i
               <section id="config-anchor-knowledge">
                 <SectionCard
                   icon={HiOutlineBookOpen}
-                  title="Kiến thức chatbot"
-                  subtitle="Quản lý tài liệu và nguồn kiến thức cho AI"
+                  title={t('chatbot.studio.knowledgeCardTitle')}
+                  subtitle={t('chatbot.studio.knowledgeCardSubtitle')}
                   accent="green"
                 >
                   {/* KnowledgeTab tự tải danh sách tài liệu — MỘT nguồn duy nhất (trước đây hộp này tải thêm một lần
@@ -388,8 +388,8 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate, i
               <section id="config-anchor-questions">
                 <SectionCard
                   icon={HiOutlineQuestionMarkCircle}
-                  title="Câu hỏi gợi ý"
-                  subtitle="Hiển thị khi người dùng bắt đầu chat"
+                  title={t('chatbot.studio.secQuestions')}
+                  subtitle={t('chatbot.studio.questionsSubtitle')}
                   accent="purple"
                 >
                   <div className="space-y-3">
@@ -420,7 +420,7 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate, i
                           if (e.key === 'Enter') { e.preventDefault(); addSuggestedQuestion(); }
                           if (e.key === 'Escape') { setNewQuestion(''); }
                         }}
-                        placeholder="Nhập câu hỏi gợi ý..."
+                        placeholder={t('chatbot.studio.questionInputPlaceholder')}
                         disabled={(form.suggested_questions || []).length >= 5}
                         className="flex-1"
                       />
@@ -458,7 +458,7 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate, i
                     ) : (
                       <div className="text-center py-6 text-slate-400">
                         <HiOutlineQuestionMarkCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                        <p className="text-xs">Chưa có câu hỏi gợi ý</p>
+                        <p className="text-xs">{t('chatbot.studio.questionsEmpty')}</p>
                       </div>
                     )}
                   </div>
@@ -501,7 +501,7 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate, i
         {/* Footer */}
         <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50 shrink-0">
           <p className="text-xs text-slate-500 hidden md:block">
-            Thay đổi sẽ được áp dụng sau khi bấm Lưu
+            {t('chatbot.studio.saveHint')}
           </p>
           <div className="flex items-center gap-2 ml-auto">
             <button
@@ -510,7 +510,7 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate, i
               disabled={saving}
               className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 rounded-lg transition-colors disabled:opacity-50"
             >
-              Hủy
+              {t('chatbot.studio.cancel')}
             </button>
             <button
               type="button"
@@ -521,12 +521,12 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate, i
               {saving ? (
                 <>
                   <HiOutlineRefresh className="w-4 h-4 animate-spin" />
-                  Đang lưu...
+                  {t('chatbot.studio.saving')}
                 </>
               ) : (
                 <>
                   <HiOutlineSave className="w-4 h-4" />
-                  Lưu cấu hình
+                  {t('chatbot.studio.saveConfig')}
                 </>
               )}
             </button>

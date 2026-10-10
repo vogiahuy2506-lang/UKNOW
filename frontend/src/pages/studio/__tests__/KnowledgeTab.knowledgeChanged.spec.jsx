@@ -10,6 +10,7 @@ vi.mock('../../../features/chatbot/services/chatbotApi.service', () => ({
   },
 }));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
+vi.mock('../../../i18n', async () => (await import('./studioTestI18n.js')).i18nMock);
 
 // Prop on dinh: mang moi moi lan render se lam effect tai lai vo han.
 const CHATBOT = { id: 7, name: 'Bot' };

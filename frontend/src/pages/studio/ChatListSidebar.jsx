@@ -151,7 +151,7 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
       const res = await chatbotApi.createChatbot({
         name: newName.trim(),
         description: '',
-        greeting_msg: 'Xin chào! Tôi có thể giúp gì cho bạn?',
+        greeting_msg: t('chatbot.studio.defaultGreeting'),
       });
       if (!res?.success || !res?.data) {
         throw new Error(res?.message || t('chatbot.studio.createFailed'));
@@ -213,7 +213,7 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
           <button
             onClick={onToggleCollapse}
             className="w-10 h-10 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-            title="Mở rộng"
+            title={t('chatbot.studio.expand')}
           >
             <HiOutlineChevronDoubleRight className="w-4 h-4" />
           </button>
@@ -221,7 +221,7 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
           <button
             onClick={() => setShowCreate(true)}
             className="w-10 h-10 rounded-lg flex items-center justify-center bg-primary-500 text-white hover:bg-primary-600 transition-colors shadow-sm shadow-primary-500/30"
-            title="Tạo chatbot"
+            title={t('chatbot.studio.createBotTitle')}
           >
             <HiOutlinePlus className="w-4 h-4" />
           </button>
@@ -245,7 +245,7 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
           <button
             onClick={onToggleCollapse}
             className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-            title="Thu gọn"
+            title={t('chatbot.studio.collapse')}
           >
             <HiOutlineChevronDoubleLeft className="w-3.5 h-3.5" />
           </button>
@@ -259,7 +259,7 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
             type="text"
             value={internalSearch}
             onChange={(e) => handleSearchChange(e.target.value)}
-            placeholder="Tìm chatbot..."
+            placeholder={t('chatbot.studio.searchBotPlaceholder')}
             className="w-full pl-3 pr-3 py-2 text-sm bg-slate-50 border border-slate-200/60 rounded-lg outline-none focus:bg-white focus:border-primary-400 focus:ring-2 focus:ring-primary-500/10 transition-all placeholder:text-slate-400"
           />
         </div>
@@ -303,7 +303,7 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
           className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold text-white bg-primary-500 hover:bg-primary-600 rounded-lg transition-colors shadow-sm shadow-primary-500/20"
         >
           <HiOutlinePlus className="w-4 h-4" />
-          Chatbot mới
+          {t('chatbot.studio.newBotBtn')}
         </button>
       </div>
 
@@ -324,7 +324,7 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
               className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 transition-colors"
             >
               <HiOutlineTrash className="w-3.5 h-3.5 text-red-500" />
-              Xóa chatbot
+              {t('chatbot.studio.deleteBot')}
             </button>
           </div>
         </>
@@ -354,13 +354,13 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
                   6 bot tên "Tùy chỉnh", khách tưởng đã chọn mẫu dựng sẵn mà bot vẫn rỗng (S-07). Bỏ hẳn. */}
               <div>
                 <label className="text-xs font-medium text-slate-700 mb-1.5 block">
-                  Tên Chatbot
+                  {t('chatbot.studio.botNameLabel')}
                 </label>
                 <input
                   type="text"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  placeholder="VD: Hỗ trợ khách hàng"
+                  placeholder={t('chatbot.studio.botNameExample')}
                   autoFocus
                   className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10 transition-all"
                 />
@@ -372,14 +372,14 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
                   onClick={() => { setShowCreate(false); setNewName(''); }}
                   className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
                 >
-                  Hủy
+                  {t('chatbot.studio.cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={creating || !newName.trim()}
                   className="inline-flex items-center gap-2 px-4 py-2 bg-primary-500 text-white text-sm font-semibold rounded-lg hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  {creating ? 'Đang tạo...' : 'Tạo ngay'}
+                  {creating ? t('chatbot.studio.creating') : t('chatbot.studio.createNow')}
                 </button>
               </div>
             </form>
@@ -398,8 +398,8 @@ function EmptyState({ isSearch = false, onCreate }) {
       desc: t('chatbot.studio.searchNotFoundDesc'),
     }
     : {
-      title: 'Chưa có chatbot',
-      desc: 'Tạo chatbot đầu tiên của bạn',
+      title: t('chatbot.studio.emptyNoBotTitle'),
+      desc: t('chatbot.studio.emptyNoBotDesc'),
     };
 
   return (
@@ -415,7 +415,7 @@ function EmptyState({ isSearch = false, onCreate }) {
           className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-primary-500 hover:bg-primary-600 px-3.5 py-2 rounded-lg transition-colors"
         >
           <HiOutlinePlus className="w-3.5 h-3.5" />
-          Tạo chatbot
+          {t('chatbot.studio.createBotTitle')}
         </button>
       )}
     </div>

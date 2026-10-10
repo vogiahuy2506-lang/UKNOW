@@ -35,13 +35,14 @@ const MAX_ATTACHMENTS = 3;
 // Tab thứ ba của điện thoại/máy tính bảng thực chất mở cột Triển khai, không phải hộp Cấu hình — nhãn cũ "Cấu hình" làm
 // khách tìm mãi không thấy chỗ đổi tên/hướng dẫn AI (S-02). Hộp Cấu hình nay mở bằng nút ở đầu khung chat.
 const MOBILE_PANELS = [
-  { id: 'list',     label: 'Danh sách',  icon: HiOutlineViewBoards },
-  { id: 'chat',     label: 'Trò chuyện', icon: HiOutlineChatAlt2 },
+  { id: 'list',     labelKey: 'chatbot.studio.panelList',  icon: HiOutlineViewBoards },
+  { id: 'chat',     labelKey: 'chatbot.studio.panelChat', icon: HiOutlineChatAlt2 },
   { id: 'settings', labelKey: 'chatbot.studio.tabDeploy', icon: HiOutlineGlobeAlt },
 ];
 
 // ── Conversation Card (recent) ───────────────────────────────────────────────
 function ConversationCard({ conv, onSelect, onDelete }) {
+  const { t } = useI18n();
   return (
     <div className="group w-full text-left px-3 py-2.5 bg-white rounded-lg hover:bg-slate-50 transition-colors">
       <div className="flex items-start gap-2.5">
@@ -52,15 +53,15 @@ function ConversationCard({ conv, onSelect, onDelete }) {
           onClick={() => onSelect(conv)}
           className="flex-1 min-w-0 text-left"
         >
-          <p className="text-sm font-medium text-slate-900 truncate">{conv.title || 'Cuộc trò chuyện mới'}</p>
+          <p className="text-sm font-medium text-slate-900 truncate">{conv.title || t('chatbot.studio.convNewTitle')}</p>
           <p className="text-xs text-slate-500 truncate mt-0.5">
-            {conv.last_message || 'Bắt đầu trò chuyện...'}
+            {conv.last_message || t('chatbot.studio.convStartHint')}
           </p>
         </button>
         <button
           onClick={() => onDelete(conv.id)}
           className="w-6 h-6 rounded flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
-          title="Xóa"
+          title={t('chatbot.studio.delete')}
         >
           <HiOutlineTrash className="w-3 h-3" />
         </button>
@@ -181,7 +182,7 @@ function ChatMessageArea({ chatbot, onOpenConfig, canUseAi = true }) {
   };
 
   const handleDeleteConversation = async (convId) => {
-    if (!confirm('Xóa cuộc trò chuyện này?')) return;
+    if (!confirm(t('chatbot.studio.confirmDeleteConv'))) return;
     try {
       await chatbotApi.deleteChatbotStudioConversation(convId);
       setConversations(prev => prev.filter(c => c.id !== convId));
@@ -192,9 +193,9 @@ function ChatMessageArea({ chatbot, onOpenConfig, canUseAi = true }) {
         setNextBeforeId(null);
         setPendingAttachments([]);
       }
-      toast.success('Đã xóa cuộc trò chuyện');
+      toast.success(t('chatbot.studio.convDeleted'));
     } catch (err) {
-      toast.error('Không thể xóa cuộc trò chuyện');
+      toast.error(t('chatbot.studio.convDeleteFailed'));
     }
   };
 
@@ -211,19 +212,19 @@ function ChatMessageArea({ chatbot, onOpenConfig, canUseAi = true }) {
 
     const remaining = MAX_ATTACHMENTS - pendingAttachments.length;
     if (remaining <= 0) {
-      toast.error(`Tối đa ${MAX_ATTACHMENTS} tệp mỗi tin nhắn`);
+      toast.error(t('chatbot.studio.maxAttachments', { max: MAX_ATTACHMENTS }));
       return;
     }
 
     const toUpload = files.slice(0, remaining);
     if (files.length > remaining) {
-      toast.error(`Chỉ thêm được ${remaining} tệp nữa (tối đa ${MAX_ATTACHMENTS})`);
+      toast.error(t('chatbot.studio.attachRemaining', { remaining, max: MAX_ATTACHMENTS }));
     }
 
     setUploadingAttachment(true);
     try {
       for (const file of toUpload) {
-        const clientErr = clientValidateFile(file);
+        const clientErr = clientValidateFile(file, undefined, t);
         if (clientErr) {
           toast.error(clientErr);
           continue;
@@ -234,17 +235,17 @@ function ChatMessageArea({ chatbot, onOpenConfig, canUseAi = true }) {
         const res = await chatbotApi.uploadChatAttachment(formData);
         const data = res.data?.data;
         if (!data) {
-          toast.error(res.data?.message || 'Tải file thất bại');
+          toast.error(res.data?.message || t('chatbot.studio.uploadFailed'));
           continue;
         }
         if (data.textExtracted === false && data.type === 'file') {
-          toast('Đã gửi tệp, nhưng chatbot không đọc được nội dung', { icon: '⚠️' });
+          toast(t('chatbot.studio.attachNotRead'), { icon: '⚠️' });
         }
         setPendingAttachments(prev => [...prev, data]);
         notifyStorageQuotaRefresh();
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || err.message || 'Tải file thất bại');
+      toast.error(err.response?.data?.message || err.message || t('chatbot.studio.uploadFailed'));
     } finally {
       setUploadingAttachment(false);
     }
@@ -353,7 +354,7 @@ function ChatMessageArea({ chatbot, onOpenConfig, canUseAi = true }) {
       }
     } catch (err) {
       const isTimeout = err.code === 'ECONNABORTED' || /timeout/i.test(String(err.message || ''));
-      toast.error(isTimeout ? 'AI đang xử lý quá lâu, vui lòng thử lại' : (err.response?.data?.message || err.message || 'Gửi thất bại'));
+      toast.error(isTimeout ? t('chatbot.studio.aiTimeout') : (err.response?.data?.message || err.message || t('chatbot.studio.sendFailed')));
       // Trả lại đúng như trước khi bấm gửi: bỏ tin vừa hiện, khôi phục chữ và tệp đính kèm để bấm gửi lại.
       setMessages(prev => prev.filter(m => m !== userMessage));
       setInput(current => current || userText);
@@ -448,7 +449,7 @@ function ChatMessageArea({ chatbot, onOpenConfig, canUseAi = true }) {
 
         {messages.length === 0 && suggestedQuestions.length > 0 && (
           <div className="mb-2">
-            <p className="text-xs font-semibold text-slate-500 mb-2.5 px-1">Câu hỏi gợi ý</p>
+            <p className="text-xs font-semibold text-slate-500 mb-2.5 px-1">{t('chatbot.studio.suggestedQuestionsTitle')}</p>
             <div className="flex flex-wrap gap-2">
               {suggestedQuestions.map((q, i) => (
                 <button
@@ -466,7 +467,7 @@ function ChatMessageArea({ chatbot, onOpenConfig, canUseAi = true }) {
         {messages.length === 0 && conversations.length > 0 && (
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2.5 px-1">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Cuộc trò chuyện gần đây</p>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{t('chatbot.studio.recentConversations')}</p>
             </div>
             <div className="space-y-1">
               {(showAllConversations ? conversations : conversations.slice(0, RECENT_CONVERSATIONS_LIMIT)).map(conv => (
@@ -594,7 +595,7 @@ function ChatMessageArea({ chatbot, onOpenConfig, canUseAi = true }) {
                     type="button"
                     onClick={() => removePendingAttachment(idx)}
                     className="text-slate-400 hover:text-slate-700"
-                    aria-label="Xóa tệp"
+                    aria-label={t('chatbot.studio.removeFileAria')}
                   >
                     <HiOutlineX className="w-3 h-3" />
                   </button>
@@ -617,7 +618,7 @@ function ChatMessageArea({ chatbot, onOpenConfig, canUseAi = true }) {
               onClick={() => fileInputRef.current?.click()}
               disabled={sending || uploadingAttachment || pendingAttachments.length >= MAX_ATTACHMENTS}
               className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 disabled:opacity-50 transition-colors shrink-0"
-              title="Đính kèm tệp"
+              title={t('chatbot.studio.attachFileTitle')}
             >
               {uploadingAttachment ? (
                 <HiOutlineRefresh className="w-4 h-4 animate-spin" />
@@ -630,7 +631,7 @@ function ChatMessageArea({ chatbot, onOpenConfig, canUseAi = true }) {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Nhập tin nhắn..."
+              placeholder={t('chatbot.studio.typeMessagePlaceholder')}
               rows={1}
               className="flex-1 resize-none bg-transparent px-1 py-2 text-sm outline-none text-slate-900 placeholder-slate-400 max-h-32"
             />
@@ -755,7 +756,7 @@ function ChatbotStudioPage() {
                   } ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
                 >
                   <Icon className="w-4 h-4" />
-                  <span className="text-xs font-medium">{panel.labelKey ? t(panel.labelKey) : panel.label}</span>
+                  <span className="text-xs font-medium">{t(panel.labelKey)}</span>
                   {isActive && (
                     <span className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-primary-500 rounded-t-full" />
                   )}
@@ -830,7 +831,7 @@ function ChatbotStudioPage() {
                   type="button"
                   onClick={() => setDeployDrawerOpen(false)}
                   className="absolute top-3 right-3 z-10 w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100"
-                  aria-label="Đóng"
+                  aria-label={t('chatbot.studio.close')}
                 >
                   <HiOutlineX className="w-4 h-4" />
                 </button>
@@ -890,8 +891,8 @@ function ChatbotStudioPage() {
                   <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3">
                     <HiOutlineCog className="w-5 h-5 text-slate-400" />
                   </div>
-                  <p className="text-sm font-medium text-slate-700">Chọn chatbot</p>
-                  <p className="text-xs text-slate-400 mt-1">Để cấu hình & triển khai</p>
+                  <p className="text-sm font-medium text-slate-700">{t('chatbot.studio.selectBotTitle')}</p>
+                  <p className="text-xs text-slate-400 mt-1">{t('chatbot.studio.selectBotForConfigDeploy')}</p>
                 </div>
               )}
             </div>

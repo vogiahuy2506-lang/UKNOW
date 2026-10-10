@@ -104,10 +104,10 @@ export default function PlaygroundHeader({ bot, onConfig, onNewChat, onOpenDeplo
             type="button"
             onClick={() => onConfig()}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-primary-500 hover:bg-primary-600 text-white transition-colors"
-            title="Mở cấu hình chatbot"
+            title={t('chatbot.studio.openConfigTitle')}
           >
             <HiOutlineCog className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Cấu hình</span>
+            <span className="hidden sm:inline">{t('chatbot.studio.configBtn')}</span>
           </button>
         )}
       </div>

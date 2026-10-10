@@ -14,23 +14,23 @@ import { useI18n } from '../../i18n';
 
 // Tên 3 cách nhúng trùng với 3 ô ở cột Triển khai (DeployTab).
 const TABS = [
-  { id: 'script', labelKey: 'chatbot.studio.embedScriptTitle', icon: HiOutlineChat, desc: 'Widget nổi góc màn hình' },
-  { id: 'iframe', labelKey: 'chatbot.studio.embedIframeTitle', icon: HiOutlineCode, desc: 'Nhúng trang chat vào website' },
-  { id: 'public_link', labelKey: 'chatbot.studio.embedLinkTitle', icon: HiOutlineLink, desc: 'Trang chat công khai' },
+  { id: 'script', labelKey: 'chatbot.studio.embedScriptTitle', icon: HiOutlineChat, descKey: 'chatbot.studio.wDescScript' },
+  { id: 'iframe', labelKey: 'chatbot.studio.embedIframeTitle', icon: HiOutlineCode, descKey: 'chatbot.studio.wDescIframe' },
+  { id: 'public_link', labelKey: 'chatbot.studio.embedLinkTitle', icon: HiOutlineLink, descKey: 'chatbot.studio.wDescLink' },
 ];
 
 const POSITIONS = [
-  { key: 'bottom-right', label: 'Dưới phải' },
-  { key: 'bottom-left', label: 'Dưới trái' },
-  { key: 'top-right', label: 'Trên phải' },
-  { key: 'top-left', label: 'Trên trái' },
+  { key: 'bottom-right', labelKey: 'chatbot.studio.posBottomRight' },
+  { key: 'bottom-left', labelKey: 'chatbot.studio.posBottomLeft' },
+  { key: 'top-right', labelKey: 'chatbot.studio.posTopRight' },
+  { key: 'top-left', labelKey: 'chatbot.studio.posTopLeft' },
 ];
 
 const SIZES = [
   // h = chiều cao (px) ghi vào mã nhúng iFrame (DeployTab EMBED_HEIGHTS); chiều rộng luôn 100%.
-  { key: 'small', label: 'Nhỏ', h: 480 },
-  { key: 'medium', label: 'Vừa', h: 600 },
-  { key: 'large', label: 'Lớn', h: 760 },
+  { key: 'small', labelKey: 'chatbot.studio.sizeSmall', h: 480 },
+  { key: 'medium', labelKey: 'chatbot.studio.sizeMedium', h: 600 },
+  { key: 'large', labelKey: 'chatbot.studio.sizeLarge', h: 760 },
 ];
 
 function Toggle({ checked, onChange }) {
@@ -153,14 +153,14 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
       if (res.success && res.data) {
         const updated = { ...chatbot, ...res.data };
         onUpdate?.(updated);
-        toast.success('Đã lưu cấu hình widget');
+        toast.success(t('chatbot.studio.wSaved'));
         onClose?.();
       } else {
         throw new Error(res.message || 'Save failed');
       }
     } catch (err) {
       // Ưu tiên câu tiếng Việt của máy chủ; err.message có thể là câu axios tiếng Anh ("Request failed with status code 400").
-      toast.error(err?.response?.data?.message || err?.message || 'Lưu thất bại');
+      toast.error(err?.response?.data?.message || err?.message || t('chatbot.studio.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -183,10 +183,10 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
             </div>
             <div className="min-w-0">
               <h2 className="text-base md:text-lg font-semibold text-slate-900 truncate">
-                Giao diện Widget
+                {t('chatbot.studio.wTitle')}
               </h2>
               <p className="text-xs text-slate-500 truncate">
-                Áp dụng cho mọi dạng nhúng — {chatbot.name}
+                {t('chatbot.studio.wAppliesAll', { name: chatbot.name })}
               </p>
             </div>
           </div>
@@ -194,7 +194,7 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
             type="button"
             onClick={onClose}
             className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-            title="Đóng"
+            title={t('chatbot.studio.close')}
           >
             <HiOutlineX className="w-5 h-5" />
           </button>
@@ -205,7 +205,7 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
           {/* Left: tab list */}
           <nav className="w-60 lg:w-72 border-r border-slate-100 bg-slate-50/50 p-3 overflow-y-auto shrink-0">
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-3 mb-2">
-              Dạng nhúng
+              {t('chatbot.studio.wEmbedTypes')}
             </p>
             <div className="space-y-1">
               {TABS.map((tab) => {
@@ -229,7 +229,7 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                     </div>
                     <div className="min-w-0">
                       <p className="truncate">{t(tab.labelKey)}</p>
-                      <p className="text-[11px] text-slate-400 font-normal truncate">{tab.desc}</p>
+                      <p className="text-[11px] text-slate-400 font-normal truncate">{t(tab.descKey)}</p>
                     </div>
                   </button>
                 );
@@ -264,12 +264,12 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
               {/* ── Common to all tabs: color palette + logo preview + border radius ── */}
               {/* Color palette */}
               <section className="bg-white rounded-xl border border-slate-200 p-5">
-                <h4 className="text-sm font-semibold text-slate-900 mb-3">Màu sắc</h4>
+                <h4 className="text-sm font-semibold text-slate-900 mb-3">{t('chatbot.studio.wColors')}</h4>
                 <div className="grid grid-cols-2 gap-3">
-                  <ColorRow label="Màu chính" value={cfg.primary_color} onChange={(v) => update({ primary_color: v })} />
-                  <ColorRow label="Màu nhấn" value={cfg.accent_color} onChange={(v) => update({ accent_color: v })} />
-                  <ColorRow label="Màu nền" value={cfg.background_color} onChange={(v) => update({ background_color: v })} />
-                  <ColorRow label="Màu chữ" value={cfg.text_color} onChange={(v) => update({ text_color: v })} />
+                  <ColorRow label={t('chatbot.studio.wColorPrimary')} value={cfg.primary_color} onChange={(v) => update({ primary_color: v })} />
+                  <ColorRow label={t('chatbot.studio.wColorAccent')} value={cfg.accent_color} onChange={(v) => update({ accent_color: v })} />
+                  <ColorRow label={t('chatbot.studio.wColorBackground')} value={cfg.background_color} onChange={(v) => update({ background_color: v })} />
+                  <ColorRow label={t('chatbot.studio.wColorText')} value={cfg.text_color} onChange={(v) => update({ text_color: v })} />
                 </div>
               </section>
 
@@ -305,7 +305,7 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
 
               {/* Border radius */}
               <section className="bg-white rounded-xl border border-slate-200 p-5">
-                <h4 className="text-sm font-semibold text-slate-900 mb-3">Bo góc</h4>
+                <h4 className="text-sm font-semibold text-slate-900 mb-3">{t('chatbot.studio.wRadius')}</h4>
                 <div className="flex items-center gap-3">
                   <input
                     type="range"
@@ -324,7 +324,7 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                 <>
                   {/* Position */}
                   <section className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h4 className="text-sm font-semibold text-slate-900 mb-3">Vị trí hiển thị</h4>
+                    <h4 className="text-sm font-semibold text-slate-900 mb-3">{t('chatbot.studio.wPosition')}</h4>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                       {POSITIONS.map((pos) => (
                         <button
@@ -337,7 +337,7 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                               : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                           }`}
                         >
-                          {pos.label}
+                          {t(pos.labelKey)}
                         </button>
                       ))}
                     </div>
@@ -348,14 +348,14 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                       thì widget chỉ hiện nút tròn như hôm nay. */}
                   <section className="bg-white rounded-xl border border-slate-200 p-5">
                     <div className="flex items-center justify-between mb-3">
-                      <h4 className="text-sm font-semibold text-slate-900">Nhãn nút mở chat</h4>
+                      <h4 className="text-sm font-semibold text-slate-900">{t('chatbot.studio.wLauncherTitle')}</h4>
                       {cfg.launcher_label?.trim() ? (
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          Đang bật
+                          {t('chatbot.studio.wLauncherOn')}
                         </span>
                       ) : (
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
-                          Chưa đặt nhãn (chỉ hiện nút tròn)
+                          {t('chatbot.studio.wLauncherOff')}
                         </span>
                       )}
                     </div>
@@ -363,7 +363,7 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                       type="text"
                       value={cfg.launcher_label}
                       onChange={(e) => update({ launcher_label: e.target.value })}
-                      placeholder="Chat với chúng tôi"
+                      placeholder={t('chatbot.studio.wLauncherDefault')}
                       maxLength={40}
                       className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10"
                     />
@@ -371,10 +371,10 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                       {!cfg.launcher_label?.trim() ? (
                         <button
                           type="button"
-                          onClick={() => update({ launcher_label: 'Chat với chúng tôi' })}
+                          onClick={() => update({ launcher_label: t('chatbot.studio.wLauncherDefault') })}
                           className="text-xs text-primary-600 hover:text-primary-700 hover:underline font-medium cursor-pointer"
                         >
-                          + Bấm để áp dụng &quot;Chat với chúng tôi&quot;
+                          {t('chatbot.studio.wLauncherApply', { label: t('chatbot.studio.wLauncherDefault') })}
                         </button>
                       ) : (
                         <button
@@ -382,7 +382,7 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                           onClick={() => update({ launcher_label: '' })}
                           className="text-xs text-slate-400 hover:text-rose-500 transition-colors cursor-pointer"
                         >
-                          Xoá nhãn (tắt)
+                          {t('chatbot.studio.wLauncherClear')}
                         </button>
                       )}
                       <p className="text-xs text-slate-400 shrink-0 ml-2">{(cfg.launcher_label || '').length}/40</p>
@@ -393,15 +393,15 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                   <section className="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-slate-700">Hiển thị Avatar</p>
-                        <p className="text-xs text-slate-400">Avatar hiển thị cạnh tin nhắn bot</p>
+                        <p className="text-sm font-medium text-slate-700">{t('chatbot.studio.wShowAvatar')}</p>
+                        <p className="text-xs text-slate-400">{t('chatbot.studio.wShowAvatarBotHelp')}</p>
                       </div>
                       <Toggle checked={cfg.show_avatar} onChange={(v) => update({ show_avatar: v })} />
                     </div>
                     <div className="flex items-center justify-between pt-3 border-t border-slate-100">
                       <div>
-                        <p className="text-sm font-medium text-slate-700">Tự động mở chat</p>
-                        <p className="text-xs text-slate-400">Mở widget sau 2s, mỗi phiên một lần (không tự mở trên màn hình hẹp)</p>
+                        <p className="text-sm font-medium text-slate-700">{t('chatbot.studio.wAutoOpen')}</p>
+                        <p className="text-xs text-slate-400">{t('chatbot.studio.wAutoOpenHelp')}</p>
                       </div>
                       <Toggle checked={cfg.widget_auto_open} onChange={(v) => update({ widget_auto_open: v })} />
                     </div>
@@ -414,7 +414,7 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                 <>
                   {/* Size */}
                   <section className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h4 className="text-sm font-semibold text-slate-900 mb-3">Kích thước</h4>
+                    <h4 className="text-sm font-semibold text-slate-900 mb-3">{t('chatbot.studio.wSizeTitle')}</h4>
                     <div className="grid grid-cols-3 gap-2">
                       {SIZES.map((s) => (
                         <button
@@ -427,7 +427,7 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                               : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                           }`}
                         >
-                          {s.label}
+                          {t(s.labelKey)}
                           <p className="text-[10px] text-slate-400 mt-0.5">Cao {s.h}px</p>
                         </button>
                       ))}
@@ -438,15 +438,15 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                   <section className="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-slate-700">Hiển thị header</p>
-                        <p className="text-xs text-slate-400">Thanh tiêu đề (tên + avatar) trên trang chat</p>
+                        <p className="text-sm font-medium text-slate-700">{t('chatbot.studio.wShowHeader')}</p>
+                        <p className="text-xs text-slate-400">{t('chatbot.studio.wShowHeaderHelp')}</p>
                       </div>
                       <Toggle checked={cfg.embed_show_header} onChange={(v) => update({ embed_show_header: v })} />
                     </div>
                     <div className="flex items-center justify-between pt-3 border-t border-slate-100">
                       <div>
-                        <p className="text-sm font-medium text-slate-700">Hiển thị Avatar</p>
-                        <p className="text-xs text-slate-400">Avatar bên cạnh tin nhắn bot</p>
+                        <p className="text-sm font-medium text-slate-700">{t('chatbot.studio.wShowAvatar')}</p>
+                        <p className="text-xs text-slate-400">{t('chatbot.studio.wShowAvatarPageHelp')}</p>
                       </div>
                       <Toggle checked={cfg.show_avatar} onChange={(v) => update({ show_avatar: v })} />
                     </div>
@@ -469,7 +469,7 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
               disabled={saving}
               className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 rounded-lg transition-colors disabled:opacity-50"
             >
-              Hủy
+              {t('chatbot.studio.cancel')}
             </button>
             <button
               type="button"
@@ -480,12 +480,12 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
               {saving ? (
                 <>
                   <HiOutlineRefresh className="w-4 h-4 animate-spin" />
-                  Đang lưu...
+                  {t('chatbot.studio.saving')}
                 </>
               ) : (
                 <>
                   <HiOutlineSave className="w-4 h-4" />
-                  Lưu cấu hình
+                  {t('chatbot.studio.saveConfig')}
                 </>
               )}
             </button>
@@ -499,6 +499,7 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
 /* ─── Live preview components ─────────────────────────────────────────── */
 
 function ScriptPreview({ cfg, chatbot }) {
+  const { t } = useI18n();
   const pos = cfg.position || 'bottom-right';
   const isRight = pos.includes('right');
   const isBottom = pos.includes('bottom');
@@ -556,13 +557,14 @@ function ScriptPreview({ cfg, chatbot }) {
         >
           {chatbot?.name || 'AI Assistant'}
         </div>
-        <div className="p-2 text-[10px]">Xin chào!</div>
+        <div className="p-2 text-[10px]">{t('chatbot.studio.previewHello')}</div>
       </div>
     </div>
   );
 }
 
 function IframePreview({ cfg, chatbot }) {
+  const { t } = useI18n();
   const sizeMap = { small: { w: 200, h: 130 }, medium: { w: 240, h: 160 }, large: { w: 280, h: 190 } };
   const sz = sizeMap[cfg.size] || sizeMap.medium;
 
@@ -597,7 +599,7 @@ function IframePreview({ cfg, chatbot }) {
                 <span className="w-3 h-3 rounded-full bg-slate-200 shrink-0" />
               )
             )}
-            <div className="px-2 py-1 rounded-md bg-slate-100 text-[9px]">Xin chào!</div>
+            <div className="px-2 py-1 rounded-md bg-slate-100 text-[9px]">{t('chatbot.studio.previewHello')}</div>
           </div>
         </div>
       </div>

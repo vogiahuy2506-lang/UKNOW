@@ -7,23 +7,23 @@ import { MAX_UPLOAD_FILE_MB } from '../../constants/uploadLimits';
 
 /**
  * Validate a single file client-side before sending it to the server.
- * Returns a user-facing error string, or null if the file passes.
+ * Returns a user-facing error string (dịch qua `t` truyền vào), or null if the file passes.
  */
-export function clientValidateFile(file, maxMb = MAX_UPLOAD_FILE_MB) {
+export function clientValidateFile(file, maxMb = MAX_UPLOAD_FILE_MB, t = (key) => key) {
   const name = file.name || '';
   const lower = name.toLowerCase();
   if (lower.endsWith('.doc') && !lower.endsWith('.docx')) {
-    return 'Chỉ nhận .docx, hãy Lưu thành .docx rồi gửi lại';
+    return t('chatbot.studio.errDocOnly');
   }
   if (lower.endsWith('.ppt') && !lower.endsWith('.pptx')) {
-    return 'Chỉ nhận .pptx, hãy Lưu thành .pptx rồi gửi lại';
+    return t('chatbot.studio.errPptOnly');
   }
   if (lower.endsWith('.svg')) {
-    return 'Không nhận file SVG';
+    return t('chatbot.studio.errSvg');
   }
   const maxBytes = maxMb * 1024 * 1024;
   if (file.size > maxBytes) {
-    return `File vượt dung lượng tối đa ${maxMb} MB`;
+    return t('chatbot.studio.errFileTooBig', { max: maxMb });
   }
   return null;
 }

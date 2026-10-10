@@ -14,6 +14,7 @@ import { useI18n } from '../../i18n';
 /* ─── ChannelModal — cấu hình từng kênh ─────────────────────────────── */
 
 export function ChannelModal({ open, channel, chatbot, onClose }) {
+  const { t } = useI18n();
   useEffect(() => {
     if (!open) return;
   }, [open]);
@@ -68,8 +69,8 @@ export function ChannelModal({ open, channel, chatbot, onClose }) {
             Z
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-semibold text-slate-900 truncate">Cấu hình Zalo cá nhân</h3>
-            <p className="text-xs text-slate-500 mt-0.5 truncate">Bật chatbot cho tài khoản Zalo cá nhân của bạn</p>
+            <h3 className="text-sm font-semibold text-slate-900 truncate">{t('chatbot.studio.zaloCfgTitle')}</h3>
+            <p className="text-xs text-slate-500 mt-0.5 truncate">{t('chatbot.studio.zaloCfgSubtitle')}</p>
           </div>
           <ZaloPersonalReloadButton />
           <button
@@ -91,7 +92,7 @@ export function ChannelModal({ open, channel, chatbot, onClose }) {
             onClick={onClose}
             className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 rounded-lg transition-colors"
           >
-            Đóng
+            {t('chatbot.studio.close')}
           </button>
         </div>
       </div>
@@ -125,6 +126,7 @@ function Toggle({ checked, onChange, disabled }) {
 /* ─── Zalo Personal reload hook ──────────────────────────────────── */
 
 function ZaloPersonalReloadButton() {
+  const { t } = useI18n();
   // Chỉ tải lại danh sách tài khoản của hộp này (ZaloPersonalForm lắng nghe sự kiện), không tải lại cả trang (S-25):
   // F5 làm mất bot đang chọn và cả đoạn chat thử đang dở.
   const onReload = () => window.dispatchEvent(new Event('zalo-personal:reload'));
@@ -133,7 +135,7 @@ function ZaloPersonalReloadButton() {
       type="button"
       onClick={onReload}
       className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100"
-      title="Tải lại"
+      title={t('chatbot.studio.reload')}
     >
       <HiOutlineRefresh className="w-4 h-4" />
     </button>
@@ -157,11 +159,11 @@ function ZaloPersonalForm({ chatbot }) {
       setAccounts(Array.isArray(rawList) ? rawList : []);
     } catch (e) {
       console.error('[ZaloPersonalForm] fetch failed:', e);
-      toast.error('Không thể tải danh sách tài khoản Zalo.');
+      toast.error(t('chatbot.studio.zaloAccountsLoadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [chatbot.id]);
+  }, [chatbot.id, t]);
 
   useEffect(() => {
     fetchAccounts();
@@ -178,10 +180,10 @@ function ZaloPersonalForm({ chatbot }) {
       setAccounts((prev) =>
         prev.map((a) => (a.id === acc.id ? { ...a, is_enabled: enabled, chatbot_enabled: enabled } : a))
       );
-      toast.success(enabled ? `Đã bật chatbot cho ${acc.name || acc.phone || acc.zalo_user_id}` : 'Đã tắt chatbot');
+      toast.success(enabled ? t('chatbot.studio.zaloToggledOn', { name: acc.name || acc.phone || acc.zalo_user_id }) : t('chatbot.studio.zaloToggledOff'));
     } catch (err) {
       console.error('[ZaloPersonalForm] toggle failed:', err);
-      toast.error(err?.response?.data?.message || 'Không thể cập nhật.');
+      toast.error(err?.response?.data?.message || t('chatbot.studio.updateFailed'));
       // 409: tài khoản đã gắn chatbot khác (dữ liệu trên màn đã cũ) → tải lại để hiện huy hiệu "Đang bật cho: …".
       if (err?.response?.status === 409) fetchAccounts();
     } finally {
@@ -202,14 +204,14 @@ function ZaloPersonalForm({ chatbot }) {
         {loading ? (
           <div className="flex items-center justify-center py-8 text-slate-400 text-xs">
             <HiOutlineRefresh className="w-4 h-4 animate-spin mr-2" />
-            Đang tải danh sách tài khoản...
+            {t('chatbot.studio.zaloAccountsLoading')}
           </div>
         ) : accounts.length === 0 ? (
           <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200">
             <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-2">
               <HiOutlineUserCircle className="w-5 h-5 text-slate-400" />
             </div>
-            <p className="text-sm font-medium text-slate-700">Chưa liên kết tài khoản Zalo</p>
+            <p className="text-sm font-medium text-slate-700">{t('chatbot.studio.zaloNotLinked')}</p>
             <p className="text-xs text-slate-400 mt-1 px-6">
               {t('chatbot.studio.channelsGoTo')}{' '}
               <a

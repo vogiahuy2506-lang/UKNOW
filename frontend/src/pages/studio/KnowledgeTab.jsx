@@ -13,6 +13,7 @@ import {
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
+import { useI18n } from '../../i18n';
 
 const ALLOWED_DOC_EXTS = ['txt', 'md', 'csv', 'json', 'html', 'htm', 'pdf', 'doc', 'docx', 'xlsx', 'xls', 'png', 'jpg', 'jpeg', 'webp', 'pptx'];
 const ALLOWED_ACCEPT = '.pdf,.docx,.doc,.txt,.md,.csv,.json,.html,.htm,.xlsx,.xls,.png,.jpg,.jpeg,.webp,.pptx';
@@ -41,13 +42,14 @@ function formatBytes(bytes) {
   return `${(bytes / Math.pow(k, i)).toFixed(i === 0 ? 0 : 1)} ${sizes[i]}`;
 }
 
-function formatDate(dateStr) {
+function formatDate(dateStr, locale = 'vi') {
   if (!dateStr) return '';
   const date = new Date(dateStr);
-  return date.toLocaleDateString('vi-VN', { day: '2-digit', month: 'short', year: 'numeric' });
+  return date.toLocaleDateString(locale === 'en' ? 'en-US' : 'vi-VN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocuments = NO_INITIAL_DOCUMENTS }) {
+  const { t, locale } = useI18n();
   const [documents, setDocuments] = useState(initialDocuments);
   const [showUpload, setShowUpload] = useState(false);
   const [showText, setShowText] = useState(false);
@@ -77,11 +79,11 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
       if (res.data?.document) {
         setViewingDoc({ ...doc, ...res.data.document, loading: false });
       } else {
-        toast.error('Không thể tải nội dung');
+        toast.error(t('chatbot.studio.kbLoadFailed'));
         setViewingDoc(null);
       }
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể tải nội dung');
+      toast.error(err?.response?.data?.message || t('chatbot.studio.kbLoadFailed'));
       setViewingDoc(null);
     }
   };
@@ -139,16 +141,16 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
   const handleUploadFile = async (e) => {
     e?.preventDefault?.();
     if (!uploadFile) {
-      toast.error('Vui lòng chọn file');
+      toast.error(t('chatbot.studio.kbPickFile'));
       return;
     }
     if (uploadFile.size > MAX_FILE_MB * 1024 * 1024) {
-      toast.error(`File vượt quá ${MAX_FILE_MB}MB`);
+      toast.error(t('chatbot.studio.kbFileTooBig', { max: MAX_FILE_MB }));
       return;
     }
     const ext = uploadFile.name.split('.').pop()?.toLowerCase();
     if (!ALLOWED_DOC_EXTS.includes(ext)) {
-      toast.error(`Định dạng không hỗ trợ. Vui lòng dùng: ${ALLOWED_DOC_EXTS.join(', ')}`);
+      toast.error(t('chatbot.studio.kbBadFormat', { list: ALLOWED_DOC_EXTS.join(', ') }));
       return;
     }
     setUploading(true);
@@ -158,17 +160,17 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
       fd.append('chatbot_id', String(chatbot.id));
       const res = await chatbotApi.uploadCustomChatDocument(fd);
       if (res.data?.success) {
-        toast.success(`Đã huấn luyện thành công: ${res.data.chunks || 0} đoạn`);
+        toast.success(t('chatbot.studio.kbTrained', { chunks: res.data.chunks || 0 }));
         setShowUpload(false);
         setUploadFile(null);
         setUploadTitle('');
         await loadDocuments();
         onDocumentsChange?.();
       } else {
-        toast.error(res.data?.message || 'Upload thất bại');
+        toast.error(res.data?.message || t('chatbot.studio.kbUploadFailed'));
       }
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Upload thất bại');
+      toast.error(err?.response?.data?.message || t('chatbot.studio.kbUploadFailed'));
     } finally {
       setUploading(false);
     }
@@ -177,7 +179,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
   const handleAddText = async (e) => {
     e.preventDefault();
     if (!textContent.trim()) {
-      toast.error('Vui lòng nhập nội dung');
+      toast.error(t('chatbot.studio.kbEnterContent'));
       return;
     }
     setAddingText(true);
@@ -187,17 +189,17 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
         content: textContent,
       });
       if (res.data?.success) {
-        toast.success('Đã thêm văn bản vào knowledge base');
+        toast.success(t('chatbot.studio.kbTextAdded'));
         setShowText(false);
         setTextTitle('');
         setTextContent('');
         await loadDocuments();
         onDocumentsChange?.();
       } else {
-        toast.error(res.data?.message || 'Thêm văn bản thất bại');
+        toast.error(res.data?.message || t('chatbot.studio.kbTextAddFailed'));
       }
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Thêm văn bản thất bại');
+      toast.error(err?.response?.data?.message || t('chatbot.studio.kbTextAddFailed'));
     } finally {
       setAddingText(false);
     }
@@ -206,7 +208,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
   const handleScrapeUrl = async (e) => {
     e.preventDefault();
     if (!scrapeUrl.trim()) {
-      toast.error('Vui lòng nhập URL');
+      toast.error(t('chatbot.studio.kbEnterUrl'));
       return;
     }
     let normalizedUrl = scrapeUrl.trim();
@@ -216,7 +218,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
     try {
       new URL(normalizedUrl);
     } catch {
-      toast.error('URL không hợp lệ');
+      toast.error(t('chatbot.studio.kbUrlInvalid'));
       return;
     }
     setScraping(true);
@@ -225,33 +227,33 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
         url: normalizedUrl,
       });
       if (res.data?.success) {
-        toast.success(`Đã trích xuất: ${res.data.chunks || 0} đoạn từ ${res.data.pages || 1} trang`);
+        toast.success(t('chatbot.studio.kbScraped', { chunks: res.data.chunks || 0, pages: res.data.pages || 1 }));
         setShowUrlScrape(false);
         setScrapeUrl('');
         await loadDocuments();
         onDocumentsChange?.();
       } else {
-        toast.error(res.data?.message || 'Trích xuất thất bại');
+        toast.error(res.data?.message || t('chatbot.studio.kbScrapeFailed'));
       }
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Trích xuất thất bại');
+      toast.error(err?.response?.data?.message || t('chatbot.studio.kbScrapeFailed'));
     } finally {
       setScraping(false);
     }
   };
 
   const handleDelete = async (doc) => {
-    if (!confirm(`Xóa tài liệu "${doc.title}"?`)) return;
+    if (!confirm(t('chatbot.studio.kbConfirmDeleteDoc', { title: doc.title }))) return;
     setDeletingId(doc.id);
     try {
       const docId = typeof doc.id === 'string' ? doc.id : String(doc.id);
       await chatbotApi.deleteDocument(chatbot.id, docId);
-      toast.success('Đã xóa tài liệu');
+      toast.success(t('chatbot.studio.kbDocDeleted'));
       await loadDocuments();
       onDocumentsChange?.();
     } catch (err) {
       console.error('[KnowledgeTab] Delete error:', err);
-      toast.error(err?.response?.data?.message || 'Không thể xóa tài liệu');
+      toast.error(err?.response?.data?.message || t('chatbot.studio.kbDocDeleteFailed'));
     } finally {
       setDeletingId(null);
     }
@@ -310,7 +312,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
     >
       <div className="px-5 pb-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2 min-w-0">
-          <h3 className="text-sm font-semibold text-slate-900">Tài liệu</h3>
+          <h3 className="text-sm font-semibold text-slate-900">{t('chatbot.studio.kbDocsTitle')}</h3>
           <span className="text-[10px] font-semibold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full">
             {documents.length}
           </span>
@@ -322,7 +324,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
             className="flex items-center gap-1.5 px-2 py-1.5 rounded-md border border-slate-200 hover:border-primary-300 hover:bg-primary-50 transition-all text-xs font-medium text-slate-700"
           >
             <HiOutlineUpload className="w-3.5 h-3.5" />
-            <span>Upload</span>
+            <span>{t('chatbot.studio.kbUploadBtn')}</span>
           </button>
           <button
             type="button"
@@ -330,7 +332,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
             className="flex items-center gap-1.5 px-2 py-1.5 rounded-md border border-slate-200 hover:border-primary-300 hover:bg-primary-50 transition-all text-xs font-medium text-slate-700"
           >
             <HiOutlinePlus className="w-3.5 h-3.5" />
-            <span>Văn bản</span>
+            <span>{t('chatbot.studio.kbTextBtn')}</span>
           </button>
           <button
             type="button"
@@ -349,8 +351,8 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
             <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-2">
               <HiOutlineBookOpen className="w-5 h-5 text-slate-400" />
             </div>
-            <p className="text-sm font-medium text-slate-700">Chưa có tài liệu</p>
-            <p className="text-xs text-slate-400 mt-1">Kéo thả file hoặc chọn nguồn bên dưới</p>
+            <p className="text-sm font-medium text-slate-700">{t('chatbot.studio.kbEmptyTitle')}</p>
+            <p className="text-xs text-slate-400 mt-1">{t('chatbot.studio.kbEmptyHint')}</p>
           </div>
         ) : (
           <div className="space-y-1">
@@ -386,7 +388,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
                     type="button"
                     onClick={() => handleViewDocument(doc)}
                     className="w-7 h-7 rounded-md flex items-center justify-center text-slate-300 hover:text-primary-600 hover:bg-primary-50 transition-colors opacity-0 group-hover:opacity-100"
-                    title="Xem nội dung"
+                    title={t('chatbot.studio.kbViewContent')}
                   >
                     <HiOutlineEye className="w-3.5 h-3.5" />
                   </button>
@@ -395,7 +397,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
                     onClick={() => handleDelete(doc)}
                     disabled={deletingId === doc.id}
                     className="w-7 h-7 rounded-md flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-50"
-                    title="Xóa"
+                    title={t('chatbot.studio.delete')}
                   >
                     {deletingId === doc.id ? (
                       <HiOutlineRefresh className="w-3.5 h-3.5 animate-spin" />
@@ -416,8 +418,8 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
           className="border-2 border-dashed border-slate-200 rounded-xl px-4 py-4 text-center cursor-pointer hover:border-primary-300 hover:bg-primary-50 transition-all"
         >
           <HiOutlineUpload className="w-5 h-5 text-slate-400 mx-auto mb-1.5" />
-          <p className="text-xs font-medium text-slate-500">Kéo thả file vào đây hoặc bấm để chọn</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">{ALLOWED_FORMATS_LABEL} • Tối đa {MAX_FILE_MB}MB</p>
+          <p className="text-xs font-medium text-slate-500">{t('chatbot.studio.kbDropHere')}</p>
+          <p className="text-[11px] text-slate-400 mt-0.5">{t('chatbot.studio.kbMaxSize', { formats: ALLOWED_FORMATS_LABEL, max: MAX_FILE_MB })}</p>
         </div>
         <input
           ref={fileInputRef}
@@ -437,7 +439,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
             <div className="w-12 h-12 rounded-full bg-primary-100 flex items-center justify-center mx-auto mb-2">
               <HiOutlineUpload className="w-6 h-6 text-primary-600 animate-bounce" />
             </div>
-            <p className="text-sm font-semibold text-primary-700">Thả file để upload</p>
+            <p className="text-sm font-semibold text-primary-700">{t('chatbot.studio.kbDropToUpload')}</p>
             <p className="text-xs text-primary-600 mt-1">{ALLOWED_FORMATS_LABEL}</p>
           </div>
         </div>
@@ -447,7 +449,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
             <div className="px-5 py-4 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-900">Upload tài liệu</h3>
+              <h3 className="text-sm font-semibold text-slate-900">{t('chatbot.studio.kbUploadModalTitle')}</h3>
               <button
                 type="button"
                 onClick={() => setShowUpload(false)}
@@ -458,12 +460,12 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
             </div>
             <form onSubmit={handleUploadFile} className="px-5 pb-5 space-y-3">
               <div>
-                <label className="text-xs font-medium text-slate-700 block mb-1.5">Tên tài liệu</label>
+                <label className="text-xs font-medium text-slate-700 block mb-1.5">{t('chatbot.studio.kbDocName')}</label>
                 <input
                   type="text"
                   value={uploadTitle}
                   onChange={(e) => setUploadTitle(e.target.value)}
-                  placeholder="VD: Hướng dẫn sử dụng"
+                  placeholder={t('chatbot.studio.kbDocNameExample')}
                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10 transition-all"
                 />
               </div>
@@ -492,12 +494,12 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
                     className="border-2 border-dashed border-slate-200 rounded-lg px-4 py-6 text-center cursor-pointer hover:border-primary-300 hover:bg-primary-50 transition-colors"
                   >
                     <HiOutlineUpload className="w-6 h-6 text-slate-400 mx-auto mb-1.5" />
-                    <p className="text-xs font-medium text-slate-600">Bấm để chọn file hoặc kéo thả vào đây</p>
-                    <p className="text-[11px] text-slate-400 mt-1">Tối đa {MAX_FILE_MB}MB</p>
+                    <p className="text-xs font-medium text-slate-600">{t('chatbot.studio.kbPickOrDrop')}</p>
+                    <p className="text-[11px] text-slate-400 mt-1">{t('chatbot.studio.kbMaxOnly', { max: MAX_FILE_MB })}</p>
                   </div>
                 )}
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Hỗ trợ: {ALLOWED_FORMATS_LABEL}
+                  {t('chatbot.studio.kbSupported', { formats: ALLOWED_FORMATS_LABEL })}
                 </p>
               </div>
               <div className="flex justify-end gap-2 pt-2">
@@ -506,10 +508,10 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
                   onClick={() => setShowUpload(false)}
                   className="px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
                 >
-                  Hủy
+                  {t('chatbot.studio.cancel')}
                 </button>
                 <button type="submit" disabled={uploading} className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50">
-                  {uploading ? 'Đang upload...' : 'Upload'}
+                  {uploading ? t('chatbot.studio.kbUploading') : t('chatbot.studio.kbUploadBtn')}
                 </button>
               </div>
             </form>
@@ -521,7 +523,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
             <div className="px-5 py-4 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-900">Thêm văn bản</h3>
+              <h3 className="text-sm font-semibold text-slate-900">{t('chatbot.studio.kbAddTextTitle')}</h3>
               <button
                 type="button"
                 onClick={() => setShowText(false)}
@@ -532,22 +534,22 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
             </div>
             <form onSubmit={handleAddText} className="px-5 pb-5 space-y-3">
               <div>
-                <label className="text-xs font-medium text-slate-700 block mb-1.5">Tiêu đề</label>
+                <label className="text-xs font-medium text-slate-700 block mb-1.5">{t('chatbot.studio.kbTitleLabel')}</label>
                 <input
                   type="text"
                   value={textTitle}
                   onChange={(e) => setTextTitle(e.target.value)}
-                  placeholder="VD: Câu hỏi thường gặp"
+                  placeholder={t('chatbot.studio.kbTitleExample')}
                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10 transition-all"
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-slate-700 block mb-1.5">Nội dung</label>
+                <label className="text-xs font-medium text-slate-700 block mb-1.5">{t('chatbot.studio.kbContentLabel')}</label>
                 <textarea
                   value={textContent}
                   onChange={(e) => setTextContent(e.target.value)}
                   rows={6}
-                  placeholder="Nhập nội dung kiến thức..."
+                  placeholder={t('chatbot.studio.kbContentPlaceholder')}
                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10 transition-all resize-y"
                 />
               </div>
@@ -557,10 +559,10 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
                   onClick={() => setShowText(false)}
                   className="px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
                 >
-                  Hủy
+                  {t('chatbot.studio.cancel')}
                 </button>
                 <button type="submit" disabled={addingText} className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50">
-                  {addingText ? 'Đang thêm...' : 'Thêm'}
+                  {addingText ? t('chatbot.studio.kbAdding') : t('chatbot.studio.kbAddBtn')}
                 </button>
               </div>
             </form>
@@ -572,7 +574,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
             <div className="px-5 py-4 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-900">Trích xuất từ URL</h3>
+              <h3 className="text-sm font-semibold text-slate-900">{t('chatbot.studio.kbScrapeTitle')}</h3>
               <button
                 type="button"
                 onClick={() => setShowUrlScrape(false)}
@@ -592,7 +594,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10 transition-all"
                 />
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Hệ thống sẽ tự động crawl các trang liên kết nội bộ.
+                  {t('chatbot.studio.kbCrawlNote')}
                 </p>
               </div>
               <div className="flex justify-end gap-2 pt-2">
@@ -601,10 +603,10 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
                   onClick={() => setShowUrlScrape(false)}
                   className="px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
                 >
-                  Hủy
+                  {t('chatbot.studio.cancel')}
                 </button>
                 <button type="submit" disabled={scraping} className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50">
-                  {scraping ? 'Đang trích xuất...' : 'Trích xuất'}
+                  {scraping ? t('chatbot.studio.kbExtracting') : t('chatbot.studio.kbExtractBtn')}
                 </button>
               </div>
             </form>
@@ -623,7 +625,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
                   {viewingDoc.extracted_chars && (
                     <>
                       <span className="text-slate-300">|</span>
-                      <span className="text-[11px] text-slate-400">{(viewingDoc.extracted_chars / 1000).toFixed(1)}k ký tự</span>
+                      <span className="text-[11px] text-slate-400">{t('chatbot.studio.kbCharsK', { n: (viewingDoc.extracted_chars / 1000).toFixed(1) })}</span>
                     </>
                   )}
                   {viewingDoc.source_type && (
@@ -633,7 +635,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
                     </>
                   )}
                   <span className="text-slate-300">|</span>
-                  <span className="text-[11px] text-slate-400">{formatDate(viewingDoc.created_at)}</span>
+                  <span className="text-[11px] text-slate-400">{formatDate(viewingDoc.created_at, locale)}</span>
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -643,7 +645,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
                     target="_blank"
                     rel="noopener noreferrer"
                     className="w-8 h-8 rounded-md flex items-center justify-center text-slate-400 hover:text-primary-600 hover:bg-primary-50 transition-colors"
-                    title="Mở URL gốc"
+                    title={t('chatbot.studio.kbOpenSource')}
                   >
                     <HiOutlineExternalLink className="w-4 h-4" />
                   </a>
@@ -661,7 +663,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
               {viewingDoc.loading ? (
                 <div className="flex items-center justify-center py-12">
                   <HiOutlineRefresh className="w-5 h-5 animate-spin text-primary-500" />
-                  <span className="ml-2 text-sm text-slate-500">Đang tải...</span>
+                  <span className="ml-2 text-sm text-slate-500">{t('chatbot.studio.kbLoading')}</span>
                 </div>
               ) : viewingDoc.content_text ? (
                 <pre className="whitespace-pre-wrap text-sm text-slate-700 font-mono leading-relaxed bg-slate-50 rounded-lg p-4 border border-slate-100 overflow-auto">
@@ -670,7 +672,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
               ) : (
                 <div className="text-center py-12 text-slate-400">
                   <HiOutlineDocumentText className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">Không có nội dung để hiển thị</p>
+                  <p className="text-sm">{t('chatbot.studio.kbNoContent')}</p>
                 </div>
               )}
             </div>
@@ -680,7 +682,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
                 onClick={() => setViewingDoc(null)}
                 className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
               >
-                Đóng
+                {t('chatbot.studio.close')}
               </button>
             </div>
           </div>
