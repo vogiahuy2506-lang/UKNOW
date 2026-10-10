@@ -44,7 +44,8 @@ import { classifyZaloSendError } from '../../utils/zaloSendErrorClassifier.util.
 import { classifyInboxChannelSendFailure } from '../../utils/inboxChannelSendFailure.util.js';
 import { QUOTA_CHANNEL_LABEL, resolveInboxQuotaChannel } from '../../constants/sendQuotaChannels.js';
 import { isZaloPartialDeliveryResult } from '../../utils/zaloDispatchDelivery.util.js';
-import { assertZaloAccountInScope } from '../user/memberChannelAccess.service.js';
+import { assertChannelAccountInScope, assertZaloAccountInScope } from '../user/memberChannelAccess.service.js';
+import { SCOPED_CHANNELS } from '../../utils/channelAccessScope.util.js';
 
 function presentInboxAttachments(raw) {
   return chatAttachmentService.presentAttachmentsForClient(raw || [], { includeRef: false });
@@ -128,7 +129,7 @@ class UnifiedInboxService {
    *
    * @throws {Error} 'Conversation not found' (không có / không thuộc chủ) hoặc 403 ZALO_ACCOUNT_NOT_ASSIGNED
    */
-  async _requireAccessibleConversation(userId, conversationId, conversationType, accessibleZaloAccountIds) {
+  async _requireAccessibleConversation(userId, conversationId, conversationType, accessibleZaloAccountIds, accessibleChannelRefs) {
     const conversation = await unifiedInboxRepository.getConversationById(
       userId,
       parseInt(conversationId),
@@ -140,7 +141,21 @@ class UnifiedInboxService {
     if (conversationType === 'zalo_personal') {
       assertZaloAccountInScope(conversation.id_zalo_setting, accessibleZaloAccountIds);
     }
+    // PLAN_GIAO_TK_TG_WA H3: hội thoại Telegram / WhatsApp (nằm ở channel_conversations) thuộc tài khoản `external_channel_id`.
+    // THIẾU phạm vi (undefined) → chặn (hỏng thì chặn). Zalo OA / Facebook không nằm trong phạm vi giao.
+    this._assertChannelConversationInScope(conversationType, conversation, accessibleChannelRefs);
     return conversation;
+  }
+
+  /**
+   * 403 `CHANNEL_ACCOUNT_NOT_ASSIGNED` nếu hội thoại `channel` thuộc tài khoản Telegram / WhatsApp mà người thao tác chưa được giao.
+   * Nhận cả hàng hội thoại (`channel_external_id`) lẫn hàng tin gửi lại (`channel_external_id` của kết nối chứa tin).
+   */
+  _assertChannelConversationInScope(conversationType, row, accessibleChannelRefs) {
+    if (conversationType !== 'channel') return;
+    const channel = row?.channel;
+    if (!SCOPED_CHANNELS.includes(channel)) return;
+    assertChannelAccountInScope(channel, row.channel_external_id, accessibleChannelRefs?.[channel]);
   }
 
   /**
@@ -207,19 +222,20 @@ class UnifiedInboxService {
   }
 
   /** Kênh user có trong Hộp thư (cho tab kênh phía FE). Nhân viên chỉ có tab Zalo cá nhân khi được giao tài khoản. */
-  async getAvailableChannels(userId, { accessibleZaloAccountIds } = {}) {
-    return unifiedInboxRepository.getAvailableChannels(userId, { accessibleZaloAccountIds });
+  async getAvailableChannels(userId, { accessibleZaloAccountIds, accessibleChannelRefs } = {}) {
+    return unifiedInboxRepository.getAvailableChannels(userId, { accessibleZaloAccountIds, accessibleChannelRefs });
   }
 
   /**
    * Get single conversation details
    */
-  async getConversation(userId, conversationId, conversationType, { accessibleZaloAccountIds } = {}) {
+  async getConversation(userId, conversationId, conversationType, { accessibleZaloAccountIds, accessibleChannelRefs } = {}) {
     const conversation = await this._requireAccessibleConversation(
       userId,
       conversationId,
       conversationType,
-      accessibleZaloAccountIds
+      accessibleZaloAccountIds,
+      accessibleChannelRefs
     );
 
     // Parse visitor_info for zalo_personal
@@ -297,7 +313,8 @@ class UnifiedInboxService {
       userId,
       conversationId,
       conversationType,
-      options.accessibleZaloAccountIds
+      options.accessibleZaloAccountIds,
+      options.accessibleChannelRefs
     );
 
     const { messages, hasMore } = await unifiedInboxRepository.getMessages(
@@ -346,7 +363,8 @@ class UnifiedInboxService {
       userId,
       conversationId,
       conversationType,
-      options.accessibleZaloAccountIds
+      options.accessibleZaloAccountIds,
+      options.accessibleChannelRefs
     );
 
     const { remainingUnread } = await unifiedInboxRepository.markAsRead(
@@ -378,7 +396,7 @@ class UnifiedInboxService {
    */
   async sendMessage(userId, conversationId, conversationType, content, attachments = [], rawOptions = {}) {
     // Phạm vi tài khoản Zalo tách khỏi `options` để không lọt xuống các hàm đặt chỗ hạn mức (chúng nhận nguyên `options`).
-    const { accessibleZaloAccountIds, ...options } = rawOptions || {};
+    const { accessibleZaloAccountIds, accessibleChannelRefs, ...options } = rawOptions || {};
     const ownedAttachments = sanitizeOwnedInboxAttachments(attachments, userId);
     if (!content?.trim() && !ownedAttachments.length) {
       throw new Error('Cần nội dung hoặc tệp đính kèm');
@@ -390,7 +408,8 @@ class UnifiedInboxService {
       userId,
       conversationId,
       conversationType,
-      accessibleZaloAccountIds
+      accessibleZaloAccountIds,
+      accessibleChannelRefs
     );
 
     // Get channel ID for channel conversations
@@ -843,7 +862,7 @@ class UnifiedInboxService {
       rawOptions = maybeOptions || {};
     }
     // Phạm vi tài khoản Zalo tách khỏi `options` để không lọt xuống các hàm đặt chỗ hạn mức (chúng nhận nguyên `options`).
-    const { accessibleZaloAccountIds, ...options } = rawOptions;
+    const { accessibleZaloAccountIds, accessibleChannelRefs, ...options } = rawOptions;
 
     if (type !== 'zalo_personal' && type !== 'channel') {
       const err = new Error('Invalid conversation type for retry');
@@ -871,6 +890,8 @@ class UnifiedInboxService {
         assertZaloAccountInScope(owned.conversation_id_zalo_setting, accessibleZaloAccountIds);
       }
     }
+    // H3: gửi lại tin Telegram / WhatsApp chỉ khi tài khoản của tin được giao — TRƯỚC khi giành quyền gửi lại / đặt chỗ hạn mức.
+    this._assertChannelConversationInScope(type, owned, accessibleChannelRefs);
 
     // Check if message is already sent (idempotent replay)
     if (owned.metadata?.send?.status === 'sent') {
@@ -1214,8 +1235,8 @@ class UnifiedInboxService {
    * Pause / resume AI auto-reply for one conversation.
    * Toggle always uses reason=manual when pausing (stay until toggled on).
    */
-  async setConversationAiPaused(userId, conversationId, conversationType, paused, { accessibleZaloAccountIds } = {}) {
-    await this._requireAccessibleConversation(userId, conversationId, conversationType, accessibleZaloAccountIds);
+  async setConversationAiPaused(userId, conversationId, conversationType, paused, { accessibleZaloAccountIds, accessibleChannelRefs } = {}) {
+    await this._requireAccessibleConversation(userId, conversationId, conversationType, accessibleZaloAccountIds, accessibleChannelRefs);
     const reason = paused ? 'manual' : 'handoff';
     const pausedRow = await unifiedInboxRepository.setAiPaused(
       parseInt(conversationId),
@@ -1252,7 +1273,10 @@ class UnifiedInboxService {
     const [messages, total, statsByChannel] = await Promise.all([
       unifiedInboxRepository.getOutboxMessages(userId, filters),
       unifiedInboxRepository.getOutboxMessagesCount(userId, filters),
-      unifiedInboxRepository.getOutboxStatsByChannel(userId, { accessibleZaloAccountIds: filters.accessibleZaloAccountIds }),
+      unifiedInboxRepository.getOutboxStatsByChannel(userId, {
+        accessibleZaloAccountIds: filters.accessibleZaloAccountIds,
+        accessibleChannelRefs: filters.accessibleChannelRefs,
+      }),
     ]);
 
     const formattedMessages = messages.map(msg => ({
@@ -1301,8 +1325,8 @@ class UnifiedInboxService {
   /**
    * Get a single sent message detail
    */
-  async getOutboxMessage(userId, messageId, { accessibleZaloAccountIds } = {}) {
-    const message = await unifiedInboxRepository.getOutboxMessageById(userId, parseInt(messageId), { accessibleZaloAccountIds });
+  async getOutboxMessage(userId, messageId, { accessibleZaloAccountIds, accessibleChannelRefs } = {}) {
+    const message = await unifiedInboxRepository.getOutboxMessageById(userId, parseInt(messageId), { accessibleZaloAccountIds, accessibleChannelRefs });
 
     if (!message) {
       throw new Error('Message not found');
@@ -1332,7 +1356,7 @@ class UnifiedInboxService {
   /**
    * Delete a conversation by ID
    */
-  async deleteConversation(userId, conversationId, type = 'zalo_personal', { accessibleZaloAccountIds } = {}) {
+  async deleteConversation(userId, conversationId, type = 'zalo_personal', { accessibleZaloAccountIds, accessibleChannelRefs } = {}) {
     // Delegate to the appropriate adapter
     switch (type) {
       case 'zalo_personal': {
@@ -1344,10 +1368,15 @@ class UnifiedInboxService {
       }
       case 'webchat':
         return chatbotRepository.deleteWebChatConversation(conversationId, userId);
-      case 'channel':
+      case 'channel': {
         // Covers Zalo OA, Facebook, WhatsApp (whatsapp_baileys) — all use
         // channel_conversations table via channel_connections join.
-        return chatbotChannelRepository.deleteChannelConversation(conversationId, userId);
+        // PLAN_GIAO_TK_TG_WA H3: kiểm tài khoản Telegram / WhatsApp được giao TRƯỚC khi xoá (403). Hội thoại không tồn tại →
+        // giữ hành vi cũ (câu xoá không khớp dòng nào). Câu xoá kiểm LẠI phạm vi ngay trong SQL.
+        const existing = await unifiedInboxRepository.getConversationById(userId, parseInt(conversationId, 10), 'channel');
+        if (existing) this._assertChannelConversationInScope('channel', existing, accessibleChannelRefs);
+        return chatbotChannelRepository.deleteChannelConversation(conversationId, userId, { accessibleChannelRefs });
+      }
       default:
         throw new Error('Unsupported conversation type');
     }

@@ -13,6 +13,9 @@ jest.unstable_mockModule('../../../config/database.js', () => ({
 const db = (await import('../../../config/database.js')).default;
 const { default: repo } = await import('../unifiedInbox.repository.js');
 
+/** Chủ / super admin: phạm vi Telegram / WhatsApp "thấy hết" (PLAN_GIAO_TK_TG_WA H3) — các ca này chỉ kiểm hành vi Zalo / bộ lọc khác. */
+const OWNER_CHANNELS = { telegram: null, whatsapp_baileys: null };
+
 beforeEach(() => {
   db.query.mockReset();
   db.query.mockResolvedValue({ rows: [] });
@@ -22,7 +25,7 @@ const ANY_SCOPE = /zp\.id_zalo_setting = ANY\(\$(\d+)::bigint\[\]\)/;
 
 describe('getConversations / getConversationsCount — nhánh Zalo lọc theo tài khoản được giao', () => {
   it('nhân viên: mảng id vào tham số (không nối chuỗi), CHỈ nhánh zalo_personal có điều kiện', async () => {
-    await repo.getConversations(1, { limit: 20, offset: 0, accessibleZaloAccountIds: [5, 9] });
+    await repo.getConversations(1, { limit: 20, offset: 0, accessibleZaloAccountIds: [5, 9], accessibleChannelRefs: OWNER_CHANNELS });
 
     const [sql, params] = db.query.mock.calls[0];
     const match = sql.match(ANY_SCOPE);
@@ -34,7 +37,7 @@ describe('getConversations / getConversationsCount — nhánh Zalo lọc theo t�
   });
 
   it('nhân viên chưa được giao gì ([]) → vẫn là điều kiện ANY với mảng rỗng (không thấy hội thoại Zalo nào), KHÔNG bỏ lọc', async () => {
-    await repo.getConversations(1, { limit: 20, offset: 0, accessibleZaloAccountIds: [] });
+    await repo.getConversations(1, { limit: 20, offset: 0, accessibleZaloAccountIds: [], accessibleChannelRefs: OWNER_CHANNELS });
 
     const [sql, params] = db.query.mock.calls[0];
     const match = sql.match(ANY_SCOPE);
@@ -43,7 +46,7 @@ describe('getConversations / getConversationsCount — nhánh Zalo lọc theo t�
   });
 
   it('CHỦ (null): SQL và tham số y như cũ — không có ANY, không tham số thừa', async () => {
-    await repo.getConversations(1, { limit: 20, offset: 0, accessibleZaloAccountIds: null });
+    await repo.getConversations(1, { limit: 20, offset: 0, accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS });
 
     const [sql, params] = db.query.mock.calls[0];
     expect(sql).not.toMatch(/ANY\(\$\d+::bigint\[\]\)/);
@@ -53,7 +56,7 @@ describe('getConversations / getConversationsCount — nhánh Zalo lọc theo t�
   it('HỎNG THÌ CHẶN: thiếu tham số / sai kiểu (undefined, chuỗi) → coi như [] chứ KHÔNG bỏ lọc', async () => {
     for (const bad of [undefined, 'null', 5, {}]) {
       db.query.mockClear();
-      await repo.getConversations(1, { limit: 20, offset: 0, accessibleZaloAccountIds: bad });
+      await repo.getConversations(1, { limit: 20, offset: 0, accessibleZaloAccountIds: bad, accessibleChannelRefs: OWNER_CHANNELS });
       const [sql, params] = db.query.mock.calls[0];
       const match = sql.match(ANY_SCOPE);
       expect(match).not.toBeNull();
@@ -65,7 +68,7 @@ describe('getConversations / getConversationsCount — nhánh Zalo lọc theo t�
   });
 
   it('id rác trong mảng bị loại, không phá câu lệnh', async () => {
-    await repo.getConversations(1, { limit: 20, offset: 0, accessibleZaloAccountIds: [5, '7', 'abc', -1, 0, 1.5, null, 5] });
+    await repo.getConversations(1, { limit: 20, offset: 0, accessibleZaloAccountIds: [5, '7', 'abc', -1, 0, 1.5, null, 5], accessibleChannelRefs: OWNER_CHANNELS });
 
     const [sql, params] = db.query.mock.calls[0];
     const match = sql.match(ANY_SCOPE);
@@ -73,7 +76,7 @@ describe('getConversations / getConversationsCount — nhánh Zalo lọc theo t�
   });
 
   it('zaloAccountId nhân viên gửi lên là AND với phạm vi được giao (id không được giao → rỗng, không lộ gì)', async () => {
-    await repo.getConversations(1, { limit: 20, offset: 0, zaloAccountId: '77', accessibleZaloAccountIds: [5] });
+    await repo.getConversations(1, { limit: 20, offset: 0, zaloAccountId: '77', accessibleZaloAccountIds: [5], accessibleChannelRefs: OWNER_CHANNELS });
 
     const [sql, params] = db.query.mock.calls[0];
     expect(sql).toMatch(/zp\.id_zalo_setting = \$4 AND zp\.id_zalo_setting = ANY\(\$5::bigint\[\]\)/);
@@ -82,7 +85,7 @@ describe('getConversations / getConversationsCount — nhánh Zalo lọc theo t�
 
   it('đếm tổng dùng CÙNG phạm vi với danh sách (không lệch nhau)', async () => {
     db.query.mockResolvedValue({ rows: [{ total: '2' }] });
-    await repo.getConversationsCount(1, { zaloAccountId: '5', accessibleZaloAccountIds: [5, 9] });
+    await repo.getConversationsCount(1, { zaloAccountId: '5', accessibleZaloAccountIds: [5, 9], accessibleChannelRefs: OWNER_CHANNELS });
 
     const [sql, params] = db.query.mock.calls[0];
     expect(sql).toMatch(/zp\.id_zalo_setting = \$2 AND zp\.id_zalo_setting = ANY\(\$3::bigint\[\]\)/);
@@ -92,7 +95,7 @@ describe('getConversations / getConversationsCount — nhánh Zalo lọc theo t�
 
   it('đếm tổng cho CHỦ không có điều kiện phạm vi', async () => {
     db.query.mockResolvedValue({ rows: [{ total: '2' }] });
-    await repo.getConversationsCount(1, { accessibleZaloAccountIds: null });
+    await repo.getConversationsCount(1, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS });
 
     const [sql, params] = db.query.mock.calls[0];
     expect(sql).not.toMatch(/ANY\(\$\d+::bigint\[\]\)/);
@@ -103,7 +106,7 @@ describe('getConversations / getConversationsCount — nhánh Zalo lọc theo t�
 describe('markAllAsRead — "đánh dấu tất cả đã đọc" không chạm tin của tài khoản chưa giao', () => {
   it('nhân viên: UPDATE bảng Zalo có ANY(phạm vi); UPDATE channel / web KHÔNG nhận tham số thừa', async () => {
     db.query.mockResolvedValue({ rowCount: 0 });
-    await repo.markAllAsRead(1, { accessibleZaloAccountIds: [5] });
+    await repo.markAllAsRead(1, { accessibleZaloAccountIds: [5], accessibleChannelRefs: OWNER_CHANNELS });
 
     const calls = db.query.mock.calls;
     expect(calls).toHaveLength(3);
@@ -118,14 +121,14 @@ describe('markAllAsRead — "đánh dấu tất cả đã đọc" không chạm 
 
   it('nhân viên + tab "web": nhánh Zalo bị khoá bởi gate nên không có UPDATE Zalo nào', async () => {
     db.query.mockResolvedValue({ rowCount: 0 });
-    await repo.markAllAsRead(1, { channel: 'web', accessibleZaloAccountIds: [5] });
+    await repo.markAllAsRead(1, { channel: 'web', accessibleZaloAccountIds: [5], accessibleChannelRefs: OWNER_CHANNELS });
 
     expect(db.query.mock.calls.some(([sql]) => /UPDATE zalo_personal_messages/.test(sql))).toBe(false);
   });
 
   it('CHỦ (null): UPDATE Zalo y như cũ, 2 tham số', async () => {
     db.query.mockResolvedValue({ rowCount: 0 });
-    await repo.markAllAsRead(1, { accessibleZaloAccountIds: null });
+    await repo.markAllAsRead(1, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS });
 
     const zaloCall = db.query.mock.calls.find(([sql]) => /UPDATE zalo_personal_messages/.test(sql));
     expect(zaloCall[0]).not.toMatch(/ANY\(\$\d+::bigint\[\]\)/);
@@ -148,7 +151,7 @@ describe('getUnreadConversationCount', () => {
   });
 
   it('nhân viên: chỉ đếm hội thoại của tài khoản được giao, AND với zaloAccountId đang chọn', async () => {
-    await repo.getUnreadConversationCount(1, { zaloAccountId: '5', accessibleZaloAccountIds: [5, 9] });
+    await repo.getUnreadConversationCount(1, { zaloAccountId: '5', accessibleZaloAccountIds: [5, 9], accessibleChannelRefs: OWNER_CHANNELS });
 
     const [sql, params] = db.query.mock.calls[0];
     expect(sql).toMatch(/zp\.id_zalo_setting = \$2 AND zp\.id_zalo_setting = ANY\(\$3::bigint\[\]\)/);
@@ -156,12 +159,12 @@ describe('getUnreadConversationCount', () => {
   });
 
   it('CHỦ (null): không điều kiện phạm vi; thiếu → chặn', async () => {
-    await repo.getUnreadConversationCount(1, { accessibleZaloAccountIds: null });
+    await repo.getUnreadConversationCount(1, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS });
     expect(db.query.mock.calls[0][0]).not.toMatch(/ANY\(\$\d+::bigint\[\]\)/);
     expect(db.query.mock.calls[0][1]).toEqual([1]);
 
     db.query.mockClear();
-    await repo.getUnreadConversationCount(1, {});
+    await repo.getUnreadConversationCount(1, { accessibleChannelRefs: OWNER_CHANNELS });
     expect(db.query.mock.calls[0][0]).toMatch(/zp\.id_zalo_setting = ANY\(\$2::bigint\[\]\)/);
     expect(db.query.mock.calls[0][1]).toEqual([1, []]);
   });
@@ -170,7 +173,7 @@ describe('getUnreadConversationCount', () => {
 describe('getAvailableChannels — tab Zalo cá nhân chỉ khi nhân viên được giao tài khoản', () => {
   it('nhân viên: điều kiện tồn tại tài khoản / hội thoại Zalo đều gắn ANY(phạm vi); tham số $2 là mảng', async () => {
     db.query.mockResolvedValue({ rows: [{ channel: 'zalo_personal' }] });
-    const channels = await repo.getAvailableChannels(1, { accessibleZaloAccountIds: [5] });
+    const channels = await repo.getAvailableChannels(1, { accessibleZaloAccountIds: [5], accessibleChannelRefs: OWNER_CHANNELS });
 
     const [sql, params] = db.query.mock.calls[0];
     expect(sql).toMatch(/FROM zalo_settings WHERE id_user = \$1 AND is_active = true AND id = ANY\(\$2::bigint\[\]\)/);
@@ -180,7 +183,7 @@ describe('getAvailableChannels — tab Zalo cá nhân chỉ khi nhân viên đư
   });
 
   it('CHỦ (null): câu lệnh và tham số y như cũ', async () => {
-    await repo.getAvailableChannels(1, { accessibleZaloAccountIds: null });
+    await repo.getAvailableChannels(1, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS });
 
     const [sql, params] = db.query.mock.calls[0];
     expect(sql).not.toMatch(/ANY\(\$2::bigint\[\]\)/);
@@ -188,7 +191,7 @@ describe('getAvailableChannels — tab Zalo cá nhân chỉ khi nhân viên đư
   });
 
   it('HỎNG THÌ CHẶN: thiếu phạm vi → ANY với mảng rỗng', async () => {
-    await repo.getAvailableChannels(1);
+    await repo.getAvailableChannels(1, { accessibleChannelRefs: OWNER_CHANNELS });
 
     const [sql, params] = db.query.mock.calls[0];
     expect(sql).toMatch(/id = ANY\(\$2::bigint\[\]\)/);
@@ -198,7 +201,7 @@ describe('getAvailableChannels — tab Zalo cá nhân chỉ khi nhân viên đư
 
 describe('Hộp gửi đi (outbox)', () => {
   it('danh sách + đếm: nhánh Zalo có zpc.id_zalo_setting = ANY(phạm vi) và tham số đánh số đúng sau bộ lọc tìm kiếm', async () => {
-    await repo.getOutboxMessages(1, { search: 'an', limit: 20, offset: 0, accessibleZaloAccountIds: [5] });
+    await repo.getOutboxMessages(1, { search: 'an', limit: 20, offset: 0, accessibleZaloAccountIds: [5], accessibleChannelRefs: OWNER_CHANNELS });
     const [sql, params] = db.query.mock.calls[0];
     const match = sql.match(/zpc\.id_zalo_setting = ANY\(\$(\d+)::bigint\[\]\)/);
     expect(match).not.toBeNull();
@@ -207,7 +210,7 @@ describe('Hộp gửi đi (outbox)', () => {
 
     db.query.mockClear();
     db.query.mockResolvedValue({ rows: [{ total: '0' }] });
-    await repo.getOutboxMessagesCount(1, { search: 'an', accessibleZaloAccountIds: [5] });
+    await repo.getOutboxMessagesCount(1, { search: 'an', accessibleZaloAccountIds: [5], accessibleChannelRefs: OWNER_CHANNELS });
     const [countSql, countParams] = db.query.mock.calls[0];
     const countMatch = countSql.match(/zpc\.id_zalo_setting = ANY\(\$(\d+)::bigint\[\]\)/);
     expect(countMatch).not.toBeNull();
@@ -215,31 +218,31 @@ describe('Hộp gửi đi (outbox)', () => {
   });
 
   it('CHỦ (null): không điều kiện phạm vi; thiếu → chặn', async () => {
-    await repo.getOutboxMessages(1, { limit: 20, offset: 0, accessibleZaloAccountIds: null });
+    await repo.getOutboxMessages(1, { limit: 20, offset: 0, accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS });
     expect(db.query.mock.calls[0][0]).not.toMatch(/ANY\(\$\d+::bigint\[\]\)/);
     expect(db.query.mock.calls[0][1]).toEqual([1, 20, 0]);
 
     db.query.mockClear();
-    await repo.getOutboxMessages(1, { limit: 20, offset: 0 });
+    await repo.getOutboxMessages(1, { limit: 20, offset: 0, accessibleChannelRefs: OWNER_CHANNELS });
     expect(db.query.mock.calls[0][0]).toMatch(/zpc\.id_zalo_setting = ANY\(\$4::bigint\[\]\)/);
     expect(db.query.mock.calls[0][1]).toEqual([1, 20, 0, []]);
   });
 
   it('thống kê theo kênh: tin gửi / đã đọc của Zalo chỉ tính tài khoản được giao; kênh khác giữ nguyên', async () => {
-    await repo.getOutboxStatsByChannel(1, { accessibleZaloAccountIds: [5] });
+    await repo.getOutboxStatsByChannel(1, { accessibleZaloAccountIds: [5], accessibleChannelRefs: OWNER_CHANNELS });
 
     const [sql, params] = db.query.mock.calls[0];
     expect(sql.match(/zpc\.id_zalo_setting = ANY\(\$2::bigint\[\]\)/g)).toHaveLength(2);
     expect(params).toEqual([1, [5]]);
 
     db.query.mockClear();
-    await repo.getOutboxStatsByChannel(1, { accessibleZaloAccountIds: null });
+    await repo.getOutboxStatsByChannel(1, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS });
     expect(db.query.mock.calls[0][0]).not.toMatch(/ANY\(\$2::bigint\[\]\)/);
     expect(db.query.mock.calls[0][1]).toEqual([1]);
   });
 
   it('chi tiết một tin gửi đi: truy vấn bảng Zalo có phạm vi; tin của tài khoản khác không khớp → rơi xuống "không tìm thấy"', async () => {
-    const found = await repo.getOutboxMessageById(1, 99, { accessibleZaloAccountIds: [5] });
+    const found = await repo.getOutboxMessageById(1, 99, { accessibleZaloAccountIds: [5], accessibleChannelRefs: OWNER_CHANNELS });
 
     expect(found).toBeNull();
     const zaloCall = db.query.mock.calls.find(([sql]) => /FROM zalo_personal_messages zpm/.test(sql));
@@ -247,7 +250,7 @@ describe('Hộp gửi đi (outbox)', () => {
     expect(zaloCall[1]).toEqual([99, 1, [5]]);
 
     db.query.mockClear();
-    await repo.getOutboxMessageById(1, 99, { accessibleZaloAccountIds: null });
+    await repo.getOutboxMessageById(1, 99, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS });
     const ownerZaloCall = db.query.mock.calls.find(([sql]) => /FROM zalo_personal_messages zpm/.test(sql));
     expect(ownerZaloCall[0]).not.toMatch(/ANY\(\$\d+::bigint\[\]\)/);
     expect(ownerZaloCall[1]).toEqual([99, 1]);

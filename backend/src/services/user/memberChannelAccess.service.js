@@ -178,6 +178,21 @@ export async function getAccessibleChannelAccountRefs(ctx, channel) {
 }
 
 /**
+ * Phạm vi CẢ HAI kênh một lần (Hộp thư, SSE): `{ telegram, whatsapp_baileys }`, mỗi kênh `null` = chủ / super admin thấy hết, mảng
+ * = nhân viên, lỗi → `[]` (hỏng thì chặn, không bao giờ `null`).
+ *
+ * @param {object} ctx `getWorkspaceContext(req.user)`
+ * @returns {Promise<{ telegram: string[]|null, whatsapp_baileys: string[]|null }>}
+ */
+export async function getAccessibleChannelScope(ctx) {
+  const [telegram, whatsapp] = await Promise.all([
+    getAccessibleChannelAccountRefs(ctx, TELEGRAM_CHANNEL),
+    getAccessibleChannelAccountRefs(ctx, WHATSAPP_BAILEYS_CHANNEL),
+  ]);
+  return { [TELEGRAM_CHANNEL]: telegram, [WHATSAPP_BAILEYS_CHANNEL]: whatsapp };
+}
+
+/**
  * Ném 403 `CHANNEL_ACCOUNT_NOT_ASSIGNED` nếu `ref` không nằm trong phạm vi. `null` (chủ / super admin) luôn qua; mọi giá trị
  * khác mảng (kể cả `undefined`) bị chặn.
  *

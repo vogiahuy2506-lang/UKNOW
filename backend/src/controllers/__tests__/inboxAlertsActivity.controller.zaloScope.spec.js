@@ -32,6 +32,7 @@ jest.unstable_mockModule('../../utils/auditContext.util.js', () => ({ getWorkspa
 jest.unstable_mockModule('../../utils/aiErrorPayload.util.js', () => ({ buildAiErrorPayload: () => ({}) }));
 jest.unstable_mockModule('../../services/user/memberChannelAccess.service.js', () => ({
   getAccessibleZaloAccountIds: (...a) => mockGetAccessible(...a),
+  getAccessibleChannelScope: async () => ({ telegram: ['7'], whatsapp_baileys: [] }),
 }));
 
 const { default: alertController } = await import('../chatbot/chatbotContactAlert.controller.js');
@@ -79,10 +80,10 @@ describe('Liên hệ khách để lại', () => {
 
   it('đánh dấu / bỏ đánh dấu đã liên hệ: phạm vi đi xuống repository; không khớp (tài khoản chưa giao) → 404 "không có quyền"', async () => {
     await call(alertController, 'markHandled', { user: employeeUser, params: { id: '3' } });
-    expect(alertRepo.markHandled).toHaveBeenCalledWith(3, OWNER, EMPLOYEE, undefined, { accessibleZaloAccountIds: [5] });
+    expect(alertRepo.markHandled).toHaveBeenCalledWith(3, OWNER, EMPLOYEE, undefined, { accessibleZaloAccountIds: [5], accessibleChannelRefs: { telegram: ['7'], whatsapp_baileys: [] } });
 
     await call(alertController, 'unmarkHandled', { user: employeeUser, params: { id: '3' } });
-    expect(alertRepo.unmarkHandled).toHaveBeenCalledWith(3, OWNER, undefined, { accessibleZaloAccountIds: [5] });
+    expect(alertRepo.unmarkHandled).toHaveBeenCalledWith(3, OWNER, undefined, { accessibleZaloAccountIds: [5], accessibleChannelRefs: { telegram: ['7'], whatsapp_baileys: [] } });
 
     alertRepo.markHandled.mockResolvedValue(null);
     alertRepo.unmarkHandled.mockResolvedValue(null);
@@ -96,7 +97,7 @@ describe('Liên hệ khách để lại', () => {
     mockGetAccessible.mockResolvedValue(null);
     await call(alertController, 'markHandled', { user: ownerUser, params: { id: '3' } });
 
-    expect(alertRepo.markHandled).toHaveBeenCalledWith(3, OWNER, OWNER, undefined, { accessibleZaloAccountIds: null });
+    expect(alertRepo.markHandled).toHaveBeenCalledWith(3, OWNER, OWNER, undefined, { accessibleZaloAccountIds: null, accessibleChannelRefs: { telegram: ['7'], whatsapp_baileys: [] } });
   });
 });
 

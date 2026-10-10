@@ -3,6 +3,8 @@
  *
  * Broadcasting real-time events to connected clients.
  */
+import { SCOPED_CHANNELS } from '../utils/channelAccessScope.util.js';
+
 const MAX_CLIENTS_PER_USER = 5;
 
 /**
@@ -19,8 +21,23 @@ export function isZaloPersonalSseEvent(data) {
 }
 
 /**
- * Kết nối này có được nhận sự kiện này không? Chỉ sự kiện Zalo cá nhân bị lọc theo việc giao tài khoản
- * (PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN G2); Telegram / WhatsApp / Zalo OA / web giữ nguyên.
+ * Sự kiện Telegram / WhatsApp: `scope.accessibleChannelRefs[channel] === null` → chủ / super admin nhận; mảng → nhân viên chỉ nhận khi
+ * `data.channelAccountRef` nằm trong mảng. HỎNG THÌ CHẶN: kết nối không có scope / thiếu khoá kênh / payload thiếu ref → KHÔNG nhận.
+ */
+function mayReceiveChannelEvent(res, data) {
+  const scope = res?.__sseScope;
+  if (!scope) return false;
+  const refs = scope.accessibleChannelRefs?.[data.channel];
+  if (refs === null) return true;
+  if (!Array.isArray(refs)) return false;
+  const ref = data?.channelAccountRef;
+  if (ref === null || ref === undefined || ref === '') return false;
+  return refs.map(String).includes(String(ref));
+}
+
+/**
+ * Kết nối này có được nhận sự kiện này không? Sự kiện Zalo cá nhân (G2) và Telegram / WhatsApp Baileys (H3) bị lọc theo việc giao
+ * tài khoản; Zalo OA / web giữ nguyên.
  *
  *  - `scope.accessibleZaloAccountIds === null` → chủ / super admin: nhận mọi sự kiện;
  *  - mảng → nhân viên: chỉ nhận khi `data.zaloAccountId` nằm trong mảng;
@@ -31,6 +48,8 @@ export function isZaloPersonalSseEvent(data) {
  * @returns {boolean}
  */
 export function clientMayReceive(res, data) {
+  // PLAN_GIAO_TK_TG_WA H3: sự kiện Telegram / WhatsApp (Baileys) lọc theo `data.channelAccountRef` (khoá tài khoản).
+  if (SCOPED_CHANNELS.includes(data?.channel)) return mayReceiveChannelEvent(res, data);
   if (!isZaloPersonalSseEvent(data)) return true;
   const scope = res?.__sseScope;
   if (!scope) return false;
@@ -54,7 +73,7 @@ class SSEService {
   /**
    * Add a client connection for a user. Evicts oldest if over max.
    *
-   * `scope` = `{ actorUserId, accessibleZaloAccountIds }` tính LÚC NỐI (route `/inbox/stream`): `null` = chủ / super admin
+   * `scope` = `{ actorUserId, accessibleZaloAccountIds, accessibleChannelRefs }` tính LÚC NỐI (route `/inbox/stream`): `null` = chủ / super admin
    * thấy mọi tài khoản Zalo, mảng = nhân viên chỉ thấy các tài khoản được giao. Đổi việc giao SAU lúc nối không tự áp
    * vào kết nối đang mở — chỗ đổi việc giao gọi `disconnectActor` để nhân viên nối lại với danh sách mới.
    * Thiếu `scope` → kết nối KHÔNG nhận sự kiện Zalo cá nhân (hỏng thì chặn).

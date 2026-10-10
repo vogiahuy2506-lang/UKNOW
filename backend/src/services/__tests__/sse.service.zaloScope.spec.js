@@ -103,14 +103,14 @@ describe('sseService — lọc sự kiện Zalo cá nhân theo tài khoản đư
     expect(assigned.write).toHaveBeenCalledTimes(1);
   });
 
-  it('Telegram / WhatsApp / Zalo OA / web giữ nguyên: mọi kết nối (kể cả nhân viên chưa được giao gì, kể cả không scope) vẫn nhận', () => {
+  it('Zalo OA / web / Facebook giữ nguyên: mọi kết nối (kể cả nhân viên chưa được giao gì, kể cả không scope) vẫn nhận', () => {
     const employee = makeRes();
     const noScope = makeRes();
     sseService.addClient(OWNER, employee, { actorUserId: 200, accessibleZaloAccountIds: [] });
     sseService.addClient(OWNER, noScope);
 
-    sseService.broadcast(OWNER, 'inbox:new_message', { conversationId: 9, type: 'channel', conversationType: 'channel', channel: 'telegram', message: 'hi' });
-    sseService.broadcast(OWNER, 'inbox:new_message', { conversationId: 10, type: 'channel', channel: 'whatsapp_baileys', message: 'hi' });
+    sseService.broadcast(OWNER, 'inbox:new_message', { conversationId: 9, type: 'channel', conversationType: 'channel', channel: 'zalo_oa', message: 'hi' });
+    sseService.broadcast(OWNER, 'inbox:new_message', { conversationId: 10, type: 'channel', channel: 'facebook', message: 'hi' });
     sseService.broadcast(OWNER, 'inbox:new_message', { conversationId: 11, type: 'webchat', channel: 'web', message: 'hi' });
     sseService.broadcast(OWNER, 'inbox:unread_change', { conversationId: 11, conversationType: 'webchat', change: 1 });
 
@@ -165,5 +165,78 @@ describe('sseService — lọc sự kiện Zalo cá nhân theo tài khoản đư
 
   it('disconnectActor: không có kết nối nào của chủ đó → 0, không ném lỗi', () => {
     expect(sseService.disconnectActor(999, 1)).toBe(0);
+  });
+});
+
+describe('sseService — lọc sự kiện Telegram / WhatsApp theo tài khoản được giao (PLAN_GIAO_TK_TG_WA H3)', () => {
+  const tgEvent = (ref) => ({ conversationId: 9, type: 'channel', conversationType: 'channel', channel: 'telegram', channelAccountRef: ref, message: 'hi' });
+  const waEvent = (ref) => ({ conversationId: 10, type: 'channel', conversationType: 'channel', channel: 'whatsapp_baileys', channelAccountRef: ref, message: 'hi' });
+  const scopeOf = (telegram, whatsapp) => ({ actorUserId: 200, accessibleZaloAccountIds: null, accessibleChannelRefs: { telegram, whatsapp_baileys: whatsapp } });
+
+  it('nhân viên chỉ nhận sự kiện của tài khoản được giao; chủ (null từng kênh) nhận hết', () => {
+    const employee = makeRes();
+    const owner = makeRes();
+    sseService.addClient(OWNER, employee, scopeOf(['7'], ['100-mot']));
+    sseService.addClient(OWNER, owner, scopeOf(null, null));
+
+    sseService.broadcast(OWNER, 'inbox:new_message', tgEvent('7'));
+    sseService.broadcast(OWNER, 'inbox:new_message', tgEvent('8'));
+    sseService.broadcast(OWNER, 'inbox:new_message', waEvent('100-mot'));
+    sseService.broadcast(OWNER, 'inbox:new_message', waEvent('100-hai'));
+
+    expect(employee.write).toHaveBeenCalledTimes(2);
+    expect(employee.writes.join('')).toContain('"channelAccountRef":"7"');
+    expect(employee.writes.join('')).toContain('"channelAccountRef":"100-mot"');
+    expect(owner.write).toHaveBeenCalledTimes(4);
+  });
+
+  it('id tài khoản Telegram dạng số trong payload vẫn khớp mảng chuỗi', () => {
+    const employee = makeRes();
+    sseService.addClient(OWNER, employee, scopeOf(['7'], []));
+    sseService.broadcast(OWNER, 'inbox:new_message', tgEvent(7));
+    expect(employee.write).toHaveBeenCalledTimes(1);
+  });
+
+  it('HỎNG THÌ CHẶN: nhân viên chưa giao gì ([]), payload thiếu ref, scope thiếu khoá kênh, kết nối không có scope → không nhận', () => {
+    const noAccounts = makeRes();
+    const assigned = makeRes();
+    const noScope = makeRes();
+    const zaloOnlyScope = makeRes();
+    const badScope = makeRes();
+    sseService.addClient(OWNER, noAccounts, scopeOf([], []));
+    sseService.addClient(OWNER, assigned, scopeOf(['7'], []));
+    sseService.addClient(OWNER, noScope, undefined);
+    sseService.addClient(OWNER, zaloOnlyScope, { actorUserId: 203, accessibleZaloAccountIds: null }); // bản scope cũ, chưa có kênh
+    sseService.addClient(OWNER, badScope, { actorUserId: 204, accessibleZaloAccountIds: null, accessibleChannelRefs: { telegram: 'all' } });
+
+    sseService.broadcast(OWNER, 'inbox:new_message', tgEvent('7'));
+    sseService.broadcast(OWNER, 'inbox:new_message', tgEvent(undefined));
+    sseService.broadcast(OWNER, 'inbox:new_message', tgEvent(null));
+    sseService.broadcast(OWNER, 'inbox:new_message', { conversationId: 1, channel: 'telegram', message: 'x' }); // không có khoá ref
+
+    expect(noAccounts.write).not.toHaveBeenCalled();
+    expect(noScope.write).not.toHaveBeenCalled();
+    expect(zaloOnlyScope.write).not.toHaveBeenCalled();
+    expect(badScope.write).not.toHaveBeenCalled();
+    expect(assigned.write).toHaveBeenCalledTimes(1); // chỉ lần có ref=7
+  });
+
+  it('phạm vi Zalo và phạm vi kênh độc lập: nhân viên không giao Zalo nào vẫn nhận Telegram được giao', () => {
+    const employee = makeRes();
+    sseService.addClient(OWNER, employee, { actorUserId: 200, accessibleZaloAccountIds: [], accessibleChannelRefs: { telegram: ['7'], whatsapp_baileys: [] } });
+    sseService.broadcast(OWNER, 'inbox:new_message', tgEvent('7'));
+    sseService.broadcast(OWNER, 'inbox:new_message', { conversationId: 1, type: 'zalo_personal', channel: 'zalo_personal', zaloAccountId: 5, message: 'z' });
+    expect(employee.write).toHaveBeenCalledTimes(1);
+  });
+
+  it('disconnectActor đóng kết nối của đúng nhân viên để nối lại với phạm vi mới (giao Telegram / WhatsApp đổi)', () => {
+    sseService._resetForTests();
+    const emp = makeRes();
+    const other = makeRes();
+    sseService.addClient(OWNER, emp, scopeOf(['7'], []));
+    sseService.addClient(OWNER, other, { ...scopeOf(['7'], []), actorUserId: 999 });
+    expect(sseService.disconnectActor(OWNER, 200)).toBe(1);
+    expect(emp.end).toHaveBeenCalled();
+    expect(other.end).not.toHaveBeenCalled();
   });
 });

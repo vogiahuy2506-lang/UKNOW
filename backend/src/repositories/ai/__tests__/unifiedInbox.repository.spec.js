@@ -7,6 +7,9 @@ jest.unstable_mockModule('../../../config/database.js', () => ({
 const db = (await import('../../../config/database.js')).default;
 const unifiedInboxRepository = (await import('../unifiedInbox.repository.js')).default;
 
+/** Chủ / super admin: phạm vi Telegram / WhatsApp "thấy hết" (PLAN_GIAO_TK_TG_WA H3) — các ca này chỉ kiểm hành vi Zalo / bộ lọc khác. */
+const OWNER_CHANNELS = { telegram: null, whatsapp_baileys: null };
+
 describe('unifiedInbox.repository conversation filters', () => {
   beforeEach(() => {
     db.query.mockReset();
@@ -14,7 +17,7 @@ describe('unifiedInbox.repository conversation filters', () => {
   });
 
   it('does not add status filter when status is omitted', async () => {
-    await unifiedInboxRepository.getConversations(1, { accessibleZaloAccountIds: null, limit: 20, offset: 0 });
+    await unifiedInboxRepository.getConversations(1, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS, limit: 20, offset: 0 });
 
     const [sql, params] = db.query.mock.calls[0];
     expect(sql).not.toMatch(/status\s*=\s*'active'/i);
@@ -23,7 +26,7 @@ describe('unifiedInbox.repository conversation filters', () => {
   });
 
   it('binds status=closed as a query parameter', async () => {
-    await unifiedInboxRepository.getConversations(1, { accessibleZaloAccountIds: null, status: 'closed', limit: 20, offset: 0 });
+    await unifiedInboxRepository.getConversations(1, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS, status: 'closed', limit: 20, offset: 0 });
 
     const [sql, params] = db.query.mock.calls[0];
     expect(sql).toMatch(/cc\.status = \$4/);
@@ -34,7 +37,7 @@ describe('unifiedInbox.repository conversation filters', () => {
   });
 
   it('binds date=today as a query parameter on last activity', async () => {
-    await unifiedInboxRepository.getConversations(1, { accessibleZaloAccountIds: null, date: 'today', limit: 20, offset: 0 });
+    await unifiedInboxRepository.getConversations(1, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS, date: 'today', limit: 20, offset: 0 });
 
     const [sql, params] = db.query.mock.calls[0];
     expect(sql).toMatch(/COALESCE\(cc\.last_message_at, cc\.started_at\) >= \$4/);
@@ -43,7 +46,7 @@ describe('unifiedInbox.repository conversation filters', () => {
   });
 
   it('ignores invalid status values', async () => {
-    await unifiedInboxRepository.getConversations(1, { accessibleZaloAccountIds: null, status: "'; DROP TABLE users; --", limit: 20, offset: 0 });
+    await unifiedInboxRepository.getConversations(1, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS, status: "'; DROP TABLE users; --", limit: 20, offset: 0 });
 
     const [sql, params] = db.query.mock.calls[0];
     expect(sql).not.toMatch(/DROP TABLE/i);
@@ -53,7 +56,7 @@ describe('unifiedInbox.repository conversation filters', () => {
   it('applies status and date filters in getConversationsCount', async () => {
     db.query.mockResolvedValue({ rows: [{ total: '3' }] });
 
-    const total = await unifiedInboxRepository.getConversationsCount(7, { accessibleZaloAccountIds: null,
+    const total = await unifiedInboxRepository.getConversationsCount(7, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS,
       status: 'active',
       date: 'week',
     });
@@ -68,7 +71,7 @@ describe('unifiedInbox.repository conversation filters', () => {
   });
 
   it('binds search on visitor_name and visitor_info per table alias (gấp dấu tiếng Việt, H-33)', async () => {
-    await unifiedInboxRepository.getConversations(1, { accessibleZaloAccountIds: null, search: 'nguyen', limit: 20, offset: 0 });
+    await unifiedInboxRepository.getConversations(1, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS, search: 'nguyen', limit: 20, offset: 0 });
 
     const [sql, params] = db.query.mock.calls[0];
     expect(sql).toMatch(/translate\(lower\(cc\.visitor_name\), '[^']+', '[^']+'\) LIKE \$4/);
@@ -81,7 +84,7 @@ describe('unifiedInbox.repository conversation filters', () => {
   });
 
   it('gates zalo/web branches when filtering conversations by zalo_oa', async () => {
-    await unifiedInboxRepository.getConversations(1, { accessibleZaloAccountIds: null, channel: 'zalo_oa', limit: 20, offset: 0 });
+    await unifiedInboxRepository.getConversations(1, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS, channel: 'zalo_oa', limit: 20, offset: 0 });
 
     const [sql, params] = db.query.mock.calls[0];
     const channelBranch = sql.split('UNION ALL')[0];
@@ -97,7 +100,7 @@ describe('unifiedInbox.repository conversation filters', () => {
   // P1 (PLAN_TG_WA_DAY_DU): Telegram vào Hộp thư qua channel_conversations — tab Telegram phải đi nhánh channel,
   // không bị `AND 1=0` (review 29/09: đột biến bỏ 'telegram' khỏi CHANNEL_CONNECTION_TYPES lọt qua mọi test).
   it('gates zalo/web branches when filtering conversations by telegram (channel_connections type)', async () => {
-    await unifiedInboxRepository.getConversations(1, { accessibleZaloAccountIds: null, channel: 'telegram', limit: 20, offset: 0 });
+    await unifiedInboxRepository.getConversations(1, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS, channel: 'telegram', limit: 20, offset: 0 });
 
     const [sql, params] = db.query.mock.calls[0];
     const channelBranch = sql.split('UNION ALL')[0];
@@ -112,7 +115,7 @@ describe('unifiedInbox.repository conversation filters', () => {
   });
 
   it('gates channel/web branches when filtering conversations by zalo_personal', async () => {
-    await unifiedInboxRepository.getConversations(1, { accessibleZaloAccountIds: null, channel: 'zalo_personal', limit: 20, offset: 0 });
+    await unifiedInboxRepository.getConversations(1, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS, channel: 'zalo_personal', limit: 20, offset: 0 });
 
     const [sql, params] = db.query.mock.calls[0];
     const channelBranch = sql.split('UNION ALL')[0];
@@ -145,7 +148,7 @@ describe('unifiedInbox.repository conversation filters', () => {
       }],
     });
 
-    const rows = await unifiedInboxRepository.getConversations(1, { accessibleZaloAccountIds: null, limit: 20, offset: 0 });
+    const rows = await unifiedInboxRepository.getConversations(1, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS, limit: 20, offset: 0 });
 
     expect(rows[0].visitorName).toBe('Team Marketing');
     expect(rows[0].groupName).toBe('Team Marketing');
@@ -153,7 +156,7 @@ describe('unifiedInbox.repository conversation filters', () => {
   });
 
   it('gates channel/zalo branches when filtering conversations by web', async () => {
-    await unifiedInboxRepository.getConversations(1, { accessibleZaloAccountIds: null, channel: 'web', limit: 20, offset: 0 });
+    await unifiedInboxRepository.getConversations(1, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS, channel: 'web', limit: 20, offset: 0 });
 
     const [sql] = db.query.mock.calls[0];
     const channelBranch = sql.split('UNION ALL')[0];
@@ -168,7 +171,7 @@ describe('unifiedInbox.repository conversation filters', () => {
   it('applies channel gates in getConversationsCount for facebook', async () => {
     db.query.mockResolvedValue({ rows: [{ total: '4' }] });
 
-    const total = await unifiedInboxRepository.getConversationsCount(2, { accessibleZaloAccountIds: null, channel: 'facebook' });
+    const total = await unifiedInboxRepository.getConversationsCount(2, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS, channel: 'facebook' });
 
     expect(total).toBe(4);
     const [sql, params] = db.query.mock.calls[0];
@@ -185,7 +188,7 @@ describe('unifiedInbox.repository outbox search filters', () => {
   });
 
   it('binds outbox search on conversation and message aliases per branch in getOutboxMessages', async () => {
-    await unifiedInboxRepository.getOutboxMessages(1, { accessibleZaloAccountIds: null, search: 'hello', limit: 20, offset: 0 });
+    await unifiedInboxRepository.getOutboxMessages(1, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS, search: 'hello', limit: 20, offset: 0 });
 
     const [sql, params] = db.query.mock.calls[0];
     expect(sql).toMatch(/cc\.visitor_name ILIKE \$4/);
@@ -202,7 +205,7 @@ describe('unifiedInbox.repository outbox search filters', () => {
   it('binds outbox search per branch in getOutboxMessagesCount', async () => {
     db.query.mockResolvedValue({ rows: [{ total: '5' }] });
 
-    const total = await unifiedInboxRepository.getOutboxMessagesCount(3, { accessibleZaloAccountIds: null, search: 'xin chao' });
+    const total = await unifiedInboxRepository.getOutboxMessagesCount(3, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS, search: 'xin chao' });
 
     expect(total).toBe(5);
     const [sql, params] = db.query.mock.calls[0];
@@ -220,7 +223,7 @@ describe('unifiedInbox.repository outbox search filters', () => {
     const startDate = '2024-01-01';
     const endDate = '2024-12-31';
 
-    await unifiedInboxRepository.getOutboxMessages(1, { accessibleZaloAccountIds: null,
+    await unifiedInboxRepository.getOutboxMessages(1, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS,
       startDate,
       endDate,
       limit: 20,
@@ -246,7 +249,7 @@ describe('unifiedInbox.repository outbox search filters', () => {
     db.query.mockResolvedValue({ rows: [{ total: '2' }] });
     const startDate = '2024-06-01';
 
-    const total = await unifiedInboxRepository.getOutboxMessagesCount(5, { accessibleZaloAccountIds: null, startDate });
+    const total = await unifiedInboxRepository.getOutboxMessagesCount(5, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS, startDate });
 
     expect(total).toBe(2);
     const [sql, params] = db.query.mock.calls[0];
@@ -256,7 +259,7 @@ describe('unifiedInbox.repository outbox search filters', () => {
   });
 
   it('gates zalo/web branches when channel is zalo_personal', async () => {
-    await unifiedInboxRepository.getOutboxMessages(1, { accessibleZaloAccountIds: null,
+    await unifiedInboxRepository.getOutboxMessages(1, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS,
       channel: 'zalo_personal',
       limit: 20,
       offset: 0,
@@ -272,7 +275,7 @@ describe('unifiedInbox.repository outbox search filters', () => {
   });
 
   it('gates zalo/web branches when channel is zalo_oa', async () => {
-    await unifiedInboxRepository.getOutboxMessages(1, { accessibleZaloAccountIds: null,
+    await unifiedInboxRepository.getOutboxMessages(1, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS,
       channel: 'zalo_oa',
       limit: 20,
       offset: 0,
@@ -292,7 +295,7 @@ describe('unifiedInbox.repository outbox search filters', () => {
   it('applies channel gates in getOutboxMessagesCount for zalo_oa', async () => {
     db.query.mockResolvedValue({ rows: [{ total: '1' }] });
 
-    await unifiedInboxRepository.getOutboxMessagesCount(9, { accessibleZaloAccountIds: null, channel: 'zalo_oa' });
+    await unifiedInboxRepository.getOutboxMessagesCount(9, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS, channel: 'zalo_oa' });
 
     const [sql, params] = db.query.mock.calls[0];
     expect(sql).toMatch(/ch\.channel = \$2/);

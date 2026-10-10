@@ -12,6 +12,9 @@ jest.unstable_mockModule('../../../config/database.js', () => ({
 const db = (await import('../../../config/database.js')).default;
 const { default: repo, dateRangeStart } = await import('../unifiedInbox.repository.js');
 
+/** Chủ / super admin: phạm vi Telegram / WhatsApp "thấy hết" (PLAN_GIAO_TK_TG_WA H3) — các ca này chỉ kiểm hành vi Zalo / bộ lọc khác. */
+const OWNER_CHANNELS = { telegram: null, whatsapp_baileys: null };
+
 beforeEach(() => {
   db.query.mockReset();
   db.query.mockResolvedValue({ rows: [{ total_unread: '29' }] });
@@ -19,7 +22,7 @@ beforeEach(() => {
 
 describe('getUnreadConversationCount (H-03)', () => {
   it('đếm hội thoại bằng EXISTS tin khách chưa đọc, KHÔNG đếm số tin', async () => {
-    const total = await repo.getUnreadConversationCount(1, { accessibleZaloAccountIds: null });
+    const total = await repo.getUnreadConversationCount(1, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS });
 
     expect(total).toBe(29);
     const [sql, params] = db.query.mock.calls[0];
@@ -30,7 +33,7 @@ describe('getUnreadConversationCount (H-03)', () => {
   });
 
   it('không tính nhóm Zalo và chỉ tính tài khoản Zalo đang kết nối (C1, C6)', async () => {
-    await repo.getUnreadConversationCount(1, { accessibleZaloAccountIds: null });
+    await repo.getUnreadConversationCount(1, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS });
 
     const [sql] = db.query.mock.calls[0];
     expect(sql).toMatch(/zs\.status = 'connected'/);
@@ -40,7 +43,7 @@ describe('getUnreadConversationCount (H-03)', () => {
   });
 
   it('theo phạm vi: tab kênh + tài khoản Zalo đi vào tham số, không nối chuỗi', async () => {
-    await repo.getUnreadConversationCount(7, { accessibleZaloAccountIds: null, channel: 'zalo_personal', zaloAccountId: '103' });
+    await repo.getUnreadConversationCount(7, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS, channel: 'zalo_personal', zaloAccountId: '103' });
 
     const [sql, params] = db.query.mock.calls[0];
     expect(sql).toMatch(/zp\.id_zalo_setting = \$2/);
@@ -50,14 +53,14 @@ describe('getUnreadConversationCount (H-03)', () => {
   });
 
   it('tab Web chat: chỉ nhánh web được tính', async () => {
-    await repo.getUnreadConversationCount(7, { accessibleZaloAccountIds: null, channel: 'web' });
+    await repo.getUnreadConversationCount(7, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS, channel: 'web' });
 
     const [sql] = db.query.mock.calls[0];
     expect(sql.match(/AND 1=0/g)?.length).toBe(2);
   });
 
   it('tab Telegram: nhánh channel lọc theo ch.channel = $2 (tham số)', async () => {
-    await repo.getUnreadConversationCount(7, { accessibleZaloAccountIds: null, channel: 'telegram' });
+    await repo.getUnreadConversationCount(7, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS, channel: 'telegram' });
 
     const [sql, params] = db.query.mock.calls[0];
     expect(sql).toMatch(/ch\.channel = \$2/);
@@ -65,7 +68,7 @@ describe('getUnreadConversationCount (H-03)', () => {
   });
 
   it('zaloAccountId rác không phá câu lệnh', async () => {
-    await repo.getUnreadConversationCount(7, { accessibleZaloAccountIds: null, zaloAccountId: "1; DROP TABLE users" });
+    await repo.getUnreadConversationCount(7, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS, zaloAccountId: "1; DROP TABLE users" });
 
     const [sql, params] = db.query.mock.calls[0];
     expect(sql).not.toMatch(/DROP TABLE/);

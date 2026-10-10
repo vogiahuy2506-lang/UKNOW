@@ -136,6 +136,8 @@ export async function ensureTelegramInboxConversation({
       id_channel: row.id_channel,
       id_user: row.id_user ?? account.id_user,
       visitor_name: row.visitor_name || displayName || null,
+      // PLAN_GIAO_TK_TG_WA H3: SSE gắn `channelAccountRef` = khoá tài khoản để lọc theo việc giao.
+      channel_external_id: String(account.id),
     };
   }
 
@@ -156,12 +158,18 @@ export async function ensureTelegramInboxConversation({
         carryPause ? (legacyPause.ai_paused_at || null) : null,
       ]
     );
-    return created[0];
+    return { ...created[0], channel_external_id: String(account.id) };
   } catch (err) {
     if (err?.code !== '23505') throw err;
     const { rows } = await select();
     if (rows[0]) {
-      return { id: rows[0].id, id_channel: rows[0].id_channel, id_user: account.id_user, visitor_name: rows[0].visitor_name };
+      return {
+        id: rows[0].id,
+        id_channel: rows[0].id_channel,
+        id_user: account.id_user,
+        visitor_name: rows[0].visitor_name,
+        channel_external_id: String(account.id),
+      };
     }
     throw err;
   }
@@ -170,7 +178,7 @@ export async function ensureTelegramInboxConversation({
 /** Tìm (KHÔNG tạo) hội thoại Hộp thư của (tài khoản, chat). */
 export async function findTelegramInboxConversation(account, chatId) {
   const { rows } = await db.query(
-    `SELECT cc.id, cc.id_channel, cc.id_user, cc.visitor_name
+    `SELECT cc.id, cc.id_channel, cc.id_user, cc.visitor_name, ch.external_channel_id AS channel_external_id
        FROM channel_conversations cc
        JOIN channel_connections ch ON ch.id = cc.id_channel
       WHERE cc.id_user = $1 AND cc.channel = 'telegram'
@@ -232,6 +240,8 @@ export function broadcastTelegramInbox({ ownerUserId, conversation, role, messag
       conversationType: 'channel',
       type: 'channel',
       channel: TELEGRAM_INBOX_CHANNEL,
+      // PLAN_GIAO_TK_TG_WA H3: khoá tài khoản (telegram_accounts.id) để SSE chỉ gửi cho nhân viên được giao tài khoản này.
+      channelAccountRef: conversation?.channel_external_id != null ? String(conversation.channel_external_id) : null,
       message,
       messageId,
       senderId,

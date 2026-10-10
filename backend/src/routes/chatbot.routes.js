@@ -21,7 +21,7 @@ import { sseLimiter, uploadLimiter } from '../middleware/rateLimiter.middleware.
 import sseService from '../services/sse.service.js';
 import { consumeSseTicket } from '../services/sseTicket.service.js';
 import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
-import { getAccessibleZaloAccountIds } from '../services/user/memberChannelAccess.service.js';
+import { getAccessibleChannelScope, getAccessibleZaloAccountIds } from '../services/user/memberChannelAccess.service.js';
 import multer from 'multer';
 import { MAX_UPLOAD_FILE_BYTES } from '../utils/uploadLimits.util.js';
 import { storageCapacityGuard } from '../middleware/storageCapacity.middleware.js';
@@ -131,10 +131,16 @@ router.get('/inbox/stream', attachSseUserIdForRateLimit, sseLimiter, async (req,
     sseScope = {
       actorUserId: sseCtx.actorUserId,
       accessibleZaloAccountIds: await getAccessibleZaloAccountIds(sseCtx),
+      // H3: phạm vi Telegram / WhatsApp (mỗi kênh null = nhận hết, mảng = chỉ tài khoản được giao, lỗi đọc → []).
+      accessibleChannelRefs: await getAccessibleChannelScope(sseCtx),
     };
   } catch (err) {
     console.error('[SSE] Không tính được phạm vi tài khoản Zalo — nối nhưng không nhận sự kiện Zalo cá nhân:', err.message);
-    sseScope = { actorUserId: req.user?.id ?? null, accessibleZaloAccountIds: [] };
+    sseScope = {
+      actorUserId: req.user?.id ?? null,
+      accessibleZaloAccountIds: [],
+      accessibleChannelRefs: { telegram: [], whatsapp_baileys: [] },
+    };
   }
   // Khách đã bỏ kết nối trong lúc chờ đọc bảng giao: chưa đăng ký `close` nên đừng thêm vào bảng client (sẽ mồ côi).
   if (res.destroyed || req.socket?.destroyed) return;

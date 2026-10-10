@@ -489,6 +489,8 @@ async function handleOwnerOutgoing({ sessionKey, msg, type }) {
       conversationType: 'channel',
       type: 'channel',
       channel: 'whatsapp_baileys',
+      // PLAN_GIAO_TK_TG_WA H3: khoá phiên để SSE chỉ gửi cho nhân viên được giao phiên này.
+      channelAccountRef: sessionKey,
       message: text,
       senderName: null,
       visitorName: conv.visitor_name || null,
@@ -712,6 +714,7 @@ async function processIncomingMessage({ sessionKey, msg, type }) {
           conversationType: 'channel',
           type: 'channel',
           channel: 'whatsapp_baileys',
+          channelAccountRef: sessionKey, // H3: lọc SSE theo việc giao
           message: inboundContent,
           ...(media ? { messageType: inboundMessageType, attachments: presentedAttachments } : {}),
           senderId: externalId,

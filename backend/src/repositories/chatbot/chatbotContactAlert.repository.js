@@ -1,5 +1,6 @@
 import db from '../../config/database.js';
 import { normalizeZaloAccessScope } from '../../utils/zaloAccessScope.util.js';
+import { pushChannelAccessCondition } from '../../utils/channelAccessScope.util.js';
 
 class ChatbotContactAlertRepository {
   /**
@@ -323,7 +324,7 @@ class ChatbotContactAlertRepository {
    * @param {object} [queryable=db]
    * @returns {Promise<{ items: Array<object>, total: number, openCount: number }>}
    */
-  async listForOwner(idUser, { status = 'open', channel = null, accountId = null, contactType = null, limit = 50, offset = 0, accessibleZaloAccountIds } = {}, queryable = db) {
+  async listForOwner(idUser, { status = 'open', channel = null, accountId = null, contactType = null, limit = 50, offset = 0, accessibleZaloAccountIds, accessibleChannelRefs } = {}, queryable = db) {
     const safeLimit = Math.max(1, Math.min(Number(limit) || 50, 100));
     const safeOffset = Math.max(0, Number(offset) || 0);
 
@@ -372,6 +373,13 @@ class ChatbotContactAlertRepository {
       conditions.push(`(a.last_source <> 'zalo_personal' OR zc.id_zalo_setting = ANY($${pIndex}::bigint[]))`);
       params.push(zaloScope);
       pIndex += 1;
+    }
+    // PLAN_GIAO_TK_TG_WA H3: liên hệ khách để lại qua Telegram / WhatsApp chỉ hiện cho nhân viên được giao đúng tài khoản đó. Hội
+    // thoại đã bị xoá (conn NULL) cũng không hiện cho nhân viên — không còn biết nó thuộc tài khoản nào. Chủ → không lọc.
+    const channelCondition = pushChannelAccessCondition(accessibleChannelRefs, 'conn', params);
+    if (channelCondition) {
+      conditions.push(`(a.last_source <> 'channel' OR (conn.id IS NOT NULL AND ${channelCondition}))`);
+      pIndex = params.length + 1;
     }
 
     const whereClause = `WHERE ${conditions.join(' AND ')}`;
@@ -446,9 +454,9 @@ class ChatbotContactAlertRepository {
    *   được giao (null = chủ / super admin; thiếu = chặn liên hệ Zalo cá nhân)
    * @returns {Promise<object|null>}
    */
-  async markHandled(id, idUser, handledBy = null, queryable = db, { accessibleZaloAccountIds } = {}) {
+  async markHandled(id, idUser, handledBy = null, queryable = db, { accessibleZaloAccountIds, accessibleChannelRefs } = {}) {
     const params = [id, idUser, handledBy];
-    const scopeSql = this._zaloAlertScopeSql(accessibleZaloAccountIds, params);
+    const scopeSql = `${this._zaloAlertScopeSql(accessibleZaloAccountIds, params)} ${this._channelAlertScopeSql(accessibleChannelRefs, params)}`;
     const { rows } = await queryable.query(
       `UPDATE chatbot_contact_alerts
        SET handled_at = NOW(),
@@ -480,6 +488,24 @@ class ChatbotContactAlertRepository {
   }
 
   /**
+   * Điều kiện nhân viên chỉ chạm được liên hệ khách để lại qua Telegram / WhatsApp của tài khoản được giao (PLAN_GIAO_TK_TG_WA H3),
+   * cho câu UPDATE theo id. Liên hệ nguồn khác (web, Zalo, Zalo OA...) không bị lọc ở đây. Chủ (cả hai kênh null) → ''.
+   * @param {object|undefined} accessibleChannelRefs `{ telegram, whatsapp_baileys }`; thiếu → chặn
+   * @param {unknown[]} params mảng tham số đang dựng
+   * @returns {string}
+   */
+  _channelAlertScopeSql(accessibleChannelRefs, params) {
+    const condition = pushChannelAccessCondition(accessibleChannelRefs, 'conn2', params);
+    if (!condition) return '';
+    return `AND (last_source <> 'channel' OR EXISTS (
+        SELECT 1 FROM channel_conversations cc2
+        JOIN channel_connections conn2 ON conn2.id = cc2.id_channel
+        WHERE cc2.id = chatbot_contact_alerts.last_conversation_id
+          AND ${condition}
+      ))`;
+  }
+
+  /**
    * Bỏ đánh dấu đã liên hệ (quay lại trạng thái chưa xử lý)
    * @param {number} id
    * @param {number} idUser
@@ -487,9 +513,9 @@ class ChatbotContactAlertRepository {
    * @param {{ accessibleZaloAccountIds?: number[]|null }} [scope] xem markHandled
    * @returns {Promise<object|null>}
    */
-  async unmarkHandled(id, idUser, queryable = db, { accessibleZaloAccountIds } = {}) {
+  async unmarkHandled(id, idUser, queryable = db, { accessibleZaloAccountIds, accessibleChannelRefs } = {}) {
     const params = [id, idUser];
-    const scopeSql = this._zaloAlertScopeSql(accessibleZaloAccountIds, params);
+    const scopeSql = `${this._zaloAlertScopeSql(accessibleZaloAccountIds, params)} ${this._channelAlertScopeSql(accessibleChannelRefs, params)}`;
     const { rows } = await queryable.query(
       `UPDATE chatbot_contact_alerts
        SET handled_at = NULL,

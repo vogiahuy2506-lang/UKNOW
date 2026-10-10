@@ -2,7 +2,7 @@ import chatbotContactAlertRepository from '../../repositories/chatbot/chatbotCon
 import chatbotDigestRepository from '../../repositories/chatbot/chatbotDigest.repository.js';
 import { resolveWorkspaceOwnerId } from '../../services/storage/storageQuota.service.js';
 import { getWorkspaceContext } from '../../utils/workspaceContext.util.js';
-import { getAccessibleZaloAccountIds } from '../../services/user/memberChannelAccess.service.js';
+import { getAccessibleChannelScope, getAccessibleZaloAccountIds } from '../../services/user/memberChannelAccess.service.js';
 
 class ChatbotContactAlertController {
   /**
@@ -14,6 +14,8 @@ class ChatbotContactAlertController {
       const { status = 'open', limit = 50, offset = 0, channel, accountId, contactType } = req.query;
       // G2: nhân viên chỉ thấy liên hệ khách để lại của tài khoản Zalo cá nhân được giao (null = chủ / super admin).
       const accessibleZaloAccountIds = await getAccessibleZaloAccountIds(getWorkspaceContext(req.user));
+      // H3: cùng nguyên tắc cho liên hệ khách để lại qua Telegram / WhatsApp (null từng kênh = chủ / super admin).
+      const accessibleChannelRefs = await getAccessibleChannelScope(getWorkspaceContext(req.user));
       const data = await chatbotContactAlertRepository.listForOwner(userId, {
         status: String(status).trim(),
         channel: channel ? String(channel).trim() : null,
@@ -22,6 +24,7 @@ class ChatbotContactAlertController {
         limit: Number(limit) || 50,
         offset: Number(offset) || 0,
         accessibleZaloAccountIds,
+        accessibleChannelRefs,
       });
       return res.json({ success: true, data });
     } catch (err) {
@@ -45,7 +48,8 @@ class ChatbotContactAlertController {
       }
       const handledBy = req.user?.id || null;
       const accessibleZaloAccountIds = await getAccessibleZaloAccountIds(getWorkspaceContext(req.user));
-      const alert = await chatbotContactAlertRepository.markHandled(id, userId, handledBy, undefined, { accessibleZaloAccountIds });
+      const accessibleChannelRefs = await getAccessibleChannelScope(getWorkspaceContext(req.user));
+      const alert = await chatbotContactAlertRepository.markHandled(id, userId, handledBy, undefined, { accessibleZaloAccountIds, accessibleChannelRefs });
       if (!alert) {
         return res.status(404).json({ success: false, message: 'Không tìm thấy liên hệ hoặc không có quyền' });
       }
@@ -70,7 +74,8 @@ class ChatbotContactAlertController {
         return res.status(400).json({ success: false, message: 'ID không hợp lệ' });
       }
       const accessibleZaloAccountIds = await getAccessibleZaloAccountIds(getWorkspaceContext(req.user));
-      const alert = await chatbotContactAlertRepository.unmarkHandled(id, userId, undefined, { accessibleZaloAccountIds });
+      const accessibleChannelRefs = await getAccessibleChannelScope(getWorkspaceContext(req.user));
+      const alert = await chatbotContactAlertRepository.unmarkHandled(id, userId, undefined, { accessibleZaloAccountIds, accessibleChannelRefs });
       if (!alert) {
         return res.status(404).json({ success: false, message: 'Không tìm thấy liên hệ hoặc không có quyền' });
       }

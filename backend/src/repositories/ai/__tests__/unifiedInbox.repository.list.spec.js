@@ -12,13 +12,16 @@ jest.unstable_mockModule('../../../config/database.js', () => ({
 const db = (await import('../../../config/database.js')).default;
 const repo = (await import('../unifiedInbox.repository.js')).default;
 
+/** Chủ / super admin: phạm vi Telegram / WhatsApp "thấy hết" (PLAN_GIAO_TK_TG_WA H3) — các ca này chỉ kiểm hành vi Zalo / bộ lọc khác. */
+const OWNER_CHANNELS = { telegram: null, whatsapp_baileys: null };
+
 beforeEach(() => {
   db.query.mockReset();
   db.query.mockResolvedValue({ rows: [] });
 });
 
 const sqlOf = async (filters = {}) => {
-  await repo.getConversations(1, { accessibleZaloAccountIds: null, limit: 20, offset: 0, ...filters });
+  await repo.getConversations(1, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS, limit: 20, offset: 0, ...filters });
   return db.query.mock.calls[0];
 };
 
@@ -68,7 +71,7 @@ describe('getConversations — chọn trang trước (H-06)', () => {
       }],
     });
 
-    const [row] = await repo.getConversations(1, { accessibleZaloAccountIds: null, limit: 20, offset: 0 });
+    const [row] = await repo.getConversations(1, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS, limit: 20, offset: 0 });
 
     expect(row).toMatchObject({
       lastMessageRawType: 'chat.photo',
@@ -111,7 +114,7 @@ describe('getConversations — chip lọc phía server (H-13, C1)', () => {
   it('getConversationsCount áp cùng bộ lọc (tổng khớp danh sách)', async () => {
     db.query.mockResolvedValue({ rows: [{ total: '7' }] });
 
-    const total = await repo.getConversationsCount(1, { accessibleZaloAccountIds: null, kind: 'personal', unreadOnly: true });
+    const total = await repo.getConversationsCount(1, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS, kind: 'personal', unreadOnly: true });
 
     expect(total).toBe(7);
     const [sql] = db.query.mock.calls[0];
@@ -143,7 +146,7 @@ describe('getAvailableChannels (H-12)', () => {
       rows: [{ channel: 'telegram' }, { channel: 'facebook' }, { channel: 'zalo_personal' }, { channel: 'web' }, { channel: 'x' }],
     });
 
-    const channels = await repo.getAvailableChannels(1, { accessibleZaloAccountIds: null });
+    const channels = await repo.getAvailableChannels(1, { accessibleZaloAccountIds: null, accessibleChannelRefs: OWNER_CHANNELS });
 
     expect(channels).toEqual(['web', 'zalo_personal', 'telegram']);
     const [sql, params] = db.query.mock.calls[0];

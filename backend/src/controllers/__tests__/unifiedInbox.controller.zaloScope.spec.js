@@ -22,6 +22,7 @@ const svc = {
   deleteConversation: jest.fn(),
 };
 const mockGetAccessible = jest.fn();
+const mockGetChannelScope = jest.fn();
 const mockLogWorkspace = jest.fn();
 
 jest.unstable_mockModule('../../services/chatbot/unifiedInbox.service.js', () => ({ default: svc }));
@@ -45,7 +46,9 @@ jest.unstable_mockModule('../../services/quota/sendQuotaKey.service.js', () => (
 jest.unstable_mockModule('../../services/sseTicket.service.js', () => ({ issueSseTicket: jest.fn() }));
 jest.unstable_mockModule('../../services/user/memberChannelAccess.service.js', () => ({
   getAccessibleZaloAccountIds: (...args) => mockGetAccessible(...args),
+  getAccessibleChannelScope: (...args) => mockGetChannelScope(...args),
   isZaloAccountNotAssignedError: (error) => error?.code === 'ZALO_ACCOUNT_NOT_ASSIGNED',
+  isChannelAccountNotAssignedError: (error) => error?.code === 'CHANNEL_ACCOUNT_NOT_ASSIGNED',
 }));
 
 const { default: controller } = await import('../unifiedInbox.controller.js');
@@ -83,6 +86,7 @@ const notAssignedError = () => Object.assign(new Error('Tài khoản Zalo này c
 beforeEach(() => {
   jest.clearAllMocks();
   mockGetAccessible.mockResolvedValue([5]);
+  mockGetChannelScope.mockResolvedValue({ telegram: ['7'], whatsapp_baileys: [] });
   for (const fn of Object.values(svc)) fn.mockResolvedValue({ conversations: [], messages: [], hasMore: false, messageId: 1, sendStatus: 'sent' });
 });
 
@@ -185,8 +189,35 @@ describe('controller Hộp thư — phạm vi tài khoản Zalo được giao', 
         expect(scopeOf()).toBeNull();
       });
 
+      // PLAN_GIAO_TK_TG_WA H3: phạm vi Telegram / WhatsApp đi CÙNG chỗ với phạm vi Zalo xuống service.
+      it('H3: truyền phạm vi Telegram / WhatsApp (nhân viên: mảng từng kênh; chủ: null từng kênh) xuống service', async () => {
+        const holderOf = () => svc[SERVICE_OF[name]].mock.calls[0].find((arg) => arg && typeof arg === 'object' && 'accessibleChannelRefs' in arg);
+
+        await run(employeeUser);
+        expect(mockGetChannelScope).toHaveBeenCalledWith(expect.objectContaining({ contextType: 'employee', actorUserId: EMPLOYEE_ID, workspaceOwnerId: OWNER_ID }));
+        expect(holderOf().accessibleChannelRefs).toEqual({ telegram: ['7'], whatsapp_baileys: [] });
+
+        jest.clearAllMocks();
+        mockGetAccessible.mockResolvedValue(null);
+        mockGetChannelScope.mockResolvedValue({ telegram: null, whatsapp_baileys: null });
+        for (const fn of Object.values(svc)) fn.mockResolvedValue({ conversations: [], messages: [], hasMore: false, messageId: 1, sendStatus: 'sent' });
+        await run(ownerUser);
+        expect(holderOf().accessibleChannelRefs).toEqual({ telegram: null, whatsapp_baileys: null });
+      });
+
       // Đường theo id hội thoại / tin: service ném 403. Đường danh sách / đếm chỉ LỌC (không bao giờ ném 403).
       if (BY_ID_HANDLERS.has(name)) {
+        it('H3: service ném 403 CHANNEL_ACCOUNT_NOT_ASSIGNED (Telegram / WhatsApp) → trả 403 đúng mã đó, không bị gộp thành lỗi khác', async () => {
+          svc[SERVICE_OF[name]].mockRejectedValue(Object.assign(new Error('Tài khoản Telegram này chưa được giao cho bạn.'), {
+            status: 403, statusCode: 403, code: 'CHANNEL_ACCOUNT_NOT_ASSIGNED',
+          }));
+          const res = await run(employeeUser);
+
+          expect(res.statusCode).toBe(403);
+          expect(res.body).toMatchObject({ success: false, code: 'CHANNEL_ACCOUNT_NOT_ASSIGNED' });
+          expect(res.body.upgradeRequired).toBeUndefined();
+        });
+
         it('service ném 403 ZALO_ACCOUNT_NOT_ASSIGNED → trả 403 đúng mã đó', async () => {
           svc[SERVICE_OF[name]].mockRejectedValue(notAssignedError());
           const res = await run(employeeUser);

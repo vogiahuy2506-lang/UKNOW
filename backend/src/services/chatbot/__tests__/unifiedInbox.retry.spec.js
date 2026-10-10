@@ -207,6 +207,8 @@ const unifiedInboxService = (await import('../unifiedInbox.service.js')).default
 // G2: phạm vi tài khoản Zalo của người thao tác. Các ca gốc của file này đều là CHỦ → null = thấy hết. Ca nhân viên /
 // thiếu phạm vi nằm ở describe 'G2 — việc giao tài khoản Zalo' cuối file.
 const ZALO_OWNER = { accessibleZaloAccountIds: null };
+/** Chủ / super admin ở cả hai phía: các ca Telegram / WhatsApp cũ chỉ kiểm hạn mức / gửi, không kiểm việc giao (H3 có khối riêng). */
+const OWNER_SCOPES = { accessibleZaloAccountIds: null, accessibleChannelRefs: { telegram: null, whatsapp_baileys: null } };
 
 describe('UnifiedInbox send status + retry', () => {
   beforeEach(() => {
@@ -258,7 +260,7 @@ describe('UnifiedInbox send status + retry', () => {
     mockSendMessage.mockResolvedValue(55);
     mockSendReply.mockResolvedValue({ success: true });
 
-    const result = await unifiedInboxService.sendMessage(1, 7, 'channel', 'hi there');
+    const result = await unifiedInboxService.sendMessage(1, 7, 'channel', 'hi there', [], OWNER_SCOPES);
 
     expect(result.success).toBe(true);
     expect(result.messageId).toBe(55);
@@ -639,7 +641,7 @@ describe('UnifiedInbox send status + retry', () => {
     it('(c) trả lời tay: adapter Telegram nhận id_channel + external_id ghép, ghi id tin vào dòng agent, tạm dừng AI', async () => {
       mockGetConversationById.mockResolvedValue(tgConversation);
 
-      const result = await unifiedInboxService.sendMessage(1, 21, 'channel', 'Chào bạn');
+      const result = await unifiedInboxService.sendMessage(1, 21, 'channel', 'Chào bạn', [], OWNER_SCOPES);
 
       expect(mockTelegramInboxSend).toHaveBeenCalledTimes(1);
       expect(mockTelegramInboxSend).toHaveBeenCalledWith(expect.objectContaining({
@@ -658,7 +660,7 @@ describe('UnifiedInbox send status + retry', () => {
       mockGetConversationById.mockResolvedValue(tgConversation);
       mockTelegramInboxSend.mockResolvedValue({ success: false, error: 'Telegram account 7 is inactive' });
 
-      const result = await unifiedInboxService.sendMessage(1, 21, 'channel', 'Chào bạn');
+      const result = await unifiedInboxService.sendMessage(1, 21, 'channel', 'Chào bạn', [], OWNER_SCOPES);
 
       expect(result.sendStatus).toBe('failed');
       expect(result.error).toMatch(/inactive/);
@@ -683,7 +685,7 @@ describe('UnifiedInbox send status + retry', () => {
     it('trả lời tay: tra session key từ id_channel, tách số từ chuỗi ghép, gửi qua adapter WhatsApp, trạng thái sent', async () => {
       mockGetConversationById.mockResolvedValue(waConversation);
 
-      const result = await unifiedInboxService.sendMessage(1, 12, 'channel', 'Chào bạn');
+      const result = await unifiedInboxService.sendMessage(1, 12, 'channel', 'Chào bạn', [], OWNER_SCOPES);
 
       expect(mockGetBaileysSessionKey).toHaveBeenCalledWith(9, 1);
       // P5: adapter Hộp thư chuyển thêm `attachments` (rỗng khi không đính kèm) + `userId` chủ để lọc tệp theo chủ.
@@ -704,7 +706,7 @@ describe('UnifiedInbox send status + retry', () => {
       mockGetConversationById.mockResolvedValue(waConversation);
       mockWaSendReply.mockResolvedValue({ success: false, error: 'not connected', provider: 'baileys' });
 
-      const result = await unifiedInboxService.sendMessage(1, 12, 'channel', 'Chào bạn');
+      const result = await unifiedInboxService.sendMessage(1, 12, 'channel', 'Chào bạn', [], OWNER_SCOPES);
 
       expect(result.sendStatus).toBe('failed');
       expect(result.error).toMatch(/not connected/);
@@ -719,7 +721,7 @@ describe('UnifiedInbox send status + retry', () => {
       mockGetConversationById.mockResolvedValue(waConversation);
 
       const result = await unifiedInboxService.sendMessage(
-        1, 12, 'channel', 'Xem ảnh', [{ key: 'uploads/1/chat/1700000000_y.png', name: 'y.png', type: 'image' }]
+        1, 12, 'channel', 'Xem ảnh', [{ key: 'uploads/1/chat/1700000000_y.png', name: 'y.png', type: 'image' }], OWNER_SCOPES
       );
 
       expect(result.sendStatus).toBe('sent');
@@ -740,7 +742,7 @@ describe('UnifiedInbox send status + retry', () => {
       });
 
       const result = await unifiedInboxService.sendMessage(
-        1, 12, 'channel', 'Xem ảnh', [{ key: 'uploads/1/chat/1700000000_y.png', name: 'y.png', type: 'image' }]
+        1, 12, 'channel', 'Xem ảnh', [{ key: 'uploads/1/chat/1700000000_y.png', name: 'y.png', type: 'image' }], OWNER_SCOPES
       );
 
       expect(result.sendStatus).toBe('failed');
@@ -751,7 +753,7 @@ describe('UnifiedInbox send status + retry', () => {
       mockGetConversationById.mockResolvedValue(waConversation);
       mockGetBaileysSessionKey.mockResolvedValue(null);
 
-      const result = await unifiedInboxService.sendMessage(1, 12, 'channel', 'Chào bạn');
+      const result = await unifiedInboxService.sendMessage(1, 12, 'channel', 'Chào bạn', [], OWNER_SCOPES);
 
       expect(result.sendStatus).toBe('failed');
       expect(mockWaSendReply).not.toHaveBeenCalled();
@@ -775,7 +777,7 @@ describe('UnifiedInbox send status + retry', () => {
         metadata: { source: 'manual_inbox', send: { status: 'sent' } },
       });
 
-      const result = await unifiedInboxService.retryMessage(1, 77, 'channel');
+      const result = await unifiedInboxService.retryMessage(1, 77, 'channel', OWNER_SCOPES);
 
       expect(mockWaSendReply).toHaveBeenCalledWith({
         channelId: '40-default',
@@ -807,9 +809,9 @@ describe('UnifiedInbox send status + retry', () => {
 
     it('telegram → reserveSendQuota({channel:telegram, sourceType:inbox}); whatsapp_baileys → channel whatsapp', async () => {
       mockGetConversationById.mockResolvedValueOnce(tgConv);
-      await unifiedInboxService.sendMessage(1, 21, 'channel', 'chào');
+      await unifiedInboxService.sendMessage(1, 21, 'channel', 'chào', [], OWNER_SCOPES);
       mockGetConversationById.mockResolvedValueOnce(waConv);
-      await unifiedInboxService.sendMessage(1, 22, 'channel', 'chào');
+      await unifiedInboxService.sendMessage(1, 22, 'channel', 'chào', [], OWNER_SCOPES);
 
       expect(mockReserveSendQuota).toHaveBeenCalledTimes(2);
       expect(mockReserveSendQuota.mock.calls[0][0]).toEqual(expect.objectContaining({
@@ -827,7 +829,7 @@ describe('UnifiedInbox send status + retry', () => {
         mockGetConversationById.mockResolvedValueOnce({ id: 9, channel, id_channel: 3, external_id: 'x' });
         mockSendReply.mockResolvedValue({ success: true });
         // eslint-disable-next-line no-await-in-loop
-        await unifiedInboxService.sendMessage(1, 9, 'channel', 'hi');
+        await unifiedInboxService.sendMessage(1, 9, 'channel', 'hi', [], OWNER_SCOPES);
       }
       expect(mockReserveSendQuota).not.toHaveBeenCalled();
       expect(mockDebitInbox).not.toHaveBeenCalled();
@@ -836,7 +838,7 @@ describe('UnifiedInbox send status + retry', () => {
     it('lưu dòng agent kèm quotaReservationId của đặt chỗ (enforce)', async () => {
       mockGetConversationById.mockResolvedValue(tgConv);
       mockReserveSendQuota.mockResolvedValueOnce(enforceReservation(200));
-      await unifiedInboxService.sendMessage(1, 21, 'channel', 'chào');
+      await unifiedInboxService.sendMessage(1, 21, 'channel', 'chào', [], OWNER_SCOPES);
       expect(mockSendMessage).toHaveBeenCalledWith(21, 1, 'channel', 31, expect.objectContaining({ quotaReservationId: 200 }));
       expect(mockMarkSendQuotaSending).toHaveBeenCalledWith({ reservationId: 200 }, expect.anything());
     });
@@ -844,7 +846,7 @@ describe('UnifiedInbox send status + retry', () => {
     it('mode shadow, gửi OK → updateMessageSendStatus(sent) RỒI debitInboxChannelMessageIfNeeded({telegram, messageId})', async () => {
       mockGetConversationById.mockResolvedValue(tgConv);
       mockReserveSendQuota.mockResolvedValueOnce(shadowReservation());
-      await unifiedInboxService.sendMessage(1, 21, 'channel', 'chào');
+      await unifiedInboxService.sendMessage(1, 21, 'channel', 'chào', [], OWNER_SCOPES);
 
       expect(mockUpdateSendStatus).toHaveBeenCalledWith('channel', 88, expect.objectContaining({ status: 'sent' }));
       expect(mockDebitInbox).toHaveBeenCalledTimes(1);
@@ -856,7 +858,7 @@ describe('UnifiedInbox send status + retry', () => {
     it('mode shadow, WhatsApp gửi OK → debit kênh whatsapp (không phải whatsapp_baileys)', async () => {
       mockGetConversationById.mockResolvedValue(waConv);
       mockReserveSendQuota.mockResolvedValueOnce(shadowReservation());
-      await unifiedInboxService.sendMessage(1, 22, 'channel', 'chào');
+      await unifiedInboxService.sendMessage(1, 22, 'channel', 'chào', [], OWNER_SCOPES);
       expect(mockDebitInbox).toHaveBeenCalledWith({ billingUserId: 1, channel: 'whatsapp', messageId: 88 });
     });
 
@@ -864,7 +866,7 @@ describe('UnifiedInbox send status + retry', () => {
       mockGetConversationById.mockResolvedValue(tgConv);
       mockReserveSendQuota.mockResolvedValueOnce(shadowReservation());
       mockTelegramInboxSend.mockResolvedValue({ success: false, error: 'Telegram account 7 is inactive' });
-      const result = await unifiedInboxService.sendMessage(1, 21, 'channel', 'chào');
+      const result = await unifiedInboxService.sendMessage(1, 21, 'channel', 'chào', [], OWNER_SCOPES);
       expect(result.sendStatus).toBe('failed');
       expect(mockDebitInbox).not.toHaveBeenCalled();
     });
@@ -874,14 +876,14 @@ describe('UnifiedInbox send status + retry', () => {
       mockReserveSendQuota.mockResolvedValueOnce({
         mode: 'shadow', status: 'reserved', id: null, legacyDecision: { allowed: true, billingUserId: null, bypass: true },
       });
-      await unifiedInboxService.sendMessage(1, 21, 'channel', 'chào');
+      await unifiedInboxService.sendMessage(1, 21, 'channel', 'chào', [], OWNER_SCOPES);
       expect(mockDebitInbox).not.toHaveBeenCalled();
     });
 
     it('mode enforce, gửi OK → consumeSendQuota, KHÔNG debit lần hai', async () => {
       mockGetConversationById.mockResolvedValue(tgConv);
       mockReserveSendQuota.mockResolvedValueOnce(enforceReservation(200));
-      await unifiedInboxService.sendMessage(1, 21, 'channel', 'chào');
+      await unifiedInboxService.sendMessage(1, 21, 'channel', 'chào', [], OWNER_SCOPES);
       expect(mockConsumeSendQuota).toHaveBeenCalledWith(expect.objectContaining({ reservationId: 200 }), expect.anything());
       expect(mockDebitInbox).not.toHaveBeenCalled();
     });
@@ -890,7 +892,7 @@ describe('UnifiedInbox send status + retry', () => {
       mockGetConversationById.mockResolvedValue(tgConv);
       mockReserveSendQuota.mockResolvedValueOnce(enforceReservation(200));
       mockTelegramInboxSend.mockResolvedValue({ success: false, error: 'Telegram account 7 is inactive' });
-      await unifiedInboxService.sendMessage(1, 21, 'channel', 'chào');
+      await unifiedInboxService.sendMessage(1, 21, 'channel', 'chào', [], OWNER_SCOPES);
       expect(mockReleaseSendQuota).toHaveBeenCalledWith(
         expect.objectContaining({ reservationId: 200, failureCode: 'PROVIDER_ERROR' }),
         expect.anything()
@@ -902,7 +904,7 @@ describe('UnifiedInbox send status + retry', () => {
       mockGetConversationById.mockResolvedValue(waConv);
       mockReserveSendQuota.mockResolvedValueOnce(enforceReservation(201));
       mockWaSendReply.mockResolvedValue({ success: false, partial: true, messageId: 'WA1', error: 'tệp lỗi' });
-      await unifiedInboxService.sendMessage(1, 22, 'channel', 'chào');
+      await unifiedInboxService.sendMessage(1, 22, 'channel', 'chào', [], OWNER_SCOPES);
       expect(mockMarkSendQuotaUncertain).toHaveBeenCalledWith(
         expect.objectContaining({ reservationId: 201, failureCode: 'PARTIAL_DELIVERY' }),
         expect.anything()
@@ -914,7 +916,7 @@ describe('UnifiedInbox send status + retry', () => {
       mockGetConversationById.mockResolvedValue(tgConv);
       mockReserveSendQuota.mockResolvedValueOnce(enforceReservation(202));
       mockTelegramInboxSend.mockResolvedValue({ success: false, error: 'tệp lỗi', messageId: 4242 });
-      await unifiedInboxService.sendMessage(1, 21, 'channel', 'chào');
+      await unifiedInboxService.sendMessage(1, 21, 'channel', 'chào', [], OWNER_SCOPES);
       expect(mockMarkSendQuotaUncertain).toHaveBeenCalledWith(
         expect.objectContaining({ reservationId: 202, failureCode: 'PARTIAL_DELIVERY' }),
         expect.anything()
@@ -926,7 +928,7 @@ describe('UnifiedInbox send status + retry', () => {
       mockGetConversationById.mockResolvedValue(tgConv);
       mockReserveSendQuota.mockResolvedValueOnce(enforceReservation(203));
       mockTelegramInboxSend.mockResolvedValue({ success: false, error: 'connect ETIMEDOUT 1.2.3.4:443' });
-      await unifiedInboxService.sendMessage(1, 21, 'channel', 'chào');
+      await unifiedInboxService.sendMessage(1, 21, 'channel', 'chào', [], OWNER_SCOPES);
       expect(mockMarkSendQuotaUncertain).toHaveBeenCalledWith(
         expect.objectContaining({ reservationId: 203, failureCode: 'TIMEOUT' }),
         expect.anything()
@@ -938,7 +940,7 @@ describe('UnifiedInbox send status + retry', () => {
       mockGetConversationById.mockResolvedValue(tgConv);
       mockReserveSendQuota.mockResolvedValueOnce(enforceReservation(204));
       mockSendMessage.mockRejectedValueOnce(new Error('db down'));
-      await expect(unifiedInboxService.sendMessage(1, 21, 'channel', 'chào')).rejects.toThrow('db down');
+      await expect(unifiedInboxService.sendMessage(1, 21, 'channel', 'chào', [], OWNER_SCOPES)).rejects.toThrow('db down');
       expect(mockReleaseSendQuota).toHaveBeenCalledWith(
         expect.objectContaining({ reservationId: 204, failureCode: 'INBOX_PERSIST_FAILED' }),
         expect.anything()
@@ -950,7 +952,7 @@ describe('UnifiedInbox send status + retry', () => {
       mockGetConversationById.mockResolvedValue(tgConv);
       const limitErr = Object.assign(new Error('Đã hết hạn mức tin Telegram'), { status: 403, code: 'RESOURCE_LIMIT_EXCEEDED' });
       mockReserveSendQuota.mockRejectedValueOnce(limitErr);
-      await expect(unifiedInboxService.sendMessage(1, 21, 'channel', 'chào')).rejects.toMatchObject({ code: 'RESOURCE_LIMIT_EXCEEDED' });
+      await expect(unifiedInboxService.sendMessage(1, 21, 'channel', 'chào', [], OWNER_SCOPES)).rejects.toMatchObject({ code: 'RESOURCE_LIMIT_EXCEEDED' });
       expect(mockSendMessage).not.toHaveBeenCalled();
       expect(mockTelegramInboxSend).not.toHaveBeenCalled();
     });
@@ -965,7 +967,7 @@ describe('UnifiedInbox send status + retry', () => {
       it('đặt chỗ cũ đã consumed → replay, KHÔNG gửi lại', async () => {
         mockFindForRetry.mockResolvedValue(retryRow({ quota_reservation_id: 200 }));
         mockFindReservationById.mockResolvedValue({ id: 200, status: 'consumed' });
-        const result = await unifiedInboxService.retryMessage(1, 88, 'channel');
+        const result = await unifiedInboxService.retryMessage(1, 88, 'channel', OWNER_SCOPES);
         expect(result).toMatchObject({ isReplay: true, sendStatus: 'sent' });
         expect(mockClaimRetry).not.toHaveBeenCalled();
         expect(mockTelegramInboxSend).not.toHaveBeenCalled();
@@ -974,10 +976,10 @@ describe('UnifiedInbox send status + retry', () => {
       it('đặt chỗ cũ uncertain → 409 RESERVATION_UNCERTAIN; reserved/sending → 409 CONCURRENT_SEND_IN_PROGRESS', async () => {
         mockFindForRetry.mockResolvedValue(retryRow({ quota_reservation_id: 200 }));
         mockFindReservationById.mockResolvedValueOnce({ id: 200, status: 'uncertain' });
-        await expect(unifiedInboxService.retryMessage(1, 88, 'channel'))
+        await expect(unifiedInboxService.retryMessage(1, 88, 'channel', OWNER_SCOPES))
           .rejects.toMatchObject({ status: 409, code: 'RESERVATION_UNCERTAIN' });
         mockFindReservationById.mockResolvedValueOnce({ id: 200, status: 'sending' });
-        await expect(unifiedInboxService.retryMessage(1, 88, 'channel'))
+        await expect(unifiedInboxService.retryMessage(1, 88, 'channel', OWNER_SCOPES))
           .rejects.toMatchObject({ status: 409, code: 'CONCURRENT_SEND_IN_PROGRESS' });
         expect(mockClaimRetry).not.toHaveBeenCalled();
       });
@@ -990,7 +992,7 @@ describe('UnifiedInbox send status + retry', () => {
         mockReserveSendQuota.mockResolvedValueOnce(shadowReservation());
         mockUpdateSendStatus.mockResolvedValue({ id: 88, metadata: { send: { status: 'sent' } } });
 
-        const result = await unifiedInboxService.retryMessage(1, 88, 'channel');
+        const result = await unifiedInboxService.retryMessage(1, 88, 'channel', OWNER_SCOPES);
 
         expect(result.sendStatus).toBe('sent');
         expect(mockReserveSendQuota.mock.calls[0][0]).toEqual(expect.objectContaining({ channel: 'telegram', sourceType: 'inbox' }));
@@ -1004,7 +1006,7 @@ describe('UnifiedInbox send status + retry', () => {
         mockGetConversationById.mockResolvedValue(tgConv);
         mockReserveSendQuota.mockResolvedValueOnce(shadowReservation());
         mockTelegramInboxSend.mockResolvedValue({ success: false, error: 'lỗi' });
-        const result = await unifiedInboxService.retryMessage(1, 88, 'channel');
+        const result = await unifiedInboxService.retryMessage(1, 88, 'channel', OWNER_SCOPES);
         expect(result.sendStatus).toBe('failed');
         expect(mockDebitInbox).not.toHaveBeenCalled();
       });
@@ -1017,21 +1019,21 @@ describe('UnifiedInbox send status + retry', () => {
 
         mockReserveSendQuota.mockResolvedValueOnce(enforceReservation(301));
         mockTelegramInboxSend.mockResolvedValueOnce({ success: false, error: 'lỗi thường' });
-        await unifiedInboxService.retryMessage(1, 88, 'channel');
+        await unifiedInboxService.retryMessage(1, 88, 'channel', OWNER_SCOPES);
         expect(mockReleaseSendQuota).toHaveBeenCalledWith(
           expect.objectContaining({ reservationId: 301, failureCode: 'PROVIDER_ERROR' }), expect.anything()
         );
 
         mockReserveSendQuota.mockResolvedValueOnce(enforceReservation(302));
         mockTelegramInboxSend.mockResolvedValueOnce({ success: false, error: 'tệp lỗi', messageId: 4242 });
-        await unifiedInboxService.retryMessage(1, 88, 'channel');
+        await unifiedInboxService.retryMessage(1, 88, 'channel', OWNER_SCOPES);
         expect(mockMarkSendQuotaUncertain).toHaveBeenCalledWith(
           expect.objectContaining({ reservationId: 302, failureCode: 'PARTIAL_DELIVERY' }), expect.anything()
         );
 
         mockReserveSendQuota.mockResolvedValueOnce(enforceReservation(303));
         mockTelegramInboxSend.mockResolvedValueOnce({ success: false, error: 'read ETIMEDOUT' });
-        await unifiedInboxService.retryMessage(1, 88, 'channel');
+        await unifiedInboxService.retryMessage(1, 88, 'channel', OWNER_SCOPES);
         expect(mockMarkSendQuotaUncertain).toHaveBeenCalledWith(
           expect.objectContaining({ reservationId: 303, failureCode: 'TIMEOUT' }), expect.anything()
         );
@@ -1044,7 +1046,7 @@ describe('UnifiedInbox send status + retry', () => {
         mockClaimRetry.mockResolvedValue({ id: 88 });
         mockGetConversationById.mockResolvedValue({ id: 21, channel: 'zalo_oa', id_channel: 31, external_id: 'x' });
         mockSendReply.mockResolvedValue({ success: true });
-        await unifiedInboxService.retryMessage(1, 88, 'channel');
+        await unifiedInboxService.retryMessage(1, 88, 'channel', OWNER_SCOPES);
         expect(mockReserveSendQuota).not.toHaveBeenCalled();
         expect(mockDebitInbox).not.toHaveBeenCalled();
       });
@@ -1165,7 +1167,7 @@ describe('G2 — việc giao tài khoản Zalo cho nhân viên (đường theo i
 
   it('kênh KHÔNG phải Zalo cá nhân (channel / webchat) không bị phạm vi Zalo chặn, kể cả nhân viên chưa được giao gì', async () => {
     mockGetConversationById.mockResolvedValue({ id: 21, channel: 'telegram', id_channel: 31, external_id: 'x', channel_display_name: 'TG' });
-    await expect(unifiedInboxService.getConversation(1, 21, 'channel', { accessibleZaloAccountIds: [] })).resolves.toMatchObject({ id: 21 });
+    await expect(unifiedInboxService.getConversation(1, 21, 'channel', { accessibleZaloAccountIds: [], accessibleChannelRefs: OWNER_SCOPES.accessibleChannelRefs })).resolves.toMatchObject({ id: 21 });
 
     mockGetConversationById.mockResolvedValue({ id: 8, channel: 'web', channel_display_name: 'Widget' });
     await expect(unifiedInboxService.getMessages(1, 8, 'webchat', { accessibleZaloAccountIds: [] })).resolves.toBeDefined();
@@ -1194,7 +1196,7 @@ describe('G2 — việc giao tài khoản Zalo cho nhân viên (đường theo i
       mockClaimRetry.mockResolvedValue({ id: 88 });
       mockGetConversationById.mockResolvedValue({ id: 21, channel: 'zalo_oa', id_channel: 31, external_id: 'x' });
 
-      await expect(unifiedInboxService.retryMessage(1, 88, 'channel', { accessibleZaloAccountIds: [] })).resolves.toMatchObject({ success: true });
+      await expect(unifiedInboxService.retryMessage(1, 88, 'channel', { accessibleZaloAccountIds: [], accessibleChannelRefs: OWNER_SCOPES.accessibleChannelRefs })).resolves.toMatchObject({ success: true });
     });
   });
 
@@ -1227,6 +1229,130 @@ describe('G2 — việc giao tài khoản Zalo cho nhân viên (đường theo i
       mockDeleteZaloConversation.mockResolvedValue(false);
 
       await expect(OPERATIONS.deleteConversation(null)).rejects.toThrow('Conversation not found');
+    });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// PLAN_GIAO_TK_TG_WA PR-H3 — đường theo id của hội thoại / tin Telegram + WhatsApp (channel_conversations): nhân viên chỉ làm được
+// với tài khoản ĐƯỢC GIAO (`channel_external_id` = telegram_accounts.id / session_key). Thiếu phạm vi → chặn.
+// ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+const chatbotChannelRepository = (await import('../../../repositories/ai/chatbotChannel.repository.js')).default;
+
+describe('H3 — việc giao tài khoản Telegram / WhatsApp cho nhân viên (đường theo id, type channel)', () => {
+  const tgConv = { id: 21, channel: 'telegram', id_channel: 31, external_id: 'telegram:7:-1001', channel_external_id: '7', channel_display_name: 'TG', visitor_name: 'Khách' };
+  const waConv = { id: 22, channel: 'whatsapp_baileys', id_channel: 32, external_id: 'baileys:1-mot:84901', channel_external_id: '1-mot', channel_display_name: 'WA', visitor_name: 'Khách' };
+  const oaConv = { id: 23, channel: 'zalo_oa', id_channel: 33, external_id: 'oa-1', channel_external_id: 'oa-id', channel_display_name: 'OA', visitor_name: 'Khách' };
+  const NULLS = { telegram: null, whatsapp_baileys: null };
+  let deleteSpy;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGetConversationById.mockResolvedValue(tgConv);
+    mockGetMessages.mockResolvedValue({ messages: [], hasMore: false });
+    mockMarkAsRead.mockResolvedValue({ remainingUnread: 0 });
+    mockSetAiPaused.mockResolvedValue({ aiPaused: true, aiPausedAt: new Date().toISOString() });
+    deleteSpy = jest.spyOn(chatbotChannelRepository, 'deleteChannelConversation').mockResolvedValue({ rowCount: 1 });
+  });
+
+  const OPERATIONS = {
+    getConversation: (refs) => unifiedInboxService.getConversation(1, 21, 'channel', { accessibleZaloAccountIds: null, accessibleChannelRefs: refs }),
+    getMessages: (refs) => unifiedInboxService.getMessages(1, 21, 'channel', { limit: 50, accessibleZaloAccountIds: null, accessibleChannelRefs: refs }),
+    markAsRead: (refs) => unifiedInboxService.markAsRead(1, 21, 'channel', { accessibleZaloAccountIds: null, accessibleChannelRefs: refs }),
+    setConversationAiPaused: (refs) => unifiedInboxService.setConversationAiPaused(1, 21, 'channel', true, { accessibleZaloAccountIds: null, accessibleChannelRefs: refs }),
+    sendMessage: (refs) => unifiedInboxService.sendMessage(1, 21, 'channel', 'hello', [], { accessibleZaloAccountIds: null, accessibleChannelRefs: refs }),
+    deleteConversation: (refs) => unifiedInboxService.deleteConversation(1, 21, 'channel', { accessibleZaloAccountIds: null, accessibleChannelRefs: refs }),
+  };
+  const expectNoSideEffects = () => {
+    expect(mockGetMessages).not.toHaveBeenCalled();
+    expect(mockMarkAsRead).not.toHaveBeenCalled();
+    expect(mockSetAiPaused).not.toHaveBeenCalled();
+    expect(mockReserveSendQuota).not.toHaveBeenCalled();
+    expect(mockSendMessage).not.toHaveBeenCalled();
+    expect(deleteSpy).not.toHaveBeenCalled();
+  };
+
+  for (const [name, run] of Object.entries(OPERATIONS)) {
+    describe(name, () => {
+      it('Telegram: nhân viên CHƯA được giao tài khoản → 403 CHANNEL_ACCOUNT_NOT_ASSIGNED, không chạm gì', async () => {
+        await expect(run({ telegram: ['8'], whatsapp_baileys: ['1-mot'] })).rejects.toMatchObject({ status: 403, code: 'CHANNEL_ACCOUNT_NOT_ASSIGNED', channel: 'telegram' });
+        expectNoSideEffects();
+      });
+
+      it('WhatsApp: phiên chưa giao → 403', async () => {
+        mockGetConversationById.mockResolvedValue(waConv);
+        await expect(run({ telegram: ['7'], whatsapp_baileys: ['1-hai'] })).rejects.toMatchObject({ status: 403, code: 'CHANNEL_ACCOUNT_NOT_ASSIGNED', channel: 'whatsapp_baileys' });
+        expectNoSideEffects();
+      });
+
+      it('HỎNG THÌ CHẶN: thiếu phạm vi (undefined), rỗng, sai kiểu, thiếu khoá kênh → chặn, không coi là chủ', async () => {
+        for (const bad of [undefined, null, 'all', {}, { telegram: [] }, { telegram: 'x' }, { whatsapp_baileys: null }]) {
+          // eslint-disable-next-line no-await-in-loop
+          await expect(run(bad)).rejects.toMatchObject({ code: 'CHANNEL_ACCOUNT_NOT_ASSIGNED' });
+        }
+        expectNoSideEffects();
+      });
+    });
+  }
+
+  it('được giao tài khoản (so chuỗi) → các thao tác đọc / sửa trạng thái làm được như thường', async () => {
+    const refs = { telegram: ['7'], whatsapp_baileys: [] };
+    await expect(OPERATIONS.getConversation(refs)).resolves.toBeDefined();
+    await expect(OPERATIONS.getMessages(refs)).resolves.toBeDefined();
+    await expect(OPERATIONS.markAsRead(refs)).resolves.toBeDefined();
+    await expect(OPERATIONS.setConversationAiPaused(refs)).resolves.toBeDefined();
+    await expect(OPERATIONS.deleteConversation(refs)).resolves.toBeDefined();
+    expect(deleteSpy).toHaveBeenCalledWith(21, 1, { accessibleChannelRefs: refs });
+  });
+
+  it('CHỦ / super admin (null từng kênh) → làm được như thường, phạm vi null được chuyển xuống câu xoá', async () => {
+    await expect(OPERATIONS.getConversation(NULLS)).resolves.toBeDefined();
+    await expect(OPERATIONS.deleteConversation(NULLS)).resolves.toBeDefined();
+    expect(deleteSpy).toHaveBeenCalledWith(21, 1, { accessibleChannelRefs: NULLS });
+  });
+
+  it('Zalo OA / kênh khác KHÔNG bị phạm vi Telegram / WhatsApp chặn (kể cả nhân viên không được giao gì, kể cả thiếu phạm vi)', async () => {
+    mockGetConversationById.mockResolvedValue(oaConv);
+    await expect(OPERATIONS.getConversation(undefined)).resolves.toBeDefined();
+    await expect(OPERATIONS.deleteConversation({ telegram: [], whatsapp_baileys: [] })).resolves.toBeDefined();
+  });
+
+  it('xoá hội thoại không tồn tại → giữ hành vi cũ (không ném), câu xoá vẫn nhận phạm vi để kiểm lại trong SQL', async () => {
+    mockGetConversationById.mockResolvedValue(null);
+    const refs = { telegram: [], whatsapp_baileys: [] };
+    await expect(OPERATIONS.deleteConversation(refs)).resolves.toBeDefined();
+    expect(deleteSpy).toHaveBeenCalledWith(21, 1, { accessibleChannelRefs: refs });
+  });
+
+  describe('retryMessage — kiểm tài khoản của tin TRƯỚC khi giành quyền gửi lại / đặt chỗ hạn mức', () => {
+    const failedChannelMessage = (overrides = {}) => ({
+      id: 88, id_conversation: 21, content: 'hi', role: 'agent', channel: 'telegram', channel_external_id: '7', id_channel: 31, external_id: 'x',
+      metadata: { send: { status: 'failed' } }, ...overrides,
+    });
+
+    it('Telegram chưa giao → 403, không claim / không đặt chỗ / không gửi', async () => {
+      mockFindForRetry.mockResolvedValue(failedChannelMessage());
+      await expect(unifiedInboxService.retryMessage(1, 88, 'channel', { accessibleZaloAccountIds: null, accessibleChannelRefs: { telegram: ['8'], whatsapp_baileys: null } }))
+        .rejects.toMatchObject({ status: 403, code: 'CHANNEL_ACCOUNT_NOT_ASSIGNED', channel: 'telegram' });
+      expect(mockClaimRetry).not.toHaveBeenCalled();
+      expect(mockReserveSendQuota).not.toHaveBeenCalled();
+    });
+
+    it('WhatsApp chưa giao → 403; thiếu phạm vi → 403', async () => {
+      mockFindForRetry.mockResolvedValue(failedChannelMessage({ channel: 'whatsapp_baileys', channel_external_id: '1-mot' }));
+      await expect(unifiedInboxService.retryMessage(1, 88, 'channel', { accessibleZaloAccountIds: null, accessibleChannelRefs: { telegram: null, whatsapp_baileys: ['1-hai'] } }))
+        .rejects.toMatchObject({ code: 'CHANNEL_ACCOUNT_NOT_ASSIGNED', channel: 'whatsapp_baileys' });
+      await expect(unifiedInboxService.retryMessage(1, 88, 'channel', { accessibleZaloAccountIds: null }))
+        .rejects.toMatchObject({ code: 'CHANNEL_ACCOUNT_NOT_ASSIGNED' });
+      expect(mockClaimRetry).not.toHaveBeenCalled();
+    });
+
+    it('tin của Zalo OA không bị chặn bởi phạm vi Telegram / WhatsApp (qua cổng giao, tới bước claim)', async () => {
+      mockFindForRetry.mockResolvedValue(failedChannelMessage({ channel: 'zalo_oa', channel_external_id: 'oa-id' }));
+      mockClaimRetry.mockResolvedValue(null);
+      await expect(unifiedInboxService.retryMessage(1, 88, 'channel', { accessibleZaloAccountIds: null, accessibleChannelRefs: { telegram: [], whatsapp_baileys: [] } }))
+        .rejects.toMatchObject({ code: 'RETRY_NOT_AVAILABLE' });
+      expect(mockClaimRetry).toHaveBeenCalled();
     });
   });
 });

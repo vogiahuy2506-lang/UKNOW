@@ -1,4 +1,5 @@
 import db from '../../config/database.js';
+import { pushChannelAccessFilter } from '../../utils/channelAccessScope.util.js';
 
 class ChatbotChannelRepository {
   // ── Chatbot Channel Connections ─────────────────────────────────
@@ -378,14 +379,18 @@ class ChatbotChannelRepository {
    * @param {number} conversationId - channel_conversations.id
    * @param {number} userId - owner to verify ownership via channel_connections join
    */
-  async deleteChannelConversation(conversationId, userId) {
+  async deleteChannelConversation(conversationId, userId, { accessibleChannelRefs } = {}) {
+    // PLAN_GIAO_TK_TG_WA H3: nhân viên chỉ xoá được hội thoại Telegram / WhatsApp của tài khoản được giao — kiểm LẠI ngay trong
+    // câu xoá (ngoài kiểm trước ở service). Chủ / super admin (cả hai kênh null) → không lọc; THIẾU phạm vi → [] = chặn.
+    const params = [conversationId, userId];
+    const channelAccess = pushChannelAccessFilter(accessibleChannelRefs, 'cc', params);
     return db.query(
       `DELETE FROM channel_conversations
        WHERE id = $1
          AND id_channel IN (
-           SELECT cc.id FROM channel_connections cc WHERE cc.id_user = $2
+           SELECT cc.id FROM channel_connections cc WHERE cc.id_user = $2 ${channelAccess}
          )`,
-      [conversationId, userId]
+      params
     );
   }
 }

@@ -577,6 +577,8 @@ describe('WhatsApp Baileys — chủ trả lời từ điện thoại (fromMe)',
     expect(sse.map(([uid]) => uid)).toEqual(['42', '42']);
     expect(sse.map(([, , d]) => d.conversationId).sort()).toEqual([101, 102]);
     expect(sse[0][2]).toEqual(expect.objectContaining({ channel: 'whatsapp_baileys', type: 'channel', role: 'agent', aiPaused: true }));
+    // H3: chủ trả lời từ điện thoại cũng mang khoá phiên để SSE lọc theo việc giao.
+    expect(sse.every(([, , d]) => d.channelAccountRef === SESSION_KEY)).toBe(true);
   });
 
   it('(c2) echo nằm ở hội thoại của MỘT chatbot → không dừng nhầm hội thoại chatbot còn lại', async () => {
@@ -664,6 +666,12 @@ describe('WhatsApp Baileys — tự bật lại AI, id tin đi, SSE tin khách',
       conversationId: 101, type: 'channel', channel: 'whatsapp_baileys', message: 'Cho mình hỏi giá áo thun size L', role: 'visitor',
     }));
     expect(events[0][2].isSelf).toBeUndefined();
+  });
+
+  it('PLAN_GIAO_TK_TG_WA H3: SSE tin khách mang channelAccountRef = khoá phiên (để lọc theo nhân viên được giao phiên này)', async () => {
+    await sendTexts(['Cho mình hỏi giá áo thun size L']);
+    const events = m.sse.filter(([, ev]) => ev === 'inbox:new_message');
+    expect(events[0][2].channelAccountRef).toBe(SESSION_KEY);
   });
 
   it('dòng tin khách lưu external_id = id tin WhatsApp (KHÔNG phải SĐT: SĐT làm id khiến tin thứ 2 bị coi trùng)', async () => {

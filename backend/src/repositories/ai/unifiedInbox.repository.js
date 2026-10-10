@@ -4,6 +4,7 @@ import { formatWebchatDisplayName } from '../../utils/webchatDisplayName.util.js
 import { getVietnamDayRange } from '../../utils/vnTimeFormat.util.js';
 import { buildFoldedLikePattern, sqlFoldVietnamese } from '../../utils/vietnameseSearchFold.util.js';
 import { normalizeZaloAccessScope, pushZaloAccessFilter } from '../../utils/zaloAccessScope.util.js';
+import { pushChannelAccessFilter } from '../../utils/channelAccessScope.util.js';
 
 const VALID_STATUSES = new Set(['active', 'closed']);
 const VALID_DATE_RANGES = new Set(['today', 'week', 'month']);
@@ -263,6 +264,14 @@ function buildConversationFilterParts(filters, params, { branch = 'all' } = {}) 
     paramIndex++;
   }
 
+  // Việc giao tài khoản Telegram / WhatsApp (PLAN_GIAO_TK_TG_WA H3): nhân viên chỉ thấy hội thoại của tài khoản được giao. Cả hai
+  // kênh `null` (chủ / super admin) → không lọc; THIẾU phạm vi → coi như [] (hỏng thì chặn). Chỉ nhánh channel_conversations
+  // dùng tham số này (các câu UPDATE / SELECT riêng Zalo, web không được thừa tham số).
+  const channelAccessFilter = useChannelParam
+    ? pushChannelAccessFilter(filters.accessibleChannelRefs, 'ch', params)
+    : '';
+  paramIndex = params.length + 1;
+
   const searchBuilt = buildSearchFilter(search, paramIndex);
   if (searchBuilt.params.length) {
     params.push(...searchBuilt.params);
@@ -274,6 +283,7 @@ function buildConversationFilterParts(filters, params, { branch = 'all' } = {}) 
 
   return {
     channelFilter,
+    channelAccessFilter,
     zaloAccountIdFilter,
     channelGate: gates.channelGate,
     zaloGate: gates.zaloGate,
@@ -306,7 +316,7 @@ class UnifiedInboxRepository {
     const { limit = 20, offset = 0 } = filters;
     const params = [userId, limit, offset];
     const {
-      channelFilter, zaloAccountIdFilter, channelGate, zaloGate, webGate,
+      channelFilter, channelAccessFilter, zaloAccountIdFilter, channelGate, zaloGate, webGate,
       ccSearch, zpSearch, wcSearch, ccStatusDate, zpStatusDate, wcStatusDate,
       ccKindUnread, zpKindUnread, wcKindUnread,
     } = buildConversationFilterParts(filters, params);
@@ -333,7 +343,7 @@ class UnifiedInboxRepository {
                  COALESCE(cc.last_message_at, cc.started_at) AS sort_at
           FROM channel_conversations cc
           JOIN channel_connections ch ON ch.id = cc.id_channel
-          WHERE cc.id_user = $1 ${channelFilter} ${channelGate} ${ccSearch}
+          WHERE cc.id_user = $1 ${channelFilter} ${channelAccessFilter} ${channelGate} ${ccSearch}
           ${ccStatusDate} ${ccKindUnread}
           ORDER BY COALESCE(cc.last_message_at, cc.started_at) DESC NULLS LAST, cc.id DESC
           LIMIT ($2::int + $3::int)
@@ -595,7 +605,7 @@ class UnifiedInboxRepository {
   async getConversationsCount(userId, filters = {}) {
     const params = [userId];
     const {
-      channelFilter, zaloAccountIdFilter, channelGate, zaloGate, webGate,
+      channelFilter, channelAccessFilter, zaloAccountIdFilter, channelGate, zaloGate, webGate,
       ccSearch, zpSearch, wcSearch, ccStatusDate, zpStatusDate, wcStatusDate,
       ccKindUnread, zpKindUnread, wcKindUnread,
     } = buildConversationFilterParts(filters, params);
@@ -604,7 +614,7 @@ class UnifiedInboxRepository {
       SELECT COUNT(*) as total FROM (
         SELECT cc.id FROM channel_conversations cc
         JOIN channel_connections ch ON ch.id = cc.id_channel
-        WHERE cc.id_user = $1 ${channelFilter} ${channelGate} ${ccStatusDate} ${ccSearch} ${ccKindUnread}
+        WHERE cc.id_user = $1 ${channelFilter} ${channelAccessFilter} ${channelGate} ${ccStatusDate} ${ccSearch} ${ccKindUnread}
 
         UNION ALL
 
@@ -627,7 +637,7 @@ class UnifiedInboxRepository {
    * Facebook không có trong danh sách: kết nối Facebook đã chốt không làm (21/09).
    * @returns {Promise<string[]>} theo thứ tự hiển thị: web, zalo_personal, zalo_oa, whatsapp_baileys, telegram
    */
-  async getAvailableChannels(userId, { accessibleZaloAccountIds } = {}) {
+  async getAvailableChannels(userId, { accessibleZaloAccountIds, accessibleChannelRefs } = {}) {
     // Nhân viên chỉ có tab Zalo cá nhân khi được giao ít nhất một tài khoản (G2); chủ / super admin (null) thấy như cũ.
     const params = [userId];
     const zaloScope = normalizeZaloAccessScope(accessibleZaloAccountIds);
@@ -638,6 +648,9 @@ class UnifiedInboxRepository {
       zaloAccountGate = 'AND id = ANY($2::bigint[])';
       zaloConversationGate = 'AND id_zalo_setting = ANY($2::bigint[])';
     }
+    // H3: nhân viên chỉ có tab Telegram / WhatsApp khi được giao ít nhất một tài khoản (hoặc đã có hội thoại của tài khoản đó).
+    // Chủ / super admin (cả hai kênh null) → không lọc. THIẾU phạm vi → coi như [] (hỏng thì chặn).
+    const channelAccess = pushChannelAccessFilter(accessibleChannelRefs, 'ch', params);
     const { rows } = await db.query(
       `SELECT channel FROM (
          SELECT 'web' AS channel
@@ -649,11 +662,11 @@ class UnifiedInboxRepository {
             OR EXISTS (SELECT 1 FROM zalo_personal_conversations WHERE id_user = $1 ${zaloConversationGate})
          UNION
          SELECT ch.channel FROM channel_connections ch
-         WHERE ch.id_user = $1 AND ch.channel IN ('zalo_oa', 'whatsapp_baileys', 'telegram')
+         WHERE ch.id_user = $1 AND ch.channel IN ('zalo_oa', 'whatsapp_baileys', 'telegram') ${channelAccess}
          UNION
          SELECT ch.channel FROM channel_conversations cc
          JOIN channel_connections ch ON ch.id = cc.id_channel
-         WHERE cc.id_user = $1 AND ch.channel IN ('zalo_oa', 'whatsapp_baileys', 'telegram')
+         WHERE cc.id_user = $1 AND ch.channel IN ('zalo_oa', 'whatsapp_baileys', 'telegram') ${channelAccess}
        ) found`,
       params
     );
@@ -667,7 +680,7 @@ class UnifiedInboxRepository {
   async getConversationById(userId, conversationId, conversationType) {
     if (conversationType === 'channel') {
       const { rows } = await db.query(
-        `SELECT cc.*, ch.channel, ch.display_name as channel_display_name
+        `SELECT cc.*, ch.channel, ch.display_name as channel_display_name, ch.external_channel_id AS channel_external_id
          FROM channel_conversations cc
          JOIN channel_connections ch ON ch.id = cc.id_channel
          WHERE cc.id = $1 AND cc.id_user = $2`,
@@ -805,7 +818,7 @@ class UnifiedInboxRepository {
          FROM channel_conversations cc
          JOIN channel_connections ch ON ch.id = cc.id_channel
          WHERE cm.id_conversation = cc.id AND cc.id_user = $1 AND cm.role = 'visitor' AND cm.is_read = false
-           ${ch.channelFilter} ${ch.ccSearch} ${ch.ccStatusDate} ${ch.ccKindUnread}`,
+           ${ch.channelFilter} ${ch.channelAccessFilter} ${ch.ccSearch} ${ch.ccStatusDate} ${ch.ccKindUnread}`,
         channelParams
       );
       updatedMessages += r.rowCount || 0;
@@ -854,7 +867,7 @@ class UnifiedInboxRepository {
    * @param {{ channel?: string, zaloAccountId?: string|number, accessibleZaloAccountIds?: number[]|null }} [scope]
    * @returns {Promise<number>}
    */
-  async getUnreadConversationCount(userId, { channel, zaloAccountId, accessibleZaloAccountIds } = {}) {
+  async getUnreadConversationCount(userId, { channel, zaloAccountId, accessibleZaloAccountIds, accessibleChannelRefs } = {}) {
     const params = [userId];
     let paramIndex = 2;
 
@@ -879,6 +892,9 @@ class UnifiedInboxRepository {
       paramIndex++;
     }
 
+    // H3: nhân viên chỉ đếm hội thoại Telegram / WhatsApp của tài khoản được giao (thiếu phạm vi → [] = không đếm gì).
+    const channelAccessFilter = pushChannelAccessFilter(accessibleChannelRefs, 'ch', params);
+
     const { channelGate, zaloGate, webGate } = buildConversationChannelGates(channel);
 
     const { rows } = await db.query(
@@ -886,7 +902,7 @@ class UnifiedInboxRepository {
         (
           SELECT COUNT(*) FROM channel_conversations cc
           JOIN channel_connections ch ON ch.id = cc.id_channel
-          WHERE cc.id_user = $1 AND ch.is_active = true ${channelFilter} ${channelGate}
+          WHERE cc.id_user = $1 AND ch.is_active = true ${channelFilter} ${channelAccessFilter} ${channelGate}
             AND EXISTS (
               SELECT 1 FROM channel_messages cm
               WHERE cm.id_conversation = cc.id AND cm.role = 'visitor' AND cm.is_read = false
@@ -1158,6 +1174,8 @@ class UnifiedInboxRepository {
     const webSearch = withOutboxAliases(searchBuilt.sql, 'wc', 'wm');
     // G2: nhân viên chỉ thấy tin gửi đi của tài khoản Zalo được giao.
     const zaloAccess = pushZaloAccessFilter(filters.accessibleZaloAccountIds, 'zpc.id_zalo_setting', params);
+    // H3: nhân viên chỉ thấy tin gửi đi của tài khoản Telegram / WhatsApp được giao (thiếu phạm vi → [] = chặn).
+    const channelAccess = pushChannelAccessFilter(filters.accessibleChannelRefs, 'ch', params);
 
     const query = `
       WITH outbox_messages AS (
@@ -1185,7 +1203,7 @@ class UnifiedInboxRepository {
         FROM channel_messages cm
         JOIN channel_conversations cc ON cc.id = cm.id_conversation
         JOIN channel_connections ch ON ch.id = cc.id_channel
-        WHERE cm.id_user = $1 AND cm.role = 'agent' ${channelFilter} ${dateBuilt.channelDate} ${channelSearch}
+        WHERE cm.id_user = $1 AND cm.role = 'agent' ${channelFilter} ${channelAccess} ${dateBuilt.channelDate} ${channelSearch}
 
         UNION ALL
 
@@ -1281,13 +1299,14 @@ class UnifiedInboxRepository {
     const zaloSearch = withOutboxAliases(searchBuilt.sql, 'zpc', 'zpm');
     const webSearch = withOutboxAliases(searchBuilt.sql, 'wc', 'wm');
     const zaloAccess = pushZaloAccessFilter(filters.accessibleZaloAccountIds, 'zpc.id_zalo_setting', params);
+    const channelAccess = pushChannelAccessFilter(filters.accessibleChannelRefs, 'ch', params);
 
     const query = `
       SELECT COUNT(*) as total FROM (
         SELECT cm.id FROM channel_messages cm
         JOIN channel_conversations cc ON cc.id = cm.id_conversation
         JOIN channel_connections ch ON ch.id = cc.id_channel
-        WHERE cm.id_user = $1 AND cm.role = 'agent' ${channelFilter} ${dateBuilt.channelDate} ${channelSearch}
+        WHERE cm.id_user = $1 AND cm.role = 'agent' ${channelFilter} ${channelAccess} ${dateBuilt.channelDate} ${channelSearch}
 
         UNION ALL
 
@@ -1310,9 +1329,11 @@ class UnifiedInboxRepository {
   /**
    * Get outbox statistics by channel
    */
-  async getOutboxStatsByChannel(userId, { accessibleZaloAccountIds } = {}) {
+  async getOutboxStatsByChannel(userId, { accessibleZaloAccountIds, accessibleChannelRefs } = {}) {
     const params = [userId];
     const zaloAccess = pushZaloAccessFilter(accessibleZaloAccountIds, 'zpc.id_zalo_setting', params);
+    // H3: mỗi dòng Telegram / WhatsApp là MỘT kết nối (tài khoản) — nhân viên chỉ thấy số của tài khoản được giao.
+    const channelAccess = pushChannelAccessFilter(accessibleChannelRefs, 'cc', params);
     const { rows } = await db.query(
       `SELECT
         'web' as channel,
@@ -1353,7 +1374,7 @@ class UnifiedInboxRepository {
           WHERE conv.id_channel = cc.id AND cm.role = 'agent' AND cm.is_read = true
         ) as total_read
       FROM channel_connections cc
-      WHERE cc.id_user = $1`,
+      WHERE cc.id_user = $1 ${channelAccess}`,
       params
     );
     return rows;
@@ -1362,8 +1383,10 @@ class UnifiedInboxRepository {
   /**
    * Get a single sent message by ID
    */
-  async getOutboxMessageById(userId, messageId, { accessibleZaloAccountIds } = {}) {
-    // Try channel_messages first
+  async getOutboxMessageById(userId, messageId, { accessibleZaloAccountIds, accessibleChannelRefs } = {}) {
+    // Try channel_messages first — H3: id tin của tài khoản Telegram / WhatsApp chưa giao không khớp dòng nào ("không tìm thấy").
+    const channelParams = [messageId, userId];
+    const channelAccess = pushChannelAccessFilter(accessibleChannelRefs, 'ch', channelParams);
     let { rows } = await db.query(
       `SELECT cm.*, cc.visitor_name, cc.visitor_info, cc.external_id, cc.status as conversation_status,
               'channel' as conversation_type, ch.channel, ch.display_name as channel_display_name,
@@ -1375,8 +1398,8 @@ class UnifiedInboxRepository {
        FROM channel_messages cm
        JOIN channel_conversations cc ON cc.id = cm.id_conversation
        JOIN channel_connections ch ON ch.id = cc.id_channel
-       WHERE cm.id = $1 AND cm.id_user = $2 AND cm.role = 'agent'`,
-      [messageId, userId]
+       WHERE cm.id = $1 AND cm.id_user = $2 AND cm.role = 'agent' ${channelAccess}`,
+      channelParams
     );
 
     if (rows.length > 0) return rows[0];
@@ -1594,7 +1617,7 @@ class UnifiedInboxRepository {
         `SELECT cm.id, cm.id_conversation, cm.id_user, cm.id_channel, cm.role,
                 cm.content, cm.attachments, cm.metadata, cm.quota_reservation_id,
                 cc.external_id, cc.id_user AS conversation_user_id,
-                ch.channel AS channel
+                ch.channel AS channel, ch.external_channel_id AS channel_external_id
          FROM channel_messages cm
          JOIN channel_conversations cc ON cc.id = cm.id_conversation
          JOIN channel_connections ch ON ch.id = cm.id_channel
