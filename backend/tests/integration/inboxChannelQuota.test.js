@@ -26,6 +26,9 @@ const db = (await import('../../src/config/database.js')).default;
 const { truncateAll, createUser } = await import('./helpers/db.js');
 const { getBillingCycle } = await import('../../src/utils/billingCycle.util.js');
 const unifiedInboxService = (await import('../../src/services/chatbot/unifiedInbox.service.js')).default;
+// PLAN_GIAO_TK_TG_WA H3 (10/10/2026): service Hộp thư chặn Telegram/WhatsApp khi THIẾU phạm vi (fail-closed) — controller luôn truyền;
+// test gọi thẳng service bằng tư cách CHỦ nên truyền phạm vi chủ (null = không giới hạn) đúng như controller.
+const OWNER_SCOPE = { accessibleChannelRefs: { telegram: null, whatsapp_baileys: null } };
 const {
   checkSendQuota,
   countAdapterSentInCycleUncached,
@@ -184,7 +187,7 @@ describe('P11 — luồng thật sendMessage (adapter giả)', () => {
     await grantWallet(owner.id, 'telegram_messages', 3);
     _clearQuotaCache();
 
-    const result = await unifiedInboxService.sendMessage(owner.id, tg.conversationId, 'channel', 'Chào bạn');
+    const result = await unifiedInboxService.sendMessage(owner.id, tg.conversationId, 'channel', 'Chào bạn', [], OWNER_SCOPE);
     expect(result.sendStatus).toBe('sent');
     expect(mockTelegramSend).toHaveBeenCalledTimes(1);
 
@@ -205,7 +208,7 @@ describe('P11 — luồng thật sendMessage (adapter giả)', () => {
     await grantWallet(owner.id, 'whatsapp_messages', 5);
     _clearQuotaCache();
 
-    const result = await unifiedInboxService.sendMessage(owner.id, tg.conversationId, 'channel', 'Chào bạn');
+    const result = await unifiedInboxService.sendMessage(owner.id, tg.conversationId, 'channel', 'Chào bạn', [], OWNER_SCOPE);
     expect(result.sendStatus).toBe('sent');
 
     const { rows: debits } = await db.query('SELECT item_key, qty, source_key FROM topup_debits WHERE user_id = $1', [owner.id]);
@@ -220,7 +223,7 @@ describe('P11 — luồng thật sendMessage (adapter giả)', () => {
     await insertChannelMessage({ userId: owner.id, ...tg });
     _clearQuotaCache();
 
-    await expect(unifiedInboxService.sendMessage(owner.id, tg.conversationId, 'channel', 'Chào bạn'))
+    await expect(unifiedInboxService.sendMessage(owner.id, tg.conversationId, 'channel', 'Chào bạn', [], OWNER_SCOPE))
       .rejects.toMatchObject({ code: expect.any(String) });
     expect(mockTelegramSend).not.toHaveBeenCalled();
     const { rows } = await db.query('SELECT count(*)::int AS n FROM channel_messages WHERE id_conversation = $1', [tg.conversationId]);
@@ -237,7 +240,7 @@ describe('P11 — luồng thật sendMessage (adapter giả)', () => {
     _clearQuotaCache();
     mockTelegramSend.mockResolvedValueOnce({ success: false, error: 'Telegram account 7 is inactive' });
 
-    const failed = await unifiedInboxService.sendMessage(owner.id, tg.conversationId, 'channel', 'Chào bạn');
+    const failed = await unifiedInboxService.sendMessage(owner.id, tg.conversationId, 'channel', 'Chào bạn', [], OWNER_SCOPE);
     expect(failed.sendStatus).toBe('failed');
     const { cycleStart, cycleEnd } = await cycleOf(owner.id);
     _clearQuotaCache();
@@ -245,7 +248,7 @@ describe('P11 — luồng thật sendMessage (adapter giả)', () => {
     expect(await db.query('SELECT 1 FROM topup_debits WHERE user_id = $1', [owner.id]).then((r) => r.rowCount)).toBe(0);
 
     _clearQuotaCache();
-    const retried = await unifiedInboxService.retryMessage(owner.id, failed.messageId, 'channel');
+    const retried = await unifiedInboxService.retryMessage(owner.id, failed.messageId, 'channel', OWNER_SCOPE);
     expect(retried.sendStatus).toBe('sent');
     _clearQuotaCache();
     expect(await countAdapterSentInCycleUncached(owner.id, 'telegram', cycleStart, cycleEnd)).toBe(2);
@@ -261,7 +264,7 @@ describe('P11 — luồng thật sendMessage (adapter giả)', () => {
     await insertChannelMessage({ userId: owner.id, ...wa });
     _clearQuotaCache();
 
-    await expect(unifiedInboxService.sendMessage(owner.id, wa.conversationId, 'channel', 'Chào bạn')).rejects.toBeTruthy();
+    await expect(unifiedInboxService.sendMessage(owner.id, wa.conversationId, 'channel', 'Chào bạn', [], OWNER_SCOPE)).rejects.toBeTruthy();
     expect(mockWhatsappSend).not.toHaveBeenCalled();
   });
 
@@ -272,7 +275,7 @@ describe('P11 — luồng thật sendMessage (adapter giả)', () => {
     const tg = await seedConversation(owner.id, 'telegram', 'telegram:1:100');
     _clearQuotaCache();
 
-    const result = await unifiedInboxService.sendMessage(owner.id, tg.conversationId, 'channel', 'Chào bạn');
+    const result = await unifiedInboxService.sendMessage(owner.id, tg.conversationId, 'channel', 'Chào bạn', [], OWNER_SCOPE);
     expect(result.sendStatus).toBe('sent');
 
     const { rows } = await db.query('SELECT quota_reservation_id FROM channel_messages WHERE id = $1', [result.messageId]);
