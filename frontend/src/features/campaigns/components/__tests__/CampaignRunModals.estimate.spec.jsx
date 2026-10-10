@@ -61,7 +61,7 @@ const renderScheduleModal = (props = {}) => {
 describe('hộp "Chạy" — ước tính thời gian gửi', () => {
   it('chiến dịch 438: hiện dự kiến xong 08/10 21:25 (khoảng 4 ngày), bảng theo nick và cảnh báo', () => {
     renderRunModal({ runEstimate: { status: 'ready', estimate: ESTIMATE_438 } });
-    expect(screen.getByTestId('campaign-estimate-finish')).toHaveTextContent('08/10 21:25');
+    expect(screen.getByTestId('campaign-estimate-finish')).toHaveTextContent('08/10/2026 21:25');
     expect(screen.getByTestId('campaign-estimate-table')).toHaveTextContent('Nick Minh Zalo');
     expect(screen.getByTestId('campaign-estimate-warnings')).toHaveTextContent('vượt mức khuyến nghị');
   });
@@ -91,7 +91,7 @@ describe('hộp "Chạy" — ước tính thời gian gửi', () => {
 describe('hộp "Đặt lịch" — ước tính + 409 SCHEDULE_OVERLAP', () => {
   it('hiện ước tính theo giờ nổ đã chọn', () => {
     renderScheduleModal({ scheduleEstimate: { status: 'ready', estimate: ESTIMATE_438 } });
-    expect(screen.getByTestId('campaign-estimate-finish')).toHaveTextContent('08/10 21:25');
+    expect(screen.getByTestId('campaign-estimate-finish')).toHaveTextContent('08/10/2026 21:25');
   });
 
   it('ước tính lỗi → vẫn bấm được nút tạo lịch', () => {

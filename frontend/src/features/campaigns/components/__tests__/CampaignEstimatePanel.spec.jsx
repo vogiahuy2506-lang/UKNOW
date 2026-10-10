@@ -20,10 +20,10 @@ describe('CampaignEstimatePanel', () => {
   it('chiến dịch 438: số chính là finishAtLatest (08/10 21:25) kèm "khoảng 4 ngày"; khoảng nhanh–chậm ở dòng nhỏ', () => {
     render(<CampaignEstimatePanel status="ready" estimate={ESTIMATE_438} t={makeT(viDict)} />);
 
-    expect(screen.getByTestId('campaign-estimate-finish')).toHaveTextContent('08/10 21:25');
-    expect(screen.getByTestId('campaign-estimate-finish')).not.toHaveTextContent('07/10 07:25');
+    expect(screen.getByTestId('campaign-estimate-finish')).toHaveTextContent('08/10/2026 21:25');
+    expect(screen.getByTestId('campaign-estimate-finish')).not.toHaveTextContent('07/10/2026 07:25');
     expect(screen.getByTestId('campaign-estimate-finish').parentElement).toHaveTextContent('(khoảng 4 ngày)');
-    expect(screen.getByTestId('campaign-estimate-range')).toHaveTextContent('07/10 07:25 đến 08/10 21:25');
+    expect(screen.getByTestId('campaign-estimate-range')).toHaveTextContent('07/10/2026 07:25 đến 08/10/2026 21:25');
     expect(screen.getByText(/1596 thao tác gửi/)).toBeInTheDocument();
   });
 
@@ -43,7 +43,7 @@ describe('CampaignEstimatePanel', () => {
     render(<CampaignEstimatePanel status="ready" estimate={ESTIMATE_438} t={makeT(viDict)} />);
     const list = screen.getByTestId('campaign-estimate-warnings');
     expect(within(list).getAllByRole('listitem')).toHaveLength(3);
-    expect(list).toHaveTextContent('kéo dài khoảng 4 ngày (dự kiến xong 08/10 21:25)');
+    expect(list).toHaveTextContent('kéo dài khoảng 4 ngày (dự kiến xong 08/10/2026 21:25)');
     expect(list).toHaveTextContent('Nick Minh Zalo gửi hơn 150 tin mỗi ngày');
     expect(list).toHaveTextContent('Zalo có thể giới hạn tra số');
     expect(screen.getByText(/có thể lâu hơn nếu Zalo khoá tra số hoặc máy chủ email chặn gửi/)).toBeInTheDocument();
@@ -60,7 +60,7 @@ describe('CampaignEstimatePanel', () => {
     const estimate = { ...ESTIMATE_438, warnings: [{ code: 'ma_moi_chua_biet', params: {} }] };
     render(<CampaignEstimatePanel status="ready" estimate={estimate} t={makeT(viDict)} />);
     expect(screen.getByTestId('campaign-estimate-warnings')).toHaveTextContent(viDict.campaignEstimate.warning.unknown);
-    expect(screen.getByTestId('campaign-estimate-finish')).toHaveTextContent('08/10 21:25');
+    expect(screen.getByTestId('campaign-estimate-finish')).toHaveTextContent('08/10/2026 21:25');
   });
 
   it('tải lỗi → câu nhẹ "Chưa ước tính được", không ném', () => {

@@ -46,7 +46,7 @@ const renderCard = (view) => render(
 describe('ConfirmCreateCard — ước tính thời gian gửi', () => {
   it('có estimate → hiện ngày xong (giờ VN) + cảnh báo', () => {
     renderCard(baseView({ estimate: ESTIMATE_438 }));
-    expect(screen.getByTestId('campaign-estimate-finish')).toHaveTextContent('08/10 21:25');
+    expect(screen.getByTestId('campaign-estimate-finish')).toHaveTextContent('08/10/2026 21:25');
     expect(screen.getByTestId('campaign-estimate-warnings')).toHaveTextContent('kéo dài khoảng 4 ngày');
   });
 

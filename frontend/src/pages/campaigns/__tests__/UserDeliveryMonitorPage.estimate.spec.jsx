@@ -76,14 +76,14 @@ const renderWith = async (runs) => {
 };
 
 describe('UserDeliveryMonitorPage — dự kiến xong của lượt đang chạy', () => {
-  it('lượt running: gọi ước tính đúng runId và hiện "Dự kiến xong: 02/01 10:04" dưới số đã gửi', async () => {
+  it('lượt running: gọi ước tính đúng runId và hiện "Dự kiến xong: 02/01/2099 10:04" dưới số đã gửi', async () => {
     getRunEstimate.mockResolvedValue(estimateBody());
     await renderWith([buildRun({ runId: 7, status: 'running', sent: 300, planned: 799 })]);
 
     expect(getRunEstimate).toHaveBeenCalledTimes(1);
     expect(getRunEstimate).toHaveBeenCalledWith(7);
     const line = within(screen.getByTestId('run-row-7')).getByTestId('run-estimate');
-    expect(line.textContent).toContain('Dự kiến xong: 02/01 10:04');
+    expect(line.textContent).toContain('Dự kiến xong: 02/01/2099 10:04');
     expect(line.textContent).toContain('còn khoảng');
   });
 

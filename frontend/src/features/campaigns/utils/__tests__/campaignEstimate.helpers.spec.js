@@ -38,14 +38,18 @@ const WARNING_SAMPLES = {
   email_provider_rate_limited: { accountKey: 'email:22', events30d: 3, lastAt: '2026-10-03T03:30:00.000Z' },
 };
 
-describe('formatEstimateDateTime — giờ Việt Nam dạng dd/MM HH:mm', () => {
+describe('formatEstimateDateTime — giờ Việt Nam dạng dd/MM/yyyy HH:mm', () => {
   it('đổi UTC sang giờ VN (UTC+7), không theo múi giờ trình duyệt', () => {
-    expect(formatEstimateDateTime('2026-10-08T14:25:00.000Z')).toBe('08/10 21:25');
-    expect(formatEstimateDateTime('2026-10-07T00:25:00.000Z')).toBe('07/10 07:25');
+    expect(formatEstimateDateTime('2026-10-08T14:25:00.000Z')).toBe('08/10/2026 21:25');
+    expect(formatEstimateDateTime('2026-10-07T00:25:00.000Z')).toBe('07/10/2026 07:25');
+  });
+
+  it('mốc năm sau vẫn hiện đủ năm (08/03 là 2027, không bị nhầm với năm nay)', () => {
+    expect(formatEstimateDateTime('2027-03-08T07:41:00Z')).toBe('08/03/2027 14:41');
   });
 
   it('qua nửa đêm VN thì sang ngày kế (17:30Z = 00:30 hôm sau ở VN)', () => {
-    expect(formatEstimateDateTime('2026-10-07T17:30:00.000Z')).toBe('08/10 00:30');
+    expect(formatEstimateDateTime('2026-10-07T17:30:00.000Z')).toBe('08/10/2026 00:30');
   });
 
   it('giá trị rỗng / sai → chuỗi rỗng, không ném', () => {
@@ -116,7 +120,7 @@ describe('describeEstimateWarning — i18n vi + en cho TỪNG mã trong hợp đ
   it('multi_day nêu số ngày + giờ xong theo giờ VN; zalo_over_safe_daily nêu nhãn nick + mức khuyến nghị', () => {
     const t = makeT(viDict);
     expect(describeEstimateWarning({ code: 'multi_day', params: WARNING_SAMPLES.multi_day }, t).text)
-      .toBe('Chiến dịch chạy kéo dài khoảng 4 ngày (dự kiến xong 08/10 21:25).');
+      .toBe('Chiến dịch chạy kéo dài khoảng 4 ngày (dự kiến xong 08/10/2026 21:25).');
     const over = describeEstimateWarning({ code: 'zalo_over_safe_daily', params: WARNING_SAMPLES.zalo_over_safe_daily }, t, () => 'Nick Minh Zalo').text;
     expect(over).toContain('Nick Minh Zalo');
     expect(over).toContain('150');
@@ -142,7 +146,7 @@ describe('describeEstimateWarning — i18n vi + en cho TỪNG mã trong hợp đ
     expect(out.tone).toBe('warn');
     expect(out.text).toContain('chu@shop.vn');
     expect(out.text).toContain('3 lần trong 30 ngày');
-    expect(out.text).toContain('03/10 10:30');
+    expect(out.text).toContain('03/10/2026 10:30');
     expect(out.text).toContain('12 giờ');
   });
 

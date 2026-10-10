@@ -39,10 +39,10 @@ const toDate = (value) => {
 };
 
 /**
- * Định dạng "dd/MM HH:mm" theo giờ Việt Nam (Asia/Ho_Chi_Minh), KHÔNG phụ thuộc múi giờ trình duyệt.
+ * Định dạng "dd/MM/yyyy HH:mm" theo giờ Việt Nam (Asia/Ho_Chi_Minh), KHÔNG phụ thuộc múi giờ trình duyệt.
  *
  * @param {string|Date|null|undefined} value mốc thời gian (ISO UTC từ API)
- * @returns {string} chuỗi dạng "07/10 22:52" hoặc '' nếu không hợp lệ
+ * @returns {string} chuỗi dạng "07/10/2026 22:52" hoặc '' nếu không hợp lệ
  */
 export const formatEstimateDateTime = (value) => {
   const date = toDate(value);
@@ -51,12 +51,13 @@ export const formatEstimateDateTime = (value) => {
     timeZone: HANOI_TIME_ZONE,
     day: '2-digit',
     month: '2-digit',
+    year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
     hourCycle: 'h23',
   }).formatToParts(date);
   const pick = (type) => parts.find((p) => p.type === type)?.value || '';
-  return `${pick('day')}/${pick('month')} ${pick('hour')}:${pick('minute')}`;
+  return `${pick('day')}/${pick('month')}/${pick('year')} ${pick('hour')}:${pick('minute')}`;
 };
 
 /**
