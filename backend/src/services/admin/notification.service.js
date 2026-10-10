@@ -2,6 +2,16 @@ import notificationRepo from '../../repositories/admin/notification.repository.j
 import emailLogRepo from '../../repositories/admin/notificationEmailLog.repository.js';
 import { sendSystemEmail } from '../../utils/systemEmail.util.js';
 import { renderNotificationEmailHtml } from '../../utils/notificationEmailRender.util.js';
+import {
+  broadcastSeverity,
+  isBroadcastEmailLocked,
+  normalizeStoredChannels,
+} from '../../utils/notificationChannels.util.js';
+import {
+  filterEmailRecipientsByPreference,
+  getEffectiveEventSettings,
+  notifyUsers,
+} from '../notification/notificationDispatch.service.js';
 
 const SENDER_NAME = process.env.MAIL_FROM_NAME || 'Founder AI';
 const PRODUCT_NAME = process.env.PRODUCT_NAME || process.env.MAIL_FROM_NAME || 'Founder AI';
@@ -86,6 +96,15 @@ const NOTIFICATION_TYPE_CONFIG = {
   }
 };
 
+/**
+ * Chuông gửi MỘT nội dung chung cho cả nhóm (một câu INSERT), nên biến theo từng người ({{user_name}}...) không thay được như email.
+ * Thay bằng cách gọi trung tính thay vì để lộ nguyên `{{user_name}}` trong chuông.
+ */
+const IN_APP_GENERIC_USER = { full_name: 'bạn', email: 'của bạn', plan: 'của bạn' };
+const IN_APP_GENERIC_USER_EN = { full_name: 'there', email: 'your', plan: 'your' };
+/** Chuông là bản tóm tắt; bản tin dài (HTML đổi sang text) cắt ở đây để khỏi nhân hàng nghìn ký tự × hàng trăm người. */
+const IN_APP_MESSAGE_MAX = 4000;
+
 export const AVAILABLE_VARIABLES = [
   { key: '{{user_name}}', description: 'Tên người dùng' },
   { key: '{{user_email}}', description: 'Email người dùng' },
@@ -106,11 +125,38 @@ export default {
   // =====================
 
   async createNotification(data) {
+    await this.assertChannelsEnabled(data?.channels);
     return notificationRepo.create(data);
   },
 
   async updateNotification(id, data) {
+    if (data?.channels !== undefined) {
+      await this.assertChannelsEnabled(data.channels);
+    }
     return notificationRepo.updateById(id, data);
+  },
+
+  /**
+   * Chặn bản tin chọn kênh mà super admin đang TẮT trong tab "Cấu hình kênh" (sự kiện `admin_broadcast`): chuông tắt thì không
+   * gửi được chuông, email tắt thì không gửi được email. Như vậy công tắc hệ thống không bị vượt, và người dùng luôn có chỗ tắt
+   * email theo đúng cấu hình (trang tuỳ chọn trả NOTIFICATION_EMAIL_DISABLED_BY_SYSTEM khi email hệ thống tắt).
+   *
+   * @param {unknown} channels mảng kênh đã lưu/được chọn; thiếu/hỏng → coi như ['email'] (mặc định của cột)
+   * @throws {Error & { status: 400 }}
+   */
+  async assertChannelsEnabled(channels) {
+    const wanted = normalizeStoredChannels(channels);
+    const settings = await getEffectiveEventSettings('admin_broadcast');
+    if (!settings) return;
+    const off = [];
+    if (wanted.includes('email') && settings.emailEnabled === false) off.push('Email');
+    if (wanted.includes('in_app') && settings.inAppEnabled === false) off.push('Chuông');
+    if (off.length) {
+      throw Object.assign(
+        new Error(`Kênh ${off.join(', ')} đang tắt trong Cấu hình kênh`),
+        { status: 400, code: 'NOTIFICATION_CHANNEL_DISABLED' }
+      );
+    }
   },
 
   async deleteNotification(id) {
@@ -246,6 +292,61 @@ export default {
   // =====================
 
   /**
+   * Văn bản cho chuông: thay biến bằng bản trung tính (xem IN_APP_GENERIC_USER).
+   *
+   * @param {string|null|undefined} text
+   * @param {'vi'|'en'} [locale]
+   * @returns {string|null}
+   */
+  renderInAppText(text, locale = 'vi') {
+    if (text == null || text === '') return null;
+    const rendered = this.replaceVariables(String(text), locale === 'en' ? IN_APP_GENERIC_USER_EN : IN_APP_GENERIC_USER);
+    return rendered.trim() || null;
+  },
+
+  /**
+   * Chèn thông báo chuông cho người nhận bản tin (MỘT câu INSERT qua dispatcher). Không ném: lỗi chuông không được làm hỏng đường email.
+   *
+   * @returns {Promise<{ inApp: number, failed: boolean }>} số dòng đã chèn; `failed` khi notifyUsers ném hoặc không chèn được dòng
+   *   nào trong khi có người nhận (không phân biệt được lỗi DB với "toàn tài khoản bị vô hiệu" vì dispatcher nuốt lỗi ghi)
+   */
+  async deliverInApp(notification, recipients) {
+    try {
+      // Tiêu đề email mang tiền tố "[Founder AI] " (xem buildEmailHtml) — chuông đã nằm trong app, bỏ cho gọn.
+      const prefix = `[${PRODUCT_NAME}] `;
+      const rawTitle = this.renderInAppText(notification.title) || '';
+      const title = rawTitle.startsWith(prefix) ? rawTitle.slice(prefix.length) : rawTitle;
+      const message = (this.renderInAppText(notification.message) || title).slice(0, IN_APP_MESSAGE_MAX);
+      const messageEn = this.renderInAppText(notification.message_en, 'en');
+      const result = await notifyUsers({
+        eventType: 'admin_broadcast',
+        userIds: recipients.map((user) => user.id),
+        title,
+        titleEn: this.renderInAppText(notification.title_en, 'en'),
+        message,
+        messageEn: messageEn ? messageEn.slice(0, IN_APP_MESSAGE_MAX) : null,
+        link: notification.metadata?.link || null,
+        severity: broadcastSeverity(notification.priority),
+        metadata: { broadcastType: notification.type, priority: notification.priority },
+        notificationId: notification.id,
+        dedupeKey: `broadcast:${notification.id}`,
+        // Email của bản tin đi đường cũ trong sendNow (có log từng người + thống kê riêng) — dispatcher chỉ lo phần chuông.
+        channels: ['in_app'],
+        // Kênh do admin chọn cho đúng bản tin này; công tắc hệ thống của `admin_broadcast` chỉ là mặc định gợi ý trên giao diện.
+        explicitChannels: true,
+      });
+      const failed = result.inApp === 0 && recipients.length > 0;
+      if (failed) {
+        console.error(`[NotificationService] Chuông không chèn được dòng nào notification=${notification.id} recipients=${recipients.length}`);
+      }
+      return { inApp: result.inApp, failed };
+    } catch (err) {
+      console.error(`[NotificationService] Gửi chuông thất bại notification=${notification.id}:`, err.message);
+      return { inApp: 0, failed: true };
+    }
+  },
+
+  /**
    * Send notification to all eligible recipients
    */
   async sendNow(id) {
@@ -260,6 +361,13 @@ export default {
     if (notification.status === 'sent') {
       throw Object.assign(new Error('Thông báo đã được gửi trước đó'), { status: 409 });
     }
+
+    const channels = normalizeStoredChannels(notification.channels);
+    const wantsEmail = channels.includes('email');
+    const wantsInApp = channels.includes('in_app');
+
+    // Kênh đã bị tắt trong Cấu hình kênh kể từ lúc tạo/hẹn giờ → dừng TRƯỚC khi đổi trạng thái (bản tin giữ nguyên, sửa kênh rồi gửi lại).
+    await this.assertChannelsEnabled(channels);
 
     // Update status to sending
     await notificationRepo.updateById(id, { status: 'sending' });
@@ -281,79 +389,117 @@ export default {
     }
 
     if (recipients.length === 0) {
-      await notificationRepo.updateById(id, { status: 'sent', recipient_count: 0, sent_at: new Date() });
-      return { sent: 0, failed: 0, total: 0, failedEmails: [] };
+      await notificationRepo.updateById(id, { status: 'sent', recipient_count: 0, in_app_count: 0, sent_at: new Date() });
+      return { sent: 0, failed: 0, total: 0, failedEmails: [], emailTotal: 0, emailSkipped: 0, inApp: 0, inAppFailed: false, channels };
     }
 
-    // Create email logs and get their IDs
-    const logs = recipients.map(user => ({
-      notification_id: id,
-      user_id: user.id,
-      email: user.email,
-      status: 'pending'
-    }));
-    const createdLogs = await emailLogRepo.createBatch(logs);
+    // Người nhận email = tất cả, TRỪ người đã tắt email loại "bản tin admin". Bản khẩn cấp / bảo trì / bảo mật là khoá (luôn gửi).
+    // Tính TRƯỚC khi chèn chuông để lỗi tra cứu tuỳ chọn dừng sớm, khi chưa có tác dụng phụ nào.
+    let emailRecipients = [];
+    let emailSkipped = 0;
+    if (wantsEmail) {
+      if (isBroadcastEmailLocked(notification)) {
+        emailRecipients = recipients;
+      } else {
+        try {
+          const { allowed, skipped } = await filterEmailRecipientsByPreference('admin_broadcast', recipients);
+          emailRecipients = allowed;
+          emailSkipped = skipped.length;
+        } catch (err) {
+          await notificationRepo.markAsFailed(id);
+          throw err;
+        }
+      }
+    }
+
+    // Chuông: MỘT câu INSERT cho cả nhóm, chống trùng theo (user, 'broadcast:<id>').
+    const inAppResult = wantsInApp ? await this.deliverInApp(notification, recipients) : { inApp: 0, failed: false };
+    const inApp = inAppResult.inApp;
 
     let sent = 0;
     let failed = 0;
     const failedEmails = [];
 
-    // Send to recipients in parallel with bounded concurrency
-    const CONCURRENCY = 5;
-    let cursor = 0;
-    const errors = [];
+    if (emailRecipients.length > 0) {
+      // Create email logs and get their IDs
+      const logs = emailRecipients.map(user => ({
+        notification_id: id,
+        user_id: user.id,
+        email: user.email,
+        status: 'pending'
+      }));
+      const createdLogs = await emailLogRepo.createBatch(logs);
 
-    const worker = async () => {
-      while (cursor < recipients.length) {
-        const i = cursor++;
-        const user = recipients[i];
-        const logId = createdLogs[i]?.id;
-        try {
-          // 1 PATH DUY NHẤT qua buildEmailHtml → renderNotificationEmailHtml.
-          // Email thực và preview iframe chung code path, đảm bảo layout khớp 100%.
-          const emailContent = await this.buildEmailHtml(notification, user);
+      // Send to recipients in parallel with bounded concurrency
+      const CONCURRENCY = 5;
+      let cursor = 0;
+      const errors = [];
 
-          if (process.env.NODE_ENV !== 'production' || process.env.DEBUG_NOTIFICATION_EMAIL === '1') {
-            console.log(`[NotificationService] → sending to ${user.email} | subject="${emailContent.subject}" | html.length=${emailContent.html.length}`);
+      const worker = async () => {
+        while (cursor < emailRecipients.length) {
+          const i = cursor++;
+          const user = emailRecipients[i];
+          const logId = createdLogs[i]?.id;
+          try {
+            // 1 PATH DUY NHẤT qua buildEmailHtml → renderNotificationEmailHtml.
+            // Email thực và preview iframe chung code path, đảm bảo layout khớp 100%.
+            const emailContent = await this.buildEmailHtml(notification, user);
+
+            if (process.env.NODE_ENV !== 'production' || process.env.DEBUG_NOTIFICATION_EMAIL === '1') {
+              console.log(`[NotificationService] → sending to ${user.email} | subject="${emailContent.subject}" | html.length=${emailContent.html.length}`);
+            }
+
+            await sendSystemEmail({
+              to: user.email,
+              subject: emailContent.subject,
+              html: emailContent.html
+            });
+
+            if (logId) {
+              await emailLogRepo.updateStatus(logId, 'sent', { sent_at: new Date() });
+            }
+            sent++;
+          } catch (err) {
+            console.error(`[NotificationService] Failed to send to ${user.email}:`, err.message);
+            if (logId) {
+              await emailLogRepo.markAsFailed(logId, err.message);
+            }
+            failed++;
+            failedEmails.push(user.email);
+            errors.push(err);
           }
-
-          await sendSystemEmail({
-            to: user.email,
-            subject: emailContent.subject,
-            html: emailContent.html
-          });
-
-          if (logId) {
-            await emailLogRepo.updateStatus(logId, 'sent', { sent_at: new Date() });
-          }
-          sent++;
-        } catch (err) {
-          console.error(`[NotificationService] Failed to send to ${user.email}:`, err.message);
-          if (logId) {
-            await emailLogRepo.markAsFailed(logId, err.message);
-          }
-          failed++;
-          failedEmails.push(user.email);
-          errors.push(err);
         }
-      }
-    };
+      };
 
-    const workers = Array.from({ length: Math.min(CONCURRENCY, recipients.length) }, () => worker());
-    await Promise.all(workers);
+      const workers = Array.from({ length: Math.min(CONCURRENCY, emailRecipients.length) }, () => worker());
+      await Promise.all(workers);
 
-    // Update notification stats
-    await notificationRepo.updateStats(id, { sent, failed });
+      // Update notification stats
+      await notificationRepo.updateStats(id, { sent, failed });
+    }
+
     await notificationRepo.markAsSent(id);
-    await notificationRepo.updateById(id, { recipient_count: recipients.length });
+    await notificationRepo.updateById(id, { recipient_count: recipients.length, in_app_count: inApp });
 
-    return { sent, failed, total: recipients.length, failedEmails };
+    return {
+      sent,
+      failed,
+      total: recipients.length,
+      failedEmails,
+      emailTotal: emailRecipients.length,
+      emailSkipped,
+      inApp,
+      inAppFailed: inAppResult.failed,
+      channels
+    };
   },
 
   /**
    * Send notification directly with data (create + send)
    */
   async sendDirect(data) {
+    // Kiểm kênh TRƯỚC khi tạo dòng để kênh bị tắt không để lại một bản nháp mồ côi.
+    await this.assertChannelsEnabled(data?.channels);
     const notification = await notificationRepo.create({
       ...data,
       status: 'sending',

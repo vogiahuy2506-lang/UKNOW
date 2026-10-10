@@ -349,6 +349,38 @@ describe('notificationDispatch', () => {
       expect(mockInsertMany).not.toHaveBeenCalled();
       expect(result.emailSent).toBe(2);
     });
+
+    // PR-3: bản tin admin chọn kênh cho TỪNG lần gửi; công tắc hệ thống của sự kiện chỉ là mặc định gợi ý trên giao diện.
+    describe('explicitChannels (bản tin admin chọn kênh lúc gửi)', () => {
+      it('công tắc chuông hệ thống TẮT nhưng người gửi chọn chuông → vẫn chèn', async () => {
+        mockListSettings.mockResolvedValue([settingRow('admin_broadcast', { inAppEnabled: false })]);
+
+        const result = await notifyUsers(base({ eventType: 'admin_broadcast', channels: ['in_app'], explicitChannels: true }));
+
+        expect(mockInsertMany).toHaveBeenCalledTimes(1);
+        expect(result.inApp).toBe(2);
+      });
+
+      it('KHÔNG có explicitChannels: công tắc chuông hệ thống tắt vẫn chặn (hành vi các sự kiện hệ thống không đổi)', async () => {
+        mockListSettings.mockResolvedValue([settingRow('admin_broadcast', { inAppEnabled: false })]);
+
+        const result = await notifyUsers(base({ eventType: 'admin_broadcast', channels: ['in_app'] }));
+
+        expect(mockInsertMany).not.toHaveBeenCalled();
+        expect(result.inApp).toBe(0);
+      });
+
+      it('công tắc email hệ thống tắt nhưng người gửi chọn email → vẫn gửi; người đã tắt email loại này vẫn bị bỏ', async () => {
+        mockListSettings.mockResolvedValue([settingRow('admin_broadcast', { emailEnabled: false })]);
+        mockListEmailDisabledUserIds.mockResolvedValue(new Set([2]));
+
+        const result = await notifyUsers(base({ eventType: 'admin_broadcast', channels: ['email'], explicitChannels: true }));
+
+        expect(mockSendSystemEmail).toHaveBeenCalledTimes(1);
+        expect(mockSendSystemEmail.mock.calls[0][0].to).toBe('u1@shop.vn');
+        expect(result).toMatchObject({ emailSent: 1, emailSkipped: 1 });
+      });
+    });
   });
 
   describe('cấu hình sự kiện', () => {

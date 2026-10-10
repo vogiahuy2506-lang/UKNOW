@@ -206,6 +206,7 @@ async function deliver(input, resolveEmailRecipients) {
   const {
     eventType, userIds, title, titleEn = null, message, messageEn = null, link = null,
     severity = 'info', metadata = {}, notificationId = null, dedupeKey = null, email = null, channels = null,
+    explicitChannels = false,
   } = input;
 
   const result = { inApp: 0, emailSent: 0, emailSkipped: 0, emailFailed: 0 };
@@ -221,7 +222,10 @@ async function deliver(input, resolveEmailRecipients) {
 
   // null = không chèn được / không chèn → chưa biết ai đã có dòng (không lọc trùng cho email).
   let inserted = null;
-  if (ids.length && wanted.includes('in_app') && settings.inAppEnabled) {
+  // `explicitChannels`: người gọi đã CHỌN kênh cho đúng lần gửi này (bản tin admin) → công tắc hệ thống của sự kiện chỉ là mặc định
+  // gợi ý trên giao diện, không chặn. Khoá tắt email của người dùng (userCanDisableEmail) vẫn áp dụng.
+  const honorSystemToggles = explicitChannels !== true;
+  if (ids.length && wanted.includes('in_app') && (!honorSystemToggles || settings.inAppEnabled)) {
     try {
       const insertedIds = await userNotificationRepository.insertMany({
         userIds: ids,
@@ -243,7 +247,7 @@ async function deliver(input, resolveEmailRecipients) {
     }
   }
 
-  if (wanted.includes('email') && settings.emailEnabled) {
+  if (wanted.includes('email') && (!honorSystemToggles || settings.emailEnabled)) {
     // Có dedupeKey + đã chèn được → chỉ người MỚI được chèn mới nhận email (gọi lại cùng sự kiện thì không gửi lần hai).
     const targetIds = safeDedupeKey && inserted ? ids.filter((id) => inserted.has(id)) : ids;
     result.emailSkipped += ids.length - targetIds.length;
@@ -284,6 +288,8 @@ async function deliver(input, resolveEmailRecipients) {
  * @param {{ subject: string, html: string }|((recipient: { id: number, email: string, fullName: string|null }) => { subject: string, html: string })|null} [input.email]
  *   mẫu email riêng (đối tượng dùng chung hoặc hàm theo người nhận); bỏ trống → buildNotificationEmail
  * @param {Array<'in_app'|'email'>|null} [input.channels] giới hạn kênh (mặc định cả hai); `['in_app']` tắt phần email của dispatcher
+ * @param {boolean} [input.explicitChannels] true = kênh trong `channels` là lựa chọn của người gửi cho lần này (bản tin admin): bỏ qua công tắc
+ *   chuông/email của HỆ THỐNG cho sự kiện (chúng chỉ là mặc định gợi ý trên giao diện). Mặc định false = công tắc hệ thống có hiệu lực.
  * @returns {Promise<{ inApp: number, emailSent: number, emailSkipped: number, emailFailed: number }>}
  */
 export async function notifyUsers(input) {

@@ -3230,6 +3230,11 @@ CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at
 CREATE INDEX IF NOT EXISTS idx_notifications_type_status ON notifications(type, status);
 CREATE INDEX IF NOT EXISTS idx_notifications_created_by ON notifications(created_by);
 
+-- Migration 290: bản tin admin chọn kênh gửi (email / chuông)
+ALTER TABLE notifications
+  ADD COLUMN IF NOT EXISTS channels TEXT[] NOT NULL DEFAULT '{email}',
+  ADD COLUMN IF NOT EXISTS in_app_count INTEGER NOT NULL DEFAULT 0;
+
 CREATE TABLE IF NOT EXISTS notification_email_logs (
   id              SERIAL PRIMARY KEY,
   notification_id INTEGER REFERENCES notifications(id) ON DELETE CASCADE,

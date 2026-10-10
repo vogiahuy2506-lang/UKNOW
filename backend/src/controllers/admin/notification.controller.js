@@ -1,5 +1,6 @@
 import notificationService from '../../services/admin/notification.service.js';
 import notificationTemplateService from '../../services/admin/notificationTemplate.service.js';
+import { parseNotificationChannels, summarizeSendResult } from '../../utils/notificationChannels.util.js';
 
 const handleError = (res, err) => {
   console.error('[NotificationController]', err);
@@ -57,7 +58,8 @@ export async function createNotification(req, res) {
       scheduled_at,
       recurrence_pattern,
       recurrence_end_date,
-      is_recurring = false
+      is_recurring = false,
+      channels
     } = req.body;
 
     if (!title || typeof title !== 'string' || title.trim().length === 0) {
@@ -65,6 +67,11 @@ export async function createNotification(req, res) {
     }
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
       return res.status(400).json({ success: false, message: 'Nội dung thông báo là bắt buộc' });
+    }
+    // Không gửi `channels` = bản tin chỉ email (hành vi cũ). Có gửi thì phải hợp lệ.
+    const parsedChannels = channels === undefined ? null : parseNotificationChannels(channels);
+    if (parsedChannels && !parsedChannels.ok) {
+      return res.status(400).json({ success: false, message: parsedChannels.message });
     }
 
     // Phải có ít nhất một tiêu chí targeting để tránh nháp "gửi cho tất cả" vô tình
@@ -107,6 +114,7 @@ export async function createNotification(req, res) {
       recurrence_pattern,
       recurrence_end_date,
       is_recurring,
+      channels: parsedChannels?.channels,
       created_by: req.user?.id
     });
 
@@ -122,7 +130,15 @@ export async function createNotification(req, res) {
 export async function updateNotification(req, res) {
   try {
     const { id } = req.params;
-    const notification = await notificationService.updateNotification(id, req.body);
+    const body = { ...req.body };
+    if (body.channels !== undefined) {
+      const parsedChannels = parseNotificationChannels(body.channels);
+      if (!parsedChannels.ok) {
+        return res.status(400).json({ success: false, message: parsedChannels.message });
+      }
+      body.channels = parsedChannels.channels;
+    }
+    const notification = await notificationService.updateNotification(id, body);
 
     if (!notification) {
       return res.status(404).json({ success: false, message: 'Không tìm thấy thông báo' });
@@ -393,19 +409,10 @@ export async function sendNotification(req, res) {
     // For large campaigns, we could use a job queue here
     const result = await notificationService.sendNow(id);
 
-    const allFailed = result.sent === 0 && result.total > 0;
-    let responseMessage;
-    if (allFailed) {
-      responseMessage = `Gửi thất bại toàn bộ ${result.total} email`;
-    } else if (result.failed === 0) {
-      responseMessage = `Đã gửi thành công ${result.sent}/${result.total} email`;
-    } else {
-      responseMessage = `Đã gửi ${result.sent}/${result.total} email, ${result.failed} thất bại`;
-    }
-
+    const summary = summarizeSendResult(result);
     res.json({
-      success: !allFailed,
-      message: responseMessage,
+      success: summary.success,
+      message: summary.message,
       data: result
     });
   } catch (err) {
@@ -437,7 +444,8 @@ export async function createAndSend(req, res) {
       target_user_ids,
       target_emails,
       registered_before,
-      registered_after
+      registered_after,
+      channels
     } = req.body;
 
     if (!title || typeof title !== 'string' || title.trim().length === 0) {
@@ -445,6 +453,10 @@ export async function createAndSend(req, res) {
     }
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
       return res.status(400).json({ success: false, message: 'Nội dung thông báo là bắt buộc' });
+    }
+    const parsedChannels = channels === undefined ? null : parseNotificationChannels(channels);
+    if (parsedChannels && !parsedChannels.ok) {
+      return res.status(400).json({ success: false, message: parsedChannels.message });
     }
 
     // Phải có ít nhất một tiêu chí targeting — nhất quán với service.sendNow
@@ -482,22 +494,14 @@ export async function createAndSend(req, res) {
       target_emails,
       registered_before,
       registered_after,
+      channels: parsedChannels?.channels,
       created_by: req.user?.id
     });
 
-    const allFailed = result.sent === 0 && result.total > 0;
-    let responseMessage;
-    if (allFailed) {
-      responseMessage = `Gửi thất bại toàn bộ ${result.total} email`;
-    } else if (result.failed === 0) {
-      responseMessage = `Đã gửi thành công ${result.sent}/${result.total} email`;
-    } else {
-      responseMessage = `Đã gửi ${result.sent}/${result.total} email, ${result.failed} thất bại`;
-    }
-
+    const summary = summarizeSendResult(result);
     res.json({
-      success: !allFailed,
-      message: responseMessage,
+      success: summary.success,
+      message: summary.message,
       data: result
     });
   } catch (err) {

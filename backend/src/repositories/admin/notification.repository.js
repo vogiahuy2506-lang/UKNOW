@@ -1,4 +1,5 @@
 import db from '../../config/database.js';
+import { normalizeStoredChannels } from '../../utils/notificationChannels.util.js';
 
 /**
  * Notification Repository
@@ -33,6 +34,8 @@ export default {
       is_recurring = false,
       created_by = null
     } = data;
+    // Thiếu/rỗng/sai → ['email'] (đúng DEFAULT của cột); controller đã chặn giá trị sai bằng 400 trước khi tới đây.
+    const channels = normalizeStoredChannels(data.channels);
 
     const { rows } = await db.query(
       `INSERT INTO notifications (
@@ -42,10 +45,10 @@ export default {
         target_user_ids, target_emails,
         registered_before, registered_after,
         schedule_type, scheduled_at, recurrence_pattern,
-        recurrence_end_date, is_recurring, created_by
+        recurrence_end_date, is_recurring, created_by, channels
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9,
-        $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
+        $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
       ) RETURNING *`,
       [
         type, title, title_en, message, message_en,
@@ -54,7 +57,7 @@ export default {
         target_user_ids, target_emails,
         registered_before, registered_after,
         schedule_type, scheduled_at, recurrence_pattern,
-        recurrence_end_date, is_recurring, created_by
+        recurrence_end_date, is_recurring, created_by, channels
       ]
     );
     return rows[0];
@@ -71,9 +74,9 @@ export default {
       'target_user_ids', 'target_emails',
       'registered_before', 'registered_after',
       'schedule_type', 'scheduled_at', 'recurrence_pattern',
-      'recurrence_end_date', 'is_recurring',
+      'recurrence_end_date', 'is_recurring', 'channels',
       'status', 'recipient_count', 'sent_count', 'failed_count',
-      'delivered_count', 'opened_count', 'open_rate',
+      'delivered_count', 'opened_count', 'open_rate', 'in_app_count',
       'sent_at'
     ];
 
@@ -467,7 +470,7 @@ export default {
         target_user_ids, target_emails,
         registered_before, registered_after,
         schedule_type, scheduled_at, recurrence_pattern,
-        recurrence_end_date, is_recurring, created_by
+        recurrence_end_date, is_recurring, created_by, channels
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
       RETURNING *`,
       [
@@ -477,7 +480,7 @@ export default {
         parent.target_user_ids, parent.target_emails,
         parent.registered_before, parent.registered_after,
         'scheduled', nextSendAt, parent.recurrence_pattern,
-        parent.recurrence_end_date, false, parent.created_by
+        parent.recurrence_end_date, false, parent.created_by, parent.channels
       ]
     );
     return rows[0];
