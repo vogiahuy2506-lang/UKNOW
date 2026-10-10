@@ -47,6 +47,8 @@ const repoStub = {
   deleteAccount: jest.fn(async () => true),
   deactivateAccount: jest.fn(async () => ({ id: 1, is_active: false })),
   setEnabled: jest.fn(async () => ({ enabled: true })),
+  assertOwned: jest.fn(async () => undefined),
+  findOtherEnabledChatbot: jest.fn(async () => null),
   listAccountsForUser: jest.fn(async () => []),
   getSessionString: jest.fn(async () => null),
 };
@@ -365,5 +367,19 @@ describe('telegramPersonalService.toggleAccountChatbot', () => {
     expect(result).toEqual({ enabled: true });
     expect(repoStub.setEnabled).toHaveBeenCalledWith(100, 1, 1, true);
     expect(gatewayMock.ensureHandler).toHaveBeenCalled();
+  });
+
+  it('bot khác đang bật trên tài khoản -> 409, không gọi setEnabled; tắt vẫn được', async () => {
+    repoStub.findOtherEnabledChatbot.mockResolvedValueOnce({ id: 9, name: 'Bot Cũ' });
+    repoStub.setEnabled.mockClear();
+    await expect(telegramPersonalService.toggleAccountChatbot(100, 1, 2, true)).rejects.toMatchObject({
+      status: 409,
+      code: 'CHANNEL_ACCOUNT_BOUND_TO_OTHER_CHATBOT',
+      chatbotName: 'Bot Cũ',
+    });
+    expect(repoStub.setEnabled).not.toHaveBeenCalled();
+
+    repoStub.findOtherEnabledChatbot.mockResolvedValueOnce({ id: 9, name: 'Bot Cũ' });
+    await expect(telegramPersonalService.toggleAccountChatbot(100, 1, 2, false)).resolves.toEqual({ enabled: true });
   });
 });
