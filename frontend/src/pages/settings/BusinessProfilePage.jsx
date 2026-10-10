@@ -242,7 +242,11 @@ const BusinessProfilePage = () => {
       await businessProfileApiService.saveBusinessProfile(form);
       setHasProfile(true);
       toast.success(t('businessProfile.saveSuccess'));
-    } catch { toast.error(t('businessProfile.saveFailed')); }
+    } catch (err) {
+      // Lỗi có mã (vd EXTRA_CONTEXT_TOO_LONG: "Phần Thông tin bổ sung quá dài…") thì hiện đúng câu máy chủ nói rõ phải sửa gì.
+      const data = err?.response?.data;
+      toast.error((data?.code && data?.message) || t('businessProfile.saveFailed'));
+    }
     finally { setIsSaving(false); }
   };
 
