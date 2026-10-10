@@ -94,6 +94,11 @@ beforeEach(async () => {
     NOTICE_KIND_OWNER_EMAIL,
     NOTICE_KIND_VISITOR_APOLOGY,
   }));
+  // PR-6 — báo chủ đi qua dispatcher (chuông + email): mock RANH GIỚI dispatcher để spec không chạm CSDL; cooldown của service thật vẫn chạy.
+  m.notifyUsers = jest.fn(async () => ({ inApp: 1, emailSent: 0, emailSkipped: 0, emailFailed: 0 }));
+  jest.unstable_mockModule(resolveUrl('services/notification/notificationDispatch.service.js'), () => ({
+    notifyUsers: (...args) => m.notifyUsers(...args),
+  }));
   jest.unstable_mockModule(resolveUrl('config/database.js'), () => ({
     default: {
       query: jest.fn(async (sql, params) => {
@@ -354,7 +359,7 @@ describe('WhatsApp Baileys — credit AI + xác nhận liên hệ', () => {
   /** Metadata JSON của dòng bot đã ghi vào channel_messages (tham số $7 của INSERT). */
   const botMetadata = () => m.inserts.filter((p) => p[3] === 'bot').map((p) => JSON.parse(p[6]));
   const limitErr = (resource) => Object.assign(new Error('limit'), { code: 'RESOURCE_LIMIT_EXCEEDED', resource });
-  const ownerEmailRuns = () => m.noticeRepo.findOwnerContact.mock.calls.length;
+  const ownerEmailRuns = () => m.notifyUsers.mock.calls.length;
 
   it('hết credit (visitorMessage): gửi đúng câu đó, KHÔNG gọi AI, KHÔNG trừ — dòng bot mang nhãn ai_unavailable', async () => {
     m.prepareCredit = jest.fn(async () => ({ visitorMessage: 'het-credit', unavailableReason: 'credit_exhausted' }));

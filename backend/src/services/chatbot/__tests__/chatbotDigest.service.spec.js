@@ -20,6 +20,8 @@ jest.unstable_mockModule(
 
 jest.unstable_mockModule('../../../utils/systemEmail.util.js', () => ({
   sendSystemEmail: mockSendSystemEmail,
+  // PR-6: chatbotContactAlert.service (import để lấy getFrontendInboxUrl) giờ kéo dispatcher thông báo, dispatcher import buildNotificationEmail.
+  buildNotificationEmail: jest.fn(),
   SENDER_NAME: 'Founder AI',
 }));
 

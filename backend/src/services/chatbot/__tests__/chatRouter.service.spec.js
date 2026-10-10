@@ -54,6 +54,13 @@ jest.unstable_mockModule('../../../repositories/chatbot/aiUnavailableNotice.repo
   NOTICE_KIND_VISITOR_APOLOGY,
 }));
 
+// PR-6 — báo chủ đi qua dispatcher (chuông + email); spec này mock RANH GIỚI dispatcher để không chạm CSDL. Hành vi thật của dispatcher
+// có spec riêng (notificationDispatch.service.spec.js); mốc cooldown của aiUnavailableNotice vẫn chạy nguyên trên kho giả.
+const mockNotifyUsers = jest.fn(async () => ({ inApp: 1, emailSent: 0, emailSkipped: 0, emailFailed: 0 }));
+jest.unstable_mockModule('../../notification/notificationDispatch.service.js', () => ({
+  notifyUsers: mockNotifyUsers,
+}));
+
 jest.unstable_mockModule('../../../repositories/ai/knowledgeBase.repository.js', () => ({
   default: {},
 }));
@@ -278,8 +285,8 @@ const limitError = (resource, extra = {}) => Object.assign(new Error('hết hạ
   code: 'RESOURCE_LIMIT_EXCEEDED', resource, status: 402, ...extra,
 });
 const flushMicrotasks = async () => { for (let i = 0; i < 40; i += 1) await Promise.resolve(); };
-/** Số lần email chủ THẬT SỰ được dựng: chỉ chạy sau khi chiếm được mốc owner_email. */
-const ownerEmailRuns = () => noticeRepo.findOwnerContact.mock.calls.length;
+/** Số lần báo chủ THẬT SỰ chạy (qua dispatcher): chỉ chạy sau khi chiếm được mốc owner_email. */
+const ownerEmailRuns = () => mockNotifyUsers.mock.calls.length;
 
 describe('chatRouter — chatbot không trả lời được khách (G3b, A P1-6)', () => {
   // Ca đã QUA kiểm credit dùng kênh 'web' (lịch sử đọc qua chatbotRepository đã mock); kênh 'zalo_personal' đọc lịch sử
@@ -293,6 +300,7 @@ describe('chatRouter — chatbot không trả lời được khách (G3b, A P1-6
     noticeRepo.rows.clear();
     noticeRepo.claim.mockClear();
     noticeRepo.findOwnerContact.mockClear();
+    mockNotifyUsers.mockClear();
     isCreditLimitError.mockImplementation((e) => e?.code === 'RESOURCE_LIMIT_EXCEEDED' && e?.resource === 'ai_credit');
     isUsageLimitError.mockImplementation((e) => e?.code === 'RESOURCE_LIMIT_EXCEEDED' && e?.resource === 'ai_token');
     getFormattedProfileForPrompt.mockResolvedValue('');
