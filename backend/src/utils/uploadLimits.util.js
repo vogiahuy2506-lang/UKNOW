@@ -1,3 +1,7 @@
 /** Giới hạn dung lượng file upload chung (PDF/DOCX/CSV/… — không áp cho logo/help image). */
 export const MAX_UPLOAD_FILE_MB = 100;
 export const MAX_UPLOAD_FILE_BYTES = MAX_UPLOAD_FILE_MB * 1024 * 1024;
+
+/** Trần riêng cho đường tải tệp CÔNG KHAI không đăng nhập (widget web chat): cả tệp nằm RAM (memoryStorage) nên hạ thấp hơn đường có đăng nhập. */
+export const MAX_PUBLIC_UPLOAD_FILE_MB = 20;
+export const MAX_PUBLIC_UPLOAD_FILE_BYTES = MAX_PUBLIC_UPLOAD_FILE_MB * 1024 * 1024;

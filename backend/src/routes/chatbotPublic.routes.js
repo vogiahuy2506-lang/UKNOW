@@ -8,12 +8,25 @@ import {
   publicChatPollIpLimiter,
   publicChatPollSessionLimiter,
 } from '../middleware/rateLimiter.middleware.js';
-import { MAX_UPLOAD_FILE_BYTES } from '../utils/uploadLimits.util.js';
+import { MAX_PUBLIC_UPLOAD_FILE_BYTES, MAX_PUBLIC_UPLOAD_FILE_MB } from '../utils/uploadLimits.util.js';
 import { storageCapacityGuard } from '../middleware/storageCapacity.middleware.js';
 import { getStoragePaths } from '../utils/storageCapacity.util.js';
 
 const router = express.Router();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_UPLOAD_FILE_BYTES } });
+const multerUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_PUBLIC_UPLOAD_FILE_BYTES } });
+// Đường công khai (không đăng nhập): trần 20 MB, quá trần trả 413 kèm câu tiếng Việt nêu đúng con số (widget hiện nguyên `message`).
+const upload = {
+  single: (field) => (req, res, next) => multerUpload.single(field)(req, res, (err) => {
+    if (err && err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({
+        success: false,
+        message: `Tệp quá lớn. Vui lòng gửi tệp dưới ${MAX_PUBLIC_UPLOAD_FILE_MB}MB.`,
+        code: 'FILE_TOO_LARGE',
+      });
+    }
+    return next(err);
+  }),
+};
 const workspaceUploadCapacityGuard = storageCapacityGuard({ paths: [getStoragePaths().uploads] });
 
 // Apply allow-all CORS to all routes (for widget/iframe embedding)
