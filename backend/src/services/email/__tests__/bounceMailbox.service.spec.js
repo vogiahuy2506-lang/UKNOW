@@ -62,4 +62,25 @@ describe('BounceMailboxService — syncBounceMailbox early returns', () => {
     });
     expect(mockImapFlow).not.toHaveBeenCalled();
   });
+
+  // PLAN_RA_SOAT_DOT3 PR-Q1 việc 5 — IMAP hỏng trước đây trả stats không có status nên cron_job_runs.recordRun mặc định
+  // 'success': trang Tác vụ định kỳ hiện xanh trong khi không đọc được hộp thư bounce.
+  it('IMAP không kết nối được → status "failure" + connectionError (không còn xanh giả)', async () => {
+    process.env.BOUNCE_DOMAIN = 'bounce.example.com';
+    process.env.BOUNCE_IMAP_HOST = 'imap.example.com';
+    process.env.BOUNCE_IMAP_USER = 'bounce@example.com';
+    process.env.BOUNCE_IMAP_PASS = 'secret123';
+    mockImapFlow.mockImplementation(() => ({
+      connect: jest.fn().mockRejectedValue(new Error('getaddrinfo ENOTFOUND imap.example.com')),
+      logout: jest.fn().mockResolvedValue(),
+      usable: false,
+    }));
+
+    const service = new BounceMailboxService();
+    const result = await service.syncBounceMailbox();
+
+    expect(result.status).toBe('failure');
+    expect(result.connectionError).toContain('ENOTFOUND');
+    expect(service.isSyncing).toBe(false);
+  });
 });

@@ -31,6 +31,7 @@ jest.unstable_mockModule('../../quota/sendQuotaReservation.service.js', () => ({
 const { default: campaignEmailSenderService } = await import('../campaignEmailSender.service.js');
 const { default: emailSettingsController } = await import('../../../controllers/emailSettings.controller.js');
 const { default: campaignEmailSenderRepository } = await import('../../../repositories/campaign/campaignEmailSender.repository.js');
+const { default: emailSuppressionRepository } = await import('../../../repositories/email/emailSuppression.repository.js');
 
 const actionNode = {
   id: 'node_send_email_transient',
@@ -50,6 +51,8 @@ describe('campaignEmailSenderService: SMTP lỗi tạm thời TRƯỚC DATA (PR-
     jest.clearAllMocks();
     mockReserveSendQuota.mockResolvedValue({ mode: 'enforce', id: 501, status: 'reserved' });
     jest.spyOn(campaignEmailSenderRepository, 'incrementEmailSettingsSentCount').mockResolvedValue();
+    jest.spyOn(emailSuppressionRepository, 'findReason').mockResolvedValue(null);
+    jest.spyOn(emailSuppressionRepository, 'upsert').mockResolvedValue();
     jest.spyOn(campaignEmailSenderRepository, 'isLeadConsentRefusedOrWithdrawn').mockResolvedValue(false);
     jest.spyOn(campaignEmailSenderRepository, 'findCustomerByEmail').mockResolvedValue({ id: 88, email: customer.email });
     jest.spyOn(emailSettingsController, 'logEmailSent').mockResolvedValue();

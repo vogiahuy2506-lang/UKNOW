@@ -1,5 +1,6 @@
 import db from '../../config/database.js';
 import customerEmailTrackingRepository from '../../repositories/customer/customerEmailTracking.repository.js';
+import emailSuppressionService from '../email/emailSuppression.service.js';
 
 class CustomerEmailTrackingService {
   async trackEmailOpen({ token, clientIp, userAgent, referer }) {
@@ -32,7 +33,11 @@ class CustomerEmailTrackingService {
 
           await customerEmailTrackingRepository.upsertCampaignParticipation(client, message.id_customer, message.id_campaign, message.id_run || null);
 
-          await customerEmailTrackingRepository.incrementCampaignTotalOpened(client, message.id_campaign);
+          // PLAN_RA_SOAT_DOT3 PR-Q1 việc 6 — total_opened đếm số THƯ được mở (lần đầu), không đếm mỗi lần tải pixel
+          // (proxy ảnh Gmail/Apple Mail tải lại liên tục làm số phình).
+          if (message.is_first_open) {
+            await customerEmailTrackingRepository.incrementCampaignTotalOpened(client, message.id_campaign);
+          }
         }
 
         if (message.id_customer) {
@@ -177,6 +182,8 @@ class CustomerEmailTrackingService {
       }
 
       await customerEmailTrackingRepository.setEmailMessageUnsubscribed(client, token);
+      // PLAN_RA_SOAT_DOT3 PR-Q1 việc 1 — chặn địa chỉ cho cả workspace, không chỉ khi khớp một dòng customers.
+      await emailSuppressionService.suppressByTrackingToken(token, { reason: 'unsubscribe', source: 'unsubscribe_link' }, client);
 
       if (message.id_customer) {
         await customerEmailTrackingRepository.unsubscribeCustomerEmail(client, message.id_customer);
@@ -266,14 +273,17 @@ class CustomerEmailTrackingService {
           } catch {}
         }
 
-        await customerEmailTrackingRepository.updateEmailMessageOnClick(client, message.id);
+        const isFirstClick = await customerEmailTrackingRepository.updateEmailMessageOnClick(client, message.id);
 
         if (message.id_campaign && message.id_customer) {
           await customerEmailTrackingRepository.upsertCampaignCustomerClick(client, message.id_campaign, message.id_customer);
 
           await customerEmailTrackingRepository.upsertCampaignParticipation(client, message.id_customer, message.id_campaign, message.id_run || null);
 
-          await customerEmailTrackingRepository.incrementCampaignTotalClicked(client, message.id_campaign);
+          // PLAN_RA_SOAT_DOT3 PR-Q1 việc 6 — total_clicked đếm số thư có bấm (lần đầu), không đếm mỗi lần bấm.
+          if (isFirstClick) {
+            await customerEmailTrackingRepository.incrementCampaignTotalClicked(client, message.id_campaign);
+          }
         }
 
         if (message.id_customer) {
@@ -282,6 +292,9 @@ class CustomerEmailTrackingService {
             await customerEmailTrackingRepository.updateEmailMessageOnInferredOpen(client, message.id);
             if (message.id_campaign) {
               await customerEmailTrackingRepository.updateCampaignCustomerInferredOpen(client, message.id_campaign, message.id_customer);
+              // PR-Q1 việc 6 — mở suy ra từ click là lần mở ĐẦU của thư (journey chưa có email_opened) nên tính vào
+              // total_opened; pixel tới sau có open_count > 1 nên không tính đôi.
+              await customerEmailTrackingRepository.incrementCampaignTotalOpened(client, message.id_campaign);
             }
             await customerEmailTrackingRepository.insertJourneyEvent(client, {
               customerId: message.id_customer,

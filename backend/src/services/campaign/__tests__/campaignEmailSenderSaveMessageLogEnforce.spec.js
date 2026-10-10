@@ -36,6 +36,7 @@ jest.unstable_mockModule('../../quota/sendQuotaReservation.service.js', () => ({
 const { default: campaignEmailSenderService } = await import('../campaignEmailSender.service.js');
 const { default: emailSettingsSmtpService } = await import('../../email/emailSettingsSmtp.service.js');
 const { default: campaignEmailSenderRepository } = await import('../../../repositories/campaign/campaignEmailSender.repository.js');
+const { default: emailSuppressionRepository } = await import('../../../repositories/email/emailSuppression.repository.js');
 
 const customer = { email: 'enforce_history@example.com', full_name: 'Nguyen Enforce' };
 const campaign = { id: 410, id_user: 39 };
@@ -55,6 +56,8 @@ describe('campaignEmailSenderService: lịch sử gửi luôn được ghi — n
     jest.clearAllMocks();
     mockReserveSendQuota.mockResolvedValue({ mode: 'enforce', id: 77, status: 'reserved' });
     jest.spyOn(campaignEmailSenderRepository, 'incrementEmailSettingsSentCount').mockResolvedValue();
+    jest.spyOn(emailSuppressionRepository, 'findReason').mockResolvedValue(null);
+    jest.spyOn(emailSuppressionRepository, 'upsert').mockResolvedValue();
     jest.spyOn(campaignEmailSenderRepository, 'isLeadConsentRefusedOrWithdrawn').mockResolvedValue(false);
     jest.spyOn(campaignEmailSenderRepository, 'findCustomerByEmail').mockResolvedValue({ id: 89, email: customer.email });
     jest.spyOn(campaignEmailSenderService, 'resolveRetryScheduleGuard').mockReturnValue({ remainingDelayMs: 0 });

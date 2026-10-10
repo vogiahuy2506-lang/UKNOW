@@ -20,7 +20,7 @@ class CustomerEmailTrackingRepository {
              ELSE status
            END
        WHERE tracking_token = $1
-       RETURNING id, id_campaign, id_customer, id_run`,
+       RETURNING id, id_campaign, id_customer, id_run, (open_count = 1) AS is_first_open`,
       [token]
     );
     return result.rows[0] || null;
@@ -264,7 +264,7 @@ class CustomerEmailTrackingRepository {
    * @returns {Promise<void>}
    */
   async updateEmailMessageOnClick(client, emailMessageId) {
-    await client.query(
+    const result = await client.query(
       `UPDATE email_messages
        SET click_count = COALESCE(click_count, 0) + 1,
            first_clicked_at = COALESCE(first_clicked_at, CURRENT_TIMESTAMP),
@@ -272,9 +272,11 @@ class CustomerEmailTrackingRepository {
              WHEN status IN ('pending', 'queued', 'sent', 'delivered', 'opened') THEN 'clicked'
              ELSE status
            END
-       WHERE id = $1`,
+       WHERE id = $1
+       RETURNING (click_count = 1) AS is_first_click`,
       [emailMessageId]
     );
+    return result.rows[0]?.is_first_click === true;
   }
 
   /**

@@ -13,11 +13,11 @@ class TrackingShortLinkRepository {
 
   async findDestinationUrlByCode(code) {
     const result = await db.query(
+      // PLAN_RA_SOAT_DOT3 PR-Q1 việc 6 — so khớp CHÍNH XÁC (dùng được chỉ mục UNIQUE short_code). Trước đây
+      // `OR LOWER(short_code) = LOWER($1)` buộc quét toàn bảng cho mỗi lượt bấm và thu hẹp không gian mã.
       `SELECT destination_url
        FROM tracking_short_links
        WHERE short_code = $1
-          OR LOWER(short_code) = LOWER($1)
-       ORDER BY CASE WHEN short_code = $1 THEN 0 ELSE 1 END
        LIMIT 1`,
       [code]
     );

@@ -251,7 +251,8 @@ class EmailSettingsController {
         matches.forEach((matched, index) => {
           const fullAnchor = String(matched[0] || '');
           if (!fullAnchor) return;
-          withClickTracking = withClickTracking.replace(fullAnchor, replacementHtmlList[index]);
+          // Hàm thay thế: chuỗi thay thế bị String.replace diễn giải `$&`, `$1`, `$$`... — URL có `$` làm hỏng link.
+          withClickTracking = withClickTracking.replace(fullAnchor, () => replacementHtmlList[index]);
         });
       }
     }
@@ -279,7 +280,7 @@ class EmailSettingsController {
 </div>`;
 
     if (/<\/body>/i.test(withClickTracking)) {
-      return withClickTracking.replace(/<\/body>/i, `${unsubscribeFooter}${trackingPixel}</body>`);
+      return withClickTracking.replace(/<\/body>/i, () => `${unsubscribeFooter}${trackingPixel}</body>`);
     }
     return `${withClickTracking}${unsubscribeFooter}${trackingPixel}`;
   }
@@ -337,7 +338,7 @@ ${linkItems}
   injectDownloadLinks(html, linksHtml) {
     if (!linksHtml) return html;
     if (/<\/body>/i.test(html)) {
-      return html.replace(/<\/body>/i, `${linksHtml}</body>`);
+      return html.replace(/<\/body>/i, () => `${linksHtml}</body>`);
     }
     return `${html}${linksHtml}`;
   }

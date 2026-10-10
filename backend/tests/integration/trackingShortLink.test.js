@@ -6,8 +6,8 @@
  *   - Code rỗng / chỉ ký tự không hợp lệ → 404.
  *   - Code không tồn tại → 404.
  *   - Code hợp lệ → 302 redirect đến destination_url.
- *   - Case-insensitive fallback (ORDER BY exact match trước).
- *   - Khi có cả exact và lowercase, ưu tiên exact match.
+ *   - So khớp chính xác (không còn fallback LOWER — PR-Q1).
+ *   - Hai mã chỉ khác hoa/thường vẫn về đúng đích riêng.
  *   - Strip ký tự đặc biệt (`AbC%def^123` → match `AbCdef123`).
  */
 import { describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
@@ -57,24 +57,29 @@ describe('GET /t/:code', () => {
     expect(res.headers.location).toBe('https://uknow.vn/track/click/token-xyz');
   });
 
-  it('case-insensitive fallback — code lưu lowercase, request UPPERCASE', async () => {
+  // PLAN_RA_SOAT_DOT3 PR-Q1 việc 6 — trước đây có "case-insensitive fallback" (`OR LOWER(short_code) = LOWER($1)`) buộc quét
+  // toàn bảng cho mỗi lượt bấm. Mã sinh ra là Base62 phân biệt hoa/thường nên chỉ khớp CHÍNH XÁC.
+  it('so khớp chính xác — code lưu lowercase, request UPPERCASE → 404 (không còn fallback LOWER)', async () => {
     await insertShortLink({
       code: 'lower42',
       destinationUrl: 'https://uknow.vn/lower',
     });
 
     const res = await request(app).get('/t/LOWER42').redirects(0);
-    expect(res.status).toBe(302);
-    expect(res.headers.location).toBe('https://uknow.vn/lower');
+    expect(res.status).toBe(404);
   });
 
-  it('exact match được ưu tiên hơn lowercase match', async () => {
+  it('hai mã chỉ khác hoa/thường trỏ về hai đích riêng, mỗi mã về đúng đích của nó', async () => {
     await insertShortLink({ code: 'AbCdEf', destinationUrl: 'https://exact.example' });
     await insertShortLink({ code: 'abcdef', destinationUrl: 'https://lowercase.example' });
 
-    const res = await request(app).get('/t/AbCdEf').redirects(0);
-    expect(res.status).toBe(302);
-    expect(res.headers.location).toBe('https://exact.example');
+    const upper = await request(app).get('/t/AbCdEf').redirects(0);
+    expect(upper.status).toBe(302);
+    expect(upper.headers.location).toBe('https://exact.example');
+
+    const lower = await request(app).get('/t/abcdef').redirects(0);
+    expect(lower.status).toBe(302);
+    expect(lower.headers.location).toBe('https://lowercase.example');
   });
 
   it('strip ký tự đặc biệt trong code', async () => {

@@ -332,7 +332,13 @@ class CustomerController {
     const clientIp = req.ip || req.socket?.remoteAddress || null;
     const userAgent = req.get('user-agent') || null;
     const referer = req.get('referer') || null;
-    await customerEmailTrackingService.trackEmailOpen({ token, clientIp, userAgent, referer });
+    // PLAN_RA_SOAT_DOT3 PR-Q1 việc 6 — pixel luôn trả ảnh: db.getClient() cạn pool (ném trước try của service) từng
+    // làm client email nhận 500 thay vì ảnh 1x1, và lượt mở mất.
+    try {
+      await customerEmailTrackingService.trackEmailOpen({ token, clientIp, userAgent, referer });
+    } catch (error) {
+      console.error('[email-open-pixel] lỗi ghi nhận, vẫn trả pixel:', error?.message || error);
+    }
     return this.sendTrackingPixel(res);
   }
   // Tracking click link trong email
@@ -347,7 +353,15 @@ class CustomerController {
     const rawUrl = String(req.query.url || '').trim();
     const label = String(req.query.label || '').trim().slice(0, 200) || null;
     const linkKey = String(req.query.lk || '').trim().slice(0, 120) || null;
-    const { redirectUrl } = await customerEmailTrackingService.trackEmailClick({ token, rawUrl, label, linkKey });
+    // PR-Q1 việc 6 — link bấm luôn chuyển hướng: lỗi lấy kết nối DB (trước try của service) không được biến thành 500
+    // cho người đang bấm link trong thư. Lỗi thì về trang chủ ứng dụng như khi URL đích không hợp lệ.
+    let redirectUrl;
+    try {
+      ({ redirectUrl } = await customerEmailTrackingService.trackEmailClick({ token, rawUrl, label, linkKey }));
+    } catch (error) {
+      console.error('[email-click] lỗi ghi nhận, vẫn chuyển hướng:', error?.message || error);
+      redirectUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    }
     return res.redirect(302, redirectUrl);
   }
 

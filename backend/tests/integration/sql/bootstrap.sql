@@ -4205,3 +4205,14 @@ VALUES
   ('plan_expired',             true, true,  false),
   ('ai_unavailable',           true, false, true)
 ON CONFLICT (event_type) DO NOTHING;
+
+-- --- Migration 295: email_suppressions (PLAN_RA_SOAT_DOT3 PR-Q1: huy dang ky / hard bounce chan moi nguon nguoi nhan) ---
+CREATE TABLE IF NOT EXISTS email_suppressions (
+  id                  BIGSERIAL    PRIMARY KEY,
+  workspace_owner_id  BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  email_lower         VARCHAR(320) NOT NULL,
+  reason              VARCHAR(20)  NOT NULL CHECK (reason IN ('unsubscribe', 'hard_bounce')),
+  source              VARCHAR(40),
+  created_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  CONSTRAINT email_suppressions_workspace_email_key UNIQUE (workspace_owner_id, email_lower)
+);

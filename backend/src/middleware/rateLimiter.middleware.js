@@ -25,9 +25,22 @@ export function isPublicChatPollPath(req) {
   return /^\/api\/chatbot-public\/custom-chatbot\/(?:id\/)?[^/?]+\/messages(?:\?|$)/.test(url);
 }
 
+/**
+ * GET /api/customers/email-tracking/{open,click,unsubscribe}/:token — pixel mở thư, link bấm, link huỷ đăng ký trong email.
+ * Người gọi là proxy ảnh của Gmail/Apple Mail (chung IP cho cả nghìn hộp thư) và trình duyệt người nhận, không phải một
+ * người dùng: đếm theo IP vào globalLimiter thì 429 làm mất lượt mở/bấm đã xảy ra thật (PLAN_RA_SOAT_DOT3 PR-Q1 việc 4).
+ * Đường này là bí mật theo token (UUID) và chỉ ghi một dòng theo token nên không cần trần theo IP.
+ * Lưu ý `/t/:code` (link ngắn) nằm NGOÀI `/api` nên globalLimiter vốn không áp.
+ */
+export function isEmailTrackingPath(req) {
+  if (req.method !== 'GET') return false;
+  const url = req.originalUrl || req.url || '';
+  return /^\/api\/customers\/email-tracking\/(?:open|click|unsubscribe)\/[^/?]+(?:\?|$)/.test(url);
+}
+
 /** Đường có bộ giới hạn riêng (hoặc cố ý không đếm) nên globalLimiter bỏ qua. Export để test ghim danh sách. */
 export function shouldSkipGlobalLimiter(req) {
-  return isInboxStreamPath(req) || isPublicChatPollPath(req);
+  return isInboxStreamPath(req) || isPublicChatPollPath(req) || isEmailTrackingPath(req);
 }
 
 /**

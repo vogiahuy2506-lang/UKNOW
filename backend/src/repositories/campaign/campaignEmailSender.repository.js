@@ -120,19 +120,33 @@ class CampaignEmailSenderRepository {
     const bounceCode = options?.bounceCode || null;
     const bounceDetectedVia = options?.bounceDetectedVia || 'smtp';
     const runner = queryable || db;
+    // PLAN_RA_SOAT_DOT3 PR-Q1 việc 5 — DSN soft (4.x / Action: delayed) là "chưa giao được, đang thử lại": CHỈ ghi
+    // bounce_type/code/reason, KHÔNG đổi status và không đóng dấu bounced_at.
+    const keepStatus = bounceDetectedVia === 'dsn' && bounceType !== 'hard';
 
     // PLAN_EMAIL_SENT_AT_GIO_UTC_2026-09-27, PR-T1 việc 2 — cột bounced_at không múi giờ
     // (production 27/09), bouncedAt luôn là JS Date UTC. Ép giống insertEmailMessage.
+    //
+    // PR-Q1 việc 5 — không ghi đè status khi người nhận đã mở/bấm/huỷ đăng ký (proxy ảnh của Gmail mở thư rất sớm,
+    // DSN đến sau): đếm mở/bấm không được rơi về 'bounced'. bounce_type/bounced_at vẫn được ghi để hard bounce
+    // vẫn tính đủ.
     await runner.query(
       `UPDATE email_messages
-       SET status = 'bounced',
-           bounced_at = ($1::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh'),
+       SET status = CASE
+             WHEN $7::boolean THEN status
+             WHEN status IN ('opened', 'clicked', 'unsubscribed') THEN status
+             ELSE 'bounced'
+           END,
+           bounced_at = CASE
+             WHEN $7::boolean THEN bounced_at
+             ELSE ($1::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
+           END,
            bounce_reason = $2,
            bounce_type = COALESCE($4, bounce_type),
            bounce_code = COALESCE($5, bounce_code),
            bounce_detected_via = COALESCE($6, bounce_detected_via)
        WHERE tracking_token = $3`,
-      [bouncedAt, bounceReason, trackingToken, bounceType, bounceCode, bounceDetectedVia]
+      [bouncedAt, bounceReason, trackingToken, bounceType, bounceCode, bounceDetectedVia, keepStatus]
     );
   }
 

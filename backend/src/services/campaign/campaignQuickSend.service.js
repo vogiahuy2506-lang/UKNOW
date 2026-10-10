@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import emailSettingsSmtpService from '../email/emailSettingsSmtp.service.js';
 import emailSettingsController from '../../controllers/emailSettings.controller.js';
 import campaignRunService from './campaignRun.service.js';
@@ -279,7 +280,9 @@ class CampaignQuickSendService {
                 accountId: account.id,
                 accountName: String(account.displayName || account.zaloName || account.name || '').trim() || null,
                 messageText: message,
-                trackingToken: null,
+                // zalo_messages.tracking_token NOT NULL UNIQUE (production): null làm INSERT trong persistSource lỗi,
+                // consume rollback và reservation rơi 'uncertain' dù tin đã gửi. Cùng khuôn zaloSettings.controller.js.
+                trackingToken: `zpv_${randomUUID()}`,
                 trackingBaseUrl: null,
                 trackingMetadata: {
                   status: 'sent',

@@ -1,3 +1,4 @@
+import { randomInt } from 'crypto';
 import trackingShortLinkRepository from '../../repositories/trackingShortLink.repository.js';
 
 class TrackingShortLinkService {
@@ -18,7 +19,8 @@ class TrackingShortLinkService {
     const safeLength = Math.max(16, Math.min(24, Number.parseInt(length, 10) || this.defaultCodeLength));
     let output = '';
     for (let index = 0; index < safeLength; index += 1) {
-      const randomIndex = Math.floor(Math.random() * this.base62Chars.length);
+      // crypto.randomInt: mã link tracking là bí mật truy cập, Math.random() đoán được từ vài giá trị quan sát.
+      const randomIndex = randomInt(this.base62Chars.length);
       output += this.base62Chars[randomIndex];
     }
     return output;

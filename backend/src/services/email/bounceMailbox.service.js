@@ -1,6 +1,7 @@
 import { simpleParser } from 'mailparser';
 import { ImapFlow } from 'imapflow';
 import campaignEmailSenderRepository from '../../repositories/campaign/campaignEmailSender.repository.js';
+import emailSuppressionService from './emailSuppression.service.js';
 
 const DSN_ATTACHMENT_TYPES = new Set([
   'message/delivery-status',
@@ -208,6 +209,15 @@ export class BounceMailboxService {
       await campaignEmailSenderRepository.markCustomerHardBounced(msgRow.id_customer);
     }
 
+    // 3. PLAN_RA_SOAT_DOT3 PR-Q1 việc 1 — hard bounce chặn địa chỉ cho cả workspace, kể cả người nhận không có
+    // trong bảng customers (Sheet/lead/form). Cũng bỏ qua tin gửi thử.
+    if (dsnInfo.bounceType === 'hard' && !msgRow.is_preview) {
+      await emailSuppressionService.suppressByTrackingToken(dsnInfo.trackingToken, {
+        reason: 'hard_bounce',
+        source: 'dsn_hard_bounce',
+      });
+    }
+
     return {
       status: 'bounced',
       trackingToken: dsnInfo.trackingToken,
@@ -312,6 +322,9 @@ export class BounceMailboxService {
     } catch (err) {
       console.error('[BounceMailbox] Lỗi kết nối hoặc đồng bộ hộp thư bounce IMAP:', err.message);
       stats.connectionError = err.message;
+      // PLAN_RA_SOAT_DOT3 PR-Q1 việc 5 — cron_job_runs.recordRun lấy result.status làm trạng thái dòng chạy; thiếu
+      // thì mặc định 'success' nên IMAP hỏng vẫn hiện xanh trên trang Tác vụ định kỳ.
+      stats.status = 'failure';
     } finally {
       this.isSyncing = false;
       if (client && client.usable) {

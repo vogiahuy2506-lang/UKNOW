@@ -299,6 +299,8 @@ class EmailSettingsSmtpService {
       brandDomain: payload.brandDomain || null,
       isPreview,
       quotaReservationId: payload.quotaReservationId || payload.reservationId || null,
+      // PLAN_RA_SOAT_DOT3 PR-Q1 việc 3 — status cuối ('failed'/'bounced') ghi ngay lúc INSERT; thiếu thì 'sent'.
+      status: payload.status || undefined,
     });
 
     // PR-T3 (PLAN_EMAIL_SENT_AT_GIO_UTC_2026-09-27) Việc 2 — thư hỏng (transient/config/delivery

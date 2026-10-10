@@ -35,6 +35,7 @@ const { default: campaignEmailSenderService } = await import('../campaignEmailSe
 const { default: emailSettingsController } = await import('../../../controllers/emailSettings.controller.js');
 const { default: emailSettingsSmtpService } = await import('../../email/emailSettingsSmtp.service.js');
 const { default: campaignEmailSenderRepository } = await import('../../../repositories/campaign/campaignEmailSender.repository.js');
+const { default: emailSuppressionRepository } = await import('../../../repositories/email/emailSuppression.repository.js');
 
 const actionNode = {
   id: 'node_send_email_delivery_failed',
@@ -62,6 +63,8 @@ describe('campaignEmailSenderService: thư hỏng gắn deliveryFailed ở đủ
     jest.clearAllMocks();
     mockReserveSendQuota.mockResolvedValue({ mode: 'enforce', id: 901, status: 'reserved' });
     jest.spyOn(campaignEmailSenderRepository, 'incrementEmailSettingsSentCount').mockResolvedValue();
+    jest.spyOn(emailSuppressionRepository, 'findReason').mockResolvedValue(null);
+    jest.spyOn(emailSuppressionRepository, 'upsert').mockResolvedValue();
     jest.spyOn(campaignEmailSenderRepository, 'isLeadConsentRefusedOrWithdrawn').mockResolvedValue(false);
     jest.spyOn(campaignEmailSenderRepository, 'findCustomerByEmail').mockResolvedValue({ id: 88, email: customer.email });
     jest.spyOn(campaignEmailSenderRepository, 'markEmailMessageFailed').mockResolvedValue();
@@ -86,6 +89,8 @@ describe('campaignEmailSenderService: thư hỏng gắn deliveryFailed ở đủ
 
     expect(result.errorType).toBe('smtp_transient');
     expect(onlyLogEmailSentPayload().deliveryFailed).toBe(true);
+    // PR-Q1 việc 3: status cuối ghi ngay lúc INSERT, không chèn 'sent' rồi UPDATE.
+    expect(onlyLogEmailSentPayload().status).toBe('failed');
   });
 
   it('2. lỗi cấu hình SMTP (535) → logEmailSent có deliveryFailed', async () => {
@@ -96,6 +101,7 @@ describe('campaignEmailSenderService: thư hỏng gắn deliveryFailed ở đủ
 
     expect(result.errorType).toBe('smtp_config');
     expect(onlyLogEmailSentPayload().deliveryFailed).toBe(true);
+    expect(onlyLogEmailSentPayload().status).toBe('failed');
   });
 
   it('3. lỗi giao thư không phải "người nhận không tồn tại" → logEmailSent có deliveryFailed', async () => {
@@ -106,6 +112,7 @@ describe('campaignEmailSenderService: thư hỏng gắn deliveryFailed ở đủ
 
     expect(result.errorType).toBe('smtp_delivery');
     expect(onlyLogEmailSentPayload().deliveryFailed).toBe(true);
+    expect(onlyLogEmailSentPayload().status).toBe('failed');
   });
 
   it('4. hard bounce khi reservation enforce → persistSource ghi logEmailSentWithClient có deliveryFailed', async () => {
@@ -119,6 +126,7 @@ describe('campaignEmailSenderService: thư hỏng gắn deliveryFailed ở đủ
     const [client, payload] = emailSettingsSmtpService.logEmailSentWithClient.mock.calls[0];
     expect(client).toBe(FAKE_TX_CLIENT);
     expect(payload.deliveryFailed).toBe(true);
+    expect(payload.status).toBe('bounced');
     expect(emailSettingsController.logEmailSent).not.toHaveBeenCalled();
   });
 
@@ -131,6 +139,7 @@ describe('campaignEmailSenderService: thư hỏng gắn deliveryFailed ở đủ
 
     expect(mockConsumeSendQuota).not.toHaveBeenCalled();
     expect(onlyLogEmailSentPayload().deliveryFailed).toBe(true);
+    expect(onlyLogEmailSentPayload().status).toBe('bounced');
   });
 
   it('ĐỐI CHỨNG: gửi thành công → KHÔNG gắn deliveryFailed', async () => {
@@ -141,5 +150,6 @@ describe('campaignEmailSenderService: thư hỏng gắn deliveryFailed ở đủ
     expect(result.status).toBe('success');
     expect(emailSettingsSmtpService.logEmailSentWithClient).toHaveBeenCalledTimes(1);
     expect(emailSettingsSmtpService.logEmailSentWithClient.mock.calls[0][1].deliveryFailed).toBeUndefined();
+    expect(emailSettingsSmtpService.logEmailSentWithClient.mock.calls[0][1].status).toBeUndefined();
   });
 });

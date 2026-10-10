@@ -4,6 +4,7 @@ import campaignEmailSenderRepository from '../../repositories/campaign/campaignE
 import campaignRunRepository from '../../repositories/campaign/campaignRun.repository.js';
 import emailSettingsController from '../../controllers/emailSettings.controller.js';
 import emailSettingsSmtpService from '../email/emailSettingsSmtp.service.js';
+import emailSuppressionService from '../email/emailSuppression.service.js';
 import campaignFlowService from './campaignFlow.service.js';
 import {
   classifyBounceType,
@@ -703,6 +704,18 @@ class CampaignEmailSenderService {
         return { to: customer.email, status: 'skipped', reason: 'hard_bounced' };
       }
 
+      // PLAN_RA_SOAT_DOT3 PR-Q1 việc 1 — danh sách cấm gửi theo (workspace, email) cho MỌI nguồn người nhận
+      // (Sheet, lead, form...), không chỉ người đã nằm trong bảng customers. Kiểm TRƯỚC reserveSendQuota().
+      const suppressionReason = await emailSuppressionService.findSuppression({
+        workspaceOwnerId: campaign.workspace_owner_id || campaign.id_user,
+        email: customer.email,
+      });
+      if (suppressionReason) {
+        const skipReason = suppressionReason === 'hard_bounce' ? 'hard_bounced' : 'unsubscribed';
+        console.info(`[CampaignRun][Email] skip run=${runId} to=${customer.email} reason=${skipReason} (email_suppressions)`);
+        return { to: customer.email, status: 'skipped', reason: skipReason };
+      }
+
       // Bỏ qua nếu lead trong DB có marketing_consent = FALSE (đã từ chối hoặc rút lại đồng ý giữa lượt chạy)
       const isLeadConsentRefused = await campaignEmailSenderRepository.isLeadConsentRefusedOrWithdrawn(
         campaign.id_user, customer.email.toLowerCase()
@@ -952,10 +965,8 @@ class CampaignEmailSenderService {
         );
       }
 
-      // Cập nhật email_message nếu đã được insert (sẽ insert trước khi throw bounce)
-      // Ở đây chưa insert nên chỉ log thống kê SMTP settings và trả bounce result.
-      // Ghi thống kê tạm thời để biết đã cố gửi
-      await campaignEmailSenderRepository.incrementEmailSettingsSentCount(settings.id).catch(() => {});
+      // PLAN_RA_SOAT_DOT3 PR-Q1 việc 6 — daily_sent_count/total_sent_count CHỈ tăng khi SMTP nhận thư
+      // (nhánh success bên dưới). Trước đây tăng cả khi lỗi nên đếm cả thư chưa từng đi.
 
       if (providerRateLimitError) {
         const retryConfig = this.resolveProviderRateLimitRetryConfig();
@@ -1058,6 +1069,8 @@ class CampaignEmailSenderService {
             // PR-T3 Việc 2 — thư hỏng KHÔNG được coi là "đã gửi" (last_email_sent_at/journey/quota
             // đếm gửi phải bỏ qua dòng này).
             deliveryFailed: true,
+            // PR-Q1 việc 3 — ghi thẳng status cuối, không chèn 'sent' rồi mới UPDATE.
+            status: 'failed',
           });
           await campaignEmailSenderRepository.markEmailMessageFailed(transientFailedTrackingToken, bounceReason);
         } catch (logErr) {
@@ -1107,6 +1120,7 @@ class CampaignEmailSenderService {
             brandDomain,
             // PR-T3 Việc 2 — thư hỏng KHÔNG được coi là "đã gửi".
             deliveryFailed: true,
+            status: 'failed',
           });
           await campaignEmailSenderRepository.markEmailMessageFailed(failedTrackingToken, bounceReason);
         } catch (logErr) {
@@ -1154,6 +1168,7 @@ class CampaignEmailSenderService {
             brandDomain,
             // PR-T3 Việc 2 — thư hỏng KHÔNG được coi là "đã gửi".
             deliveryFailed: true,
+            status: 'failed',
           });
           await campaignEmailSenderRepository.markEmailMessageFailed(failedTrackingToken, bounceReason);
         } catch (logErr) {
@@ -1174,6 +1189,17 @@ class CampaignEmailSenderService {
         await campaignEmailSenderRepository.markCustomerHardBounced(customerId)
           .catch((e) => console.error('[sendEmailToCustomer] Lỗi cập nhật hard bounce:', e.message));
         console.info(`[CampaignRun][Email] mark_hard_bounce run=${runId} customerId=${customerId}`);
+      }
+
+      // PLAN_RA_SOAT_DOT3 PR-Q1 việc 1 — hard bounce chặn địa chỉ này cho CẢ workspace, kể cả người nhận không có
+      // trong bảng customers (Sheet/lead/form). Best-effort như markCustomerHardBounced ở trên.
+      if (bounceType === 'hard') {
+        await emailSuppressionService.suppress({
+          workspaceOwnerId: campaign.workspace_owner_id || campaign.id_user,
+          email: customer.email,
+          reason: 'hard_bounce',
+          source: 'smtp_hard_bounce',
+        }).catch((e) => console.error('[sendEmailToCustomer] Lỗi ghi email_suppressions (hard bounce):', e.message));
       }
 
       // Ghi log email_message với status bounced. Theo policy Wave 2 (mục 8): hard bounce phát
@@ -1227,6 +1253,7 @@ class CampaignEmailSenderService {
                 // PR-T3 Việc 2 — bounce KHÔNG được coi là "đã gửi" (vẫn consume quota như cũ,
                 // chỉ khác chỗ không ghi last_email_sent_at/journey — xem policy Wave 2 ở trên).
                 deliveryFailed: true,
+                status: 'bounced',
               });
               await campaignEmailSenderRepository.markEmailMessageBounced(
                 trackingToken,
@@ -1267,6 +1294,7 @@ class CampaignEmailSenderService {
             debitWallet: true,
             // PR-T3 Việc 2 — bounce KHÔNG được coi là "đã gửi".
             deliveryFailed: true,
+            status: 'bounced',
           });
           // Cập nhật email_message vừa insert sang status bounced
           await campaignEmailSenderRepository.markEmailMessageBounced(
@@ -1348,6 +1376,37 @@ class CampaignEmailSenderService {
       } catch (consumeErr) {
         console.warn('[CampaignEmailSender] consumeSendQuota failed after successful provider send:', consumeErr.message);
         await markUncertainReservation('CONSUME_DB_FAILED', consumeErr.message);
+        // PLAN_RA_SOAT_DOT3 PR-Q1 việc 3 — SMTP đã nhận thư nhưng transaction consume (persistSource) rollback nên
+        // KHÔNG có dòng email_messages: thư đã đi mà không có tracking/lịch sử. Ghi dòng 'sent' bằng đường không
+        // reservation (không debitWallet — reservation đang 'uncertain', sweeper đối soát; tracking_token UNIQUE
+        // chặn ghi đôi nếu consume thực ra đã commit).
+        try {
+          await emailSettingsController.logEmailSent({
+            userId: campaign.id_user,
+            workspaceOwnerId: campaign.workspace_owner_id || campaign.id_user,
+            actorUserId: campaign.created_by || campaign.id_user,
+            campaignId: campaign.id,
+            customerId,
+            emailTemplateId: templateId,
+            fromEmailId: settings.id,
+            to: customer.email,
+            subject,
+            trackedHtmlContent: shouldStoreBody ? trackedHtmlContent : null,
+            plainTextContent: shouldStoreBody ? textBody : null,
+            trackingToken,
+            info,
+            sentAt,
+            setting: settings,
+            runId,
+            nodeId: logNodeIdForDb,
+            emailStep: logEmailStepForDb,
+            fromAddress,
+            brandDomain,
+          });
+        } catch (fallbackLogErr) {
+          console.error('[sendEmailToCustomer] Lỗi ghi dòng sent dự phòng sau consume lỗi:', fallbackLogErr.message);
+          await recordMessageLogFailure(runId, fallbackLogErr);
+        }
       }
     } else {
       try {
