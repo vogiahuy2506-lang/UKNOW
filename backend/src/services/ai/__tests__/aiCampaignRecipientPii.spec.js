@@ -231,6 +231,33 @@ describe('H2 (C P1-6) — processSmartChat không gửi lại danh sách ngườ
     });
   });
 
+  describe('tệp bảng tính đính kèm không được lưu chữ vào wizard_state', () => {
+    const listCsv = Buffer.from(['Họ tên,Số điện thoại,Email', ...Array.from({ length: 5 }, (_, i) => `Khách ${i},09000000${i},khach${i}@example.test`)].join('\n'));
+    const priceCsv = Buffer.from('Gói,Giá\nCơ bản,199000\nNâng cao,499000');
+    const run = async (name, buffer, text) => {
+      readTempFileBuffer.mockResolvedValue(buffer);
+      extractTextFromBuffer.mockResolvedValue(text);
+      return aiCampaignService.processSmartChat({
+        userId: 7,
+        locale: 'vi',
+        history: [{ role: 'user', content: 'Tạo chiến dịch email từ tệp này' }],
+        files: [{ tempId: 't-1', originalName: name, contentType: 'text/csv' }],
+      });
+    };
+
+    it('tệp DANH SÁCH người nhận: không có attachedFile.text trong state trả về, không đi qua extractTextFromBuffer', async () => {
+      const result = await run('khach.csv', listCsv, 'LIST_PII_TEXT khach0@example.test');
+      expect(JSON.stringify(result._wizard?.brief || {})).not.toContain('khach0@example.test');
+      expect(result._wizard?.brief?.attachedFile?.text).toBeFalsy();
+      expect(extractTextFromBuffer).not.toHaveBeenCalled();
+    });
+
+    it('ĐỐI CHỨNG: tệp bảng giá (không có liên hệ) vẫn lưu chữ như tệp nội dung', async () => {
+      const result = await run('bang_gia.csv', priceCsv, 'Gói Cơ bản 199000');
+      expect(result._wizard?.brief?.attachedFile?.text).toContain('Cơ bản');
+    });
+  });
+
   describe('nhánh super admin giữ hành vi cũ (không có brief để lưu bản trích)', () => {
     it("tệp ở tin cũ vẫn đính lại cho trợ lý admin (historyAttachments='all')", async () => {
       readTempFileBuffer.mockResolvedValue(Buffer.from('xlsx'));

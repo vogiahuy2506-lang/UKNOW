@@ -114,6 +114,14 @@ export function lastHandTypedUserText(history = []) {
   return '';
 }
 
+/** Tệp bảng tính Excel/CSV (cùng khuôn `isSpreadsheetFile` ở aiChatTransport.service.js). */
+function isSpreadsheetAttachment(file) {
+  const name = String(file?.originalName || file?.name || '').toLowerCase();
+  const mime = String(file?.contentType || '').toLowerCase();
+  return name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.csv')
+    || mime.includes('spreadsheet') || mime.includes('excel') || mime.includes('csv');
+}
+
 class AiCampaignService {
   _guardCampaignDataSourceResponse(response, history = [], locale = 'vi', gateState = null) {
     const lastUserText = lastUserMessageContent(history);
@@ -631,6 +639,15 @@ QUY TẮC:
             );
           }
           if (buffer) {
+            // Tệp bảng tính là DANH SÁCH NGƯỜI NHẬN (tên/SĐT/email khách cuối): không lưu chữ của nó vào brief (-> wizard_state)
+            // và không để nó thành "tệp nội dung" cho prompt. Bảng giá/sản phẩm (không đủ liên hệ) vẫn là tệp nội dung như cũ.
+            if (isSpreadsheetAttachment(file)) {
+              // eslint-disable-next-line no-await-in-loop
+              const { summarizeRecipientListBuffer } = await import('./recipientListSummary.service.js');
+              // eslint-disable-next-line no-await-in-loop
+              const listSummary = await summarizeRecipientListBuffer(buffer, file.originalName, file.contentType);
+              if (listSummary) continue;
+            }
             // eslint-disable-next-line no-await-in-loop
             const fullText = await extractTextFromBuffer(buffer, file.originalName, file.contentType);
             if (fullText && fullText.trim()) {
