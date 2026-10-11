@@ -70,7 +70,7 @@ export default function Footer() {
             </p>
             
             {/* Company Info */}
-            <div className="text-sm text-slate-500 space-y-1">
+            <div className="text-sm text-slate-400 space-y-1">
               <p className="font-medium text-slate-400">{t('footer.companyName')}</p>
               <p>{t('footer.companyAddress')}</p>
               <p>{t('footer.companyRep')}</p>
@@ -106,7 +106,7 @@ export default function Footer() {
                     {to ? (
                       <Link
                         to={to}
-                        className="text-[15px] font-medium text-slate-700 hover:text-orange-500 transition-colors duration-200 inline-block hover:translate-x-1"
+                        className="text-[15px] font-medium text-slate-300 hover:text-orange-400 transition-colors duration-200 inline-block hover:translate-x-1"
                         style={{ transition: 'all 0.2s ease' }}
                       >
                         {label}
@@ -114,7 +114,7 @@ export default function Footer() {
                     ) : (
                       <a
                         href={href}
-                        className="text-[15px] font-medium text-slate-700 hover:text-orange-500 transition-colors duration-200 inline-block hover:translate-x-1"
+                        className="text-[15px] font-medium text-slate-300 hover:text-orange-400 transition-colors duration-200 inline-block hover:translate-x-1"
                         style={{ transition: 'all 0.2s ease' }}
                       >
                         {label}
@@ -129,7 +129,7 @@ export default function Footer() {
 
         {/* Bottom bar */}
         <div className="mt-16 pt-8 border-t border-slate-800">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-slate-500">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-slate-400">
             <p>{t('footer.publicBottomCopyright') || '© 2026 Founder AI - Đồng sáng lập cho doanh nghiệp một người'}</p>
             <div className="flex items-center gap-6">
               <a href="/privacy-policy" className="hover:text-white transition-colors">
