@@ -147,7 +147,7 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
         'Gửi nhanh', 'Quản lý kênh gửi', 'Thư viện nội dung', 'Quản lý chiến dịch',
         'Giám sát gửi tin', 'Khách hàng từ chiến dịch',
       ],
-      'Landing page': ['Khách hàng từ Landing page', 'Tạo Landing page', 'Biểu mẫu'],
+      'Landing page': ['Khách để lại thông tin', 'Tạo Landing page', 'Biểu mẫu'],
       'Gói & Thanh toán': ['Tổng quan gói', 'Mua thêm hạn mức'],
       'Cài đặt': ['Hồ sơ doanh nghiệp', 'Nhân viên', 'Tệp & dung lượng', 'Nhật ký hoạt động', 'Góp ý & hỗ trợ'],
     };
@@ -235,6 +235,18 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
 
     it('courses → hiện "Sản phẩm"', () => {
       expect(employeeTitles({ courses: true })).toEqual(['Trợ lý AI', 'Sản phẩm', 'Cài đặt']);
+    });
+
+    // Màn "Khách để lại thông tin" gộp 2 tab (leads + forms): mục menu hiện khi có MỘT TRONG HAI quyền,
+    // không phải cả hai — nhân viên chỉ được cấp `forms` vẫn phải vào được tab "Từ biểu mẫu".
+    it('chỉ có forms (không có leads) → vẫn thấy "Khách để lại thông tin" cạnh "Biểu mẫu"', () => {
+      expect(employeeTitles({ forms: true })).toEqual(['Trợ lý AI', 'Landing page', 'Cài đặt']);
+      expect(openGroupLinks('Landing page')).toEqual(['Khách để lại thông tin', 'Biểu mẫu']);
+    });
+
+    it('chỉ có leads (không có forms) → "Khách để lại thông tin", không có "Biểu mẫu"', () => {
+      employeeTitles({ leads: true });
+      expect(openGroupLinks('Landing page')).toEqual(['Khách để lại thông tin']);
     });
   });
 
