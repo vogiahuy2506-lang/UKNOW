@@ -289,6 +289,22 @@ describe('FormEditorPage — bố cục soạn + xem trước sống (PR-3)', ()
     expect(screen.getByText(/Chưa có trường nào/)).toBeInTheDocument();
   });
 
+  it('xoá trường đang chọn Ở GIỮA: chọn trường kế bên ngay phía dưới (không nhảy về trường đầu); xoá trường cuối thì chọn trường liền trước', async () => {
+    await renderEdit();
+
+    selectFieldRow(1); // Email
+    fireEvent.click(within(fieldRow(1)).getByTitle('Xoá trường'));
+    // Còn [Họ và tên, Thành phố]; trường kế bên (Thành phố) đứng ở vị trí 2 và được chọn
+    expect(fieldRow(1)).toHaveAttribute('data-selected', 'true');
+    expect(fieldRow(0)).toHaveAttribute('data-selected', 'false');
+    expect(within(fieldRow(1)).getByPlaceholderText(/Ví dụ: Họ và tên/i)).toHaveValue('Thành phố');
+
+    // Xoá trường cuối đang chọn → chọn trường liền trước
+    fireEvent.click(within(fieldRow(1)).getByTitle('Xoá trường'));
+    expect(fieldRow(0)).toHaveAttribute('data-selected', 'true');
+    expect(within(fieldRow(0)).getByPlaceholderText(/Ví dụ: Họ và tên/i)).toHaveValue('Họ và tên');
+  });
+
   // ────────────────────── placeholder · chữ hướng dẫn · lời đồng ý ──────────────────────
 
   it('placeholder + chữ hướng dẫn nhập ở bảng thuộc tính → vào payload (đã trim) và hiện ngay ở xem trước', async () => {
