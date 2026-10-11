@@ -224,7 +224,11 @@ const BullMQPanel = ({ bullmq, t }) => {
 };
 
 const DbPoolPanel = ({ dbPool, t }) => {
-  const tone = dbPool?.percent >= 90 ? 'red' : dbPool?.percent >= 75 ? 'yellow' : 'green';
+  // Màu + thanh theo kết nối ĐANG BẬN; kết nối rảnh pg giữ sẵn không phải áp lực.
+  // Backend cũ chưa có busyPercent (lệch phiên bản lúc deploy) → dùng percent như trước.
+  const busyPercent = dbPool?.busyPercent ?? dbPool?.percent ?? 0;
+  const busy = dbPool?.busy ?? Math.max(0, (dbPool?.total ?? 0) - (dbPool?.idle ?? 0));
+  const tone = busyPercent >= 90 ? 'red' : busyPercent >= 75 ? 'yellow' : 'green';
   const cls = toneClass[tone];
   return (
     <div className="card p-5">
@@ -235,9 +239,10 @@ const DbPoolPanel = ({ dbPool, t }) => {
         </span>
       </div>
       <div className="mt-1 h-2 rounded-full bg-gray-100 dark:bg-dk-raised overflow-hidden">
-        <div className={`h-full ${cls.bar}`} style={{ width: `${Math.min(100, dbPool?.percent ?? 0)}%` }} />
+        <div className={`h-full ${cls.bar}`} style={{ width: `${Math.min(100, busyPercent)}%` }} />
       </div>
       <div className="mt-2 flex gap-4 text-xs text-gray-500 dark:text-dk-text2">
+        <span>{t('adminSystem.dbPoolBusy', { busy })}</span>
         <span>{t('adminSystem.dbPoolIdle', { idle: dbPool?.idle ?? 0 })}</span>
         <span>{t('adminSystem.dbPoolWaiting', { waiting: dbPool?.waiting ?? 0 })}</span>
       </div>

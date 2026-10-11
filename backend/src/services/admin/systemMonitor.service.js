@@ -321,17 +321,39 @@ const getDockerContainers = async () => {
   }
 };
 
-const getDbPoolStats = () => {
+// `total` gồm cả kết nối RẢNH mà pg giữ sẵn tới idleTimeout — không phải áp lực. Áp lực thật là
+// kết nối ĐANG BẬN (total - idle); có hàng chờ (waiting > 0) thì pool đã bận hết.
+// 11/10/2026 production: 21/25 kết nối, 21 rảnh, 0 chờ → bản cũ (total/max = 84%) báo "DB pool đang cao".
+export const getDbPoolStats = (pool = db.pool) => {
   try {
-    const pool = db.pool;
     const max = pool.options?.max ?? 20;
     const total = pool.totalCount ?? 0;
     const idle = pool.idleCount ?? 0;
     const waiting = pool.waitingCount ?? 0;
-    return { available: true, total, idle, waiting, max, percent: max > 0 ? pct((total / max) * 100) : 0 };
+    const busy = Math.max(0, total - idle);
+    return {
+      available: true,
+      total,
+      idle,
+      busy,
+      waiting,
+      max,
+      percent: max > 0 ? pct((total / max) * 100) : 0,
+      busyPercent: max > 0 ? pct((busy / max) * 100) : 0,
+    };
   } catch {
-    return { available: false, total: 0, idle: 0, waiting: 0, max: 0, percent: 0 };
+    return { available: false, total: 0, idle: 0, busy: 0, waiting: 0, max: 0, percent: 0, busyPercent: 0 };
   }
+};
+
+export const buildDbPoolAlerts = (dbPool) => {
+  if (!dbPool?.available || !(dbPool.max > 0)) return [];
+  const busy = Math.max(0, (dbPool.total ?? 0) - (dbPool.idle ?? 0));
+  const busyPct = (busy / dbPool.max) * 100;
+  const message = `DB pool ${busy}/${dbPool.max} busy, ${dbPool.waiting ?? 0} waiting`;
+  if (busyPct >= 90) return [{ level: 'critical', code: 'DB_POOL_HIGH', message }];
+  if (busyPct >= 75) return [{ level: 'warning', code: 'DB_POOL_WARNING', message }];
+  return [];
 };
 
 const buildAlerts = ({ cpu, memory, disk, docker, redis, dbPool }) => {
@@ -364,11 +386,7 @@ const buildAlerts = ({ cpu, memory, disk, docker, redis, dbPool }) => {
     alerts.push({ level: 'warning', code: 'REDIS_EVICTION_POLICY', message: `Redis eviction policy is "${redis.evictionPolicy}" — BullMQ requires "noeviction"` });
   }
 
-  if (dbPool?.available && dbPool.max > 0) {
-    const poolPct = (dbPool.total / dbPool.max) * 100;
-    if (poolPct >= 90) alerts.push({ level: 'critical', code: 'DB_POOL_HIGH', message: `DB pool ${dbPool.total}/${dbPool.max} connections` });
-    else if (poolPct >= 75) alerts.push({ level: 'warning', code: 'DB_POOL_WARNING', message: `DB pool ${dbPool.total}/${dbPool.max} connections` });
-  }
+  alerts.push(...buildDbPoolAlerts(dbPool));
 
   return alerts;
 };
