@@ -31,7 +31,7 @@ export const POLICY_VERSIONS = {
     titleVi: 'Điều khoản sử dụng dịch vụ',
     titleEn: 'Terms of Service',
     files: ['TermsOfService.jsx'],
-    currentHash: '16957d7458a662fcf7952fe93bb67e106c7a3911902ce2db22e1af607e92f2c5',
+    currentHash: '77a0a5b6d4bce7f17747cdeb29f47bd66c7dcb093df149a9647066081234129d',
     versions: ['2026-09-29'],
   },
   privacy: {
@@ -39,7 +39,7 @@ export const POLICY_VERSIONS = {
     titleVi: 'Chính Sách Bảo Mật',
     titleEn: 'Privacy Policy',
     files: ['PrivacyPolicy.jsx', 'PrivacyPolicyControllerPanel.jsx', 'PrivacyPolicyProcessorPanel.jsx'],
-    currentHash: 'f6d6180cdd611767a18e2747bd76db2017ff2bcd90e04a890fd1e9aa3f57231a',
+    currentHash: '39342dac26e364b0fc6e49bc0f07f103b02d88fc4e8a3127088af2f6a407fbb2',
     versions: ['2026-09-29'],
   },
   dpa: {
@@ -47,7 +47,7 @@ export const POLICY_VERSIONS = {
     titleVi: 'Thỏa Thuận Xử Lý Dữ Liệu Cá Nhân',
     titleEn: 'Personal Data Processing Agreement',
     files: ['PublicDPA.jsx'],
-    currentHash: 'b7d0d37f50a039637ebabc3a6b05669f84206f34bdcd14857e663c3439479310',
+    currentHash: '03ef0da3326dc74d9ae84883094c013585a5c8c79b8c80c567680d4a857c5807',
     versions: ['2026-09-29'],
   },
   pricing: {
@@ -55,7 +55,7 @@ export const POLICY_VERSIONS = {
     titleVi: 'Chính sách về giá',
     titleEn: 'Pricing Policy',
     files: ['PricingPolicy.jsx'],
-    currentHash: '4d8ba3d18a9b6556ef5a2cdb5299664fcda8f350681526be67b896b0b8a2aa60',
+    currentHash: 'e5992f4457ad2556543e7f6cb4ff0246ea1e6465202b28b840bafe344d9590cd',
     versions: ['2026-09-29'],
   },
   payment: {
@@ -63,7 +63,7 @@ export const POLICY_VERSIONS = {
     titleVi: 'Chính sách về thanh toán',
     titleEn: 'Payment Policy',
     files: ['PaymentPolicy.jsx'],
-    currentHash: 'a8b4076589335402ad034859eaf0ef77f14abc558cc365232bebaab0f57eed56',
+    currentHash: '4f0a022086b8888fb606c8e7aefe145dec6e213ab9b2430c3e0dee482aa14460',
     versions: ['2026-09-29'],
   },
   complaint: {
@@ -71,7 +71,7 @@ export const POLICY_VERSIONS = {
     titleVi: 'Phương thức tiếp nhận và giải quyết phản ánh, yêu cầu, khiếu nại',
     titleEn: 'Procedure for Receiving and Resolving Feedback, Requests and Complaints',
     files: ['ComplaintPolicy.jsx'],
-    currentHash: '669add601d2a72a18097c7ea8589eff3b0b76689d5a516bb5f7b25b1301d57d4',
+    currentHash: 'a6aede37f4e3adef9b4cc3637e4b03c1ac4cc5edaee97bbb327145cb4ebb9e67',
     versions: ['2026-09-29'],
   },
   serviceTerms: {
@@ -79,7 +79,7 @@ export const POLICY_VERSIONS = {
     titleVi: 'Các điều kiện hoặc hạn chế trong việc cung cấp dịch vụ trên nền tảng',
     titleEn: 'Conditions and Restrictions on the Provision of Services on the Platform',
     files: ['ServiceTerms.jsx'],
-    currentHash: 'bed02a6b3d6a44fed086a2cad91af04560a47612a60592e9012260f1847055a9',
+    currentHash: 'd6e67e81d5e0248534ae35ab27892e58136e18d3aa45c697ee6494ea6b8c411b',
     versions: ['2026-09-29'],
   },
   delivery: {
@@ -87,7 +87,7 @@ export const POLICY_VERSIONS = {
     titleVi: 'Chính sách về phương thức cung cấp dịch vụ',
     titleEn: 'Service Delivery Policy',
     files: ['ServiceDeliveryPolicy.jsx'],
-    currentHash: 'ff96dc15c306f3e26f462539268b4f6244d5d7fb0ee957f8a2588b0e3f7880c2',
+    currentHash: 'ae9ff6658ce33155750ea1aebaec3addac0f630c352f13e0942c2c47bfe02af4',
     versions: ['2026-09-29'],
   },
   refund: {
@@ -95,7 +95,7 @@ export const POLICY_VERSIONS = {
     titleVi: 'Chính sách chấm dứt dịch vụ và hoàn tiền',
     titleEn: 'Service Termination and Refund Policy',
     files: ['RefundPolicy.jsx'],
-    currentHash: '98674c8190aee5958b22004f3376c750ab4077475056a94a37103b8e702311e2',
+    currentHash: '21299ae09ebe6efc52648f15e2fdc68741c6b54f2387bdcb057795765d073c27',
     versions: ['2026-09-29'],
   },
   rights: {
@@ -103,7 +103,7 @@ export const POLICY_VERSIONS = {
     titleVi: 'Quyền và nghĩa vụ của các bên',
     titleEn: 'Rights and Obligations of the Parties',
     files: ['RightsAndDuties.jsx'],
-    currentHash: '6a7b5a9264c60d50c2b6500492e530cfd349e50cfba8b73f47d78fdd78dc87c5',
+    currentHash: 'dc5d1921af7a3ba0d219cb5cd1f272b687d60598ef7d4fceb24b3c95105fd6ba',
     versions: ['2026-09-29'],
   },
   support: {
