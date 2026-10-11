@@ -12,6 +12,7 @@ import {
   HiOutlineTag,
 } from 'react-icons/hi';
 import PageContainer from '../../components/common/PageContainer';
+import Modal from '../../components/Modal';
 import adminVouchersApiService from '../../features/admin/services/adminVouchersApi.service';
 import { Field, FormSection, ModalShell } from '../../features/admin/plans/PlanModalsShared.jsx';
 import { PriceInput } from '../../features/admin/plans/PlanInputs.jsx';
@@ -23,7 +24,14 @@ import { toInputDate } from '../../utils/voucherDate.util.js';
 import NumberInput from '../../components/common/NumberInput';
 
 const fmtVnd = (n) => Number(n || 0).toLocaleString('vi-VN') + ' đ';
-const fmtDate = (d, locale = 'vi') => d ? new Date(d).toLocaleDateString(locale === 'en' ? 'en-US' : 'vi-VN') : '—';
+// Ngày luôn đủ 2 chữ số (01/09/2026): vi-VN mặc định ra "1/9/2026" nên cột ngày lệch độ rộng giữa các dòng.
+const fmtDate = (d, locale = 'vi') => d
+  ? new Date(d).toLocaleDateString(locale === 'en' ? 'en-US' : 'vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  : '—';
+const fmtDateTime = (d, locale = 'vi') => d
+  ? new Date(d).toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  : '—';
+const fmtInt = (n) => Number(n || 0).toLocaleString('vi-VN');
 
 const emptyForm = {
   code: '',
@@ -119,11 +127,212 @@ const fromVoucher = (voucher) => {
   };
 };
 
-const discountLabel = (voucher, t) => {
+/** Mức giảm tách 2 phần: `main` ("10%" / "50.000 đ") và `cap` ("tối đa 500.000 đ", chỉ khi giảm % có trần) để bảng xếp 2 dòng gọn. */
+const discountParts = (voucher, t) => {
   if (voucher.discountType === 'percentage') {
-    return `${Number(voucher.discountValue || 0)}%${voucher.maxDiscountAmount ? `, ${t('voucherAdmin.maxDiscount')} ${fmtVnd(voucher.maxDiscountAmount)}` : ''}`;
+    return {
+      main: `${Number(voucher.discountValue || 0)}%`,
+      cap: voucher.maxDiscountAmount ? `${t('voucherAdmin.maxDiscount')} ${fmtVnd(voucher.maxDiscountAmount)}` : '',
+    };
   }
-  return fmtVnd(voucher.discountValue);
+  return { main: fmtVnd(voucher.discountValue), cap: '' };
+};
+
+const resolveVoucherMode = (voucher) => voucher.offerMode || (voucher.autoApply ? 'automatic' : 'public_code');
+
+/** Mã hiển thị ở bảng/modal: khuyến mãi tự động -> tên; mã bí mật -> che trừ khi đã bấm hiện. */
+const getCodeDisplay = (voucher, mode, revealed, t) => {
+  if (mode === 'automatic') return voucher.name || t('voucherAdmin.autoBadge');
+  if (mode === 'private_code') return revealed ? voucher.code : `••••${String(voucher.code || '').slice(-4)}`;
+  return voucher.code;
+};
+
+// Lớp `badge-yellow` / `badge-green` KHÔNG có trong index.css (chip mất màu, chữ xuống dòng) — dùng đúng các lớp có thật.
+const MODE_BADGE_CLASS = {
+  public_code: 'badge-info',
+  private_code: 'badge-warning',
+  automatic: 'bg-violet-100 text-violet-800 dark:bg-violet-950/40 dark:text-violet-300',
+};
+
+const ModeChip = ({ mode, t }) => (
+  <span className={`badge shrink-0 whitespace-nowrap text-xs ${MODE_BADGE_CLASS[mode] || 'badge-gray'}`}>
+    {t(`voucherAdmin.modeBadge.${mode}`)}
+  </span>
+);
+
+const StatusChip = ({ status, t }) => (
+  <span className={`badge whitespace-nowrap text-xs ${status === 'active' ? 'badge-success' : 'badge-gray'}`}>
+    {t(`voucherAdmin.statusBadge.${status}`)}
+  </span>
+);
+
+const UsageMeter = ({ voucher }) => {
+  const used = Number(voucher.usedCount) || 0;
+  const limit = Number(voucher.usageLimit) || 0;
+  const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+  return (
+    <div className="min-w-[5rem]">
+      <div className="whitespace-nowrap tabular-nums text-gray-900 dark:text-dk-text">
+        <span className="font-semibold">{fmtInt(used)}</span>
+        <span className="text-gray-400 dark:text-dk-text2"> / {limit > 0 ? fmtInt(limit) : '∞'}</span>
+      </div>
+      {limit > 0 && (
+        <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-dk-strong" aria-hidden="true">
+          <div className={`h-full rounded-full ${pct >= 100 ? 'bg-red-500' : 'bg-primary-500'}`} style={{ width: `${pct}%` }} />
+        </div>
+      )}
+    </div>
+  );
+};
+
+const ACTION_TONE = {
+  primary: 'hover:text-primary-600 dark:hover:text-primary-400',
+  danger: 'hover:text-red-600 dark:hover:text-red-400',
+  success: 'hover:text-green-600 dark:hover:text-green-400',
+};
+
+/** Nút biểu tượng ở cột Hành động: luôn có `title` (rê chuột) và `aria-label` (trình đọc màn hình). */
+const RowActionButton = ({ label, onClick, tone = 'primary', children }) => (
+  <button
+    type="button"
+    className={`p-2 text-gray-400 dark:text-dk-muted ${ACTION_TONE[tone]}`}
+    onClick={onClick}
+    title={label}
+    aria-label={label}
+  >
+    {children}
+  </button>
+);
+
+const DetailRow = ({ label, children, testId }) => (
+  <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-3 py-2 sm:grid-cols-[170px_minmax(0,1fr)]" data-testid={testId}>
+    <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-dk-text2">{label}</dt>
+    <dd className="min-w-0 break-words text-sm text-gray-900 dark:text-dk-text">{children}</dd>
+  </div>
+);
+
+const CodeChips = ({ items, fallback }) => (
+  items.length === 0 ? (
+    <span>{fallback}</span>
+  ) : (
+    <span className="flex flex-wrap gap-1.5">
+      {items.map((item) => (
+        <span key={item.key} className="rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700 dark:bg-dk-raised dark:text-dk-text">
+          {item.label}
+        </span>
+      ))}
+    </span>
+  )
+);
+
+// Modal chi tiết voucher — chỉ trình bày lại object voucher của dòng (không gọi API mới); "Sửa" mở form sửa sẵn có.
+const VoucherDetailModal = ({ voucher, revealed, onToggleReveal, onCopy, onEdit, onClose, t, locale }) => {
+  const mode = resolveVoucherMode(voucher);
+  const status = getVoucherLifecycleStatus(voucher);
+  const offer = discountParts(voucher, t);
+  const planCodes = voucher.appliesToPlanCodes || [];
+  const cycles = voucher.appliesToBillingPeriods || [];
+  const hasCode = mode !== 'automatic' && Boolean(voucher.code);
+  const hasLimit = Number(voucher.usageLimit) > 0;
+
+  return (
+    <Modal isOpen onClose={onClose} size="2xl" title={t('voucherAdmin.detail.title')}>
+      <div className="space-y-4" data-testid="voucher-detail-modal">
+        <div className="flex flex-wrap items-center gap-2">
+          <ModeChip mode={mode} t={t} />
+          <StatusChip status={status} t={t} />
+        </div>
+
+        <dl className="divide-y divide-gray-100 rounded-lg border border-gray-100 px-4 dark:divide-dk-border dark:border-dk-border dark:bg-dk-surface">
+          <DetailRow label={t('voucherAdmin.voucherCode')} testId="voucher-detail-code">
+            {hasCode ? (
+              <span className="inline-flex flex-wrap items-center gap-2">
+                <span className="font-mono font-semibold">{getCodeDisplay(voucher, mode, revealed, t)}</span>
+                {mode === 'private_code' && (
+                  <button
+                    type="button"
+                    onClick={onToggleReveal}
+                    className="inline-flex items-center gap-1 text-xs text-primary-600 hover:underline dark:text-primary-400"
+                  >
+                    {revealed ? <HiOutlineEyeOff className="h-3.5 w-3.5" /> : <HiOutlineEye className="h-3.5 w-3.5" />}
+                    {revealed ? t('voucherAdmin.hideCode') : t('voucherAdmin.revealCode')}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={onCopy}
+                  className="inline-flex items-center gap-1 text-xs text-primary-600 hover:underline dark:text-primary-400"
+                >
+                  <HiOutlineClipboardCopy className="h-3.5 w-3.5" />
+                  {t('common.copy')}
+                </button>
+              </span>
+            ) : (
+              <span className="text-gray-500 dark:text-dk-text2">{t('voucherAdmin.autoPromotion')}</span>
+            )}
+          </DetailRow>
+
+          <DetailRow label={t('voucherAdmin.displayName')}>{voucher.name || '—'}</DetailRow>
+          <DetailRow label={t('voucherAdmin.description')} testId="voucher-detail-description">
+            {voucher.description
+              ? <p className="whitespace-pre-wrap break-words">{voucher.description}</p>
+              : <span className="text-gray-400 dark:text-dk-muted">—</span>}
+          </DetailRow>
+
+          <DetailRow label={t('voucherAdmin.tableOffer')} testId="voucher-detail-offer">
+            <span className="font-semibold">{offer.main}</span>
+            {offer.cap && <span className="text-gray-500 dark:text-dk-text2">{`, ${offer.cap}`}</span>}
+          </DetailRow>
+
+          <DetailRow label={t('voucherAdmin.minOrder')}>{fmtVnd(voucher.minOrderAmount)}</DetailRow>
+          <DetailRow label={t('voucherAdmin.applicablePlans')} testId="voucher-detail-plans">
+            <CodeChips
+              items={planCodes.map((code) => ({ key: code, label: code }))}
+              fallback={t('voucherAdmin.allPlans')}
+            />
+          </DetailRow>
+          <DetailRow label={t('voucherAdmin.applicableCycles')} testId="voucher-detail-cycles">
+            <CodeChips
+              items={cycles.map((cycle) => ({
+                key: cycle,
+                label: cycle === 'monthly' || cycle === 'yearly' ? t(`voucherAdmin.${cycle}`) : cycle,
+              }))}
+              fallback={t('voucherAdmin.allCycles')}
+            />
+          </DetailRow>
+
+          <DetailRow label={t('voucherAdmin.tableTime')} testId="voucher-detail-time">
+            <span className="whitespace-nowrap tabular-nums">
+              {voucher.startsAt ? fmtDate(voucher.startsAt, locale) : '—'}
+              {' → '}
+              {voucher.endsAt ? fmtDate(voucher.endsAt, locale) : t('voucherAdmin.noExpiry')}
+            </span>
+          </DetailRow>
+
+          <DetailRow label={t('voucherAdmin.tableUsage')} testId="voucher-detail-usage">
+            <span className="tabular-nums">
+              {t('voucherAdmin.detail.usedOf', { used: fmtInt(voucher.usedCount), limit: hasLimit ? fmtInt(voucher.usageLimit) : t('voucherAdmin.unlimited') })}
+            </span>
+          </DetailRow>
+          <DetailRow label={t('voucherAdmin.usagePerUser')}>
+            {Number(voucher.usageLimitPerUser) > 0 ? fmtInt(voucher.usageLimitPerUser) : t('voucherAdmin.unlimited')}
+          </DetailRow>
+
+          {voucher.createdAt && <DetailRow label={t('voucherAdmin.detail.createdAt')}>{fmtDateTime(voucher.createdAt, locale)}</DetailRow>}
+          {voucher.updatedAt && <DetailRow label={t('voucherAdmin.detail.updatedAt')}>{fmtDateTime(voucher.updatedAt, locale)}</DetailRow>}
+        </dl>
+
+        {/* Dính đáy vùng cuộn: mô tả dài làm modal phải cuộn thì nút Đóng/Sửa vẫn luôn thấy. */}
+        <div className="sticky bottom-0 flex justify-end gap-3 border-t border-gray-100 bg-white pt-3 dark:border-dk-border dark:bg-dk-raised">
+          <button type="button" className="btn btn-secondary" onClick={onClose}>{t('common.close')}</button>
+          <button type="button" className="btn btn-primary" onClick={onEdit}>
+            <HiOutlinePencilAlt className="mr-2 h-4 w-4" />
+            {t('common.edit')}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
 };
 
 const normalizeCode = (value) => String(value || '').trim().toLowerCase();
@@ -478,6 +687,7 @@ export default function AdminVouchersPage() {
   const [tab, setTab] = useState('active');
   const [offerModeFilter, setOfferModeFilter] = useState('all');
   const [revealedPrivateIds, setRevealedPrivateIds] = useState(() => new Set());
+  const [detailVoucherId, setDetailVoucherId] = useState(null); // id voucher đang mở modal chi tiết
 
   const counts = useMemo(() => {
     const now = Date.now();
@@ -515,6 +725,11 @@ export default function AdminVouchersPage() {
       .then((res) => setPlans(res.data.data || []))
       .catch(() => setPlans([]));
   }, []);
+
+  const detailVoucher = useMemo(
+    () => (detailVoucherId == null ? null : vouchers.find((v) => v.id === detailVoucherId) || null),
+    [detailVoucherId, vouchers],
+  );
 
   const openCreate = () => {
     setEditing(null);
@@ -711,101 +926,126 @@ export default function AdminVouchersPage() {
         />
       )}
 
+      {detailVoucher && (
+        <VoucherDetailModal
+          voucher={detailVoucher}
+          revealed={revealedPrivateIds.has(detailVoucher.id)}
+          onToggleReveal={() => togglePrivateCode(detailVoucher.id)}
+          onCopy={() => copyPrivateCode(detailVoucher.code)}
+          onEdit={() => {
+            setDetailVoucherId(null);
+            openEdit(detailVoucher);
+          }}
+          onClose={() => setDetailVoucherId(null)}
+          t={t}
+          locale={locale}
+        />
+      )}
+
       <div className="card overflow-hidden dark:bg-dk-surface dark:border-dk-border">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 dark:bg-dk-raised border-b border-gray-200 dark:border-dk-border">
               <tr>
                 {[
-                  t('voucherAdmin.tableCode'),
-                  t('voucherAdmin.tableType'),
-                  t('voucherAdmin.tableOffer'),
-                  t('voucherAdmin.tableCondition'),
-                  t('voucherAdmin.tableTime'),
-                  t('voucherAdmin.tableUsage'),
-                  t('voucherAdmin.tableStatus'),
-                  '',
-                ].map((h) => (
-                  <th key={h || 'actions'} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-dk-text2 uppercase tracking-wide">{h}</th>
+                  { key: 'code', label: t('voucherAdmin.tableCode') },
+                  { key: 'offer', label: t('voucherAdmin.tableOffer') },
+                  { key: 'usage', label: t('voucherAdmin.tableUsage') },
+                  { key: 'expiry', label: t('voucherAdmin.tableExpiry') },
+                  { key: 'status', label: t('voucherAdmin.tableStatus') },
+                  { key: 'actions', label: t('voucherAdmin.tableActions'), right: true },
+                ].map((col) => (
+                  <th
+                    key={col.key}
+                    className={`px-4 py-3 text-xs font-semibold text-gray-500 dark:text-dk-text2 uppercase tracking-wide whitespace-nowrap ${col.right ? 'text-right' : 'text-left'}`}
+                  >
+                    {col.label}
+                  </th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-dk-border/60">
               {loading ? (
-                <tr><td colSpan={8} className="px-4 py-10 text-center text-gray-400 dark:text-dk-muted">{t('voucherAdmin.loading')}</td></tr>
+                <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400 dark:text-dk-muted">{t('voucherAdmin.loading')}</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-10 text-center text-gray-400 dark:text-dk-muted">{t('voucherAdmin.empty')}</td></tr>
+                <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400 dark:text-dk-muted">{t('voucherAdmin.empty')}</td></tr>
               ) : filtered.map((voucher) => {
                 const status = getVoucherLifecycleStatus(voucher);
-                const mode = voucher.offerMode || (voucher.autoApply ? 'automatic' : 'public_code');
+                const mode = resolveVoucherMode(voucher);
                 const privateCodeRevealed = mode === 'private_code' && revealedPrivateIds.has(voucher.id);
-                const codeDisplay = mode === 'automatic'
-                  ? (voucher.name || t('voucherAdmin.autoBadge'))
-                  : mode === 'private_code'
-                    ? privateCodeRevealed
-                      ? voucher.code
-                      : `••••${String(voucher.code || '').slice(-4)}`
-                    : voucher.code;
+                const codeDisplay = getCodeDisplay(voucher, mode, privateCodeRevealed, t);
+                const offer = discountParts(voucher, t);
+                // Dòng 2 của ô Mã: tên hiển thị (khuyến mãi tự động đã lấy tên làm "mã" ở dòng 1 nên dòng 2 là mô tả).
+                const note = mode === 'automatic' ? (voucher.description || '') : (voucher.name || '');
+                const noteTitle = [voucher.name, voucher.description].filter(Boolean).join('\n');
                 return (
                   <tr key={voucher.id} className="hover:bg-gray-50 dark:hover:bg-dk-raised/40">
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-1">
-                        <div className="font-mono font-semibold text-gray-900 dark:text-dk-text">{codeDisplay}</div>
-                        {mode === 'private_code' && (
-                          <>
-                            <button
-                              type="button"
-                              className="p-1 text-gray-400 dark:text-dk-muted hover:text-primary-600 dark:hover:text-primary-400"
-                              onClick={() => togglePrivateCode(voucher.id)}
-                              title={privateCodeRevealed ? t('voucherAdmin.hideCode') : t('voucherAdmin.revealCode')}
-                            >
-                              {privateCodeRevealed ? <HiOutlineEyeOff /> : <HiOutlineEye />}
-                            </button>
-                            <button
-                              type="button"
-                              className="p-1 text-gray-400 dark:text-dk-muted hover:text-primary-600 dark:hover:text-primary-400"
-                              onClick={() => copyPrivateCode(voucher.code)}
-                              title={t('voucherAdmin.copyCode')}
-                            >
-                              <HiOutlineClipboardCopy />
-                            </button>
-                          </>
-                        )}
+                      <div className="max-w-[22rem]">
+                        <div className="flex items-center gap-1">
+                          <span className="min-w-0 truncate font-mono font-semibold text-gray-900 dark:text-dk-text" title={codeDisplay}>{codeDisplay}</span>
+                          {mode === 'private_code' && (
+                            <>
+                              <button
+                                type="button"
+                                className="shrink-0 p-1 text-gray-400 dark:text-dk-muted hover:text-primary-600 dark:hover:text-primary-400"
+                                onClick={() => togglePrivateCode(voucher.id)}
+                                title={privateCodeRevealed ? t('voucherAdmin.hideCode') : t('voucherAdmin.revealCode')}
+                                aria-label={privateCodeRevealed ? t('voucherAdmin.hideCode') : t('voucherAdmin.revealCode')}
+                              >
+                                {privateCodeRevealed ? <HiOutlineEyeOff /> : <HiOutlineEye />}
+                              </button>
+                              <button
+                                type="button"
+                                className="shrink-0 p-1 text-gray-400 dark:text-dk-muted hover:text-primary-600 dark:hover:text-primary-400"
+                                onClick={() => copyPrivateCode(voucher.code)}
+                                title={t('voucherAdmin.copyCode')}
+                                aria-label={t('voucherAdmin.copyCode')}
+                              >
+                                <HiOutlineClipboardCopy />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                        <div className="mt-1 flex items-center gap-2">
+                          <ModeChip mode={mode} t={t} />
+                          {note && (
+                            <span className="min-w-0 truncate text-xs text-gray-500 dark:text-dk-text2" title={noteTitle}>{note}</span>
+                          )}
+                        </div>
                       </div>
-                      <div className="text-xs text-gray-500 dark:text-dk-text2">{voucher.name}</div>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
-                      <span className="badge badge-yellow text-xs">{t(`voucherAdmin.modeBadge.${mode}`)}</span>
+                      <div className="font-semibold text-gray-900 dark:text-dk-text">{offer.main}</div>
+                      {offer.cap && <div className="text-xs text-gray-500 dark:text-dk-text2">{offer.cap}</div>}
                     </td>
-                    <td className="px-4 py-3 font-semibold text-gray-900 dark:text-dk-text">{discountLabel(voucher, t)}</td>
-                    <td className="px-4 py-3 text-gray-600 dark:text-dk-text">
-                      <div>{t('voucherAdmin.orderFrom', { amount: fmtVnd(voucher.minOrderAmount) })}</div>
-                      <div className="text-xs text-gray-400 dark:text-dk-text2">{(voucher.appliesToPlanCodes || []).join(', ') || t('voucherAdmin.anyPlan')} · {(voucher.appliesToBillingPeriods || []).join(', ') || t('voucherAdmin.anyCycle')}</div>
+                    <td className="px-4 py-3"><UsageMeter voucher={voucher} /></td>
+                    <td className="px-4 py-3 whitespace-nowrap tabular-nums text-gray-600 dark:text-dk-text">
+                      {voucher.endsAt
+                        ? fmtDate(voucher.endsAt, locale)
+                        : <span className="text-gray-400 dark:text-dk-text2">{t('voucherAdmin.noExpiry')}</span>}
                     </td>
-                    <td className="px-4 py-3 text-gray-600 dark:text-dk-text">{fmtDate(voucher.startsAt, locale)} → {fmtDate(voucher.endsAt, locale)}</td>
-                    <td className="px-4 py-3 text-gray-600 dark:text-dk-text">{voucher.usedCount || 0}{voucher.usageLimit ? ` / ${voucher.usageLimit}` : ''}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1">
-                        <span className={`badge text-xs ${status === 'active' ? 'badge-green' : 'badge-gray'}`}>
-                          {t(`voucherAdmin.statusBadge.${status}`)}
-                        </span>
-                      </div>
-                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap"><StatusChip status={status} t={t} /></td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
-                      <button type="button" className="p-2 text-gray-400 dark:text-dk-muted hover:text-primary-600 dark:hover:text-primary-400" onClick={() => openEdit(voucher)} title={t('voucherAdmin.editTitle')}><HiOutlinePencilAlt /></button>
+                      <RowActionButton label={t('voucherAdmin.viewDetail')} onClick={() => setDetailVoucherId(voucher.id)}>
+                        <HiOutlineEye />
+                      </RowActionButton>
+                      <RowActionButton label={t('voucherAdmin.editTitle')} onClick={() => openEdit(voucher)}>
+                        <HiOutlinePencilAlt />
+                      </RowActionButton>
                       {status === 'active' ? (
-                        <button type="button" className="p-2 text-gray-400 dark:text-dk-muted hover:text-red-600 dark:hover:text-red-400" onClick={() => handleDeactivate(voucher)} title={t('voucherAdmin.deactivate')}>
+                        <RowActionButton label={t('voucherAdmin.deactivate')} tone="danger" onClick={() => handleDeactivate(voucher)}>
                           <HiOutlineTrash />
-                        </button>
+                        </RowActionButton>
                       ) : (
                         <>
-                          <button type="button" className="p-2 text-gray-400 dark:text-dk-muted hover:text-green-600 dark:hover:text-green-400" onClick={() => handleRestore(voucher)} title={t('voucherAdmin.restore')}>
+                          <RowActionButton label={t('voucherAdmin.restore')} tone="success" onClick={() => handleRestore(voucher)}>
                             <HiOutlineReply />
-                          </button>
+                          </RowActionButton>
                           {Number(voucher.usedCount) === 0 && (
-                            <button type="button" className="p-2 text-gray-400 dark:text-dk-muted hover:text-red-600 dark:hover:text-red-400" onClick={() => handleHardDelete(voucher)} title={t('voucherAdmin.hardDelete')}>
+                            <RowActionButton label={t('voucherAdmin.hardDelete')} tone="danger" onClick={() => handleHardDelete(voucher)}>
                               <HiOutlineTrash />
-                            </button>
+                            </RowActionButton>
                           )}
                         </>
                       )}
