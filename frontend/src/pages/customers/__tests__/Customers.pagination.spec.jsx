@@ -6,6 +6,8 @@ import campaignApiService from '../../../features/campaigns/services/campaignApi
 import viTranslations from '../../../i18n/vi';
 
 /**
+ * Tab "Theo chiến dịch" (`?tab=campaigns`) của trang — tab mặc định giờ là "Tất cả khách" (PR-C3).
+ *
  * PR-10 (C-09) — `/app/customers` (chọn chiến dịch) mất phân trang: API cắt 20 chiến dịch/trang, trình
  * duyệt lọc bỏ nháp SAU ĐÓ rồi gán totalPages = 1 → chiến dịch thứ 21 trở đi không mở được.
  * Sửa: nhờ API loại nháp (excludeDraft) và dùng `pagination` của API.
@@ -43,7 +45,7 @@ const makeItems = (from, count) =>
 
 const renderPage = () =>
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={['/app/customers?tab=campaigns']}>
       <Customers />
     </MemoryRouter>
   );

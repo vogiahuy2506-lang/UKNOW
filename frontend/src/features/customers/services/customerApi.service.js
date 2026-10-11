@@ -5,8 +5,12 @@ import api from '../../../services/api';
  * Keeps page layer free from raw endpoint literals.
  */
 export const customerApiService = {
-  getCustomers(params = {}) {
-    return api.get('/customers', { params });
+  /**
+   * @param {object} params page, limit, search, consentSource, emailStatus, source, status, campaignId
+   * @param {import('axios').AxiosRequestConfig} [config] vd { signal } để huỷ lượt cũ khi đổi trang/bộ lọc
+   */
+  getCustomers(params = {}, config = {}) {
+    return api.get('/customers', { ...config, params });
   },
 
   getCustomerById(customerId) {
@@ -37,24 +41,31 @@ export const customerApiService = {
     return api.delete(`/customers/${customerId}`);
   },
 
-  bulkUpsertCustomers(payload) {
-    return api.post('/customers/bulk-upsert', payload);
+  /**
+   * Nhập/cập nhật khách hàng loạt. Backend trần 2.000 dòng mỗi lần — người gọi tự chia lô.
+   * Trả `{ inserted, updated, skipped, invalid, errors: [{ index, field, message }] }`; `index` tính trong CHÍNH lô này.
+   *
+   * @param {object[]} items
+   */
+  bulkUpsertCustomers(items) {
+    return api.post('/customers/bulk', { items });
+  },
+
+  /** Xuất CSV theo bộ lọc danh sách (tối đa 10.000 dòng). Trả Blob; header `x-export-truncated` báo bị cắt. */
+  exportCustomersCsv(params = {}) {
+    return api.get('/customers/export.csv', { params, responseType: 'blob' });
   },
 
   getCustomerJourney(customerId, params = {}) {
     return api.get(`/customers/${customerId}/journey`, { params });
   },
 
-  getCustomerCampaignJourneyDetail(customerId, campaignId, params = {}) {
-    return api.get(`/customers/${customerId}/campaigns/${campaignId}/journey-detail`, { params });
-  },
-
   getCampaignById(campaignId) {
     return api.get(`/campaigns/${campaignId}`);
   },
 
-  getCustomersByQueryString(queryString) {
-    return api.get(`/customers?${queryString}`);
+  getCustomersByQueryString(queryString, config = {}) {
+    return api.get(`/customers?${queryString}`, config);
   },
 
   getAttachmentPresignedDownload(fileId, { preview = false } = {}) {

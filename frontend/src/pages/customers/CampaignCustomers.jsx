@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import axios from 'axios';
 import { useI18n } from '../../i18n';
 import customerApiService from '../../features/customers/services/customerApi.service';
 import {
@@ -118,28 +119,32 @@ const CampaignCustomers = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deepLinkCustomerId]);
 
-  const fetchCustomers = useCallback(async (page, currentSearch, currentConsentSource) => {
+  // `signal`: đổi trang/bộ lọc huỷ lượt cũ để lượt chậm trả về sau không ghi đè kết quả mới.
+  const fetchCustomers = useCallback(async (page, currentSearch, currentConsentSource, signal) => {
     setIsLoading(true);
     try {
       const params = new URLSearchParams({
         page,
-        limit: 20,
+        limit: pagination.limit,
         campaignId,
         ...(currentSearch && { search: currentSearch }),
         ...(currentConsentSource && { consentSource: currentConsentSource }),
       });
-      const res = await customerApiService.getCustomersByQueryString(params.toString());
+      const res = await customerApiService.getCustomersByQueryString(params.toString(), { signal });
       const payload = res.data?.data || {};
       setCustomers(payload.items || []);
       setPagination((p) => ({
         ...p,
         page,
+        // Backend có thể cắt `limit` (trần 100) — theo đúng số nó trả để "start–end" không lệch.
+        limit:      payload.pagination?.limit      ?? p.limit,
         total:      payload.pagination?.total      ?? 0,
         totalPages: payload.pagination?.totalPages ?? 1,
       }));
-    } catch {
+      setIsLoading(false);
+    } catch (error) {
+      if (axios.isCancel(error) || signal?.aborted) return;
       toast.error(t('campaignCustomers.loadCustomersFailed'));
-    } finally {
       setIsLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -169,8 +174,10 @@ const CampaignCustomers = () => {
   }, [campaignId, groupMessagesPagination.limit]);
 
   useEffect(() => {
-    if (isZaloGroupCampaign && activeTab !== 'customers') return;
-    fetchCustomers(pagination.page, search, consentSource);
+    if (isZaloGroupCampaign && activeTab !== 'customers') return undefined;
+    const controller = new AbortController();
+    fetchCustomers(pagination.page, search, consentSource, controller.signal);
+    return () => controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaignId, pagination.page, search, consentSource, activeTab, isZaloGroupCampaign]);
 
@@ -278,6 +285,7 @@ const CampaignCustomers = () => {
                 <option value="landing_lead">{t('campaignCustomers.consentSources.landing_lead')}</option>
                 <option value="webhook">{t('campaignCustomers.consentSources.webhook')}</option>
                 <option value="zalo">{t('campaignCustomers.consentSources.zalo')}</option>
+                <option value="form_submission">{t('campaignCustomers.consentSources.form_submission')}</option>
               </select>
             </div>
             <button type="submit" className="btn btn-secondary shrink-0">
@@ -371,7 +379,7 @@ const CampaignCustomers = () => {
                         <td>
                           <div className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-dk-text2">
                             <HiOutlineCalendar className="w-4 h-4 text-gray-400 dark:text-dk-muted shrink-0" />
-                            {formatDate(c.createdAt)}
+                            {formatDate(c.campaignJoinedAt || c.createdAt)}
                           </div>
                         </td>
                         <td>
@@ -405,8 +413,8 @@ const CampaignCustomers = () => {
               <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 dark:border-dk-border">
                 <p className="text-sm text-gray-500 dark:text-dk-text2">
                   {t('campaignCustomers.paginationInfo', {
-                    start: (pagination.page - 1) * 20 + 1,
-                    end: Math.min(pagination.page * 20, pagination.total),
+                    start: (pagination.page - 1) * pagination.limit + 1,
+                    end: Math.min(pagination.page * pagination.limit, pagination.total),
                     total: pagination.total,
                   })}
                 </p>

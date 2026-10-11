@@ -3,7 +3,12 @@ import { createPortal } from 'react-dom';
 import { HiOutlineX } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 
-const BaseModal = ({ isOpen, onClose, title, children }) => {
+/**
+ * @param {object} props
+ * @param {object} [props.contentStyle] ghi đè kích thước khung (mặc định 80vw x 80vh, tối đa 1100px) —
+ *   form nhỏ truyền { maxWidth: '520px', height: 'auto', maxHeight: '90vh' }.
+ */
+const BaseModal = ({ isOpen, onClose, title, children, contentStyle }) => {
   const { t } = useI18n();
   const closeBtnRef = useRef(null);
 
@@ -33,7 +38,7 @@ const BaseModal = ({ isOpen, onClose, title, children }) => {
     >
       <div
         className="modal-content-animate relative flex flex-col bg-white dark:bg-dk-surface rounded-xl shadow-2xl border border-slate-200 dark:border-dk-border overflow-hidden"
-        style={{ width: '80vw', maxWidth: '1100px', height: '80vh' }}
+        style={{ width: '80vw', maxWidth: '1100px', height: '80vh', ...contentStyle }}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-dk-border shrink-0 bg-white dark:bg-dk-surface">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-dk-text truncate pr-4">{title}</h2>
