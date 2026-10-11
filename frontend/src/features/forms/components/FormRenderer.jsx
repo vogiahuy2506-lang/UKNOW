@@ -452,7 +452,7 @@ export default function FormRenderer({
           // Chữ hướng dẫn nhỏ dưới nhãn (PR-3) + gợi ý trong ô nhập (placeholder) — thiếu thì không hiện gì.
           const helpText = typeof field.helpText === 'string' ? field.helpText.trim() : '';
           const helpId = helpText ? `help_${key}` : undefined;
-          const inputPlaceholder = typeof field.placeholder === 'string' && field.placeholder.trim() ? field.placeholder : undefined;
+          const inputPlaceholder = typeof field.placeholder === 'string' && field.placeholder.trim() ? field.placeholder.trim() : undefined;
 
           return (
             <div key={key} className="space-y-1.5">
@@ -705,7 +705,7 @@ export default function FormRenderer({
                 className="mt-0.5 h-4 w-4 rounded text-[color:var(--form-primary,#df5c0e)] focus:ring-primary-500 border-gray-300"
               />
               <span className="leading-snug">
-                {settings.consentText || t('publicForm.consentLabel')}
+                {(typeof settings.consentText === 'string' && settings.consentText.trim()) || t('publicForm.consentLabel')}
               </span>
             </label>
           </div>

@@ -791,6 +791,21 @@ describe('FormRenderer component', () => {
       expect(screen.queryByText('Tôi đồng ý nhận thông tin tư vấn và ưu đãi tiếp thị.')).not.toBeInTheDocument();
     });
 
+    it('consentText chỉ có khoảng trắng → vẫn dùng câu đồng ý mặc định (không hiện ô trống không chữ)', () => {
+      renderForm({ ...baseForm, settings: { ...baseForm.settings, consentEnabled: true, consentText: '   ' } });
+      expect(screen.getByText('Tôi đồng ý nhận thông tin tư vấn và ưu đãi tiếp thị.')).toBeInTheDocument();
+    });
+
+    it('placeholder / consentText có khoảng trắng hai đầu được cắt khi hiện', () => {
+      renderForm({
+        ...baseForm,
+        fields: [{ key: 'a', label: 'A', type: 'short_text', placeholder: '  Nguyễn Văn A  ' }],
+        settings: { ...baseForm.settings, consentEnabled: true, consentText: '  Đồng ý nhận tin  ' },
+      });
+      expect(screen.getByLabelText('A')).toHaveAttribute('placeholder', 'Nguyễn Văn A');
+      expect(screen.getByText('Đồng ý nhận tin').textContent).toBe('Đồng ý nhận tin');
+    });
+
     it('consentEnabled không có consentText → câu đồng ý mặc định của hệ thống', () => {
       renderForm({ ...baseForm, settings: { ...baseForm.settings, consentEnabled: true } });
       expect(screen.getByText('Tôi đồng ý nhận thông tin tư vấn và ưu đãi tiếp thị.')).toBeInTheDocument();
