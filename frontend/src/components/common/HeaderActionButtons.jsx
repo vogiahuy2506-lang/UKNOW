@@ -49,6 +49,7 @@ export function RefreshButton({ onClick, loading = false, disabled = false, labe
 
 /**
  * Nút hành động chính (nền cam). `icon` là component icon (react-icons), vẽ cỡ 4x4 bên trái nhãn.
+ * Có viền 1px trong suốt để CAO BẰNG nút Làm mới (nút Làm mới có viền thật; thiếu viền này nút chính thấp hơn 2px).
  * Mọi prop còn lại (onClick, disabled, title, ...) chuyển thẳng xuống thẻ `<button>`.
  *
  * @param {object} props
@@ -59,7 +60,7 @@ export function PrimaryActionButton({ icon: Icon, children, ...rest }) {
   return (
     <button
       type="button"
-      className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
+      className="inline-flex items-center gap-2 rounded-lg border border-transparent bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
       {...rest}
     >
       {Icon && <Icon className="h-4 w-4" aria-hidden="true" />}

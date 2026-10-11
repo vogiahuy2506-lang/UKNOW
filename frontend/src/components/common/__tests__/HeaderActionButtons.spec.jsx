@@ -44,6 +44,17 @@ describe('HeaderActionButtons', () => {
     expect(onClick).not.toHaveBeenCalled();
   });
 
+  it('PrimaryActionButton: có viền (trong suốt) như RefreshButton để hai nút cao bằng nhau', () => {
+    render(
+      <>
+        <RefreshButton />
+        <PrimaryActionButton>Thêm</PrimaryActionButton>
+      </>
+    );
+    expect(screen.getByRole('button', { name: 'common.refresh' })).toHaveClass('border');
+    expect(screen.getByRole('button', { name: 'Thêm' })).toHaveClass('border', 'border-transparent');
+  });
+
   it('PrimaryActionButton: bật thì bấm được', () => {
     const onClick = vi.fn();
     render(<PrimaryActionButton onClick={onClick}>Thêm</PrimaryActionButton>);
