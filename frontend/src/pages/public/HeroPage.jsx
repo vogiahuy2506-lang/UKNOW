@@ -133,13 +133,13 @@ export default function HeroPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 transition-colors">
+    <div className="min-h-screen bg-white dark:bg-dk-bg text-slate-900 dark:text-dk-text transition-colors">
 
       {/* ── Navigation ── */}
       <HeroNavbar />
 
       {/* ── Hero Section ── */}
-      <section className="relative px-6 pt-12 pb-20 md:pt-16 md:pb-28 overflow-hidden bg-white">
+      <section className="relative px-6 pt-12 pb-20 md:pt-16 md:pb-28 overflow-hidden bg-white dark:bg-dk-bg">
         {/* Background dots */}
         <div className="absolute inset-0 opacity-[0.3] pointer-events-none" style={{
           backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)',
@@ -147,11 +147,11 @@ export default function HeroPage() {
         }} />
 
         {/* Decorative shapes */}
-        <div className="absolute top-16 left-8 w-24 h-24 border border-orange-200 rounded-full opacity-40" />
-        <div className="absolute top-36 left-16 w-14 h-14 border border-blue-200 rounded-2xl rotate-12 opacity-40" />
-        <div className="absolute bottom-20 right-16 w-20 h-20 border border-purple-200 rounded-full opacity-40" />
-        <div className="absolute bottom-36 right-28 w-10 h-10 bg-orange-100 rounded-lg rotate-45 opacity-30" />
-        <div className="absolute top-1/2 left-6 w-6 h-6 bg-blue-100 rounded-full opacity-25" />
+        <div className="absolute top-16 left-8 w-24 h-24 border border-orange-200 dark:border-orange-800 rounded-full opacity-40" />
+        <div className="absolute top-36 left-16 w-14 h-14 border border-blue-200 dark:border-blue-800 rounded-2xl rotate-12 opacity-40" />
+        <div className="absolute bottom-20 right-16 w-20 h-20 border border-purple-200 dark:border-purple-800 rounded-full opacity-40" />
+        <div className="absolute bottom-36 right-28 w-10 h-10 bg-orange-100 dark:bg-orange-950/40 rounded-lg rotate-45 opacity-30" />
+        <div className="absolute top-1/2 left-6 w-6 h-6 bg-blue-100 dark:bg-blue-950/40 rounded-full opacity-25" />
 
         {/* Floating icons - minimal */}
         <svg className="absolute top-28 left-1/4 w-8 h-8 text-orange-400 opacity-25" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
@@ -172,14 +172,14 @@ export default function HeroPage() {
 
         <div className="max-w-4xl mx-auto text-center relative z-10">
           {/* Badge */}
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 text-slate-700 text-sm font-medium mb-8 border border-transparent">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 dark:bg-dk-raised text-slate-700 dark:text-dk-text2 text-sm font-medium mb-8 border border-transparent">
             <span className="w-2 h-2 rounded-full bg-orange-500" />
             <span data-edit="hero.tagline">{getValue('hero.tagline', t('heroPage.tagline'))}</span>
           </div>
 
           {/* Title */}
           <h1
-            className="text-slate-900 mb-6"
+            className="text-slate-900 dark:text-dk-text mb-6"
             style={{ fontSize: 'clamp(32px, 6vw, 56px)', lineHeight: 1.15, fontWeight: 600 }}
           >
             <span data-edit="hero.titleLine1">{getValue('hero.titleLine1', t('heroPage.heroTitleLine1'))}</span>{' '}
@@ -190,7 +190,7 @@ export default function HeroPage() {
 
           {/* Subtitle */}
           <p
-            className="text-slate-600 text-lg md:text-xl max-w-2xl mx-auto mb-10 leading-relaxed"
+            className="text-slate-600 dark:text-dk-text2 text-lg md:text-xl max-w-2xl mx-auto mb-10 leading-relaxed"
             data-edit="hero.subtitle"
           >
             {getValue('hero.subtitle', t('heroPage.heroSubtitle'))}
@@ -208,14 +208,14 @@ export default function HeroPage() {
             </Link>
             <Link
               to="/pricing"
-              className="inline-flex items-center gap-2 px-8 py-4 border border-slate-300 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition-colors text-base"
+              className="inline-flex items-center gap-2 px-8 py-4 border border-slate-300 dark:border-dk-border-strong text-slate-700 dark:text-dk-text2 font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-dk-raised transition-colors text-base"
             >
               {t('heroPage.heroCtaSecondary')}
             </Link>
           </div>
 
           {/* Trust indicators */}
-          <div className="flex flex-wrap items-center justify-center gap-6 mt-10 text-sm text-slate-500">
+          <div className="flex flex-wrap items-center justify-center gap-6 mt-10 text-sm text-slate-500 dark:text-dk-muted">
             <span className="flex items-center gap-2">
               <FaCheck className="w-4 h-4 text-green-500" />
               {t('heroPage.heroTrust1')}
@@ -241,13 +241,13 @@ export default function HeroPage() {
 
       {/* ── Divider ── */}
       <div className="max-w-6xl mx-auto px-6">
-        <div className="h-px bg-gradient-to-r from-transparent via-slate-300 to-transparent" />
+        <div className="h-px bg-gradient-to-r from-transparent via-slate-300 dark:via-dk-border-strong to-transparent" />
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════ */}
       {/* ── SECTION 1: Giải pháp thay đổi cuộc chơi ── */}
       {/* ══════════════════════════════════════════════════════════════════ */}
-      <section className="py-20 md:py-28 bg-white relative overflow-hidden">
+      <section className="py-20 md:py-28 bg-white dark:bg-dk-bg relative overflow-hidden">
         {/* Grid background */}
         <div className="absolute inset-0 opacity-[0.3] pointer-events-none" style={{
           backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)',
@@ -255,13 +255,13 @@ export default function HeroPage() {
         }} />
         <div className="max-w-6xl mx-auto px-6 relative z-10">
           <div className="text-center mb-16">
-            <span className="inline-block px-4 py-1.5 bg-orange-100 text-orange-700 rounded-full text-xs font-bold uppercase tracking-wider mb-4">
+            <span className="inline-block px-4 py-1.5 bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 rounded-full text-xs font-bold uppercase tracking-wider mb-4">
               {t('heroPage.section1Badge')}
             </span>
-            <h2 className="text-3xl md:text-4xl font-semibold text-slate-900 mb-4">
+            <h2 className="text-3xl md:text-4xl font-semibold text-slate-900 dark:text-dk-text mb-4">
               {t('heroPage.section1Title')}
             </h2>
-            <p className="text-slate-600 max-w-xl mx-auto">
+            <p className="text-slate-600 dark:text-dk-text2 max-w-xl mx-auto">
               {t('heroPage.section1Subtitle')}
             </p>
           </div>
@@ -270,13 +270,13 @@ export default function HeroPage() {
             {features.map((feature, i) => (
               <AnimatedSection key={i} delay={i * 80}>
                 <div className="flex gap-4">
-                  <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center shrink-0">
-                    <feature.icon className="w-5 h-5 text-orange-600" />
+                  <div className="w-12 h-12 bg-orange-100 dark:bg-orange-950/40 rounded-xl flex items-center justify-center shrink-0">
+                    <feature.icon className="w-5 h-5 text-orange-600 dark:text-orange-400" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-slate-900 mb-2">{feature.title}</h3>
-                    <p className="text-slate-600 text-sm leading-relaxed mb-3">{feature.description}</p>
-                    <span className="inline-flex items-center gap-1 text-xs font-medium text-orange-600 bg-orange-50 px-2 py-1 rounded">
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-dk-text mb-2">{feature.title}</h3>
+                    <p className="text-slate-600 dark:text-dk-text2 text-sm leading-relaxed mb-3">{feature.description}</p>
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/40 px-2 py-1 rounded">
                       {feature.highlight}
                     </span>
                   </div>
@@ -290,16 +290,16 @@ export default function HeroPage() {
       {/* ══════════════════════════════════════════════════════════════════ */}
       {/* ── SECTION 2: Bắt đầu trong 15 phút ── */}
       {/* ══════════════════════════════════════════════════════════════════ */}
-      <section className="py-20 md:py-28 bg-slate-50/50">
+      <section className="py-20 md:py-28 bg-slate-50/50 dark:bg-dk-surface/40">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-16">
-            <span className="inline-block px-4 py-1.5 bg-slate-200 text-slate-700 rounded-full text-xs font-bold uppercase tracking-wider mb-4">
+            <span className="inline-block px-4 py-1.5 bg-slate-200 dark:bg-dk-strong text-slate-700 dark:text-dk-text2 rounded-full text-xs font-bold uppercase tracking-wider mb-4">
               {t('heroPage.section2Badge')}
             </span>
-            <h2 className="text-3xl md:text-4xl font-semibold text-slate-900 mb-4">
+            <h2 className="text-3xl md:text-4xl font-semibold text-slate-900 dark:text-dk-text mb-4">
               {t('heroPage.section2Title')}
             </h2>
-            <p className="text-slate-600 max-w-lg mx-auto">
+            <p className="text-slate-600 dark:text-dk-text2 max-w-lg mx-auto">
               {t('heroPage.section2Subtitle')}
             </p>
           </div>
@@ -307,23 +307,23 @@ export default function HeroPage() {
           {/* Steps với timeline connector */}
           <div className="relative">
             {/* Desktop timeline line */}
-            <div className="hidden md:block absolute top-16 left-[12.5%] right-[12.5%] h-0.5 bg-slate-200" />
+            <div className="hidden md:block absolute top-16 left-[12.5%] right-[12.5%] h-0.5 bg-slate-200 dark:bg-dk-strong" />
 
             <div className="grid md:grid-cols-4 gap-8">
               {steps.map((step, i) => (
                 <AnimatedSection key={i} delay={i * 100}>
                   <div className="text-center relative">
                     {/* Step number */}
-                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-white border-2 border-orange-500 text-orange-600 font-bold text-sm mb-6 relative z-10 shadow-sm">
+                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-white dark:bg-dk-surface border-2 border-orange-500 text-orange-600 dark:text-orange-400 font-bold text-sm mb-6 relative z-10 shadow-sm">
                       {step.number}
                     </div>
                     {/* Icon */}
-                    <div className="w-10 h-10 mx-auto mb-4 flex items-center justify-center text-slate-400">
+                    <div className="w-10 h-10 mx-auto mb-4 flex items-center justify-center text-slate-400 dark:text-dk-muted">
                       <step.icon className="w-5 h-5" />
                     </div>
                     {/* Content */}
-                    <h3 className="text-base font-semibold text-slate-900 mb-2">{step.title}</h3>
-                    <p className="text-sm text-slate-600 leading-relaxed">{step.description}</p>
+                    <h3 className="text-base font-semibold text-slate-900 dark:text-dk-text mb-2">{step.title}</h3>
+                    <p className="text-sm text-slate-600 dark:text-dk-text2 leading-relaxed">{step.description}</p>
                   </div>
                 </AnimatedSection>
               ))}
@@ -334,13 +334,13 @@ export default function HeroPage() {
 
       {/* ── Divider ── */}
       <div className="max-w-6xl mx-auto px-6">
-        <div className="h-px bg-gradient-to-r from-transparent via-slate-300 to-transparent" />
+        <div className="h-px bg-gradient-to-r from-transparent via-slate-300 dark:via-dk-border-strong to-transparent" />
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════ */}
       {/* ── SECTION 2.5: Xem chiến dịch chạy ntn trong hệ thống ── */}
       {/* ══════════════════════════════════════════════════════════════════ */}
-      <section className="py-20 md:py-28 bg-white relative overflow-hidden">
+      <section className="py-20 md:py-28 bg-white dark:bg-dk-bg relative overflow-hidden">
         {/* Grid background */}
         <div className="absolute inset-0 opacity-[0.3] pointer-events-none" style={{
           backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)',
@@ -350,8 +350,8 @@ export default function HeroPage() {
           <CampaignFlowLauncher t={t} />
 
           <div className="mt-10 max-w-2xl mx-auto">
-            <div className="bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-200 rounded-xl p-4">
-              <p className="text-xs text-orange-900 leading-relaxed">
+            <div className="bg-gradient-to-br from-orange-50 dark:from-orange-950/40 to-amber-50 dark:to-amber-950/40 border border-orange-200 dark:border-orange-800 rounded-xl p-4">
+              <p className="text-xs text-orange-900 dark:text-orange-300 leading-relaxed">
                 <span className="font-semibold">💡 {t('heroPage.campaignDemo.tipTitle') || 'Mẹo:'}</span>{' '}
                 {t('heroPage.campaignDemo.tipContent') || 'Bạn có thể kết hợp cả 3 loại chiến dịch để tiếp cận khách hàng qua nhiều kênh.'}
               </p>
@@ -362,13 +362,13 @@ export default function HeroPage() {
 
       {/* ── Divider ── */}
       <div className="max-w-6xl mx-auto px-6">
-        <div className="h-px bg-gradient-to-r from-transparent via-slate-300 to-transparent" />
+        <div className="h-px bg-gradient-to-r from-transparent via-slate-300 dark:via-dk-border-strong to-transparent" />
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════ */}
       {/* ── SECTION 3: Tại sao chọn Founder AI? ── */}
       {/* ══════════════════════════════════════════════════════════════════ */}
-      <section className="py-20 md:py-28 bg-white relative overflow-hidden">
+      <section className="py-20 md:py-28 bg-white dark:bg-dk-bg relative overflow-hidden">
         {/* Grid background */}
         <div className="absolute inset-0 opacity-[0.3] pointer-events-none" style={{
           backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)',
@@ -376,10 +376,10 @@ export default function HeroPage() {
         }} />
         <div className="max-w-5xl mx-auto px-6">
           <div className="text-center mb-16 relative z-10">
-          <h2 className="text-[26px] md:text-[34px] font-semibold text-slate-900 mb-4 whitespace-nowrap">
+          <h2 className="text-[26px] md:text-[34px] font-semibold text-slate-900 dark:text-dk-text mb-4 whitespace-nowrap">
             {t('heroPage.section3Title')}
           </h2>
-            <p className="text-slate-600 max-w-lg mx-auto">
+            <p className="text-slate-600 dark:text-dk-text2 max-w-lg mx-auto">
               {t('heroPage.section3Subtitle')}
             </p>
           </div>
@@ -387,12 +387,12 @@ export default function HeroPage() {
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
             {benefits.map((b, i) => (
               <AnimatedSection key={i} delay={i * 80}>
-                <div className="h-full text-center p-6 rounded-2xl border border-slate-200 bg-white/50 hover:border-orange-200 hover:bg-orange-50/30 transition-colors relative z-10 flex flex-col items-center">
-                  <div className="w-14 h-14 mb-5 flex items-center justify-center bg-orange-100 rounded-xl shrink-0">
+                <div className="h-full text-center p-6 rounded-2xl border border-slate-200 dark:border-dk-border bg-white/50 dark:bg-dk-surface/50 hover:border-orange-200 dark:hover:border-orange-700 hover:bg-orange-50/30 dark:hover:bg-orange-950/30 transition-colors relative z-10 flex flex-col items-center">
+                  <div className="w-14 h-14 mb-5 flex items-center justify-center bg-orange-100 dark:bg-orange-950/40 rounded-xl shrink-0">
                     <b.icon className="w-6 h-6 text-orange-500" />
                   </div>
-                  <h3 className="text-lg font-semibold text-slate-900 mb-3 min-h-[3.5rem] flex items-center">{b.title}</h3>
-                  <p className="text-sm text-slate-600 leading-relaxed min-h-[3rem]">{b.description}</p>
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-dk-text mb-3 min-h-[3.5rem] flex items-center">{b.title}</h3>
+                  <p className="text-sm text-slate-600 dark:text-dk-text2 leading-relaxed min-h-[3rem]">{b.description}</p>
                 </div>
               </AnimatedSection>
             ))}
@@ -402,33 +402,33 @@ export default function HeroPage() {
 
       {/* ── Divider ── */}
       <div className="max-w-6xl mx-auto px-6">
-        <div className="h-px bg-gradient-to-r from-transparent via-slate-300 to-transparent" />
+        <div className="h-px bg-gradient-to-r from-transparent via-slate-300 dark:via-dk-border-strong to-transparent" />
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════ */}
       {/* ── SECTION 4: Đơn vị phát triển ── */}
       {/* ══════════════════════════════════════════════════════════════════ */}
-      <section className="py-20 md:py-24 bg-slate-50/40 relative overflow-hidden">
+      <section className="py-20 md:py-24 bg-slate-50/40 dark:bg-dk-surface/40 relative overflow-hidden">
         {/* Grid background */}
         <div className="absolute inset-0 opacity-[0.3] pointer-events-none" style={{
           backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)',
           backgroundSize: '24px 24px'
         }} />
         <div className="max-w-4xl mx-auto px-6 text-center relative z-10">
-          <span className="inline-block px-4 py-1.5 bg-slate-100 text-slate-600 rounded-full text-xs font-bold uppercase tracking-wider mb-6">
+          <span className="inline-block px-4 py-1.5 bg-slate-100 dark:bg-dk-raised text-slate-600 dark:text-dk-text2 rounded-full text-xs font-bold uppercase tracking-wider mb-6">
             {t('heroPage.section4Badge')}
           </span>
           <div className="flex items-center justify-center mb-4">
             <img
               src="/logo-digiso.png"
               alt="DIGISO Logo"
-              className="h-16 md:h-20 w-auto"
+              className="h-16 md:h-20 w-auto dark:bg-dk-text dark:rounded-2xl dark:p-2"
             />
           </div>
 
-          <p className="text-slate-600 text-lg max-w-xl mx-auto mb-8 leading-relaxed text-center">
+          <p className="text-slate-600 dark:text-dk-text2 text-lg max-w-xl mx-auto mb-8 leading-relaxed text-center">
             {t('heroPage.section4Desc')}{' '}
-            <span className="font-semibold text-slate-900 whitespace-nowrap">{t('heroPage.section4CompanyName')}</span>.
+            <span className="font-semibold text-slate-900 dark:text-dk-text whitespace-nowrap">{t('heroPage.section4CompanyName')}</span>.
           </p>
 
           <a

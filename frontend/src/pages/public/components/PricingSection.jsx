@@ -27,36 +27,36 @@ import {
 // Tất cả card cùng style border trắng, không có "phổ biến nhất" nổi bật riêng.
 const CARD_STYLES = [
   {
-    wrapper: 'bg-white border border-slate-200 hover:border-orange-300',
-    title: 'text-slate-900',
-    price: 'text-slate-900',
-    unit: 'text-slate-500',
-    feature: 'text-slate-600',
-    featureIcon: 'bg-green-100 text-green-600',
-    button: 'bg-slate-900 text-white hover:bg-slate-800',
-    iconBg: 'bg-slate-50',
+    wrapper: 'bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border hover:border-orange-300 dark:hover:border-orange-700',
+    title: 'text-slate-900 dark:text-dk-text',
+    price: 'text-slate-900 dark:text-dk-text',
+    unit: 'text-slate-500 dark:text-dk-muted',
+    feature: 'text-slate-600 dark:text-dk-text2',
+    featureIcon: 'bg-green-100 dark:bg-green-950/40 text-green-600 dark:text-green-400',
+    button: 'bg-slate-900 dark:bg-dk-strong text-white hover:bg-slate-800 dark:hover:bg-dk-border-strong',
+    iconBg: 'bg-slate-50 dark:bg-dk-inset',
     icon: FaRocket,
   },
   {
-    wrapper: 'bg-white border border-slate-200 hover:border-orange-300',
-    title: 'text-slate-900',
-    price: 'text-slate-900',
-    unit: 'text-slate-500',
-    feature: 'text-slate-600',
-    featureIcon: 'bg-green-100 text-green-600',
-    button: 'bg-slate-900 text-white hover:bg-slate-800',
-    iconBg: 'bg-slate-50',
+    wrapper: 'bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border hover:border-orange-300 dark:hover:border-orange-700',
+    title: 'text-slate-900 dark:text-dk-text',
+    price: 'text-slate-900 dark:text-dk-text',
+    unit: 'text-slate-500 dark:text-dk-muted',
+    feature: 'text-slate-600 dark:text-dk-text2',
+    featureIcon: 'bg-green-100 dark:bg-green-950/40 text-green-600 dark:text-green-400',
+    button: 'bg-slate-900 dark:bg-dk-strong text-white hover:bg-slate-800 dark:hover:bg-dk-border-strong',
+    iconBg: 'bg-slate-50 dark:bg-dk-inset',
     icon: FaCrown,
   },
   {
-    wrapper: 'bg-white border border-slate-200 hover:border-orange-300',
-    title: 'text-slate-900',
-    price: 'text-slate-900',
-    unit: 'text-slate-500',
-    feature: 'text-slate-600',
-    featureIcon: 'bg-green-100 text-green-600',
-    button: 'bg-slate-900 text-white hover:bg-slate-800',
-    iconBg: 'bg-slate-50',
+    wrapper: 'bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border hover:border-orange-300 dark:hover:border-orange-700',
+    title: 'text-slate-900 dark:text-dk-text',
+    price: 'text-slate-900 dark:text-dk-text',
+    unit: 'text-slate-500 dark:text-dk-muted',
+    feature: 'text-slate-600 dark:text-dk-text2',
+    featureIcon: 'bg-green-100 dark:bg-green-950/40 text-green-600 dark:text-green-400',
+    button: 'bg-slate-900 dark:bg-dk-strong text-white hover:bg-slate-800 dark:hover:bg-dk-border-strong',
+    iconBg: 'bg-slate-50 dark:bg-dk-inset',
     icon: FaBolt,
   },
 ];
@@ -390,7 +390,7 @@ export default function PricingSection({ embedded = false, compact = false, glas
   return (
     <section
       id="pricing"
-      className={`${sectionPadding} bg-white relative overflow-hidden transition-colors`}
+      className={`${sectionPadding} bg-white dark:bg-dk-bg relative overflow-hidden transition-colors`}
     >
       {/* Dot grid background — match ContactPage / HeroPage */}
       <div className="absolute inset-0 opacity-[0.3] pointer-events-none" style={{
@@ -402,20 +402,20 @@ export default function PricingSection({ embedded = false, compact = false, glas
         {!embedded && (
           <AnimatedSection className="text-center mb-8">
             {/* Badge — match HeroPage style */}
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 text-slate-700 text-sm font-medium mb-5 border border-transparent">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 dark:bg-dk-raised text-slate-700 dark:text-dk-text2 text-sm font-medium mb-5 border border-transparent">
               <span className="w-2 h-2 rounded-full bg-orange-500" />
               <span>{t('pricing.heroBadge')}</span>
             </div>
 
             <h2
-              className="text-slate-900 mb-4"
+              className="text-slate-900 dark:text-dk-text mb-4"
               style={{ fontSize: 'clamp(28px, 5vw, 48px)', lineHeight: 1.15, fontWeight: 600 }}
             >
               {t('pricing.heroTitlePrefix')}{' '}
               <span className="text-orange-500">{t('pricing.heroTitleHighlight')}</span>
             </h2>
 
-            <p className="text-slate-600 text-base md:text-lg max-w-2xl mx-auto leading-relaxed">
+            <p className="text-slate-600 dark:text-dk-text2 text-base md:text-lg max-w-2xl mx-auto leading-relaxed">
               {t('pricing.heroSubtitle')}
             </p>
           </AnimatedSection>
@@ -423,17 +423,17 @@ export default function PricingSection({ embedded = false, compact = false, glas
 
         {/* Pending scheduled plan change banner */}
         {pendingChange && (
-          <div className="max-w-3xl mx-auto mb-6 rounded-xl border border-amber-300 bg-gradient-to-br from-amber-50 to-orange-50/40 p-4 flex items-start gap-4 shadow-sm">
+          <div className="max-w-3xl mx-auto mb-6 rounded-xl border border-amber-300 dark:border-amber-800 bg-gradient-to-br from-amber-50 dark:from-amber-950/40 to-orange-50/40 dark:to-orange-950/40 p-4 flex items-start gap-4 shadow-sm">
             <div className="w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center shrink-0 mt-0.5">
               <FaClock className="w-4 h-4" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-amber-900 uppercase tracking-wide">
+                <span className="text-xs font-bold text-amber-900 dark:text-amber-300 uppercase tracking-wide">
                   {t('pricing.pendingChangeBannerTitle')}
                 </span>
               </div>
-              <p className="text-xs text-slate-600 mt-0.5">
+              <p className="text-xs text-slate-600 dark:text-dk-text2 mt-0.5">
                 {t('pricing.pendingChangeBannerDesc', {
                   planName: pendingChange.plan_name,
                   period: pendingChange.billing_period === 'yearly' ? t('pricing.billingYearly') : t('pricing.billingMonthly'),
@@ -447,7 +447,7 @@ export default function PricingSection({ embedded = false, compact = false, glas
         {/* Current plan banner — chỉ hiện khi user đang dùng plan không có trong list public
             (gói custom / gói cũ đã soft-delete). Khi match card → card tự highlight, không cần banner. */}
         {customPlanInfo && (
-          <div className={`max-w-3xl mx-auto mb-6 rounded-xl border-2 border-emerald-300 bg-gradient-to-br from-emerald-50 to-white p-5 flex items-start gap-4 shadow-sm`}>
+          <div className={`max-w-3xl mx-auto mb-6 rounded-xl border-2 border-emerald-300 dark:border-emerald-800 bg-gradient-to-br from-emerald-50 dark:from-emerald-950/40 to-white dark:to-dk-surface p-5 flex items-start gap-4 shadow-sm`}>
             <div className="w-10 h-10 shrink-0 rounded-full bg-emerald-500 text-white flex items-center justify-center">
               <FaCheck className="w-5 h-5" />
             </div>
@@ -457,13 +457,13 @@ export default function PricingSection({ embedded = false, compact = false, glas
                   {t('pricing.currentPlanBadge')}
                 </span>
                 {customPlanInfo.name && (
-                  <span className="text-sm font-bold text-slate-900 truncate">{customPlanInfo.name}</span>
+                  <span className="text-sm font-bold text-slate-900 dark:text-dk-text truncate">{customPlanInfo.name}</span>
                 )}
                 {customPlanInfo.code && (
-                  <span className="text-xs text-emerald-700 font-mono">{customPlanInfo.code}</span>
+                  <span className="text-xs text-emerald-700 dark:text-emerald-300 font-mono">{customPlanInfo.code}</span>
                 )}
               </div>
-              <p className="text-sm text-slate-600 leading-relaxed mb-3">
+              <p className="text-sm text-slate-600 dark:text-dk-text2 leading-relaxed mb-3">
                 {customPlanInfo.code?.toLowerCase() === 'custom' || !customPlanInfo.code
                   ? t('pricing.customPlanBannerDesc')
                   : t('pricing.currentPlanNoExpiry')}
@@ -482,13 +482,13 @@ export default function PricingSection({ embedded = false, compact = false, glas
         {/* Billing period toggle */}
         {hasYearlyPricing && (
           <div className={`flex justify-center ${compact ? 'mb-4' : 'mb-6'}`}>
-            <div className="inline-flex items-center rounded-full p-1 gap-1 bg-slate-100 border border-slate-200">
+            <div className="inline-flex items-center rounded-full p-1 gap-1 bg-slate-100 dark:bg-dk-raised border border-slate-200 dark:border-dk-border">
               <button
                 onClick={() => setBillingPeriod('monthly')}
                 className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${
                   billingPeriod === 'monthly'
-                    ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
+                    ? 'bg-white dark:bg-dk-surface text-slate-900 dark:text-dk-text shadow-sm'
+                    : 'text-slate-500 dark:text-dk-muted hover:text-slate-700 dark:hover:text-dk-text'
                 }`}
               >
                 {t('pricing.billingMonthly')}
@@ -497,8 +497,8 @@ export default function PricingSection({ embedded = false, compact = false, glas
                 onClick={() => setBillingPeriod('yearly')}
                 className={`px-5 py-2 rounded-full text-sm font-semibold transition-all flex items-center gap-2 ${
                   billingPeriod === 'yearly'
-                    ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
+                    ? 'bg-white dark:bg-dk-surface text-slate-900 dark:text-dk-text shadow-sm'
+                    : 'text-slate-500 dark:text-dk-muted hover:text-slate-700 dark:hover:text-dk-text'
                 }`}
               >
                 {t('pricing.billingYearly')}
@@ -512,7 +512,7 @@ export default function PricingSection({ embedded = false, compact = false, glas
           </div>
         )}
 
-        <p className={`text-center text-xs text-slate-500 ${compact ? 'mb-4' : 'mb-6'}`}>
+        <p className={`text-center text-xs text-slate-500 dark:text-dk-muted ${compact ? 'mb-4' : 'mb-6'}`}>
           {t('pricing.taxNoteKct')}
         </p>
 
@@ -614,7 +614,7 @@ export default function PricingSection({ embedded = false, compact = false, glas
               <AnimatedSection key={plan.id} delay={index * 100}>
                 <div className={`relative h-full rounded-xl p-5 flex flex-col transition-all hover:shadow-lg ${
                   isCurrentPlanCard
-                    ? 'bg-gradient-to-br from-emerald-50 via-white to-emerald-50/40 border-2 border-emerald-400 shadow-md ring-1 ring-emerald-200'
+                    ? 'bg-gradient-to-br from-emerald-50 dark:from-emerald-950/40 via-white dark:via-dk-surface to-emerald-50/40 dark:to-emerald-950/40 border-2 border-emerald-400 shadow-md ring-1 ring-emerald-200 dark:ring-emerald-800'
                     : style.wrapper
                 }`}>
                   {/* Current plan badge */}
@@ -635,19 +635,19 @@ export default function PricingSection({ embedded = false, compact = false, glas
                     </div>
                     <p className={`text-xs leading-relaxed min-h-[32px] ${style.unit}`}>{planDescription}</p>
                     {isCurrentPlanCard && currentPlanExpiryText && (
-                      <p className="text-[10px] text-emerald-600 font-medium mt-1">
+                      <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium mt-1">
                         {t('pricing.currentPlanMeta', { date: currentPlanExpiryText })}
                       </p>
                     )}
                     {isCurrentPlanCard && !currentPlanExpiryText && (
-                      <p className="text-[10px] text-emerald-600 font-medium mt-1">
+                      <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium mt-1">
                         {t('pricing.currentPlanNoExpiry')}
                       </p>
                     )}
                   </div>
 
                   {/* Price */}
-                  <div className="mb-5 pb-5 border-b border-slate-200/30">
+                  <div className="mb-5 pb-5 border-b border-slate-200/30 dark:border-dk-border">
                     {isCustom ? (
                       activePlanIsCustom ? (
                         <div>
@@ -759,7 +759,7 @@ export default function PricingSection({ embedded = false, compact = false, glas
         </div>
 
         {!compact && (
-          <p className="text-center text-sm text-slate-500 mt-10">
+          <p className="text-center text-sm text-slate-500 dark:text-dk-muted mt-10">
             Tất cả các gói đều bao gồm SSL miễn phí, backup hàng ngày và hỗ trợ kỹ thuật.
           </p>
         )}
@@ -768,23 +768,23 @@ export default function PricingSection({ embedded = false, compact = false, glas
       {/* Day Loss Warning Modal */}
       {dayLossWarningPlan && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white border border-transparent rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center gap-3 text-amber-600">
-              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-                <FaExclamationTriangle className="w-5 h-5 text-amber-600" />
+          <div className="bg-white dark:bg-dk-surface border border-transparent rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-amber-600 dark:text-amber-400">
+              <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-950/40 flex items-center justify-center shrink-0">
+                <FaExclamationTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
               </div>
-              <h3 className="text-base font-bold text-slate-900">
+              <h3 className="text-base font-bold text-slate-900 dark:text-dk-text">
                 {t('pricing.dayLossWarningTitle')}
               </h3>
             </div>
-            <p className="text-sm text-slate-600 leading-relaxed">
+            <p className="text-sm text-slate-600 dark:text-dk-text2 leading-relaxed">
               {t('pricing.dayLossWarningDesc', { days: dayLossWarningPlan.daysRemaining })}
             </p>
             <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => setDayLossWarningPlan(null)}
-                className="px-4 py-2 rounded-lg text-xs font-semibold border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+                className="px-4 py-2 rounded-lg text-xs font-semibold border border-slate-200 dark:border-dk-border text-slate-600 dark:text-dk-text2 hover:bg-slate-50 dark:hover:bg-dk-raised transition-colors"
               >
                 {t('pricing.dayLossWarningCancel')}
               </button>

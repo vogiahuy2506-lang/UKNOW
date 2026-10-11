@@ -30,9 +30,9 @@ export default function TrialDemoPage() {
       label: t('trialDemo.campaignTab'),
       icon: HiOutlineMail,
       color: 'from-blue-500 to-blue-600',
-      bgColor: 'bg-blue-50',
-      borderColor: 'border-blue-200',
-      textColor: 'text-blue-600',
+      bgColor: 'bg-blue-50 dark:bg-blue-950/40',
+      borderColor: 'border-blue-200 dark:border-blue-800',
+      textColor: 'text-blue-600 dark:text-blue-400',
       description: t('trialDemo.campaignDesc'),
     },
     {
@@ -40,9 +40,9 @@ export default function TrialDemoPage() {
       label: t('trialDemo.templateTab'),
       icon: HiOutlineDocumentText,
       color: 'from-purple-500 to-purple-600',
-      bgColor: 'bg-purple-50',
-      borderColor: 'border-purple-200',
-      textColor: 'text-purple-600',
+      bgColor: 'bg-purple-50 dark:bg-purple-950/40',
+      borderColor: 'border-purple-200 dark:border-purple-800',
+      textColor: 'text-purple-600 dark:text-purple-400',
       description: t('trialDemo.templateDesc'),
     },
     {
@@ -50,9 +50,9 @@ export default function TrialDemoPage() {
       label: t('trialDemo.landingTab'),
       icon: HiOutlineViewGrid,
       color: 'from-orange-500 to-red-500',
-      bgColor: 'bg-orange-50',
-      borderColor: 'border-orange-200',
-      textColor: 'text-orange-600',
+      bgColor: 'bg-orange-50 dark:bg-orange-950/40',
+      borderColor: 'border-orange-200 dark:border-orange-800',
+      textColor: 'text-orange-600 dark:text-orange-400',
       description: t('trialDemo.landingDesc'),
     },
   ];
@@ -67,7 +67,7 @@ export default function TrialDemoPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="min-h-screen bg-slate-50 dark:bg-dk-bg flex flex-col">
       {/* Shared header */}
       <HeroNavbar />
 
@@ -76,12 +76,12 @@ export default function TrialDemoPage() {
         {/* Hero section */}
         {!isStarted ? (
           <div className="text-center mb-12">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-orange-100 text-orange-700 rounded-full text-sm font-medium mb-6">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 rounded-full text-sm font-medium mb-6">
               <HiOutlineSparkles className="w-4 h-4" />
               {t('trialDemo.badge')}
             </div>
 
-            <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">
+            <h1 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-dk-text mb-4">
               {t('trialDemo.titlePrefix')}
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-red-500">
                 {t('trialDemo.titleHighlight')}
@@ -89,7 +89,7 @@ export default function TrialDemoPage() {
               {t('trialDemo.titleSuffix')}
             </h1>
 
-            <p className="text-lg text-slate-600 max-w-2xl mx-auto mb-10">
+            <p className="text-lg text-slate-600 dark:text-dk-text2 max-w-2xl mx-auto mb-10">
               {t('trialDemo.subtitle')}
             </p>
 
@@ -102,17 +102,17 @@ export default function TrialDemoPage() {
                     setActiveFlow(flow.id);
                     setIsStarted(true);
                   }}
-                  className={`relative p-6 rounded-2xl border-2 text-left transition-all hover:shadow-lg hover:-translate-y-1 bg-white ${
+                  className={`relative p-6 rounded-2xl border-2 text-left transition-all hover:shadow-lg hover:-translate-y-1 bg-white dark:bg-dk-surface ${
                     activeFlow === flow.id
-                      ? `border-orange-300 shadow-md`
-                      : 'border-slate-200 hover:border-slate-300'
+                      ? `border-orange-300 dark:border-orange-800 shadow-md`
+                      : 'border-slate-200 dark:border-dk-border hover:border-slate-300 dark:hover:border-dk-border-strong'
                   }`}
                 >
                   <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${flow.color} flex items-center justify-center mb-4`}>
                     <flow.icon className="w-6 h-6 text-white" />
                   </div>
-                  <h3 className="text-lg font-semibold text-slate-800 mb-2">{flow.label}</h3>
-                  <p className="text-sm text-slate-500">{flow.description}</p>
+                  <h3 className="text-lg font-semibold text-slate-800 dark:text-dk-text mb-2">{flow.label}</h3>
+                  <p className="text-sm text-slate-500 dark:text-dk-muted">{flow.description}</p>
                   <div className={`absolute top-4 right-4 w-6 h-6 rounded-full ${flow.bgColor} flex items-center justify-center ${flow.textColor}`}>
                     <HiOutlineChevronRight className="w-4 h-4" />
                   </div>
@@ -121,7 +121,7 @@ export default function TrialDemoPage() {
             </div>
 
             {/* Trust indicators */}
-            <div className="flex flex-wrap justify-center gap-6 text-sm text-slate-500">
+            <div className="flex flex-wrap justify-center gap-6 text-sm text-slate-500 dark:text-dk-muted">
               <span className="flex items-center gap-2">
                 <HiOutlineShieldCheck className="w-5 h-5 text-green-500" />
                 {t('trialDemo.trustNoSignup')}
@@ -143,7 +143,7 @@ export default function TrialDemoPage() {
             <div className="flex items-center justify-between mb-6">
               <button
                 onClick={() => setIsStarted(false)}
-                className="flex items-center gap-2 text-slate-600 hover:text-slate-800 transition-colors"
+                className="flex items-center gap-2 text-slate-600 dark:text-dk-text2 hover:text-slate-800 dark:hover:text-dk-text transition-colors"
               >
                 <HiOutlineArrowLeft className="w-4 h-4" />
                 <span>{t('trialDemo.selectAnother')}</span>
@@ -159,7 +159,7 @@ export default function TrialDemoPage() {
                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                       activeFlow === flow.id
                         ? `${flow.bgColor} ${flow.textColor} border border-current`
-                        : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300'
+                        : 'bg-white dark:bg-dk-surface text-slate-600 dark:text-dk-text2 border border-slate-200 dark:border-dk-border hover:border-slate-300 dark:hover:border-dk-border-strong'
                     }`}
                   >
                     <flow.icon className="w-4 h-4 inline mr-1" />
@@ -172,7 +172,7 @@ export default function TrialDemoPage() {
             {/* Chatbot demo */}
             <div className="grid lg:grid-cols-3 gap-6">
               {/* Chatbot */}
-              <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden h-[600px]">
+              <div className="lg:col-span-2 bg-white dark:bg-dk-surface rounded-2xl border border-slate-200 dark:border-dk-border shadow-sm overflow-hidden h-[600px]">
                 <MockChatbot
                   flow={activeFlow}
                   initialMessage={getConversation(chatbotLocale, activeFlow)}
@@ -183,17 +183,17 @@ export default function TrialDemoPage() {
               {/* Sidebar info */}
               <div className="space-y-4">
                 {/* Feature info card */}
-                <div className="bg-white rounded-2xl border border-slate-200 p-6">
+                <div className="bg-white dark:bg-dk-surface rounded-2xl border border-slate-200 dark:border-dk-border p-6">
                   <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${currentFlowConfig.color} flex items-center justify-center mb-4`}>
                     <currentFlowConfig.icon className="w-6 h-6 text-white" />
                   </div>
-                  <h3 className="text-lg font-semibold text-slate-800 mb-2">
+                  <h3 className="text-lg font-semibold text-slate-800 dark:text-dk-text mb-2">
                     {currentFlowConfig.label}
                   </h3>
-                  <p className="text-sm text-slate-600 mb-4">
+                  <p className="text-sm text-slate-600 dark:text-dk-text2 mb-4">
                     {currentFlowConfig.description}
                   </p>
-                  <ul className="space-y-2 text-sm text-slate-600">
+                  <ul className="space-y-2 text-sm text-slate-600 dark:text-dk-text2">
                     {getFeaturesForFlow(activeFlow).map((feature, idx) => (
                       <li key={idx} className="flex items-start gap-2">
                         <HiOutlineCheck className="w-4 h-4 text-green-500 mt-0.5 shrink-0" />
@@ -218,8 +218,8 @@ export default function TrialDemoPage() {
                 </div>
 
                 {/* Demo notice */}
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                  <p className="text-sm text-amber-800">
+                <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
+                  <p className="text-sm text-amber-800 dark:text-amber-300">
                     <strong>{(locale === 'en' ? 'Note' : 'Lưu ý')}:</strong> {t('trialDemo.notice')}
                   </p>
                 </div>

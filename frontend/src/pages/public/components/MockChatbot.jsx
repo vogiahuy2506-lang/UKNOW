@@ -23,14 +23,14 @@ import {
 const ChannelIcon = ({ type, size = 'md' }) => {
   const sizeClass = size === 'sm' ? 'w-5 h-5' : 'w-8 h-8';
   const colors = {
-    email: 'bg-blue-100 text-blue-600',
+    email: 'bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400',
     zalo: 'bg-blue-500 text-white',
-    zalo_group: 'bg-purple-100 text-purple-600',
-    sms: 'bg-green-100 text-green-600',
+    zalo_group: 'bg-purple-100 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400',
+    sms: 'bg-green-100 dark:bg-green-950/40 text-green-600 dark:text-green-400',
   };
 
   return (
-    <div className={`${sizeClass} rounded-lg flex items-center justify-center ${colors[type] || 'bg-gray-100 text-gray-600'}`}>
+    <div className={`${sizeClass} rounded-lg flex items-center justify-center ${colors[type] || 'bg-gray-100 dark:bg-dk-raised text-gray-600 dark:text-dk-text2'}`}>
       {type === 'email' && <HiOutlineMail className="w-4 h-4" />}
       {type === 'zalo' && <span className="text-xs font-bold">Z</span>}
       {type === 'zalo_group' && <HiOutlineUsers className="w-4 h-4" />}
@@ -49,7 +49,7 @@ const ActionButtonsCard = ({ options, onSelect }) => (
         className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
           opt.variant === 'primary'
             ? 'bg-orange-500 text-white hover:bg-orange-600'
-            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            : 'bg-slate-100 dark:bg-dk-raised text-slate-700 dark:text-dk-text2 hover:bg-slate-200 dark:hover:bg-dk-strong'
         }`}
       >
         {opt.label}
@@ -65,10 +65,10 @@ const ChannelPickerCard = ({ options, onSelect }) => (
       <button
         key={opt.id}
         onClick={() => onSelect(opt.id)}
-        className="flex flex-col items-center gap-2 p-4 bg-white border border-slate-200 rounded-xl hover:border-orange-300 hover:shadow-md transition-all"
+        className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-dk-raised border border-slate-200 dark:border-dk-border rounded-xl hover:border-orange-300 dark:hover:border-orange-700 hover:shadow-md transition-all"
       >
         <ChannelIcon type={opt.id} />
-        <span className="text-sm font-medium text-slate-700">{opt.label}</span>
+        <span className="text-sm font-medium text-slate-700 dark:text-dk-text2">{opt.label}</span>
       </button>
     ))}
   </div>
@@ -81,15 +81,15 @@ const DataSourcePickerCard = ({ options, onSelect }) => (
       <button
         key={opt.id}
         onClick={() => onSelect(opt.id)}
-        className="flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-lg hover:border-orange-300 hover:shadow-sm transition-all text-left"
+        className="flex items-center gap-3 p-3 bg-white dark:bg-dk-raised border border-slate-200 dark:border-dk-border rounded-lg hover:border-orange-300 dark:hover:border-orange-700 hover:shadow-sm transition-all text-left"
       >
-        <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center">
-          {opt.icon === 'landing' && <HiOutlineViewGrid className="w-4 h-4 text-slate-600" />}
-          {opt.icon === 'sheet' && <HiOutlineDocumentText className="w-4 h-4 text-slate-600" />}
-          {opt.icon === 'db' && <HiOutlineUsers className="w-4 h-4 text-slate-600" />}
+        <div className="w-8 h-8 bg-slate-100 dark:bg-dk-raised rounded-lg flex items-center justify-center">
+          {opt.icon === 'landing' && <HiOutlineViewGrid className="w-4 h-4 text-slate-600 dark:text-dk-text2" />}
+          {opt.icon === 'sheet' && <HiOutlineDocumentText className="w-4 h-4 text-slate-600 dark:text-dk-text2" />}
+          {opt.icon === 'db' && <HiOutlineUsers className="w-4 h-4 text-slate-600 dark:text-dk-text2" />}
         </div>
-        <span className="text-sm font-medium text-slate-700">{opt.label}</span>
-        <HiOutlineChevronRight className="w-4 h-4 text-slate-400 ml-auto" />
+        <span className="text-sm font-medium text-slate-700 dark:text-dk-text2">{opt.label}</span>
+        <HiOutlineChevronRight className="w-4 h-4 text-slate-400 dark:text-dk-muted ml-auto" />
       </button>
     ))}
   </div>
@@ -102,7 +102,7 @@ const TemplateSuggestionsCard = ({ suggestions, onSelect }) => (
       <button
         key={idx}
         onClick={() => onSelect(suggestion)}
-        className="p-3 bg-white border border-slate-200 rounded-lg hover:border-orange-300 hover:shadow-sm transition-all text-left text-sm"
+        className="p-3 bg-white dark:bg-dk-raised border border-slate-200 dark:border-dk-border rounded-lg hover:border-orange-300 dark:hover:border-orange-700 hover:shadow-sm transition-all text-left text-sm"
       >
         {suggestion}
       </button>
@@ -117,9 +117,9 @@ const TemplateTypePickerCard = ({ options, onSelect }) => (
       <button
         key={opt.id}
         onClick={() => onSelect(opt.id)}
-        className="flex items-center gap-2 p-3 bg-white border border-slate-200 rounded-lg hover:border-orange-300 hover:shadow-sm transition-all text-left"
+        className="flex items-center gap-2 p-3 bg-white dark:bg-dk-raised border border-slate-200 dark:border-dk-border rounded-lg hover:border-orange-300 dark:hover:border-orange-700 hover:shadow-sm transition-all text-left"
       >
-        <span className="text-sm font-medium text-slate-700">{opt.label}</span>
+        <span className="text-sm font-medium text-slate-700 dark:text-dk-text2">{opt.label}</span>
       </button>
     ))}
   </div>
@@ -132,9 +132,9 @@ const ProductPickerCard = ({ options, onSelect }) => (
       <button
         key={opt.id}
         onClick={() => onSelect(opt.id)}
-        className="flex items-center gap-2 p-3 bg-white border border-slate-200 rounded-lg hover:border-orange-300 hover:shadow-sm transition-all text-left"
+        className="flex items-center gap-2 p-3 bg-white dark:bg-dk-raised border border-slate-200 dark:border-dk-border rounded-lg hover:border-orange-300 dark:hover:border-orange-700 hover:shadow-sm transition-all text-left"
       >
-        <span className="text-sm font-medium text-slate-700">{opt.label}</span>
+        <span className="text-sm font-medium text-slate-700 dark:text-dk-text2">{opt.label}</span>
       </button>
     ))}
   </div>
@@ -142,7 +142,7 @@ const ProductPickerCard = ({ options, onSelect }) => (
 
 // Campaign result card
 const CampaignResultCard = ({ stats }) => (
-  <div className="mt-3 overflow-hidden rounded-2xl border border-green-200 bg-white shadow-sm">
+  <div className="mt-3 overflow-hidden rounded-2xl border border-green-200 dark:border-green-800 bg-white dark:bg-dk-surface shadow-sm">
     {/* Header */}
     <div className="bg-gradient-to-r from-green-500 to-emerald-500 px-4 py-3 flex items-center justify-between">
       <div className="flex items-center gap-2">
@@ -178,38 +178,38 @@ const CampaignResultCard = ({ stats }) => (
     <div className="p-4">
       <div className="grid grid-cols-3 gap-3">
         {/* Pending */}
-        <div className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
-          <div className="w-8 h-8 bg-amber-100 rounded-full mx-auto mb-2 flex items-center justify-center">
+        <div className="bg-slate-50 dark:bg-dk-inset rounded-xl p-3 text-center border border-slate-100 dark:border-dk-border">
+          <div className="w-8 h-8 bg-amber-100 dark:bg-amber-950/40 rounded-full mx-auto mb-2 flex items-center justify-center">
             <svg className="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
           </div>
-          <div className="text-xl font-bold text-slate-700">{stats.pending}</div>
-          <div className="text-[10px] text-slate-500 mt-0.5">Đang chờ</div>
+          <div className="text-xl font-bold text-slate-700 dark:text-dk-text2">{stats.pending}</div>
+          <div className="text-[10px] text-slate-500 dark:text-dk-muted mt-0.5">Đang chờ</div>
         </div>
 
         {/* Delivered */}
-        <div className="bg-green-50 rounded-xl p-3 text-center border border-green-100">
-          <div className="w-8 h-8 bg-green-100 rounded-full mx-auto mb-2 flex items-center justify-center">
+        <div className="bg-green-50 dark:bg-green-950/40 rounded-xl p-3 text-center border border-green-100 dark:border-green-800">
+          <div className="w-8 h-8 bg-green-100 dark:bg-green-950/40 rounded-full mx-auto mb-2 flex items-center justify-center">
             <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
           </div>
-          <div className="text-xl font-bold text-green-600">{stats.delivered}</div>
-          <div className="text-[10px] text-green-600 mt-0.5">Đã gửi</div>
+          <div className="text-xl font-bold text-green-600 dark:text-green-400">{stats.delivered}</div>
+          <div className="text-[10px] text-green-600 dark:text-green-400 mt-0.5">Đã gửi</div>
         </div>
 
         {/* Failed */}
-        <div className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
-          <div className="w-8 h-8 bg-red-100 rounded-full mx-auto mb-2 flex items-center justify-center">
+        <div className="bg-slate-50 dark:bg-dk-inset rounded-xl p-3 text-center border border-slate-100 dark:border-dk-border">
+          <div className="w-8 h-8 bg-red-100 dark:bg-red-950/40 rounded-full mx-auto mb-2 flex items-center justify-center">
             <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </div>
-          <div className="text-xl font-bold text-slate-700">{stats.failed}</div>
-          <div className="text-[10px] text-slate-500 mt-0.5">Thất bại</div>
+          <div className="text-xl font-bold text-slate-700 dark:text-dk-text2">{stats.failed}</div>
+          <div className="text-[10px] text-slate-500 dark:text-dk-muted mt-0.5">Thất bại</div>
         </div>
       </div>
 
       {/* Real-time feed simulation */}
-      <div className="mt-3 pt-3 border-t border-slate-100">
+      <div className="mt-3 pt-3 border-t border-slate-100 dark:border-dk-border">
         <div className="flex items-center gap-1.5 mb-2">
           <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-          <span className="text-[10px] text-slate-500 font-medium">Đang cập nhật real-time...</span>
+          <span className="text-[10px] text-slate-500 dark:text-dk-muted font-medium">Đang cập nhật real-time...</span>
         </div>
         <div className="space-y-1.5">
           {[
@@ -217,12 +217,12 @@ const CampaignResultCard = ({ stats }) => (
             { name: 'Trần Thị B', time: '5s trước', status: 'delivered' },
             { name: 'Lê Văn C', time: '8s trước', status: 'pending' },
           ].map((item, i) => (
-            <div key={i} className="flex items-center justify-between text-[10px] text-slate-600 bg-slate-50 rounded-lg px-2 py-1.5">
+            <div key={i} className="flex items-center justify-between text-[10px] text-slate-600 dark:text-dk-text2 bg-slate-50 dark:bg-dk-inset rounded-lg px-2 py-1.5">
               <span className="flex items-center gap-1.5">
                 <div className={`w-1.5 h-1.5 rounded-full ${item.status === 'delivered' ? 'bg-green-500' : 'bg-amber-400'}`} />
                 {item.name}
               </span>
-              <span className="text-slate-400">{item.time}</span>
+              <span className="text-slate-400 dark:text-dk-muted">{item.time}</span>
             </div>
           ))}
         </div>
@@ -236,16 +236,16 @@ const LandingPreviewCard = ({ title, features, locale = 'vi' }) => {
   const previewLabel = locale === 'en' ? 'Landing Page Preview' : 'Xem trước Landing Page';
 
   return (
-    <div className="mt-3 rounded-2xl overflow-hidden border border-slate-200 bg-white shadow-sm">
+    <div className="mt-3 rounded-2xl overflow-hidden border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface shadow-sm">
       {/* Browser chrome */}
-      <div className="bg-gradient-to-r from-slate-100 to-slate-50 px-4 py-2.5 flex items-center gap-2 border-b border-slate-200">
+      <div className="bg-gradient-to-r from-slate-100 dark:from-dk-raised to-slate-50 dark:to-dk-bg px-4 py-2.5 flex items-center gap-2 border-b border-slate-200 dark:border-dk-border">
         <div className="flex items-center gap-1.5">
           <span className="w-3 h-3 rounded-full bg-red-400" />
           <span className="w-3 h-3 rounded-full bg-yellow-400" />
           <span className="w-3 h-3 rounded-full bg-green-400" />
         </div>
         <div className="flex-1 flex justify-center">
-          <div className="bg-white rounded-md px-3 py-1 text-[11px] text-slate-400 border border-slate-200 w-48 text-center truncate">
+          <div className="bg-white dark:bg-dk-surface rounded-md px-3 py-1 text-[11px] text-slate-400 dark:text-dk-muted border border-slate-200 dark:border-dk-border w-48 text-center truncate">
             uknow.vn/landing-{title.split(' ').slice(0, 3).join('-').toLowerCase()}
           </div>
         </div>
@@ -340,15 +340,15 @@ const LandingPreviewCard = ({ title, features, locale = 'vi' }) => {
         </div>
 
         {/* Real features tags */}
-        <div className="bg-slate-50 px-4 py-3 border-t border-slate-200">
-          <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
+        <div className="bg-slate-50 dark:bg-dk-inset px-4 py-3 border-t border-slate-200 dark:border-dk-border">
+          <p className="text-[10px] font-semibold text-slate-500 dark:text-dk-muted uppercase tracking-wide mb-2">
             {locale === 'en' ? 'Features included' : 'Tính năng bao gồm'}
           </p>
           <div className="flex flex-wrap gap-1.5">
             {features.map((feature, idx) => (
               <span
                 key={idx}
-                className="inline-flex items-center gap-1 text-[10px] bg-white text-slate-600 px-2 py-0.5 rounded-full border border-slate-200 shadow-sm"
+                className="inline-flex items-center gap-1 text-[10px] bg-white dark:bg-dk-surface text-slate-600 dark:text-dk-text2 px-2 py-0.5 rounded-full border border-slate-200 dark:border-dk-border shadow-sm"
               >
                 <svg className="w-2.5 h-2.5 text-green-500 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
                 {feature}
@@ -475,9 +475,9 @@ const PickerCard = ({ options, onSelect, title }) => (
       <button
         key={opt.id}
         onClick={() => onSelect(opt.id)}
-        className="flex items-center gap-2 p-3 bg-white border border-slate-200 rounded-lg hover:border-orange-300 hover:shadow-sm transition-all"
+        className="flex items-center gap-2 p-3 bg-white dark:bg-dk-raised border border-slate-200 dark:border-dk-border rounded-lg hover:border-orange-300 dark:hover:border-orange-700 hover:shadow-sm transition-all"
       >
-        <span className="text-sm font-medium text-slate-700">{opt.label}</span>
+        <span className="text-sm font-medium text-slate-700 dark:text-dk-text2">{opt.label}</span>
       </button>
     ))}
   </div>
@@ -751,15 +751,15 @@ export default function MockChatbot({ flow, initialMessage, onComplete, locale =
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50">
+    <div className="flex flex-col h-full bg-slate-50 dark:bg-dk-inset">
       {/* Chat header */}
-      <div className="bg-white border-b border-slate-200 px-4 py-3 flex items-center gap-3">
+      <div className="bg-white dark:bg-dk-surface border-b border-slate-200 dark:border-dk-border px-4 py-3 flex items-center gap-3">
         <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl flex items-center justify-center">
           <HiOutlineSparkles className="w-5 h-5 text-white" />
         </div>
         <div>
-          <div className="font-semibold text-slate-800">Founder AI Assistant</div>
-          <div className="text-xs text-slate-500 flex items-center gap-1">
+          <div className="font-semibold text-slate-800 dark:text-dk-text">Founder AI Assistant</div>
+          <div className="text-xs text-slate-500 dark:text-dk-muted flex items-center gap-1">
             <span className="w-2 h-2 bg-green-500 rounded-full" />
             Demo Mode
           </div>
@@ -777,8 +777,8 @@ export default function MockChatbot({ flow, initialMessage, onComplete, locale =
                   <HiOutlineSparkles className="w-4 h-4 text-white" />
                 </div>
               ) : (
-                <div className="w-8 h-8 bg-slate-200 rounded-xl flex items-center justify-center shrink-0">
-                  <HiOutlineUser className="w-4 h-4 text-slate-500" />
+                <div className="w-8 h-8 bg-slate-200 dark:bg-dk-strong rounded-xl flex items-center justify-center shrink-0">
+                  <HiOutlineUser className="w-4 h-4 text-slate-500 dark:text-dk-muted" />
                 </div>
               )}
 
@@ -788,7 +788,7 @@ export default function MockChatbot({ flow, initialMessage, onComplete, locale =
                   className={`px-4 py-3 rounded-2xl ${
                     message.role === 'user'
                       ? 'bg-orange-500 text-white rounded-tr-sm'
-                      : 'bg-white text-slate-700 rounded-tl-sm border border-slate-200'
+                      : 'bg-white dark:bg-dk-surface text-slate-700 dark:text-dk-text2 rounded-tl-sm border border-slate-200 dark:border-dk-border'
                   }`}
                 >
                   <div className="text-sm whitespace-pre-wrap leading-relaxed">
@@ -836,7 +836,7 @@ export default function MockChatbot({ flow, initialMessage, onComplete, locale =
               <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl flex items-center justify-center shrink-0">
                 <HiOutlineSparkles className="w-4 h-4 text-white" />
               </div>
-              <div className="bg-white border border-slate-200 px-4 py-3 rounded-2xl rounded-tl-sm">
+              <div className="bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border px-4 py-3 rounded-2xl rounded-tl-sm">
                 <TypingIndicator />
               </div>
             </div>
@@ -847,8 +847,8 @@ export default function MockChatbot({ flow, initialMessage, onComplete, locale =
       </div>
 
       {/* Input area (disabled for demo) */}
-      <div className="bg-white border-t border-slate-200 p-3">
-        <div className="flex items-center gap-2 px-3 py-2 bg-slate-100 rounded-xl text-slate-400 text-sm">
+      <div className="bg-white dark:bg-dk-surface border-t border-slate-200 dark:border-dk-border p-3">
+        <div className="flex items-center gap-2 px-3 py-2 bg-slate-100 dark:bg-dk-raised rounded-xl text-slate-400 dark:text-dk-muted text-sm">
           <HiOutlineChip className="w-4 h-4" />
           <span>{locale === 'en' ? 'Demo mode - Click the buttons to interact' : 'Demo mode - Nhấn vào các nút để trải nghiệm'}</span>
         </div>
@@ -857,13 +857,13 @@ export default function MockChatbot({ flow, initialMessage, onComplete, locale =
       {/* HTML Preview Modal */}
       {previewHtml && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setPreviewHtml(null)}>
-          <div className="bg-white rounded-2xl w-full max-w-4xl h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-4 border-b border-slate-200">
-              <h3 className="font-semibold text-slate-800">
+          <div className="bg-white dark:bg-dk-surface rounded-2xl w-full max-w-4xl h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-dk-border">
+              <h3 className="font-semibold text-slate-800 dark:text-dk-text">
                 {locale === 'en' ? 'Landing Page Preview' : 'Xem trước Landing Page'}
               </h3>
-              <button onClick={() => setPreviewHtml(null)} className="p-2 hover:bg-slate-100 rounded-lg">
-                <HiOutlineX className="w-5 h-5 text-slate-500" />
+              <button onClick={() => setPreviewHtml(null)} className="p-2 hover:bg-slate-100 dark:hover:bg-dk-raised rounded-lg">
+                <HiOutlineX className="w-5 h-5 text-slate-500 dark:text-dk-muted" />
               </button>
             </div>
             <div className="flex-1 p-0">

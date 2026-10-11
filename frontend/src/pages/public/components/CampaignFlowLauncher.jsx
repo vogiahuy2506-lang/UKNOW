@@ -29,12 +29,12 @@ export default function CampaignFlowLauncher({ t }) {
       desc: t('heroPage.campaignDemo.emailDesc') || 'Gửi email hàng loạt theo mẫu, theo dõi lượt mở và lượt bấm link',
       icon: HiOutlineMail,
       gradient: 'from-orange-400 via-orange-500 to-amber-500',
-      border: 'border-orange-200',
-      hoverBorder: 'hover:border-orange-400',
-      iconBg: 'bg-orange-100',
-      iconColor: 'text-orange-600',
+      border: 'border-orange-200 dark:border-orange-800',
+      hoverBorder: 'hover:border-orange-400 dark:hover:border-orange-700',
+      iconBg: 'bg-orange-100 dark:bg-orange-950/40',
+      iconColor: 'text-orange-600 dark:text-orange-400',
       btnBg: 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600',
-      chipBg: 'bg-orange-50 text-orange-700',
+      chipBg: 'bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300',
       chips: [`${getFlowNodeCount('email')} node`, 'Nhiều email nối tiếp', 'Đo lượt mở, bấm link'],
     },
     {
@@ -43,12 +43,12 @@ export default function CampaignFlowLauncher({ t }) {
       desc: t('heroPage.campaignDemo.zaloPersonalDesc') || 'Gửi tin nhắn Zalo cá nhân đến từng khách hàng',
       icon: HiOutlineChatAlt2,
       gradient: 'from-orange-500 to-red-500',
-      border: 'border-orange-200',
-      hoverBorder: 'hover:border-red-400',
-      iconBg: 'bg-orange-100',
+      border: 'border-orange-200 dark:border-orange-800',
+      hoverBorder: 'hover:border-red-400 dark:hover:border-red-700',
+      iconBg: 'bg-orange-100 dark:bg-orange-950/40',
       iconColor: 'text-red-500',
       btnBg: 'bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600',
-      chipBg: 'bg-orange-50 text-orange-700',
+      chipBg: 'bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300',
       chips: [`${getFlowNodeCount('zalo')} node`, 'Tự giãn cách tin', 'Theo dõi gửi, lỗi'],
     },
     {
@@ -57,12 +57,12 @@ export default function CampaignFlowLauncher({ t }) {
       desc: t('heroPage.campaignDemo.zaloGroupDesc') || 'Gửi tin nhắn vào các nhóm Zalo đã tham gia',
       icon: HiOutlineUserGroup,
       gradient: 'from-red-500 to-rose-600',
-      border: 'border-red-200',
-      hoverBorder: 'hover:border-rose-400',
-      iconBg: 'bg-red-100',
-      iconColor: 'text-red-600',
+      border: 'border-red-200 dark:border-red-800',
+      hoverBorder: 'hover:border-rose-400 dark:hover:border-rose-700',
+      iconBg: 'bg-red-100 dark:bg-red-950/40',
+      iconColor: 'text-red-600 dark:text-red-400',
       btnBg: 'bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700',
-      chipBg: 'bg-red-50 text-red-700',
+      chipBg: 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300',
       chips: [`${getFlowNodeCount('zalo_group')} node`, 'Chọn nhóm cần gửi', 'Theo dõi gửi, lỗi'],
     },
   ];
@@ -75,14 +75,14 @@ export default function CampaignFlowLauncher({ t }) {
     <div>
       {/* Header text */}
       <div className="text-center mb-10">
-        <span className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-orange-100 text-orange-700 rounded-full text-xs font-bold uppercase tracking-wider mb-4">
+        <span className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 rounded-full text-xs font-bold uppercase tracking-wider mb-4">
           <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
           {t('heroPage.campaignDemoBadge') || 'Mô phỏng'}
         </span>
-        <h2 className="text-3xl md:text-4xl font-semibold text-slate-900 mb-4">
+        <h2 className="text-3xl md:text-4xl font-semibold text-slate-900 dark:text-dk-text mb-4">
           {t('heroPage.campaignDemoTitle') || 'Chiến dịch chạy như thế nào?'}
         </h2>
-        <p className="text-slate-600 max-w-2xl mx-auto">
+        <p className="text-slate-600 dark:text-dk-text2 max-w-2xl mx-auto">
           {t('heroPage.campaignDemoSubtitle') || 'Xem chi tiết các bước (node) mà mỗi chiến dịch sẽ chạy trong hệ thống Founder AI. Bấm vào từng loại để xem mô phỏng trực quan.'}
         </p>
       </div>
@@ -98,7 +98,7 @@ export default function CampaignFlowLauncher({ t }) {
               onClick={() => openFlow(c.key)}
               onMouseEnter={() => setHovered(c.key)}
               onMouseLeave={() => setHovered(null)}
-              className={`group relative text-left bg-white rounded-2xl border-2 ${c.border} ${c.hoverBorder} p-6 transition-all hover:shadow-xl hover:-translate-y-1 overflow-hidden`}
+              className={`group relative text-left bg-white dark:bg-dk-surface rounded-2xl border-2 ${c.border} ${c.hoverBorder} p-6 transition-all hover:shadow-xl hover:-translate-y-1 overflow-hidden`}
             >
               {/* Decorative gradient strip */}
               <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${c.gradient}`} />
@@ -106,12 +106,12 @@ export default function CampaignFlowLauncher({ t }) {
               <div className={`w-14 h-14 rounded-xl ${c.iconBg} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
                 <Icon className={`w-7 h-7 ${c.iconColor}`} />
               </div>
-              <h3 className="text-lg font-bold text-slate-900 mb-2">{c.title}</h3>
-              <p className="text-sm text-slate-600 leading-relaxed mb-4 min-h-[3rem]">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-dk-text mb-2">{c.title}</h3>
+              <p className="text-sm text-slate-600 dark:text-dk-text2 leading-relaxed mb-4 min-h-[3rem]">
                 {c.desc}
               </p>
 
-              <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500 mb-4">
+              <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500 dark:text-dk-muted mb-4">
                 {c.chips.map((chip) => (
                   <span key={chip} className={`px-2 py-0.5 ${c.chipBg} rounded-md font-medium`}>
                     {chip}

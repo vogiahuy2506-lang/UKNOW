@@ -16,14 +16,14 @@ import { FLOWS } from '../campaignFlowData';
 
 // Màu sắc cho từng loại node (theo CampaignBuilderFlowNodes.jsx)
 const NODE_COLORS = {
-  indigo: { bg: 'bg-indigo-100', icon: 'text-indigo-600', ring: 'ring-indigo-300' },
-  amber: { bg: 'bg-amber-100', icon: 'text-amber-600', ring: 'ring-amber-300' },
-  pink: { bg: 'bg-pink-100', icon: 'text-pink-600', ring: 'ring-pink-300' },
-  orange: { bg: 'bg-orange-100', icon: 'text-orange-600', ring: 'ring-orange-300' },
-  blue: { bg: 'bg-blue-100', icon: 'text-blue-600', ring: 'ring-blue-300' },
-  green: { bg: 'bg-green-100', icon: 'text-green-600', ring: 'ring-green-300' },
-  gray: { bg: 'bg-gray-100', icon: 'text-gray-600', ring: 'ring-gray-300' },
-  violet: { bg: 'bg-violet-100', icon: 'text-violet-600', ring: 'ring-violet-300' },
+  indigo: { bg: 'bg-indigo-100 dark:bg-indigo-950/40', icon: 'text-indigo-600 dark:text-indigo-400', ring: 'ring-indigo-300 dark:ring-indigo-800' },
+  amber: { bg: 'bg-amber-100 dark:bg-amber-950/40', icon: 'text-amber-600 dark:text-amber-400', ring: 'ring-amber-300 dark:ring-amber-800' },
+  pink: { bg: 'bg-pink-100 dark:bg-pink-950/40', icon: 'text-pink-600 dark:text-pink-400', ring: 'ring-pink-300 dark:ring-pink-800' },
+  orange: { bg: 'bg-orange-100 dark:bg-orange-950/40', icon: 'text-orange-600 dark:text-orange-400', ring: 'ring-orange-300 dark:ring-orange-800' },
+  blue: { bg: 'bg-blue-100 dark:bg-blue-950/40', icon: 'text-blue-600 dark:text-blue-400', ring: 'ring-blue-300 dark:ring-blue-800' },
+  green: { bg: 'bg-green-100 dark:bg-green-950/40', icon: 'text-green-600 dark:text-green-400', ring: 'ring-green-300 dark:ring-green-800' },
+  gray: { bg: 'bg-gray-100 dark:bg-dk-raised', icon: 'text-gray-600 dark:text-dk-text2', ring: 'ring-gray-300 dark:ring-dk-border-strong' },
+  violet: { bg: 'bg-violet-100 dark:bg-violet-950/40', icon: 'text-violet-600 dark:text-violet-400', ring: 'ring-violet-300 dark:ring-violet-800' },
 };
 
 function NodeCard({ node, isActive, isCompleted, index }) {
@@ -32,18 +32,18 @@ function NodeCard({ node, isActive, isCompleted, index }) {
 
   return (
     <div
-      className={`relative bg-white rounded-xl border-2 transition-all duration-500 ${
+      className={`relative bg-white dark:bg-dk-surface rounded-xl border-2 transition-all duration-500 ${
         isActive
           ? `border-current ${colors.ring} ring-4 shadow-lg scale-105`
           : isCompleted
-          ? 'border-green-200 bg-green-50/30'
-          : 'border-slate-200 opacity-60'
+          ? 'border-green-200 dark:border-green-800 bg-green-50/30 dark:bg-green-950/30'
+          : 'border-slate-200 dark:border-dk-border opacity-60'
       }`}
       style={{ animationDelay: `${index * 100}ms` }}
     >
       {/* Connection line on top */}
       {index > 0 && (
-        <div className={`absolute -top-2 left-1/2 -translate-x-1/2 w-0.5 h-2 ${isCompleted || isActive ? 'bg-green-400' : 'bg-slate-300'}`} />
+        <div className={`absolute -top-2 left-1/2 -translate-x-1/2 w-0.5 h-2 ${isCompleted || isActive ? 'bg-green-400' : 'bg-slate-300 dark:bg-dk-border-strong'}`} />
       )}
 
       <div className="p-3 flex items-center gap-2.5">
@@ -63,14 +63,14 @@ function NodeCard({ node, isActive, isCompleted, index }) {
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-mono text-slate-400">
+            <span className="text-[10px] font-mono text-slate-400 dark:text-dk-muted">
               {String(index + 1).padStart(2, '0')}
             </span>
-            <h4 className={`text-xs font-semibold leading-tight ${isActive ? 'text-slate-900' : 'text-slate-700'}`}>
+            <h4 className={`text-xs font-semibold leading-tight ${isActive ? 'text-slate-900 dark:text-dk-text' : 'text-slate-700 dark:text-dk-text2'}`}>
               {node.label}
             </h4>
           </div>
-          <p className="text-[10px] text-slate-500 leading-tight mt-0.5 line-clamp-2">
+          <p className="text-[10px] text-slate-500 dark:text-dk-muted leading-tight mt-0.5 line-clamp-2">
             {node.desc}
           </p>
         </div>
@@ -118,10 +118,10 @@ function FlowAnimation({ flowKey, onClose: _onClose }) {
           </div>
           <div className="flex-1">
             <h3 className={`text-sm font-bold ${flow.textClass}`}>{flow.title}</h3>
-            <p className="text-[11px] text-slate-600 mt-0.5">{flow.subtitle}</p>
+            <p className="text-[11px] text-slate-600 dark:text-dk-text2 mt-0.5">{flow.subtitle}</p>
           </div>
           <div className="text-right">
-            <div className="text-[10px] text-slate-500">{t('heroPage.campaignFlow.nodes') || 'Số node'}</div>
+            <div className="text-[10px] text-slate-500 dark:text-dk-muted">{t('heroPage.campaignFlow.nodes') || 'Số node'}</div>
             <div className={`text-lg font-bold ${flow.textClass} tabular-nums`}>
               {flow.nodes.length}
             </div>
@@ -130,13 +130,13 @@ function FlowAnimation({ flowKey, onClose: _onClose }) {
 
         {/* Progress bar */}
         <div className="mt-3">
-          <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1">
+          <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-dk-muted mb-1">
             <span>{t('heroPage.campaignFlow.executing') || 'Đang thực thi'}</span>
             <span className="font-semibold">
               {Math.max(0, activeIndex)} / {flow.nodes.length}
             </span>
           </div>
-          <div className="h-1.5 bg-white rounded-full overflow-hidden">
+          <div className="h-1.5 bg-white dark:bg-dk-surface rounded-full overflow-hidden">
             <div
               className={`h-full ${flow.barClass} transition-all duration-500 ease-out`}
               style={{ width: `${(Math.max(0, activeIndex) / flow.nodes.length) * 100}%` }}
@@ -168,7 +168,7 @@ function FlowAnimation({ flowKey, onClose: _onClose }) {
             </h4>
             <span
               data-testid="campaign-flow-sample-badge"
-              className="ml-auto px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 text-[10px] font-semibold"
+              className="ml-auto px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-[10px] font-semibold"
             >
               {t('heroPage.campaignFlow.sampleData') || 'Số liệu minh hoạ'}
             </span>
@@ -178,18 +178,18 @@ function FlowAnimation({ flowKey, onClose: _onClose }) {
             style={{ gridTemplateColumns: `repeat(${flow.stats.length}, minmax(0, 1fr))` }}
           >
             {flow.stats.map((stat) => (
-              <div key={stat.label} className="bg-white/70 rounded-lg p-2 text-center">
-                <div className="text-[9px] text-slate-500 leading-tight">{stat.label}</div>
+              <div key={stat.label} className="bg-white/70 dark:bg-dk-surface/70 rounded-lg p-2 text-center">
+                <div className="text-[9px] text-slate-500 dark:text-dk-muted leading-tight">{stat.label}</div>
                 <div className={`text-base font-bold ${flow.textClass} tabular-nums leading-tight mt-0.5`}>
                   {stat.value}
                 </div>
                 {stat.rate && (
-                  <div className="text-[9px] text-slate-400 mt-0.5">{stat.rate}</div>
+                  <div className="text-[9px] text-slate-400 dark:text-dk-muted mt-0.5">{stat.rate}</div>
                 )}
               </div>
             ))}
           </div>
-          <p data-testid="campaign-flow-sample-note" className="mt-2 text-[10px] leading-snug text-slate-500">
+          <p data-testid="campaign-flow-sample-note" className="mt-2 text-[10px] leading-snug text-slate-500 dark:text-dk-muted">
             {t('heroPage.campaignFlow.sampleDataNote')}
           </p>
         </div>
@@ -218,20 +218,20 @@ export default function CampaignFlowModal({ open, flowKey, onClose }) {
 
   return createPortal(
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+      <div className="bg-white dark:bg-dk-surface rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
         {/* Header */}
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-50 to-orange-50/30">
+        <div className="px-5 py-4 border-b border-slate-100 dark:border-dk-border flex items-center justify-between bg-gradient-to-r from-slate-50 dark:from-dk-bg to-orange-50/30 dark:to-orange-950/30">
           <div>
-            <h2 className="text-base font-bold text-slate-900">
+            <h2 className="text-base font-bold text-slate-900 dark:text-dk-text">
               {t('heroPage.campaignFlow.title') || 'Mô phỏng chiến dịch'}
             </h2>
-            <p className="text-[11px] text-slate-500 mt-0.5">
+            <p className="text-[11px] text-slate-500 dark:text-dk-muted mt-0.5">
               {t('heroPage.campaignFlow.subtitle') || 'Các node chạy theo flow thật trong hệ thống'}
             </p>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500"
+            className="w-8 h-8 rounded-lg hover:bg-slate-100 dark:hover:bg-dk-raised flex items-center justify-center text-slate-500 dark:text-dk-muted"
             aria-label="Close"
           >
             <HiOutlineX className="w-5 h-5" />
@@ -239,15 +239,15 @@ export default function CampaignFlowModal({ open, flowKey, onClose }) {
         </div>
 
         {/* Tabs */}
-        <div className="px-5 pt-3 pb-2 border-b border-slate-100">
+        <div className="px-5 pt-3 pb-2 border-b border-slate-100 dark:border-dk-border">
           <div className="flex gap-1.5">
             {tabs.map((tab) => {
               const TabIcon = tab.icon;
               const isActive = activeTab === tab.key;
               const colorMap = {
-                blue: isActive ? 'bg-blue-500 text-white' : 'bg-blue-50 text-blue-600 hover:bg-blue-100',
-                emerald: isActive ? 'bg-emerald-500 text-white' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100',
-                violet: isActive ? 'bg-violet-500 text-white' : 'bg-violet-50 text-violet-600 hover:bg-violet-100',
+                blue: isActive ? 'bg-blue-500 text-white' : 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-950/60',
+                emerald: isActive ? 'bg-emerald-500 text-white' : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-950/60',
+                violet: isActive ? 'bg-violet-500 text-white' : 'bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-950/60',
               };
               return (
                 <button
@@ -269,14 +269,14 @@ export default function CampaignFlowModal({ open, flowKey, onClose }) {
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
+        <div className="px-5 py-3 border-t border-slate-100 dark:border-dk-border bg-slate-50/50 dark:bg-dk-inset/50 flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-dk-muted">
             <HiOutlineLightningBolt className="w-3 h-3 text-orange-500" />
             <span>{t('heroPage.campaignFlow.footerNote') || 'Mô phỏng minh hoạ, có thể khác cấu hình thật'}</span>
           </div>
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg transition-colors"
+            className="px-4 py-1.5 bg-slate-900 dark:bg-dk-strong hover:bg-slate-800 dark:hover:bg-dk-border-strong text-white text-xs font-semibold rounded-lg transition-colors"
           >
             {t('heroPage.campaignFlow.close') || 'Đóng'}
           </button>

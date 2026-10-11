@@ -11,7 +11,7 @@ function Support() {
   const lc = getLangClass;
 
   return (
-    <div className="min-h-screen bg-slate-100/90 text-slate-900 antialiased">
+    <div className="min-h-screen bg-slate-100/90 dark:bg-dk-bg text-slate-900 dark:text-dk-text antialiased">
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
         .pp-body { font-family: 'Be Vietnam Pro', system-ui, sans-serif; line-height: 1.7; font-size: 15px; }
@@ -57,18 +57,18 @@ function Support() {
         </header>
 
         <div className="mx-auto max-w-4xl px-5 pb-24 pt-10 sm:px-8">
-          <div className="mb-8 flex flex-wrap items-start gap-x-4 gap-y-3 rounded-xl border border-slate-200/90 bg-white px-5 py-4 shadow-sm">
+          <div className="mb-8 flex flex-wrap items-start gap-x-4 gap-y-3 rounded-xl border border-slate-200/90 dark:border-dk-border bg-white dark:bg-dk-surface px-5 py-4 shadow-sm">
             <span className="mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full bg-orange-500 ring-4 ring-orange-500/15" aria-hidden />
-            <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600">
+            <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600 dark:text-dk-text2">
               <span className={lc(language, 'vi')}>
                 Cập nhật ngày <strong>29/09/2026</strong> — Áp dụng từ <strong>29/09/2026</strong>
-                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 hover:underline">Các phiên bản đã lưu trữ</a>
+                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 dark:text-orange-400 hover:underline">Các phiên bản đã lưu trữ</a>
                 {'\u00a0'}|{'\u00a0'}
                 Áp dụng cho: founderai.biz
               </span>
               <span className={lc(language, 'en')}>
                 Last updated on <strong>September 29, 2026</strong> — Effective from <strong>September 29, 2026</strong>
-                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 hover:underline">Archived versions</a>
+                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 dark:text-orange-400 hover:underline">Archived versions</a>
                 {'\u00a0'}|{'\u00a0'}
                 Applies to: founderai.biz
               </span>
@@ -77,25 +77,25 @@ function Support() {
           <PolicyChangeNotice language={language} lc={lc} />
 
           {/* Section 1 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               1. Kênh hỗ trợ trực tuyến
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               1. Online Support Channels
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               DIGISO cung cấp các kênh hỗ trợ trực tuyến sau:
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               DIGISO provides the following online support channels:
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
+                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 dark:text-orange-400 hover:underline">info@digiso.vn</a>
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
+                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 dark:text-orange-400 hover:underline">info@digiso.vn</a>
               </li>
               <li className={lc(language, 'vi')}>
                 <strong>Hotline:</strong> 0877909606
@@ -104,10 +104,10 @@ function Support() {
                 <strong>Hotline:</strong> 0877909606
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Trang liên hệ:</strong> <a href="/contact" className="text-orange-600 hover:underline">founderai.biz/contact</a>
+                <strong>Trang liên hệ:</strong> <a href="/contact" className="text-orange-600 dark:text-orange-400 hover:underline">founderai.biz/contact</a>
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Contact page:</strong> <a href="/contact" className="text-orange-600 hover:underline">founderai.biz/contact</a>
+                <strong>Contact page:</strong> <a href="/contact" className="text-orange-600 dark:text-orange-400 hover:underline">founderai.biz/contact</a>
               </li>
               <li className={lc(language, 'vi')}>
                 <strong>Trợ lý AI:</strong> trợ lý AI tích hợp trong ứng dụng, hỗ trợ người dùng đã đăng nhập thao tác và soạn thảo nội dung (chiến dịch, mẫu tin nhắn, trang đích…).
@@ -116,23 +116,23 @@ function Support() {
                 <strong>AI assistant:</strong> an AI assistant integrated into the application that helps signed-in users with operations and drafting content (campaigns, message templates, landing pages, etc.).
               </li>
             </ul>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               Hiện nền tảng chưa cung cấp kênh chat trực tiếp với nhân viên hỗ trợ trên website.
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               The platform does not currently offer a live chat channel with support staff on the website.
             </p>
           </section>
 
           {/* Section 2 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               2. Thời gian hỗ trợ
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               2. Support Hours
             </h2>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
                 <strong>Hotline:</strong> 8:00 - 22:00, Thứ 2 - Thứ 7.
               </li>
@@ -155,30 +155,30 @@ function Support() {
           </section>
 
           {/* Section 3 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               3. Tài liệu hỗ trợ
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               3. Support Documentation
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              Bên cạnh hỗ trợ trực tiếp, DIGISO cung cấp tài liệu hướng dẫn sử dụng (kèm hình ảnh, video minh họa ở các bài hướng dẫn) tại <a href="/huong-dan" className="text-orange-600 hover:underline">founderai.biz/huong-dan</a>.
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
+              Bên cạnh hỗ trợ trực tiếp, DIGISO cung cấp tài liệu hướng dẫn sử dụng (kèm hình ảnh, video minh họa ở các bài hướng dẫn) tại <a href="/huong-dan" className="text-orange-600 dark:text-orange-400 hover:underline">founderai.biz/huong-dan</a>.
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              In addition to direct support, DIGISO provides user guides (with illustrative images and videos in the guide articles) at <a href="/huong-dan" className="text-orange-600 hover:underline">founderai.biz/huong-dan</a>.
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
+              In addition to direct support, DIGISO provides user guides (with illustrative images and videos in the guide articles) at <a href="/huong-dan" className="text-orange-600 dark:text-orange-400 hover:underline">founderai.biz/huong-dan</a>.
             </p>
           </section>
 
           {/* Section 4 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               4. Cam kết chất lượng
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               4. Service Quality Commitments
             </h2>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
                 Phản hồi yêu cầu hỗ trợ trong vòng 24 giờ làm việc.
               </li>
@@ -192,23 +192,23 @@ function Support() {
                 A dedicated support team that answers customers' questions within the scope of the service.
               </li>
               <li className={lc(language, 'vi')}>
-                Phản ánh, khiếu nại được xử lý theo <a href="/complaint-policy" className="text-orange-600 hover:underline">Phương thức tiếp nhận và giải quyết phản ánh, yêu cầu, khiếu nại</a>.
+                Phản ánh, khiếu nại được xử lý theo <a href="/complaint-policy" className="text-orange-600 dark:text-orange-400 hover:underline">Phương thức tiếp nhận và giải quyết phản ánh, yêu cầu, khiếu nại</a>.
               </li>
               <li className={lc(language, 'en')}>
-                Feedback and complaints are handled under the <a href="/complaint-policy" className="text-orange-600 hover:underline">Procedure for Receiving and Resolving Feedback, Requests and Complaints</a>.
+                Feedback and complaints are handled under the <a href="/complaint-policy" className="text-orange-600 dark:text-orange-400 hover:underline">Procedure for Receiving and Resolving Feedback, Requests and Complaints</a>.
               </li>
             </ul>
           </section>
 
         </div>
 
-        <footer className="border-t border-slate-200 bg-white px-5 py-8 text-center text-[12px] text-slate-500">
+        <footer className="border-t border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface px-5 py-8 text-center text-[12px] text-slate-500 dark:text-dk-muted">
           <p className={lc(language, 'vi')}>© 2026 Công ty TNHH Giải pháp số DIGISO. Mọi quyền được bảo lưu.</p>
           <p className={lc(language, 'en')}>© 2026 DIGISO Digital Solutions Co., Ltd. All rights reserved.</p>
-          <p className={`mt-2 text-slate-400 ${lc(language, 'vi')}`}>
+          <p className={`mt-2 text-slate-400 dark:text-dk-muted ${lc(language, 'vi')}`}>
             Chính sách này được cập nhật và có hiệu lực từ ngày 29/09/2026.
           </p>
-          <p className={`mt-2 text-slate-400 ${lc(language, 'en')}`}>
+          <p className={`mt-2 text-slate-400 dark:text-dk-muted ${lc(language, 'en')}`}>
             This policy was last updated and effective from September 29, 2026.
           </p>
         </footer>

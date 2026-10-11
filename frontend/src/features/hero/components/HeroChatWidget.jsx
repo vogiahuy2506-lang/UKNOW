@@ -264,7 +264,7 @@ export default function HeroChatWidget() {
     // data-help-shot-hide: bộ chụp ảnh minh hoạ (e2e/screenshots) ẩn widget này đi,
     // nếu không nó nổi ở góc phải mọi ảnh chụp trang công khai.
     <div data-help-shot-hide className={`fixed bottom-6 right-6 z-50 w-[380px] max-w-[calc(100vw-48px)] transition-all duration-300 ${isMinimized ? 'h-0 opacity-0 overflow-hidden' : 'h-[520px] opacity-100'}`}>
-      <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 h-full flex flex-col overflow-hidden">
+      <div className="bg-white dark:bg-dk-surface rounded-2xl shadow-2xl border border-gray-100 dark:border-dk-border h-full flex flex-col overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-r from-orange-500 to-orange-600 px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -288,22 +288,22 @@ export default function HeroChatWidget() {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50/50">
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50/50 dark:bg-dk-inset/50">
           {messages.map((msg, idx) => (
             <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div className={`max-w-[85%] rounded-2xl px-4 py-3 ${
                 msg.role === 'user' 
                   ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-br-md' 
-                  : 'bg-white text-gray-800 rounded-bl-md shadow-sm border border-gray-100'
+                  : 'bg-white dark:bg-dk-surface text-gray-800 dark:text-dk-text rounded-bl-md shadow-sm border border-gray-100 dark:border-dk-border'
               }`}>
                 {msg.role === 'assistant' && (
                   <div className="flex items-center gap-1.5 mb-1.5">
                     <BotAvatarIcon className="w-4 h-4" />
-                    <span className="text-xs font-medium text-gray-500">Foundy</span>
+                    <span className="text-xs font-medium text-gray-500 dark:text-dk-muted">Foundy</span>
                   </div>
                 )}
                 <p
-                  className={`text-sm leading-relaxed ${msg.role === 'user' ? '' : 'text-gray-700'}`}
+                  className={`text-sm leading-relaxed ${msg.role === 'user' ? '' : 'text-gray-700 dark:text-dk-text2'}`}
                   dangerouslySetInnerHTML={{ __html: formatMarkdown(msg.content) }}
                 />
               </div>
@@ -312,10 +312,10 @@ export default function HeroChatWidget() {
 
           {isLoading && (
             <div className="flex justify-start">
-              <div className="bg-white rounded-2xl rounded-bl-md shadow-sm border border-gray-100 px-4 py-3">
+              <div className="bg-white dark:bg-dk-surface rounded-2xl rounded-bl-md shadow-sm border border-gray-100 dark:border-dk-border px-4 py-3">
                 <div className="flex items-center gap-1.5">
                   <BotAvatarIcon className="w-4 h-4" />
-                  <span className="text-xs text-gray-500">Typing...</span>
+                  <span className="text-xs text-gray-500 dark:text-dk-muted">Typing...</span>
                 </div>
                 <div className="flex gap-1 mt-2">
                   <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -327,15 +327,15 @@ export default function HeroChatWidget() {
           )}
 
           {quotaExceeded && !contactForm && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-              <p className="text-amber-800 text-sm font-medium mb-3">{contactReason === 'busy' ? busyTitle : quotaTitle}</p>
+            <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
+              <p className="text-amber-800 dark:text-amber-300 text-sm font-medium mb-3">{contactReason === 'busy' ? busyTitle : quotaTitle}</p>
               <form onSubmit={handleContactSubmit} className="space-y-3">
                 <input
                   type="text"
                   placeholder="Họ và tên"
                   value={contactData.name}
                   onChange={(e) => setContactData({...contactData, name: e.target.value})}
-                  className="w-full px-3 py-2 text-sm border border-amber-200 bg-white text-slate-800 placeholder:text-slate-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  className="w-full px-3 py-2 text-sm border border-amber-200 dark:border-amber-800 bg-white dark:bg-dk-surface text-slate-800 dark:text-dk-text placeholder:text-slate-400 dark:placeholder:text-dk-muted rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
                   required
                 />
                 <input
@@ -343,7 +343,7 @@ export default function HeroChatWidget() {
                   placeholder="Email"
                   value={contactData.email}
                   onChange={(e) => setContactData({...contactData, email: e.target.value})}
-                  className="w-full px-3 py-2 text-sm border border-amber-200 bg-white text-slate-800 placeholder:text-slate-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  className="w-full px-3 py-2 text-sm border border-amber-200 dark:border-amber-800 bg-white dark:bg-dk-surface text-slate-800 dark:text-dk-text placeholder:text-slate-400 dark:placeholder:text-dk-muted rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
                   required
                 />
                 <input
@@ -351,14 +351,14 @@ export default function HeroChatWidget() {
                   placeholder="Số điện thoại"
                   value={contactData.phone}
                   onChange={(e) => setContactData({...contactData, phone: e.target.value})}
-                  className="w-full px-3 py-2 text-sm border border-amber-200 bg-white text-slate-800 placeholder:text-slate-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  className="w-full px-3 py-2 text-sm border border-amber-200 dark:border-amber-800 bg-white dark:bg-dk-surface text-slate-800 dark:text-dk-text placeholder:text-slate-400 dark:placeholder:text-dk-muted rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
                   required
                 />
                 <textarea
                   placeholder="Câu hỏi của bạn"
                   value={contactData.message}
                   onChange={(e) => setContactData({...contactData, message: e.target.value})}
-                  className="w-full px-3 py-2 text-sm border border-amber-200 bg-white text-slate-800 placeholder:text-slate-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
+                  className="w-full px-3 py-2 text-sm border border-amber-200 dark:border-amber-800 bg-white dark:bg-dk-surface text-slate-800 dark:text-dk-text placeholder:text-slate-400 dark:placeholder:text-dk-muted rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
                   rows={2}
                 />
                 <button
@@ -372,25 +372,25 @@ export default function HeroChatWidget() {
           )}
 
           {contactForm?.success && (
-            <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
+            <div className="bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800 rounded-xl p-4 text-center">
               <div className="text-green-500 mb-2">
                 <CheckIcon className="w-8 h-8 mx-auto" />
               </div>
-              <p className="text-green-800 font-medium">Đã gửi thành công!</p>
-              <p className="text-green-600 text-sm mt-1">Đội ngũ tư vấn sẽ gọi lại cho bạn trong 24 giờ.</p>
+              <p className="text-green-800 dark:text-green-300 font-medium">Đã gửi thành công!</p>
+              <p className="text-green-600 dark:text-green-400 text-sm mt-1">Đội ngũ tư vấn sẽ gọi lại cho bạn trong 24 giờ.</p>
             </div>
           )}
 
           {contactForm?.error && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
-              <p className="text-red-600 text-sm">{contactForm.error}</p>
+            <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-xl p-3 text-center">
+              <p className="text-red-600 dark:text-red-400 text-sm">{contactForm.error}</p>
             </div>
           )}
 
           {/* Quick Reply Suggestions */}
           {showSuggestions && messages.length <= 2 && quickReplies.length > 0 && (
-            <div className="bg-gradient-to-t from-gray-50 pt-3 -mx-5 px-5">
-              <p className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-1.5">
+            <div className="bg-gradient-to-t from-gray-50 dark:from-dk-inset pt-3 -mx-5 px-5">
+              <p className="text-xs font-medium text-gray-500 dark:text-dk-muted mb-2 flex items-center gap-1.5">
                 <HiOutlineSparkles className="w-3 h-3 text-orange-500" />
                 {suggestionsTitle}
               </p>
@@ -399,7 +399,7 @@ export default function HeroChatWidget() {
                   <button
                     key={reply.id}
                     onClick={() => handleQuickReply(reply)}
-                    className="px-3 py-1.5 bg-white border border-gray-200 hover:border-orange-300 hover:bg-orange-50 text-gray-600 hover:text-orange-700 rounded-full text-xs font-medium transition-all duration-150 shadow-sm hover:shadow"
+                    className="px-3 py-1.5 bg-white dark:bg-dk-surface border border-gray-200 dark:border-dk-border hover:border-orange-300 dark:hover:border-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950/30 text-gray-600 dark:text-dk-text2 hover:text-orange-700 dark:hover:text-orange-300 rounded-full text-xs font-medium transition-all duration-150 shadow-sm hover:shadow"
                   >
                     {reply.text}
                   </button>
@@ -412,7 +412,7 @@ export default function HeroChatWidget() {
         </div>
 
         {/* Input */}
-        <form id="hero-chat-form" onSubmit={handleSubmit} className="border-t border-gray-100 p-4 bg-white">
+        <form id="hero-chat-form" onSubmit={handleSubmit} className="border-t border-gray-100 dark:border-dk-border p-4 bg-white dark:bg-dk-surface">
           <div className="flex items-center gap-2">
             <input
               ref={inputRef}
@@ -422,12 +422,12 @@ export default function HeroChatWidget() {
               onKeyPress={handleKeyPress}
               placeholder={placeholderText}
               disabled={isLoading || quotaExceeded}
-              className="flex-1 px-4 py-2.5 bg-gray-100 border-0 text-slate-900 placeholder:text-slate-400 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 disabled:opacity-50"
+              className="flex-1 px-4 py-2.5 bg-gray-100 dark:bg-dk-raised border-0 text-slate-900 dark:text-dk-text placeholder:text-slate-400 dark:placeholder:text-dk-muted rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 disabled:opacity-50"
             />
             <button
               type="submit"
               disabled={!input.trim() || isLoading || quotaExceeded}
-              className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 disabled:from-gray-300 disabled:to-gray-300 text-white p-2.5 rounded-full transition-all shadow-md hover:shadow-lg disabled:shadow-none"
+              className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 disabled:from-gray-300 dark:disabled:from-dk-strong disabled:to-gray-300 dark:disabled:to-dk-strong text-white p-2.5 rounded-full transition-all shadow-md hover:shadow-lg disabled:shadow-none"
               aria-label="Send message"
             >
               <SendIcon className="w-4 h-4" />

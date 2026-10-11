@@ -36,9 +36,9 @@ export default function PricingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 transition-colors">
+    <div className="min-h-screen bg-white dark:bg-dk-bg text-slate-900 dark:text-dk-text transition-colors">
       {/* ── Hero Section ── */}
-      <section className="relative px-6 pt-12 pb-16 md:pt-16 md:pb-24 overflow-hidden bg-white">
+      <section className="relative px-6 pt-12 pb-16 md:pt-16 md:pb-24 overflow-hidden bg-white dark:bg-dk-bg">
         {/* Background dots */}
         <div className="absolute inset-0 opacity-[0.3] pointer-events-none" style={{
           backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)',
@@ -46,21 +46,21 @@ export default function PricingPage() {
         }} />
 
         {/* Decorative shapes */}
-        <div className="absolute top-20 left-12 w-20 h-20 border border-orange-200 rounded-full opacity-40" />
-        <div className="absolute top-40 left-24 w-12 h-12 border border-blue-200 rounded-2xl rotate-12 opacity-40" />
-        <div className="absolute bottom-16 right-20 w-16 h-16 border border-purple-200 rounded-full opacity-40" />
-        <div className="absolute bottom-32 right-32 w-8 h-8 bg-orange-100 rounded-lg rotate-45 opacity-30" />
+        <div className="absolute top-20 left-12 w-20 h-20 border border-orange-200 dark:border-orange-800 rounded-full opacity-40" />
+        <div className="absolute top-40 left-24 w-12 h-12 border border-blue-200 dark:border-blue-800 rounded-2xl rotate-12 opacity-40" />
+        <div className="absolute bottom-16 right-20 w-16 h-16 border border-purple-200 dark:border-purple-800 rounded-full opacity-40" />
+        <div className="absolute bottom-32 right-32 w-8 h-8 bg-orange-100 dark:bg-orange-950/40 rounded-lg rotate-45 opacity-30" />
 
         <div className="max-w-4xl mx-auto text-center relative z-10">
           {/* Badge */}
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 text-slate-700 text-sm font-medium mb-8 border border-transparent">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 dark:bg-dk-raised text-slate-700 dark:text-dk-text2 text-sm font-medium mb-8 border border-transparent">
             <span className="w-2 h-2 rounded-full bg-orange-500" />
             <span data-edit="pricing.badge">{getValue('pricing.badge', t('pricingPage.badge'))}</span>
           </div>
 
           {/* Title */}
           <h1
-            className="text-slate-900 mb-6"
+            className="text-slate-900 dark:text-dk-text mb-6"
             style={{ fontSize: 'clamp(32px, 6vw, 56px)', lineHeight: 1.15, fontWeight: 600 }}
             data-edit="pricing.title"
           >
@@ -70,14 +70,14 @@ export default function PricingPage() {
 
           {/* Subtitle */}
           <p
-            className="text-slate-600 text-lg md:text-xl max-w-2xl mx-auto mb-10 leading-relaxed"
+            className="text-slate-600 dark:text-dk-text2 text-lg md:text-xl max-w-2xl mx-auto mb-10 leading-relaxed"
             data-edit="pricing.subtitle"
           >
             {t('pricingPage.subtitle')}
           </p>
 
           {/* Trust indicators */}
-          <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-slate-500">
+          <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-slate-500 dark:text-dk-muted">
             <span className="flex items-center gap-2">
               <FaCheck className="w-4 h-4 text-green-500" />
               {t('pricingPage.trust1')}
@@ -96,7 +96,7 @@ export default function PricingPage() {
 
       {/* ── Divider ── */}
       <div className="max-w-6xl mx-auto px-6">
-        <div className="h-px bg-gradient-to-r from-transparent via-slate-300 to-transparent" />
+        <div className="h-px bg-gradient-to-r from-transparent via-slate-300 dark:via-dk-border-strong to-transparent" />
       </div>
 
       {/* ── Pricing Cards (fetched from /api/plans) ── */}
@@ -104,11 +104,11 @@ export default function PricingPage() {
 
       {/* ── Divider ── */}
       <div className="max-w-6xl mx-auto px-6">
-        <div className="h-px bg-gradient-to-r from-transparent via-slate-300 to-transparent" />
+        <div className="h-px bg-gradient-to-r from-transparent via-slate-300 dark:via-dk-border-strong to-transparent" />
       </div>
 
       {/* ── FAQ ── */}
-      <section className="py-20 md:py-28 bg-white relative overflow-hidden">
+      <section className="py-20 md:py-28 bg-white dark:bg-dk-bg relative overflow-hidden">
         <div className="absolute inset-0 opacity-[0.3] pointer-events-none" style={{
           backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)',
           backgroundSize: '24px 24px'
@@ -116,10 +116,10 @@ export default function PricingPage() {
 
         <div className="max-w-3xl mx-auto px-6 relative z-10">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-semibold text-slate-900 mb-4">
+            <h2 className="text-3xl md:text-4xl font-semibold text-slate-900 dark:text-dk-text mb-4">
               {t('pricingPage.faqTitle')}
             </h2>
-            <p className="text-slate-600">
+            <p className="text-slate-600 dark:text-dk-text2">
               {t('pricingPage.faqSubtitle')}
             </p>
           </div>
@@ -127,9 +127,9 @@ export default function PricingPage() {
           <div className="space-y-4">
             {faqs.map((faq, i) => (
               <AnimatedSection key={i} delay={i * 60}>
-                <div className="bg-white border border-slate-200 rounded-xl p-6 hover:border-orange-200 transition-colors">
-                  <h3 className="text-base font-semibold text-slate-900 mb-2">{faq.q}</h3>
-                  <p className="text-sm text-slate-600 leading-relaxed">{faq.a}</p>
+                <div className="bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border rounded-xl p-6 hover:border-orange-200 dark:hover:border-orange-700 transition-colors">
+                  <h3 className="text-base font-semibold text-slate-900 dark:text-dk-text mb-2">{faq.q}</h3>
+                  <p className="text-sm text-slate-600 dark:text-dk-text2 leading-relaxed">{faq.a}</p>
                 </div>
               </AnimatedSection>
             ))}

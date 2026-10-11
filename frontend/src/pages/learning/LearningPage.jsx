@@ -139,12 +139,12 @@ const AnimatedSection = ({ children, className = '', delay = 0 }) => {
 // --- Components ---
 
 const PainPointCard = ({ icon: Icon, title, desc, delay }) => (
-  <AnimatedSection delay={delay} className="bg-white p-8 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 hover:-translate-y-2 transition-transform duration-300">
-    <div className="w-14 h-14 bg-red-50 rounded-2xl flex items-center justify-center mb-6">
+  <AnimatedSection delay={delay} className="bg-white dark:bg-dk-surface p-8 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 dark:border-dk-border hover:-translate-y-2 transition-transform duration-300">
+    <div className="w-14 h-14 bg-red-50 dark:bg-red-950/40 rounded-2xl flex items-center justify-center mb-6">
       <Icon className="w-7 h-7 text-red-500" />
     </div>
-    <h3 className="text-xl font-bold text-gray-900 mb-3">{title}</h3>
-    <p className="text-gray-600 leading-relaxed">{desc}</p>
+    <h3 className="text-xl font-bold text-gray-900 dark:text-dk-text mb-3">{title}</h3>
+    <p className="text-gray-600 dark:text-dk-text2 leading-relaxed">{desc}</p>
   </AnimatedSection>
 );
 
@@ -157,7 +157,7 @@ const CourseCard = ({ course, onEnroll, index }) => {
       ref={ref}
       className={`relative rounded-3xl overflow-hidden transition-all duration-700 ${
         isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'
-      } ${course.popular ? 'lg:-translate-y-4 shadow-2xl z-10 border-2 border-orange-500' : 'shadow-xl border border-gray-100'} bg-white flex flex-col h-full`}
+      } ${course.popular ? 'lg:-translate-y-4 shadow-2xl z-10 border-2 border-orange-500' : 'shadow-xl border border-gray-100 dark:border-dk-border'} bg-white dark:bg-dk-surface flex flex-col h-full`}
       style={{ transitionDelay: `${index * 150}ms` }}
     >
       {course.popular && (
@@ -169,25 +169,25 @@ const CourseCard = ({ course, onEnroll, index }) => {
       <div className={`p-8 ${course.popular ? 'pt-12' : ''} flex-1 flex flex-col`}>
         <div className="flex justify-between items-start mb-6">
           <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${course.color} p-0.5`}>
-            <div className="w-full h-full bg-white rounded-xl flex items-center justify-center">
+            <div className="w-full h-full bg-white dark:bg-dk-surface rounded-xl flex items-center justify-center">
               <IconComponent className={`w-8 h-8 text-transparent bg-clip-text bg-gradient-to-br ${course.color}`} />
             </div>
           </div>
         </div>
 
-        <h3 className="text-2xl font-bold text-gray-900 mb-2">{course.title}</h3>
-        <p className="text-gray-500 mb-6 min-h-[48px]">{course.description}</p>
+        <h3 className="text-2xl font-bold text-gray-900 dark:text-dk-text mb-2">{course.title}</h3>
+        <p className="text-gray-500 dark:text-dk-muted mb-6 min-h-[48px]">{course.description}</p>
 
         <div className="space-y-4 mb-8 flex-1">
           {course.features.map((feat, i) => (
             <div key={i} className="flex items-start gap-3">
               <FaCheckCircle className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
-              <span className="text-gray-700">{feat}</span>
+              <span className="text-gray-700 dark:text-dk-text2">{feat}</span>
             </div>
           ))}
         </div>
 
-        <div className="border-t border-gray-100 pt-6 mt-auto">
+        <div className="border-t border-gray-100 dark:border-dk-border pt-6 mt-auto">
           <div className="flex items-end justify-between mb-6">
             <div>
               <p className={`text-3xl font-black bg-gradient-to-r ${course.color} text-transparent bg-clip-text`}>
@@ -231,7 +231,7 @@ const EnrollmentModal = ({ course, isOpen, onClose }) => {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={onClose} />
       
-      <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-[slideUp_0.3s_ease-out]">
+      <div className="relative bg-white dark:bg-dk-surface rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-[slideUp_0.3s_ease-out]">
         <div className={`bg-gradient-to-r ${course.color} p-8 text-white text-center`}>
           <h2 className="text-3xl font-bold mb-2">Đăng ký khóa học</h2>
           <p className="text-white/80">{course.title}</p>
@@ -239,49 +239,49 @@ const EnrollmentModal = ({ course, isOpen, onClose }) => {
 
         {showSuccess ? (
           <div className="p-12 text-center">
-            <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <div className="w-24 h-24 bg-green-100 dark:bg-green-950/40 rounded-full flex items-center justify-center mx-auto mb-6">
               <FaCheck className="w-12 h-12 text-green-500" />
             </div>
-            <h3 className="text-2xl font-bold text-gray-900 mb-2">Thành công!</h3>
-            <p className="text-gray-500">Chuyên viên của chúng tôi sẽ liên hệ với bạn trong vòng 24h tới.</p>
+            <h3 className="text-2xl font-bold text-gray-900 dark:text-dk-text mb-2">Thành công!</h3>
+            <p className="text-gray-500 dark:text-dk-muted">Chuyên viên của chúng tôi sẽ liên hệ với bạn trong vòng 24h tới.</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="p-8 space-y-5">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Họ và tên *</label>
+              <label className="block text-sm font-semibold text-gray-700 dark:text-dk-text2 mb-2">Họ và tên *</label>
               <input
                 type="text" required value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all"
+                className="w-full px-5 py-4 bg-gray-50 dark:bg-dk-inset border border-gray-200 dark:border-dk-border rounded-xl focus:bg-white dark:focus:bg-dk-surface focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all"
                 placeholder="Nhập họ và tên..."
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Email *</label>
+              <label className="block text-sm font-semibold text-gray-700 dark:text-dk-text2 mb-2">Email *</label>
               <input
                 type="email" required value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all"
+                className="w-full px-5 py-4 bg-gray-50 dark:bg-dk-inset border border-gray-200 dark:border-dk-border rounded-xl focus:bg-white dark:focus:bg-dk-surface focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all"
                 placeholder="Nhập địa chỉ email..."
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Số điện thoại *</label>
+              <label className="block text-sm font-semibold text-gray-700 dark:text-dk-text2 mb-2">Số điện thoại *</label>
               <input
                 type="tel" required value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all"
+                className="w-full px-5 py-4 bg-gray-50 dark:bg-dk-inset border border-gray-200 dark:border-dk-border rounded-xl focus:bg-white dark:focus:bg-dk-surface focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all"
                 placeholder="Nhập số điện thoại liên hệ..."
               />
             </div>
 
             <button 
               type="submit" disabled={isSubmitting}
-              className={`w-full py-4 bg-gray-900 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 hover:bg-gray-800 ${isSubmitting ? 'opacity-70' : ''}`}
+              className={`w-full py-4 bg-gray-900 dark:bg-dk-strong text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 hover:bg-gray-800 dark:hover:bg-dk-border-strong ${isSubmitting ? 'opacity-70' : ''}`}
             >
               {isSubmitting ? 'Đang xử lý...' : 'Xác nhận đăng ký ngay'}
             </button>
-            <p className="text-center text-xs text-gray-500">
+            <p className="text-center text-xs text-gray-500 dark:text-dk-muted">
               Thông tin của bạn được bảo vệ theo chính sách bảo mật.
             </p>
           </form>
@@ -306,14 +306,14 @@ export default function LearningPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] font-sans selection:bg-orange-500 selection:text-white">
+    <div className="min-h-screen bg-[#FAFAFA] dark:bg-dk-bg font-sans selection:bg-orange-500 selection:text-white">
       
       {/* 1. HERO SECTION (High Conversion) */}
-      <div className="relative pt-32 pb-20 lg:pt-48 lg:pb-32 overflow-hidden bg-white">
+      <div className="relative pt-32 pb-20 lg:pt-48 lg:pb-32 overflow-hidden bg-white dark:bg-dk-bg">
         {/* Abstract Background Shapes */}
         <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0">
-          <div className="absolute -top-[20%] -right-[10%] w-[70%] h-[70%] rounded-full bg-gradient-to-b from-orange-50 to-orange-100/50 blur-3xl opacity-70" />
-          <div className="absolute top-[40%] -left-[10%] w-[50%] h-[50%] rounded-full bg-gradient-to-tr from-rose-50 to-transparent blur-3xl opacity-60" />
+          <div className="absolute -top-[20%] -right-[10%] w-[70%] h-[70%] rounded-full bg-gradient-to-b from-orange-50 dark:from-orange-950/40 to-orange-100/50 dark:to-orange-950/50 blur-3xl opacity-70" />
+          <div className="absolute top-[40%] -left-[10%] w-[50%] h-[50%] rounded-full bg-gradient-to-tr from-rose-50 dark:from-rose-950/40 to-transparent blur-3xl opacity-60" />
         </div>
 
         <div className="max-w-7xl mx-auto px-4 relative z-10">
@@ -322,23 +322,23 @@ export default function LearningPage() {
             {/* Left Content */}
             <div className="lg:w-3/5 text-center lg:text-left">
               <AnimatedSection>
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-100 text-orange-600 font-bold text-sm mb-6 uppercase tracking-wide border border-orange-200 shadow-sm">
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-100 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 font-bold text-sm mb-6 uppercase tracking-wide border border-orange-200 dark:border-orange-800 shadow-sm">
                   <FaRocket className="w-4 h-4" /> Giải pháp cho Doanh nghiệp & Cá nhân
                 </div>
-                <h1 className="text-5xl lg:text-7xl font-black text-gray-900 leading-[1.1] mb-6">
+                <h1 className="text-5xl lg:text-7xl font-black text-gray-900 dark:text-dk-text leading-[1.1] mb-6">
                   Đừng Để AI Thay Thế Bạn.<br />
                   <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-red-500">
                     Hãy Làm Chủ Nó.
                   </span>
                 </h1>
-                <p className="text-xl text-gray-600 mb-10 leading-relaxed max-w-2xl mx-auto lg:mx-0">
-                  Khóa học thực chiến <strong className="text-gray-900">1 ngày làm chủ AI</strong> giúp bạn tối ưu quy trình, tự động hóa công việc và <span className="underline decoration-orange-500 decoration-4 underline-offset-4">nâng năng suất làm việc</span>.
+                <p className="text-xl text-gray-600 dark:text-dk-text2 mb-10 leading-relaxed max-w-2xl mx-auto lg:mx-0">
+                  Khóa học thực chiến <strong className="text-gray-900 dark:text-dk-text">1 ngày làm chủ AI</strong> giúp bạn tối ưu quy trình, tự động hóa công việc và <span className="underline decoration-orange-500 decoration-4 underline-offset-4">nâng năng suất làm việc</span>.
                 </p>
                 
                 <div className="flex flex-col sm:flex-row items-center gap-4 justify-center lg:justify-start">
                   <button 
                     onClick={scrollToCourses}
-                    className="w-full sm:w-auto px-10 py-5 rounded-2xl bg-gray-900 text-white font-bold text-lg hover:bg-gray-800 transition-all shadow-xl hover:shadow-2xl hover:-translate-y-1 flex items-center justify-center gap-2"
+                    className="w-full sm:w-auto px-10 py-5 rounded-2xl bg-gray-900 dark:bg-dk-strong text-white font-bold text-lg hover:bg-gray-800 dark:hover:bg-dk-border-strong transition-all shadow-xl hover:shadow-2xl hover:-translate-y-1 flex items-center justify-center gap-2"
                   >
                     Xem báo giá & Đăng ký <FaArrowRight />
                   </button>
@@ -349,7 +349,7 @@ export default function LearningPage() {
             {/* Right Content - Visual/Lead Magnet */}
             <div className="lg:w-2/5 w-full">
               <AnimatedSection delay={400}>
-                <div className="relative rounded-3xl overflow-hidden shadow-2xl border-4 border-white transform lg:rotate-2 hover:rotate-0 transition-transform duration-500">
+                <div className="relative rounded-3xl overflow-hidden shadow-2xl border-4 border-white dark:border-dk-border-strong transform lg:rotate-2 hover:rotate-0 transition-transform duration-500">
                   <img src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&h=600&fit=crop" alt="Team working with AI" className="w-full h-auto" />
                   <div className="absolute inset-0 bg-gradient-to-t from-gray-900/80 to-transparent flex items-end p-8">
                     <div>
@@ -366,11 +366,11 @@ export default function LearningPage() {
       </div>
 
       {/* 2. AGITATION SECTION (Pain points) */}
-      <div className="py-24 bg-[#FAFAFA]">
+      <div className="py-24 bg-[#FAFAFA] dark:bg-dk-inset">
         <div className="max-w-7xl mx-auto px-4">
           <AnimatedSection className="text-center max-w-3xl mx-auto mb-16">
-            <h2 className="text-3xl md:text-5xl font-black text-gray-900 mb-6">Bạn có đang chật vật với những vấn đề này?</h2>
-            <p className="text-lg text-gray-600">Thế giới đang thay đổi từng ngày. Nếu bạn vẫn làm việc theo cách cũ, bạn đang tự đào thải chính mình.</p>
+            <h2 className="text-3xl md:text-5xl font-black text-gray-900 dark:text-dk-text mb-6">Bạn có đang chật vật với những vấn đề này?</h2>
+            <p className="text-lg text-gray-600 dark:text-dk-text2">Thế giới đang thay đổi từng ngày. Nếu bạn vẫn làm việc theo cách cũ, bạn đang tự đào thải chính mình.</p>
           </AnimatedSection>
 
           <div className="grid md:grid-cols-3 gap-8">
@@ -397,7 +397,7 @@ export default function LearningPage() {
       </div>
 
       {/* 3. SOLUTION & INSTRUCTOR SECTION */}
-      <div className="py-24 bg-white border-y border-gray-100">
+      <div className="py-24 bg-white dark:bg-dk-bg border-y border-gray-100 dark:border-dk-border">
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex flex-col lg:flex-row items-center gap-16">
             <div className="lg:w-1/2 relative">
@@ -405,9 +405,9 @@ export default function LearningPage() {
                 <div className="relative rounded-[2rem] overflow-hidden">
                   <div className="absolute inset-0 bg-gradient-to-tr from-orange-500/20 to-transparent mix-blend-multiply z-10"></div>
                   <img src={instructor.avatar} alt={instructor.name} className="w-full h-auto object-cover rounded-[2rem]" />
-                  <div className="absolute bottom-6 left-6 right-6 bg-white/90 backdrop-blur-md p-6 rounded-2xl z-20 shadow-xl border border-white/50">
-                    <p className="font-black text-2xl text-gray-900">{instructor.name}</p>
-                    <p className="text-orange-600 font-bold mb-2">{instructor.title}</p>
+                  <div className="absolute bottom-6 left-6 right-6 bg-white/90 dark:bg-dk-surface/90 backdrop-blur-md p-6 rounded-2xl z-20 shadow-xl border border-white/50 dark:border-dk-border">
+                    <p className="font-black text-2xl text-gray-900 dark:text-dk-text">{instructor.name}</p>
+                    <p className="text-orange-600 dark:text-orange-400 font-bold mb-2">{instructor.title}</p>
                   </div>
                 </div>
               </AnimatedSection>
@@ -415,8 +415,8 @@ export default function LearningPage() {
             
             <div className="lg:w-1/2">
               <AnimatedSection delay={200}>
-                <h2 className="text-3xl md:text-5xl font-black text-gray-900 mb-6 leading-tight">Học từ chuyên gia <br/><span className="text-orange-500">giàu thực chiến</span></h2>
-                <p className="text-lg text-gray-600 mb-8 leading-relaxed">
+                <h2 className="text-3xl md:text-5xl font-black text-gray-900 dark:text-dk-text mb-6 leading-tight">Học từ chuyên gia <br/><span className="text-orange-500">giàu thực chiến</span></h2>
+                <p className="text-lg text-gray-600 dark:text-dk-text2 mb-8 leading-relaxed">
                   Digiso Education được dẫn dắt bởi chuyên gia Ngô Hữu Thống - người có nhiều năm kinh nghiệm đưa ứng dụng AI thực tiễn vào quy trình vận hành của các doanh nghiệp tại Việt Nam.
                 </p>
                 <div className="space-y-6">
@@ -426,12 +426,12 @@ export default function LearningPage() {
                     { title: 'Hỗ trợ trọn đời', desc: 'Tham gia cộng đồng Alumni, nhận update kiến thức AI mới nhất hoàn toàn miễn phí.' }
                   ].map((item, idx) => (
                     <div key={idx} className="flex gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center shrink-0">
-                        <FaCheck className="text-orange-600 w-5 h-5" />
+                      <div className="w-12 h-12 rounded-xl bg-orange-100 dark:bg-orange-950/40 flex items-center justify-center shrink-0">
+                        <FaCheck className="text-orange-600 dark:text-orange-400 w-5 h-5" />
                       </div>
                       <div>
-                        <h4 className="text-xl font-bold text-gray-900 mb-1">{item.title}</h4>
-                        <p className="text-gray-600">{item.desc}</p>
+                        <h4 className="text-xl font-bold text-gray-900 dark:text-dk-text mb-1">{item.title}</h4>
+                        <p className="text-gray-600 dark:text-dk-text2">{item.desc}</p>
                       </div>
                     </div>
                   ))}

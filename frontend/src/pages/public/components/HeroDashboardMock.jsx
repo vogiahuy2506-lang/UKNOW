@@ -30,7 +30,7 @@ function MiniBarChart({ data, color = '#f97316' }) {
             className="w-full rounded-t"
             style={{ height: `${(d.value / max) * 52}px`, backgroundColor: i === data.length - 1 ? color : `${color}55` }}
           />
-          <span className="text-[8px] text-neutral-400">{d.label}</span>
+          <span className="text-[8px] text-neutral-400 dark:text-dk-muted">{d.label}</span>
         </div>
       ))}
     </div>
@@ -41,7 +41,7 @@ function MiniBarChart({ data, color = '#f97316' }) {
 
 function StatCard({ label, value, sub, trend, trendUp, gradient, chart }) {
   return (
-    <div className="bg-white rounded-xl overflow-hidden border border-neutral-100 flex flex-col">
+    <div className="bg-white dark:bg-dk-surface rounded-xl overflow-hidden border border-neutral-100 dark:border-dk-border flex flex-col">
       <div className={`bg-gradient-to-r ${gradient} px-3 pt-1.5 pb-1.5 flex-1`}>
         <div className="flex items-start justify-between mb-0.5">
           <span className="text-[9px] font-semibold text-white/80 uppercase tracking-wider">{label}</span>
@@ -53,8 +53,8 @@ function StatCard({ label, value, sub, trend, trendUp, gradient, chart }) {
         </div>
         <div className="text-[18px] font-bold text-white leading-none text-left">{value}</div>
       </div>
-      <div className="px-3 py-2 bg-white">
-        <div className="text-[8px] text-neutral-500 leading-relaxed text-left">{sub}</div>
+      <div className="px-3 py-2 bg-white dark:bg-dk-surface">
+        <div className="text-[8px] text-neutral-500 dark:text-dk-muted leading-relaxed text-left">{sub}</div>
         {chart && <div className="mt-1">{chart}</div>}
       </div>
     </div>
@@ -73,37 +73,37 @@ const NAV = [
 
 function MockSidebar() {
   return (
-    <div className="w-36 shrink-0 bg-white border-r border-neutral-100 flex flex-col h-full">
+    <div className="w-36 shrink-0 bg-white dark:bg-dk-surface border-r border-neutral-100 dark:border-dk-border flex flex-col h-full">
       {/* Logo */}
-      <div className="px-3 py-3 border-b border-neutral-100 flex items-start gap-2">
+      <div className="px-3 py-3 border-b border-neutral-100 dark:border-dk-border flex items-start gap-2">
         <img src={founderaiLogo} alt="logo" className="w-6 h-6 object-contain" />
         <div>
-          <div className="text-[10px] font-bold text-neutral-800 leading-tight">Founder AI</div>
-          <div className="text-[8px] text-neutral-400 leading-tight">Campaign Mgmt</div>
+          <div className="text-[10px] font-bold text-neutral-800 dark:text-dk-text leading-tight">Founder AI</div>
+          <div className="text-[8px] text-neutral-400 dark:text-dk-muted leading-tight">Campaign Mgmt</div>
         </div>
       </div>
       {/* User */}
-      <div className="px-3 py-2 border-b border-neutral-100 flex items-start gap-1.5">
+      <div className="px-3 py-2 border-b border-neutral-100 dark:border-dk-border flex items-start gap-1.5">
         <div className="w-5 h-5 rounded-full bg-orange-500 flex items-center justify-center shrink-0">
           <span className="text-white text-[8px] font-bold">N</span>
         </div>
         <div>
-          <div className="text-[9px] font-semibold text-neutral-700">Nhật Minh</div>
-          <div className="text-[8px] text-neutral-400">Cá nhân</div>
+          <div className="text-[9px] font-semibold text-neutral-700 dark:text-dk-text2">Nhật Minh</div>
+          <div className="text-[8px] text-neutral-400 dark:text-dk-muted">Cá nhân</div>
         </div>
       </div>
       {/* Nav */}
       <nav className="flex-1 px-2 py-2 flex flex-col gap-0.5 overflow-hidden">
         {NAV.map((item) => (
           <div key={item.label}>
-            <div className={`px-2 py-1.5 rounded-lg text-[9px] font-semibold flex items-start gap-1.5 ${item.active ? 'bg-orange-50 text-orange-600' : 'text-neutral-600'}`}>
+            <div className={`px-2 py-1.5 rounded-lg text-[9px] font-semibold flex items-start gap-1.5 ${item.active ? 'bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400' : 'text-neutral-600 dark:text-dk-text2'}`}>
               <span className="w-1.5 h-1.5 rounded-full shrink-0 mt-0.5" style={{ backgroundColor: item.active ? '#f97316' : '#d1d5db' }} />
               {item.label}
             </div>
             {item.sub && (
               <div className="ml-4 flex flex-col gap-0.5 mt-0.5">
                 {item.sub.map(s => (
-                  <div key={s} className="text-[8.5px] text-neutral-400 px-2 py-0.5">{s}</div>
+                  <div key={s} className="text-[8.5px] text-neutral-400 dark:text-dk-muted px-2 py-0.5">{s}</div>
                 ))}
               </div>
             )}
@@ -139,9 +139,9 @@ const CAMPAIGNS = [
 
 function StatusBadge({ status }) {
   const map = {
-    'Đang chạy': 'bg-green-50 text-green-600',
-    'Đã xong': 'bg-blue-50 text-blue-500',
-    'Nháp': 'bg-neutral-100 text-neutral-400',
+    'Đang chạy': 'bg-green-50 dark:bg-green-950/40 text-green-600 dark:text-green-400',
+    'Đã xong': 'bg-blue-50 dark:bg-blue-950/40 text-blue-500',
+    'Nháp': 'bg-neutral-100 dark:bg-dk-raised text-neutral-400 dark:text-dk-muted',
   };
   return <span className={`text-[8px] font-medium px-1.5 py-0.5 rounded-full ${map[status]}`}>{status}</span>;
 }
@@ -160,7 +160,7 @@ export default function HeroDashboardMock() {
             <div className="w-2.5 h-2.5 rounded-full bg-yellow-400" />
             <div className="w-2.5 h-2.5 rounded-full bg-green-400" />
           </div>
-          <div className="flex-1 bg-neutral-700 rounded-md px-3 py-1 text-[9px] text-neutral-400 mx-2">
+          <div className="flex-1 bg-neutral-700 rounded-md px-3 py-1 text-[9px] text-neutral-400 dark:text-dk-muted mx-2">
             founderai.biz/app/dashboard
           </div>
           <span
@@ -172,19 +172,19 @@ export default function HeroDashboardMock() {
         </div>
 
         {/* App content */}
-        <div className="flex bg-neutral-50" style={{ height: 380 }}>
+        <div className="flex bg-neutral-50 dark:bg-dk-inset" style={{ height: 380 }}>
           <MockSidebar />
 
           {/* Main content */}
           <div className="flex-1 flex flex-col overflow-hidden">
             {/* Top bar */}
-            <div className="bg-white border-b border-neutral-100 px-4 py-2.5 flex items-center justify-between">
+            <div className="bg-white dark:bg-dk-surface border-b border-neutral-100 dark:border-dk-border px-4 py-2.5 flex items-center justify-between">
               <div>
-                <div className="text-[13px] font-bold text-neutral-900">Campaign Dashboard</div>
-                <div className="text-[8.5px] text-neutral-400">01/03/2026 — 15/05/2026</div>
+                <div className="text-[13px] font-bold text-neutral-900 dark:text-dk-text">Campaign Dashboard</div>
+                <div className="text-[8.5px] text-neutral-400 dark:text-dk-muted">01/03/2026 — 15/05/2026</div>
               </div>
               <div className="flex items-center gap-1.5">
-                <button className="text-[8.5px] text-neutral-500 border border-neutral-200 rounded-md px-2 py-1">Bộ lọc</button>
+                <button className="text-[8.5px] text-neutral-500 dark:text-dk-muted border border-neutral-200 dark:border-dk-border rounded-md px-2 py-1">Bộ lọc</button>
                 <button className="text-[8.5px] text-white bg-orange-500 rounded-md px-2.5 py-1 font-medium">⚡ Phân tích</button>
               </div>
             </div>
@@ -210,19 +210,19 @@ export default function HeroDashboardMock() {
 
               {/* Chart + table row */}
               <div className="grid grid-cols-2 gap-2">
-                <div className="bg-white rounded-xl p-3 border border-neutral-100">
-                  <div className="text-[9.5px] font-semibold text-neutral-700 mb-0.5">Đơn hàng theo thời gian</div>
-                  <div className="text-[8px] text-neutral-400 mb-2">Tổng hợp tất cả kênh</div>
+                <div className="bg-white dark:bg-dk-surface rounded-xl p-3 border border-neutral-100 dark:border-dk-border">
+                  <div className="text-[9.5px] font-semibold text-neutral-700 dark:text-dk-text2 mb-0.5">Đơn hàng theo thời gian</div>
+                  <div className="text-[8px] text-neutral-400 dark:text-dk-muted mb-2">Tổng hợp tất cả kênh</div>
                   <MiniBarChart data={EMAIL_DATA} color="#f97316" />
                 </div>
-                <div className="bg-white rounded-xl p-3 border border-neutral-100">
-                  <div className="text-[9.5px] font-semibold text-neutral-700 mb-1.5">Chiến dịch gần đây</div>
+                <div className="bg-white dark:bg-dk-surface rounded-xl p-3 border border-neutral-100 dark:border-dk-border">
+                  <div className="text-[9.5px] font-semibold text-neutral-700 dark:text-dk-text2 mb-1.5">Chiến dịch gần đây</div>
                   <div className="flex flex-col gap-1">
                     {CAMPAIGNS.map((c) => (
                       <div key={c.name} className="flex items-center justify-between">
                         <div className="min-w-0 flex-1">
-                          <div className="text-[8.5px] font-medium text-neutral-700 truncate">{c.name}</div>
-                          <div className="text-[7.5px] text-neutral-400">{c.type} • {c.sent} gửi</div>
+                          <div className="text-[8.5px] font-medium text-neutral-700 dark:text-dk-text2 truncate">{c.name}</div>
+                          <div className="text-[7.5px] text-neutral-400 dark:text-dk-muted">{c.type} • {c.sent} gửi</div>
                         </div>
                         <StatusBadge status={c.status} />
                       </div>
