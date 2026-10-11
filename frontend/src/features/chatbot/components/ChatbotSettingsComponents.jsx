@@ -34,10 +34,10 @@ import SystemInstructionAiWriter from './SystemInstructionAiWriter';
 
 export function SectionCard({ icon: Icon, title, subtitle, children, accent = 'slate' }) {
   const colors = {
-    purple: 'bg-purple-50 text-purple-500',
-    blue: 'bg-blue-50 text-blue-500',
-    green: 'bg-green-50 text-green-600',
-    orange: 'bg-orange-50 text-orange-500',
+    purple: 'bg-purple-50 dark:bg-purple-950/40 text-purple-500 dark:text-purple-400',
+    blue: 'bg-blue-50 dark:bg-blue-950/40 text-blue-500 dark:text-blue-400',
+    green: 'bg-green-50 dark:bg-green-950/40 text-green-600 dark:text-green-400',
+    orange: 'bg-orange-50 dark:bg-orange-950/40 text-orange-500 dark:text-orange-400',
     slate: 'bg-slate-100 dark:bg-dk-raised text-slate-500 dark:text-dk-text2',
   };
 
@@ -206,7 +206,7 @@ export function AIConfig({ config = {}, onChange, options = {} }) {
             <button
               type="button"
               onClick={resetToPreset}
-              className="text-[11px] text-primary-600 hover:text-primary-700 font-medium"
+              className="text-[11px] text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium"
             >
               Khôi phục mặc định
             </button>
@@ -329,7 +329,7 @@ export function AIConfig({ config = {}, onChange, options = {} }) {
         <div>
           <div className="flex items-center justify-between mb-2">
             <label className={`${compact ? 'text-xs' : 'label mb-0'} font-medium text-slate-700 dark:text-dk-text`}>
-              <HiOutlineSparkles className="w-3.5 h-3.5 inline mr-1 -mt-0.5 text-violet-500" />
+              <HiOutlineSparkles className="w-3.5 h-3.5 inline mr-1 -mt-0.5 text-violet-500 dark:text-violet-400" />
               Hướng dẫn AI
             </label>
             <span className="text-[10px] text-slate-400 dark:text-dk-muted">
@@ -357,31 +357,31 @@ export function AIConfig({ config = {}, onChange, options = {} }) {
       {options?.showKnowledge && (
         <div>
           <div className="flex items-center justify-between mb-2">
-            <label className="text-xs font-medium text-slate-700 flex items-center gap-1">
-              <HiOutlineBookOpen className="w-3.5 h-3.5 text-emerald-500" />
+            <label className="text-xs font-medium text-slate-700 dark:text-dk-text flex items-center gap-1">
+              <HiOutlineBookOpen className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
               Kiến thức chatbot
             </label>
             {options.onOpenKnowledge && (
               <button
                 type="button"
                 onClick={options.onOpenKnowledge}
-                className="text-[11px] text-primary-600 hover:text-primary-700 font-medium"
+                className="text-[11px] text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium"
               >
                 Quản lý tài liệu →
               </button>
             )}
           </div>
-          <div className="border border-slate-200 rounded-xl p-4 bg-gradient-to-br from-slate-50 to-emerald-50/30">
+          <div className="border border-slate-200 dark:border-dk-border rounded-xl p-4 bg-gradient-to-br from-slate-50 dark:from-dk-raised to-emerald-50/30 dark:to-emerald-950/30">
             {options.knowledgeCount > 0 ? (
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
                   <HiOutlineBookOpen className="w-5 h-5" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-700">
+                  <p className="text-sm font-medium text-slate-700 dark:text-dk-text">
                     {options.knowledgeCount} tài liệu
                   </p>
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <p className="text-xs text-slate-400 dark:text-dk-muted mt-0.5">
                     AI sẽ sử dụng kiến thức để trả lời câu hỏi
                   </p>
                 </div>
@@ -389,8 +389,8 @@ export function AIConfig({ config = {}, onChange, options = {} }) {
               </div>
             ) : (
               <div className="text-center py-2">
-                <p className="text-sm text-slate-500">Chưa có tài liệu kiến thức</p>
-                <p className="text-xs text-slate-400 mt-1">Thêm tài liệu để chatbot trả lời chính xác hơn</p>
+                <p className="text-sm text-slate-500 dark:text-dk-text2">Chưa có tài liệu kiến thức</p>
+                <p className="text-xs text-slate-400 dark:text-dk-muted mt-1">Thêm tài liệu để chatbot trả lời chính xác hơn</p>
               </div>
             )}
           </div>
@@ -429,6 +429,7 @@ export function Toggle({ checked, onChange, id }) {
         checked ? 'bg-primary-600' : 'bg-slate-200 dark:bg-dk-strong'
       }`}
     >
+      {/* giữ sáng: núm công tắc */}
       <span
         className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
           checked ? 'translate-x-6' : 'translate-x-1'
@@ -440,12 +441,12 @@ export function Toggle({ checked, onChange, id }) {
 
 export function ChannelStatusBadge({ connected, label }) {
   return connected ? (
-    <span className="inline-flex max-w-full items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+    <span className="inline-flex max-w-full items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-300">
       <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
       <span className="truncate">{label || 'Đã kết nối'}</span>
     </span>
   ) : (
-    <span className="inline-flex max-w-full items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+    <span className="inline-flex max-w-full items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300">
       <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
       <span className="truncate">Chưa kết nối</span>
     </span>
@@ -454,14 +455,14 @@ export function ChannelStatusBadge({ connected, label }) {
 
 export function CopyField({ label, value, tone = 'slate' }) {
   const toneClass = {
-    slate: 'bg-slate-50 border-slate-200 text-slate-700',
-    blue: 'bg-blue-50 border-blue-200 text-blue-700',
-    orange: 'bg-orange-50 border-orange-200 text-orange-700',
+    slate: 'bg-slate-50 dark:bg-dk-raised border-slate-200 dark:border-dk-border text-slate-700 dark:text-dk-text',
+    blue: 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300',
+    orange: 'bg-orange-50 dark:bg-orange-950/40 border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-300',
   };
 
   return (
     <div className="space-y-1.5">
-      <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</label>
+      <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-dk-muted">{label}</label>
       <div className={`rounded-xl border px-3 py-3 ${toneClass[tone]}`}>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
           <code className="min-w-0 flex-1 text-[11px] font-mono break-all leading-5">{value}</code>
@@ -471,7 +472,7 @@ export function CopyField({ label, value, tone = 'slate' }) {
               navigator.clipboard.writeText(value);
               toast.success('Đã copy');
             }}
-            className="inline-flex items-center justify-center gap-1 rounded-lg bg-white/80 px-2.5 py-1.5 text-[11px] font-medium hover:bg-white transition-colors shrink-0 self-start"
+            className="inline-flex items-center justify-center gap-1 rounded-lg bg-white/80 dark:bg-dk-surface/80 px-2.5 py-1.5 text-[11px] font-medium hover:bg-white dark:hover:bg-dk-raised transition-colors shrink-0 self-start"
           >
             <HiOutlineClipboardCopy className="w-3.5 h-3.5" /> Copy
           </button>
@@ -488,11 +489,11 @@ export function ChecklistStep({ index, title, description, children, accent = 'b
   };
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+    <div className="rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface overflow-hidden">
       <button
         type="button"
         onClick={onToggle}
-        className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors"
+        className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-dk-raised transition-colors"
       >
         <div className={`w-7 h-7 rounded-full ${accentClass[accent]} text-white text-xs font-bold flex items-center justify-center shrink-0 mt-0.5`}>
           {index}
@@ -500,13 +501,13 @@ export function ChecklistStep({ index, title, description, children, accent = 'b
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h4 className="text-sm font-semibold text-slate-700 break-words">{title}</h4>
-              <p className="text-xs text-slate-500 mt-1 leading-5 break-words">{description}</p>
+              <h4 className="text-sm font-semibold text-slate-700 dark:text-dk-text break-words">{title}</h4>
+              <p className="text-xs text-slate-500 dark:text-dk-text2 mt-1 leading-5 break-words">{description}</p>
             </div>
             {expanded ? (
-              <HiOutlineChevronDown className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+              <HiOutlineChevronDown className="w-4 h-4 text-slate-400 dark:text-dk-muted shrink-0 mt-0.5" />
             ) : (
-              <HiOutlineChevronRight className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+              <HiOutlineChevronRight className="w-4 h-4 text-slate-400 dark:text-dk-muted shrink-0 mt-0.5" />
             )}
           </div>
         </div>
@@ -519,13 +520,13 @@ export function ChecklistStep({ index, title, description, children, accent = 'b
 export function ChannelOverview({ accent = 'blue', icon, title, subtitle, bullets }) {
   const palette = {
     blue: {
-      iconWrap: 'bg-blue-100 text-blue-600',
-      badge: 'bg-blue-50 border-blue-100 text-blue-700',
+      iconWrap: 'bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400',
+      badge: 'bg-blue-50 dark:bg-blue-950/40 border-blue-100 dark:border-blue-800 text-blue-700 dark:text-blue-300',
       dot: 'bg-blue-500',
     },
     indigo: {
-      iconWrap: 'bg-indigo-100 text-indigo-600',
-      badge: 'bg-indigo-50 border-indigo-100 text-indigo-700',
+      iconWrap: 'bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400',
+      badge: 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-100 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300',
       dot: 'bg-indigo-600',
     },
   };
@@ -533,7 +534,7 @@ export function ChannelOverview({ accent = 'blue', icon, title, subtitle, bullet
   const current = palette[accent];
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+    <div className="rounded-2xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface p-4">
       <div className="flex items-start gap-3">
         <div className={`w-11 h-11 rounded-2xl flex items-center justify-center text-lg font-bold shrink-0 ${current.iconWrap}`}>
           {icon}
@@ -542,13 +543,13 @@ export function ChannelOverview({ accent = 'blue', icon, title, subtitle, bullet
           <div className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${current.badge}`}>
             Kết nối kênh hội thoại
           </div>
-          <h3 className="text-sm font-semibold text-slate-800 mt-2">{title}</h3>
-          <p className="text-xs text-slate-500 mt-1 leading-5">{subtitle}</p>
+          <h3 className="text-sm font-semibold text-slate-800 dark:text-dk-text mt-2">{title}</h3>
+          <p className="text-xs text-slate-500 dark:text-dk-text2 mt-1 leading-5">{subtitle}</p>
         </div>
       </div>
       <div className="mt-4 grid gap-2">
         {bullets.map((item) => (
-          <div key={item} className="flex items-start gap-2 text-xs text-slate-600 leading-5">
+          <div key={item} className="flex items-start gap-2 text-xs text-slate-600 dark:text-dk-text2 leading-5">
             <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${current.dot}`} />
             <span>{item}</span>
           </div>
@@ -586,10 +587,10 @@ export function ChannelQuickTest({ channelType, channelLabel, connected }) {
   };
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
-      <div className="px-4 py-3 border-b border-slate-100">
-        <p className="text-sm font-semibold text-slate-700">Kiểm tra kết nối nhanh</p>
-        <p className="text-xs text-slate-400 mt-1">Xác minh trạng thái hiện tại của kênh mà không cần rời khỏi studio.</p>
+    <div className="rounded-2xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface overflow-hidden">
+      <div className="px-4 py-3 border-b border-slate-100 dark:border-dk-border">
+        <p className="text-sm font-semibold text-slate-700 dark:text-dk-text">Kiểm tra kết nối nhanh</p>
+        <p className="text-xs text-slate-400 dark:text-dk-muted mt-1">Xác minh trạng thái hiện tại của kênh mà không cần rời khỏi studio.</p>
       </div>
       <div className="p-4 space-y-3">
         {connected ? (
@@ -609,8 +610,8 @@ export function ChannelQuickTest({ channelType, channelLabel, connected }) {
             {result ? (
               <div className={`flex items-start gap-2 rounded-xl border px-3 py-2 text-xs leading-5 ${
                 result === 'success'
-                  ? 'border-green-200 bg-green-50 text-green-700'
-                  : 'border-red-200 bg-red-50 text-red-700'
+                  ? 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300'
+                  : 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300'
               }`}>
                 {result === 'success' ? (
                   <HiOutlineCheckCircle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -622,7 +623,7 @@ export function ChannelQuickTest({ channelType, channelLabel, connected }) {
             ) : null}
           </>
         ) : (
-          <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-700 leading-5">
+          <div className="rounded-xl border border-amber-100 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-xs text-amber-700 dark:text-amber-300 leading-5">
             Kênh chưa được kết nối nên chưa thể test trực tiếp trong studio. Hãy hoàn tất cấu hình tại trang kết nối kênh trước.
           </div>
         )}
@@ -637,22 +638,22 @@ export function ZaloChannelCard({ channel, onConnect, onDisconnect, onOpenGuide,
   return (
     <div className="space-y-4">
       <div className="flex items-start gap-4">
-        <div className="w-14 h-14 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center text-2xl font-bold shrink-0">
+        <div className="w-14 h-14 rounded-2xl bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center text-2xl font-bold shrink-0">
           Z
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 flex-wrap">
-            <h3 className="text-lg font-bold text-slate-800">Zalo Official Account</h3>
+            <h3 className="text-lg font-bold text-slate-800 dark:text-dk-text">Zalo Official Account</h3>
             <ChannelStatusBadge connected={isConnected} label={isConnected ? 'Đã kết nối' : 'Chưa kết nối'} />
           </div>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-sm text-slate-500 dark:text-dk-text2 mt-1">
             Kết nối chatbot với Zalo OA để tự động nhận, phân luồng và phản hồi hội thoại từ khách hàng.
           </p>
         </div>
       </div>
 
-      <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-        <svg className="w-4 h-4 shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <div className="flex items-center gap-2 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+        <svg className="w-4 h-4 shrink-0 text-amber-500 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
         </svg>
         <span className="font-medium">Tính năng đang phát triển.</span>
@@ -661,24 +662,24 @@ export function ZaloChannelCard({ channel, onConnect, onDisconnect, onOpenGuide,
 
       {isConnected ? (
         <div className="space-y-4">
-          <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+          <div className="rounded-2xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 p-4">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-sm font-semibold text-blue-700">Kênh đang hoạt động</span>
+              <span className="text-sm font-semibold text-blue-700 dark:text-blue-300">Kênh đang hoạt động</span>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="bg-white/80 rounded-xl p-3 border border-blue-100">
-                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Webhook URL</p>
-                <p className="text-xs text-slate-700 font-mono break-all">{channel.webhook_url || webhookUrl}</p>
+              <div className="bg-white/80 dark:bg-dk-surface/80 rounded-xl p-3 border border-blue-100 dark:border-blue-800">
+                <p className="text-[11px] font-semibold text-slate-400 dark:text-dk-muted uppercase tracking-wide mb-1">Webhook URL</p>
+                <p className="text-xs text-slate-700 dark:text-dk-text font-mono break-all">{channel.webhook_url || webhookUrl}</p>
               </div>
               {channel.config && (
-                <div className="bg-white/80 rounded-xl p-3 border border-blue-100">
-                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1">App ID</p>
-                  <p className="text-xs text-slate-700 font-mono">{channel.config.zalo_app_id || '—'}</p>
+                <div className="bg-white/80 dark:bg-dk-surface/80 rounded-xl p-3 border border-blue-100 dark:border-blue-800">
+                  <p className="text-[11px] font-semibold text-slate-400 dark:text-dk-muted uppercase tracking-wide mb-1">App ID</p>
+                  <p className="text-xs text-slate-700 dark:text-dk-text font-mono">{channel.config.zalo_app_id || '—'}</p>
                 </div>
               )}
             </div>
-            <p className="text-xs text-blue-600 mt-3">
+            <p className="text-xs text-blue-600 dark:text-blue-400 mt-3">
               Chatbot đang nhận sự kiện từ Zalo OA. Nếu bạn thay đổi OA hoặc app credentials, hãy ngắt kết nối và cấu hình lại.
             </p>
           </div>
@@ -686,21 +687,21 @@ export function ZaloChannelCard({ channel, onConnect, onDisconnect, onOpenGuide,
             <button type="button" onClick={onOpenGuide} className="btn btn-secondary text-xs">
               <HiOutlineBookOpen className="w-4 h-4" /> Xem hướng dẫn
             </button>
-            <button type="button" onClick={onDisconnect} className="btn bg-red-50 text-red-600 hover:bg-red-100 text-xs border border-red-200">
+            <button type="button" onClick={onDisconnect} className="btn bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/60 text-xs border border-red-200 dark:border-red-800">
               <HiOutlineTrash className="w-4 h-4" /> Ngắt kết nối
             </button>
           </div>
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <div className="rounded-2xl border border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-raised p-4">
             <div className="flex items-start gap-3 mb-3">
-              <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+              <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
                 <HiOutlineLink className="w-4 h-4" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-slate-700">Thiết lập Webhook</p>
-                <p className="text-xs text-slate-500 mt-0.5">
+                <p className="text-sm font-semibold text-slate-700 dark:text-dk-text">Thiết lập Webhook</p>
+                <p className="text-xs text-slate-500 dark:text-dk-text2 mt-0.5">
                   Sau khi kết nối, webhook URL sẽ được sử dụng để nhận tin nhắn và sự kiện từ Zalo OA.
                 </p>
               </div>
@@ -727,22 +728,22 @@ export function FacebookChannelCard({ channel, onConnect, onDisconnect, onOpenGu
   return (
     <div className="space-y-4">
       <div className="flex items-start gap-4">
-        <div className="w-14 h-14 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-2xl font-bold shrink-0">
+        <div className="w-14 h-14 rounded-2xl bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-2xl font-bold shrink-0">
           f
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 flex-wrap">
-            <h3 className="text-lg font-bold text-slate-800">Facebook Messenger</h3>
+            <h3 className="text-lg font-bold text-slate-800 dark:text-dk-text">Facebook Messenger</h3>
             <ChannelStatusBadge connected={isConnected} label={isConnected ? 'Đã kết nối' : 'Chưa kết nối'} />
           </div>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-sm text-slate-500 dark:text-dk-text2 mt-1">
             Kết nối chatbot với Facebook Fanpage để tự động trả lời tin nhắn Messenger.
           </p>
         </div>
       </div>
 
-      <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-        <svg className="w-4 h-4 shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <div className="flex items-center gap-2 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+        <svg className="w-4 h-4 shrink-0 text-amber-500 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
         </svg>
         <span className="font-medium">Tính năng đang phát triển.</span>
@@ -751,24 +752,24 @@ export function FacebookChannelCard({ channel, onConnect, onDisconnect, onOpenGu
 
       {isConnected ? (
         <div className="space-y-4">
-          <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
+          <div className="rounded-2xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 p-4">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-sm font-semibold text-indigo-700">Fanpage đã liên kết</span>
+              <span className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">Fanpage đã liên kết</span>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="bg-white/80 rounded-xl p-3 border border-indigo-100">
-                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Webhook URL</p>
-                <p className="text-xs text-slate-700 font-mono break-all">{channel.webhook_url || webhookUrl}</p>
+              <div className="bg-white/80 dark:bg-dk-surface/80 rounded-xl p-3 border border-indigo-100 dark:border-indigo-800">
+                <p className="text-[11px] font-semibold text-slate-400 dark:text-dk-muted uppercase tracking-wide mb-1">Webhook URL</p>
+                <p className="text-xs text-slate-700 dark:text-dk-text font-mono break-all">{channel.webhook_url || webhookUrl}</p>
               </div>
               {channel.config && (
-                <div className="bg-white/80 rounded-xl p-3 border border-indigo-100">
-                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Page ID</p>
-                  <p className="text-xs text-slate-700 font-mono">{channel.config.page_id || '—'}</p>
+                <div className="bg-white/80 dark:bg-dk-surface/80 rounded-xl p-3 border border-indigo-100 dark:border-indigo-800">
+                  <p className="text-[11px] font-semibold text-slate-400 dark:text-dk-muted uppercase tracking-wide mb-1">Page ID</p>
+                  <p className="text-xs text-slate-700 dark:text-dk-text font-mono">{channel.config.page_id || '—'}</p>
                 </div>
               )}
             </div>
-            <p className="text-xs text-indigo-600 mt-3">
+            <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-3">
               Các cuộc trò chuyện Messenger mới sẽ được chuyển vào chatbot. Nếu đổi page hoặc token, hãy kết nối lại.
             </p>
           </div>
@@ -776,21 +777,21 @@ export function FacebookChannelCard({ channel, onConnect, onDisconnect, onOpenGu
             <button type="button" onClick={onOpenGuide} className="btn btn-secondary text-xs">
               <HiOutlineBookOpen className="w-4 h-4" /> Xem hướng dẫn
             </button>
-            <button type="button" onClick={onDisconnect} className="btn bg-red-50 text-red-600 hover:bg-red-100 text-xs border border-red-200">
+            <button type="button" onClick={onDisconnect} className="btn bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/60 text-xs border border-red-200 dark:border-red-800">
               <HiOutlineTrash className="w-4 h-4" /> Ngắt kết nối
             </button>
           </div>
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <div className="rounded-2xl border border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-raised p-4">
             <div className="flex items-start gap-3 mb-3">
-              <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+              <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
                 <HiOutlineLink className="w-4 h-4" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-slate-700">Cấu hình Webhook</p>
-                <p className="text-xs text-slate-500 mt-0.5">
+                <p className="text-sm font-semibold text-slate-700 dark:text-dk-text">Cấu hình Webhook</p>
+                <p className="text-xs text-slate-500 dark:text-dk-text2 mt-0.5">
                   Sử dụng URL và Verify Token bên dưới để cấu hình webhook trên Facebook Developer Console.
                 </p>
               </div>
@@ -826,14 +827,14 @@ export function FacebookConnectModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+      <div className="bg-white dark:bg-dk-surface rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 dark:border-dk-border flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-semibold text-slate-800">Kết nối Facebook Messenger</h3>
-            <p className="text-xs text-slate-400 mt-1">Nhập Page ID và Page Access Token để kết nối chatbot với Fanpage của bạn.</p>
+            <h3 className="text-sm font-semibold text-slate-800 dark:text-dk-text">Kết nối Facebook Messenger</h3>
+            <p className="text-xs text-slate-400 dark:text-dk-muted mt-1">Nhập Page ID và Page Access Token để kết nối chatbot với Fanpage của bạn.</p>
           </div>
           <button type="button" onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+            className="p-1 rounded-lg text-slate-400 dark:text-dk-muted hover:text-slate-600 dark:hover:text-dk-text2 hover:bg-slate-100 dark:hover:bg-dk-strong transition-colors">
             <HiOutlineX className="w-4 h-4" />
           </button>
         </div>
@@ -862,7 +863,7 @@ export function FacebookConnectModal({
               required
             />
           </FieldRow>
-          <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs text-indigo-700 leading-5">
+          <div className="rounded-xl border border-indigo-100 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 px-3 py-2 text-xs text-indigo-700 dark:text-indigo-300 leading-5">
             Sau khi kết nối thành công, webhook URL sẽ được sinh để bạn cấu hình trên Facebook Developer Console.
           </div>
           <div className="flex justify-end gap-2 pt-2">
@@ -889,14 +890,14 @@ export function ZaloConnectModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+      <div className="bg-white dark:bg-dk-surface rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 dark:border-dk-border flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-semibold text-slate-800">Kết nối Zalo Official Account</h3>
-            <p className="text-xs text-slate-400 mt-1">Nhập App ID và App Secret để kết nối thật với chatbot này.</p>
+            <h3 className="text-sm font-semibold text-slate-800 dark:text-dk-text">Kết nối Zalo Official Account</h3>
+            <p className="text-xs text-slate-400 dark:text-dk-muted mt-1">Nhập App ID và App Secret để kết nối thật với chatbot này.</p>
           </div>
           <button type="button" onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+            className="p-1 rounded-lg text-slate-400 dark:text-dk-muted hover:text-slate-600 dark:hover:text-dk-text2 hover:bg-slate-100 dark:hover:bg-dk-strong transition-colors">
             <HiOutlineX className="w-4 h-4" />
           </button>
         </div>
@@ -925,7 +926,7 @@ export function ZaloConnectModal({
               required
             />
           </FieldRow>
-          <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700 leading-5">
+          <div className="rounded-xl border border-blue-100 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 px-3 py-2 text-xs text-blue-700 dark:text-blue-300 leading-5">
             Sau khi kết nối thành công, hệ thống sẽ sinh webhook URL riêng cho chatbot này để bạn cấu hình trong Zalo Developer.
           </div>
           <div className="flex justify-end gap-2 pt-2">
@@ -954,34 +955,34 @@ export function UploadDocumentModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-800">Upload Tài Liệu</h3>
+      <div className="bg-white dark:bg-dk-surface rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 dark:border-dk-border flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-800 dark:text-dk-text">Upload Tài Liệu</h3>
           <button type="button" onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+            className="p-1 rounded-lg text-slate-400 dark:text-dk-muted hover:text-slate-600 dark:hover:text-dk-text2 hover:bg-slate-100 dark:hover:bg-dk-strong transition-colors">
             <HiOutlineX className="w-4 h-4" />
           </button>
         </div>
         <form onSubmit={onSubmit} className="p-5 space-y-4">
           <div
             onClick={() => fileInputRef.current?.click()}
-            className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center cursor-pointer hover:bg-slate-50 hover:border-slate-300 transition-colors"
+            className="border-2 border-dashed border-slate-200 dark:border-dk-border rounded-xl p-8 text-center cursor-pointer hover:bg-slate-50 dark:hover:bg-dk-raised hover:border-slate-300 dark:hover:border-dk-border-strong transition-colors"
           >
             <input ref={fileInputRef} type="file" accept=".pdf,.docx,.doc,.txt,.csv,.xlsx,.xls"
               className="hidden" onChange={onFileSelect} />
             {form.file ? (
               <>
-                <HiOutlineDocumentText className="w-8 h-8 text-green-500 mx-auto mb-2" />
-                <p className="text-sm font-medium text-slate-700">{form.file.name}</p>
-                <p className="text-xs text-slate-400 mt-1">
+                <HiOutlineDocumentText className="w-8 h-8 text-green-500 dark:text-green-400 mx-auto mb-2" />
+                <p className="text-sm font-medium text-slate-700 dark:text-dk-text">{form.file.name}</p>
+                <p className="text-xs text-slate-400 dark:text-dk-muted mt-1">
                   {(form.file.size / 1024 / 1024).toFixed(2)} MB
                 </p>
               </>
             ) : (
               <>
-                <HiOutlineUpload className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                <p className="text-sm text-slate-600">Click hoặc kéo thả file vào đây</p>
-                <p className="text-xs text-slate-400 mt-1">PDF, DOCX, TXT, CSV (tối đa {MAX_UPLOAD_FILE_MB}MB)</p>
+                <HiOutlineUpload className="w-8 h-8 text-slate-300 dark:text-dk-muted mx-auto mb-2" />
+                <p className="text-sm text-slate-600 dark:text-dk-text2">Click hoặc kéo thả file vào đây</p>
+                <p className="text-xs text-slate-400 dark:text-dk-muted mt-1">PDF, DOCX, TXT, CSV (tối đa {MAX_UPLOAD_FILE_MB}MB)</p>
               </>
             )}
           </div>
@@ -1016,11 +1017,11 @@ export function TextDocumentModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-800">Thêm Văn Bản Kiến Thức</h3>
+      <div className="bg-white dark:bg-dk-surface rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 dark:border-dk-border flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-800 dark:text-dk-text">Thêm Văn Bản Kiến Thức</h3>
           <button type="button" onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+            className="p-1 rounded-lg text-slate-400 dark:text-dk-muted hover:text-slate-600 dark:hover:text-dk-text2 hover:bg-slate-100 dark:hover:bg-dk-strong transition-colors">
             <HiOutlineX className="w-4 h-4" />
           </button>
         </div>
@@ -1069,12 +1070,12 @@ export function ChannelGuideModal({
 
   const palette = {
     blue: {
-      icon: 'bg-blue-100 text-blue-600',
-      title: 'text-blue-600',
+      icon: 'bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400',
+      title: 'text-blue-600 dark:text-blue-400',
     },
     indigo: {
-      icon: 'bg-indigo-100 text-indigo-600',
-      title: 'text-indigo-600',
+      icon: 'bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400',
+      title: 'text-indigo-600 dark:text-indigo-400',
     },
   };
 
@@ -1082,18 +1083,18 @@ export function ChannelGuideModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 flex items-start justify-between gap-4">
+      <div className="bg-white dark:bg-dk-surface rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 dark:border-dk-border flex items-start justify-between gap-4">
           <div className="flex items-start gap-3 min-w-0">
             <div className={`w-11 h-11 rounded-2xl flex items-center justify-center text-lg font-bold shrink-0 ${current.icon}`}>
               {icon}
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-base font-semibold text-slate-800">{title}</h3>
+                <h3 className="text-base font-semibold text-slate-800 dark:text-dk-text">{title}</h3>
                 <span className={`text-xs font-medium ${current.title}`}>Hướng dẫn triển khai</span>
               </div>
-              <p className="text-sm text-slate-500 mt-1 leading-6">{summary}</p>
+              <p className="text-sm text-slate-500 dark:text-dk-text2 mt-1 leading-6">{summary}</p>
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -1108,7 +1109,7 @@ export function ChannelGuideModal({
               </a>
             ) : null}
             <button type="button" onClick={onClose}
-              className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+              className="p-1 rounded-lg text-slate-400 dark:text-dk-muted hover:text-slate-600 dark:hover:text-dk-text2 hover:bg-slate-100 dark:hover:bg-dk-strong transition-colors">
               <HiOutlineX className="w-4 h-4" />
             </button>
           </div>
@@ -1117,26 +1118,26 @@ export function ChannelGuideModal({
         <div className="overflow-y-auto max-h-[calc(90vh-76px)] p-5">
           <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr] min-w-0">
             <div className="space-y-4 min-w-0">
-              <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
-                <div className="px-4 py-3 border-b border-slate-100">
-                  <p className="text-sm font-semibold text-slate-700">Hướng dẫn thiết lập</p>
-                  <p className="text-xs text-slate-400 mt-1">Làm theo từng bước để hoàn tất kết nối.</p>
+              <div className="rounded-2xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface overflow-hidden">
+                <div className="px-4 py-3 border-b border-slate-100 dark:border-dk-border">
+                  <p className="text-sm font-semibold text-slate-700 dark:text-dk-text">Hướng dẫn thiết lập</p>
+                  <p className="text-xs text-slate-400 dark:text-dk-muted mt-1">Làm theo từng bước để hoàn tất kết nối.</p>
                 </div>
                 <div className="p-4 min-w-0">{setupChecklist}</div>
               </div>
             </div>
 
             <div className="space-y-4 min-w-0">
-              <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
-                <div className="px-4 py-3 border-b border-slate-100">
-                  <p className="text-sm font-semibold text-slate-700">Thông số kỹ thuật</p>
-                  <p className="text-xs text-slate-400 mt-1">Các giá trị cần dùng khi cấu hình webhook.</p>
+              <div className="rounded-2xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface overflow-hidden">
+                <div className="px-4 py-3 border-b border-slate-100 dark:border-dk-border">
+                  <p className="text-sm font-semibold text-slate-700 dark:text-dk-text">Thông số kỹ thuật</p>
+                  <p className="text-xs text-slate-400 dark:text-dk-muted mt-1">Các giá trị cần dùng khi cấu hình webhook.</p>
                 </div>
                 <div className="p-4 space-y-3 min-w-0">{techDetails}</div>
               </div>
 
               {footer ? (
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-500 leading-5 min-w-0">
+                <div className="rounded-2xl border border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-raised p-4 text-xs text-slate-500 dark:text-dk-text2 leading-5 min-w-0">
                   {footer}
                 </div>
               ) : null}
@@ -1268,11 +1269,11 @@ export function PublicLinkCard({ chatbot, form }) {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-            <HiOutlineGlobeAlt className="w-5 h-5 text-emerald-500" />
+          <h3 className="text-lg font-bold text-slate-800 dark:text-dk-text flex items-center gap-2">
+            <HiOutlineGlobeAlt className="w-5 h-5 text-emerald-500 dark:text-emerald-400" />
             Chia sẻ Chatbot
           </h3>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-slate-500 dark:text-dk-text2 mt-1">
             Gửi link hoặc QR cho khách hàng trải nghiệm chatbot
           </p>
         </div>
@@ -1283,12 +1284,12 @@ export function PublicLinkCard({ chatbot, form }) {
         {/* Left - Link & Actions */}
         <div className="space-y-4">
           {/* Link Input - Clean & Modern */}
-          <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
-            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 block">
+          <div className="bg-white dark:bg-dk-surface rounded-2xl p-5 border border-slate-200 dark:border-dk-border shadow-sm">
+            <label className="text-xs font-semibold text-slate-500 dark:text-dk-text2 uppercase tracking-wider mb-3 block">
               Link chia sẻ chatbot
             </label>
             <div className="flex items-center gap-3">
-              <div className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-mono text-slate-700 truncate" title={shareLink}>
+              <div className="flex-1 bg-slate-50 dark:bg-dk-raised border border-slate-200 dark:border-dk-border rounded-xl px-4 py-3 text-sm font-mono text-slate-700 dark:text-dk-text truncate" title={shareLink}>
                 {shareLink}
               </div>
               <button
@@ -1312,13 +1313,14 @@ export function PublicLinkCard({ chatbot, form }) {
           </div>
 
           {/* Chatbot Preview - Mobile Mockup */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm overflow-hidden">
-            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 block">
+          <div className="bg-white dark:bg-dk-surface rounded-2xl border border-slate-200 dark:border-dk-border p-5 shadow-sm overflow-hidden">
+            <label className="text-xs font-semibold text-slate-500 dark:text-dk-text2 uppercase tracking-wider mb-3 block">
               Xem trước
             </label>
-            <div className="bg-slate-100 rounded-xl p-3">
+            <div className="bg-slate-100 dark:bg-dk-raised rounded-xl p-3">
               {/* Phone Frame */}
-              <div className="bg-white rounded-2xl border-2 border-slate-300 overflow-hidden shadow-lg max-w-[240px] mx-auto">
+              {/* giữ sáng: khung điện thoại + bong bóng chào là widget thật (màu theo form.primary_color/background_color); chỉ khung bao ngoài theo chế độ tối */}
+              <div className="bg-white rounded-2xl border-2 border-slate-300 dark:border-dk-border-strong overflow-hidden shadow-lg max-w-[240px] mx-auto">
                 {/* Phone Header */}
                 <div
                   className="px-4 py-3 flex items-center gap-3"
@@ -1347,8 +1349,8 @@ export function PublicLinkCard({ chatbot, form }) {
         </div>
 
         {/* Right - QR Code */}
-        <div className="flex flex-col items-center justify-center bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Quét để trải nghiệm</span>
+        <div className="flex flex-col items-center justify-center bg-white dark:bg-dk-surface rounded-2xl border border-slate-200 dark:border-dk-border p-6 shadow-sm">
+          <span className="text-xs font-semibold text-slate-500 dark:text-dk-text2 uppercase tracking-wider mb-4">Quét để trải nghiệm</span>
           
           {/* QR Display */}
           {qrDataUrl ? (
@@ -1363,6 +1365,7 @@ export function PublicLinkCard({ chatbot, form }) {
               {/* Logo overlay */}
               {qrLogo && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  {/* giữ sáng: logo nằm trên mã QR (nền trắng cố định, không dark:) */}
                   <img
                     src={qrLogo}
                     alt="Logo"
@@ -1372,8 +1375,8 @@ export function PublicLinkCard({ chatbot, form }) {
               )}
             </div>
           ) : (
-            <div className="w-52 h-52 rounded-2xl border-4 border-dashed border-slate-300 flex items-center justify-center bg-slate-50">
-              <div className="animate-pulse text-slate-400 text-sm">Đang tạo...</div>
+            <div className="w-52 h-52 rounded-2xl border-4 border-dashed border-slate-300 dark:border-dk-border-strong flex items-center justify-center bg-slate-50 dark:bg-dk-raised">
+              <div className="animate-pulse text-slate-400 dark:text-dk-muted text-sm">Đang tạo...</div>
             </div>
           )}
 
@@ -1383,7 +1386,7 @@ export function PublicLinkCard({ chatbot, form }) {
               type="button"
               onClick={copyQR}
               disabled={!qrDataUrl}
-              className="flex-1 flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-xl transition-colors disabled:opacity-50 font-medium text-sm"
+              className="flex-1 flex items-center justify-center gap-2 bg-slate-100 dark:bg-dk-raised hover:bg-slate-200 dark:hover:bg-dk-strong text-slate-700 dark:text-dk-text px-4 py-2.5 rounded-xl transition-colors disabled:opacity-50 font-medium text-sm"
             >
               <HiOutlineClipboardCopy className="w-4 h-4" />
               {qrCopied ? 'Đã copy!' : 'Copy QR'}
@@ -1402,13 +1405,13 @@ export function PublicLinkCard({ chatbot, form }) {
       </div>
 
       {/* Customization Section */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5">
+      <div className="bg-white dark:bg-dk-surface rounded-2xl border border-slate-200 dark:border-dk-border p-5">
         <div className="flex items-center justify-between mb-4">
-          <h4 className="font-semibold text-slate-700">Tùy chỉnh QR Code</h4>
+          <h4 className="font-semibold text-slate-700 dark:text-dk-text">Tùy chỉnh QR Code</h4>
           <button
             type="button"
             onClick={resetToDefault}
-            className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+            className="text-xs text-slate-500 dark:text-dk-text2 hover:text-slate-700 dark:hover:text-dk-text flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-dk-strong transition-colors"
           >
             <HiOutlineRefresh className="w-3.5 h-3.5" />
             Khôi phục
@@ -1418,7 +1421,7 @@ export function PublicLinkCard({ chatbot, form }) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Color */}
           <div className="space-y-2">
-            <label className="text-xs font-medium text-slate-500 flex items-center gap-1.5">
+            <label className="text-xs font-medium text-slate-500 dark:text-dk-text2 flex items-center gap-1.5">
               <span
                 className="w-3 h-3 rounded-full border"
                 style={{ backgroundColor: qrColor }}
@@ -1430,22 +1433,22 @@ export function PublicLinkCard({ chatbot, form }) {
                 type="color"
                 value={qrColor}
                 onChange={(e) => setQrColor(e.target.value)}
-                className="w-10 h-10 rounded-xl border border-slate-200 cursor-pointer"
+                className="w-10 h-10 rounded-xl border border-slate-200 dark:border-dk-border cursor-pointer"
               />
               <input
                 type="text"
                 value={qrColor}
                 onChange={(e) => setQrColor(e.target.value)}
-                className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono text-slate-600"
+                className="flex-1 bg-slate-50 dark:bg-dk-raised border border-slate-200 dark:border-dk-border rounded-lg px-3 py-2 text-xs font-mono text-slate-600 dark:text-dk-text2"
               />
             </div>
           </div>
 
           {/* Background Color */}
           <div className="space-y-2">
-            <label className="text-xs font-medium text-slate-500 flex items-center gap-1.5">
+            <label className="text-xs font-medium text-slate-500 dark:text-dk-text2 flex items-center gap-1.5">
               <span
-                className="w-3 h-3 rounded-full border border-slate-300"
+                className="w-3 h-3 rounded-full border border-slate-300 dark:border-dk-border-strong"
                 style={{ backgroundColor: qrBgColor }}
               />
               Màu nền
@@ -1455,45 +1458,45 @@ export function PublicLinkCard({ chatbot, form }) {
                 type="color"
                 value={qrBgColor}
                 onChange={(e) => setQrBgColor(e.target.value)}
-                className="w-10 h-10 rounded-xl border border-slate-200 cursor-pointer"
+                className="w-10 h-10 rounded-xl border border-slate-200 dark:border-dk-border cursor-pointer"
               />
               <input
                 type="text"
                 value={qrBgColor}
                 onChange={(e) => setQrBgColor(e.target.value)}
-                className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono text-slate-600"
+                className="flex-1 bg-slate-50 dark:bg-dk-raised border border-slate-200 dark:border-dk-border rounded-lg px-3 py-2 text-xs font-mono text-slate-600 dark:text-dk-text2"
               />
             </div>
           </div>
 
           {/* Logo URL */}
           <div className="space-y-2">
-            <label className="text-xs font-medium text-slate-500">Logo (URL)</label>
+            <label className="text-xs font-medium text-slate-500 dark:text-dk-text2">Logo (URL)</label>
             <input
               type="text"
               value={qrLogo}
               onChange={(e) => setQrLogo(e.target.value)}
               placeholder="https://..."
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-600 placeholder:text-slate-400"
+              className="w-full bg-slate-50 dark:bg-dk-raised border border-slate-200 dark:border-dk-border rounded-lg px-3 py-2 text-xs text-slate-600 dark:text-dk-text2 placeholder:text-slate-400 dark:placeholder:text-dk-muted"
             />
           </div>
         </div>
       </div>
 
       {/* Info Footer */}
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-        <p className="text-xs font-medium text-amber-800 mb-2">Mẹo sử dụng:</p>
-        <ul className="text-xs text-amber-700 space-y-1.5">
+      <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
+        <p className="text-xs font-medium text-amber-800 dark:text-amber-300 mb-2">Mẹo sử dụng:</p>
+        <ul className="text-xs text-amber-700 dark:text-amber-300 space-y-1.5">
           <li className="flex items-start gap-2">
-            <span className="text-amber-500 mt-0.5">•</span>
+            <span className="text-amber-500 dark:text-amber-400 mt-0.5">•</span>
             Copy link rồi gửi qua Zalo, Facebook, Email hoặc SMS
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-amber-500 mt-0.5">•</span>
+            <span className="text-amber-500 dark:text-amber-400 mt-0.5">•</span>
             In mã QR trên namecard, poster, hoặc đặt tại quầy
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-amber-500 mt-0.5">•</span>
+            <span className="text-amber-500 dark:text-amber-400 mt-0.5">•</span>
             Link hoạt động mọi lúc, không cần cài đặt
           </li>
         </ul>
@@ -1559,10 +1562,10 @@ const deployOptionsConfig = [
 ];
 
 const colorClasses = {
-  emerald: { bg: 'bg-emerald-100', text: 'text-emerald-600', border: 'border-emerald-200' },
-  blue: { bg: 'bg-blue-100', text: 'text-blue-600', border: 'border-blue-200' },
-  purple: { bg: 'bg-purple-100', text: 'text-purple-600', border: 'border-purple-200' },
-  indigo: { bg: 'bg-indigo-100', text: 'text-indigo-600', border: 'border-indigo-200' },
+  emerald: { bg: 'bg-emerald-100 dark:bg-emerald-950/40', text: 'text-emerald-600 dark:text-emerald-400', border: 'border-emerald-200 dark:border-emerald-800' },
+  blue: { bg: 'bg-blue-100 dark:bg-blue-950/40', text: 'text-blue-600 dark:text-blue-400', border: 'border-blue-200 dark:border-blue-800' },
+  purple: { bg: 'bg-purple-100 dark:bg-purple-950/40', text: 'text-purple-600 dark:text-purple-400', border: 'border-purple-200 dark:border-purple-800' },
+  indigo: { bg: 'bg-indigo-100 dark:bg-indigo-950/40', text: 'text-indigo-600 dark:text-indigo-400', border: 'border-indigo-200 dark:border-indigo-800' },
 };
 
 // ── Deploy Script Modal ────────────────────────────────────────────────────────
@@ -1588,26 +1591,26 @@ export function DeployScriptModal({ open, chatbot, form, onClose, onCopy, copied
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[85vh] overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
+      <div className="relative bg-white dark:bg-dk-surface rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[85vh] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-dk-border shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
               </svg>
             </div>
             <div>
-              <h3 className="text-base font-semibold text-slate-800">Website Script</h3>
-              <p className="text-xs text-slate-400">Mã nhúng JavaScript</p>
+              <h3 className="text-base font-semibold text-slate-800 dark:text-dk-text">Website Script</h3>
+              <p className="text-xs text-slate-400 dark:text-dk-muted">Mã nhúng JavaScript</p>
             </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center">
-            <HiOutlineX className="w-5 h-5 text-slate-400" />
+          <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-slate-100 dark:hover:bg-dk-strong flex items-center justify-center">
+            <HiOutlineX className="w-5 h-5 text-slate-400 dark:text-dk-muted" />
           </button>
         </div>
         <div className="p-5 overflow-y-auto flex-1 space-y-4">
-          <p className="text-sm text-slate-600">
-            Copy đoạn mã bên dưới và dán vào thẻ <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">&#x3C;head&#x3E;</code> hoặc trước thẻ đóng <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">&#x3C;/body&#x3E;</code> trên website của bạn.
+          <p className="text-sm text-slate-600 dark:text-dk-text2">
+            Copy đoạn mã bên dưới và dán vào thẻ <code className="bg-slate-100 dark:bg-dk-raised px-1.5 py-0.5 rounded text-xs">&#x3C;head&#x3E;</code> hoặc trước thẻ đóng <code className="bg-slate-100 dark:bg-dk-raised px-1.5 py-0.5 rounded text-xs">&#x3C;/body&#x3E;</code> trên website của bạn.
           </p>
           <div className="relative rounded-xl overflow-hidden">
             <pre className="bg-slate-900 text-green-400 p-4 text-xs font-mono overflow-x-auto leading-relaxed max-h-80">
@@ -1618,17 +1621,17 @@ export function DeployScriptModal({ open, chatbot, form, onClose, onCopy, copied
               {copied ? <><HiOutlineCheck className="w-3.5 h-3.5" /> Đã copy</> : <><HiOutlineCode className="w-3.5 h-3.5" /> Copy code</>}
             </button>
           </div>
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
-            <p className="text-xs font-medium text-amber-800">Lưu ý khi sử dụng:</p>
-            <ul className="text-xs text-amber-700 space-y-1">
+          <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl p-4 space-y-2">
+            <p className="text-xs font-medium text-amber-800 dark:text-amber-300">Lưu ý khi sử dụng:</p>
+            <ul className="text-xs text-amber-700 dark:text-amber-300 space-y-1">
               <li>• Đảm bảo website của bạn hỗ trợ HTTPS</li>
               <li>• Script sẽ tự động tạo widget chat ở góc màn hình</li>
               <li>• Có thể tùy chỉnh màu sắc và vị trí trong cấu hình</li>
             </ul>
           </div>
         </div>
-        <div className="px-5 py-4 border-t border-slate-100 flex justify-end shrink-0">
-          <button onClick={onClose} className="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-xl transition-colors">
+        <div className="px-5 py-4 border-t border-slate-100 dark:border-dk-border flex justify-end shrink-0">
+          <button onClick={onClose} className="px-5 py-2 bg-slate-100 dark:bg-dk-raised hover:bg-slate-200 dark:hover:bg-dk-strong text-slate-700 dark:text-dk-text text-sm font-medium rounded-xl transition-colors">
             Đóng
           </button>
         </div>
@@ -1653,25 +1656,25 @@ export function DeployIframeModal({ open, chatbot, onClose, onCopy }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[85vh] overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
+      <div className="relative bg-white dark:bg-dk-surface rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[85vh] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-dk-border shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
               </svg>
             </div>
             <div>
-              <h3 className="text-base font-semibold text-slate-800">iFrame</h3>
-              <p className="text-xs text-slate-400">Nhúng vào trang cố định</p>
+              <h3 className="text-base font-semibold text-slate-800 dark:text-dk-text">iFrame</h3>
+              <p className="text-xs text-slate-400 dark:text-dk-muted">Nhúng vào trang cố định</p>
             </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center">
-            <HiOutlineX className="w-5 h-5 text-slate-400" />
+          <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-slate-100 dark:hover:bg-dk-strong flex items-center justify-center">
+            <HiOutlineX className="w-5 h-5 text-slate-400 dark:text-dk-muted" />
           </button>
         </div>
         <div className="p-5 overflow-y-auto flex-1 space-y-4">
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-slate-600 dark:text-dk-text2">
             Sử dụng iFrame để nhúng giao diện chat vào một trang cố định trên website của bạn.
           </p>
           <div className="relative rounded-xl overflow-hidden">
@@ -1683,17 +1686,17 @@ export function DeployIframeModal({ open, chatbot, onClose, onCopy }) {
               <HiOutlineCode className="w-3.5 h-3.5" /> Copy code
             </button>
           </div>
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
-            <p className="text-xs font-medium text-amber-800">Lưu ý khi sử dụng:</p>
-            <ul className="text-xs text-amber-700 space-y-1">
+          <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl p-4 space-y-2">
+            <p className="text-xs font-medium text-amber-800 dark:text-amber-300">Lưu ý khi sử dụng:</p>
+            <ul className="text-xs text-amber-700 dark:text-amber-300 space-y-1">
               <li>• iFrame phù hợp cho trang chat chuyên dụng</li>
               <li>• Có thể điều chỉnh chiều cao (height) theo nhu cầu</li>
               <li>• Đảm bảo website hỗ trợ HTTPS</li>
             </ul>
           </div>
         </div>
-        <div className="px-5 py-4 border-t border-slate-100 flex justify-end shrink-0">
-          <button onClick={onClose} className="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-xl transition-colors">
+        <div className="px-5 py-4 border-t border-slate-100 dark:border-dk-border flex justify-end shrink-0">
+          <button onClick={onClose} className="px-5 py-2 bg-slate-100 dark:bg-dk-raised hover:bg-slate-200 dark:hover:bg-dk-strong text-slate-700 dark:text-dk-text text-sm font-medium rounded-xl transition-colors">
             Đóng
           </button>
         </div>
@@ -1710,26 +1713,26 @@ export function DeployPublicLinkModal({ open, chatbot, form, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[85vh] overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
+      <div className="relative bg-white dark:bg-dk-surface rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[85vh] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-dk-border shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center">
               <HiOutlineGlobeAlt className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-semibold text-slate-800">Link công khai</h3>
-              <p className="text-xs text-slate-400">Link rút gọn & QR Code</p>
+              <h3 className="text-base font-semibold text-slate-800 dark:text-dk-text">Link công khai</h3>
+              <p className="text-xs text-slate-400 dark:text-dk-muted">Link rút gọn & QR Code</p>
             </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center">
-            <HiOutlineX className="w-5 h-5 text-slate-400" />
+          <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-slate-100 dark:hover:bg-dk-strong flex items-center justify-center">
+            <HiOutlineX className="w-5 h-5 text-slate-400 dark:text-dk-muted" />
           </button>
         </div>
         <div className="p-5 overflow-y-auto flex-1">
           <PublicLinkCard chatbot={chatbot} form={form} />
         </div>
-        <div className="px-5 py-4 border-t border-slate-100 flex justify-end shrink-0">
-          <button onClick={onClose} className="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-xl transition-colors">
+        <div className="px-5 py-4 border-t border-slate-100 dark:border-dk-border flex justify-end shrink-0">
+          <button onClick={onClose} className="px-5 py-2 bg-slate-100 dark:bg-dk-raised hover:bg-slate-200 dark:hover:bg-dk-strong text-slate-700 dark:text-dk-text text-sm font-medium rounded-xl transition-colors">
             Đóng
           </button>
         </div>
@@ -1747,19 +1750,19 @@ export function ZaloChannelModal({ open, channel, form, onClose, onConnect, onDi
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[85vh] overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
+      <div className="relative bg-white dark:bg-dk-surface rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[85vh] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-dk-border shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-xl font-bold">
+            <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xl font-bold">
               Z
             </div>
             <div>
-              <h3 className="text-base font-semibold text-slate-800">Zalo Official Account</h3>
-              <p className="text-xs text-slate-400">Kết nối chatbot với Zalo OA</p>
+              <h3 className="text-base font-semibold text-slate-800 dark:text-dk-text">Zalo Official Account</h3>
+              <p className="text-xs text-slate-400 dark:text-dk-muted">Kết nối chatbot với Zalo OA</p>
             </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center">
-            <HiOutlineX className="w-5 h-5 text-slate-400" />
+          <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-slate-100 dark:hover:bg-dk-strong flex items-center justify-center">
+            <HiOutlineX className="w-5 h-5 text-slate-400 dark:text-dk-muted" />
           </button>
         </div>
         <div className="p-5 overflow-y-auto flex-1">
@@ -1771,8 +1774,8 @@ export function ZaloChannelModal({ open, channel, form, onClose, onConnect, onDi
             webhookUrl={webhookUrl}
           />
         </div>
-        <div className="px-5 py-4 border-t border-slate-100 flex justify-end shrink-0">
-          <button onClick={onClose} className="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-xl transition-colors">
+        <div className="px-5 py-4 border-t border-slate-100 dark:border-dk-border flex justify-end shrink-0">
+          <button onClick={onClose} className="px-5 py-2 bg-slate-100 dark:bg-dk-raised hover:bg-slate-200 dark:hover:bg-dk-strong text-slate-700 dark:text-dk-text text-sm font-medium rounded-xl transition-colors">
             Đóng
           </button>
         </div>
@@ -1790,21 +1793,21 @@ export function FacebookChannelModal({ open, channel, onClose, onConnect, onDisc
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[85vh] overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
+      <div className="relative bg-white dark:bg-dk-surface rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[85vh] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-dk-border shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
               </svg>
             </div>
             <div>
-              <h3 className="text-base font-semibold text-slate-800">Facebook Messenger</h3>
-              <p className="text-xs text-slate-400">Kết nối chatbot với Facebook Page</p>
+              <h3 className="text-base font-semibold text-slate-800 dark:text-dk-text">Facebook Messenger</h3>
+              <p className="text-xs text-slate-400 dark:text-dk-muted">Kết nối chatbot với Facebook Page</p>
             </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center">
-            <HiOutlineX className="w-5 h-5 text-slate-400" />
+          <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-slate-100 dark:hover:bg-dk-strong flex items-center justify-center">
+            <HiOutlineX className="w-5 h-5 text-slate-400 dark:text-dk-muted" />
           </button>
         </div>
         <div className="p-5 overflow-y-auto flex-1">
@@ -1817,8 +1820,8 @@ export function FacebookChannelModal({ open, channel, onClose, onConnect, onDisc
             verifyToken={verifyToken}
           />
         </div>
-        <div className="px-5 py-4 border-t border-slate-100 flex justify-end shrink-0">
-          <button onClick={onClose} className="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-xl transition-colors">
+        <div className="px-5 py-4 border-t border-slate-100 dark:border-dk-border flex justify-end shrink-0">
+          <button onClick={onClose} className="px-5 py-2 bg-slate-100 dark:bg-dk-raised hover:bg-slate-200 dark:hover:bg-dk-strong text-slate-700 dark:text-dk-text text-sm font-medium rounded-xl transition-colors">
             Đóng
           </button>
         </div>

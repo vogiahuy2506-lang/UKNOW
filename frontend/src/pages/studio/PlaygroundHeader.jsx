@@ -13,9 +13,9 @@ function getGradient(chatbot) {
 }
 
 const STATUS_STYLES = {
-  on: { badge: 'bg-emerald-50 text-emerald-700', dot: 'bg-emerald-500', labelKey: 'chatbot.studio.statusOn' },
-  off: { badge: 'bg-slate-100 text-slate-500', dot: 'bg-slate-400', labelKey: 'chatbot.studio.statusOff' },
-  locked: { badge: 'bg-amber-50 text-amber-700', dot: 'bg-amber-500', labelKey: 'chatbot.studio.statusLocked' },
+  on: { badge: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300', dot: 'bg-emerald-500', labelKey: 'chatbot.studio.statusOn' },
+  off: { badge: 'bg-slate-100 dark:bg-dk-raised text-slate-500 dark:text-dk-text2', dot: 'bg-slate-400', labelKey: 'chatbot.studio.statusOff' },
+  locked: { badge: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300', dot: 'bg-amber-500', labelKey: 'chatbot.studio.statusLocked' },
 };
 
 /**

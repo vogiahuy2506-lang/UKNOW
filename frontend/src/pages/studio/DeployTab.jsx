@@ -28,21 +28,21 @@ const EMBED_OPTIONS = [
     titleKey: 'chatbot.studio.embedScriptTitle',
     tooltipKey: 'chatbot.studio.embedScriptTip',
     icon: HiOutlineChat,
-    iconClass: 'bg-emerald-50 text-emerald-600',
+    iconClass: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400',
   },
   {
     id: 'iframe',
     titleKey: 'chatbot.studio.embedIframeTitle',
     tooltipKey: 'chatbot.studio.embedIframeTip',
     icon: HiOutlineCode,
-    iconClass: 'bg-blue-50 text-blue-600',
+    iconClass: 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400',
   },
   {
     id: 'public_link',
     titleKey: 'chatbot.studio.embedLinkTitle',
     tooltipKey: 'chatbot.studio.embedLinkTip',
     icon: HiOutlineLink,
-    iconClass: 'bg-primary-50 text-primary-600',
+    iconClass: 'bg-primary-50 dark:bg-primary-950/40 text-primary-600 dark:text-primary-400',
   },
 ];
 
@@ -55,7 +55,7 @@ const CHANNEL_TILES = [
     title: 'Facebook',
     tooltipKey: 'chatbot.studio.tipFacebook',
     icon: 'f',
-    iconClass: 'bg-blue-50 text-blue-600',
+    iconClass: 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400',
     countField: 'facebook_count',
   },
   {
@@ -63,7 +63,7 @@ const CHANNEL_TILES = [
     titleKey: 'chatbot.studio.channelZaloPersonal',
     tooltipKey: 'chatbot.studio.tipZaloPersonal',
     icon: 'Z',
-    iconClass: 'bg-orange-50 text-orange-600',
+    iconClass: 'bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400',
     countField: 'zalo_personal_count',
   },
   {
@@ -71,7 +71,7 @@ const CHANNEL_TILES = [
     title: 'WhatsApp',
     tooltipKey: 'chatbot.studio.tipWhatsApp',
     icon: 'W',
-    iconClass: 'bg-emerald-50 text-emerald-600',
+    iconClass: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400',
     countField: 'whatsapp_count',
   },
   {
@@ -79,7 +79,7 @@ const CHANNEL_TILES = [
     title: 'Telegram',
     tooltipKey: 'chatbot.studio.tipTelegram',
     icon: 'T',
-    iconClass: 'bg-sky-50 text-sky-600',
+    iconClass: 'bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400',
     countField: 'telegram_count',
   },
 ];
@@ -148,7 +148,7 @@ export default function DeployTab({
 
   if (!chatbot) {
     return (
-      <div className="flex items-center justify-center h-full text-slate-400 text-sm">
+      <div className="flex items-center justify-center h-full text-slate-400 dark:text-dk-muted text-sm">
         {t('chatbot.studio.selectBotForDeployView')}
       </div>
     );
@@ -207,7 +207,7 @@ export default function DeployTab({
         {/* Trên ứng dụng nhắn tin */}
         {canManageChannels && channelTiles.length > 0 && (
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-1 mb-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-dk-muted px-1 mb-2">
               {t('chatbot.studio.deployMessengerTitle')}
             </p>
             {/* 4 ô kênh (Facebook + Zalo cá nhân + WhatsApp + Telegram) nên xuống 2 cột: 3 cột sẽ đẩy ô
@@ -236,14 +236,14 @@ export default function DeployTab({
         {/* Sao chép & bán */}
         {(canSendCopy || canSell) && (
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-1 mb-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-dk-muted px-1 mb-2">
               {t('chatbot.studio.deployCopySellTitle')}
             </p>
             <div className="grid grid-cols-2 gap-2">
               {canSendCopy && (
                 <SquareTile
                   onClick={() => setShareModal(true)}
-                  iconBg="bg-orange-50 text-orange-600"
+                  iconBg="bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400"
                   tooltip={t('chatbot.studio.shareCopyTip')}
                   label={t('chatbot.studio.shareCopyTitle')}
                 >
@@ -253,7 +253,7 @@ export default function DeployTab({
               {canSell && (
                 <SquareTile
                   onClick={() => setMarketplaceModal(true)}
-                  iconBg="bg-violet-50 text-violet-600"
+                  iconBg="bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400"
                   tooltip={listingStatus ? t('chatbot.studio.marketplaceListedTip') : t('chatbot.studio.marketplaceSellTip')}
                   label={listingStatus
                     ? t(listingStatus === 'published' ? 'chatbot.studio.marketplaceSoldTitle' : 'chatbot.studio.marketplaceListedTitle')
@@ -397,7 +397,7 @@ function EmbedModal({ kind, chatbot, onClose, onOpenWidgetSettings }) {
           <button
             type="button"
             onClick={onClose}
-            className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-dk-text hover:bg-slate-100 dark:hover:bg-dk-raised"
+            className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 dark:text-dk-muted hover:text-slate-700 dark:hover:text-dk-text hover:bg-slate-100 dark:hover:bg-dk-raised"
           >
             <HiOutlineX className="w-4 h-4" />
           </button>
@@ -409,7 +409,7 @@ function EmbedModal({ kind, chatbot, onClose, onOpenWidgetSettings }) {
           {kind === 'public_link' ? (
             <div className="space-y-3">
               <div className="flex items-center gap-2 px-3 py-2.5 bg-slate-50 dark:bg-dk-raised rounded-lg border border-slate-200 dark:border-dk-border">
-                <HiOutlineLink className="w-4 h-4 text-slate-400 shrink-0" />
+                <HiOutlineLink className="w-4 h-4 text-slate-400 dark:text-dk-muted shrink-0" />
                 <input
                   type="text"
                   readOnly
@@ -457,17 +457,17 @@ function EmbedModal({ kind, chatbot, onClose, onOpenWidgetSettings }) {
 
           {/* Widget custom hint */}
           {(kind === 'script' || kind === 'iframe' || kind === 'public_link') && (
-            <div className="flex items-start gap-3 px-3 py-2.5 bg-primary-50/50 rounded-lg border border-primary-100">
-              <HiOutlineColorSwatch className="w-4 h-4 text-primary-600 mt-0.5 shrink-0" />
+            <div className="flex items-start gap-3 px-3 py-2.5 bg-primary-50/50 dark:bg-primary-950/40 rounded-lg border border-primary-100 dark:border-primary-800">
+              <HiOutlineColorSwatch className="w-4 h-4 text-primary-600 dark:text-primary-400 mt-0.5 shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-xs text-slate-700">
+                <p className="text-xs text-slate-700 dark:text-dk-text">
                   {t('chatbot.studio.widgetCustomHint')}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={onOpenWidgetSettings}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white border border-primary-200 text-primary-700 text-xs font-medium hover:bg-primary-100 transition-colors shrink-0"
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white dark:bg-dk-surface border border-primary-200 dark:border-primary-800 text-primary-700 dark:text-primary-300 text-xs font-medium hover:bg-primary-100 dark:hover:bg-primary-950/60 transition-colors shrink-0"
               >
                 {t('chatbot.studio.customizeBtn')}
               </button>
@@ -475,11 +475,11 @@ function EmbedModal({ kind, chatbot, onClose, onOpenWidgetSettings }) {
           )}
         </div>
 
-        <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex justify-end">
+        <div className="px-5 py-3 bg-slate-50 dark:bg-dk-raised border-t border-slate-100 dark:border-dk-border flex justify-end">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 rounded-lg transition-colors"
+            className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-dk-text hover:bg-slate-200 dark:hover:bg-dk-strong rounded-lg transition-colors"
           >
             {t('chatbot.studio.close')}
           </button>
