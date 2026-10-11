@@ -51,7 +51,7 @@ export default function RetryFreeLinkPanel({ editingId, onRetried }) {
       <div className="flex flex-wrap items-center gap-2">
         <span
           data-testid="retry-free-link-status"
-          className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800"
+          className="rounded-full bg-amber-100 dark:bg-amber-950/40 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:text-amber-300"
         >
           {tc('sections.freeLink.pendingBadge')}
         </span>
@@ -64,9 +64,9 @@ export default function RetryFreeLinkPanel({ editingId, onRetried }) {
           {busy ? tc('sections.freeLink.retrying') : tc('sections.freeLink.retry')}
         </button>
       </div>
-      <p className="text-xs text-gray-600">{tc('sections.freeLink.pendingNote')}</p>
+      <p className="text-xs text-gray-600 dark:text-dk-text2">{tc('sections.freeLink.pendingNote')}</p>
       {error ? (
-        <p role="alert" className="whitespace-pre-line text-xs text-red-600" data-testid="retry-free-link-error">
+        <p role="alert" className="whitespace-pre-line text-xs text-red-600 dark:text-red-400" data-testid="retry-free-link-error">
           {error}
         </p>
       ) : null}

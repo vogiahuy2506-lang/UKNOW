@@ -33,15 +33,15 @@ export default function BlockEditorModal({ open, html, onApply, onClose }) {
         if (e.target === e.currentTarget) onClose?.();
       }}
     >
-      <div className="relative w-[calc(100vw-48px)] h-[calc(100vh-48px)] max-w-7xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-white shrink-0 z-10">
-          <h2 className="text-[20px] font-semibold text-gray-900">
+      <div className="relative w-[calc(100vw-48px)] h-[calc(100vh-48px)] max-w-7xl bg-white dark:bg-dk-surface rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface shrink-0 z-10">
+          <h2 className="text-[20px] font-semibold text-gray-900 dark:text-dk-text">
             {tc('title')}
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="p-2.5 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+            className="p-2.5 rounded-lg text-gray-500 dark:text-dk-text2 hover:text-gray-900 dark:hover:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-strong transition-colors"
           >
             <HiOutlineX className="w-6 h-6" />
           </button>

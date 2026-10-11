@@ -40,15 +40,15 @@ function formatDate(isoStr) {
 function getSourceBadge(source) {
   switch (source) {
     case 'ai_edit':
-      return { label: 'Sửa với AI', className: 'bg-purple-100 text-purple-700 border-purple-200' };
+      return { label: 'Sửa với AI', className: 'bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800' };
     case 'ai_generate':
-      return { label: 'Tạo với AI', className: 'bg-indigo-100 text-indigo-700 border-indigo-200' };
+      return { label: 'Tạo với AI', className: 'bg-indigo-100 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800' };
     case 'template':
-      return { label: 'Template', className: 'bg-blue-100 text-blue-700 border-blue-200' };
+      return { label: 'Template', className: 'bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800' };
     case 'rollback':
-      return { label: 'Khôi phục', className: 'bg-amber-100 text-amber-700 border-amber-200' };
+      return { label: 'Khôi phục', className: 'bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800' };
     default:
-      return { label: 'Lưu thủ công', className: 'bg-gray-100 text-gray-700 border-gray-200' };
+      return { label: 'Lưu thủ công', className: 'bg-gray-100 dark:bg-dk-raised text-gray-700 dark:text-dk-text border-gray-200 dark:border-dk-border' };
   }
 }
 
@@ -151,20 +151,20 @@ export default function LandingVersionModal({
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
       <div
         ref={modalRef}
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col animate-modal-pop"
+        className="bg-white dark:bg-dk-surface rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col animate-modal-pop"
       >
         {/* Header */}
-        <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-orange-50 to-white shrink-0">
-          <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
-            <HiOutlineClock className="w-5 h-5 text-orange-600" />
+        <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100 dark:border-dk-border bg-gradient-to-r from-orange-50 dark:from-orange-950/40 to-white dark:to-dk-surface shrink-0">
+          <div className="w-10 h-10 bg-orange-100 dark:bg-orange-950/40 rounded-xl flex items-center justify-center">
+            <HiOutlineClock className="w-5 h-5 text-orange-600 dark:text-orange-400" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-gray-900">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-dk-text">
               {previewData ? 'Xem trước phiên bản' : 'Lịch sử phiên bản'}
             </h2>
-            <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500">
+            <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500 dark:text-dk-text2">
               <span className="flex items-center gap-1">
-                <HiOutlineDatabase className="w-3.5 h-3.5 text-gray-400" />
+                <HiOutlineDatabase className="w-3.5 h-3.5 text-gray-400 dark:text-dk-muted" />
                 Đang dùng: <strong>{formatBytes(totalSizeBytes)}</strong>
               </span>
               <span>Lưu tối đa {maxVersions} bản</span>
@@ -176,7 +176,7 @@ export default function LandingVersionModal({
               type="button"
               onClick={loadVersions}
               disabled={loading}
-              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-2 text-gray-400 dark:text-dk-muted hover:text-gray-600 dark:hover:text-dk-text2 hover:bg-gray-100 dark:hover:bg-dk-strong rounded-lg transition-colors"
               title="Làm mới"
             >
               <HiOutlineRefresh className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
@@ -185,7 +185,7 @@ export default function LandingVersionModal({
           <button
             type="button"
             onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 text-gray-400 dark:text-dk-muted hover:text-gray-600 dark:hover:text-dk-text2 hover:bg-gray-100 dark:hover:bg-dk-strong rounded-lg transition-colors"
           >
             <HiOutlineX className="w-5 h-5" />
           </button>
@@ -196,17 +196,17 @@ export default function LandingVersionModal({
           {previewData ? (
             /* PREVIEW VIEW */
             <div className="h-full flex flex-col space-y-4">
-              <div className="flex items-center justify-between bg-gray-50 p-3 rounded-xl border border-gray-200 text-xs">
+              <div className="flex items-center justify-between bg-gray-50 dark:bg-dk-raised p-3 rounded-xl border border-gray-200 dark:border-dk-border text-xs">
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
                     onClick={() => setPreviewData(null)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-gray-200 font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-dk-surface border border-gray-200 dark:border-dk-border font-medium text-gray-700 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised transition-colors"
                   >
                     <HiOutlineArrowNarrowLeft className="w-4 h-4" />
                     Quay lại
                   </button>
-                  <span className="text-gray-600">
+                  <span className="text-gray-600 dark:text-dk-text2">
                     Bản chụp lúc <strong>{formatDate(previewData.version?.created_at)}</strong> ({formatBytes(previewData.version?.sizeBytes)})
                   </span>
                 </div>
@@ -221,7 +221,8 @@ export default function LandingVersionModal({
                 </button>
               </div>
 
-              <div className="flex-1 min-h-[450px] border border-gray-200 rounded-xl overflow-hidden bg-white">
+              {/* giữ sáng: iframe xem lại bản cũ của trang khách (bg-white, không dark:); chỉ viền khung bao theo chế độ tối */}
+              <div className="flex-1 min-h-[450px] border border-gray-200 dark:border-dk-border rounded-xl overflow-hidden bg-white">
                 <iframe
                   title="Landing Version Preview"
                   srcDoc={previewData.htmlContent}
@@ -233,20 +234,20 @@ export default function LandingVersionModal({
             </div>
           ) : loading ? (
             /* LOADING VIEW */
-            <div className="h-64 flex flex-col items-center justify-center text-gray-400 gap-3">
-              <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
-                <HiOutlineRefresh className={`w-5 h-5 text-orange-500 ${loading ? 'animate-spin' : ''}`} />
+            <div className="h-64 flex flex-col items-center justify-center text-gray-400 dark:text-dk-muted gap-3">
+              <div className="w-10 h-10 bg-orange-100 dark:bg-orange-950/40 rounded-full flex items-center justify-center">
+                <HiOutlineRefresh className={`w-5 h-5 text-orange-500 dark:text-orange-400 ${loading ? 'animate-spin' : ''}`} />
               </div>
               <p className="text-sm font-medium">Đang tải lịch sử phiên bản...</p>
             </div>
           ) : versions.length === 0 ? (
             /* EMPTY VIEW */
             <div className="h-64 flex flex-col items-center justify-center text-center p-6">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 mb-4">
+              <div className="w-16 h-16 bg-gray-100 dark:bg-dk-raised rounded-full flex items-center justify-center text-gray-400 dark:text-dk-muted mb-4">
                 <HiOutlineClock className="w-8 h-8" />
               </div>
-              <h3 className="text-base font-semibold text-gray-800">Chưa có phiên bản lịch sử nào</h3>
-              <p className="text-sm text-gray-500 max-w-sm mt-2">
+              <h3 className="text-base font-semibold text-gray-800 dark:text-dk-text">Chưa có phiên bản lịch sử nào</h3>
+              <p className="text-sm text-gray-500 dark:text-dk-text2 max-w-sm mt-2">
                 Khi bạn chỉnh sửa và bấm <strong>Lưu</strong> hoặc <strong>Sửa với AI</strong>, hệ thống sẽ tự động lưu lại bản cũ để bạn có thể xem lại hoặc khôi phục.
               </p>
             </div>
@@ -261,28 +262,28 @@ export default function LandingVersionModal({
                 return (
                   <div
                     key={ver.id}
-                    className="p-4 bg-white rounded-xl border border-gray-200 hover:border-orange-200 hover:shadow-sm transition-all flex items-center justify-between gap-4"
+                    className="p-4 bg-white dark:bg-dk-surface rounded-xl border border-gray-200 dark:border-dk-border hover:border-orange-200 dark:hover:border-orange-800 hover:shadow-sm transition-all flex items-center justify-between gap-4"
                   >
                     <div className="flex items-center gap-3.5 min-w-0">
-                      <div className="w-10 h-10 rounded-full bg-orange-50 border border-orange-100 flex items-center justify-center text-sm font-bold text-orange-600 shrink-0">
+                      <div className="w-10 h-10 rounded-full bg-orange-50 dark:bg-orange-950/40 border border-orange-100 dark:border-orange-800 flex items-center justify-center text-sm font-bold text-orange-600 dark:text-orange-400 shrink-0">
                         #{versions.length - idx}
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-sm text-gray-900">
+                          <span className="font-semibold text-sm text-gray-900 dark:text-dk-text">
                             {formatDate(ver.createdAt)}
                           </span>
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${badge.className}`}>
                             {badge.label}
                           </span>
                           {idx === 0 && (
-                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800">
                               Bản gần nhất
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-gray-500 mt-1">
-                          Dung lượng: <strong className="text-gray-700">{formatBytes(ver.sizeBytes)}</strong>
+                        <p className="text-xs text-gray-500 dark:text-dk-text2 mt-1">
+                          Dung lượng: <strong className="text-gray-700 dark:text-dk-text">{formatBytes(ver.sizeBytes)}</strong>
                         </p>
                       </div>
                     </div>
@@ -293,7 +294,7 @@ export default function LandingVersionModal({
                         type="button"
                         onClick={() => handlePreview(ver)}
                         disabled={isPreviewing || isDeleting}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 transition-colors disabled:opacity-50"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-700 dark:text-dk-text bg-gray-50 dark:bg-dk-raised hover:bg-gray-100 dark:hover:bg-dk-strong border border-gray-200 dark:border-dk-border transition-colors disabled:opacity-50"
                       >
                         <HiOutlineEye className={`w-4 h-4 ${isPreviewing ? 'animate-spin' : ''}`} />
                         {isPreviewing ? 'Đang tải...' : 'Xem trước'}
@@ -302,7 +303,7 @@ export default function LandingVersionModal({
                         type="button"
                         onClick={() => handleDelete(ver.id)}
                         disabled={isPreviewing || isDeleting}
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                        className="p-1.5 rounded-lg text-gray-400 dark:text-dk-muted hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/60 transition-colors"
                         title="Xóa phiên bản này"
                       >
                         <HiOutlineTrash className="w-4 h-4" />
@@ -316,12 +317,12 @@ export default function LandingVersionModal({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between shrink-0">
-          <span className="text-xs text-gray-500">Dung lượng lịch sử được tính vào Cloud Storage.</span>
+        <div className="px-6 py-3 bg-gray-50 dark:bg-dk-raised border-t border-gray-100 dark:border-dk-border flex items-center justify-between shrink-0">
+          <span className="text-xs text-gray-500 dark:text-dk-text2">Dung lượng lịch sử được tính vào Cloud Storage.</span>
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-2 rounded-lg bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium transition-colors"
+            className="px-5 py-2 rounded-lg bg-gray-900 dark:bg-dk-strong hover:bg-gray-800 dark:hover:bg-dk-border-strong text-white text-sm font-medium transition-colors"
           >
             Đóng
           </button>

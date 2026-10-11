@@ -78,18 +78,18 @@ export default function ImportHtmlModal({ isOpen, onClose, currentHtml = '', onA
         if (e.target === e.currentTarget) onClose?.();
       }}
     >
-      <div className="relative w-[calc(100vw-48px)] h-[calc(100vh-96px)] max-w-3xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-white shrink-0">
+      <div className="relative w-[calc(100vw-48px)] h-[calc(100vh-96px)] max-w-3xl bg-white dark:bg-dk-surface rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-orange-50 text-orange-600 rounded-lg">
+            <div className="p-2 bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 rounded-lg">
               <HiOutlineCode className="w-5 h-5" />
             </div>
-            <h2 className="text-[18px] font-semibold text-gray-900">{ti('title')}</h2>
+            <h2 className="text-[18px] font-semibold text-gray-900 dark:text-dk-text">{ti('title')}</h2>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-2.5 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+            className="p-2.5 rounded-lg text-gray-500 dark:text-dk-text2 hover:text-gray-900 dark:hover:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-strong transition-colors"
           >
             <HiOutlineX className="w-5 h-5" />
           </button>
@@ -97,15 +97,15 @@ export default function ImportHtmlModal({ isOpen, onClose, currentHtml = '', onA
 
         {confirming ? (
           <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-5 px-8 text-center">
-            <div className="p-3 bg-amber-50 text-amber-600 rounded-full">
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-full">
               <HiOutlineExclamation className="w-8 h-8" />
             </div>
-            <p className="text-[15px] text-gray-700 max-w-md">{ti('replaceConfirm')}</p>
+            <p className="text-[15px] text-gray-700 dark:text-dk-text max-w-md">{ti('replaceConfirm')}</p>
             <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={() => setConfirming(false)}
-                className="inline-flex items-center justify-center h-10 px-4 rounded-lg bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 text-[14px] font-semibold transition-colors"
+                className="inline-flex items-center justify-center h-10 px-4 rounded-lg bg-white dark:bg-dk-surface text-gray-700 dark:text-dk-text border border-gray-300 dark:border-dk-border-strong hover:bg-gray-50 dark:hover:bg-dk-raised text-[14px] font-semibold transition-colors"
               >
                 {ti('confirmCancel')}
               </button>
@@ -130,21 +130,21 @@ export default function ImportHtmlModal({ isOpen, onClose, currentHtml = '', onA
                 placeholder={ti('placeholder')}
                 rows={16}
                 spellCheck={false}
-                className="flex-1 min-h-[320px] w-full resize-none rounded-lg border border-gray-300 bg-[#1e1e1e] text-[#d4d4d4] font-mono text-[13px] leading-relaxed p-3.5 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                className="flex-1 min-h-[320px] w-full resize-none rounded-lg border border-gray-300 dark:border-dk-border-strong bg-[#1e1e1e] text-[#d4d4d4] font-mono text-[13px] leading-relaxed p-3.5 focus:outline-none focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800"
               />
 
               {error && (
-                <p className="text-[13px] text-red-600 font-medium">{error}</p>
+                <p className="text-[13px] text-red-600 dark:text-red-400 font-medium">{error}</p>
               )}
               {!error && showNoFormWarning && (
-                <p className="flex items-start gap-1.5 text-[13px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                <p className="flex items-start gap-1.5 text-[13px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
                   <HiOutlineExclamation className="w-4 h-4 shrink-0 mt-0.5" />
                   {ti('noFormWarning')}
                 </p>
               )}
             </div>
 
-            <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50/50 shrink-0">
+            <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 dark:border-dk-border bg-gray-50/50 dark:bg-dk-raised/50 shrink-0">
               <div>
                 <input
                   ref={fileInputRef}
@@ -156,7 +156,7 @@ export default function ImportHtmlModal({ isOpen, onClose, currentHtml = '', onA
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="inline-flex items-center gap-1.5 h-10 px-4 rounded-lg bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 text-[14px] font-semibold transition-colors"
+                  className="inline-flex items-center gap-1.5 h-10 px-4 rounded-lg bg-white dark:bg-dk-surface text-gray-700 dark:text-dk-text border border-gray-300 dark:border-dk-border-strong hover:bg-gray-50 dark:hover:bg-dk-raised text-[14px] font-semibold transition-colors"
                 >
                   <HiOutlineUpload className="w-4 h-4" />
                   {ti('chooseFile')}

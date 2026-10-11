@@ -18,17 +18,17 @@ export default function CanvasPreviewView({ srcDoc, viewport, zoom, publicUrl })
     <div className="flex flex-col items-center gap-1.5 w-full">
       {/* Header ngang hàng: Kích thước độ phân giải (trái) + Mở trong tab mới (phải) */}
       <div
-        className="flex items-center justify-between text-gray-400 px-1 py-0.5 text-xs transition-all duration-200 select-none"
+        className="flex items-center justify-between text-gray-400 dark:text-dk-muted px-1 py-0.5 text-xs transition-all duration-200 select-none"
         style={{
           width: `${Math.max(280, scaledWidth)}px`,
           maxWidth: '100%',
         }}
       >
         <div
-          className="inline-flex items-center gap-1.5 text-[11px] font-medium text-gray-500 bg-white/80 px-2 py-0.5 rounded-md border border-gray-200/70 shadow-2xs"
+          className="inline-flex items-center gap-1.5 text-[11px] font-medium text-gray-500 dark:text-dk-text2 bg-white/80 dark:bg-dk-surface/80 px-2 py-0.5 rounded-md border border-gray-200/70 dark:border-dk-border/70 shadow-2xs"
           title={`Độ phân giải mô phỏng: ${device.width} × ${device.height} px`}
         >
-          <DeviceIcon className="w-3.5 h-3.5 text-gray-400" />
+          <DeviceIcon className="w-3.5 h-3.5 text-gray-400 dark:text-dk-muted" />
           <span>{device.width} × {device.height}</span>
         </div>
 
@@ -37,7 +37,7 @@ export default function CanvasPreviewView({ srcDoc, viewport, zoom, publicUrl })
             href={publicUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-[12px] font-medium text-blue-600 hover:text-blue-700 hover:underline transition-colors ml-auto"
+            className="inline-flex items-center gap-1 text-[12px] font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline transition-colors ml-auto"
           >
             <HiOutlineExternalLink className="w-3.5 h-3.5" />
             <span>{tc('openNewTab')}</span>
@@ -46,8 +46,9 @@ export default function CanvasPreviewView({ srcDoc, viewport, zoom, publicUrl })
       </div>
 
       {/* Frame Iframe */}
+      {/* giữ sáng: khung + iframe là trang thật của khách (bg-white, không dark:); chỉ viền khung bao theo chế độ tối */}
       <div
-        className="bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden transition-all duration-200"
+        className="bg-white rounded-xl shadow-xl border border-gray-200 dark:border-dk-border overflow-hidden transition-all duration-200"
         style={{
           width: `${scaledWidth}px`,
           height: `${scaledHeight}px`,

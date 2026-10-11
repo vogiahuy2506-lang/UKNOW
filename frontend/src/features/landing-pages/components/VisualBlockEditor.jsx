@@ -506,21 +506,21 @@ ${blocksHtml}
   if (!isOpen) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[400] flex flex-col bg-gray-50">
+    <div className="fixed inset-0 z-[400] flex flex-col bg-gray-50 dark:bg-dk-bg">
       {/* Header */}
-      <header className="shrink-0 flex items-center justify-between gap-4 px-6 py-4 bg-white border-b border-gray-200 shadow-sm">
+      <header className="shrink-0 flex items-center justify-between gap-4 px-6 py-4 bg-white dark:bg-dk-surface border-b border-gray-200 dark:border-dk-border shadow-sm">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <HiOutlineViewGrid className="w-6 h-6 text-orange-500" />
-            <h2 className="text-lg font-semibold text-gray-900">
+            <HiOutlineViewGrid className="w-6 h-6 text-orange-500 dark:text-orange-400" />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-dk-text">
               Trình chỉnh sửa khối
             </h2>
           </div>
-          <div className="flex items-center bg-gray-100 rounded-lg p-1">
+          <div className="flex items-center bg-gray-100 dark:bg-dk-raised rounded-lg p-1">
             <button
               onClick={() => setViewMode('visual')}
               className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                viewMode === 'visual' ? 'bg-white shadow text-orange-500' : 'text-gray-600 hover:text-gray-900'
+                viewMode === 'visual' ? 'bg-white dark:bg-dk-surface shadow text-orange-500 dark:text-orange-400' : 'text-gray-600 dark:text-dk-text2 hover:text-gray-900 dark:hover:text-dk-text'
               }`}
             >
               <HiOutlineViewGrid className="w-4 h-4" />
@@ -529,7 +529,7 @@ ${blocksHtml}
             <button
               onClick={() => setViewMode('code')}
               className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                viewMode === 'code' ? 'bg-white shadow text-orange-500' : 'text-gray-600 hover:text-gray-900'
+                viewMode === 'code' ? 'bg-white dark:bg-dk-surface shadow text-orange-500 dark:text-orange-400' : 'text-gray-600 dark:text-dk-text2 hover:text-gray-900 dark:hover:text-dk-text'
               }`}
             >
               <HiOutlineCode className="w-4 h-4" />
@@ -541,7 +541,7 @@ ${blocksHtml}
           {onSaveAsTemplate && blocks.length > 0 && (
             <button
               onClick={onSaveAsTemplate}
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors text-sm"
+              className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-dk-surface border border-gray-300 dark:border-dk-border-strong text-gray-700 dark:text-dk-text rounded-lg font-medium hover:bg-gray-50 dark:hover:bg-dk-raised transition-colors text-sm"
             >
               <HiOutlineTemplate className="w-4 h-4" />
               Lưu template
@@ -549,7 +549,7 @@ ${blocksHtml}
           )}
           <button
             onClick={onClose}
-            className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition-colors"
+            className="px-4 py-2 text-gray-600 dark:text-dk-text2 hover:bg-gray-100 dark:hover:bg-dk-strong rounded-lg font-medium transition-colors"
           >
             Hủy
           </button>
@@ -565,9 +565,9 @@ ${blocksHtml}
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Left Panel - Block Library */}
-        <div className="w-64 shrink-0 bg-white border-r border-gray-200 overflow-y-auto">
-          <div className="p-4 border-b border-gray-100">
-            <h3 className="text-sm font-semibold text-gray-700">Thêm khối mới</h3>
+        <div className="w-64 shrink-0 bg-white dark:bg-dk-surface border-r border-gray-200 dark:border-dk-border overflow-y-auto">
+          <div className="p-4 border-b border-gray-100 dark:border-dk-border">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-dk-text">Thêm khối mới</h3>
           </div>
           <div className="p-3 space-y-2">
             {BLOCK_LIST.map(bt => (
@@ -578,43 +578,43 @@ ${blocksHtml}
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e)}
                 onClick={() => handleAddBlock(bt)}
-                className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl cursor-grab hover:bg-orange-50 hover:ring-2 hover:ring-orange-200 transition-all active:cursor-grabbing group"
+                className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-dk-raised rounded-xl cursor-grab hover:bg-orange-50 dark:hover:bg-orange-950/60 hover:ring-2 hover:ring-orange-200 dark:hover:ring-orange-800 transition-all active:cursor-grabbing group"
               >
                 <span className="text-xl">{bt.icon}</span>
-                <span className="font-medium text-gray-700 text-sm group-hover:text-orange-600">{bt.name}</span>
+                <span className="font-medium text-gray-700 dark:text-dk-text text-sm group-hover:text-orange-600 dark:group-hover:text-orange-400">{bt.name}</span>
               </div>
             ))}
           </div>
 
-          <div className="p-4 border-t border-gray-100">
-            <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl p-4 border border-orange-100">
-              <p className="text-xs text-orange-600 font-medium mb-2">Mẹo</p>
-              <p className="text-xs text-gray-500">Kéo hoặc click để thêm khối. Click vào khối để chỉnh sửa nội dung.</p>
+          <div className="p-4 border-t border-gray-100 dark:border-dk-border">
+            <div className="bg-gradient-to-br from-orange-50 dark:from-orange-950/40 to-amber-50 dark:to-amber-950/40 rounded-xl p-4 border border-orange-100 dark:border-orange-800">
+              <p className="text-xs text-orange-600 dark:text-orange-400 font-medium mb-2">Mẹo</p>
+              <p className="text-xs text-gray-500 dark:text-dk-text2">Kéo hoặc click để thêm khối. Click vào khối để chỉnh sửa nội dung.</p>
             </div>
           </div>
         </div>
 
         {/* Main Canvas */}
-        <div className="flex-1 overflow-y-auto bg-gray-100" ref={canvasRef}>
+        <div className="flex-1 overflow-y-auto bg-gray-100 dark:bg-dk-inset" ref={canvasRef}>
           {viewMode === 'visual' ? (
             <div className="max-w-4xl mx-auto py-6 px-4">
               {blocks.length === 0 && !draggedBlockType && (
                 <div
                   onDragOver={handleDragOver}
                   onDrop={(e) => handleDrop(e, 0)}
-                  className="border-2 border-dashed border-gray-300 bg-white rounded-2xl p-16 text-center"
+                  className="border-2 border-dashed border-gray-300 dark:border-dk-border-strong bg-white dark:bg-dk-surface rounded-2xl p-16 text-center"
                 >
-                  <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <div className="w-20 h-20 bg-orange-100 dark:bg-orange-950/40 rounded-full flex items-center justify-center mx-auto mb-6">
                     <HiOutlinePlus className="w-10 h-10 text-orange-400" />
                   </div>
-                  <h3 className="text-xl font-semibold text-gray-700 mb-2">Bắt đầu xây dựng landing page</h3>
-                  <p className="text-gray-500 mb-6">Kéo khối từ bên trái hoặc click để thêm</p>
+                  <h3 className="text-xl font-semibold text-gray-700 dark:text-dk-text mb-2">Bắt đầu xây dựng landing page</h3>
+                  <p className="text-gray-500 dark:text-dk-text2 mb-6">Kéo khối từ bên trái hoặc click để thêm</p>
                   <div className="flex flex-wrap justify-center gap-2">
                     {BLOCK_LIST.slice(0, 4).map(bt => (
                       <button
                         key={bt.id}
                         onClick={() => handleAddBlock(bt)}
-                        className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-orange-50 text-gray-700 hover:text-orange-600 rounded-lg text-sm font-medium transition-colors"
+                        className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-dk-raised hover:bg-orange-50 dark:hover:bg-orange-950/60 text-gray-700 dark:text-dk-text hover:text-orange-600 dark:hover:text-orange-400 rounded-lg text-sm font-medium transition-colors"
                       >
                         <span>{bt.icon}</span>
                         {bt.name}
@@ -633,62 +633,63 @@ ${blocksHtml}
                   const previewHeight = isExpanded ? '600px' : '400px';
 
                   return (
+                    // giữ sáng: khối + iframe xem trước là HTML trang của khách (bg-white, không dark:); khung canvas bao quanh vẫn tối
                     <div
                       key={block.id}
                       onClick={() => setSelectedBlockId(block.id)}
                       onMouseEnter={() => setHoveredBlockId(block.id)}
                       onMouseLeave={() => setHoveredBlockId(null)}
                       className={`relative bg-white rounded-xl overflow-hidden transition-all cursor-pointer ${
-                        isSelected ? 'ring-2 ring-orange-500 shadow-lg' : isHovered ? 'ring-2 ring-orange-200 shadow-md' : 'shadow-sm hover:shadow-md'
+                        isSelected ? 'ring-2 ring-orange-500 shadow-lg' : isHovered ? 'ring-2 ring-orange-200 dark:ring-orange-800 shadow-md' : 'shadow-sm hover:shadow-md'
                       }`}
                     >
                       {/* Block Controls */}
-                      <div className={`flex items-center gap-1 bg-white/95 backdrop-blur-sm rounded-lg p-1.5 shadow-lg z-30 ${
+                      <div className={`flex items-center gap-1 bg-white/95 dark:bg-dk-surface/95 backdrop-blur-sm rounded-lg p-1.5 shadow-lg z-30 ${
                         isSelected || isHovered ? 'opacity-100' : 'opacity-0'
                       }`} style={{ position: 'absolute', top: '12px', right: '12px' }}>
                         <button
                           onClick={(e) => { e.stopPropagation(); toggleExpand(block.id); }}
-                          className="p-2 hover:bg-gray-100 rounded-md transition-colors bg-orange-50 hover:bg-orange-100"
+                          className="p-2 hover:bg-gray-100 dark:hover:bg-dk-strong rounded-md transition-colors bg-orange-50 dark:bg-orange-950/40 hover:bg-orange-100 dark:hover:bg-orange-950/60"
                           title={isExpanded ? 'Thu nhỏ' : 'Mở rộng'}
                         >
                           {isExpanded ? (
-                            <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-4 h-4 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
                             </svg>
                           ) : (
-                            <svg className="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-4 h-4 text-orange-500 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
                             </svg>
                           )}
                         </button>
-                        <div className="w-px h-6 bg-gray-200 mx-0.5" />
+                        <div className="w-px h-6 bg-gray-200 dark:bg-dk-strong mx-0.5" />
                         <button
                           onClick={(e) => { e.stopPropagation(); handleMoveBlock(block.id, 'up'); }}
                           disabled={index === 0}
-                          className="p-2 hover:bg-gray-100 rounded-md disabled:opacity-30 disabled:cursor-not-allowed transition-colors bg-gray-50"
+                          className="p-2 hover:bg-gray-100 dark:hover:bg-dk-strong rounded-md disabled:opacity-30 disabled:cursor-not-allowed transition-colors bg-gray-50 dark:bg-dk-raised"
                           title="Di chuyển lên"
                         >
-                          <HiOutlineChevronUp className="w-5 h-5 text-gray-700" />
+                          <HiOutlineChevronUp className="w-5 h-5 text-gray-700 dark:text-dk-text" />
                         </button>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleMoveBlock(block.id, 'down'); }}
                           disabled={index === blocks.length - 1}
-                          className="p-2 hover:bg-gray-100 rounded-md disabled:opacity-30 disabled:cursor-not-allowed transition-colors bg-gray-50"
+                          className="p-2 hover:bg-gray-100 dark:hover:bg-dk-strong rounded-md disabled:opacity-30 disabled:cursor-not-allowed transition-colors bg-gray-50 dark:bg-dk-raised"
                           title="Di chuyển xuống"
                         >
-                          <HiOutlineChevronDown className="w-5 h-5 text-gray-700" />
+                          <HiOutlineChevronDown className="w-5 h-5 text-gray-700 dark:text-dk-text" />
                         </button>
-                        <div className="w-px h-6 bg-gray-200 mx-0.5" />
+                        <div className="w-px h-6 bg-gray-200 dark:bg-dk-strong mx-0.5" />
                         <button
                           onClick={(e) => { e.stopPropagation(); handleDuplicateBlock(block); }}
-                          className="p-2 hover:bg-gray-100 rounded-md transition-colors bg-gray-50"
+                          className="p-2 hover:bg-gray-100 dark:hover:bg-dk-strong rounded-md transition-colors bg-gray-50 dark:bg-dk-raised"
                           title="Nhân bản"
                         >
-                          <HiOutlineDuplicate className="w-5 h-5 text-gray-700" />
+                          <HiOutlineDuplicate className="w-5 h-5 text-gray-700 dark:text-dk-text" />
                         </button>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleDeleteBlock(block.id); }}
-                          className="p-2 hover:bg-red-50 text-red-500 rounded-md transition-colors bg-red-50 hover:bg-red-100"
+                          className="p-2 hover:bg-red-50 dark:hover:bg-red-950/60 text-red-500 dark:text-red-400 rounded-md transition-colors bg-red-50 dark:bg-red-950/40 hover:bg-red-100"
                           title="Xóa"
                         >
                           <HiOutlineTrash className="w-5 h-5" />
@@ -742,14 +743,14 @@ ${blocksHtml}
 
                 {/* Add block button at bottom */}
                 {blocks.length > 0 && (
-                  <div className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center hover:border-orange-300 hover:bg-orange-50/30 transition-colors">
-                    <p className="text-sm text-gray-500 mb-3">Thêm khối mới</p>
+                  <div className="border-2 border-dashed border-gray-200 dark:border-dk-border rounded-xl p-6 text-center hover:border-orange-300 dark:hover:border-orange-700 hover:bg-orange-50/30 dark:hover:bg-orange-950/60 transition-colors">
+                    <p className="text-sm text-gray-500 dark:text-dk-text2 mb-3">Thêm khối mới</p>
                     <div className="flex flex-wrap justify-center gap-2">
                       {BLOCK_LIST.map(bt => (
                         <button
                           key={bt.id}
                           onClick={() => handleAddBlock(bt)}
-                          className="flex items-center gap-2 px-3 py-1.5 bg-white hover:bg-orange-50 text-gray-600 hover:text-orange-600 rounded-lg text-xs font-medium border border-gray-200 hover:border-orange-200 transition-colors"
+                          className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-dk-surface hover:bg-orange-50 dark:hover:bg-orange-950/60 text-gray-600 dark:text-dk-text2 hover:text-orange-600 dark:hover:text-orange-400 rounded-lg text-xs font-medium border border-gray-200 dark:border-dk-border hover:border-orange-200 dark:hover:border-orange-800 transition-colors"
                         >
                           <span>{bt.icon}</span>
                           {bt.name}
@@ -763,26 +764,26 @@ ${blocksHtml}
                   <div
                     onDragOver={handleDragOver}
                     onDrop={(e) => handleDrop(e)}
-                    className="border-2 border-dashed border-orange-300 bg-orange-50 rounded-xl p-6 text-center animate-pulse"
+                    className="border-2 border-dashed border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-950/40 rounded-xl p-6 text-center animate-pulse"
                   >
-                    <p className="text-orange-600 font-medium">Thả để thêm khối {draggedBlockType.name}</p>
+                    <p className="text-orange-600 dark:text-orange-400 font-medium">Thả để thêm khối {draggedBlockType.name}</p>
                   </div>
                 )}
               </div>
             </div>
           ) : (
             <div className="max-w-4xl mx-auto py-6 px-4">
-              <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
-                  <span className="text-sm font-medium text-gray-700">HTML Code</span>
+              <div className="bg-white dark:bg-dk-surface rounded-xl shadow-sm overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-dk-raised border-b border-gray-200 dark:border-dk-border">
+                  <span className="text-sm font-medium text-gray-700 dark:text-dk-text">HTML Code</span>
                   <button
                     onClick={handleCopyCode}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-white hover:bg-gray-100 text-gray-600 hover:text-gray-900 rounded-lg text-sm font-medium border border-gray-200 transition-colors"
+                    className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-dk-surface hover:bg-gray-100 dark:hover:bg-dk-strong text-gray-600 dark:text-dk-text2 hover:text-gray-900 dark:hover:text-dk-text rounded-lg text-sm font-medium border border-gray-200 dark:border-dk-border transition-colors"
                   >
                     {copiedCode ? (
                       <>
-                        <HiOutlineCheck className="w-4 h-4 text-green-500" />
-                        <span className="text-green-600">Đã copy!</span>
+                        <HiOutlineCheck className="w-4 h-4 text-green-500 dark:text-green-400" />
+                        <span className="text-green-600 dark:text-green-400">Đã copy!</span>
                       </>
                     ) : (
                       <>
@@ -801,23 +802,23 @@ ${blocksHtml}
         </div>
 
         {/* Right Panel - Block Properties */}
-        <div className="w-72 shrink-0 bg-white border-l border-gray-200 overflow-y-auto">
-          <div className="p-4 border-b border-gray-100 bg-gray-50">
-            <h3 className="text-sm font-semibold text-gray-700">Thuộc tính khối</h3>
+        <div className="w-72 shrink-0 bg-white dark:bg-dk-surface border-l border-gray-200 dark:border-dk-border overflow-y-auto">
+          <div className="p-4 border-b border-gray-100 dark:border-dk-border bg-gray-50 dark:bg-dk-raised">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-dk-text">Thuộc tính khối</h3>
           </div>
 
           {selectedBlock && blockDef ? (
             <div className="p-4 space-y-4">
-              <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl border border-orange-100">
+              <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-orange-50 dark:from-orange-950/40 to-amber-50 dark:to-amber-950/40 rounded-xl border border-orange-100 dark:border-orange-800">
                 <span className="text-2xl">{blockDef.icon}</span>
                 <div>
-                  <p className="font-medium text-gray-900">{blockDef.name}</p>
-                  <p className="text-xs text-gray-500">ID: {selectedBlock.type}</p>
+                  <p className="font-medium text-gray-900 dark:text-dk-text">{blockDef.name}</p>
+                  <p className="text-xs text-gray-500 dark:text-dk-text2">ID: {selectedBlock.type}</p>
                 </div>
               </div>
 
-              <div className="border-t border-gray-100 pt-4">
-                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Màu sắc</h4>
+              <div className="border-t border-gray-100 dark:border-dk-border pt-4">
+                <h4 className="text-xs font-semibold text-gray-500 dark:text-dk-text2 uppercase tracking-wide mb-3">Màu sắc</h4>
                 <div className="space-y-3">
                   {[
                     { key: 'primary_color', label: 'Màu chính', default: '#f97316' },
@@ -826,19 +827,19 @@ ${blocksHtml}
                     { key: 'text_color', label: 'Màu chữ', default: '#1f2937' },
                   ].map(({ key, label, default: defaultColor }) => (
                     <div key={key} className="flex items-center justify-between gap-2">
-                      <label className="text-xs text-gray-600 w-16">{label}</label>
+                      <label className="text-xs text-gray-600 dark:text-dk-text2 w-16">{label}</label>
                       <div className="flex items-center gap-2 flex-1">
                         <input
                           type="color"
                           value={selectedBlock.data[key] || defaultColor}
                           onChange={(e) => handleUpdateBlockData(selectedBlock.id, key, e.target.value)}
-                          className="w-8 h-8 rounded cursor-pointer border border-gray-200"
+                          className="w-8 h-8 rounded cursor-pointer border border-gray-200 dark:border-dk-border"
                         />
                         <input
                           type="text"
                           value={selectedBlock.data[key] || defaultColor}
                           onChange={(e) => handleUpdateBlockData(selectedBlock.id, key, e.target.value)}
-                          className="flex-1 px-2 py-1 border border-gray-200 rounded text-xs font-mono"
+                          className="flex-1 px-2 py-1 border border-gray-200 dark:border-dk-border rounded text-xs font-mono dark:bg-dk-inset dark:text-dk-text"
                         />
                       </div>
                     </div>
@@ -846,8 +847,8 @@ ${blocksHtml}
                 </div>
               </div>
 
-              <div className="border-t border-gray-100 pt-4">
-                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Nội dung</h4>
+              <div className="border-t border-gray-100 dark:border-dk-border pt-4">
+                <h4 className="text-xs font-semibold text-gray-500 dark:text-dk-text2 uppercase tracking-wide mb-3">Nội dung</h4>
                 <div className="space-y-3">
                   {(blockDef.defaultDataKeys || []).filter(key => !['bg_color', 'text_color', 'primary_color', 'accent_color', 'current_year'].includes(key)).map((key) => {
                     const defaultValue = selectedBlock.data[key] || '';
@@ -859,20 +860,20 @@ ${blocksHtml}
 
                     return (
                       <div key={key}>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-dk-text2 mb-1">{label}</label>
                         {typeof defaultValue === 'string' && defaultValue.length > 60 ? (
                           <textarea
                             value={selectedBlock.data[key] || ''}
                             onChange={(e) => handleUpdateBlockData(selectedBlock.id, key, e.target.value)}
                             rows={3}
-                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none"
+                            className="w-full px-3 py-2 border border-gray-200 dark:border-dk-border rounded-lg text-sm dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none"
                           />
                         ) : (
                           <input
                             type="text"
                             value={selectedBlock.data[key] || ''}
                             onChange={(e) => handleUpdateBlockData(selectedBlock.id, key, e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                            className="w-full px-3 py-2 border border-gray-200 dark:border-dk-border rounded-lg text-sm dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted focus:outline-none focus:ring-2 focus:ring-orange-500"
                           />
                         )}
                       </div>
@@ -883,29 +884,29 @@ ${blocksHtml}
 
               <button
                 onClick={() => handleDeleteBlock(selectedBlock.id)}
-                className="w-full flex items-center justify-center gap-2 py-2.5 bg-red-50 text-red-600 rounded-lg font-medium hover:bg-red-100 transition-colors mt-4"
+                className="w-full flex items-center justify-center gap-2 py-2.5 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-lg font-medium hover:bg-red-100 dark:hover:bg-red-950/60 transition-colors mt-4"
               >
                 <HiOutlineTrash className="w-4 h-4" />
                 Xóa khối này
               </button>
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center h-48 text-gray-400 p-6 text-center">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+            <div className="flex flex-col items-center justify-center h-48 text-gray-400 dark:text-dk-muted p-6 text-center">
+              <div className="w-16 h-16 bg-gray-100 dark:bg-dk-raised rounded-full flex items-center justify-center mb-4">
                 <HiOutlineTemplate className="w-8 h-8" />
               </div>
-              <p className="text-sm font-medium text-gray-500 mb-1">Chưa có khối nào được chọn</p>
-              <p className="text-xs text-gray-400">Click vào khối trong canvas để chỉnh sửa</p>
+              <p className="text-sm font-medium text-gray-500 dark:text-dk-text2 mb-1">Chưa có khối nào được chọn</p>
+              <p className="text-xs text-gray-400 dark:text-dk-muted">Click vào khối trong canvas để chỉnh sửa</p>
             </div>
           )}
         </div>
       </div>
 
       {/* Keyboard shortcuts hint */}
-      <div className="shrink-0 px-6 py-2 bg-gray-50 border-t border-gray-200 text-xs text-gray-400 text-center">
-        <span className="bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded mr-1">Ctrl</span>+<span className="bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded mx-1">S</span> để lưu
+      <div className="shrink-0 px-6 py-2 bg-gray-50 dark:bg-dk-raised border-t border-gray-200 dark:border-dk-border text-xs text-gray-400 dark:text-dk-muted text-center">
+        <span className="bg-gray-200 dark:bg-dk-strong text-gray-600 dark:text-dk-text2 px-1.5 py-0.5 rounded mr-1">Ctrl</span>+<span className="bg-gray-200 dark:bg-dk-strong text-gray-600 dark:text-dk-text2 px-1.5 py-0.5 rounded mx-1">S</span> để lưu
         <span className="mx-3">|</span>
-        <span className="bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded mr-1">Esc</span> để đóng
+        <span className="bg-gray-200 dark:bg-dk-strong text-gray-600 dark:text-dk-text2 px-1.5 py-0.5 rounded mr-1">Esc</span> để đóng
       </div>
     </div>,
     document.body

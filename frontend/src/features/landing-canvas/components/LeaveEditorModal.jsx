@@ -50,22 +50,22 @@ export default function LeaveEditorModal({
       aria-modal="true"
       aria-labelledby="leave-editor-title"
     >
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-6 space-y-4">
+      <div className="w-full max-w-md bg-white dark:bg-dk-surface rounded-2xl shadow-2xl p-6 space-y-4">
         <div className="flex items-start gap-3">
-          <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center shrink-0">
-            <HiOutlineExclamation className="w-6 h-6 text-amber-600" />
+          <div className="w-10 h-10 bg-amber-100 dark:bg-amber-950/40 rounded-full flex items-center justify-center shrink-0">
+            <HiOutlineExclamation className="w-6 h-6 text-amber-600 dark:text-amber-400" />
           </div>
           <div className="min-w-0">
-            <h2 id="leave-editor-title" className="text-[17px] font-semibold text-gray-900">
+            <h2 id="leave-editor-title" className="text-[17px] font-semibold text-gray-900 dark:text-dk-text">
               {tc('title')}
             </h2>
-            <p className="mt-1 text-[14px] text-gray-600">{tc('message')}</p>
+            <p className="mt-1 text-[14px] text-gray-600 dark:text-dk-text2">{tc('message')}</p>
           </div>
         </div>
 
         {needsTitle ? (
           <div>
-            <label className="block text-[13px] font-medium text-gray-700 mb-1" htmlFor="leave-editor-name">
+            <label className="block text-[13px] font-medium text-gray-700 dark:text-dk-text mb-1" htmlFor="leave-editor-name">
               {tc('nameLabel')}
             </label>
             <input
@@ -78,22 +78,22 @@ export default function LeaveEditorModal({
                 if (nameError) setNameError(false);
               }}
               placeholder={tc('namePlaceholder')}
-              className={`w-full h-10 px-3 rounded-lg border text-[14px] outline-none focus:ring-2 focus:ring-orange-500/20 ${
-                nameError ? 'border-red-400' : 'border-gray-300 focus:border-orange-500'
+              className={`w-full h-10 px-3 rounded-lg border text-[14px] dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted outline-none focus:ring-2 focus:ring-orange-500/20 ${
+                nameError ? 'border-red-400' : 'border-gray-300 dark:border-dk-border-strong focus:border-orange-500'
               }`}
             />
-            {nameError ? <p className="mt-1 text-[12px] text-red-600">{tc('nameRequired')}</p> : null}
+            {nameError ? <p className="mt-1 text-[12px] text-red-600 dark:text-red-400">{tc('nameRequired')}</p> : null}
           </div>
         ) : null}
 
-        {error ? <p className="text-[13px] text-red-600">{error}</p> : null}
+        {error ? <p className="text-[13px] text-red-600 dark:text-red-400">{error}</p> : null}
 
         <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-1">
           <button
             type="button"
             onClick={onStay}
             disabled={saving}
-            className="inline-flex items-center justify-center h-10 px-4 rounded-lg bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 text-[14px] font-semibold disabled:opacity-50"
+            className="inline-flex items-center justify-center h-10 px-4 rounded-lg bg-white dark:bg-dk-surface text-gray-700 dark:text-dk-text border border-gray-300 dark:border-dk-border-strong hover:bg-gray-50 dark:hover:bg-dk-raised text-[14px] font-semibold disabled:opacity-50"
           >
             {tc('stay')}
           </button>
@@ -101,7 +101,7 @@ export default function LeaveEditorModal({
             type="button"
             onClick={onDiscard}
             disabled={saving}
-            className="inline-flex items-center justify-center h-10 px-4 rounded-lg bg-white text-red-600 border border-red-200 hover:bg-red-50 text-[14px] font-semibold disabled:opacity-50"
+            className="inline-flex items-center justify-center h-10 px-4 rounded-lg bg-white dark:bg-dk-surface text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-950/60 text-[14px] font-semibold disabled:opacity-50"
           >
             {tc('discard')}
           </button>

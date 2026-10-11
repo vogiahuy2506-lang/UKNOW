@@ -98,7 +98,7 @@ export default function CanvasCodeStreamView({ text = '', streaming = false, spe
                 isCurrent ? 'bg-orange-500/15 text-orange-100' : ''
               }`}
             >
-              <span className="select-none text-gray-600 w-7 inline-block shrink-0 text-right pr-2">
+              <span className="select-none text-gray-600 dark:text-dk-text2 w-7 inline-block shrink-0 text-right pr-2">
                 {i + 1}
               </span>
               <span className="flex-1 whitespace-pre-wrap break-all">
@@ -111,7 +111,7 @@ export default function CanvasCodeStreamView({ text = '', streaming = false, spe
         {/* Dòng cuối nếu chưa kết thúc bằng \n */}
         {streaming && shown && !shown.endsWith('\n') && lines.length === currentLine ? (
           <div className="flex px-1 -mx-1 rounded-sm bg-orange-500/15">
-            <span className="select-none text-gray-600 w-7 inline-block shrink-0 text-right pr-2">
+            <span className="select-none text-gray-600 dark:text-dk-text2 w-7 inline-block shrink-0 text-right pr-2">
               {currentLine}
             </span>
             <span className="flex-1 whitespace-pre-wrap break-all">

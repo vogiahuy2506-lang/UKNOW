@@ -58,12 +58,12 @@ export default function RestoreFreeLinkPanel({ editingId, slug, onRestored }) {
   };
 
   return (
-    <div className="space-y-2 rounded-xl border border-orange-200 bg-orange-50/60 p-4" data-testid="restore-free-link">
-      <label htmlFor="restore-free-link-slug" className="block text-sm font-semibold text-gray-900">
+    <div className="space-y-2 rounded-xl border border-orange-200 dark:border-orange-800 bg-orange-50/60 dark:bg-orange-950/40 p-4" data-testid="restore-free-link">
+      <label htmlFor="restore-free-link-slug" className="block text-sm font-semibold text-gray-900 dark:text-dk-text">
         {tc('sections.freeLink.slugLabel')}
       </label>
       <div className="flex flex-col gap-2 sm:flex-row">
-        <div className="flex min-w-0 flex-1 items-center rounded-lg border border-gray-200 bg-white focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-100">
+        <div className="flex min-w-0 flex-1 items-center rounded-lg border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-100 dark:focus-within:ring-orange-800">
           <input
             id="restore-free-link-slug"
             type="text"
@@ -75,9 +75,9 @@ export default function RestoreFreeLinkPanel({ editingId, slug, onRestored }) {
               setError('');
             }}
             placeholder="ten-page"
-            className="min-w-0 flex-1 rounded-lg bg-transparent px-4 py-2.5 font-mono text-gray-900 placeholder:text-gray-400 focus:outline-none"
+            className="min-w-0 flex-1 rounded-lg bg-transparent px-4 py-2.5 font-mono text-gray-900 dark:text-dk-text placeholder:text-gray-400 dark:placeholder:text-dk-muted focus:outline-none"
           />
-          <span className="shrink-0 pr-3 font-mono text-sm text-gray-500">.{SYSTEM_BASE_DOMAIN}</span>
+          <span className="shrink-0 pr-3 font-mono text-sm text-gray-500 dark:text-dk-text2">.{SYSTEM_BASE_DOMAIN}</span>
         </div>
         <button
           type="button"
@@ -89,7 +89,7 @@ export default function RestoreFreeLinkPanel({ editingId, slug, onRestored }) {
         </button>
       </div>
       {error ? (
-        <p role="alert" className="whitespace-pre-line text-xs text-red-600" data-testid="restore-free-link-error">
+        <p role="alert" className="whitespace-pre-line text-xs text-red-600 dark:text-red-400" data-testid="restore-free-link-error">
           {error}
         </p>
       ) : null}

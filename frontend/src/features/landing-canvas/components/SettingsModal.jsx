@@ -271,17 +271,17 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
     <div className="fixed inset-0 z-[55] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
       <div
         ref={modalRef}
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl lg:max-w-5xl max-h-[90vh] overflow-hidden flex flex-col animate-modal-pop"
+        className="bg-white dark:bg-dk-surface rounded-2xl shadow-2xl w-full max-w-4xl lg:max-w-5xl max-h-[90vh] overflow-hidden flex flex-col animate-modal-pop"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-orange-50 to-white">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-dk-border bg-gradient-to-r from-orange-50 dark:from-orange-950/40 to-white dark:to-dk-surface">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">{tc('title')}</h2>
-            <p className="text-sm text-gray-500">{form?.title || tc('untitled')}</p>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-dk-text">{tc('title')}</h2>
+            <p className="text-sm text-gray-500 dark:text-dk-text2">{form?.title || tc('untitled')}</p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition"
+            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dk-strong text-gray-400 dark:text-dk-muted hover:text-gray-600 dark:hover:text-dk-text2 transition"
           >
             <HiOutlineX className="w-6 h-6" />
           </button>
@@ -295,14 +295,14 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
             icon={<HiOutlineGlobeAlt className="w-5 h-5" />}
             title={tc('sections.publish.title')}
             badge={form?.isPublished ? tc('published') : tc('draft')}
-            badgeClass={form?.isPublished ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}
+            badgeClass={form?.isPublished ? 'bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-300' : 'bg-gray-100 dark:bg-dk-raised text-gray-500 dark:text-dk-text2'}
           >
             <div className="space-y-4">
               {/* Publish toggle */}
-              <div className="flex items-center justify-between p-4 bg-gray-50/90 border border-gray-200/60 rounded-xl">
+              <div className="flex items-center justify-between p-4 bg-gray-50/90 dark:bg-dk-raised/90 border border-gray-200/60 dark:border-dk-border/60 rounded-xl">
                 <div>
-                  <p className="font-semibold text-gray-900">{tc('sections.publish.publishLabel')}</p>
-                  <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
+                  <p className="font-semibold text-gray-900 dark:text-dk-text">{tc('sections.publish.publishLabel')}</p>
+                  <p className="text-xs sm:text-sm text-gray-500 dark:text-dk-text2 mt-0.5">
                     {form?.isPublished ? tc('sections.publish.publishOnDesc') : tc('sections.publish.publishOffDesc')}
                   </p>
                 </div>
@@ -319,18 +319,19 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
                     }}
                     className="sr-only peer"
                   />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-orange-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
+                  {/* giữ sáng: núm công tắc (after:bg-white) */}
+                  <div className="w-11 h-6 bg-gray-200 dark:bg-dk-strong peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-orange-200 dark:peer-focus:ring-orange-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
                 </label>
               </div>
 
               {/* Link trang đang dùng */}
-              <div className="rounded-xl border border-gray-200/70 bg-white p-4 space-y-2">
-                <p className="text-sm font-semibold text-gray-900">{tc('sections.publish.linkLabel')}</p>
+              <div className="rounded-xl border border-gray-200/70 dark:border-dk-border/70 bg-white dark:bg-dk-surface p-4 space-y-2">
+                <p className="text-sm font-semibold text-gray-900 dark:text-dk-text">{tc('sections.publish.linkLabel')}</p>
                 {publicUrl ? (
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     <code
                       data-testid="landing-public-url"
-                      className="min-w-0 flex-1 truncate rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 font-mono text-sm text-gray-900"
+                      className="min-w-0 flex-1 truncate rounded-lg border border-gray-200 dark:border-dk-border bg-gray-50 dark:bg-dk-raised px-3 py-2 font-mono text-sm text-gray-900 dark:text-dk-text"
                     >
                       {publicUrl}
                     </code>
@@ -338,7 +339,7 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
                       <button
                         type="button"
                         onClick={handleCopyLink}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface px-3 py-2 text-sm font-medium text-gray-700 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised transition"
                       >
                         <HiOutlineClipboardCopy className="w-4 h-4" />
                         {tc('sections.publish.linkCopy')}
@@ -355,10 +356,10 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
                     </div>
                   </div>
                 ) : null}
-                {linkHint ? <p className="text-xs text-gray-500">{linkHint}</p> : null}
+                {linkHint ? <p className="text-xs text-gray-500 dark:text-dk-text2">{linkHint}</p> : null}
                 {freeLinkPending ? <RetryFreeLinkPanel editingId={editingId} onRetried={reloadDomain} /> : null}
                 {publicUrl && !form?.isPublished ? (
-                  <p className="text-xs text-amber-700">{tc('sections.publish.linkDraftHint')}</p>
+                  <p className="text-xs text-amber-700 dark:text-amber-300">{tc('sections.publish.linkDraftHint')}</p>
                 ) : null}
               </div>
 
@@ -370,11 +371,11 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
               {/* Đường dẫn miễn phí (slug) — chỉ khi không dùng tên miền riêng */}
               {!hasCustomDomain && !isBrokenCustom && (
                 <div>
-                  <label htmlFor="landing-slug-input" className="block text-sm font-medium text-gray-700 mb-1.5">
+                  <label htmlFor="landing-slug-input" className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1.5">
                     {tc('sections.publish.slugLabel')}
                   </label>
                   <div className="flex gap-2">
-                    <div className="flex min-w-0 flex-1 items-center rounded-lg border border-gray-200 focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-100">
+                    <div className="flex min-w-0 flex-1 items-center rounded-lg border border-gray-200 dark:border-dk-border focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-100 dark:focus-within:ring-orange-800">
                       <input
                         id="landing-slug-input"
                         type="text"
@@ -386,9 +387,9 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
                           }))
                         }
                         placeholder="ten-page"
-                        className="min-w-0 flex-1 rounded-lg bg-transparent px-4 py-2.5 font-mono text-gray-900 placeholder:text-gray-400 focus:outline-none"
+                        className="min-w-0 flex-1 rounded-lg bg-transparent px-4 py-2.5 font-mono text-gray-900 dark:text-dk-text placeholder:text-gray-400 dark:placeholder:text-dk-muted focus:outline-none"
                       />
-                      <span className="shrink-0 pr-3 font-mono text-sm text-gray-500">.{BASE_DOMAIN}</span>
+                      <span className="shrink-0 pr-3 font-mono text-sm text-gray-500 dark:text-dk-text2">.{BASE_DOMAIN}</span>
                     </div>
                     <button
                       onClick={handleSaveSlug}
@@ -417,7 +418,7 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
             icon={<HiOutlineClipboardList className="w-5 h-5" />}
             title={tc('sections.leadForm.title')}
             badge={leadFormBadge}
-            badgeClass="bg-blue-100 text-blue-700"
+            badgeClass="bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300"
           >
             <LeadFormConfigPanel form={form} setForm={setForm} t={t} editingId={editingId} />
           </SectionCard>
@@ -430,17 +431,17 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
             title={
               <span className="flex items-center gap-1.5 flex-wrap">
                 <span>{tc('sections.images.title')}</span>
-                <span className="text-sm font-normal text-gray-500">({uploadedImagesCount})</span>
+                <span className="text-sm font-normal text-gray-500 dark:text-dk-text2">({uploadedImagesCount})</span>
               </span>
             }
           >
             <div className="space-y-4">
               {/* Dòng gợi ý thông minh */}
-              <div className="p-3 rounded-xl bg-amber-50/90 border border-amber-200/70 text-xs text-amber-900 flex items-start gap-2.5">
+              <div className="p-3 rounded-xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200/70 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-300 flex items-start gap-2.5">
                 <span className="text-base leading-none shrink-0 mt-0.5">💡</span>
                 <div className="space-y-0.5">
-                  <div className="font-semibold text-amber-950">Mẹo chèn ảnh vào trang:</div>
-                  <div className="text-amber-900/90 leading-relaxed">
+                  <div className="font-semibold text-amber-950 dark:text-amber-300">Mẹo chèn ảnh vào trang:</div>
+                  <div className="text-amber-900/90 dark:text-amber-300 leading-relaxed">
                     Để ảnh nằm đúng vị trí đẹp nhất (Logo, Banner chính, Khối sản phẩm...), bạn chỉ cần đính kèm ảnh trực tiếp trong <strong>Khung Chat AI</strong> và nhắn vị trí mong muốn. Mục này dùng để bạn xem lại và lấy link các ảnh đã tải lên.
                   </div>
                 </div>
@@ -460,9 +461,9 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
                   type="button"
                   disabled={isUploadingImage}
                   onClick={() => imageInputRef.current?.click()}
-                  className="inline-flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-medium rounded-xl text-gray-700 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 transition border border-gray-200/80"
+                  className="inline-flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-medium rounded-xl text-gray-700 dark:text-dk-text bg-gray-100 dark:bg-dk-raised hover:bg-gray-200 dark:hover:bg-dk-strong disabled:opacity-50 transition border border-gray-200/80 dark:border-dk-border/80"
                 >
-                  <HiOutlinePhotograph className="w-4 h-4 text-gray-500" />
+                  <HiOutlinePhotograph className="w-4 h-4 text-gray-500 dark:text-dk-text2" />
                   {isUploadingImage ? tc('sections.images.uploading') : tc('sections.images.upload')}
                 </button>
               </div>
@@ -470,19 +471,19 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
               {/* Danh sách ảnh vừa tải lên */}
               {pendingUploadedAssets.length > 0 && (
                 <div className="space-y-2">
-                  <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-dk-text2">
                     {tc('sections.images.justUploaded')}
                   </h4>
-                  <div className="space-y-1.5 divide-y divide-gray-100">
+                  <div className="space-y-1.5 divide-y divide-gray-100 dark:divide-dk-border">
                     {pendingUploadedAssets.map((asset, idx) => (
                       <div key={asset.storageKey || asset.url || idx} className="pt-1.5 flex items-center justify-between gap-3 text-sm">
                         <div className="flex items-center gap-2.5 min-w-0 flex-1">
                           <img
                             src={asset.url}
                             alt={asset.originalName}
-                            className="w-10 h-10 object-cover rounded border border-gray-200 flex-shrink-0"
+                            className="w-10 h-10 object-cover rounded border border-gray-200 dark:border-dk-border flex-shrink-0"
                           />
-                          <span className="truncate font-medium text-gray-700" title={asset.originalName}>
+                          <span className="truncate font-medium text-gray-700 dark:text-dk-text" title={asset.originalName}>
                             {asset.originalName}
                           </span>
                         </div>
@@ -490,14 +491,14 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
                           <button
                             type="button"
                             onClick={() => handleCopyUrl(asset.url)}
-                            className="px-2 py-1 text-xs font-medium text-gray-600 hover:text-gray-900 border border-gray-200 rounded hover:bg-gray-50 transition"
+                            className="px-2 py-1 text-xs font-medium text-gray-600 dark:text-dk-text2 hover:text-gray-900 dark:hover:text-dk-text border border-gray-200 dark:border-dk-border rounded hover:bg-gray-50 dark:hover:bg-dk-raised transition"
                           >
                             {copiedUrl === asset.url ? tc('sections.images.copied') : tc('sections.images.copyUrl')}
                           </button>
                           <button
                             type="button"
                             onClick={() => handleInsertImage(asset)}
-                            className="px-2 py-1 text-xs font-medium text-orange-600 hover:text-orange-700 border border-orange-200 rounded hover:bg-orange-50 transition"
+                            className="px-2 py-1 text-xs font-medium text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 border border-orange-200 dark:border-orange-800 rounded hover:bg-orange-50 dark:hover:bg-orange-950/60 transition"
                           >
                             {tc('sections.images.insert')}
                           </button>
@@ -510,24 +511,24 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
 
               {/* Danh sách ảnh đang có trong trang */}
               <div className="space-y-2">
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-dk-text2">
                   {tc('sections.images.inPage')}
                 </h4>
                 {inPageImages.length === 0 ? (
-                  <p className="text-sm text-gray-400 italic">
+                  <p className="text-sm text-gray-400 dark:text-dk-muted italic">
                     {tc('sections.images.empty')}
                   </p>
                 ) : (
-                  <div className="space-y-1.5 divide-y divide-gray-100">
+                  <div className="space-y-1.5 divide-y divide-gray-100 dark:divide-dk-border">
                     {inPageImages.map((img, idx) => (
                       <div key={img.url || idx} className="pt-1.5 flex items-center justify-between gap-3 text-sm">
                         <div className="flex items-center gap-2.5 min-w-0 flex-1">
                           <img
                             src={img.url}
                             alt={img.name}
-                            className="w-10 h-10 object-cover rounded border border-gray-200 flex-shrink-0"
+                            className="w-10 h-10 object-cover rounded border border-gray-200 dark:border-dk-border flex-shrink-0"
                           />
-                          <span className="truncate font-medium text-gray-700" title={img.name}>
+                          <span className="truncate font-medium text-gray-700 dark:text-dk-text" title={img.name}>
                             {img.name}
                           </span>
                         </div>
@@ -535,7 +536,7 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
                           <button
                             type="button"
                             onClick={() => handleCopyUrl(img.url)}
-                            className="px-2 py-1 text-xs font-medium text-gray-600 hover:text-gray-900 border border-gray-200 rounded hover:bg-gray-50 transition"
+                            className="px-2 py-1 text-xs font-medium text-gray-600 dark:text-dk-text2 hover:text-gray-900 dark:hover:text-dk-text border border-gray-200 dark:border-dk-border rounded hover:bg-gray-50 dark:hover:bg-dk-raised transition"
                           >
                             {copiedUrl === img.url ? tc('sections.images.copied') : tc('sections.images.copyUrl')}
                           </button>
@@ -550,10 +551,10 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end">
+        <div className="px-6 py-4 border-t border-gray-100 dark:border-dk-border bg-gray-50 dark:bg-dk-raised flex justify-end">
           <button
             onClick={onClose}
-            className="px-6 py-2.5 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 transition"
+            className="px-6 py-2.5 bg-gray-900 dark:bg-dk-strong text-white rounded-lg font-medium hover:bg-gray-800 dark:hover:bg-dk-border-strong transition"
           >
             Xong
           </button>
@@ -579,8 +580,8 @@ function SectionCard({ expanded, onToggle, icon, title, badge, badgeClass, child
   const headerContent = (
     <>
       <div className="flex items-center gap-3">
-        <span className="text-gray-400">{icon}</span>
-        <span className="font-semibold text-gray-900">{title}</span>
+        <span className="text-gray-400 dark:text-dk-muted">{icon}</span>
+        <span className="font-semibold text-gray-900 dark:text-dk-text">{title}</span>
         {badge && (
           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${badgeClass}`}>
             {badge}
@@ -588,23 +589,23 @@ function SectionCard({ expanded, onToggle, icon, title, badge, badgeClass, child
         )}
       </div>
       {alwaysOpen ? null : expanded ? (
-        <HiOutlineChevronDown className="w-5 h-5 text-gray-400" />
+        <HiOutlineChevronDown className="w-5 h-5 text-gray-400 dark:text-dk-muted" />
       ) : (
-        <HiOutlineChevronRight className="w-5 h-5 text-gray-400" />
+        <HiOutlineChevronRight className="w-5 h-5 text-gray-400 dark:text-dk-muted" />
       )}
     </>
   );
   return (
-    <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+    <div className="rounded-xl border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface overflow-hidden">
       {/* Header */}
       {alwaysOpen ? (
-        <div className="w-full flex items-center justify-between px-4 py-3 bg-gray-50">{headerContent}</div>
+        <div className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-dk-raised">{headerContent}</div>
       ) : (
         <button
           type="button"
           onClick={onToggle}
           aria-expanded={Boolean(expanded)}
-          className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition"
+          className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-dk-raised hover:bg-gray-100 dark:hover:bg-dk-strong transition"
         >
           {headerContent}
         </button>

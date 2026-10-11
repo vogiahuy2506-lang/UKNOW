@@ -174,42 +174,42 @@ export default function TemplateGallery({ isOpen, onClose, onSelect, onGenerateW
     <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
       <div
         ref={modalRef}
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden animate-modal-pop"
+        className="bg-white dark:bg-dk-surface rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden animate-modal-pop"
       >
         {/* Header */}
-        <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
+        <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-dk-border bg-gray-50 dark:bg-dk-raised">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
-              <HiOutlineTemplate className="w-5 h-5 text-orange-600" />
+            <div className="w-10 h-10 bg-orange-100 dark:bg-orange-950/40 rounded-xl flex items-center justify-center">
+              <HiOutlineTemplate className="w-5 h-5 text-orange-600 dark:text-orange-400" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Thư viện Template</h2>
-              <p className="text-sm text-gray-500">Chọn template cho landing page của bạn</p>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-dk-text">Thư viện Template</h2>
+              <p className="text-sm text-gray-500 dark:text-dk-text2">Chọn template cho landing page của bạn</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <button
               onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-dk-strong rounded-lg transition-colors"
             >
-              <HiOutlineX className="w-5 h-5 text-gray-500" />
+              <HiOutlineX className="w-5 h-5 text-gray-500 dark:text-dk-text2" />
             </button>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="shrink-0 flex items-center gap-1 px-6 py-3 border-b border-gray-200 bg-white">
+        <div className="shrink-0 flex items-center gap-1 px-6 py-3 border-b border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface">
           <button
             onClick={() => { setActiveTab('public'); setSelectedTemplate(null); }}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
               activeTab === 'public'
-                ? 'bg-orange-100 text-orange-700'
-                : 'text-gray-600 hover:bg-gray-100'
+                ? 'bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300'
+                : 'text-gray-600 dark:text-dk-text2 hover:bg-gray-100 dark:hover:bg-dk-strong'
             }`}
           >
             <HiOutlineGlobeAlt className="w-4 h-4" />
             Template công khai
-            <span className="ml-1 px-1.5 py-0.5 bg-gray-200 text-gray-600 rounded text-xs">
+            <span className="ml-1 px-1.5 py-0.5 bg-gray-200 dark:bg-dk-strong text-gray-600 dark:text-dk-text2 rounded text-xs">
               {templates.length}
             </span>
           </button>
@@ -217,13 +217,13 @@ export default function TemplateGallery({ isOpen, onClose, onSelect, onGenerateW
             onClick={() => { setActiveTab('my'); setSelectedTemplate(null); }}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
               activeTab === 'my'
-                ? 'bg-orange-100 text-orange-700'
-                : 'text-gray-600 hover:bg-gray-100'
+                ? 'bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300'
+                : 'text-gray-600 dark:text-dk-text2 hover:bg-gray-100 dark:hover:bg-dk-strong'
             }`}
           >
             <HiOutlineUser className="w-4 h-4" />
             Template của tôi
-            <span className="ml-1 px-1.5 py-0.5 bg-gray-200 text-gray-600 rounded text-xs">
+            <span className="ml-1 px-1.5 py-0.5 bg-gray-200 dark:bg-dk-strong text-gray-600 dark:text-dk-text2 rounded text-xs">
               {myTemplates.length}
             </span>
           </button>
@@ -231,16 +231,16 @@ export default function TemplateGallery({ isOpen, onClose, onSelect, onGenerateW
 
         <div className="flex flex-1 min-h-0 overflow-hidden">
           {/* Left Sidebar - Categories & Filters */}
-          <div className="w-64 shrink-0 border-r border-gray-200 bg-gray-50 overflow-y-auto p-4">
+          <div className="w-64 shrink-0 border-r border-gray-200 dark:border-dk-border bg-gray-50 dark:bg-dk-raised overflow-y-auto p-4">
             <div className="mb-4">
               <div className="relative">
-                <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-dk-muted" />
                 <input
                   type="text"
                   placeholder="Tìm kiếm..."
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                  className="w-full pl-9 pr-3 py-2 bg-white dark:bg-dk-inset border border-gray-300 dark:border-dk-border-strong rounded-lg text-sm dark:text-dk-text dark:placeholder-dk-muted focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
                 />
               </div>
             </div>
@@ -250,7 +250,7 @@ export default function TemplateGallery({ isOpen, onClose, onSelect, onGenerateW
                 <button
                   onClick={() => { setSelectedCategory(null); fetchPublicTemplates(); }}
                   className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                    !selectedCategory ? 'bg-orange-100 text-orange-700' : 'text-gray-600 hover:bg-gray-100'
+                    !selectedCategory ? 'bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300' : 'text-gray-600 dark:text-dk-text2 hover:bg-gray-100 dark:hover:bg-dk-strong'
                   }`}
                 >
                   <HiOutlineTemplate className="w-4 h-4" />
@@ -262,12 +262,12 @@ export default function TemplateGallery({ isOpen, onClose, onSelect, onGenerateW
                     key={cat.category}
                     onClick={() => handleCategoryClick(cat.category)}
                     className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                      selectedCategory === cat.category ? 'bg-orange-100 text-orange-700' : 'text-gray-600 hover:bg-gray-100'
+                      selectedCategory === cat.category ? 'bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300' : 'text-gray-600 dark:text-dk-text2 hover:bg-gray-100 dark:hover:bg-dk-strong'
                     }`}
                   >
                     <HiOutlineColorSwatch className="w-4 h-4" />
                     {cat.category}
-                    <span className="ml-auto text-xs text-gray-400">{cat.count}</span>
+                    <span className="ml-auto text-xs text-gray-400 dark:text-dk-muted">{cat.count}</span>
                   </button>
                 ))}
               </div>
@@ -275,12 +275,12 @@ export default function TemplateGallery({ isOpen, onClose, onSelect, onGenerateW
 
             {activeTab === 'my' && (
               <div className="space-y-3">
-                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Bộ lọc</div>
+                <div className="text-xs font-semibold text-gray-500 dark:text-dk-text2 uppercase tracking-wide">Bộ lọc</div>
                 <div className="space-y-1">
                   <button
                     onClick={() => setSelectedCategory('public')}
                     className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                      selectedCategory === 'public' ? 'bg-green-100 text-green-700' : 'text-gray-600 hover:bg-gray-100'
+                      selectedCategory === 'public' ? 'bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-300' : 'text-gray-600 dark:text-dk-text2 hover:bg-gray-100 dark:hover:bg-dk-strong'
                     }`}
                   >
                     <HiOutlineGlobeAlt className="w-4 h-4" />
@@ -289,7 +289,7 @@ export default function TemplateGallery({ isOpen, onClose, onSelect, onGenerateW
                   <button
                     onClick={() => setSelectedCategory('private')}
                     className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                      selectedCategory === 'private' ? 'bg-purple-100 text-purple-700' : 'text-gray-600 hover:bg-gray-100'
+                      selectedCategory === 'private' ? 'bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300' : 'text-gray-600 dark:text-dk-text2 hover:bg-gray-100 dark:hover:bg-dk-strong'
                     }`}
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -299,20 +299,20 @@ export default function TemplateGallery({ isOpen, onClose, onSelect, onGenerateW
                   </button>
                 </div>
 
-                <div className="border-t border-gray-200 pt-3 mt-3">
-                  <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Thống kê</div>
+                <div className="border-t border-gray-200 dark:border-dk-border pt-3 mt-3">
+                  <div className="text-xs font-semibold text-gray-500 dark:text-dk-text2 uppercase tracking-wide mb-2">Thống kê</div>
                   <div className="grid grid-cols-2 gap-2 text-center">
-                    <div className="bg-green-50 rounded-lg p-2">
-                      <div className="text-lg font-bold text-green-600">
+                    <div className="bg-green-50 dark:bg-green-950/40 rounded-lg p-2">
+                      <div className="text-lg font-bold text-green-600 dark:text-green-400">
                         {myTemplates.filter(t => t.isPublic).length}
                       </div>
-                      <div className="text-xs text-gray-500">Công khai</div>
+                      <div className="text-xs text-gray-500 dark:text-dk-text2">Công khai</div>
                     </div>
-                    <div className="bg-purple-50 rounded-lg p-2">
-                      <div className="text-lg font-bold text-purple-600">
+                    <div className="bg-purple-50 dark:bg-purple-950/40 rounded-lg p-2">
+                      <div className="text-lg font-bold text-purple-600 dark:text-purple-400">
                         {myTemplates.filter(t => !t.isPublic).length}
                       </div>
-                      <div className="text-xs text-gray-500">Riêng tư</div>
+                      <div className="text-xs text-gray-500 dark:text-dk-text2">Riêng tư</div>
                     </div>
                   </div>
                 </div>
@@ -321,20 +321,20 @@ export default function TemplateGallery({ isOpen, onClose, onSelect, onGenerateW
           </div>
 
           {/* Main Content - Templates Grid */}
-          <div className="flex-1 overflow-y-auto p-6 bg-gray-100">
+          <div className="flex-1 overflow-y-auto p-6 bg-gray-100 dark:bg-dk-inset">
             {loading ? (
               <div className="flex items-center justify-center h-64">
-                <div className="w-8 h-8 border-2 border-orange-300 border-t-orange-500 rounded-full animate-spin" />
+                <div className="w-8 h-8 border-2 border-orange-300 dark:border-orange-700 border-t-orange-500 rounded-full animate-spin" />
               </div>
             ) : filteredTemplates.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-64 text-gray-400">
-                <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mb-4">
+              <div className="flex flex-col items-center justify-center h-64 text-gray-400 dark:text-dk-muted">
+                <div className="w-16 h-16 bg-gray-200 dark:bg-dk-strong rounded-full flex items-center justify-center mb-4">
                   <HiOutlineTemplate className="w-8 h-8" />
                 </div>
-                <p className="text-lg font-medium text-gray-500">
+                <p className="text-lg font-medium text-gray-500 dark:text-dk-text2">
                   {activeTab === 'my' ? 'Bạn chưa có template nào' : 'Không có template nào'}
                 </p>
-                <p className="text-sm text-gray-400 mt-1 mb-4">
+                <p className="text-sm text-gray-400 dark:text-dk-muted mt-1 mb-4">
                   {activeTab === 'my' 
                     ? 'Tạo landing page và lưu lại làm template'
                     : 'Hãy tạo template đầu tiên của bạn'}
@@ -346,14 +346,14 @@ export default function TemplateGallery({ isOpen, onClose, onSelect, onGenerateW
                   <div
                     key={template.id}
                     onClick={() => handleTemplateClick(template)}
-                    className={`group cursor-pointer bg-white rounded-xl border-2 overflow-hidden transition-all hover:shadow-lg ${
+                    className={`group cursor-pointer bg-white dark:bg-dk-surface rounded-xl border-2 overflow-hidden transition-all hover:shadow-lg ${
                       selectedTemplate?.id === template.id
                         ? 'border-orange-500 shadow-orange-500/20'
-                        : 'border-gray-200 hover:border-orange-300'
+                        : 'border-gray-200 dark:border-dk-border hover:border-orange-300 dark:hover:border-orange-700'
                     }`}
                   >
                     {/* Thumbnail */}
-                    <div className="aspect-[16/10] bg-gradient-to-br from-gray-100 to-gray-50 relative overflow-hidden">
+                    <div className="aspect-[16/10] bg-gradient-to-br from-gray-100 dark:from-dk-raised to-gray-50 dark:to-dk-raised relative overflow-hidden">
                       {template.thumbnailUrl ? (
                         <img
                           src={template.thumbnailUrl}
@@ -366,7 +366,7 @@ export default function TemplateGallery({ isOpen, onClose, onSelect, onGenerateW
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
-                          <HiOutlineTemplate className="w-12 h-12 text-gray-300" />
+                          <HiOutlineTemplate className="w-12 h-12 text-gray-300 dark:text-dk-muted" />
                         </div>
                       )}
                       
@@ -411,10 +411,10 @@ export default function TemplateGallery({ isOpen, onClose, onSelect, onGenerateW
                     <div className="p-4">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-gray-900 mb-1 group-hover:text-orange-600 transition-colors truncate">
+                          <h3 className="font-semibold text-gray-900 dark:text-dk-text mb-1 group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors truncate">
                             {template.name}
                           </h3>
-                          <p className="text-sm text-gray-500 line-clamp-2">
+                          <p className="text-sm text-gray-500 dark:text-dk-text2 line-clamp-2">
                             {template.description || 'Không có mô tả'}
                           </p>
                         </div>
@@ -425,8 +425,8 @@ export default function TemplateGallery({ isOpen, onClose, onSelect, onGenerateW
                               onClick={(e) => handleTogglePublic(template, e)}
                               className={`p-1.5 rounded-lg transition-colors flex-shrink-0 ${
                                 template.isPublic
-                                  ? 'text-green-600 hover:bg-green-50 hover:text-green-700'
-                                  : 'text-gray-400 hover:text-green-600 hover:bg-green-50'
+                                  ? 'text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-950/60 hover:text-green-700 dark:hover:text-green-300'
+                                  : 'text-gray-400 dark:text-dk-muted hover:text-green-600 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-950/60'
                               }`}
                               title={template.isPublic ? 'Hủy công khai' : 'Công khai'}
                             >
@@ -434,7 +434,7 @@ export default function TemplateGallery({ isOpen, onClose, onSelect, onGenerateW
                             </button>
                             <button
                               onClick={(e) => handleDeleteTemplate(template.id, e)}
-                              className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                              className="p-1.5 text-gray-400 dark:text-dk-muted hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/60 rounded-lg transition-colors flex-shrink-0"
                               title="Xóa template"
                             >
                               <HiOutlineTrash className="w-4 h-4" />
@@ -445,7 +445,7 @@ export default function TemplateGallery({ isOpen, onClose, onSelect, onGenerateW
                       
                       {template.category && (
                         <div className="mt-2 flex items-center gap-2">
-                          <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
+                          <span className="px-2 py-0.5 bg-gray-100 dark:bg-dk-raised text-gray-600 dark:text-dk-text2 rounded text-xs">
                             {template.category}
                           </span>
                         </div>
@@ -458,16 +458,17 @@ export default function TemplateGallery({ isOpen, onClose, onSelect, onGenerateW
           </div>
 
           {/* Right Sidebar - Preview */}
-          <div className="w-96 shrink-0 border-l border-gray-200 bg-white overflow-hidden flex flex-col">
-            <div className="shrink-0 px-4 py-3 border-b border-gray-200 bg-gray-50">
-              <h3 className="font-semibold text-gray-900">Xem trước</h3>
+          <div className="w-96 shrink-0 border-l border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface overflow-hidden flex flex-col">
+            <div className="shrink-0 px-4 py-3 border-b border-gray-200 dark:border-dk-border bg-gray-50 dark:bg-dk-raised">
+              <h3 className="font-semibold text-gray-900 dark:text-dk-text">Xem trước</h3>
               {selectedTemplate && (
-                <p className="text-sm text-gray-500 mt-0.5 truncate">{selectedTemplate.name}</p>
+                <p className="text-sm text-gray-500 dark:text-dk-text2 mt-0.5 truncate">{selectedTemplate.name}</p>
               )}
             </div>
-            <div className="flex-1 overflow-auto p-4 bg-gray-50">
+            <div className="flex-1 overflow-auto p-4 bg-gray-50 dark:bg-dk-inset">
               {selectedTemplate ? (
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+                // giữ sáng: iframe xem trước là HTML trang của khách (bg-white, không dark:); chỉ viền khung bao theo chế độ tối
+                <div className="bg-white rounded-xl border border-gray-200 dark:border-dk-border overflow-hidden shadow-sm">
                   <iframe
                     title="Template Preview"
                     className="w-full h-[500px] border-0"
@@ -486,8 +487,8 @@ export default function TemplateGallery({ isOpen, onClose, onSelect, onGenerateW
                   />
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                  <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mb-4">
+                <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-dk-muted">
+                  <div className="w-16 h-16 bg-gray-200 dark:bg-dk-strong rounded-full flex items-center justify-center mb-4">
                     <HiOutlineTemplate className="w-8 h-8" />
                   </div>
                   <p className="text-sm text-center">Chọn một template để xem trước</p>
@@ -498,10 +499,10 @@ export default function TemplateGallery({ isOpen, onClose, onSelect, onGenerateW
         </div>
 
         {/* Footer */}
-        <div className="shrink-0 flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
-          <div className="text-sm text-gray-500">
+        <div className="shrink-0 flex items-center justify-between px-6 py-4 border-t border-gray-200 dark:border-dk-border bg-gray-50 dark:bg-dk-raised">
+          <div className="text-sm text-gray-500 dark:text-dk-text2">
             {selectedTemplate ? (
-              <span>Đã chọn: <strong className="text-gray-900">{selectedTemplate.name}</strong></span>
+              <span>Đã chọn: <strong className="text-gray-900 dark:text-dk-text">{selectedTemplate.name}</strong></span>
             ) : (
               <span>Chọn template để tiếp tục</span>
             )}
@@ -527,23 +528,23 @@ export default function TemplateGallery({ isOpen, onClose, onSelect, onGenerateW
       {/* Confirmation Modal */}
       {confirmModal && (
         <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
+          <div className="bg-white dark:bg-dk-surface rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
             <div className="p-6">
               <div className={`w-12 h-12 mx-auto mb-4 rounded-full flex items-center justify-center ${
-                confirmModal.action === 'delete' ? 'bg-red-100' : 'bg-orange-100'
+                confirmModal.action === 'delete' ? 'bg-red-100 dark:bg-red-950/40' : 'bg-orange-100 dark:bg-orange-950/40'
               }`}>
                 {confirmModal.action === 'delete' ? (
-                  <HiOutlineTrash className="w-6 h-6 text-red-600" />
+                  <HiOutlineTrash className="w-6 h-6 text-red-600 dark:text-red-400" />
                 ) : (
-                  <HiOutlineGlobeAlt className={`w-6 h-6 ${confirmModal.template.isPublic ? 'text-green-600' : 'text-orange-600'}`} />
+                  <HiOutlineGlobeAlt className={`w-6 h-6 ${confirmModal.template.isPublic ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'}`} />
                 )}
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-dk-text text-center mb-2">
                 {confirmModal.action === 'delete' ? 'Xóa template?' : (
                   confirmModal.template.isPublic ? 'Hủy công khai?' : 'Công khai template?'
                 )}
               </h3>
-              <p className="text-sm text-gray-500 text-center mb-6">
+              <p className="text-sm text-gray-500 dark:text-dk-text2 text-center mb-6">
                 {confirmModal.action === 'delete' ? (
                   `Bạn có chắc muốn xóa template "${confirmModal.template.name}"? Hành động này không thể hoàn tác.`
                 ) : (
@@ -557,7 +558,7 @@ export default function TemplateGallery({ isOpen, onClose, onSelect, onGenerateW
               <div className="flex gap-3">
                 <button
                   onClick={() => setConfirmModal(null)}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-dk-border-strong rounded-lg text-gray-700 dark:text-dk-text font-medium hover:bg-gray-50 dark:hover:bg-dk-raised transition-colors"
                 >
                   Hủy
                 </button>

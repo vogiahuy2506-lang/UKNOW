@@ -155,7 +155,7 @@ function CenteredStudioView({
     <div className="w-full flex flex-col items-center text-center">
       {/* Badge lấp lánh */}
       <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-orange-500/10 border border-orange-200/60 dark:border-orange-500/30 text-orange-700 dark:text-orange-400 text-xs font-semibold mb-3 shadow-2xs backdrop-blur-sm animate-pulse">
-        <HiOutlineSparkles className="w-4 h-4 text-orange-500" />
+        <HiOutlineSparkles className="w-4 h-4 text-orange-500 dark:text-orange-400" />
         <span>{tc('initialBadge', 'Trợ lý AI Thiết kế Landing Page')}</span>
       </div>
 
@@ -187,7 +187,7 @@ function CenteredStudioView({
       <div className="w-full mt-8 text-left">
         <div className="flex items-center justify-between mb-3 px-1">
           <span className="text-xs font-bold text-gray-600 dark:text-dk-text uppercase tracking-wider flex items-center gap-1.5">
-            <HiOutlineLightBulb className="w-4 h-4 text-amber-500" />
+            <HiOutlineLightBulb className="w-4 h-4 text-amber-500 dark:text-amber-400" />
             {tc('initialQuickPicksTitle', 'Hoặc chọn một mẫu ý tưởng phổ biến:')}
           </span>
           <span className="text-[11px] text-gray-400 dark:text-dk-muted font-medium">
@@ -246,7 +246,7 @@ function CenteredStudioView({
             onClick={onOpenTemplateGallery}
             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-gray-200 dark:border-dk-border/80 bg-white dark:bg-dk-raised hover:bg-gray-50 dark:hover:bg-dk-strong hover:border-gray-300 dark:hover:border-dk-border-strong text-gray-700 dark:text-dk-text font-semibold transition-all shadow-2xs cursor-pointer active:scale-95"
           >
-            <HiOutlineSparkles className="w-4 h-4 text-orange-500" />
+            <HiOutlineSparkles className="w-4 h-4 text-orange-500 dark:text-orange-400" />
             <span>{tc('templateGallery', 'Thư viện mẫu')}</span>
           </button>
         )}

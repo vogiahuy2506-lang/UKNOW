@@ -331,10 +331,10 @@ export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'spli
       {mode === 'linked' ? (
         <div
           data-testid="linked-form-picker"
-          className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/80 via-purple-50/30 to-white p-5 shadow-2xs space-y-3"
+          className="rounded-2xl border border-indigo-100 dark:border-indigo-800 bg-gradient-to-br from-indigo-50/80 dark:from-indigo-950/40 via-purple-50/30 dark:via-purple-950/30 to-white dark:to-dk-surface p-5 shadow-2xs space-y-3"
         >
           <div className="flex items-center justify-between gap-3 text-xs flex-wrap">
-            <label htmlFor="lead-form-linked-select" className="font-semibold text-gray-700">
+            <label htmlFor="lead-form-linked-select" className="font-semibold text-gray-700 dark:text-dk-text">
               {t('leadFormConfig.pickerTitle')}
             </label>
             <div className="flex items-center gap-3">
@@ -342,7 +342,7 @@ export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'spli
                 type="button"
                 onClick={loadForms}
                 disabled={formsLoading}
-                className="inline-flex items-center gap-1 text-gray-500 hover:text-indigo-600 transition disabled:opacity-50"
+                className="inline-flex items-center gap-1 text-gray-500 dark:text-dk-text2 hover:text-indigo-600 dark:hover:text-indigo-400 transition disabled:opacity-50"
               >
                 <HiOutlineRefresh className={`w-3.5 h-3.5 ${formsLoading ? 'animate-spin' : ''}`} />
                 <span>{t('leadFormConfig.pickerRefresh')}</span>
@@ -351,7 +351,7 @@ export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'spli
                 href="/app/forms/new"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 font-semibold"
+                className="inline-flex items-center gap-1 text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-semibold"
               >
                 <span>{t('leadFormConfig.pickerCreate')}</span>
                 <HiOutlineExternalLink className="w-3 h-3" />
@@ -364,7 +364,7 @@ export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'spli
             value={pickedId || ''}
             onChange={(e) => applyPick(e.target.value)}
             disabled={formsLoading && formsList.length === 0}
-            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] text-gray-800 focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300 disabled:bg-gray-50"
+            className="w-full rounded-xl border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface px-3 py-2 text-[13px] text-gray-800 dark:text-dk-text focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300 dark:focus:ring-indigo-700 disabled:bg-gray-50 dark:disabled:bg-dk-raised"
           >
             <option value="" disabled>
               {formsLoading && formsList.length === 0
@@ -398,21 +398,21 @@ export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'spli
           </select>
 
           {formsLoadFailed ? (
-            <p className="text-xs text-red-600">{t('leadFormConfig.pickerLoadFailed')}</p>
+            <p className="text-xs text-red-600 dark:text-red-400">{t('leadFormConfig.pickerLoadFailed')}</p>
           ) : null}
 
           {view.choice?.mode === 'linked' ? (
-            <p data-testid="linked-form-pending" className="text-xs font-medium text-indigo-800">
+            <p data-testid="linked-form-pending" className="text-xs font-medium text-indigo-800 dark:text-indigo-300">
               {tf('leadFormConfig.pendingLinked', { title: view.choice.title || `#${view.choice.formId}` })}
             </p>
           ) : !view.serverChosenId ? (
-            <p className="text-xs text-gray-500">{t('leadFormConfig.pickerChooseHint')}</p>
+            <p className="text-xs text-gray-500 dark:text-dk-text2">{t('leadFormConfig.pickerChooseHint')}</p>
           ) : null}
 
-          <p className="text-xs text-indigo-900/80 leading-relaxed">{t('leadFormConfig.linkedWhereNote')}</p>
+          <p className="text-xs text-indigo-900/80 dark:text-indigo-300 leading-relaxed">{t('leadFormConfig.linkedWhereNote')}</p>
         </div>
       ) : view.choice?.mode === 'basic' ? (
-        <p data-testid="linked-form-pending" className="text-xs font-medium text-indigo-800">
+        <p data-testid="linked-form-pending" className="text-xs font-medium text-indigo-800 dark:text-indigo-300">
           {t('leadFormConfig.pendingBasic')}
         </p>
       ) : null}
@@ -421,25 +421,25 @@ export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'spli
       {form?.linkedFormId && !view.choice && (mode === 'linked' ? view.serverChosenId : true) ? (
         <div
           data-testid="linked-form-readonly"
-          className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50/90 to-indigo-50/40 p-5 space-y-4 shadow-2xs"
+          className="rounded-2xl border border-blue-200 dark:border-blue-800 bg-gradient-to-br from-blue-50/90 dark:from-blue-950/40 to-indigo-50/40 dark:to-indigo-950/40 p-5 space-y-4 shadow-2xs"
         >
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-start gap-3">
-              <div className="p-2.5 rounded-xl bg-blue-100 text-blue-700 shrink-0 mt-0.5 shadow-2xs">
+              <div className="p-2.5 rounded-xl bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 shrink-0 mt-0.5 shadow-2xs">
                 <HiOutlineClipboardList className="w-5 h-5" />
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h4 className="text-sm font-bold text-blue-950">{t('leadFormConfig.linkedTitle')}</h4>
-                  <span className="text-[11px] font-semibold bg-blue-200/80 text-blue-800 px-2.5 py-0.5 rounded-full">
+                  <h4 className="text-sm font-bold text-blue-950 dark:text-blue-300">{t('leadFormConfig.linkedTitle')}</h4>
+                  <span className="text-[11px] font-semibold bg-blue-200/80 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 px-2.5 py-0.5 rounded-full">
                     #{form.linkedFormId}
                   </span>
                   {activeLinkedForm?.isPublished !== undefined && (
                     <span
                       className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
                         activeLinkedForm.isPublished
-                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                          : 'bg-amber-100 text-amber-800 border border-amber-200'
+                          ? 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                          : 'bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
                       }`}
                     >
                       {activeLinkedForm.isPublished
@@ -448,7 +448,7 @@ export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'spli
                     </span>
                   )}
                 </div>
-                <p className="text-xs font-medium text-blue-900">
+                <p className="text-xs font-medium text-blue-900 dark:text-blue-300">
                   {activeLinkedForm?.fields?.length
                     ? tf('leadFormConfig.linkedTitleWithFields', {
                         title:
@@ -461,7 +461,7 @@ export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'spli
                       form.linkedFormTitle ||
                       tf('leadFormConfig.linkedFallbackTitle', { id: form.linkedFormId })}
                 </p>
-                <p className="text-xs text-blue-800/80 leading-relaxed">{t('leadFormConfig.linkedDesc')}</p>
+                <p className="text-xs text-blue-800/80 dark:text-blue-300 leading-relaxed">{t('leadFormConfig.linkedDesc')}</p>
               </div>
             </div>
 
@@ -479,14 +479,14 @@ export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'spli
           </div>
 
           {/* Trạng thái vị trí hiển thị trong HTML (chỉ báo, không có nút ghi) */}
-          <div className="pt-3 border-t border-blue-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+          <div className="pt-3 border-t border-blue-200/60 dark:border-blue-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
             {htmlContent.includes('data-founderai-form-slot') || htmlContent.includes('data-founderai-form') ? (
-              <div className="flex items-center gap-1.5 text-emerald-700 font-medium">
-                <HiOutlineCheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+              <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300 font-medium">
+                <HiOutlineCheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                 <span>{t('leadFormConfig.slotOk')}</span>
               </div>
             ) : (
-              <div className="flex items-center gap-2 text-amber-800 bg-amber-50/90 border border-amber-200 px-3 py-1.5 rounded-lg flex-1">
+              <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300 bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-3 py-1.5 rounded-lg flex-1">
                 <span className="font-medium">⚠️ {t('leadFormConfig.slotMissing')}</span>
               </div>
             )}
@@ -494,7 +494,7 @@ export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'spli
             <button
               type="button"
               onClick={() => handleCopyEmbedCode(activeLinkedForm)}
-              className="inline-flex items-center gap-1 text-blue-700 hover:text-blue-900 font-medium self-end sm:self-auto py-1"
+              className="inline-flex items-center gap-1 text-blue-700 dark:text-blue-300 hover:text-blue-900 dark:hover:text-blue-200 font-medium self-end sm:self-auto py-1"
             >
               <HiOutlineDocumentDuplicate className="w-3.5 h-3.5" />
               <span>{t('leadFormConfig.copyEmbed')}</span>
@@ -505,13 +505,13 @@ export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'spli
 
       {mode === 'basic' ? (
         <>
-          <p className="text-[13px] text-gray-500 leading-relaxed">{t('leadFormConfig.help')}</p>
+          <p className="text-[13px] text-gray-500 dark:text-dk-text2 leading-relaxed">{t('leadFormConfig.help')}</p>
 
           {/* Fixed fields toggle — inline card */}
-          <section className="rounded-xl border border-gray-200 bg-white p-5">
-            <p className="text-[14px] font-semibold text-gray-900 mb-1">{t('leadFormConfig.fixedFieldsTitle')}</p>
-            <p className="text-[12px] text-gray-500">{t('leadFormConfig.fixedFieldsAlways')}</p>
-            <p className="text-[12px] text-gray-500 mb-3">{t('leadFormConfig.fixedFieldsHint')}</p>
+          <section className="rounded-xl border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface p-5">
+            <p className="text-[14px] font-semibold text-gray-900 dark:text-dk-text mb-1">{t('leadFormConfig.fixedFieldsTitle')}</p>
+            <p className="text-[12px] text-gray-500 dark:text-dk-text2">{t('leadFormConfig.fixedFieldsAlways')}</p>
+            <p className="text-[12px] text-gray-500 dark:text-dk-text2 mb-3">{t('leadFormConfig.fixedFieldsHint')}</p>
             <div className="flex flex-wrap gap-2">
               <InlineChip
                 checked={config.fixedFields.occupation.visible}
@@ -543,20 +543,20 @@ export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'spli
           </section>
 
           {/* Custom fields card — danh sách chỉ hiện khi có câu hỏi thêm */}
-          <section className="rounded-xl border border-gray-200 bg-white p-5">
+          <section className="rounded-xl border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface p-5">
             <div className="flex items-center justify-between mb-3 gap-3">
               <div>
-                <p className="text-[14px] font-semibold text-gray-900">
+                <p className="text-[14px] font-semibold text-gray-900 dark:text-dk-text">
                   {t('leadFormConfig.customFields')}
-                  <span className="ml-2 text-[12px] font-normal text-gray-500">
+                  <span className="ml-2 text-[12px] font-normal text-gray-500 dark:text-dk-text2">
                     ({config.customFields.length}/20)
                   </span>
                 </p>
-                <p className="text-[12px] text-gray-500 mt-0.5">{t('leadFormConfig.customFieldsHint')}</p>
+                <p className="text-[12px] text-gray-500 dark:text-dk-text2 mt-0.5">{t('leadFormConfig.customFieldsHint')}</p>
               </div>
               <button
                 type="button"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-orange-300 bg-orange-50 px-3 py-1.5 text-[13px] font-semibold text-orange-700 hover:bg-orange-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-950/40 px-3 py-1.5 text-[13px] font-semibold text-orange-700 dark:text-orange-300 hover:bg-orange-100 dark:hover:bg-orange-950/60 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
                 onClick={() => {
                   if (config.customFields.length >= 20) return;
                   const next = [...config.customFields, emptyCustomField()];
@@ -572,7 +572,7 @@ export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'spli
             </div>
 
             {config.customFields.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50/50 px-4 py-3 text-[13px] text-gray-500">
+              <p className="rounded-lg border border-dashed border-gray-200 dark:border-dk-border bg-gray-50/50 dark:bg-dk-raised/50 px-4 py-3 text-[13px] text-gray-500 dark:text-dk-text2">
                 {t('leadFormConfig.customFieldsEmpty')}
               </p>
             ) : (
@@ -616,17 +616,18 @@ export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'spli
               type="button"
               aria-expanded={previewOpen}
               onClick={() => setPreviewOpen((prev) => !prev)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface px-3 py-1.5 text-[13px] font-medium text-gray-700 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised transition-colors"
             >
               {previewOpen ? <HiOutlineEyeOff className="h-4 w-4" /> : <HiOutlineEye className="h-4 w-4" />}
               {previewOpen ? t('leadFormConfig.previewHide') : t('leadFormConfig.previewShow')}
             </button>
             {previewOpen ? (
-              <section className="mt-3 rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
-                <div className="px-5 py-3 border-b border-gray-100 bg-gray-50/60">
-                  <p className="text-[12px] text-gray-500">{t('leadFormConfig.previewHint')}</p>
+              <section className="mt-3 rounded-xl border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface overflow-hidden shadow-sm">
+                <div className="px-5 py-3 border-b border-gray-100 dark:border-dk-border bg-gray-50/60 dark:bg-dk-raised/60">
+                  <p className="text-[12px] text-gray-500 dark:text-dk-text2">{t('leadFormConfig.previewHint')}</p>
                 </div>
-                <div className="px-5 py-5 bg-gray-50/40 max-h-[520px] overflow-auto">
+                {/* giữ sáng: FormRenderer/FounderLeadFormCard là biểu mẫu khách điền (tự có nền trắng); chỉ khung bao quanh theo chế độ tối */}
+                <div className="px-5 py-5 bg-gray-50/40 dark:bg-dk-raised/40 max-h-[520px] overflow-auto">
                   <FounderLeadFormCard
                     variant="embed"
                     locale="vi"
@@ -659,10 +660,10 @@ function ModeOption({ value, checked, disabled = false, onSelect, title, descrip
     <label
       className={`flex items-start gap-3 rounded-xl border p-3.5 transition-colors ${
         disabled
-          ? 'cursor-not-allowed border-gray-200 bg-gray-50 opacity-70'
+          ? 'cursor-not-allowed border-gray-200 dark:border-dk-border bg-gray-50 dark:bg-dk-raised opacity-70'
           : checked
-          ? 'cursor-pointer border-orange-300 bg-orange-50/70'
-          : 'cursor-pointer border-gray-200 bg-white hover:border-gray-300'
+          ? 'cursor-pointer border-orange-300 dark:border-orange-700 bg-orange-50/70 dark:bg-orange-950/40'
+          : 'cursor-pointer border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface hover:border-gray-300 dark:hover:border-dk-border-strong'
       }`}
     >
       <input
@@ -673,11 +674,11 @@ function ModeOption({ value, checked, disabled = false, onSelect, title, descrip
         disabled={disabled}
         onChange={onSelect}
         aria-label={title}
-        className="mt-1 h-4 w-4 shrink-0 text-orange-600 focus:ring-orange-500"
+        className="mt-1 h-4 w-4 shrink-0 text-orange-600 dark:text-orange-400 focus:ring-orange-500"
       />
       <span className="min-w-0">
-        <span className="block text-[14px] font-semibold text-gray-900">{title}</span>
-        <span className="mt-0.5 block text-[12px] leading-relaxed text-gray-500">{description}</span>
+        <span className="block text-[14px] font-semibold text-gray-900 dark:text-dk-text">{title}</span>
+        <span className="mt-0.5 block text-[12px] leading-relaxed text-gray-500 dark:text-dk-text2">{description}</span>
       </span>
     </label>
   );
@@ -696,14 +697,14 @@ function ModeOption({ value, checked, disabled = false, onSelect, title, descrip
 function MissingFieldWarning({ fieldLabel, issue = 'missing', asking, onAskAi, t }) {
   const isMismatch = issue === 'mismatch';
   return (
-    <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-      <div className="flex items-center gap-1.5 text-[12px] text-amber-800">
+    <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2">
+      <div className="flex items-center gap-1.5 text-[12px] text-amber-800 dark:text-amber-300">
         <HiOutlineExclamation className="h-4 w-4 flex-shrink-0" />
         <span>{fmt(t(isMismatch ? 'leadFormConfig.mismatchField' : 'leadFormConfig.missingField'), { label: fieldLabel })}</span>
       </div>
       <button
         type="button"
-        className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-white px-2.5 py-1 text-[12px] font-semibold text-amber-800 hover:bg-amber-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        className="inline-flex items-center gap-1 rounded-md border border-amber-300 dark:border-amber-700 bg-white dark:bg-dk-surface px-2.5 py-1 text-[12px] font-semibold text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-950/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         onClick={onAskAi}
         disabled={asking}
       >
@@ -720,15 +721,15 @@ function InlineChip({ checked, onChange, label }) {
     <label
       className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-[13px] cursor-pointer select-none transition-colors ${
         checked
-          ? 'bg-orange-50 border-orange-300 text-orange-700'
-          : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'
+          ? 'bg-orange-50 dark:bg-orange-950/40 border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-300'
+          : 'bg-white dark:bg-dk-surface border-gray-200 dark:border-dk-border text-gray-700 dark:text-dk-text hover:border-gray-300 dark:hover:border-dk-border-strong'
       }`}
     >
       <input
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="rounded border-gray-300 text-orange-600 focus:ring-orange-500 w-4 h-4"
+        className="rounded border-gray-300 dark:border-dk-border-strong text-orange-600 dark:text-orange-400 focus:ring-orange-500 w-4 h-4"
       />
       {label}
     </label>
@@ -756,12 +757,12 @@ function CustomFieldRow({
   onAskAiToAdd,
 }) {
   const summary = String(field.labelVi || '').trim() || (
-    <span className="italic text-gray-400">{t('leadFormConfig.noLabel')}</span>
+    <span className="italic text-gray-400 dark:text-dk-muted">{t('leadFormConfig.noLabel')}</span>
   );
   return (
     <div
-      className={`rounded-lg border bg-white transition-colors ${
-        labelError ? 'border-red-300' : 'border-gray-200 hover:border-gray-300'
+      className={`rounded-lg border bg-white dark:bg-dk-surface transition-colors ${
+        labelError ? 'border-red-300 dark:border-red-700' : 'border-gray-200 dark:border-dk-border hover:border-gray-300 dark:hover:border-dk-border-strong'
       }`}
     >
       {/* Inline row */}
@@ -769,7 +770,7 @@ function CustomFieldRow({
         <button
           type="button"
           onClick={onToggleExpand}
-          className={`p-1.5 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+          className={`p-1.5 rounded text-gray-400 dark:text-dk-muted hover:text-gray-700 dark:hover:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-strong transition-transform ${isExpanded ? 'rotate-180' : ''}`}
           title={isExpanded ? t('leadFormConfig.collapse') : t('leadFormConfig.expand')}
         >
           <HiOutlineExpand className="h-4 w-4" />
@@ -777,12 +778,12 @@ function CustomFieldRow({
 
         <div className="flex-1 min-w-0 grid grid-cols-[1fr_auto_auto_auto] items-center gap-3">
           <div className="min-w-0">
-            <span className="text-[14px] text-gray-900 truncate block">{summary}</span>
-            <code className="text-[11px] text-gray-400 truncate block">{field.key}</code>
+            <span className="text-[14px] text-gray-900 dark:text-dk-text truncate block">{summary}</span>
+            <code className="text-[11px] text-gray-400 dark:text-dk-muted truncate block">{field.key}</code>
           </div>
 
           <select
-            className="rounded-md border border-gray-200 px-2 py-1 text-[12px] disabled:bg-gray-100 disabled:text-gray-500"
+            className="rounded-md border border-gray-200 dark:border-dk-border px-2 py-1 text-[12px] dark:bg-dk-inset dark:text-dk-text disabled:bg-gray-100 dark:disabled:bg-dk-raised disabled:text-gray-500 dark:disabled:text-dk-text2"
             value={field.type}
             disabled={isPersisted}
             title={isPersisted ? t('leadFormConfig.typeLocked') : undefined}
@@ -807,8 +808,8 @@ function CustomFieldRow({
           <label
             className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[12px] cursor-pointer border transition-colors ${
               field.required
-                ? 'bg-red-50 border-red-200 text-red-700'
-                : 'bg-gray-50 border-gray-200 text-gray-600 hover:border-gray-300'
+                ? 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300'
+                : 'bg-gray-50 dark:bg-dk-raised border-gray-200 dark:border-dk-border text-gray-600 dark:text-dk-text2 hover:border-gray-300 dark:hover:border-dk-border-strong'
             }`}
           >
             <input
@@ -824,7 +825,7 @@ function CustomFieldRow({
             <button
               type="button"
               aria-label={t('leadFormConfig.moveUp')}
-              className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded disabled:opacity-30"
+              className="p-1.5 text-gray-400 dark:text-dk-muted hover:text-gray-700 dark:hover:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-strong rounded disabled:opacity-30"
               onClick={onMoveUp}
               disabled={index === 0}
             >
@@ -833,7 +834,7 @@ function CustomFieldRow({
             <button
               type="button"
               aria-label={t('leadFormConfig.moveDown')}
-              className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded disabled:opacity-30"
+              className="p-1.5 text-gray-400 dark:text-dk-muted hover:text-gray-700 dark:hover:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-strong rounded disabled:opacity-30"
               onClick={onMoveDown}
             >
               <HiOutlineChevronDown className="h-4 w-4" />
@@ -841,7 +842,7 @@ function CustomFieldRow({
             <button
               type="button"
               aria-label={t('leadFormConfig.removeField')}
-              className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded"
+              className="p-1.5 text-red-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/60 rounded"
               onClick={onRemove}
             >
               <HiOutlineTrash className="h-4 w-4" />
@@ -864,19 +865,19 @@ function CustomFieldRow({
 
       {/* Expanded editor */}
       {isExpanded ? (
-        <div className="border-t border-gray-100 px-3 py-2.5 space-y-2 bg-gray-50/40">
+        <div className="border-t border-gray-100 dark:border-dk-border px-3 py-2.5 space-y-2 bg-gray-50/40 dark:bg-dk-raised/40">
           <div className="grid grid-cols-2 gap-2">
             <div>
               <input
-                className={`w-full rounded border px-3 py-2 text-[13px] ${labelError ? 'border-red-400' : 'border-gray-300'}`}
+                className={`w-full rounded border px-3 py-2 text-[13px] dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted ${labelError ? 'border-red-400' : 'border-gray-300 dark:border-dk-border-strong'}`}
                 placeholder={t('leadFormConfig.labelVi')}
                 value={field.labelVi}
                 onChange={(e) => onUpdate({ labelVi: e.target.value })}
               />
-              {labelError ? <p className="mt-1 text-[12px] text-red-600">{labelError}</p> : null}
+              {labelError ? <p className="mt-1 text-[12px] text-red-600 dark:text-red-400">{labelError}</p> : null}
             </div>
             <input
-              className="rounded border border-gray-300 px-3 py-2 text-[13px]"
+              className="rounded border border-gray-300 dark:border-dk-border-strong px-3 py-2 text-[13px] dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
               placeholder={t('leadFormConfig.labelEn')}
               value={field.labelEn || ''}
               onChange={(e) => onUpdate({ labelEn: e.target.value })}
@@ -886,13 +887,13 @@ function CustomFieldRow({
           {field.type === 'text' || field.type === 'textarea' ? (
             <div className="grid grid-cols-2 gap-3">
               <input
-                className="rounded border border-gray-300 px-3 py-2 text-[13px]"
+                className="rounded border border-gray-300 dark:border-dk-border-strong px-3 py-2 text-[13px] dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                 placeholder={t('leadFormConfig.placeholderVi')}
                 value={field.placeholderVi || ''}
                 onChange={(e) => onUpdate({ placeholderVi: e.target.value })}
               />
               <input
-                className="rounded border border-gray-300 px-3 py-2 text-[13px]"
+                className="rounded border border-gray-300 dark:border-dk-border-strong px-3 py-2 text-[13px] dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                 placeholder={t('leadFormConfig.placeholderEn')}
                 value={field.placeholderEn || ''}
                 onChange={(e) => onUpdate({ placeholderEn: e.target.value })}
@@ -907,7 +908,7 @@ function CustomFieldRow({
                 return (
                   <div key={`${field.key}-${oi}`} className="flex gap-2">
                     <input
-                      className="w-28 rounded border border-gray-300 px-2.5 py-1.5 text-[12px] disabled:bg-gray-100 disabled:text-gray-500"
+                      className="w-28 rounded border border-gray-300 dark:border-dk-border-strong px-2.5 py-1.5 text-[12px] dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted disabled:bg-gray-100 dark:disabled:bg-dk-raised disabled:text-gray-500 dark:disabled:text-dk-text2"
                       placeholder="value"
                       value={opt.value}
                       disabled={valueLocked}
@@ -919,7 +920,7 @@ function CustomFieldRow({
                       }}
                     />
                     <input
-                      className="flex-1 rounded border border-gray-300 px-2.5 py-1.5 text-[12px]"
+                      className="flex-1 rounded border border-gray-300 dark:border-dk-border-strong px-2.5 py-1.5 text-[12px] dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                       placeholder="VI"
                       value={opt.labelVi}
                       onChange={(e) => {
@@ -929,7 +930,7 @@ function CustomFieldRow({
                       }}
                     />
                     <input
-                      className="flex-1 rounded border border-gray-300 px-2.5 py-1.5 text-[12px]"
+                      className="flex-1 rounded border border-gray-300 dark:border-dk-border-strong px-2.5 py-1.5 text-[12px] dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                       placeholder="EN"
                       value={opt.labelEn || ''}
                       onChange={(e) => {
@@ -940,7 +941,7 @@ function CustomFieldRow({
                     />
                     <button
                       type="button"
-                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded disabled:opacity-30"
+                      className="p-1.5 text-gray-400 dark:text-dk-muted hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/60 rounded disabled:opacity-30"
                       disabled={(field.options || []).length <= 1}
                       title={t('leadFormConfig.removeOption')}
                       onClick={() => {
@@ -955,7 +956,7 @@ function CustomFieldRow({
               })}
               <button
                 type="button"
-                className="text-[12px] font-medium text-orange-700 hover:underline"
+                className="text-[12px] font-medium text-orange-700 dark:text-orange-300 hover:underline"
                 onClick={() =>
                   onUpdate({
                     options: [

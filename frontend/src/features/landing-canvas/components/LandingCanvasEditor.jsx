@@ -284,7 +284,7 @@ export default function LandingCanvasEditor({
   const restoredBanner = restoredAt ? (
     <div
       data-testid="draft-restored-banner"
-      className="shrink-0 flex items-center justify-between gap-3 px-4 py-1.5 bg-amber-50 border-b border-amber-200 text-[13px] text-amber-900"
+      className="shrink-0 flex items-center justify-between gap-3 px-4 py-1.5 bg-amber-50 dark:bg-amber-950/40 border-b border-amber-200 dark:border-amber-800 text-[13px] text-amber-900 dark:text-amber-300"
     >
       <span className="min-w-0 truncate">
         {td('restoredBanner', {
@@ -294,7 +294,7 @@ export default function LandingCanvasEditor({
       <button
         type="button"
         onClick={handleDiscardRestored}
-        className="shrink-0 font-semibold text-amber-800 hover:text-amber-950 underline"
+        className="shrink-0 font-semibold text-amber-800 dark:text-amber-300 hover:text-amber-950 dark:hover:text-amber-200 underline"
       >
         {editingId ? td('discardDraft') : td('startNew')}
       </button>
@@ -341,10 +341,10 @@ export default function LandingCanvasEditor({
 
     toast.custom((t) => (
       <div
-        className="flex items-center gap-3 bg-white rounded-lg shadow-lg border border-gray-200 px-4 py-3"
+        className="flex items-center gap-3 bg-white dark:bg-dk-surface rounded-lg shadow-lg border border-gray-200 dark:border-dk-border px-4 py-3"
         style={{ opacity: t.visible ? 1 : 0, transition: 'opacity 0.2s' }}
       >
-        <span className="text-[14px] text-gray-700">{ti('applied')}</span>
+        <span className="text-[14px] text-gray-700 dark:text-dk-text">{ti('applied')}</span>
         <button
           type="button"
           onClick={() => {
@@ -352,7 +352,7 @@ export default function LandingCanvasEditor({
             setPreviewResetKey((k) => k + 1);
             toast.dismiss(t.id);
           }}
-          className="text-[13px] font-semibold text-orange-600 hover:text-orange-700"
+          className="text-[13px] font-semibold text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300"
         >
           {ti('undo')}
         </button>

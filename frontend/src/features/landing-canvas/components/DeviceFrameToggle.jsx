@@ -42,15 +42,15 @@ export default function DeviceFrameToggle({ value = DEFAULT_VIEWPORT, onChange }
         title={`Thiết bị: ${currentDevice.label} (${currentDevice.width} × ${currentDevice.height} px)`}
         className={`h-[34px] px-2.5 rounded-xl border text-xs font-semibold transition-all inline-flex items-center gap-1.5 box-border select-none ${
           isOpen
-            ? 'bg-orange-50 text-orange-700 border-orange-200 ring-2 ring-orange-500/15'
-            : 'bg-white text-gray-700 border-gray-200/90 hover:bg-gray-50 hover:text-gray-900 shadow-2xs'
+            ? 'bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-800 ring-2 ring-orange-500/15'
+            : 'bg-white dark:bg-dk-surface text-gray-700 dark:text-dk-text border-gray-200/90 dark:border-dk-border/90 hover:bg-gray-50 dark:hover:bg-dk-raised hover:text-gray-900 dark:hover:text-dk-text shadow-2xs'
         }`}
       >
-        <CurrentIcon className="w-4 h-4 text-orange-600 shrink-0" />
+        <CurrentIcon className="w-4 h-4 text-orange-600 dark:text-orange-400 shrink-0" />
         <span>{currentDevice.label}</span>
         <HiOutlineChevronDown
-          className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-150 ${
-            isOpen ? 'rotate-180 text-orange-600' : ''
+          className={`w-3.5 h-3.5 text-gray-400 dark:text-dk-muted transition-transform duration-150 ${
+            isOpen ? 'rotate-180 text-orange-600 dark:text-orange-400' : ''
           }`}
         />
       </button>
@@ -58,9 +58,9 @@ export default function DeviceFrameToggle({ value = DEFAULT_VIEWPORT, onChange }
       {isOpen && (
         <div
           role="listbox"
-          className="absolute left-0 mt-1.5 w-56 bg-white rounded-2xl shadow-xl border border-gray-200/90 py-1.5 z-50 animate-in fade-in slide-in-from-top-1 duration-150 select-none"
+          className="absolute left-0 mt-1.5 w-56 bg-white dark:bg-dk-surface rounded-2xl shadow-xl border border-gray-200/90 dark:border-dk-border/90 py-1.5 z-50 animate-in fade-in slide-in-from-top-1 duration-150 select-none"
         >
-          <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+          <div className="px-3 py-1 text-[10px] font-bold text-gray-400 dark:text-dk-muted uppercase tracking-wider">
             Thiết bị mô phỏng
           </div>
           {Object.values(DEVICES).map((device) => {
@@ -78,26 +78,26 @@ export default function DeviceFrameToggle({ value = DEFAULT_VIEWPORT, onChange }
                 }}
                 className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between transition-colors ${
                   active
-                    ? 'bg-orange-50/80 text-orange-900 font-semibold'
-                    : 'text-gray-700 hover:bg-gray-50'
+                    ? 'bg-orange-50/80 dark:bg-orange-950/40 text-orange-900 dark:text-orange-300 font-semibold'
+                    : 'text-gray-700 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised'
                 }`}
               >
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div
                     className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
-                      active ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-500'
+                      active ? 'bg-orange-100 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400' : 'bg-gray-100 dark:bg-dk-raised text-gray-500 dark:text-dk-text2'
                     }`}
                   >
                     <Icon className="w-4 h-4" />
                   </div>
                   <div className="min-w-0">
-                    <div className="font-semibold text-gray-900 leading-tight">{device.label}</div>
-                    <div className="text-[11px] text-gray-400 leading-tight mt-0.5">
+                    <div className="font-semibold text-gray-900 dark:text-dk-text leading-tight">{device.label}</div>
+                    <div className="text-[11px] text-gray-400 dark:text-dk-muted leading-tight mt-0.5">
                       {device.width} × {device.height} px
                     </div>
                   </div>
                 </div>
-                {active && <HiOutlineCheck className="w-4 h-4 text-orange-600 shrink-0 ml-2" />}
+                {active && <HiOutlineCheck className="w-4 h-4 text-orange-600 dark:text-orange-400 shrink-0 ml-2" />}
               </button>
             );
           })}

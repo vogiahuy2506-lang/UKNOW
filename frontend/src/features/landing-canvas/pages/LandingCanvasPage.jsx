@@ -331,10 +331,10 @@ function CanvasState({ title, description, actionLabel, onAction, spinner = fals
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="text-center space-y-3 max-w-md">
           {spinner ? (
-            <div className="mx-auto w-8 h-8 border-2 border-gray-300 border-t-orange-500 rounded-full animate-spin" />
+            <div className="mx-auto w-8 h-8 border-2 border-gray-300 dark:border-dk-border-strong border-t-orange-500 rounded-full animate-spin" />
           ) : null}
-          <p className="text-base font-semibold text-gray-800">{title}</p>
-          {description ? <p className="text-sm text-gray-500">{description}</p> : null}
+          <p className="text-base font-semibold text-gray-800 dark:text-dk-text">{title}</p>
+          {description ? <p className="text-sm text-gray-500 dark:text-dk-text2">{description}</p> : null}
           {actionLabel ? (
             <button
               type="button"

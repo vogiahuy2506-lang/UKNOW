@@ -105,28 +105,28 @@ export default function CanvasPreviewArea({
     <div className="flex flex-col h-full min-h-0">
       {/* Chỉ render toolbar nội bộ khi KHÔNG có điều khiển từ Topbar (backward-compat) */}
       {!hasExternalControls && (
-        <div className="h-14 px-4 flex items-center justify-between border-b border-gray-200 bg-white shrink-0">
+        <div className="h-14 px-4 flex items-center justify-between border-b border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface shrink-0">
           <div className="flex items-center gap-2">
             {isChatCollapsed && onToggleChat && (
               <button
                 type="button"
                 onClick={onToggleChat}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-50 text-orange-700 hover:bg-orange-100 hover:text-orange-800 border border-orange-200 text-xs sm:text-sm font-semibold transition-all shadow-2xs mr-1"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 hover:bg-orange-100 dark:hover:bg-orange-950/60 hover:text-orange-800 dark:hover:text-orange-200 border border-orange-200 dark:border-orange-800 text-xs sm:text-sm font-semibold transition-all shadow-2xs mr-1"
                 title="Mở lại khung chat Trợ lý AI"
               >
-                <HiOutlineSparkles className="w-4 h-4 text-orange-500 animate-pulse" />
+                <HiOutlineSparkles className="w-4 h-4 text-orange-500 dark:text-orange-400 animate-pulse" />
                 <span>Mở Trợ lý AI</span>
               </button>
             )}
 
-            <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-lg">
+            <div className="flex items-center gap-1 p-1 bg-gray-100 dark:bg-dk-raised rounded-lg">
               <button
                 type="button"
                 onClick={() => setMode('view')}
                 className={`px-3 py-1.5 text-[14px] font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
                   mode === 'view'
-                    ? 'bg-white text-orange-600 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-900'
+                    ? 'bg-white dark:bg-dk-surface text-orange-600 dark:text-orange-400 shadow-sm'
+                    : 'text-gray-500 dark:text-dk-text2 hover:text-gray-900 dark:hover:text-dk-text'
                 }`}
               >
                 <HiOutlineEye className="w-4 h-4" />
@@ -137,8 +137,8 @@ export default function CanvasPreviewArea({
                 onClick={() => setMode('code')}
                 className={`px-3 py-1.5 text-[14px] font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
                   mode === 'code'
-                    ? 'bg-white text-orange-600 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-900'
+                    ? 'bg-white dark:bg-dk-surface text-orange-600 dark:text-orange-400 shadow-sm'
+                    : 'text-gray-500 dark:text-dk-text2 hover:text-gray-900 dark:hover:text-dk-text'
                 }`}
               >
                 <HiOutlineCode className="w-3.5 h-3.5" />
@@ -157,7 +157,7 @@ export default function CanvasPreviewArea({
       {/* Vùng xem trước: Padding tinh gọn p-2 sm:p-3, chiếm trọn vẹn không gian */}
       <div
         ref={containerRef}
-        className="flex-1 min-h-0 overflow-auto bg-[#f8fafc] p-2 sm:p-3 flex justify-center items-start"
+        className="flex-1 min-h-0 overflow-auto bg-[#f8fafc] dark:bg-dk-inset p-2 sm:p-3 flex justify-center items-start"
       >
         {mode === 'view' ? (
           html ? (
@@ -203,10 +203,10 @@ function EmptyPreviewCard({ heading, onPasteHtml, onAskAi, onPickTemplate }) {
         <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-orange-500 to-amber-400 text-white shadow-lg shadow-orange-500/20 mb-2">
           <HiOutlineSparkles className="w-7 h-7" />
         </div>
-        <h2 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-dk-text tracking-tight">
           Bắt đầu tạo Landing Page của bạn
         </h2>
-        <p className="text-sm text-gray-500 max-w-md mx-auto">
+        <p className="text-sm text-gray-500 dark:text-dk-text2 max-w-md mx-auto">
           {heading || 'Chọn một phương thức bên dưới hoặc nhập yêu cầu trực tiếp với AI bên trái để lên ý tưởng'}
         </p>
       </div>
@@ -214,17 +214,17 @@ function EmptyPreviewCard({ heading, onPasteHtml, onAskAi, onPickTemplate }) {
       {/* 3 Action Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
         {/* Card 1: Ask AI */}
-        <div className="relative group flex flex-col justify-between p-5 rounded-2xl border-2 border-orange-400/80 bg-gradient-to-b from-orange-50/70 via-white to-white shadow-xs hover:shadow-xl hover:border-orange-500 hover:-translate-y-1 transition-all duration-200">
+        <div className="relative group flex flex-col justify-between p-5 rounded-2xl border-2 border-orange-400/80 bg-gradient-to-b from-orange-50/70 dark:from-orange-950/40 via-white dark:via-dk-surface to-white dark:to-dk-surface shadow-xs hover:shadow-xl hover:border-orange-500 hover:-translate-y-1 transition-all duration-200">
           <span className="absolute -top-3 right-4 px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-xs">
             {te('cardAiBadge')}
           </span>
           <div className="space-y-3">
-            <div className="w-10 h-10 rounded-xl bg-orange-100/80 text-orange-600 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-orange-100/80 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 flex items-center justify-center">
               <HiOutlineSparkles className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="font-bold text-gray-900 text-base">{te('cardAiTitle')}</h3>
-              <p className="text-xs text-gray-500 mt-1 leading-relaxed">{te('cardAiDesc')}</p>
+              <h3 className="font-bold text-gray-900 dark:text-dk-text text-base">{te('cardAiTitle')}</h3>
+              <p className="text-xs text-gray-500 dark:text-dk-text2 mt-1 leading-relaxed">{te('cardAiDesc')}</p>
             </div>
           </div>
           <button
@@ -237,40 +237,40 @@ function EmptyPreviewCard({ heading, onPasteHtml, onAskAi, onPickTemplate }) {
         </div>
 
         {/* Card 2: Pick Template */}
-        <div className="group flex flex-col justify-between p-5 rounded-2xl border border-gray-200/90 bg-white shadow-xs hover:shadow-lg hover:border-gray-300 hover:-translate-y-0.5 transition-all duration-200">
+        <div className="group flex flex-col justify-between p-5 rounded-2xl border border-gray-200/90 dark:border-dk-border/90 bg-white dark:bg-dk-surface shadow-xs hover:shadow-lg hover:border-gray-300 dark:hover:border-dk-border-strong hover:-translate-y-0.5 transition-all duration-200">
           <div className="space-y-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center">
               <HiOutlineTemplate className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="font-bold text-gray-900 text-base">{te('cardTemplateTitle')}</h3>
-              <p className="text-xs text-gray-500 mt-1 leading-relaxed">{te('cardTemplateDesc')}</p>
+              <h3 className="font-bold text-gray-900 dark:text-dk-text text-base">{te('cardTemplateTitle')}</h3>
+              <p className="text-xs text-gray-500 dark:text-dk-text2 mt-1 leading-relaxed">{te('cardTemplateDesc')}</p>
             </div>
           </div>
           <button
             type="button"
             onClick={onPickTemplate}
-            className="mt-5 w-full py-2.5 px-3 rounded-xl border border-gray-300/90 hover:bg-gray-50 active:bg-gray-100 text-gray-700 text-xs font-semibold shadow-2xs transition-all text-center cursor-pointer"
+            className="mt-5 w-full py-2.5 px-3 rounded-xl border border-gray-300/90 dark:border-dk-border-strong/90 hover:bg-gray-50 dark:hover:bg-dk-raised active:bg-gray-100 dark:active:bg-dk-strong text-gray-700 dark:text-dk-text text-xs font-semibold shadow-2xs transition-all text-center cursor-pointer"
           >
             {te('cardTemplateAction')}
           </button>
         </div>
 
         {/* Card 3: Paste HTML */}
-        <div className="group flex flex-col justify-between p-5 rounded-2xl border border-gray-200/90 bg-white shadow-xs hover:shadow-lg hover:border-gray-300 hover:-translate-y-0.5 transition-all duration-200">
+        <div className="group flex flex-col justify-between p-5 rounded-2xl border border-gray-200/90 dark:border-dk-border/90 bg-white dark:bg-dk-surface shadow-xs hover:shadow-lg hover:border-gray-300 dark:hover:border-dk-border-strong hover:-translate-y-0.5 transition-all duration-200">
           <div className="space-y-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center">
               <HiOutlineCode className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="font-bold text-gray-900 text-base">{te('cardPasteTitle')}</h3>
-              <p className="text-xs text-gray-500 mt-1 leading-relaxed">{te('cardPasteDesc')}</p>
+              <h3 className="font-bold text-gray-900 dark:text-dk-text text-base">{te('cardPasteTitle')}</h3>
+              <p className="text-xs text-gray-500 dark:text-dk-text2 mt-1 leading-relaxed">{te('cardPasteDesc')}</p>
             </div>
           </div>
           <button
             type="button"
             onClick={onPasteHtml}
-            className="mt-5 w-full py-2.5 px-3 rounded-xl border border-gray-300/90 hover:bg-gray-50 active:bg-gray-100 text-gray-700 text-xs font-semibold shadow-2xs transition-all text-center cursor-pointer"
+            className="mt-5 w-full py-2.5 px-3 rounded-xl border border-gray-300/90 dark:border-dk-border-strong/90 hover:bg-gray-50 dark:hover:bg-dk-raised active:bg-gray-100 dark:active:bg-dk-strong text-gray-700 dark:text-dk-text text-xs font-semibold shadow-2xs transition-all text-center cursor-pointer"
           >
             {te('cardPasteAction')}
           </button>

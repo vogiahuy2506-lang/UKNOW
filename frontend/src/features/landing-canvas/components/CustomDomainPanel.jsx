@@ -45,9 +45,9 @@ function DnsRecordsTable({ records, tc }) {
   };
   if (!records?.length) return null;
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200">
+    <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-dk-border">
       <table className="w-full text-left text-sm" data-testid="custom-domain-dns-table">
-        <thead className="bg-gray-50 text-xs font-semibold uppercase text-gray-500">
+        <thead className="bg-gray-50 dark:bg-dk-raised text-xs font-semibold uppercase text-gray-500 dark:text-dk-text2">
           <tr>
             <th className="px-3 py-2">{tc('sections.customDomain.dnsType')}</th>
             <th className="px-3 py-2">{tc('sections.customDomain.dnsHost')}</th>
@@ -58,29 +58,29 @@ function DnsRecordsTable({ records, tc }) {
           {records.map((record) => {
             const value = displayDnsValue(record.value);
             return (
-              <tr key={`${record.type}-${record.host}-${value}`} className="border-t border-gray-100">
-                <td className="px-3 py-2 font-mono text-gray-900">{record.type}</td>
+              <tr key={`${record.type}-${record.host}-${value}`} className="border-t border-gray-100 dark:border-dk-border">
+                <td className="px-3 py-2 font-mono text-gray-900 dark:text-dk-text">{record.type}</td>
                 <td className="px-3 py-2">
-                  <span className="inline-flex items-center gap-1.5 font-mono text-gray-900">
+                  <span className="inline-flex items-center gap-1.5 font-mono text-gray-900 dark:text-dk-text">
                     {record.host}
                     <button
                       type="button"
                       onClick={() => copy(record.host)}
                       aria-label={`${tc('sections.customDomain.copy')} ${tc('sections.customDomain.dnsHost')}`}
-                      className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                      className="rounded p-1 text-gray-500 dark:text-dk-text2 hover:bg-gray-100 dark:hover:bg-dk-strong hover:text-gray-800 dark:hover:text-dk-text"
                     >
                       <HiOutlineClipboardCopy className="h-4 w-4" />
                     </button>
                   </span>
                 </td>
                 <td className="px-3 py-2">
-                  <span className="inline-flex items-center gap-1.5 font-mono text-gray-900">
+                  <span className="inline-flex items-center gap-1.5 font-mono text-gray-900 dark:text-dk-text">
                     {value}
                     <button
                       type="button"
                       onClick={() => copy(value)}
                       aria-label={`${tc('sections.customDomain.copy')} ${tc('sections.customDomain.dnsValue')}`}
-                      className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                      className="rounded p-1 text-gray-500 dark:text-dk-text2 hover:bg-gray-100 dark:hover:bg-dk-strong hover:text-gray-800 dark:hover:text-dk-text"
                     >
                       <HiOutlineClipboardCopy className="h-4 w-4" />
                     </button>
@@ -223,7 +223,7 @@ export default function CustomDomainPanel({ editingId, domain, slug, onChanged }
   // Trang chưa lưu: chưa có id để gắn tên miền.
   if (!editingId) {
     return (
-      <p className="text-xs text-gray-500" data-testid="custom-domain-save-first">
+      <p className="text-xs text-gray-500 dark:text-dk-text2" data-testid="custom-domain-save-first">
         {tc('sections.customDomain.saveFirst')}
       </p>
     );
@@ -233,19 +233,19 @@ export default function CustomDomainPanel({ editingId, domain, slug, onChanged }
   if (isCustom) {
     const active = domain.kind === 'custom-active';
     return (
-      <div className="space-y-3 rounded-xl border border-purple-100 bg-white p-4" data-testid="custom-domain-block">
-        <p className="text-sm font-semibold text-gray-900">{tc('sections.customDomain.hostnameLabel')}</p>
+      <div className="space-y-3 rounded-xl border border-purple-100 dark:border-purple-800 bg-white dark:bg-dk-surface p-4" data-testid="custom-domain-block">
+        <p className="text-sm font-semibold text-gray-900 dark:text-dk-text">{tc('sections.customDomain.hostnameLabel')}</p>
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="font-mono text-gray-800">{domain.hostname}</span>
-          <span className="font-medium text-gray-700">{tc('sections.customDomain.statusLabel')}:</span>
+          <span className="font-mono text-gray-800 dark:text-dk-text">{domain.hostname}</span>
+          <span className="font-medium text-gray-700 dark:text-dk-text">{tc('sections.customDomain.statusLabel')}:</span>
           <span
             data-testid="custom-domain-status"
             className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
               active
-                ? 'bg-green-100 text-green-700'
+                ? 'bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-300'
                 : domain.status === 'disabled'
-                ? 'bg-gray-100 text-gray-600'
-                : 'bg-amber-100 text-amber-800'
+                ? 'bg-gray-100 dark:bg-dk-raised text-gray-600 dark:text-dk-text2'
+                : 'bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300'
             }`}
           >
             {active
@@ -257,14 +257,14 @@ export default function CustomDomainPanel({ editingId, domain, slug, onChanged }
         </div>
 
         {active && justConnected ? (
-          <p className="text-xs text-green-700" data-testid="custom-domain-https-hint">
+          <p className="text-xs text-green-700 dark:text-green-300" data-testid="custom-domain-https-hint">
             {tc('sections.customDomain.httpsHint')}
           </p>
         ) : null}
 
         {!active ? (
           <div className="space-y-2">
-            <p className="text-xs text-gray-600">{tc('sections.customDomain.pendingNote')}</p>
+            <p className="text-xs text-gray-600 dark:text-dk-text2">{tc('sections.customDomain.pendingNote')}</p>
             <DnsRecordsTable records={domain.dnsRecords} tc={tc} />
             <button
               type="button"
@@ -282,9 +282,9 @@ export default function CustomDomainPanel({ editingId, domain, slug, onChanged }
             role="alertdialog"
             aria-label={tc('sections.customDomain.remove')}
             data-testid="custom-domain-remove-confirm"
-            className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3"
+            className="space-y-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-3"
           >
-            <p className="text-sm text-amber-900">
+            <p className="text-sm text-amber-900 dark:text-amber-300">
               {freeLink
                 ? tc('sections.customDomain.removeConfirm', { link: freeLink })
                 : tc('sections.customDomain.removeConfirmNoSlug')}
@@ -302,7 +302,7 @@ export default function CustomDomainPanel({ editingId, domain, slug, onChanged }
                 type="button"
                 onClick={() => setConfirmRemove(false)}
                 disabled={busy !== null}
-                className="rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+                className="rounded-lg border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface px-3.5 py-2 text-sm font-medium text-gray-700 dark:text-dk-text transition hover:bg-gray-50 dark:hover:bg-dk-raised disabled:opacity-50"
               >
                 {tc('sections.customDomain.removeCancel')}
               </button>
@@ -316,14 +316,14 @@ export default function CustomDomainPanel({ editingId, domain, slug, onChanged }
               setConfirmRemove(true);
             }}
             disabled={busy !== null}
-            className="rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+            className="rounded-lg border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface px-3.5 py-2 text-sm font-medium text-gray-700 dark:text-dk-text transition hover:bg-gray-50 dark:hover:bg-dk-raised disabled:opacity-50"
           >
             {tc('sections.customDomain.remove')}
           </button>
         )}
 
         {error ? (
-          <p role="alert" className="whitespace-pre-line text-xs text-red-600" data-testid="custom-domain-error">
+          <p role="alert" className="whitespace-pre-line text-xs text-red-600 dark:text-red-400" data-testid="custom-domain-error">
             {error}
           </p>
         ) : null}
@@ -338,15 +338,15 @@ export default function CustomDomainPanel({ editingId, domain, slug, onChanged }
         <button
           type="button"
           onClick={() => setExpanded(true)}
-          className="rounded-lg border border-orange-200 bg-orange-50 px-3.5 py-2 text-sm font-medium text-orange-700 transition hover:bg-orange-100"
+          className="rounded-lg border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/40 px-3.5 py-2 text-sm font-medium text-orange-700 dark:text-orange-300 transition hover:bg-orange-100 dark:hover:bg-orange-950/60"
         >
           {tc('sections.customDomain.useOwn')}
         </button>
         {domain.kind === 'free' && !freePending ? (
-          <p className="text-xs text-gray-500">{tc('sections.customDomain.freeKeepsRunning')}</p>
+          <p className="text-xs text-gray-500 dark:text-dk-text2">{tc('sections.customDomain.freeKeepsRunning')}</p>
         ) : null}
         {error ? (
-          <p role="alert" className="whitespace-pre-line text-xs text-red-600" data-testid="custom-domain-error">
+          <p role="alert" className="whitespace-pre-line text-xs text-red-600 dark:text-red-400" data-testid="custom-domain-error">
             {error}
           </p>
         ) : null}
@@ -356,12 +356,12 @@ export default function CustomDomainPanel({ editingId, domain, slug, onChanged }
 
   const verified = Boolean(check?.verified);
   return (
-    <div className="space-y-3 rounded-xl border border-purple-100 bg-white p-4" data-testid="custom-domain-connect">
-      <p className="text-sm font-semibold text-gray-900">{tc('sections.customDomain.useOwn')}</p>
+    <div className="space-y-3 rounded-xl border border-purple-100 dark:border-purple-800 bg-white dark:bg-dk-surface p-4" data-testid="custom-domain-connect">
+      <p className="text-sm font-semibold text-gray-900 dark:text-dk-text">{tc('sections.customDomain.useOwn')}</p>
 
       <fieldset className="space-y-1.5">
-        <legend className="text-xs font-medium text-gray-700">{tc('sections.customDomain.typeLabel')}</legend>
-        <label className="flex items-center gap-2 text-sm text-gray-800">
+        <legend className="text-xs font-medium text-gray-700 dark:text-dk-text">{tc('sections.customDomain.typeLabel')}</legend>
+        <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-dk-text">
           <input
             type="radio"
             name="custom-domain-type"
@@ -370,7 +370,7 @@ export default function CustomDomainPanel({ editingId, domain, slug, onChanged }
           />
           {tc('sections.customDomain.typeSubdomain')}
         </label>
-        <label className="flex items-center gap-2 text-sm text-gray-800">
+        <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-dk-text">
           <input
             type="radio"
             name="custom-domain-type"
@@ -382,7 +382,7 @@ export default function CustomDomainPanel({ editingId, domain, slug, onChanged }
       </fieldset>
 
       <div>
-        <label htmlFor="custom-domain-input" className="mb-1 block text-xs font-medium text-gray-700">
+        <label htmlFor="custom-domain-input" className="mb-1 block text-xs font-medium text-gray-700 dark:text-dk-text">
           {tc('sections.customDomain.hostnameInputLabel')}
         </label>
         <input
@@ -394,7 +394,7 @@ export default function CustomDomainPanel({ editingId, domain, slug, onChanged }
           value={hostname}
           onChange={handleHostnameChange}
           placeholder={isApex ? 'tenmien.com' : 'lp.tenmien.com'}
-          className="w-full rounded-lg border border-gray-200 px-3 py-2 font-mono text-sm text-gray-900 placeholder:text-gray-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100"
+          className="w-full rounded-lg border border-gray-200 dark:border-dk-border dark:bg-dk-inset px-3 py-2 font-mono text-sm text-gray-900 dark:text-dk-text placeholder:text-gray-400 dark:placeholder:text-dk-muted focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-800"
         />
       </div>
 
@@ -425,7 +425,7 @@ export default function CustomDomainPanel({ editingId, domain, slug, onChanged }
           type="button"
           onClick={resetConnectForm}
           disabled={busy !== null}
-          className="rounded-lg px-3 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-100 disabled:opacity-50"
+          className="rounded-lg px-3 py-2 text-sm font-medium text-gray-600 dark:text-dk-text2 transition hover:bg-gray-100 dark:hover:bg-dk-strong disabled:opacity-50"
         >
           {tc('sections.customDomain.close')}
         </button>
@@ -435,17 +435,17 @@ export default function CustomDomainPanel({ editingId, domain, slug, onChanged }
         <div className="space-y-2" data-testid="custom-domain-check-result">
           {!verified ? (
             <>
-              <p className="text-xs font-medium text-amber-800">{tc('sections.customDomain.dnsTitle')}</p>
+              <p className="text-xs font-medium text-amber-800 dark:text-amber-300">{tc('sections.customDomain.dnsTitle')}</p>
               <DnsRecordsTable records={check.dnsRecords} tc={tc} />
-              <p className="text-xs font-medium text-amber-800" data-testid="custom-domain-dns-missing">
+              <p className="text-xs font-medium text-amber-800 dark:text-amber-300" data-testid="custom-domain-dns-missing">
                 {tc('sections.customDomain.dnsMissing')}
               </p>
               {check.message ? (
-                <p className="whitespace-pre-line text-xs text-gray-500">{check.message}</p>
+                <p className="whitespace-pre-line text-xs text-gray-500 dark:text-dk-text2">{check.message}</p>
               ) : null}
             </>
           ) : (
-            <p className="text-xs font-medium text-green-700" data-testid="custom-domain-dns-ok">
+            <p className="text-xs font-medium text-green-700 dark:text-green-300" data-testid="custom-domain-dns-ok">
               {tc('sections.customDomain.dnsOk')}
             </p>
           )}
@@ -453,12 +453,12 @@ export default function CustomDomainPanel({ editingId, domain, slug, onChanged }
       ) : null}
 
       {error ? (
-        <p role="alert" className="whitespace-pre-line text-xs text-red-600" data-testid="custom-domain-error">
+        <p role="alert" className="whitespace-pre-line text-xs text-red-600 dark:text-red-400" data-testid="custom-domain-error">
           {error}
         </p>
       ) : null}
 
-      {freePending ? null : <p className="text-xs text-gray-500">{tc('sections.customDomain.freeKeepsRunning')}</p>}
+      {freePending ? null : <p className="text-xs text-gray-500 dark:text-dk-text2">{tc('sections.customDomain.freeKeepsRunning')}</p>}
     </div>
   );
 }

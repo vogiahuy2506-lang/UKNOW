@@ -34,6 +34,7 @@ export function FounderLeadFormCard({
   previewMode = false,
   nameMode = 'split', // 'split' | 'single'
 }) {
+  // giữ sáng: biểu mẫu khách điền, hiện ở trang công khai /embed/lead-form và xem trước trong LeadFormConfigPanel — KHÔNG thêm dark:
   const isEmbed = variant === 'embed';
   const isFullName = nameMode === 'single';
   /** Nền ô nhập: embed dùng xám rất nhạt để khớp “một khối trắng”, tránh tông kem. */
