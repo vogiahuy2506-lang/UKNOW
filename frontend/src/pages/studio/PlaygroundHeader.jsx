@@ -45,7 +45,7 @@ export default function PlaygroundHeader({ bot, onConfig, onNewChat, onOpenDeplo
     : t('chatbot.studio.channelsRunning', { list: parts.map(channelLabel).join(' · ') });
 
   return (
-    <div className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 bg-white shrink-0">
+    <div className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 bg-white dark:bg-dk-surface shrink-0">
       {/* Left: Avatar + Name */}
       <div className="flex items-center gap-3 min-w-0 flex-1">
         {bot.logo_url ? (
@@ -62,7 +62,7 @@ export default function PlaygroundHeader({ bot, onConfig, onNewChat, onOpenDeplo
         )}
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h2 className="text-sm font-semibold text-slate-900 truncate tracking-tight">{bot.name}</h2>
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-dk-text truncate tracking-tight">{bot.name}</h2>
             <span
               data-testid="bot-status-badge"
               className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap shrink-0 ${style.badge}`}
@@ -71,7 +71,7 @@ export default function PlaygroundHeader({ bot, onConfig, onNewChat, onOpenDeplo
               {t(style.labelKey)}
             </span>
           </div>
-          <p data-testid="bot-deploy-summary" className="text-[11px] text-slate-400 truncate mt-0.5">{summary}</p>
+          <p data-testid="bot-deploy-summary" className="text-[11px] text-slate-400 dark:text-dk-text2 truncate mt-0.5">{summary}</p>
         </div>
       </div>
 
@@ -81,7 +81,7 @@ export default function PlaygroundHeader({ bot, onConfig, onNewChat, onOpenDeplo
           <button
             type="button"
             onClick={onNewChat}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 dark:text-dk-text hover:text-slate-900 dark:hover:text-dk-text hover:bg-slate-100 dark:hover:bg-dk-raised transition-colors"
             title={t('chatbot.studio.newChatTitle')}
           >
             <HiOutlinePlus className="w-3.5 h-3.5" />
@@ -92,7 +92,7 @@ export default function PlaygroundHeader({ bot, onConfig, onNewChat, onOpenDeplo
           <button
             type="button"
             onClick={onOpenDeploy}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 dark:text-dk-text hover:text-slate-900 dark:hover:text-dk-text hover:bg-slate-100 dark:hover:bg-dk-raised transition-colors"
             title={t('chatbot.studio.tabDeploy')}
           >
             <HiOutlineGlobeAlt className="w-3.5 h-3.5" />

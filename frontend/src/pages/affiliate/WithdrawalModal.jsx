@@ -150,16 +150,16 @@ export default function WithdrawalModal({ isOpen, onClose, currentBalance, onSuc
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
-      <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="relative w-full max-w-2xl bg-white dark:bg-dk-raised rounded-2xl shadow-2xl border border-gray-200 dark:border-dk-border/80 overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-orange-50 to-amber-50">
+        <div className="px-6 py-4 border-b border-gray-100 dark:border-dk-border flex items-center justify-between bg-gradient-to-r from-orange-50 to-amber-50 dark:from-dk-raised dark:to-dk-raised">
           <div>
-            <h3 className="text-lg font-bold text-gray-900">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-dk-text">
               {t('affiliate.modalWithdrawalTitle')}
             </h3>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <p className="text-xs text-gray-500 dark:text-dk-text2 mt-0.5">
               {t('affiliate.walletBalance')}:{' '}
-              <span className="font-semibold text-emerald-600">
+              <span className="font-semibold text-emerald-600 dark:text-emerald-400">
                 {formatVnd(currentBalance)}
               </span>
             </p>
@@ -167,7 +167,7 @@ export default function WithdrawalModal({ isOpen, onClose, currentBalance, onSuc
           <button
             type="button"
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg transition-colors"
+            className="text-gray-400 dark:text-dk-text2 hover:text-gray-600 dark:hover:text-dk-text p-1.5 rounded-lg transition-colors hover:bg-black/5 dark:hover:bg-dk-raised/5"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -180,13 +180,13 @@ export default function WithdrawalModal({ isOpen, onClose, currentBalance, onSuc
           {/* Nhập số tiền rút */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="font-semibold text-gray-800">
+              <label className="font-semibold text-gray-800 dark:text-dk-text">
                 {t('affiliate.withdrawalAmountLabel')} <span className="text-red-500">*</span>
               </label>
               <button
                 type="button"
                 onClick={handleWithdrawAll}
-                className="text-xs text-orange-600 hover:underline font-medium"
+                className="text-xs text-orange-600 dark:text-orange-400 hover:underline font-medium"
               >
                 {t('affiliate.withdrawalAll')} ({formatVnd(currentBalance)})
               </button>
@@ -199,7 +199,7 @@ export default function WithdrawalModal({ isOpen, onClose, currentBalance, onSuc
                 placeholder={t('affiliate.withdrawalAmountPlaceholder')}
                 className={`input font-semibold text-base pr-14 ${validationError ? 'input-error' : ''}`}
               />
-              <span className="absolute right-3.5 top-2.5 text-gray-400 font-medium">VNĐ</span>
+              <span className="absolute right-3.5 top-2.5 text-gray-400 dark:text-dk-text2 font-medium">VNĐ</span>
             </div>
             {validationError && (
               <p className="text-xs text-red-500 font-medium flex items-center gap-1">
@@ -212,26 +212,26 @@ export default function WithdrawalModal({ isOpen, onClose, currentBalance, onSuc
           </div>
 
           {/* Bảng ba số: Gộp / Thuế 10% / Thực nhận */}
-          <div className="p-4 rounded-xl bg-gray-50 border border-gray-200 space-y-2.5">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-gray-600">
+          <div className="p-4 rounded-xl bg-gray-50 dark:bg-dk-bg border border-gray-200 dark:border-dk-border/80 space-y-2.5">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-gray-600 dark:text-dk-text2">
               {t('affiliate.amountBreakdownTitle')}
             </h4>
-            <div className="flex justify-between text-gray-600">
+            <div className="flex justify-between text-gray-600 dark:text-dk-text">
               <span>{t('affiliate.grossAmount')}</span>
-              <span className="font-semibold text-gray-900">
+              <span className="font-semibold text-gray-900 dark:text-dk-text">
                 {formatVnd(numericAmount)}
               </span>
             </div>
-            <div className="flex justify-between text-gray-600">
+            <div className="flex justify-between text-gray-600 dark:text-dk-text">
               <span className="flex items-center gap-1">
                 {t('affiliate.taxDeduction')}
-                <span className="text-xs text-gray-400">(TNCN)</span>
+                <span className="text-xs text-gray-400 dark:text-dk-muted">(TNCN)</span>
               </span>
-              <span className="font-semibold text-red-600">
+              <span className="font-semibold text-red-600 dark:text-red-400">
                 - {formatVnd(taxAmount)}
               </span>
             </div>
-            <div className="pt-2 border-t border-gray-200 flex justify-between items-center text-emerald-700">
+            <div className="pt-2 border-t border-gray-200 dark:border-dk-border/80 flex justify-between items-center text-emerald-700 dark:text-emerald-400">
               <span className="font-bold">{t('affiliate.netPayout')}</span>
               <span className="font-extrabold text-base">
                 {formatVnd(netAmount)}
@@ -241,9 +241,9 @@ export default function WithdrawalModal({ isOpen, onClose, currentBalance, onSuc
 
           {/* Loại đối tác */}
           <div className="space-y-2">
-            <label className="font-semibold text-gray-800">{t('affiliate.partnerTypeLabel')}</label>
+            <label className="font-semibold text-gray-800 dark:text-dk-text">{t('affiliate.partnerTypeLabel')}</label>
             <div className="grid grid-cols-2 gap-3">
-              <label className="flex items-center gap-2 p-3 rounded-xl border border-orange-500 bg-orange-50/50 cursor-pointer">
+              <label className="flex items-center gap-2 p-3 rounded-xl border border-orange-500 bg-orange-50/50 dark:bg-orange-950/30 cursor-pointer">
                 <input
                   type="radio"
                   name="partnerType"
@@ -252,12 +252,12 @@ export default function WithdrawalModal({ isOpen, onClose, currentBalance, onSuc
                   onChange={() => setPartnerType('personal')}
                   className="text-orange-600 focus:ring-orange-500"
                 />
-                <span className="font-medium text-gray-900">
+                <span className="font-medium text-gray-900 dark:text-dk-text">
                   {t('affiliate.partnerPersonal')}
                 </span>
               </label>
 
-              <label className="flex items-center gap-2 p-3 rounded-xl border border-gray-200 bg-gray-100/60 opacity-60 cursor-not-allowed">
+              <label className="flex items-center gap-2 p-3 rounded-xl border border-gray-200 dark:border-dk-border bg-gray-100/60 dark:bg-dk-raised/40 opacity-60 cursor-not-allowed">
                 <input
                   type="radio"
                   name="partnerType"
@@ -265,7 +265,7 @@ export default function WithdrawalModal({ isOpen, onClose, currentBalance, onSuc
                   disabled
                   className="text-gray-400"
                 />
-                <span className="font-medium text-gray-700">
+                <span className="font-medium text-gray-700 dark:text-dk-muted">
                   {t('affiliate.partnerCompany')}
                 </span>
               </label>
@@ -276,8 +276,8 @@ export default function WithdrawalModal({ isOpen, onClose, currentBalance, onSuc
           </div>
 
           {/* Thông tin KYC Cá nhân */}
-          <div className="space-y-3.5 pt-2 border-t border-gray-100">
-            <h4 className="font-bold text-gray-900">
+          <div className="space-y-3.5 pt-2 border-t border-gray-100 dark:border-dk-border">
+            <h4 className="font-bold text-gray-900 dark:text-dk-text">
               {t('affiliate.personalInfoTitle')}
             </h4>
 
@@ -350,8 +350,8 @@ export default function WithdrawalModal({ isOpen, onClose, currentBalance, onSuc
           </div>
 
           {/* Thông tin Ngân hàng */}
-          <div className="space-y-3.5 pt-2 border-t border-gray-100">
-            <h4 className="font-bold text-gray-900">
+          <div className="space-y-3.5 pt-2 border-t border-gray-100 dark:border-dk-border">
+            <h4 className="font-bold text-gray-900 dark:text-dk-text">
               {t('affiliate.bankTitle')}
             </h4>
 

@@ -33,9 +33,9 @@ const TeamActivityCard = ({ overview, loading }) => {
   return (
     <div className="card">
       <div className="mb-4">
-        <h2 className="text-base font-semibold text-gray-800">{t('employee.teamActivity')}</h2>
-        <p className="text-xs text-gray-400 mt-0.5">{formatPeriodNote(overview?.aiCycle, t)}</p>
-        <p className="text-xs text-gray-400">{t('employee.teamActivityScope')}</p>
+        <h2 className="text-base font-semibold text-gray-800 dark:text-dk-text">{t('employee.teamActivity')}</h2>
+        <p className="text-xs text-gray-400 dark:text-dk-muted mt-0.5">{formatPeriodNote(overview?.aiCycle, t)}</p>
+        <p className="text-xs text-gray-400 dark:text-dk-muted">{t('employee.teamActivityScope')}</p>
       </div>
       {loading ? (
         <div className="h-32 flex items-center justify-center"><div className="spinner w-6 h-6" /></div>
@@ -63,7 +63,7 @@ const TeamActivityCard = ({ overview, loading }) => {
   );
 };
 
-const EMPTY_CELL = <span className="text-gray-300">—</span>;
+const EMPTY_CELL = <span className="text-gray-300 dark:text-dk-muted">—</span>;
 
 function TeamActivityRow({ kind, data, t }) {
   const isTotal = kind === 'company';
@@ -73,39 +73,39 @@ function TeamActivityRow({ kind, data, t }) {
   return (
     <tr
       data-testid={`team-row-${kind}`}
-      className={isTotal ? 'bg-gray-50 font-semibold text-gray-900' : 'hover:bg-gray-50'}
+      className={isTotal ? 'bg-gray-50 dark:bg-dk-raised/60 font-semibold text-gray-900 dark:text-dk-text' : 'hover:bg-gray-50 dark:hover:bg-dk-strong'}
     >
       <td>
-        {kind === 'owner' && <div className="font-medium text-gray-800">{t('employee.teamRowYou')}</div>}
+        {kind === 'owner' && <div className="font-medium text-gray-800 dark:text-dk-text">{t('employee.teamRowYou')}</div>}
         {kind === 'employee' && (
           <>
-            <div className="font-medium text-gray-800">{data.fullName || data.username}</div>
-            <div className="text-xs text-gray-400">@{data.username}</div>
+            <div className="font-medium text-gray-800 dark:text-dk-text">{data.fullName || data.username}</div>
+            <div className="text-xs text-gray-400 dark:text-dk-muted">@{data.username}</div>
           </>
         )}
-        {kind === 'other' && <div className="text-gray-600">{t('employee.teamRowOther')}</div>}
+        {kind === 'other' && <div className="text-gray-600 dark:text-dk-text2">{t('employee.teamRowOther')}</div>}
         {isTotal && <div>{t('employee.teamRowCompany')}</div>}
       </td>
       <td className="text-center text-sm">
         {hasPerson ? (
           data.runningCampaigns > 0 ? (
-            <span className="inline-flex items-center gap-1 text-green-700 font-semibold">
+            <span className="inline-flex items-center gap-1 text-green-700 dark:text-green-400 font-semibold">
               <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
               {formatRunningCampaigns(data, t)}
             </span>
           ) : (
-            <span className="text-gray-400">{formatCount(0)}</span>
+            <span className="text-gray-400 dark:text-dk-muted">{formatCount(0)}</span>
           )
         ) : EMPTY_CELL}
       </td>
-      <td className={`text-center text-sm ${isTotal ? '' : 'text-gray-700'}`}>
+      <td className={`text-center text-sm ${isTotal ? '' : 'text-gray-700 dark:text-dk-text'}`}>
         {formatSentThisMonth(data, t)}
       </td>
-      <td className={`text-center text-sm ${isTotal ? '' : 'text-gray-700'}`}>
+      <td className={`text-center text-sm ${isTotal ? '' : 'text-gray-700 dark:text-dk-text'}`}>
         {formatAiCredits(data)}
       </td>
-      <td className="text-sm text-gray-500">
-        {hasPerson ? (lastActive || <span className="text-gray-300">—</span>) : null}
+      <td className="text-sm text-gray-500 dark:text-dk-text2">
+        {hasPerson ? (lastActive || <span className="text-gray-300 dark:text-dk-muted">—</span>) : null}
       </td>
     </tr>
   );

@@ -44,23 +44,23 @@ const MOBILE_PANELS = [
 function ConversationCard({ conv, onSelect, onDelete }) {
   const { t } = useI18n();
   return (
-    <div className="group w-full text-left px-3 py-2.5 bg-white rounded-lg hover:bg-slate-50 transition-colors">
+    <div className="group w-full text-left px-3 py-2.5 bg-white dark:bg-dk-raised rounded-lg border border-transparent dark:border-dk-border/80 hover:bg-slate-50 dark:hover:bg-dk-strong transition-colors">
       <div className="flex items-start gap-2.5">
-        <div className="w-7 h-7 rounded-md bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
+        <div className="w-7 h-7 rounded-md bg-slate-100 dark:bg-dk-surface text-slate-500 dark:text-dk-text2 flex items-center justify-center shrink-0">
           <HiOutlineChatAlt2 className="w-3.5 h-3.5" />
         </div>
         <button
           onClick={() => onSelect(conv)}
           className="flex-1 min-w-0 text-left"
         >
-          <p className="text-sm font-medium text-slate-900 truncate">{conv.title || t('chatbot.studio.convNewTitle')}</p>
-          <p className="text-xs text-slate-500 truncate mt-0.5">
+          <p className="text-sm font-medium text-slate-900 dark:text-dk-text truncate">{conv.title || t('chatbot.studio.convNewTitle')}</p>
+          <p className="text-xs text-slate-500 dark:text-dk-text2 truncate mt-0.5">
             {conv.last_message || t('chatbot.studio.convStartHint')}
           </p>
         </button>
         <button
           onClick={() => onDelete(conv.id)}
-          className="w-6 h-6 rounded flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
+          className="w-6 h-6 rounded flex items-center justify-center text-slate-300 dark:text-dk-muted hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 opacity-0 group-hover:opacity-100 transition-all"
           title={t('chatbot.studio.delete')}
         >
           <HiOutlineTrash className="w-3 h-3" />
@@ -392,7 +392,7 @@ function ChatMessageArea({ chatbot, onOpenConfig, canUseAi = true }) {
   };
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col bg-white">
+    <div className="flex-1 min-h-0 flex flex-col bg-white dark:bg-dk-surface">
       {/* Messages */}
       <div
         ref={messagesScrollRef}
@@ -404,7 +404,7 @@ function ChatMessageArea({ chatbot, onOpenConfig, canUseAi = true }) {
               type="button"
               onClick={loadOlderMessages}
               disabled={loadingOlderMessages}
-              className="inline-flex h-8 items-center justify-center rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 px-3 disabled:opacity-60 transition-colors"
+              className="inline-flex h-8 items-center justify-center rounded-md text-xs font-medium text-slate-600 dark:text-dk-text hover:bg-slate-100 dark:hover:bg-dk-raised px-3 disabled:opacity-60 transition-colors"
             >
               {loadingOlderMessages ? t('chatbot.studio.loadingOlderMessages') : t('chatbot.studio.loadOlderMessages')}
             </button>
@@ -425,7 +425,7 @@ function ChatMessageArea({ chatbot, onOpenConfig, canUseAi = true }) {
               )}
             </div>
             <div className="max-w-[85%] md:max-w-[75%]">
-              <div data-testid="welcome-bubble" className="px-3.5 py-2.5 rounded-2xl rounded-tl-md bg-slate-100 text-sm leading-relaxed text-slate-900">
+              <div data-testid="welcome-bubble" className="px-3.5 py-2.5 rounded-2xl rounded-tl-md bg-slate-100 dark:bg-dk-raised text-sm leading-relaxed text-slate-900 dark:text-dk-text">
                 <p className="whitespace-pre-wrap">
                   {chatbot?.greeting_msg || chatbot?.welcome_message || t('chatbot.studio.defaultGreeting')}
                 </p>
@@ -435,12 +435,12 @@ function ChatMessageArea({ chatbot, onOpenConfig, canUseAi = true }) {
         )}
 
         {messages.length === 0 && !loadingMessages && hasNoDocuments && (
-          <div data-testid="no-documents-strip" className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5">
-            <p className="text-xs text-amber-900 leading-relaxed">{t('chatbot.studio.noDocumentsStrip')}</p>
+          <div data-testid="no-documents-strip" className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/30 px-3.5 py-2.5">
+            <p className="text-xs text-amber-900 dark:text-amber-200 leading-relaxed">{t('chatbot.studio.noDocumentsStrip')}</p>
             <button
               type="button"
               onClick={() => onOpenConfig?.('knowledge')}
-              className="shrink-0 px-2.5 py-1.5 rounded-md bg-white border border-amber-200 text-xs font-semibold text-amber-800 hover:bg-amber-100 transition-colors whitespace-nowrap"
+              className="shrink-0 px-2.5 py-1.5 rounded-md bg-white dark:bg-dk-surface border border-amber-200 dark:border-amber-800 text-xs font-semibold text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-950/50 transition-colors whitespace-nowrap"
             >
               {t('chatbot.studio.addDocuments')}
             </button>
@@ -449,13 +449,13 @@ function ChatMessageArea({ chatbot, onOpenConfig, canUseAi = true }) {
 
         {messages.length === 0 && suggestedQuestions.length > 0 && (
           <div className="mb-2">
-            <p className="text-xs font-semibold text-slate-500 mb-2.5 px-1">{t('chatbot.studio.suggestedQuestionsTitle')}</p>
+            <p className="text-xs font-semibold text-slate-500 dark:text-dk-text2 mb-2.5 px-1">{t('chatbot.studio.suggestedQuestionsTitle')}</p>
             <div className="flex flex-wrap gap-2">
               {suggestedQuestions.map((q, i) => (
                 <button
                   key={i}
                   onClick={() => handleSuggestionClick(q)}
-                  className="px-3 py-1.5 rounded-full text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors"
+                  className="px-3 py-1.5 rounded-full text-xs font-medium text-slate-700 dark:text-dk-text bg-slate-100 dark:bg-dk-raised hover:bg-slate-200 dark:hover:bg-dk-strong transition-colors"
                 >
                   {q}
                 </button>
@@ -518,7 +518,7 @@ function ChatMessageArea({ chatbot, onOpenConfig, canUseAi = true }) {
 
             {/* User Avatar */}
             {msg.role === 'user' && (
-              <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-slate-200 text-slate-600">
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-slate-200 dark:bg-dk-strong text-slate-600 dark:text-dk-text">
                 <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
                 </svg>
@@ -531,7 +531,7 @@ function ChatMessageArea({ chatbot, onOpenConfig, canUseAi = true }) {
                 className={`px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed ${
                   msg.role === 'user'
                     ? 'text-white rounded-tr-md'
-                    : 'bg-slate-100 text-slate-900 rounded-tl-md'
+                    : 'bg-slate-100 dark:bg-dk-raised text-slate-900 dark:text-dk-text rounded-tl-md'
                 }`}
                 style={msg.role === 'user' ? { background: gradientStyle } : {}}
               >
@@ -539,7 +539,7 @@ function ChatMessageArea({ chatbot, onOpenConfig, canUseAi = true }) {
                   <p className="whitespace-pre-wrap">
                     <RenderTextWithLinks
                       text={msg.content}
-                      linkClassName={`underline break-all font-medium hover:opacity-80 ${msg.role === 'user' ? 'text-white' : 'text-primary-600'}`}
+                      linkClassName={`underline break-all font-medium hover:opacity-80 ${msg.role === 'user' ? 'text-white' : 'text-primary-600 dark:text-primary-400'}`}
                     />
                   </p>
                 ) : null}
@@ -561,7 +561,7 @@ function ChatMessageArea({ chatbot, onOpenConfig, canUseAi = true }) {
             >
               {chatbot?.name?.[0]?.toUpperCase()}
             </div>
-            <div className="px-3.5 py-3 rounded-2xl rounded-tl-md bg-slate-100">
+            <div className="px-3.5 py-3 rounded-2xl rounded-tl-md bg-slate-100 dark:bg-dk-raised">
               <div className="flex gap-1">
                 {[0, 1, 2].map(i => (
                   <div
@@ -579,7 +579,7 @@ function ChatMessageArea({ chatbot, onOpenConfig, canUseAi = true }) {
       </div>
 
       {/* Floating Composer */}
-      <div className="px-4 sm:px-6 pb-4 sm:pb-6 pt-2 bg-white">
+      <div className="px-4 sm:px-6 pb-4 sm:pb-6 pt-2 bg-white dark:bg-dk-surface">
         <div className="max-w-3xl mx-auto">
           {canUseAi ? <>
           {pendingAttachments.length > 0 && (
@@ -587,14 +587,14 @@ function ChatMessageArea({ chatbot, onOpenConfig, canUseAi = true }) {
               {pendingAttachments.map((att, idx) => (
                 <div
                   key={`${att.ref || att.name}-${idx}`}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-xs"
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 dark:bg-dk-raised text-xs"
                 >
-                  <span className="truncate font-medium text-slate-700 max-w-[160px]">{att.displayName || att.name}</span>
+                  <span className="truncate font-medium text-slate-700 dark:text-dk-text max-w-[160px]">{att.displayName || att.name}</span>
                   <span className="text-slate-400 shrink-0">{formatFileSize(att.size)}</span>
                   <button
                     type="button"
                     onClick={() => removePendingAttachment(idx)}
-                    className="text-slate-400 hover:text-slate-700"
+                    className="text-slate-400 hover:text-slate-700 dark:hover:text-dk-text"
                     aria-label={t('chatbot.studio.removeFileAria')}
                   >
                     <HiOutlineX className="w-3 h-3" />
@@ -604,7 +604,7 @@ function ChatMessageArea({ chatbot, onOpenConfig, canUseAi = true }) {
             </div>
           )}
 
-          <div className="flex items-end gap-2 bg-slate-50 rounded-2xl ring-1 ring-slate-200/60 focus-within:ring-primary-500 focus-within:bg-white transition-all p-2">
+          <div className="flex items-end gap-2 bg-slate-50 dark:bg-dk-inset rounded-2xl ring-1 ring-slate-200/60 dark:ring-dk-border focus-within:ring-primary-500 focus-within:bg-white dark:focus-within:bg-dk-inset transition-all p-2">
             <input
               ref={fileInputRef}
               type="file"
@@ -617,7 +617,7 @@ function ChatMessageArea({ chatbot, onOpenConfig, canUseAi = true }) {
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={sending || uploadingAttachment || pendingAttachments.length >= MAX_ATTACHMENTS}
-              className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 disabled:opacity-50 transition-colors shrink-0"
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-dk-text hover:bg-slate-200/60 dark:hover:bg-dk-raised disabled:opacity-50 transition-colors shrink-0"
               title={t('chatbot.studio.attachFileTitle')}
             >
               {uploadingAttachment ? (
@@ -633,7 +633,7 @@ function ChatMessageArea({ chatbot, onOpenConfig, canUseAi = true }) {
               onKeyDown={handleKeyDown}
               placeholder={t('chatbot.studio.typeMessagePlaceholder')}
               rows={1}
-              className="flex-1 resize-none bg-transparent px-1 py-2 text-sm outline-none text-slate-900 placeholder-slate-400 max-h-32"
+              className="flex-1 resize-none bg-transparent px-1 py-2 text-sm outline-none text-slate-900 dark:text-dk-text placeholder-slate-400 dark:placeholder-dk-muted max-h-32"
             />
             <button
               onClick={handleSend}
@@ -652,7 +652,7 @@ function ChatMessageArea({ chatbot, onOpenConfig, canUseAi = true }) {
             {hasCreditLimit ? t('chatbot.studio.testChatNoteCredit') : t('chatbot.studio.testChatNoteFree')}
           </p>
           </> : (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-xs text-slate-600">
+            <div className="rounded-xl border border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-surface px-4 py-3 text-center text-xs text-slate-600 dark:text-dk-text">
               {t('chatbot.studio.employeeNoTestChat')}
             </div>
           )}
@@ -739,8 +739,8 @@ function ChatbotStudioPage() {
     <div className="h-[calc(100dvh-1.5rem)] min-h-[600px] flex flex-col">
       {/* Mobile tab switcher */}
       {isCompact && (
-        <div className="lg:hidden sticky top-0 z-30 -mx-4 sm:mx-0 bg-white">
-          <div className="flex border-b border-slate-100">
+        <div className="lg:hidden sticky top-0 z-30 -mx-4 sm:mx-0 bg-white dark:bg-dk-surface">
+          <div className="flex border-b border-slate-100 dark:border-dk-border">
             {MOBILE_PANELS.map((panel) => {
               const Icon = panel.icon;
               const isActive = activePanel === panel.id;
@@ -752,7 +752,7 @@ function ChatbotStudioPage() {
                   onClick={() => !disabled && setActivePanel(panel.id)}
                   disabled={disabled}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-3 transition-colors relative ${
-                    isActive ? 'text-primary-600' : 'text-slate-500 hover:text-slate-700'
+                    isActive ? 'text-primary-600 dark:text-primary-400' : 'text-slate-500 dark:text-dk-text2 hover:text-slate-700 dark:hover:text-dk-text'
                   } ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
                 >
                   <Icon className="w-4 h-4" />
@@ -769,9 +769,9 @@ function ChatbotStudioPage() {
 
       {/* Desktop: 3 cột từ 1280px; 1024–1279px: 2 cột + ngăn kéo Triển khai */}
       {isLargeScreen ? (
-        <div className="flex-1 flex gap-0 bg-white rounded-xl shadow-sm shadow-slate-200/60 overflow-hidden relative">
+        <div className="flex-1 flex gap-0 bg-white dark:bg-dk-surface rounded-xl shadow-sm border border-slate-200 dark:border-dk-border overflow-hidden relative">
           {/* Left */}
-          <div className={`${leftCollapsed ? 'w-14' : 'w-72'} shrink-0 transition-[width] duration-200 border-r border-slate-100`}>
+          <div className={`${leftCollapsed ? 'w-14' : 'w-72'} shrink-0 transition-[width] duration-200 border-r border-slate-100 dark:border-dk-border`}>
             <div className="h-full">
               <ChatListSidebar
                 selectedBot={selectedBot}
@@ -784,10 +784,10 @@ function ChatbotStudioPage() {
           </div>
 
           {/* Middle */}
-          <div className="flex-1 min-w-0 flex flex-col bg-white">
+          <div className="flex-1 min-w-0 flex flex-col bg-white dark:bg-dk-surface">
             {selectedBot ? (
               <>
-                <div className="border-b border-slate-100">
+                <div className="border-b border-slate-100 dark:border-dk-border">
                   <PlaygroundHeader
                     bot={selectedBot}
                     onConfig={openConfig}
@@ -804,7 +804,7 @@ function ChatbotStudioPage() {
 
           {/* Right */}
           {isWide && (
-            <div className="w-[360px] shrink-0 border-l border-slate-100">
+            <div className="w-[360px] shrink-0 border-l border-slate-100 dark:border-dk-border">
               <div className="h-full">
                 <RightPanel
                   chatbot={selectedBot}
@@ -825,12 +825,12 @@ function ChatbotStudioPage() {
               />
               <div
                 data-testid="deploy-drawer"
-                className="absolute inset-y-0 right-0 z-30 w-[360px] max-w-full bg-white border-l border-slate-100 shadow-xl"
+                className="absolute inset-y-0 right-0 z-30 w-[360px] max-w-full bg-white dark:bg-dk-surface border-l border-slate-100 dark:border-dk-border shadow-xl"
               >
                 <button
                   type="button"
                   onClick={() => setDeployDrawerOpen(false)}
-                  className="absolute top-3 right-3 z-10 w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                  className="absolute top-3 right-3 z-10 w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-dk-text hover:bg-slate-100 dark:hover:bg-dk-raised"
                   aria-label={t('chatbot.studio.close')}
                 >
                   <HiOutlineX className="w-4 h-4" />
@@ -850,7 +850,7 @@ function ChatbotStudioPage() {
       ) : (
         <div className="flex-1 flex flex-col md:flex-row gap-3 items-stretch">
           <div className={`${isCompact ? (activePanel === 'list' ? 'flex' : 'hidden') : 'flex'} flex-col w-full md:w-64 lg:w-72 shrink-0`}>
-            <div className={`bg-white rounded-xl shadow-sm shadow-slate-200/60 flex-1 min-h-0 flex flex-col overflow-hidden`}>
+            <div className={`bg-white dark:bg-dk-surface rounded-xl shadow-sm border border-slate-200 dark:border-dk-border flex-1 min-h-0 flex flex-col overflow-hidden`}>
               <ChatListSidebar
                 selectedBot={selectedBot}
                 onSelectBot={handleSelectBot}
@@ -859,12 +859,12 @@ function ChatbotStudioPage() {
             </div>
           </div>
           <div className={`${isCompact ? (activePanel === 'chat' ? 'flex' : 'hidden') : 'flex'} flex-1 min-w-0`}>
-            <div className={`bg-white rounded-xl shadow-sm shadow-slate-200/60 flex-1 min-h-0 flex flex-col overflow-hidden w-full`}>
+            <div className={`bg-white dark:bg-dk-surface rounded-xl shadow-sm border border-slate-200 dark:border-dk-border flex-1 min-h-0 flex flex-col overflow-hidden w-full`}>
               {selectedBot ? (
                 <>
                   {/* S-02: trên điện thoại/máy tính bảng, đầu khung chat có tên bot, trạng thái và nút Cấu hình — trước đây
                       chỉ nhánh màn lớn vẽ PlaygroundHeader nên không có đường nào mở hộp Cấu hình. */}
-                  <div className="border-b border-slate-100">
+                  <div className="border-b border-slate-100 dark:border-dk-border">
                     <PlaygroundHeader
                       bot={selectedBot}
                       onConfig={openConfig}
@@ -879,7 +879,7 @@ function ChatbotStudioPage() {
             </div>
           </div>
           <div className={`${isCompact ? (activePanel === 'settings' ? 'flex' : 'hidden') : 'flex'} flex-col w-full md:w-72 xl:w-[360px] shrink-0`}>
-            <div className={`bg-white rounded-xl shadow-sm shadow-slate-200/60 flex-1 min-h-0 flex flex-col overflow-hidden`}>
+            <div className={`bg-white dark:bg-dk-surface rounded-xl shadow-sm border border-slate-200 dark:border-dk-border flex-1 min-h-0 flex flex-col overflow-hidden`}>
               {selectedBot ? (
                 <RightPanel
                   chatbot={selectedBot}
@@ -888,10 +888,10 @@ function ChatbotStudioPage() {
                 />
               ) : (
                 <div className="h-full flex flex-col items-center justify-center p-8 text-center">
-                  <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3">
+                  <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-dk-raised flex items-center justify-center mb-3">
                     <HiOutlineCog className="w-5 h-5 text-slate-400" />
                   </div>
-                  <p className="text-sm font-medium text-slate-700">{t('chatbot.studio.selectBotTitle')}</p>
+                  <p className="text-sm font-medium text-slate-700 dark:text-dk-text">{t('chatbot.studio.selectBotTitle')}</p>
                   <p className="text-xs text-slate-400 mt-1">{t('chatbot.studio.selectBotForConfigDeploy')}</p>
                 </div>
               )}

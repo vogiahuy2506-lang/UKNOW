@@ -86,7 +86,7 @@ export default function SystemInstructionAiWriter({ currentValue = '', onApply }
       <button
         type="button"
         onClick={() => setIsOpen((open) => !open)}
-        className="inline-flex items-center gap-1 text-xs font-medium text-violet-600 hover:text-violet-700"
+        className="inline-flex items-center gap-1 text-xs font-medium text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300"
         aria-expanded={isOpen}
       >
         <HiOutlineSparkles className="w-3.5 h-3.5" />
@@ -94,10 +94,10 @@ export default function SystemInstructionAiWriter({ currentValue = '', onApply }
       </button>
 
       {isOpen && (
-        <div className="mt-2 rounded-lg border border-violet-200 bg-violet-50/50 p-3 space-y-2">
+        <div className="mt-2 rounded-lg border border-violet-200 dark:border-violet-900/50 bg-violet-50/50 dark:bg-violet-950/20 p-3 space-y-2">
           {!result && (
             <>
-              <label htmlFor="system-instruction-ai-hint" className="text-xs font-medium text-slate-700 block">
+              <label htmlFor="system-instruction-ai-hint" className="text-xs font-medium text-slate-700 dark:text-dk-text block">
                 {t('systemInstructionAiWriter.hintLabel')}
               </label>
               <textarea
@@ -110,9 +110,9 @@ export default function SystemInstructionAiWriter({ currentValue = '', onApply }
                 className="input resize-y min-h-[56px] text-sm"
                 disabled={isWriting}
               />
-              {hintError && <p role="alert" className="text-xs text-red-600">{hintError}</p>}
+              {hintError && <p role="alert" className="text-xs text-red-600 dark:text-red-400">{hintError}</p>}
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[10px] text-slate-500">{t('systemInstructionAiWriter.creditNote')}</span>
+                <span className="text-[10px] text-slate-500 dark:text-dk-text2">{t('systemInstructionAiWriter.creditNote')}</span>
                 <button
                   type="button"
                   onClick={write}
@@ -127,10 +127,10 @@ export default function SystemInstructionAiWriter({ currentValue = '', onApply }
 
           {result && (
             <>
-              <p className="text-xs font-medium text-slate-700">{t('systemInstructionAiWriter.previewTitle')}</p>
+              <p className="text-xs font-medium text-slate-700 dark:text-dk-text">{t('systemInstructionAiWriter.previewTitle')}</p>
               <pre
                 data-testid="system-instruction-ai-preview"
-                className="max-h-64 overflow-auto whitespace-pre-wrap rounded border border-slate-200 bg-white p-2 text-xs text-slate-800"
+                className="max-h-64 overflow-auto whitespace-pre-wrap rounded border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset p-2 text-xs text-slate-800 dark:text-dk-text"
               >
                 {result}
               </pre>

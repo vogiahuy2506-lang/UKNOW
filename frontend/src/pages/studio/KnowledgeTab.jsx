@@ -312,8 +312,8 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
     >
       <div className="px-5 pb-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2 min-w-0">
-          <h3 className="text-sm font-semibold text-slate-900">{t('chatbot.studio.kbDocsTitle')}</h3>
-          <span className="text-[10px] font-semibold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-dk-text">{t('chatbot.studio.kbDocsTitle')}</h3>
+          <span className="text-[10px] font-semibold bg-slate-100 dark:bg-dk-raised text-slate-600 dark:text-dk-text px-1.5 py-0.5 rounded-full">
             {documents.length}
           </span>
         </div>
@@ -321,7 +321,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
           <button
             type="button"
             onClick={openUpload}
-            className="flex items-center gap-1.5 px-2 py-1.5 rounded-md border border-slate-200 hover:border-primary-300 hover:bg-primary-50 transition-all text-xs font-medium text-slate-700"
+            className="flex items-center gap-1.5 px-2 py-1.5 rounded-md border border-slate-200 dark:border-dk-border hover:border-primary-300 dark:hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-dk-raised transition-all text-xs font-medium text-slate-700 dark:text-dk-text"
           >
             <HiOutlineUpload className="w-3.5 h-3.5" />
             <span>{t('chatbot.studio.kbUploadBtn')}</span>
@@ -329,7 +329,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
           <button
             type="button"
             onClick={() => setShowText(true)}
-            className="flex items-center gap-1.5 px-2 py-1.5 rounded-md border border-slate-200 hover:border-primary-300 hover:bg-primary-50 transition-all text-xs font-medium text-slate-700"
+            className="flex items-center gap-1.5 px-2 py-1.5 rounded-md border border-slate-200 dark:border-dk-border hover:border-primary-300 dark:hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-dk-raised transition-all text-xs font-medium text-slate-700 dark:text-dk-text"
           >
             <HiOutlinePlus className="w-3.5 h-3.5" />
             <span>{t('chatbot.studio.kbTextBtn')}</span>
@@ -337,7 +337,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
           <button
             type="button"
             onClick={() => setShowUrlScrape(true)}
-            className="flex items-center gap-1.5 px-2 py-1.5 rounded-md border border-slate-200 hover:border-primary-300 hover:bg-primary-50 transition-all text-xs font-medium text-slate-700"
+            className="flex items-center gap-1.5 px-2 py-1.5 rounded-md border border-slate-200 dark:border-dk-border hover:border-primary-300 dark:hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-dk-raised transition-all text-xs font-medium text-slate-700 dark:text-dk-text"
           >
             <HiOutlineGlobeAlt className="w-3.5 h-3.5" />
             <span>URL</span>
@@ -347,11 +347,11 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
 
       <div className="flex-1 overflow-y-auto px-5 pb-5">
         {documents.length === 0 ? (
-          <div className="text-center py-12 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
-            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-2">
+          <div className="text-center py-12 bg-slate-50 dark:bg-dk-raised rounded-xl border-2 border-dashed border-slate-200 dark:border-dk-border">
+            <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-dk-raised flex items-center justify-center mx-auto mb-2">
               <HiOutlineBookOpen className="w-5 h-5 text-slate-400" />
             </div>
-            <p className="text-sm font-medium text-slate-700">{t('chatbot.studio.kbEmptyTitle')}</p>
+            <p className="text-sm font-medium text-slate-700 dark:text-dk-text">{t('chatbot.studio.kbEmptyTitle')}</p>
             <p className="text-xs text-slate-400 mt-1">{t('chatbot.studio.kbEmptyHint')}</p>
           </div>
         ) : (
@@ -359,20 +359,20 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
             {documents.map((doc) => (
               <div
                 key={doc.id}
-                className="group flex items-center gap-3 px-3 py-2.5 bg-white rounded-lg hover:bg-slate-50 transition-colors"
+                className="group flex items-center gap-3 px-3 py-2.5 bg-white dark:bg-dk-raised rounded-lg hover:bg-slate-50 dark:hover:bg-dk-strong transition-colors"
               >
-                <div className="w-8 h-8 rounded-md bg-primary-50 text-primary-600 flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 rounded-md bg-primary-50 dark:bg-primary-950/50 text-primary-600 dark:text-primary-400 flex items-center justify-center shrink-0">
                   <HiOutlineDocumentText className="w-4 h-4" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-900 truncate">{doc.title}</p>
+                  <p className="text-sm font-medium text-slate-900 dark:text-dk-text truncate">{doc.title}</p>
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <span className="text-[11px] text-slate-400">
                       {doc.chunk_count || 0} chunks
                     </span>
                     {doc.source_type && (
                       <span className="inline-flex items-center gap-1 text-[10px] text-slate-400">
-                        <span className="w-1 h-1 rounded-full bg-slate-300" />
+                        <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-dk-strong" />
                         {doc.source_type}
                       </span>
                     )}
@@ -387,7 +387,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
                   <button
                     type="button"
                     onClick={() => handleViewDocument(doc)}
-                    className="w-7 h-7 rounded-md flex items-center justify-center text-slate-300 hover:text-primary-600 hover:bg-primary-50 transition-colors opacity-0 group-hover:opacity-100"
+                    className="w-7 h-7 rounded-md flex items-center justify-center text-slate-300 dark:text-dk-muted hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-950/40 transition-colors opacity-0 group-hover:opacity-100"
                     title={t('chatbot.studio.kbViewContent')}
                   >
                     <HiOutlineEye className="w-3.5 h-3.5" />
@@ -396,7 +396,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
                     type="button"
                     onClick={() => handleDelete(doc)}
                     disabled={deletingId === doc.id}
-                    className="w-7 h-7 rounded-md flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-50"
+                    className="w-7 h-7 rounded-md flex items-center justify-center text-slate-300 dark:text-dk-muted hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-50"
                     title={t('chatbot.studio.delete')}
                   >
                     {deletingId === doc.id ? (
@@ -412,14 +412,14 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
         )}
       </div>
 
-      <div className="shrink-0 border-t border-slate-100 px-5 py-3 bg-white">
+      <div className="shrink-0 border-t border-slate-100 dark:border-dk-border px-5 py-3 bg-white dark:bg-dk-raised">
         <div
           onClick={openUpload}
-          className="border-2 border-dashed border-slate-200 rounded-xl px-4 py-4 text-center cursor-pointer hover:border-primary-300 hover:bg-primary-50 transition-all"
+          className="border-2 border-dashed border-slate-200 dark:border-dk-border bg-slate-50/50 dark:bg-dk-surface rounded-xl px-4 py-4 text-center cursor-pointer hover:border-primary-300 dark:hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-950/20 transition-all"
         >
           <HiOutlineUpload className="w-5 h-5 text-slate-400 mx-auto mb-1.5" />
-          <p className="text-xs font-medium text-slate-500">{t('chatbot.studio.kbDropHere')}</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">{t('chatbot.studio.kbMaxSize', { formats: ALLOWED_FORMATS_LABEL, max: MAX_FILE_MB })}</p>
+          <p className="text-xs font-medium text-slate-600 dark:text-dk-text">{t('chatbot.studio.kbDropHere')}</p>
+          <p className="text-[11px] text-slate-400 dark:text-dk-text2 mt-0.5">{t('chatbot.studio.kbMaxSize', { formats: ALLOWED_FORMATS_LABEL, max: MAX_FILE_MB })}</p>
         </div>
         <input
           ref={fileInputRef}
@@ -447,43 +447,43 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
 
       {showUpload && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+          <div className="bg-white dark:bg-dk-surface rounded-xl shadow-xl w-full max-w-md border border-transparent dark:border-dk-border">
             <div className="px-5 py-4 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-900">{t('chatbot.studio.kbUploadModalTitle')}</h3>
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-dk-text">{t('chatbot.studio.kbUploadModalTitle')}</h3>
               <button
                 type="button"
                 onClick={() => setShowUpload(false)}
-                className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-dk-text dark:hover:bg-dk-raised"
               >
                 <HiOutlineX className="w-4 h-4" />
               </button>
             </div>
             <form onSubmit={handleUploadFile} className="px-5 pb-5 space-y-3">
               <div>
-                <label className="text-xs font-medium text-slate-700 block mb-1.5">{t('chatbot.studio.kbDocName')}</label>
+                <label className="text-xs font-medium text-slate-700 dark:text-dk-text block mb-1.5">{t('chatbot.studio.kbDocName')}</label>
                 <input
                   type="text"
                   value={uploadTitle}
                   onChange={(e) => setUploadTitle(e.target.value)}
                   placeholder={t('chatbot.studio.kbDocNameExample')}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10 transition-all"
+                  className="w-full border border-slate-200 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text rounded-lg px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10 transition-all"
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-slate-700 block mb-1.5">File</label>
+                <label className="text-xs font-medium text-slate-700 dark:text-dk-text block mb-1.5">File</label>
                 {uploadFile ? (
-                  <div className="flex items-center gap-3 px-3 py-2.5 border border-slate-200 rounded-lg bg-slate-50">
-                    <div className="w-8 h-8 rounded-md bg-primary-100 text-primary-600 flex items-center justify-center shrink-0">
+                  <div className="flex items-center gap-3 px-3 py-2.5 border border-slate-200 dark:border-dk-border rounded-lg bg-slate-50 dark:bg-dk-raised">
+                    <div className="w-8 h-8 rounded-md bg-primary-100 dark:bg-primary-950/40 text-primary-600 dark:text-primary-400 flex items-center justify-center shrink-0">
                       <HiOutlineDocumentText className="w-4 h-4" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-900 truncate">{uploadFile.name}</p>
+                      <p className="text-sm font-medium text-slate-900 dark:text-dk-text truncate">{uploadFile.name}</p>
                       <p className="text-xs text-slate-400">{formatBytes(uploadFile.size)}</p>
                     </div>
                     <button
                       type="button"
                       onClick={() => { setUploadFile(null); setUploadTitle(''); }}
-                      className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50"
+                      className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40"
                     >
                       <HiOutlineX className="w-4 h-4" />
                     </button>
@@ -491,10 +491,10 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
                 ) : (
                   <div
                     onClick={openUpload}
-                    className="border-2 border-dashed border-slate-200 rounded-lg px-4 py-6 text-center cursor-pointer hover:border-primary-300 hover:bg-primary-50 transition-colors"
+                    className="border-2 border-dashed border-slate-200 dark:border-dk-border rounded-lg px-4 py-6 text-center cursor-pointer hover:border-primary-300 hover:bg-primary-50 dark:hover:bg-primary-950/20 transition-colors"
                   >
                     <HiOutlineUpload className="w-6 h-6 text-slate-400 mx-auto mb-1.5" />
-                    <p className="text-xs font-medium text-slate-600">{t('chatbot.studio.kbPickOrDrop')}</p>
+                    <p className="text-xs font-medium text-slate-600 dark:text-dk-text">{t('chatbot.studio.kbPickOrDrop')}</p>
                     <p className="text-[11px] text-slate-400 mt-1">{t('chatbot.studio.kbMaxOnly', { max: MAX_FILE_MB })}</p>
                   </div>
                 )}
@@ -506,7 +506,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
                 <button
                   type="button"
                   onClick={() => setShowUpload(false)}
-                  className="px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                  className="px-3 py-2 text-sm font-medium text-slate-600 dark:text-dk-text hover:bg-slate-100 dark:hover:bg-dk-raised rounded-lg transition-colors"
                 >
                   {t('chatbot.studio.cancel')}
                 </button>
@@ -521,43 +521,43 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
 
       {showText && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+          <div className="bg-white dark:bg-dk-surface rounded-xl shadow-xl w-full max-w-md border border-transparent dark:border-dk-border">
             <div className="px-5 py-4 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-900">{t('chatbot.studio.kbAddTextTitle')}</h3>
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-dk-text">{t('chatbot.studio.kbAddTextTitle')}</h3>
               <button
                 type="button"
                 onClick={() => setShowText(false)}
-                className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-dk-text dark:hover:bg-dk-raised"
               >
                 <HiOutlineX className="w-4 h-4" />
               </button>
             </div>
             <form onSubmit={handleAddText} className="px-5 pb-5 space-y-3">
               <div>
-                <label className="text-xs font-medium text-slate-700 block mb-1.5">{t('chatbot.studio.kbTitleLabel')}</label>
+                <label className="text-xs font-medium text-slate-700 dark:text-dk-text block mb-1.5">{t('chatbot.studio.kbTitleLabel')}</label>
                 <input
                   type="text"
                   value={textTitle}
                   onChange={(e) => setTextTitle(e.target.value)}
                   placeholder={t('chatbot.studio.kbTitleExample')}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10 transition-all"
+                  className="w-full border border-slate-200 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text rounded-lg px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10 transition-all"
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-slate-700 block mb-1.5">{t('chatbot.studio.kbContentLabel')}</label>
+                <label className="text-xs font-medium text-slate-700 dark:text-dk-text block mb-1.5">{t('chatbot.studio.kbContentLabel')}</label>
                 <textarea
                   value={textContent}
                   onChange={(e) => setTextContent(e.target.value)}
                   rows={6}
                   placeholder={t('chatbot.studio.kbContentPlaceholder')}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10 transition-all resize-y"
+                  className="w-full border border-slate-200 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text rounded-lg px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10 transition-all resize-y"
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowText(false)}
-                  className="px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                  className="px-3 py-2 text-sm font-medium text-slate-600 dark:text-dk-text hover:bg-slate-100 dark:hover:bg-dk-raised rounded-lg transition-colors"
                 >
                   {t('chatbot.studio.cancel')}
                 </button>
@@ -572,26 +572,26 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
 
       {showUrlScrape && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+          <div className="bg-white dark:bg-dk-surface rounded-xl shadow-xl w-full max-w-md border border-transparent dark:border-dk-border">
             <div className="px-5 py-4 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-900">{t('chatbot.studio.kbScrapeTitle')}</h3>
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-dk-text">{t('chatbot.studio.kbScrapeTitle')}</h3>
               <button
                 type="button"
                 onClick={() => setShowUrlScrape(false)}
-                className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-dk-text dark:hover:bg-dk-raised"
               >
                 <HiOutlineX className="w-4 h-4" />
               </button>
             </div>
             <form onSubmit={handleScrapeUrl} className="px-5 pb-5 space-y-3">
               <div>
-                <label className="text-xs font-medium text-slate-700 block mb-1.5">URL</label>
+                <label className="text-xs font-medium text-slate-700 dark:text-dk-text block mb-1.5">URL</label>
                 <input
                   type="url"
                   value={scrapeUrl}
                   onChange={(e) => setScrapeUrl(e.target.value)}
                   placeholder="https://example.com"
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10 transition-all"
+                  className="w-full border border-slate-200 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text rounded-lg px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10 transition-all"
                 />
                 <p className="text-[11px] text-slate-400 mt-1">
                   {t('chatbot.studio.kbCrawlNote')}
@@ -601,7 +601,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
                 <button
                   type="button"
                   onClick={() => setShowUrlScrape(false)}
-                  className="px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                  className="px-3 py-2 text-sm font-medium text-slate-600 dark:text-dk-text hover:bg-slate-100 dark:hover:bg-dk-raised rounded-lg transition-colors"
                 >
                   {t('chatbot.studio.cancel')}
                 </button>
@@ -616,25 +616,25 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
 
       {viewingDoc && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
-            <div className="px-5 py-4 flex items-center justify-between border-b border-slate-100 shrink-0">
+          <div className="bg-white dark:bg-dk-surface rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col border border-transparent dark:border-dk-border">
+            <div className="px-5 py-4 flex items-center justify-between border-b border-slate-100 dark:border-dk-border shrink-0">
               <div className="flex-1 min-w-0 mr-4">
-                <h3 className="text-sm font-semibold text-slate-900 truncate">{viewingDoc.title}</h3>
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-dk-text truncate">{viewingDoc.title}</h3>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className="text-[11px] text-slate-400">{viewingDoc.chunk_count || 0} chunks</span>
                   {viewingDoc.extracted_chars && (
                     <>
-                      <span className="text-slate-300">|</span>
+                      <span className="text-slate-300 dark:text-dk-muted">|</span>
                       <span className="text-[11px] text-slate-400">{t('chatbot.studio.kbCharsK', { n: (viewingDoc.extracted_chars / 1000).toFixed(1) })}</span>
                     </>
                   )}
                   {viewingDoc.source_type && (
                     <>
-                      <span className="text-slate-300">|</span>
+                      <span className="text-slate-300 dark:text-dk-muted">|</span>
                       <span className="text-[11px] text-slate-400">{viewingDoc.source_type}</span>
                     </>
                   )}
-                  <span className="text-slate-300">|</span>
+                  <span className="text-slate-300 dark:text-dk-muted">|</span>
                   <span className="text-[11px] text-slate-400">{formatDate(viewingDoc.created_at, locale)}</span>
                 </div>
               </div>
@@ -644,7 +644,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
                     href={viewingDoc.source}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-8 h-8 rounded-md flex items-center justify-center text-slate-400 hover:text-primary-600 hover:bg-primary-50 transition-colors"
+                    className="w-8 h-8 rounded-md flex items-center justify-center text-slate-400 hover:text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-950/20 transition-colors"
                     title={t('chatbot.studio.kbOpenSource')}
                   >
                     <HiOutlineExternalLink className="w-4 h-4" />
@@ -653,7 +653,7 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
                 <button
                   type="button"
                   onClick={() => setViewingDoc(null)}
-                  className="w-8 h-8 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                  className="w-8 h-8 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-dk-text dark:hover:bg-dk-raised transition-colors"
                 >
                   <HiOutlineX className="w-4 h-4" />
                 </button>
@@ -663,10 +663,10 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
               {viewingDoc.loading ? (
                 <div className="flex items-center justify-center py-12">
                   <HiOutlineRefresh className="w-5 h-5 animate-spin text-primary-500" />
-                  <span className="ml-2 text-sm text-slate-500">{t('chatbot.studio.kbLoading')}</span>
+                  <span className="ml-2 text-sm text-slate-500 dark:text-dk-text2">{t('chatbot.studio.kbLoading')}</span>
                 </div>
               ) : viewingDoc.content_text ? (
-                <pre className="whitespace-pre-wrap text-sm text-slate-700 font-mono leading-relaxed bg-slate-50 rounded-lg p-4 border border-slate-100 overflow-auto">
+                <pre className="whitespace-pre-wrap text-sm text-slate-700 dark:text-dk-text font-mono leading-relaxed bg-slate-50 dark:bg-dk-raised rounded-lg p-4 border border-slate-100 dark:border-dk-border overflow-auto">
                   {viewingDoc.content_text}
                 </pre>
               ) : (
@@ -676,11 +676,11 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
                 </div>
               )}
             </div>
-            <div className="px-5 py-3 border-t border-slate-100 shrink-0 flex justify-end">
+            <div className="px-5 py-3 border-t border-slate-100 dark:border-dk-border shrink-0 flex justify-end">
               <button
                 type="button"
                 onClick={() => setViewingDoc(null)}
-                className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-dk-text hover:bg-slate-100 dark:hover:bg-dk-raised rounded-lg transition-colors"
               >
                 {t('chatbot.studio.close')}
               </button>

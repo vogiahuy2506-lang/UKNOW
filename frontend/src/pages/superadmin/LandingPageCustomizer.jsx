@@ -12,16 +12,16 @@ export default function LandingPageCustomizer() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="px-4 py-2 bg-slate-50 border-b border-slate-200 flex items-center gap-4 flex-wrap">
-        <span className="text-sm font-medium text-slate-600">Editor Mode:</span>
-        <div className="flex bg-white border border-slate-200 rounded-lg p-0.5 flex-wrap">
+      <div className="px-4 py-2 bg-slate-50 dark:bg-dk-surface border-b border-slate-200 dark:border-dk-border flex items-center gap-4 flex-wrap">
+        <span className="text-sm font-medium text-slate-600 dark:text-dk-text2">Editor Mode:</span>
+        <div className="flex bg-white dark:bg-dk-inset border border-slate-200 dark:border-dk-border rounded-lg p-0.5 flex-wrap">
           <button
             type="button"
             onClick={() => setEditorMode('canva')}
             className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
               editorMode === 'canva'
                 ? 'bg-orange-500 text-white shadow-sm'
-                : 'text-slate-600 hover:bg-slate-100'
+                : 'text-slate-600 dark:text-dk-text2 hover:bg-slate-100 dark:hover:bg-dk-raised'
             }`}
           >
             Canva Editor
@@ -32,14 +32,14 @@ export default function LandingPageCustomizer() {
             className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
               editorMode === 'html'
                 ? 'bg-orange-500 text-white shadow-sm'
-                : 'text-slate-600 hover:bg-slate-100'
+                : 'text-slate-600 dark:text-dk-text2 hover:bg-slate-100 dark:hover:bg-dk-raised'
             }`}
           >
             HTML Full
           </button>
         </div>
         <div className="flex-1" />
-        <div className="text-xs text-slate-500">{modeHint}</div>
+        <div className="text-xs text-slate-500 dark:text-dk-muted">{modeHint}</div>
       </div>
 
       <div className="flex-1 min-h-0">

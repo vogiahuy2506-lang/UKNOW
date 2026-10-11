@@ -38,18 +38,18 @@ export function SectionCard({ icon: Icon, title, subtitle, children, accent = 's
     blue: 'bg-blue-50 text-blue-500',
     green: 'bg-green-50 text-green-600',
     orange: 'bg-orange-50 text-orange-500',
-    slate: 'bg-slate-100 text-slate-500',
+    slate: 'bg-slate-100 dark:bg-dk-raised text-slate-500 dark:text-dk-text2',
   };
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-      <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100">
+    <div className="bg-white dark:bg-dk-raised border border-slate-200 dark:border-dk-border rounded-2xl overflow-hidden">
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100 dark:border-dk-border">
         <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${colors[accent]}`}>
           <Icon className="w-4 h-4" />
         </div>
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-slate-700">{title}</p>
-          {subtitle && <p className="text-xs text-slate-400 truncate">{subtitle}</p>}
+          <p className="text-sm font-semibold text-slate-700 dark:text-dk-text">{title}</p>
+          {subtitle && <p className="text-xs text-slate-500 dark:text-dk-text2 truncate">{subtitle}</p>}
         </div>
       </div>
       <div className="p-5">{children}</div>
@@ -68,8 +68,8 @@ const RESPONSE_STYLES = [
     emoji: '😊',
     label: 'Thân thiện',
     desc: 'Gần gũi, dùng emoji phù hợp',
-    accent: 'from-orange-50 to-amber-50',
-    ring: 'ring-orange-300',
+    accent: 'from-orange-50 to-amber-50 dark:from-orange-950/40 dark:to-amber-950/30',
+    ring: 'ring-orange-300 dark:ring-orange-500/50',
     temperature: 0.7,
     max_tokens: 2048,
     welcome: 'Xin chào! Tôi có thể giúp gì cho bạn hôm nay? 😊',
@@ -79,8 +79,8 @@ const RESPONSE_STYLES = [
     emoji: '🎯',
     label: 'Chuyên nghiệp',
     desc: 'Ngắn gọn, súc tích, lịch sự',
-    accent: 'from-slate-50 to-blue-50',
-    ring: 'ring-blue-300',
+    accent: 'from-slate-50 to-blue-50 dark:from-dk-bg/40 dark:to-blue-950/30',
+    ring: 'ring-blue-300 dark:ring-blue-500/50',
     temperature: 0.3,
     max_tokens: 1024,
     welcome: 'Xin chào. Tôi là trợ lý ảo, xin phép hỗ trợ bạn.',
@@ -90,8 +90,8 @@ const RESPONSE_STYLES = [
     emoji: '💬',
     label: 'Thoải mái',
     desc: 'Như trò chuyện với bạn bè',
-    accent: 'from-violet-50 to-fuchsia-50',
-    ring: 'ring-violet-300',
+    accent: 'from-violet-50 to-fuchsia-50 dark:from-violet-950/40 dark:to-fuchsia-950/30',
+    ring: 'ring-violet-300 dark:ring-violet-500/50',
     temperature: 0.8,
     max_tokens: 2048,
     welcome: 'Ê chào bạn! Đang cần hỗ trợ gì nè?',
@@ -101,8 +101,8 @@ const RESPONSE_STYLES = [
     emoji: '🤝',
     label: 'Đồng cảm',
     desc: 'Thấu hiểu, ân cần, chu đáo',
-    accent: 'from-rose-50 to-pink-50',
-    ring: 'ring-rose-300',
+    accent: 'from-rose-50 to-pink-50 dark:from-rose-950/40 dark:to-pink-950/30',
+    ring: 'ring-rose-300 dark:ring-rose-500/50',
     temperature: 0.6,
     max_tokens: 2048,
     welcome: 'Chào bạn, mình ở đây để lắng nghe và hỗ trợ bạn nhé 💗',
@@ -112,8 +112,8 @@ const RESPONSE_STYLES = [
     emoji: '⚡',
     label: 'Ngắn gọn',
     desc: 'Trả lời đúng trọng tâm, ít thừa',
-    accent: 'from-cyan-50 to-sky-50',
-    ring: 'ring-cyan-300',
+    accent: 'from-cyan-50 to-sky-50 dark:from-cyan-950/40 dark:to-sky-950/30',
+    ring: 'ring-cyan-300 dark:ring-cyan-500/50',
     temperature: 0.2,
     max_tokens: 512,
     welcome: 'Chào bạn. Bạn cần hỗ trợ gì?',
@@ -123,8 +123,8 @@ const RESPONSE_STYLES = [
     emoji: '✨',
     label: 'Sáng tạo',
     desc: 'Ý tưởng mới, gợi mở, đa dạng',
-    accent: 'from-amber-50 to-yellow-50',
-    ring: 'ring-amber-300',
+    accent: 'from-amber-50 to-yellow-50 dark:from-amber-950/40 dark:to-yellow-950/30',
+    ring: 'ring-amber-300 dark:ring-amber-500/50',
     temperature: 0.95,
     max_tokens: 4096,
     welcome: 'Chào bạn! Hôm nay mình có thể cùng bạn khám phá điều gì thú vị? ✨',
@@ -193,11 +193,11 @@ export function AIConfig({ config = {}, onChange, options = {} }) {
       <div>
         <div className="flex items-center justify-between mb-2">
           <div>
-            <label className={`${compact ? 'text-xs' : 'label mb-0'} font-medium text-slate-700 block`}>
+            <label className={`${compact ? 'text-xs' : 'label mb-0'} font-medium text-slate-700 dark:text-dk-text block`}>
               Phong cách trả lời
             </label>
             {!compact && (
-              <p className="text-[11px] text-slate-400 mt-0.5">
+              <p className="text-[11px] text-slate-400 dark:text-dk-muted mt-0.5">
                 Chọn 1 phong cách — AI sẽ tự động điều chỉnh giọng điệu & tin nhắn chào
               </p>
             )}
@@ -223,21 +223,21 @@ export function AIConfig({ config = {}, onChange, options = {} }) {
                 className={`relative p-2.5 rounded-xl border text-left transition-all bg-gradient-to-br ${
                   active
                     ? `border-primary-500 ${style.accent} ring-2 ${style.ring}`
-                    : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                    : 'border-slate-200 dark:border-dk-border hover:border-slate-300 dark:hover:border-dk-border bg-white dark:bg-dk-raised/40 hover:bg-slate-50 dark:hover:bg-dk-strong'
                 }`}
               >
                 <div className="flex items-center gap-1.5 mb-1">
                   <span className="text-base leading-none">{style.emoji}</span>
                   <span
                     className={`text-xs font-semibold ${
-                      active ? 'text-primary-700' : 'text-slate-800'
+                      active ? 'text-primary-700 dark:text-primary-300' : 'text-slate-800 dark:text-dk-text'
                     }`}
                   >
                     {style.label}
                   </span>
                 </div>
                 {!compact && (
-                  <div className="text-[10px] text-slate-500 leading-tight">{style.desc}</div>
+                  <div className="text-[10px] text-slate-500 dark:text-dk-text2 leading-tight">{style.desc}</div>
                 )}
                 {active && (
                   <span className="absolute top-1.5 right-1.5 w-3.5 h-3.5 rounded-full bg-primary-500 flex items-center justify-center">
@@ -251,25 +251,25 @@ export function AIConfig({ config = {}, onChange, options = {} }) {
       </div>
 
       {/* ── Tuỳ chỉnh nâng cao (collapsible) ──────────────────────────── */}
-      <details className="group border border-slate-200 rounded-xl overflow-hidden">
-        <summary className="flex items-center justify-between px-3 py-2.5 cursor-pointer bg-slate-50 hover:bg-slate-100 transition-colors list-none">
+      <details className="group border border-slate-200 dark:border-dk-border rounded-xl overflow-hidden">
+        <summary className="flex items-center justify-between px-3 py-2.5 cursor-pointer bg-slate-50 dark:bg-dk-raised/60 hover:bg-slate-100 dark:hover:bg-dk-strong transition-colors list-none">
           <div className="flex items-center gap-2">
-            <HiOutlineCog className="w-4 h-4 text-slate-500" />
-            <span className="text-xs font-medium text-slate-700">Tuỳ chỉnh nâng cao</span>
+            <HiOutlineCog className="w-4 h-4 text-slate-500 dark:text-dk-text2" />
+            <span className="text-xs font-medium text-slate-700 dark:text-dk-text">Tuỳ chỉnh nâng cao</span>
             {isStyleModified() && (
-              <span className="text-[9px] font-semibold uppercase tracking-wider text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded">
+              <span className="text-[9px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-950/60 px-1.5 py-0.5 rounded">
                 Đã chỉnh
               </span>
             )}
           </div>
-          <HiOutlineChevronDown className="w-3.5 h-3.5 text-slate-400 transition-transform group-open:rotate-180" />
+          <HiOutlineChevronDown className="w-3.5 h-3.5 text-slate-400 dark:text-dk-muted transition-transform group-open:rotate-180" />
         </summary>
-        <div className="p-3 space-y-4 bg-white">
+        <div className="p-3 space-y-4 bg-white dark:bg-dk-surface">
           {/* Temperature */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-medium text-slate-700">Độ sáng tạo</label>
-              <span className="text-xs font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+              <label className="text-xs font-medium text-slate-700 dark:text-dk-text">Độ sáng tạo</label>
+              <span className="text-xs font-mono text-slate-500 dark:text-dk-text2 bg-slate-100 dark:bg-dk-raised px-1.5 py-0.5 rounded">
                 {config.temperature ?? 0.7}
               </span>
             </div>
@@ -282,7 +282,7 @@ export function AIConfig({ config = {}, onChange, options = {} }) {
               onChange={(e) => markCustom('temperature', parseFloat(e.target.value))}
               className="w-full accent-primary-600"
             />
-            <div className="flex justify-between text-[10px] text-slate-400 mt-1">
+            <div className="flex justify-between text-[10px] text-slate-400 dark:text-dk-muted mt-1">
               <span>Chính xác</span>
               <span>Sáng tạo</span>
             </div>
@@ -290,7 +290,7 @@ export function AIConfig({ config = {}, onChange, options = {} }) {
 
           {/* Max Tokens */}
           <div>
-            <label className="text-xs font-medium text-slate-700 mb-1.5 block">
+            <label className="text-xs font-medium text-slate-700 dark:text-dk-text mb-1.5 block">
               Giới hạn độ dài phản hồi
             </label>
             <select
@@ -307,7 +307,7 @@ export function AIConfig({ config = {}, onChange, options = {} }) {
 
           {/* Welcome Message */}
           <div>
-            <label className="text-xs font-medium text-slate-700 mb-1.5 block">
+            <label className="text-xs font-medium text-slate-700 dark:text-dk-text mb-1.5 block">
               Tin nhắn chào mở đầu
             </label>
             <textarea
@@ -317,7 +317,7 @@ export function AIConfig({ config = {}, onChange, options = {} }) {
               rows={2}
               className="input resize-y min-h-[60px]"
             />
-            <p className="text-[10px] text-slate-400 mt-1">
+            <p className="text-[10px] text-slate-400 dark:text-dk-muted mt-1">
               Tin nhắn này sẽ được gửi khi người dùng bắt đầu cuộc trò chuyện
             </p>
           </div>
@@ -328,11 +328,11 @@ export function AIConfig({ config = {}, onChange, options = {} }) {
       {showSystemInstruction && (
         <div>
           <div className="flex items-center justify-between mb-2">
-            <label className={`${compact ? 'text-xs' : 'label mb-0'} font-medium text-slate-700`}>
+            <label className={`${compact ? 'text-xs' : 'label mb-0'} font-medium text-slate-700 dark:text-dk-text`}>
               <HiOutlineSparkles className="w-3.5 h-3.5 inline mr-1 -mt-0.5 text-violet-500" />
               Hướng dẫn AI
             </label>
-            <span className="text-[10px] text-slate-400">
+            <span className="text-[10px] text-slate-400 dark:text-dk-muted">
               {(config.system_instruction || '').length} ký tự
             </span>
           </div>
@@ -347,7 +347,7 @@ export function AIConfig({ config = {}, onChange, options = {} }) {
             rows={compact ? 4 : 8}
             className="input resize-y min-h-[160px]"
           />
-          <p className="text-[10px] text-slate-400 mt-1">
+          <p className="text-[10px] text-slate-400 dark:text-dk-muted mt-1">
             Không giới hạn độ dài. Hướng dẫn chi tiết giúp AI hiểu rõ vai trò và phong cách trả lời.
           </p>
         </div>
@@ -405,7 +405,7 @@ export function FieldRow({ label, children, hint }) {
     <div className="space-y-1.5">
       <label className="label">{label}</label>
       {children}
-      {hint && <p className="text-xs text-slate-400">{hint}</p>}
+      {hint && <p className="text-xs text-slate-500 dark:text-dk-text2">{hint}</p>}
     </div>
   );
 }
@@ -426,7 +426,7 @@ export function Toggle({ checked, onChange, id }) {
       id={id}
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
-        checked ? 'bg-primary-600' : 'bg-slate-200'
+        checked ? 'bg-primary-600' : 'bg-slate-200 dark:bg-dk-strong'
       }`}
     >
       <span

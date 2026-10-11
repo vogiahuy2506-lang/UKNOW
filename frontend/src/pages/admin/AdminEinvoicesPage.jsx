@@ -189,11 +189,11 @@ const AdminEinvoicesPage = () => {
     >
 
       {/* Filter bar */}
-      <form onSubmit={handleSearch} className="card p-4 flex flex-wrap items-end gap-3">
+      <form onSubmit={handleSearch} className="card p-4 flex flex-wrap items-end gap-3 dark:bg-dk-surface dark:border-dk-border">
         <div className="flex-[2] min-w-[180px]">
-          <label className="block text-xs text-gray-500 mb-1">{t('adminEinvoices.search')}</label>
+          <label className="block text-xs text-gray-500 dark:text-dk-text2 mb-1">{t('adminEinvoices.search')}</label>
           <div className="relative">
-            <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-dk-muted" />
             <input
               type="text"
               className="input pl-9 w-full"
@@ -205,7 +205,7 @@ const AdminEinvoicesPage = () => {
         </div>
 
         <div className="flex-1 min-w-[150px]">
-          <label className="block text-xs text-gray-500 mb-1">{t('adminEinvoices.invoiceStatus')}</label>
+          <label className="block text-xs text-gray-500 dark:text-dk-text2 mb-1">{t('adminEinvoices.invoiceStatus')}</label>
           <select
             className="input w-full"
             value={draft.status}
@@ -222,7 +222,7 @@ const AdminEinvoicesPage = () => {
         </div>
 
         <div className="flex-1 min-w-[140px]">
-          <label className="block text-xs text-gray-500 mb-1">{t('adminEinvoices.fromDate')}</label>
+          <label className="block text-xs text-gray-500 dark:text-dk-text2 mb-1">{t('adminEinvoices.fromDate')}</label>
           <input
             type="date"
             className="input w-full"
@@ -232,7 +232,7 @@ const AdminEinvoicesPage = () => {
         </div>
 
         <div className="flex-1 min-w-[140px]">
-          <label className="block text-xs text-gray-500 mb-1">{t('adminEinvoices.toDate')}</label>
+          <label className="block text-xs text-gray-500 dark:text-dk-text2 mb-1">{t('adminEinvoices.toDate')}</label>
           <input
             type="date"
             className="input w-full"
@@ -257,10 +257,10 @@ const AdminEinvoicesPage = () => {
       </form>
 
       {/* Table */}
-      <div className="card overflow-hidden">
+      <div className="card overflow-hidden dark:bg-dk-surface dark:border-dk-border">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="bg-gray-50 dark:bg-dk-raised border-b border-gray-200 dark:border-dk-border">
               <tr>
                 {[
                   t('adminEinvoices.orderCode'),
@@ -275,27 +275,27 @@ const AdminEinvoicesPage = () => {
                 ].map((h) => (
                   <th
                     key={h}
-                    className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3"
+                    className="text-left text-xs font-semibold text-gray-500 dark:text-dk-text2 uppercase tracking-wide px-4 py-3"
                   >
                     {h}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100 dark:divide-dk-border/60">
               {isLoading ? (
                 [...Array(5)].map((_, i) => (
                   <tr key={i}>
                     {[...Array(9)].map((__, j) => (
                       <td key={j} className="px-4 py-3">
-                        <div className="h-4 bg-gray-100 rounded animate-pulse" />
+                        <div className="h-4 bg-gray-100 dark:bg-dk-raised/60 rounded animate-pulse" />
                       </td>
                     ))}
                   </tr>
                 ))
               ) : einvoices.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-10 text-center text-gray-400">
+                  <td colSpan={9} className="px-4 py-10 text-center text-gray-400 dark:text-dk-muted">
                     {t('adminEinvoices.noEinvoices')}
                   </td>
                 </tr>
@@ -309,42 +309,42 @@ const AdminEinvoicesPage = () => {
                   const isActing = actionLoadingId === e.id;
 
                   return (
-                    <tr key={e.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-3 font-mono text-xs text-gray-600">{e.orderCode}</td>
+                    <tr key={e.id} className="hover:bg-gray-50 dark:hover:bg-dk-raised/40 transition-colors">
+                      <td className="px-4 py-3 font-mono text-xs text-gray-600 dark:text-dk-text">{e.orderCode}</td>
                       <td className="px-4 py-3">
-                        <p className="text-gray-800 font-medium">{e.userFullName || e.userEmail}</p>
-                        {e.userFullName && <p className="text-xs text-gray-400">{e.userEmail}</p>}
+                        <p className="text-gray-800 dark:text-dk-text font-medium">{e.userFullName || e.userEmail}</p>
+                        {e.userFullName && <p className="text-xs text-gray-400 dark:text-dk-muted">{e.userEmail}</p>}
                       </td>
-                      <td className="px-4 py-3 font-semibold text-gray-900 whitespace-nowrap">
+                      <td className="px-4 py-3 font-semibold text-gray-900 dark:text-dk-text whitespace-nowrap">
                         {fmtVnd(e.amount)}
                       </td>
                       <td className="px-4 py-3">
                         <InvoiceStatusBadge status={e.status} />
                         {isOrderRefunded && (
-                          <span className="mt-1 block w-fit rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium text-rose-700">
+                          <span className="mt-1 block w-fit rounded bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 px-1.5 py-0.5 text-[10px] font-medium text-rose-700 dark:text-rose-400">
                             {['issued', 'cqt_ok'].includes(e.status)
                               ? t('adminEinvoices.orderRefundedNeedsAdjustment')
                               : t('adminEinvoices.orderRefundedNotIssued')}
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-xs text-gray-700 whitespace-nowrap">
+                      <td className="px-4 py-3 text-xs text-gray-700 dark:text-dk-text whitespace-nowrap">
                         {e.soHdon ? `${e.khhdon || ''} / ${e.soHdon}` : '—'}
                       </td>
                       <td className="px-4 py-3">
                         <EmailStatusBadge status={e.emailStatus} />
                       </td>
-                      <td className="px-4 py-3 text-xs text-gray-500 max-w-[200px] truncate" title={e.errorMessage || e.errorCode || ''}>
+                      <td className="px-4 py-3 text-xs text-gray-500 dark:text-dk-text2 max-w-[200px] truncate" title={e.errorMessage || e.errorCode || ''}>
                         {e.errorCode ? (
                           <span>
-                            <span className="font-mono text-red-600 font-semibold">{e.errorCode}</span>
-                            {e.errorMessage && <span className="text-gray-400 ml-1">({e.errorMessage})</span>}
+                            <span className="font-mono text-red-600 dark:text-red-400 font-semibold">{e.errorCode}</span>
+                            {e.errorMessage && <span className="text-gray-400 dark:text-dk-muted ml-1">({e.errorMessage})</span>}
                           </span>
                         ) : (
                           '—'
                         )}
                       </td>
-                      <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">
+                      <td className="px-4 py-3 text-gray-500 dark:text-dk-text2 whitespace-nowrap text-xs">
                         {fmtDate(e.createdAt)}
                       </td>
                       <td className="px-4 py-3">
@@ -354,7 +354,7 @@ const AdminEinvoicesPage = () => {
                               type="button"
                               onClick={() => handleRetry(e)}
                               disabled={isActing}
-                              className="btn btn-secondary text-xs px-2.5 py-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                              className="btn btn-secondary text-xs px-2.5 py-1 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/30"
                               title={t('adminEinvoices.retry')}
                             >
                               <HiOutlineRefresh className={`w-3.5 h-3.5 mr-1 ${isActing ? 'animate-spin' : ''}`} />
@@ -366,7 +366,7 @@ const AdminEinvoicesPage = () => {
                               type="button"
                               onClick={() => handleResendEmail(e)}
                               disabled={isActing}
-                              className="btn btn-secondary text-xs px-2.5 py-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                              className="btn btn-secondary text-xs px-2.5 py-1 text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
                               title={t('adminEinvoices.resendEmail')}
                             >
                               <HiOutlineMail className={`w-3.5 h-3.5 mr-1 ${isActing ? 'animate-spin' : ''}`} />
@@ -374,7 +374,7 @@ const AdminEinvoicesPage = () => {
                             </button>
                           )}
                           {!canRetry && !canResend && (
-                            <span className="text-xs text-gray-400">—</span>
+                            <span className="text-xs text-gray-400 dark:text-dk-muted">—</span>
                           )}
                         </div>
                       </td>
@@ -388,8 +388,8 @@ const AdminEinvoicesPage = () => {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="p-4 border-t border-gray-100 flex items-center justify-between gap-4">
-            <p className="text-xs text-gray-500">
+          <div className="p-4 border-t border-gray-100 dark:border-dk-border flex items-center justify-between gap-4">
+            <p className="text-xs text-gray-500 dark:text-dk-text2">
               {t('adminEinvoices.displaying', {
                 from: (page - 1) * PAGE_SIZE + 1,
                 to: Math.min(page * PAGE_SIZE, total),
@@ -405,7 +405,7 @@ const AdminEinvoicesPage = () => {
               >
                 {t('adminEinvoices.previous')}
               </button>
-              <span className="text-xs text-gray-600">
+              <span className="text-xs text-gray-600 dark:text-dk-text">
                 {page} / {totalPages}
               </span>
               <button

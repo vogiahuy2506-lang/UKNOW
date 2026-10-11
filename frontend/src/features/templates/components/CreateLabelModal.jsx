@@ -34,15 +34,15 @@ const CreateLabelModal = ({ isOpen, onClose, onCreated, onDeleted, existingLabel
 
   return (
     <FullScreenOverlay isOpen={isOpen} backdropClassName="bg-black/50" className="p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
-        <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-primary-100 flex items-center justify-center text-primary-600">
+      <div className="bg-white dark:bg-dk-surface rounded-xl shadow-xl border border-gray-200 dark:border-dk-border w-full max-w-md">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-dk-border flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-primary-100 dark:bg-primary-950/40 flex items-center justify-center text-primary-600 dark:text-primary-400">
             <HiOutlineTag className="w-4 h-4" />
           </div>
-          <h3 className="text-base font-semibold text-gray-900">Quản lý nhãn template</h3>
+          <h3 className="text-base font-semibold text-gray-900 dark:text-dk-text">Quản lý nhãn template</h3>
           <button
             onClick={onClose}
-            className="ml-auto w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+            className="ml-auto w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 dark:hover:bg-dk-raised text-gray-400 dark:text-dk-muted hover:text-gray-600 dark:hover:text-dk-text transition-colors"
           >
             ✕
           </button>
@@ -52,7 +52,7 @@ const CreateLabelModal = ({ isOpen, onClose, onCreated, onDeleted, existingLabel
           {/* Danh sách nhãn hiện có */}
           {existingLabels.length > 0 && (
             <div>
-              <p className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Nhãn hiện có</p>
+              <p className="text-xs font-medium text-gray-500 dark:text-dk-text2 mb-2 uppercase tracking-wide">Nhãn hiện có</p>
               <div className="flex flex-wrap gap-2">
                 {existingLabels.map((label) => (
                   <div
@@ -70,7 +70,7 @@ const CreateLabelModal = ({ isOpen, onClose, onCreated, onDeleted, existingLabel
                       <button
                         type="button"
                         onClick={() => onDeleted(label.id)}
-                        className="ml-0.5 p-0.5 rounded-full hover:bg-black/10 transition-colors opacity-60 hover:opacity-100"
+                        className="ml-0.5 p-0.5 rounded-full hover:bg-black/10 dark:hover:bg-dk-raised/10 transition-colors opacity-60 hover:opacity-100"
                         title="Xóa nhãn"
                       >
                         <HiOutlineTrash className="w-3 h-3" />
@@ -85,19 +85,19 @@ const CreateLabelModal = ({ isOpen, onClose, onCreated, onDeleted, existingLabel
           {/* Form tạo nhãn mới */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="text-sm font-medium text-gray-700 block mb-1">Tên nhãn mới</label>
+              <label className="text-sm font-medium text-gray-700 dark:text-dk-text block mb-1">Tên nhãn mới</label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Ví dụ: Upsell, Flash sale, Nhắc lịch..."
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all text-sm"
+                className="w-full px-3 py-2 bg-gray-50 dark:bg-dk-inset border border-gray-300 dark:border-dk-border text-gray-900 dark:text-dk-text placeholder:text-gray-400 dark:placeholder:text-dk-muted rounded-lg focus:bg-white dark:focus:bg-dk-inset focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all text-sm"
                 autoFocus
               />
             </div>
 
             <div>
-              <label className="text-sm font-medium text-gray-700 block mb-2">Màu nhãn</label>
+              <label className="text-sm font-medium text-gray-700 dark:text-dk-text block mb-2">Màu nhãn</label>
               <div className="flex flex-wrap gap-2.5">
                 {COLOR_OPTIONS.map((c) => (
                   <button
@@ -105,7 +105,7 @@ const CreateLabelModal = ({ isOpen, onClose, onCreated, onDeleted, existingLabel
                     type="button"
                     onClick={() => setColor(c)}
                     className={`w-7 h-7 rounded-full transition-all ${
-                      color === c ? 'ring-2 ring-offset-2 ring-gray-500 scale-110' : 'hover:scale-105'
+                      color === c ? 'ring-2 ring-offset-2 ring-gray-500 dark:ring-offset-dk-surface scale-110' : 'hover:scale-105'
                     }`}
                     style={{ backgroundColor: c }}
                     title={c}
@@ -114,7 +114,7 @@ const CreateLabelModal = ({ isOpen, onClose, onCreated, onDeleted, existingLabel
               </div>
               {name.trim() && (
                 <div className="mt-3 flex items-center gap-2">
-                  <span className="text-xs text-gray-500">Xem trước:</span>
+                  <span className="text-xs text-gray-500 dark:text-dk-text2">Xem trước:</span>
                   <span
                     className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border"
                     style={{
@@ -130,13 +130,13 @@ const CreateLabelModal = ({ isOpen, onClose, onCreated, onDeleted, existingLabel
               )}
             </div>
 
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
             <div className="flex justify-end gap-2 pt-1">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm transition-colors"
+                className="px-4 py-2 rounded-lg border border-gray-300 dark:border-dk-border text-gray-700 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised text-sm transition-colors"
               >
                 Đóng
               </button>

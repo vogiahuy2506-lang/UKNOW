@@ -125,11 +125,11 @@ export default function ImageUrlInput({
 
   return (
     <div className="space-y-3">
-      {label && <p className="text-sm font-medium text-slate-700">{label}</p>}
+      {label && <p className="text-sm font-medium text-slate-700 dark:text-dk-text">{label}</p>}
 
       {/* Preview */}
       {preview && (
-        <div className="relative w-24 h-24 rounded-xl overflow-hidden border-2 border-slate-200 bg-slate-50 group">
+        <div className="relative w-24 h-24 rounded-xl overflow-hidden border-2 border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-raised group">
           <img
             src={preview}
             alt="Preview"
@@ -165,14 +165,14 @@ export default function ImageUrlInput({
         <div
           onDrop={handleDrop}
           onDragOver={handleDragOver}
-          className="w-24 h-24 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 hover:bg-slate-100 hover:border-slate-400 transition-colors cursor-pointer flex flex-col items-center justify-center gap-1"
+          className="w-24 h-24 rounded-xl border-2 border-dashed border-slate-300 dark:border-dk-border bg-slate-50 dark:bg-dk-raised hover:bg-slate-100 dark:hover:bg-dk-strong hover:border-slate-400 dark:hover:border-dk-border-strong transition-colors cursor-pointer flex flex-col items-center justify-center gap-1"
           onClick={() => fileInputRef.current?.click()}
         >
-          <HiOutlineUpload className="w-6 h-6 text-slate-400" />
-          <span className="text-xs text-slate-500 text-center px-1">
+          <HiOutlineUpload className="w-6 h-6 text-slate-400 dark:text-dk-muted" />
+          <span className="text-xs text-slate-500 dark:text-dk-text2 text-center px-1">
             Upload ảnh
           </span>
-          <span className="text-[10px] text-slate-400">
+          <span className="text-[10px] text-slate-400 dark:text-dk-muted">
             tối đa {maxSize}MB
           </span>
         </div>
@@ -189,8 +189,8 @@ export default function ImageUrlInput({
 
       {/* Upload status */}
       {isUploading && (
-        <div className="flex items-center gap-2 text-xs text-slate-500">
-          <div className="w-4 h-4 border-2 border-slate-300 border-t-primary-500 rounded-full animate-spin" />
+        <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-dk-text2">
+          <div className="w-4 h-4 border-2 border-slate-300 dark:border-dk-border-strong border-t-primary-500 rounded-full animate-spin" />
           Đang tải lên...
         </div>
       )}
@@ -203,15 +203,15 @@ export default function ImageUrlInput({
           onChange={handleUrlChange}
           onBlur={handleUrlBlur}
           placeholder={placeholder}
-          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-slate-100 disabled:cursor-not-allowed"
+          className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset text-slate-800 dark:text-dk-text placeholder-slate-300 dark:placeholder-dk-muted focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-slate-100 dark:disabled:bg-dk-raised disabled:cursor-not-allowed"
           disabled={isUploading}
         />
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-slate-500 dark:text-dk-text2">
           Hoặc dán URL ảnh. Kích thước khuyến nghị: 256×256px
         </p>
       </div>
 
-      {help && <p className="text-xs text-slate-400">{help}</p>}
+      {help && <p className="text-xs text-slate-500 dark:text-dk-text2">{help}</p>}
     </div>
   );
 }

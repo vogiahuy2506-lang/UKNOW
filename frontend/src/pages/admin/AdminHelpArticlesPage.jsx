@@ -160,18 +160,18 @@ export default function AdminHelpArticlesPage() {
       }
     >
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface shadow-sm">
         {isLoading ? (
-          <div className="p-10 text-center text-sm text-slate-400">{t('common.loading')}</div>
+          <div className="p-10 text-center text-sm text-slate-400 dark:text-dk-muted">{t('common.loading')}</div>
         ) : rows.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-3 p-14 text-slate-400">
+          <div className="flex flex-col items-center justify-center gap-3 p-14 text-slate-400 dark:text-dk-muted">
             <HiOutlineDocumentText className="h-10 w-10" />
             <p>{t('adminHelp.noArticles')}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-100 text-sm">
-              <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <table className="min-w-full divide-y divide-slate-100 dark:divide-dk-border/60 text-sm">
+              <thead className="bg-slate-50 dark:bg-dk-raised text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-dk-text2">
                 <tr>
                   <th className="px-5 py-3">{t('adminHelp.article')}</th>
                   <th className="px-5 py-3">{t('adminHelp.locale')}</th>
@@ -181,72 +181,72 @@ export default function AdminHelpArticlesPage() {
                   <th className="px-5 py-3 text-right">{t('common.actions')}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-dk-border/60">
                 {rows.map((article) => {
                   const busy = savingId === article.id;
                   return (
-                    <tr key={article.slug} className="align-top">
+                    <tr key={article.slug} className="align-top hover:bg-slate-50/50 dark:hover:bg-dk-raised/30 transition-colors">
                       <td className="px-5 py-4">
-                        <p className="font-medium text-slate-900">{article.title}</p>
-                        <p className="mt-0.5 text-xs text-slate-500">/huong-dan/{article.slug}</p>
+                        <p className="font-medium text-slate-900 dark:text-dk-text">{article.title}</p>
+                        <p className="mt-0.5 text-xs text-slate-500 dark:text-dk-text2">/huong-dan/{article.slug}</p>
                       </td>
                       <td className="px-5 py-4">
                         <div className="flex flex-wrap gap-1">
                           {article._hasVi ? (
-                            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-700">
+                            <span className="rounded bg-slate-100 dark:bg-dk-raised px-1.5 py-0.5 text-xs font-medium text-slate-700 dark:text-dk-text">
                               {t('adminHelp.localeVi')}
                             </span>
                           ) : (
-                            <span className="rounded bg-red-50 px-1.5 py-0.5 text-xs text-red-600 font-medium" title="Lỗi: Bài viết này bị mất bản gốc tiếng Việt!">
+                            <span className="rounded bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 px-1.5 py-0.5 text-xs text-red-600 dark:text-red-400 font-medium" title="Lỗi: Bài viết này bị mất bản gốc tiếng Việt!">
                               Thiếu VI
                             </span>
                           )}
                           {article._hasEn ? (
                             <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${
                               article._enStale
-                                ? 'bg-amber-100 text-amber-800'
-                                : 'bg-emerald-100 text-emerald-800'
+                                ? 'bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-400'
+                                : 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-400'
                             }`}
                             >
                               {article._enStale ? t('adminHelp.enStale') : t('adminHelp.hasEn')}
                             </span>
                           ) : (
-                            <span className="rounded bg-slate-50 px-1.5 py-0.5 text-xs text-slate-400">
+                            <span className="rounded bg-slate-50 dark:bg-dk-raised/60 px-1.5 py-0.5 text-xs text-slate-400 dark:text-dk-muted">
                               {t('adminHelp.noEn')}
                             </span>
                           )}
                         </div>
                       </td>
-                      <td className="px-5 py-4 text-slate-600">{article.feature_key}</td>
+                      <td className="px-5 py-4 text-slate-600 dark:text-dk-text2">{article.feature_key}</td>
                       <td className="px-5 py-4">
                         <label className="inline-flex cursor-pointer items-center gap-2">
                           <input
                             type="checkbox"
-                            className="h-4 w-4 rounded border-slate-300 text-primary-600"
+                            className="h-4 w-4 rounded border-slate-300 dark:border-dk-border text-primary-600"
                             checked={Boolean(article.is_published)}
                             disabled={busy}
                             onChange={() => togglePublish(article)}
                           />
-                          <span className={article.is_published ? 'font-medium text-emerald-700' : 'text-slate-400'}>
+                          <span className={article.is_published ? 'font-medium text-emerald-700 dark:text-emerald-400' : 'text-slate-400 dark:text-dk-muted'}>
                             {article.is_published ? t('adminHelp.publishedYes') : t('adminHelp.publishedNo')}
                           </span>
                         </label>
                       </td>
-                      <td className="px-5 py-4 text-slate-500">{formatDate(article.updated_at)}</td>
+                      <td className="px-5 py-4 text-slate-500 dark:text-dk-text2">{formatDate(article.updated_at)}</td>
                       <td className="px-5 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button
                             type="button"
                             onClick={() => reindex(article)}
                             disabled={busy}
-                            className="p-2 text-slate-500 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors disabled:opacity-50"
+                            className="p-2 text-slate-500 dark:text-dk-text2 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-950/30 rounded-lg transition-colors disabled:opacity-50"
                             title={t('adminHelp.reindex')}
                           >
                             <HiOutlineRefresh className={`h-4 w-4 ${busy ? 'animate-spin' : ''}`} />
                           </button>
                           <Link
                             to={`/admin/help-articles/${article.id}`}
-                            className="p-2 text-slate-500 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                            className="p-2 text-slate-500 dark:text-dk-text2 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-950/30 rounded-lg transition-colors"
                             title={t('common.edit')}
                           >
                             <HiOutlinePencil className="h-4 w-4" />
@@ -255,7 +255,7 @@ export default function AdminHelpArticlesPage() {
                             type="button"
                             onClick={() => deleteArticle(article)}
                             disabled={busy}
-                            className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                            className="p-2 text-slate-500 dark:text-dk-text2 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors disabled:opacity-50"
                             title={t('common.delete')}
                           >
                             <HiOutlineTrash className="h-4 w-4" />

@@ -88,9 +88,9 @@ const OrdersTooltip = ({ active, payload, label, isMonthlyView, viewMode, t, loc
     ];
 
     return (
-      <div className="bg-white border border-gray-100 rounded-xl shadow-lg px-4 py-3">
-        <p className="text-xs font-semibold text-gray-500 mb-3">{dateLabel}</p>
-        <div className="flex divide-x divide-gray-100">
+      <div className="bg-white dark:bg-dk-surface border border-gray-100 dark:border-dk-border rounded-xl shadow-lg px-4 py-3">
+        <p className="text-xs font-semibold text-gray-500 dark:text-dk-text2 mb-3">{dateLabel}</p>
+        <div className="flex divide-x divide-gray-100 dark:divide-dk-border/80">
           {COLS.map((col, colIdx) => {
             const pendingEntry   = dataMap[col.pending.key];
             const completedEntry = dataMap[col.completed.key];
@@ -99,7 +99,7 @@ const OrdersTooltip = ({ active, payload, label, isMonthlyView, viewMode, t, loc
                 key={col.label}
                 className={`min-w-[110px] ${colIdx > 0 ? 'pl-3' : ''} ${colIdx < COLS.length - 1 ? 'pr-3' : ''}`}
               >
-                <p className="text-[11px] font-semibold text-gray-400 mb-1.5 uppercase tracking-wide">
+                <p className="text-[11px] font-semibold text-gray-400 dark:text-dk-text2 mb-1.5 uppercase tracking-wide">
                   {col.label}
                 </p>
                 {[
@@ -112,9 +112,9 @@ const OrdersTooltip = ({ active, payload, label, isMonthlyView, viewMode, t, loc
                         className="w-2 h-2 rounded-full shrink-0"
                         style={{ background: entry?.color || '#d1d5db' }}
                       />
-                      <span className="text-xs text-gray-600 whitespace-nowrap">{rowLabel}</span>
+                      <span className="text-xs text-gray-600 dark:text-dk-text whitespace-nowrap">{rowLabel}</span>
                     </div>
-                    <span className="text-xs font-semibold text-gray-900 tabular-nums text-right">
+                    <span className="text-xs font-semibold text-gray-900 dark:text-dk-text tabular-nums text-right">
                       {Number(entry?.value || 0).toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN')}
                     </span>
                   </div>
@@ -129,15 +129,15 @@ const OrdersTooltip = ({ active, payload, label, isMonthlyView, viewMode, t, loc
 
   /* ── Summary mode: vertical list ── */
   return (
-    <div className="bg-white border border-gray-100 rounded-xl shadow-lg px-4 py-3 min-w-[180px]">
-      <p className="text-xs font-semibold text-gray-500 mb-2">{dateLabel}</p>
+    <div className="bg-white dark:bg-dk-surface border border-gray-100 dark:border-dk-border rounded-xl shadow-lg px-4 py-3 min-w-[180px]">
+      <p className="text-xs font-semibold text-gray-500 dark:text-dk-text2 mb-2">{dateLabel}</p>
       {payload.map((entry) => (
         <div key={entry.dataKey} className="flex items-center justify-between gap-4 py-0.5">
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: entry.color }} />
-            <span className="text-xs text-gray-600">{entry.name}</span>
+            <span className="text-xs text-gray-600 dark:text-dk-text">{entry.name}</span>
           </div>
-          <span className="text-xs font-semibold text-gray-900">
+          <span className="text-xs font-semibold text-gray-900 dark:text-dk-text">
             {Number(entry.value || 0).toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN')}
           </span>
         </div>
@@ -204,8 +204,8 @@ const DashboardOrdersChart = ({
       {/* Card header */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-5">
         <div>
-          <h3 className="text-base font-semibold text-gray-900">{t('dashboard.ordersOverTime')}</h3>
-          <p className="text-xs text-gray-400 mt-0.5">
+          <h3 className="text-base font-semibold text-gray-900 dark:text-dk-text">{t('dashboard.ordersOverTime')}</h3>
+          <p className="text-xs text-gray-400 dark:text-dk-text2 mt-0.5">
             {viewMode === 'compare'
               ? t('dashboard.compareOrdersByChannel')
               : t('dashboard.summaryAllChannels')}
@@ -215,7 +215,7 @@ const DashboardOrdersChart = ({
         <div className="flex flex-col items-end gap-2 shrink-0">
           {/* View mode tabs — ẩn khi in PDF (lockedViewMode) */}
           {!lockedViewMode && (
-            <div className="flex items-center gap-1 p-0.5 rounded-lg bg-gray-100">
+            <div className="flex items-center gap-1 p-0.5 rounded-lg bg-gray-100 dark:bg-dk-inset">
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
@@ -223,8 +223,8 @@ const DashboardOrdersChart = ({
                   onClick={() => setViewMode(tab.id)}
                   className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
                     viewMode === tab.id
-                      ? 'bg-white text-gray-800 shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700'
+                      ? 'bg-white dark:bg-dk-raised text-gray-800 dark:text-dk-text shadow-sm'
+                      : 'text-gray-500 dark:text-dk-text2 hover:text-gray-700 dark:hover:text-dk-text'
                   }`}
                 >
                   {tab.label}
@@ -235,15 +235,15 @@ const DashboardOrdersChart = ({
 
           {/* Summary badges */}
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-50 border border-orange-100">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-50 dark:bg-orange-950/40 border border-orange-100 dark:border-orange-900/50">
               <span className="w-2 h-2 rounded-full bg-orange-400 shrink-0" />
-              <span className="text-xs font-medium text-orange-700">
+              <span className="text-xs font-medium text-orange-700 dark:text-orange-300">
                 {Number(totalPending).toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN')} {t('dashboard.pendingOrdersBadge')}
               </span>
             </div>
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-green-50 border border-green-100">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-green-50 dark:bg-emerald-950/40 border border-green-100 dark:border-emerald-900/50">
               <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-              <span className="text-xs font-medium text-green-700">
+              <span className="text-xs font-medium text-green-700 dark:text-emerald-300">
                 {Number(totalCompleted).toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN')} {t('dashboard.completedOrdersBadge')}
               </span>
             </div>

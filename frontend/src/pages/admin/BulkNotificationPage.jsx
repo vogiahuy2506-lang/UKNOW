@@ -87,15 +87,15 @@ export default function BulkNotificationPage() {
     >
 
       {/* Info banner */}
-      <div className="rounded-xl border border-blue-100 bg-blue-50 px-5 py-4">
+      <div className="rounded-xl border border-blue-100 bg-blue-50 px-5 py-4 dark:border-blue-900/50 dark:bg-blue-950/30">
         <div className="flex items-start gap-3">
-          <HiOutlineMail className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
+          <HiOutlineMail className="mt-0.5 h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
           <div>
-            <p className="text-sm font-semibold text-blue-800">{t('bulkNotification.recipients')}</p>
+            <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">{t('bulkNotification.recipients')}</p>
             {loading ? (
-              <div className="mt-1 h-4 w-24 rounded bg-blue-200 animate-pulse" />
+              <div className="mt-1 h-4 w-24 rounded bg-blue-200 animate-pulse dark:bg-blue-800" />
             ) : (
-              <p className="mt-0.5 text-sm text-blue-700">
+              <p className="mt-0.5 text-sm text-blue-700 dark:text-blue-200">
                 {recipientCount > 0
                   ? t('bulkNotification.recipientsCount', { count: recipientCount })
                   : t('bulkNotification.noRecipients')}
@@ -111,7 +111,7 @@ export default function BulkNotificationPage() {
           <form onSubmit={handleSubmit} className="card space-y-5 p-6">
             {/* Title */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-dk-text mb-1.5">
                 {t('bulkNotification.labelTitle')} <span className="text-red-500">*</span>
               </label>
               <input
@@ -121,14 +121,14 @@ export default function BulkNotificationPage() {
                 onChange={handleChange}
                 placeholder={t('bulkNotification.placeholderTitle')}
                 maxLength={200}
-                className="input input-bordered w-full"
+                className="input input-bordered w-full dark:border-dk-border dark:bg-dk-inset dark:text-dk-text"
               />
-              <p className="mt-1 text-xs text-gray-400">{t('bulkNotification.titleHint')}</p>
+              <p className="mt-1 text-xs text-gray-400 dark:text-dk-muted">{t('bulkNotification.titleHint')}</p>
             </div>
 
             {/* Message */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-dk-text mb-1.5">
                 {t('bulkNotification.labelMessage')} <span className="text-red-500">*</span>
               </label>
               <textarea
@@ -138,9 +138,9 @@ export default function BulkNotificationPage() {
                 placeholder={t('bulkNotification.placeholderMessage')}
                 rows={6}
                 maxLength={2000}
-                className="textarea textarea-bordered w-full resize-none font-mono text-sm"
+                className="textarea textarea-bordered w-full resize-none font-mono text-sm dark:border-dk-border dark:bg-dk-inset dark:text-dk-text"
               />
-              <p className="mt-1 text-xs text-gray-400">
+              <p className="mt-1 text-xs text-gray-400 dark:text-dk-muted">
                 {t('bulkNotification.charCount', { current: form.message.length, max: 2000 })}
               </p>
             </div>
@@ -149,7 +149,7 @@ export default function BulkNotificationPage() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {/* Duration */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                <label className="block text-sm font-semibold text-gray-700 dark:text-dk-text mb-1.5">
                   {t('bulkNotification.labelDuration')}
                 </label>
                 <div className="relative">
@@ -161,18 +161,18 @@ export default function BulkNotificationPage() {
                     placeholder="30"
                     min={1}
                     max={9999}
-                    className="input input-bordered w-full pr-14"
+                    className="input input-bordered w-full pr-14 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text"
                   />
-                  <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 text-sm text-gray-400">
+                  <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 text-sm text-gray-400 dark:text-dk-muted">
                     {t('bulkNotification.minutes')}
                   </span>
                 </div>
-                <p className="mt-1 text-xs text-gray-400">{t('bulkNotification.durationHint')}</p>
+                <p className="mt-1 text-xs text-gray-400 dark:text-dk-muted">{t('bulkNotification.durationHint')}</p>
               </div>
 
               {/* Start time */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                <label className="block text-sm font-semibold text-gray-700 dark:text-dk-text mb-1.5">
                   {t('bulkNotification.labelStartTime')}
                 </label>
                 <input
@@ -180,9 +180,9 @@ export default function BulkNotificationPage() {
                   name="start_time"
                   value={form.start_time}
                   onChange={handleChange}
-                  className="input input-bordered w-full"
+                  className="input input-bordered w-full dark:border-dk-border dark:bg-dk-inset dark:text-dk-text"
                 />
-                <p className="mt-1 text-xs text-gray-400">{t('bulkNotification.startTimeHint')}</p>
+                <p className="mt-1 text-xs text-gray-400 dark:text-dk-muted">{t('bulkNotification.startTimeHint')}</p>
               </div>
             </div>
 
@@ -208,7 +208,7 @@ export default function BulkNotificationPage() {
               <button
                 type="button"
                 onClick={handleReset}
-                className="btn btn-ghost"
+                className="btn btn-ghost dark:text-dk-text dark:hover:bg-dk-raised"
                 disabled={sending}
               >
                 {t('bulkNotification.reset')}
@@ -221,35 +221,35 @@ export default function BulkNotificationPage() {
         <div className="space-y-5">
           {/* Email preview */}
           <div className="card p-5">
-            <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('bulkNotification.preview')}</h3>
-            <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm">
+            <h3 className="mb-3 text-sm font-semibold text-gray-700 dark:text-dk-text">{t('bulkNotification.preview')}</h3>
+            <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm dark:border-dk-border dark:bg-dk-raised">
               <div className="mb-3 rounded bg-red-600 px-3 py-2">
                 <p className="text-xs font-semibold text-white">⚠️ FounderAI</p>
                 <p className="text-[11px] text-red-100">Thông báo bảo trì hệ thống</p>
               </div>
-              <p className="mb-2 text-xs text-gray-500">Xin chào <strong>Quý khách hàng</strong>,</p>
-              <p className="mb-3 text-xs text-gray-600">
+              <p className="mb-2 text-xs text-gray-500 dark:text-dk-text2">Xin chào <strong>Quý khách hàng</strong>,</p>
+              <p className="mb-3 text-xs text-gray-600 dark:text-dk-text">
                 Chúng tôi xin thông báo rằng hệ thống <strong>FounderAI</strong> sẽ được bảo trì...
               </p>
               {form.start_time && (
-                <div className="mb-2 rounded bg-red-50 border border-red-100 px-3 py-2 text-xs text-red-700">
+                <div className="mb-2 rounded bg-red-50 border border-red-100 px-3 py-2 text-xs text-red-700 dark:border-rose-900/40 dark:bg-rose-950/40 dark:text-rose-300">
                   <strong>Thời gian:</strong> {new Date(form.start_time).toLocaleString('vi-VN')}
                 </div>
               )}
               {form.duration_minutes && (
-                <div className="mb-2 text-xs text-gray-500">
+                <div className="mb-2 text-xs text-gray-500 dark:text-dk-text2">
                   <strong>Thời gian dự kiến:</strong> ~{form.duration_minutes} phút
                 </div>
               )}
               {form.title && (
-                <div className="mb-2 rounded bg-gray-50 px-3 py-2 text-xs">
-                  <span className="font-semibold text-gray-500 uppercase">Tiêu đề: </span>
-                  <span className="text-gray-800">{form.title}</span>
+                <div className="mb-2 rounded bg-gray-50 px-3 py-2 text-xs dark:bg-dk-inset">
+                  <span className="font-semibold text-gray-500 dark:text-dk-text2 uppercase">Tiêu đề: </span>
+                  <span className="text-gray-800 dark:text-dk-text">{form.title}</span>
                 </div>
               )}
               {form.message && (
-                <div className="rounded border border-gray-100 bg-white px-3 py-2 text-xs text-gray-700">
-                  <span className="font-semibold text-gray-500">Nội dung: </span>
+                <div className="rounded border border-gray-100 bg-white px-3 py-2 text-xs text-gray-700 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text">
+                  <span className="font-semibold text-gray-500 dark:text-dk-text2">Nội dung: </span>
                   {form.message.length > 100
                     ? `${form.message.substring(0, 100)}...`
                     : form.message}
@@ -262,33 +262,33 @@ export default function BulkNotificationPage() {
           {result && (
             <div className={`rounded-xl border px-5 py-4 ${
               result.failed === 0
-                ? 'border-emerald-100 bg-emerald-50'
+                ? 'border-emerald-100 bg-emerald-50 dark:border-emerald-900/50 dark:bg-emerald-950/30'
                 : result.sent === 0
-                ? 'border-red-100 bg-red-50'
-                : 'border-amber-100 bg-amber-50'
+                ? 'border-red-100 bg-red-50 dark:border-rose-900/50 dark:bg-rose-950/30'
+                : 'border-amber-100 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30'
             }`}>
               <div className="flex items-start gap-3">
                 {result.failed === 0 ? (
-                  <HiOutlineCheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+                  <HiOutlineCheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
                 ) : (
-                  <HiOutlineExclamationCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+                  <HiOutlineExclamationCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
                 )}
                 <div>
                   <p className={`text-sm font-semibold ${
-                    result.failed === 0 ? 'text-emerald-800' : 'text-amber-800'
+                    result.failed === 0 ? 'text-emerald-800 dark:text-emerald-300' : 'text-amber-800 dark:text-amber-300'
                   }`}>
                     {t('bulkNotification.resultTitle')}
                   </p>
                   <div className="mt-1 space-y-0.5 text-xs">
-                    <p className={result.sent > 0 ? 'text-emerald-700' : 'text-gray-500'}>
+                    <p className={result.sent > 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-gray-500 dark:text-dk-text2'}>
                       ✓ {t('bulkNotification.sentCount', { count: result.sent })}
                     </p>
                     {result.failed > 0 && (
-                      <p className="text-amber-700">
+                      <p className="text-amber-700 dark:text-amber-400">
                         ✗ {t('bulkNotification.failedCount', { count: result.failed })}
                       </p>
                     )}
-                    <p className="text-gray-500">
+                    <p className="text-gray-500 dark:text-dk-text2">
                       {t('bulkNotification.totalCount', { count: result.total })}
                     </p>
                   </div>
@@ -298,10 +298,10 @@ export default function BulkNotificationPage() {
           )}
 
           {/* Warning */}
-          <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
+          <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 dark:border-amber-900/50 dark:bg-amber-950/30">
             <div className="flex items-start gap-2">
-              <HiOutlineExclamationCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-              <p className="text-xs text-amber-800">
+              <HiOutlineExclamationCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              <p className="text-xs text-amber-800 dark:text-amber-300">
                 {t('bulkNotification.warning')}
               </p>
             </div>

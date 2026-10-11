@@ -21,7 +21,7 @@ import { HELP_ARTICLE_BODY_RICH_CLASS } from '../../constants/helpArticleBodySty
  * token chứa ký tự khoảng trắng — để nguyên là ném "Failed to execute 'add' on
  * 'DOMTokenList'" và hỏng nguyên trang sửa bài.
  */
-const EDITOR_BODY_CLASS = `${HELP_ARTICLE_BODY_RICH_CLASS} max-w-none min-h-[280px] px-3 py-2 focus:outline-none text-slate-800`
+const EDITOR_BODY_CLASS = `${HELP_ARTICLE_BODY_RICH_CLASS} max-w-none min-h-[280px] px-3 py-2 focus:outline-none text-slate-800 dark:text-dk-text`
   .replace(/\s+/g, ' ')
   .trim();
 
@@ -43,8 +43,10 @@ function ToolbarButton({ active, disabled, onClick, title, children }) {
       title={title}
       disabled={disabled}
       onClick={onClick}
-      className={`rounded px-2 py-1.5 text-xs font-medium ${
-        active ? 'bg-primary-100 text-primary-700' : 'text-slate-600 hover:bg-slate-100'
+      className={`rounded-lg px-2 py-1 text-xs font-medium transition-colors ${
+        active
+          ? 'bg-orange-100 text-orange-700 dark:bg-orange-950/60 dark:text-orange-400 font-semibold shadow-2xs'
+          : 'text-slate-600 dark:text-dk-text hover:bg-slate-200/60 dark:hover:bg-dk-raised'
       } disabled:opacity-40`}
     >
       {children}
@@ -62,6 +64,7 @@ export default function RichTextEditor({
   onChange,
   placeholder = 'Soạn nội dung…',
   disabled = false,
+  className = '',
 }) {
   const { t, locale } = useI18n();
   const editorRef = useRef(null);
@@ -111,18 +114,18 @@ export default function RichTextEditor({
       Table.configure({
         resizable: false,
         HTMLAttributes: {
-          class: 'w-full border-collapse border border-slate-200 my-4',
+          class: 'w-full border-collapse border border-slate-200 dark:border-dk-border my-4',
         },
       }),
       TableRow,
       TableHeader.configure({
         HTMLAttributes: {
-          class: 'border border-slate-200 bg-slate-50 p-2 font-semibold text-left text-slate-900',
+          class: 'border border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-raised p-2 font-semibold text-left text-slate-900 dark:text-dk-text',
         },
       }),
       TableCell.configure({
         HTMLAttributes: {
-          class: 'border border-slate-200 p-2 text-slate-700',
+          class: 'border border-slate-200 dark:border-dk-border p-2 text-slate-700 dark:text-dk-text',
         },
       }),
     ],
@@ -217,8 +220,8 @@ export default function RichTextEditor({
   };
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
-      <div className="flex flex-wrap items-center gap-0.5 border-b border-slate-200 bg-slate-50 px-2 py-1.5">
+    <div className={`rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset overflow-hidden flex flex-col ${className}`}>
+      <div className="flex flex-wrap items-center gap-0.5 border-b border-slate-200 dark:border-dk-border bg-slate-50/80 dark:bg-dk-surface px-2 py-1.5 shrink-0">
         <ToolbarButton
           title="Đậm"
           active={editor.isActive('bold')}
@@ -247,7 +250,7 @@ export default function RichTextEditor({
         >
           <span className="line-through">S</span>
         </ToolbarButton>
-        <span className="mx-1 h-5 w-px bg-slate-200" />
+        <span className="mx-1 h-4 w-px bg-slate-200 dark:border-dk-border" />
         <ToolbarButton
           title="Tiêu đề H2"
           active={editor.isActive('heading', { level: 2 })}
@@ -269,7 +272,7 @@ export default function RichTextEditor({
         >
           H4
         </ToolbarButton>
-        <span className="mx-1 h-5 w-px bg-slate-200" />
+        <span className="mx-1 h-4 w-px bg-slate-200 dark:bg-dk-raised" />
         <ToolbarButton
           title="Danh sách"
           active={editor.isActive('bulletList')}
@@ -317,7 +320,7 @@ export default function RichTextEditor({
         >
           ―
         </ToolbarButton>
-        <span className="mx-1 h-5 w-px bg-slate-200" />
+        <span className="mx-1 h-4 w-px bg-slate-200 dark:bg-dk-raised" />
         <ToolbarButton title="Liên kết" active={editor.isActive('link')} onClick={setLink}>
           Link
         </ToolbarButton>
@@ -328,13 +331,13 @@ export default function RichTextEditor({
         >
           Ảnh
         </ToolbarButton>
-        <span className="mx-1 h-5 w-px bg-slate-200" />
+        <span className="mx-1 h-4 w-px bg-slate-200 dark:bg-dk-raised" />
         <ToolbarButton
           title={t('adminHelp.pasteMarkdownTitle')}
           disabled={disabled}
           onClick={() => setShowMarkdownModal(true)}
         >
-          <span className="inline-flex items-center gap-1 font-semibold text-primary-600">
+          <span className="inline-flex items-center gap-1 font-semibold text-orange-600 dark:text-orange-400">
             <span>📝</span>
             <span>{t('adminHelp.pasteMarkdown')}</span>
           </span>
@@ -351,21 +354,26 @@ export default function RichTextEditor({
           }}
         />
         {uploading && (
-          <span className="ml-2 text-xs text-slate-500">Đang tải ảnh…</span>
+          <span className="ml-2 text-xs text-orange-600 dark:text-orange-400 flex items-center gap-1">
+            <span className="w-2.5 h-2.5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+            <span>Đang tải ảnh…</span>
+          </span>
         )}
       </div>
 
-      <EditorContent editor={editor} />
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <EditorContent editor={editor} className="h-full min-h-[220px]" />
+      </div>
 
       {uploadError && (
-        <p className="border-t border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600">{uploadError}</p>
+        <p className="border-t border-red-100 dark:border-red-900/40 bg-red-50 dark:bg-red-950/30 px-3 py-2 text-xs text-red-600 dark:text-red-400">{uploadError}</p>
       )}
 
       {showMarkdownModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-xl rounded-xl bg-white p-5 shadow-xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-xl rounded-2xl bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border p-5 shadow-2xl space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-semibold text-slate-900">
+              <h3 className="text-base font-semibold text-slate-900 dark:text-dk-text">
                 {t('adminHelp.pasteMarkdownTitle')}
               </h3>
               <button
@@ -374,16 +382,16 @@ export default function RichTextEditor({
                   setShowMarkdownModal(false);
                   setMarkdownInput('');
                 }}
-                className="text-slate-400 hover:text-slate-600 text-lg leading-none"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-dk-text text-lg leading-none"
               >
                 ✕
               </button>
             </div>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-500 dark:text-dk-text2">
               {t('adminHelp.pasteMarkdownPlaceholder')}
             </p>
             <textarea
-              className="w-full h-64 rounded-lg border border-slate-300 p-3 font-mono text-xs focus:border-primary-500 focus:outline-none"
+              className="w-full h-64 rounded-xl border border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-inset text-slate-900 dark:text-dk-text p-3 font-mono text-xs focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
               placeholder="# Tiêu đề hướng dẫn\n\nNội dung được tạo bởi AI...\n\n| Cột 1 | Cột 2 |\n|---|---|\n| Giá trị 1 | Giá trị 2 |"
               value={markdownInput}
               onChange={(e) => setMarkdownInput(e.target.value)}
@@ -396,7 +404,7 @@ export default function RichTextEditor({
                   setShowMarkdownModal(false);
                   setMarkdownInput('');
                 }}
-                className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                className="rounded-xl border border-slate-200 dark:border-dk-border px-3.5 py-1.5 text-xs font-medium text-slate-700 dark:text-dk-text hover:bg-slate-100 dark:hover:bg-dk-raised transition-colors"
               >
                 {t('adminHelp.pasteMarkdownCancel')}
               </button>
@@ -404,7 +412,7 @@ export default function RichTextEditor({
                 type="button"
                 onClick={handleInsertMarkdown}
                 disabled={!markdownInput.trim()}
-                className="rounded-lg bg-primary-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+                className="rounded-xl bg-gradient-to-r from-orange-500 to-amber-600 px-4 py-1.5 text-xs font-semibold text-white hover:from-orange-600 hover:to-amber-700 shadow-sm transition-all disabled:opacity-50"
               >
                 {t('adminHelp.pasteMarkdownInsert')}
               </button>

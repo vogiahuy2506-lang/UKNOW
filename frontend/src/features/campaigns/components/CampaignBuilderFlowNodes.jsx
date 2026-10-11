@@ -6,11 +6,11 @@ import { FaTelegramPlane, FaWhatsapp } from 'react-icons/fa';
 import { useI18n } from '../../../i18n';
 
 const NODE_CARD_CONTAINER_CLASS =
-  'relative w-[148px] sm:w-[160px] md:w-[172px] bg-white rounded-xl shadow-sm border-2 transition-all duration-200 group';
+  'relative w-[148px] sm:w-[160px] md:w-[172px] bg-white dark:bg-dk-raised rounded-xl shadow-sm border-2 transition-all duration-200 group';
 const NODE_TITLE_CLASS =
-  'text-[12px] sm:text-sm font-semibold text-gray-800 leading-4 sm:leading-5 line-clamp-2 min-h-[2.15rem] sm:min-h-[2.35rem] break-words';
+  'text-[12px] sm:text-sm font-semibold text-gray-800 dark:text-dk-text leading-4 sm:leading-5 line-clamp-2 min-h-[2.15rem] sm:min-h-[2.35rem] break-words';
 const NODE_DESCRIPTION_CLASS =
-  'text-[10px] sm:text-[11px] text-gray-500 mt-0.1 leading-4 line-clamp-2 min-h-[1.1rem] sm:min-h-[1.85rem] break-words';
+  'text-[10px] sm:text-[11px] text-gray-500 dark:text-dk-text2 mt-0.1 leading-4 line-clamp-2 min-h-[1.1rem] sm:min-h-[1.85rem] break-words';
 
 // Factory function to get translated node configs
 export function getNodeConfigs(t) {
@@ -462,7 +462,7 @@ const CustomEdge = ({
       {label && !isHovered && labelX != null && labelY != null && (
         <foreignObject width={150} height={30} x={labelX - 75} y={labelY - 15} className="overflow-visible">
           <div className="flex items-center justify-center">
-            <span className="bg-white px-2 py-0.5 text-xs text-gray-500 whitespace-nowrap">{label}</span>
+            <span className="bg-white dark:bg-dk-raised px-2 py-0.5 text-xs text-gray-500 dark:text-dk-text whitespace-nowrap rounded shadow-sm border border-transparent dark:border-dk-border">{label}</span>
           </div>
         </foreignObject>
       )}
@@ -486,7 +486,7 @@ const StartNode = ({ data, selected }) => {
   return (
     <div
       className={`${NODE_CARD_CONTAINER_CLASS}
-      ${selected ? 'border-primary-500 shadow-md ring-2 ring-primary-100' : 'border-transparent hover:border-gray-200 hover:shadow-md'}
+      ${selected ? 'border-primary-500 shadow-md ring-2 ring-primary-100 dark:ring-primary-950/60' : 'border-transparent hover:border-gray-200 dark:hover:border-dk-border hover:shadow-md'}
     `}
     >
       <div className="p-2.5 sm:p-3 flex flex-col items-center justify-center gap-2 sm:gap-2.5">
@@ -504,7 +504,7 @@ const StartNode = ({ data, selected }) => {
       <Handle
         type="source"
         position={Position.Right}
-        className="!w-4 !h-4 !bg-orange-400 !border-2 !border-white !-right-2 transition-transform group-hover:scale-125"
+        className="!w-4 !h-4 !bg-orange-400 !border-2 !border-white dark:!border-dk-raised !-right-2 transition-transform group-hover:scale-125"
       />
     </div>
   );
@@ -518,16 +518,16 @@ const EndNode = ({ data, selected }) => {
   return (
     <div
       className={`${NODE_CARD_CONTAINER_CLASS}
-    ${selected ? 'border-red-500 shadow-md' : 'border-transparent hover:border-gray-200 hover:shadow-md'}
+    ${selected ? 'border-red-500 shadow-md' : 'border-transparent hover:border-gray-200 dark:hover:border-dk-border hover:shadow-md'}
   `}
     >
       <Handle
         type="target"
         position={Position.Left}
-        className="!w-4 !h-4 !bg-orange-400 !border-2 !border-white !-left-2 transition-transform group-hover:scale-125"
+        className="!w-4 !h-4 !bg-orange-400 !border-2 !border-white dark:!border-dk-raised !-left-2 transition-transform group-hover:scale-125"
       />
       <div className="p-2.5 sm:p-3 flex flex-col items-center justify-center gap-2 sm:gap-2.5">
-        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-red-50 flex items-center justify-center">
+        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-red-50 dark:bg-red-950/40 flex items-center justify-center">
           <HiOutlineStop className="w-4 h-4 sm:w-5 sm:h-5 text-red-500" />
         </div>
         <div className="text-center w-full">
@@ -553,13 +553,13 @@ const TaskNode = ({ data, selected }) => {
   return (
     <div
       className={`${NODE_CARD_CONTAINER_CLASS}
-      ${selected ? 'border-primary-500 shadow-md ring-2 ring-primary-100' : 'border-transparent hover:border-gray-200 hover:shadow-md'}
+      ${selected ? 'border-primary-500 shadow-md ring-2 ring-primary-100 dark:ring-primary-950/60' : 'border-transparent hover:border-gray-200 dark:hover:border-dk-border hover:shadow-md'}
     `}
     >
       <Handle
         type="target"
         position={Position.Left}
-        className="!w-4 !h-4 !bg-orange-400 !border-2 !border-white !-left-2 transition-transform group-hover:scale-125"
+        className="!w-4 !h-4 !bg-orange-400 !border-2 !border-white dark:!border-dk-raised !-left-2 transition-transform group-hover:scale-125"
       />
       <div className="p-2.5 sm:p-3 flex flex-col items-center justify-center gap-2 sm:gap-2.5">
         <div
@@ -578,7 +578,7 @@ const TaskNode = ({ data, selected }) => {
       <Handle
         type="source"
         position={Position.Right}
-        className="!w-4 !h-4 !bg-orange-400 !border-2 !border-white !-right-2 transition-transform group-hover:scale-125"
+        className="!w-4 !h-4 !bg-orange-400 !border-2 !border-white dark:!border-dk-raised !-right-2 transition-transform group-hover:scale-125"
       />
     </div>
   );

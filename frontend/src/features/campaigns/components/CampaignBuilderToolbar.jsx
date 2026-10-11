@@ -56,7 +56,7 @@ const CampaignBuilderToolbar = ({
         disabled={!canUseServerRunActions}
         title={!canUseServerRunActions ? serverRunActionsDisabledHint : undefined}
         className={`${BASE_BUTTON_CLASS} ${
-          !canUseServerRunActions ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700'
+          !canUseServerRunActions ? 'bg-gray-200 dark:bg-dk-raised text-gray-500 dark:text-dk-muted cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700'
         }`}
       >
         <HiOutlineLightningBolt className="w-4 h-4" />
@@ -67,7 +67,7 @@ const CampaignBuilderToolbar = ({
         disabled={!canUseServerRunActions}
         title={!canUseServerRunActions ? serverRunActionsDisabledHint : undefined}
         className={`${BASE_BUTTON_CLASS} ${
-          !canUseServerRunActions ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+          !canUseServerRunActions ? 'bg-gray-200 dark:bg-dk-raised text-gray-500 dark:text-dk-muted cursor-not-allowed' : 'bg-white dark:bg-dk-raised text-gray-700 dark:text-dk-text border border-gray-300 dark:border-dk-border hover:bg-gray-50 dark:hover:bg-dk-strong'
         }`}
       >
         <HiOutlineClock className="w-4 h-4" />
@@ -77,7 +77,7 @@ const CampaignBuilderToolbar = ({
         onClick={onRunCampaign}
         disabled={isRunning}
         className={`${BASE_BUTTON_CLASS} ${
-          isRunning ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-green-500 text-white hover:bg-green-600'
+          isRunning ? 'bg-gray-200 dark:bg-dk-raised text-gray-500 dark:text-dk-muted cursor-not-allowed' : 'bg-green-500 text-white hover:bg-green-600'
         }`}
       >
         <HiOutlinePlay className="w-4 h-4" />
@@ -87,7 +87,7 @@ const CampaignBuilderToolbar = ({
         onClick={onStopRun}
         disabled={!isRunning}
         className={`${BASE_BUTTON_CLASS} ${
-          !isRunning ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-red-500 text-white hover:bg-red-600'
+          !isRunning ? 'bg-gray-200 dark:bg-dk-raised text-gray-500 dark:text-dk-muted cursor-not-allowed' : 'bg-red-500 text-white hover:bg-red-600'
         }`}
       >
         <HiOutlineStop className="w-4 h-4" />
@@ -106,7 +106,7 @@ const CampaignBuilderToolbar = ({
           disabled={!canUseServerRunActions}
           title={!canUseServerRunActions ? serverRunActionsDisabledHint : undefined}
           className={`${BASE_BUTTON_CLASS} ${
-            !canUseServerRunActions ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+            !canUseServerRunActions ? 'bg-gray-200 dark:bg-dk-raised text-gray-500 dark:text-dk-muted cursor-not-allowed' : 'bg-white dark:bg-dk-raised text-gray-700 dark:text-dk-text border border-gray-300 dark:border-dk-border hover:bg-gray-50 dark:hover:bg-dk-strong'
           }`}
         >
           <HiOutlineMail className="w-4 h-4" />
@@ -118,7 +118,7 @@ const CampaignBuilderToolbar = ({
         disabled={!canUseServerRunActions}
         title={!canUseServerRunActions ? serverRunActionsDisabledHint : undefined}
         className={`${BASE_BUTTON_CLASS} ${
-          !canUseServerRunActions ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+          !canUseServerRunActions ? 'bg-gray-200 dark:bg-dk-raised text-gray-500 dark:text-dk-muted cursor-not-allowed' : 'bg-white dark:bg-dk-raised text-gray-700 dark:text-dk-text border border-gray-300 dark:border-dk-border hover:bg-gray-50 dark:hover:bg-dk-strong'
         }`}
       >
         <HiOutlineDuplicate className="w-4 h-4" />

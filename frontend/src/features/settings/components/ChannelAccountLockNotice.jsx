@@ -10,7 +10,7 @@ import { useI18n } from '../../../i18n';
 export function ChannelAccountLockBadge() {
   const { t } = useI18n();
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700">
+    <span className="inline-flex items-center gap-1 rounded-full border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-2 py-0.5 text-[11px] font-semibold text-red-700 dark:text-red-300">
       <HiOutlineLockClosed className="h-3 w-3" aria-hidden="true" />
       {t('channelAccountLock.badge')}
     </span>
@@ -22,12 +22,12 @@ export default function ChannelAccountLockNotice() {
   return (
     <div
       role="alert"
-      className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800"
+      className="mt-2 rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-3 py-2 text-xs text-red-800 dark:text-red-200"
     >
       <p>{t('channelAccountLock.hint')}</p>
       <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1 font-semibold">
-        <Link to="/app/topup" className="underline hover:text-red-900">{t('channelAccountLock.buyMore')}</Link>
-        <Link to="/app/billing?tab=locks" className="underline hover:text-red-900">{t('channelAccountLock.manage')}</Link>
+        <Link to="/app/topup" className="underline hover:text-red-900 dark:hover:text-red-100">{t('channelAccountLock.buyMore')}</Link>
+        <Link to="/app/billing?tab=locks" className="underline hover:text-red-900 dark:hover:text-red-100">{t('channelAccountLock.manage')}</Link>
       </p>
     </div>
   );

@@ -28,11 +28,12 @@ const LanguageSwitcher = ({ className = '', showLabel = false, variant = 'defaul
 
   const buttonClasses = isDark
     ? 'text-white hover:text-white hover:bg-white/20'
-    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100';
+    : 'text-gray-600 dark:text-dk-text hover:text-gray-900 dark:hover:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-raised';
 
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
         className={`flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors ${buttonClasses}`}
         title={t('common.language') || 'Language'}
@@ -46,13 +47,13 @@ const LanguageSwitcher = ({ className = '', showLabel = false, variant = 'defaul
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+        <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-dk-raised rounded-lg shadow-lg border border-gray-200 dark:border-dk-border py-1 z-50">
           {Object.entries(LOCALES).map(([key, value]) => (
             <button
               key={key}
               onClick={() => handleSelect(value)}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors ${
-                locale === value ? 'bg-primary-50 text-primary-600 font-medium' : 'text-gray-700'
+              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-dk-raised/80 transition-colors ${
+                locale === value ? 'bg-primary-50 dark:bg-orange-950/40 text-primary-600 dark:text-orange-400 font-medium' : 'text-gray-700 dark:text-dk-text'
               }`}
             >
               <span className="text-lg">{localeFlags[value]}</span>

@@ -261,13 +261,13 @@ export default function LandingPagesAdminPage() {
     if (filteredMineRows.length === 0) {
       return (
         <div className="flex flex-col items-center justify-center py-16 text-center px-4">
-          <div className="w-14 h-14 rounded-2xl bg-orange-50 border border-orange-200/60 flex items-center justify-center text-orange-400 mb-3 shadow-xs">
+          <div className="w-14 h-14 rounded-2xl bg-orange-50 dark:bg-orange-950/30 border border-orange-200/60 dark:border-orange-800 flex items-center justify-center text-orange-400 mb-3 shadow-xs">
             <HiOutlineGlobeAlt className="w-7 h-7" />
           </div>
-          <p className="text-sm font-semibold text-slate-700">
+          <p className="text-sm font-semibold text-slate-700 dark:text-dk-text">
             {search ? 'Không tìm thấy trang đích nào khớp bộ lọc' : t('landingPagesAdmin.tabMineEmpty')}
           </p>
-          <p className="text-xs text-slate-400 mt-1 max-w-sm leading-relaxed">
+          <p className="text-xs text-slate-400 dark:text-dk-muted mt-1 max-w-sm leading-relaxed">
             {search ? 'Thử xóa từ khóa tìm kiếm hoặc kiểm tra lại tên miền.' : 'Bấm "+ Tạo trang đích" ở trên để thiết kế trang đích mới.'}
           </p>
           {!search && (
@@ -285,49 +285,49 @@ export default function LandingPagesAdminPage() {
     }
     return (
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-slate-100">
-          <thead className="bg-slate-50/80">
+        <table className="min-w-full divide-y divide-slate-100 dark:divide-dk-border">
+          <thead className="bg-slate-50/80 dark:bg-dk-raised/60">
             <tr>
-              <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('landingPagesAdmin.titleCol')}</th>
-              <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('landingPagesAdmin.domainCol') || 'Domain'}</th>
-              <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('landingPagesAdmin.published')}</th>
-              <th className="px-4 py-3.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider tabular-nums">{t('landingPagesAdmin.views')}</th>
-              <th className="px-4 py-3.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider tabular-nums">{t('landingPagesAdmin.clicks')}</th>
-              <th className="px-4 py-3.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider tabular-nums">{t('landingPagesAdmin.forms')}</th>
-              <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('landingPagesAdmin.updated')}</th>
-              <th className="px-6 py-3.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('common.actions')}</th>
+              <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">{t('landingPagesAdmin.titleCol')}</th>
+              <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">{t('landingPagesAdmin.domainCol') || 'Domain'}</th>
+              <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">{t('landingPagesAdmin.published')}</th>
+              <th className="px-4 py-3.5 text-right text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider tabular-nums">{t('landingPagesAdmin.views')}</th>
+              <th className="px-4 py-3.5 text-right text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider tabular-nums">{t('landingPagesAdmin.clicks')}</th>
+              <th className="px-4 py-3.5 text-right text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider tabular-nums">{t('landingPagesAdmin.forms')}</th>
+              <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">{t('landingPagesAdmin.updated')}</th>
+              <th className="px-6 py-3.5 text-right text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">{t('common.actions')}</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-slate-100">
+          <tbody className="bg-white dark:bg-dk-surface divide-y divide-slate-100 dark:divide-dk-border">
             {filteredMineRows.map((r) => (
               <tr
                 key={r.id}
-                className="hover:bg-slate-50/70 transition-colors"
+                className="hover:bg-slate-50/70 dark:hover:bg-dk-raised/50 transition-colors"
               >
                 <td className="px-6 py-4">
-                  <div className="font-semibold text-sm text-slate-900 line-clamp-1">{r.title || '—'}</div>
-                  <div className="text-xs text-slate-400 font-mono mt-0.5">{r.slug}</div>
+                  <div className="font-semibold text-sm text-slate-900 dark:text-dk-text line-clamp-1">{r.title || '—'}</div>
+                  <div className="text-xs text-slate-400 dark:text-dk-muted font-mono mt-0.5">{r.slug}</div>
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-2 flex-wrap">
                     <code
                       className={`font-mono text-xs px-2 py-0.5 rounded-md border ${
                         r.isCustomDomain
-                          ? 'bg-purple-50 text-purple-700 border-purple-200'
-                          : 'bg-slate-100 text-slate-700 border-slate-200'
+                          ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800'
+                          : 'bg-slate-100 dark:bg-dk-raised text-slate-700 dark:text-dk-text border-slate-200 dark:border-dk-border'
                       }`}
                     >
                       {r.displayDomain}
                     </code>
                     {r.isCustomDomain && (
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold bg-purple-50 text-purple-600 border border-purple-200/80">
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-300 border border-purple-200/80 dark:border-purple-800">
                         {r.isApexDomain ? 'Apex' : 'Sub'}
                       </span>
                     )}
                     <button
                       type="button"
                       onClick={() => copyToClipboard(getPublicUrl(r), 'Đã copy URL')}
-                      className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                      className="p-1 rounded-lg text-slate-400 dark:text-dk-muted hover:text-slate-600 dark:hover:text-dk-text hover:bg-slate-100 dark:hover:bg-dk-raised transition-colors"
                       title="Copy URL"
                     >
                       <HiOutlineClipboard className="w-3.5 h-3.5" />
@@ -336,7 +336,7 @@ export default function LandingPagesAdminPage() {
                       href={getPublicUrl(r)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-1 rounded-lg text-slate-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
+                      className="p-1 rounded-lg text-slate-400 dark:text-dk-muted hover:text-orange-600 dark:hover:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-colors"
                       title="Mở trong tab mới"
                     >
                       <HiOutlineExternalLink className="w-3.5 h-3.5" />
@@ -345,34 +345,34 @@ export default function LandingPagesAdminPage() {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   {r.isPublished ? (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800 shadow-2xs">
                       <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                       {t('common.yes')}
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200 shadow-2xs">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-dk-raised text-slate-600 dark:text-dk-text border border-slate-200 dark:border-dk-border shadow-2xs">
                       <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
                       {t('common.no')}
                     </span>
                   )}
                 </td>
-                <td className="px-4 py-4 whitespace-nowrap text-right text-xs font-semibold tabular-nums text-slate-700">
+                <td className="px-4 py-4 whitespace-nowrap text-right text-xs font-semibold tabular-nums text-slate-700 dark:text-dk-text">
                   {Number(r.viewCount || 0).toLocaleString('vi-VN')}
                 </td>
-                <td className="px-4 py-4 whitespace-nowrap text-right text-xs font-semibold tabular-nums text-slate-700">
+                <td className="px-4 py-4 whitespace-nowrap text-right text-xs font-semibold tabular-nums text-slate-700 dark:text-dk-text">
                   {Number(r.clickCount || 0).toLocaleString('vi-VN')}
                 </td>
-                <td className="px-4 py-4 whitespace-nowrap text-right text-xs font-semibold tabular-nums text-slate-700">
+                <td className="px-4 py-4 whitespace-nowrap text-right text-xs font-semibold tabular-nums text-slate-700 dark:text-dk-text">
                   {Number(r.submitCount || 0).toLocaleString('vi-VN')}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500">
+                <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500 dark:text-dk-text2">
                   {r.updatedAt ? new Date(r.updatedAt).toLocaleDateString('vi-VN') + ' ' + new Date(r.updatedAt).toLocaleTimeString('vi-VN') : '—'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
                   <div className="flex items-center justify-end gap-1">
                     <button
                       type="button"
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
+                      className="p-1.5 rounded-lg text-slate-400 dark:text-dk-muted hover:text-orange-600 dark:hover:text-orange-400 hover:bg-orange-50 dark:hover:bg-dk-raised transition-colors"
                       title="Chia sẻ"
                       onClick={() => setSharingLandingPage(r)}
                     >
@@ -380,7 +380,7 @@ export default function LandingPagesAdminPage() {
                     </button>
                     <button
                       type="button"
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
+                      className="p-1.5 rounded-lg text-slate-400 dark:text-dk-muted hover:text-orange-600 dark:hover:text-orange-400 hover:bg-orange-50 dark:hover:bg-dk-raised transition-colors"
                       title={t('landingPagesAdmin.publishToMarketplace')}
                       onClick={() => setPublishingLandingPage(r)}
                     >
@@ -388,7 +388,7 @@ export default function LandingPagesAdminPage() {
                     </button>
                     <button
                       type="button"
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
+                      className="p-1.5 rounded-lg text-slate-400 dark:text-dk-muted hover:text-orange-600 dark:hover:text-orange-400 hover:bg-orange-50 dark:hover:bg-dk-raised transition-colors"
                       title={t('common.edit')}
                       onClick={() => openEdit(r)}
                     >
@@ -396,7 +396,7 @@ export default function LandingPagesAdminPage() {
                     </button>
                     <button
                       type="button"
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                      className="p-1.5 rounded-lg text-slate-400 dark:text-dk-muted hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
                       title={t('common.delete')}
                       onClick={() => setDeleteTarget(r)}
                     >
@@ -417,17 +417,17 @@ export default function LandingPagesAdminPage() {
       return (
         <div className="flex flex-col items-center justify-center py-16 gap-3">
           <div className="w-7 h-7 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-xs text-slate-500 font-medium">Đang tải danh sách trang đích đã mua…</p>
+          <p className="text-xs text-slate-500 dark:text-dk-text2 font-medium">Đang tải danh sách trang đích đã mua…</p>
         </div>
       );
     }
     if (filteredPurchasedRows.length === 0) {
       return (
         <div className="flex flex-col items-center justify-center py-16 text-center px-4">
-          <div className="w-14 h-14 rounded-2xl bg-orange-50 border border-orange-200/60 flex items-center justify-center text-orange-400 mb-3 shadow-xs">
+          <div className="w-14 h-14 rounded-2xl bg-orange-50 dark:bg-orange-950/30 border border-orange-200/60 dark:border-orange-800/40 flex items-center justify-center text-orange-400 mb-3 shadow-xs">
             <HiOutlineShoppingCart className="w-7 h-7" />
           </div>
-          <p className="text-sm font-semibold text-slate-700">
+          <p className="text-sm font-semibold text-slate-700 dark:text-dk-text">
             {search ? 'Không tìm thấy trang đích đã mua nào khớp bộ lọc' : t('landingPagesAdmin.tabPurchasedEmpty')}
           </p>
         </div>
@@ -435,29 +435,29 @@ export default function LandingPagesAdminPage() {
     }
     return (
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-slate-100">
-          <thead className="bg-slate-50/80">
+        <table className="min-w-full divide-y divide-slate-100 dark:divide-dk-border">
+          <thead className="bg-slate-50/80 dark:bg-dk-raised/60">
             <tr>
-              <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('landingPagesAdmin.titleCol')}</th>
-              <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Người bán</th>
-              <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Giá</th>
-              <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Ngày mua</th>
-              <th className="px-6 py-3.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('common.actions')}</th>
+              <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">{t('landingPagesAdmin.titleCol')}</th>
+              <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">Người bán</th>
+              <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">Giá</th>
+              <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">Ngày mua</th>
+              <th className="px-6 py-3.5 text-right text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">{t('common.actions')}</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-slate-100">
+          <tbody className="bg-white dark:bg-dk-surface divide-y divide-slate-100 dark:divide-dk-border">
             {filteredPurchasedRows.map((p) => (
-              <tr key={p.id || p.listingId || p.listing_id} className="hover:bg-slate-50/70 transition-colors">
-                <td className="px-6 py-4 font-semibold text-sm text-slate-900">
+              <tr key={p.id || p.listingId || p.listing_id} className="hover:bg-slate-50/70 dark:hover:bg-dk-raised/40 transition-colors">
+                <td className="px-6 py-4 font-semibold text-sm text-slate-900 dark:text-dk-text">
                   {p.title || p.listingTitle || p.listing?.title || '—'}
                 </td>
-                <td className="px-6 py-4 text-xs text-slate-600">
+                <td className="px-6 py-4 text-xs text-slate-600 dark:text-dk-text">
                   {p.seller_name || p.seller?.fullName || p.seller?.name || p.sellerName || '—'}
                 </td>
-                <td className="px-6 py-4 text-xs font-semibold text-orange-600">
+                <td className="px-6 py-4 text-xs font-semibold text-orange-600 dark:text-orange-400">
                   {t('landingPagesAdmin.purchasedPrice', { price: p.price_credits ?? p.priceCredits ?? p.price ?? 0 })}
                 </td>
-                <td className="px-6 py-4 text-xs text-slate-500">
+                <td className="px-6 py-4 text-xs text-slate-500 dark:text-dk-text2">
                   {p.purchased_at || p.purchasedAt
                     ? new Date(p.purchased_at || p.purchasedAt).toLocaleDateString('vi-VN') + ' ' + new Date(p.purchased_at || p.purchasedAt).toLocaleTimeString('vi-VN')
                     : '—'}
@@ -467,7 +467,7 @@ export default function LandingPagesAdminPage() {
                     href={p.publicUrl || getPublicUrl(p)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-orange-600 hover:bg-orange-50 inline-flex transition-colors"
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-orange-600 dark:hover:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950/30 inline-flex transition-colors"
                     title="Xem"
                   >
                     <HiOutlineExternalLink className="w-4 h-4" />
@@ -486,17 +486,17 @@ export default function LandingPagesAdminPage() {
       return (
         <div className="flex flex-col items-center justify-center py-16 gap-3">
           <div className="w-7 h-7 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-xs text-slate-500 font-medium">Đang tải danh sách trang đích được chia sẻ…</p>
+          <p className="text-xs text-slate-500 dark:text-dk-text2 font-medium">Đang tải danh sách trang đích được chia sẻ…</p>
         </div>
       );
     }
     if (filteredSharedRows.length === 0) {
       return (
         <div className="flex flex-col items-center justify-center py-16 text-center px-4">
-          <div className="w-14 h-14 rounded-2xl bg-orange-50 border border-orange-200/60 flex items-center justify-center text-orange-400 mb-3 shadow-xs">
+          <div className="w-14 h-14 rounded-2xl bg-orange-50 dark:bg-orange-950/30 border border-orange-200/60 dark:border-orange-800/40 flex items-center justify-center text-orange-400 mb-3 shadow-xs">
             <HiOutlineUserGroup className="w-7 h-7" />
           </div>
-          <p className="text-sm font-semibold text-slate-700">
+          <p className="text-sm font-semibold text-slate-700 dark:text-dk-text">
             {search ? 'Không tìm thấy trang đích được chia sẻ nào khớp bộ lọc' : t('landingPagesAdmin.tabSharedEmpty')}
           </p>
         </div>
@@ -504,41 +504,41 @@ export default function LandingPagesAdminPage() {
     }
     return (
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-slate-100">
-          <thead className="bg-slate-50/80">
+        <table className="min-w-full divide-y divide-slate-100 dark:divide-dk-border">
+          <thead className="bg-slate-50/80 dark:bg-dk-raised/60">
             <tr>
-              <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('landingPagesAdmin.titleCol')}</th>
-              <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('landingPagesAdmin.domainCol') || 'Domain'}</th>
-              <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Chia sẻ bởi</th>
-              <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('landingPagesAdmin.published')}</th>
-              <th className="px-6 py-3.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('common.actions')}</th>
+              <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">{t('landingPagesAdmin.titleCol')}</th>
+              <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">{t('landingPagesAdmin.domainCol') || 'Domain'}</th>
+              <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">Chia sẻ bởi</th>
+              <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">{t('landingPagesAdmin.published')}</th>
+              <th className="px-6 py-3.5 text-right text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">{t('common.actions')}</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-slate-100">
+          <tbody className="bg-white dark:bg-dk-surface divide-y divide-slate-100 dark:divide-dk-border">
             {filteredSharedRows.map((s) => (
-              <tr key={s.id} className="hover:bg-slate-50/70 transition-colors">
+              <tr key={s.id} className="hover:bg-slate-50/70 dark:hover:bg-dk-raised/40 transition-colors">
                 <td className="px-6 py-4">
-                  <div className="font-semibold text-sm text-slate-900">{s.title || '—'}</div>
-                  <div className="text-xs text-slate-400 mt-0.5">
+                  <div className="font-semibold text-sm text-slate-900 dark:text-dk-text">{s.title || '—'}</div>
+                  <div className="text-xs text-slate-400 dark:text-dk-muted mt-0.5">
                     {t('landingPagesAdmin.sharedBy', { name: s.sharedBy?.name || s.sharedBy?.email || '—' })}
                   </div>
                 </td>
                 <td className="px-6 py-4">
-                  <code className="font-mono text-xs px-2 py-0.5 rounded-md border bg-orange-50 text-orange-700 border-orange-200">
+                  <code className="font-mono text-xs px-2 py-0.5 rounded-md border bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-800/40">
                     {getCustomHostname(s) || `${s.slug}.${BASE_DOMAIN}`}
                   </code>
                 </td>
-                <td className="px-6 py-4 text-xs text-slate-600">
+                <td className="px-6 py-4 text-xs text-slate-600 dark:text-dk-text">
                   {s.sharedBy?.email || '—'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   {s.isPublished ? (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/40 shadow-2xs">
                       <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                       {t('common.yes')}
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200 shadow-2xs">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-dk-raised text-slate-600 dark:text-dk-text border border-slate-200 dark:border-dk-border shadow-2xs">
                       <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
                       {t('common.no')}
                     </span>
@@ -549,7 +549,7 @@ export default function LandingPagesAdminPage() {
                     href={s.publicUrl || getPublicUrl(s)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-orange-600 hover:bg-orange-50 inline-flex transition-colors"
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-orange-600 dark:hover:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950/30 inline-flex transition-colors"
                     title="Xem"
                   >
                     <HiOutlineExternalLink className="w-4 h-4" />
@@ -573,7 +573,7 @@ export default function LandingPagesAdminPage() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-colors shadow-2xs"
+              className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised hover:bg-slate-50 dark:hover:bg-dk-strong text-xs font-semibold text-slate-700 dark:text-dk-text transition-colors shadow-2xs"
               onClick={() => {
                 if (activeTab === 'mine') reloadMine();
                 else if (activeTab === 'purchased') reloadPurchased();
@@ -599,9 +599,9 @@ export default function LandingPagesAdminPage() {
       />
 
       {/* ── Toolbar: Sub-tabs Pills & Search ── */}
-      <div className="rounded-2xl border border-slate-200/90 bg-white p-3.5 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+      <div className="rounded-2xl border border-slate-200/90 dark:border-dk-border bg-white dark:bg-dk-surface p-3.5 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         {/* Sub-tabs switcher */}
-        <div className="inline-flex rounded-xl bg-slate-100 p-0.5 border border-slate-200/80 shrink-0">
+        <div className="inline-flex rounded-xl bg-slate-100 dark:bg-dk-raised p-0.5 border border-slate-200/80 dark:border-dk-border/80 shrink-0">
           {TABS.map((tab) => {
             const isActive = activeTab === tab.id;
             const Icon = tab.icon;
@@ -618,8 +618,8 @@ export default function LandingPagesAdminPage() {
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
                   isActive
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800'
+                    ? 'bg-white dark:bg-dk-inset text-slate-900 dark:text-dk-text shadow-xs'
+                    : 'text-slate-500 dark:text-dk-text2 hover:text-slate-800 dark:hover:text-dk-text'
                 }`}
               >
                 <Icon className="w-3.5 h-3.5" />
@@ -639,13 +639,13 @@ export default function LandingPagesAdminPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Tìm theo tên, slug, domain…"
-            className="w-full pl-9 pr-8 py-1.5 text-xs bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 text-slate-800"
+            className="w-full pl-9 pr-8 py-1.5 text-xs bg-slate-50 dark:bg-dk-inset hover:bg-slate-100/70 dark:hover:bg-dk-surface focus:bg-white dark:focus:bg-dk-inset border border-slate-200 dark:border-dk-border rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 dark:placeholder:text-dk-muted text-slate-800 dark:text-dk-text"
           />
           {search && (
             <button
               type="button"
               onClick={() => setSearch('')}
-              className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-600"
+              className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-dk-text"
             >
               <HiOutlineX className="w-3.5 h-3.5" />
             </button>
@@ -654,7 +654,7 @@ export default function LandingPagesAdminPage() {
       </div>
 
       {/* ── Table Card ── */}
-      <div className="rounded-2xl border border-slate-200/90 bg-white shadow-2xs overflow-hidden">
+      <div className="rounded-2xl border border-slate-200/90 dark:border-dk-border bg-white dark:bg-dk-surface shadow-2xs overflow-hidden">
         {activeTab === 'mine' && renderMineTab()}
         {activeTab === 'purchased' && renderPurchasedTab()}
         {activeTab === 'shared' && renderSharedTab()}

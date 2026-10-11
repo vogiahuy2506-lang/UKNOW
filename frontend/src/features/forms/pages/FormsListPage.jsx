@@ -113,17 +113,17 @@ export default function FormsListPage() {
 
       {/* Loading state */}
       {isLoading ? (
-        <div className="rounded-2xl border border-slate-200/90 bg-white shadow-2xs p-16 flex flex-col items-center justify-center gap-3">
+        <div className="rounded-2xl border border-slate-200/90 dark:border-dk-border bg-white dark:bg-dk-surface shadow-2xs p-16 flex flex-col items-center justify-center gap-3">
           <div className="w-7 h-7 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-xs text-slate-500 font-medium">{t('forms.listPage.loading')}</p>
+          <p className="text-xs text-slate-500 dark:text-dk-text2 font-medium">{t('forms.listPage.loading')}</p>
         </div>
       ) : forms.length === 0 ? (
-        <div className="rounded-2xl border border-slate-200/90 bg-white shadow-2xs py-16 text-center px-4">
-          <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-orange-50 border border-orange-200/60 text-orange-400 flex items-center justify-center shadow-xs">
+        <div className="rounded-2xl border border-slate-200/90 dark:border-dk-border bg-white dark:bg-dk-surface shadow-2xs py-16 text-center px-4">
+          <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-orange-50 dark:bg-orange-950/40 border border-orange-200/60 dark:border-orange-800/60 text-orange-400 dark:text-orange-300 flex items-center justify-center shadow-xs">
             <HiOutlinePlus className="w-7 h-7" />
           </div>
-          <h3 className="text-sm font-semibold text-slate-700 mb-1">{t('forms.listPage.empty')}</h3>
-          <p className="text-xs text-slate-400 mb-4 max-w-md mx-auto leading-relaxed">
+          <h3 className="text-sm font-semibold text-slate-700 dark:text-dk-text mb-1">{t('forms.listPage.empty')}</h3>
+          <p className="text-xs text-slate-400 dark:text-dk-muted mb-4 max-w-md mx-auto leading-relaxed">
             {t('forms.listPage.emptyDescription')}
           </p>
           <button
@@ -135,28 +135,28 @@ export default function FormsListPage() {
           </button>
         </div>
       ) : (
-        <div className="rounded-2xl border border-slate-200/90 bg-white shadow-2xs overflow-hidden">
+        <div className="rounded-2xl border border-slate-200/90 dark:border-dk-border bg-white dark:bg-dk-surface shadow-2xs overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-100">
-              <thead className="bg-slate-50/80">
+            <table className="min-w-full divide-y divide-slate-100 dark:divide-dk-border">
+              <thead className="bg-slate-50/80 dark:bg-dk-raised/50">
                 <tr>
-                  <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('forms.listPage.colForm')}</th>
-                  <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('forms.listPage.colStatus')}</th>
-                  <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('forms.listPage.colSubmissions')}</th>
-                  <th className="px-6 py-3.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('forms.listPage.colActions')}</th>
+                  <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">{t('forms.listPage.colForm')}</th>
+                  <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">{t('forms.listPage.colStatus')}</th>
+                  <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">{t('forms.listPage.colSubmissions')}</th>
+                  <th className="px-6 py-3.5 text-right text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">{t('forms.listPage.colActions')}</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-slate-100">
+              <tbody className="bg-white dark:bg-dk-surface divide-y divide-slate-100 dark:divide-dk-border">
                 {forms.map((form) => {
                   const submissionCount = Number(form.submissionCount) || 0;
                   return (
-                    <tr key={form.id} className="hover:bg-slate-50/70 transition-colors">
+                    <tr key={form.id} className="hover:bg-slate-50/70 dark:hover:bg-dk-raised/40 transition-colors">
                       <td className="px-6 py-4">
-                        <div className="font-semibold text-sm text-slate-900 break-words line-clamp-1">
+                        <div className="font-semibold text-sm text-slate-900 dark:text-dk-text break-words line-clamp-1">
                           {form.title}
                         </div>
                         {form.description && (
-                          <div className="text-xs text-slate-400 mt-0.5 line-clamp-1 break-words">
+                          <div className="text-xs text-slate-400 dark:text-dk-muted mt-0.5 line-clamp-1 break-words">
                             {form.description}
                           </div>
                         )}
@@ -166,20 +166,20 @@ export default function FormsListPage() {
                             chủ phải thấy "Đã bị tắt" chứ không phải "Đã xuất bản" (giống trang admin). */}
                         {form.adminDisabledAt ? (
                           <span
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200/80 shadow-2xs"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 border border-rose-200/80 dark:border-rose-900/50 shadow-2xs"
                             title={t('forms.listPage.statusAdminDisabledHint')}
                           >
                             <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
                             {t('forms.listPage.statusAdminDisabled')}
                           </span>
                         ) : form.isPublished ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-900/50 shadow-2xs">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                             {t('forms.isPublished')}
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200 shadow-2xs">
-                            <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-dk-raised text-slate-600 dark:text-dk-text border border-slate-200 dark:border-dk-border shadow-2xs">
+                            <span className="h-1.5 w-1.5 rounded-full bg-slate-400 dark:bg-dk-strong" />
                             {t('forms.isDraft')}
                           </span>
                         )}
@@ -187,9 +187,9 @@ export default function FormsListPage() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <button
                           onClick={() => navigate(`/app/forms/${form.id}/submissions`)}
-                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-600 hover:text-primary-700 hover:underline"
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 hover:underline"
                         >
-                          <HiOutlineInbox className="w-4 h-4 text-slate-400" />
+                          <HiOutlineInbox className="w-4 h-4 text-slate-400 dark:text-dk-muted" />
                           <span>{t('forms.listPage.submissionCount', { count: submissionCount })}</span>
                         </button>
                       </td>
@@ -199,7 +199,7 @@ export default function FormsListPage() {
                           <button
                             onClick={() => handleTogglePublish(form)}
                             title={form.isPublished ? t('forms.unpublish') : t('forms.publish')}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-orange-600 dark:hover:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-colors"
                           >
                             {form.isPublished ? (
                               <HiOutlineEyeOff className="w-4 h-4" />
@@ -212,7 +212,7 @@ export default function FormsListPage() {
                           <button
                             onClick={() => setShareForm(form)}
                             title={t('forms.share')}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-orange-600 dark:hover:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-colors"
                           >
                             <HiOutlineShare className="w-4 h-4" />
                           </button>
@@ -221,7 +221,7 @@ export default function FormsListPage() {
                           <button
                             onClick={() => navigate(`/app/forms/${form.id}/edit`)}
                             title={t('forms.editForm')}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-orange-600 dark:hover:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-colors"
                           >
                             <HiOutlinePencil className="w-4 h-4" />
                           </button>
@@ -230,7 +230,7 @@ export default function FormsListPage() {
                           <button
                             onClick={() => setDeleteTarget(form)}
                             title={t('forms.delete')}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
                           >
                             <HiOutlineTrash className="w-4 h-4" />
                           </button>
@@ -257,14 +257,14 @@ export default function FormsListPage() {
       {/* Modal xác nhận xoá kèm số bài nộp */}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fadeIn">
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-gray-100 p-6">
-            <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4">
+          <div className="w-full max-w-md bg-white dark:bg-dk-surface rounded-2xl shadow-xl border border-gray-100 dark:border-dk-border p-6">
+            <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400 flex items-center justify-center mb-4">
               <HiOutlineExclamationCircle className="w-6 h-6" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-dk-text mb-2">
               {t('forms.deleteConfirmTitle')}
             </h3>
-            <p className="text-sm text-gray-600 leading-relaxed mb-6">
+            <p className="text-sm text-gray-600 dark:text-dk-text leading-relaxed mb-6">
               {t('forms.listPage.deleteConfirmMessage', {
                 title: deleteTarget.title,
                 count: deleteTarget.submissionCount || 0,
@@ -275,7 +275,7 @@ export default function FormsListPage() {
                 type="button"
                 onClick={() => setDeleteTarget(null)}
                 disabled={isDeleting}
-                className="px-4 py-2 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                className="px-4 py-2 rounded-xl text-sm font-medium text-gray-700 dark:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-raised transition-colors"
               >
                 {t('forms.listPage.cancel')}
               </button>

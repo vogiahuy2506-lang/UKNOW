@@ -54,13 +54,13 @@ function SubmenuPanel({ item, onClose }) {
   };
 
   return (
-    <div className="fixed left-[44px] w-56 bg-white shadow-2xl z-50 flex flex-col rounded-r-2xl border border-gray-200 border-l-0"
+    <div className="fixed left-[44px] w-56 bg-white dark:bg-dk-surface shadow-2xl z-50 flex flex-col rounded-r-2xl border border-gray-200 dark:border-dk-border border-l-0"
       style={{ top: 44, height: 'calc(100vh - 44px)' }}>
-      <div className="h-12 flex items-center px-4 shrink-0">
-        <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors mr-2 -ml-2">
+      <div className="h-12 flex items-center px-4 shrink-0 border-b border-gray-100 dark:border-dk-border">
+        <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-dk-raised transition-colors mr-2 -ml-2">
           <HiOutlineChevronRight className="w-4 h-4 text-gray-400 rotate-180" />
         </button>
-        <span className="text-[13px] font-bold text-gray-900">{item.name}</span>
+        <span className="text-[13px] font-bold text-gray-900 dark:text-dk-text">{item.name}</span>
       </div>
 
       <nav className="flex-1 overflow-y-auto py-2 px-2">
@@ -71,7 +71,7 @@ function SubmenuPanel({ item, onClose }) {
               ? t('sidebar.editCampaign')
               : child.name;
             const baseClass = `w-full flex items-center gap-2 pl-3 pr-2 py-1.5 text-[12px] rounded-lg transition-all ${
-              isActive ? 'bg-orange-50 text-orange-600 font-semibold' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              isActive ? 'bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 font-semibold' : 'text-gray-600 dark:text-dk-text hover:text-gray-900 dark:hover:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised/80'
             }`;
 
             if (child.action) {
@@ -311,8 +311,8 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
         : child.name;
       const baseClassName = `w-[calc(100%-18px)] flex items-center gap-2 py-1.5 pl-3 pr-2 text-[13px] ml-[18px] border-l-2 rounded-r-lg transition-colors ${
         isActiveChild
-          ? 'border-l-orange-500 text-orange-600 font-medium bg-orange-50'
-          : 'border-l-gray-200 text-gray-600 hover:text-gray-900 hover:bg-gray-50 hover:border-l-gray-300'
+          ? 'border-l-orange-500 text-orange-600 dark:text-orange-400 font-medium bg-orange-50 dark:bg-orange-950/40'
+          : 'border-l-gray-200 dark:border-l-slate-800 text-gray-600 dark:text-dk-text2 hover:text-gray-900 dark:hover:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised/40 hover:border-l-gray-300 dark:hover:border-l-slate-700'
       }`;
 
       if (child.action === 'openCreateCampaignModal') {
@@ -324,7 +324,7 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
             onClick={() => { navigate('/app/campaigns', { state: { openCreateCampaignModal: true } }); handleNavClose(); }}
             className={`${baseClassName} text-left`}
           >
-            {child.icon && <child.icon className={`w-4 h-4 shrink-0 ${isActiveChild ? 'text-orange-600' : 'text-gray-400'}`} />}
+            {child.icon && <child.icon className={`w-4 h-4 shrink-0 ${isActiveChild ? 'text-orange-600 dark:text-orange-400' : 'text-gray-400 dark:text-dk-muted'}`} />}
             <span>{displayName}</span>
           </button>
         );
@@ -338,7 +338,7 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
             onClick={() => { navigate('/app/settings/employees', { state: { openCreateEmployeeModal: true } }); handleNavClose(); }}
             className={`${baseClassName} text-left`}
           >
-            {child.icon && <child.icon className={`w-4 h-4 shrink-0 ${isActiveChild ? 'text-orange-600' : 'text-gray-400'}`} />}
+            {child.icon && <child.icon className={`w-4 h-4 shrink-0 ${isActiveChild ? 'text-orange-600 dark:text-orange-400' : 'text-gray-400 dark:text-dk-muted'}`} />}
             <span>{displayName}</span>
           </button>
         );
@@ -355,7 +355,7 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
             onClick={handleNavClose}
             className={baseClassName}
           >
-            {child.icon && <child.icon className="w-4 h-4 shrink-0 text-gray-400" />}
+            {child.icon && <child.icon className="w-4 h-4 shrink-0 text-gray-400 dark:text-dk-muted" />}
             <span>{displayName}</span>
           </a>
         );
@@ -371,7 +371,7 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
           onClick={handleNavClose}
           className={() => baseClassName}
         >
-          {child.icon && <child.icon className={`w-4 h-4 shrink-0 ${isActiveChild ? 'text-orange-600' : 'text-gray-400'}`} />}
+          {child.icon && <child.icon className={`w-4 h-4 shrink-0 ${isActiveChild ? 'text-orange-600 dark:text-orange-400' : 'text-gray-400 dark:text-dk-muted'}`} />}
           <span>{displayName}</span>
         </NavLink>
       );
@@ -394,7 +394,7 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
       )}
 
       <aside
-        className={`fixed left-0 h-full bg-white border-r border-gray-200 z-50 flex flex-col transition-all duration-300 ${isMobile ? 'top-0' : ''} ${mobileHidden ? '-translate-x-full' : 'translate-x-0'}`}
+        className={`fixed left-0 h-full bg-white dark:bg-dk-bg border-r border-gray-200 dark:border-dk-border z-50 flex flex-col transition-all duration-300 ${isMobile ? 'top-0' : ''} ${mobileHidden ? '-translate-x-full' : 'translate-x-0'}`}
         style={{
           width: sidebarWidth,
           top: isMobile ? 0 : topOffset,
@@ -404,8 +404,8 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
         {/* Mobile: show close button only */}
         {isMobile && (
           <div className="h-12 flex items-center px-4 shrink-0">
-            <button onClick={onClose} className="ml-auto p-1.5 rounded-lg hover:bg-gray-100 transition-colors shrink-0" aria-label={t('sidebar.closeMenu')}>
-              <HiOutlineX className="w-5 h-5 text-gray-500" />
+            <button onClick={onClose} className="ml-auto p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-dk-raised transition-colors shrink-0" aria-label={t('sidebar.closeMenu')}>
+              <HiOutlineX className="w-5 h-5 text-gray-500 dark:text-dk-text2" />
             </button>
           </div>
         )}
@@ -425,10 +425,10 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
                 const isFloatingOpen = floatingItem && getMenuItemKey(floatingItem) === itemKey;
                 const iconButtonClassName = `w-full flex items-center justify-center rounded-xl py-2.5 transition-all ${
                   isFloatingOpen
-                    ? 'bg-orange-100 text-orange-600'
+                    ? 'bg-orange-100 dark:bg-orange-950/60 text-orange-600 dark:text-orange-400'
                     : isItemActive
-                    ? 'bg-orange-50 text-orange-600'
-                    : 'text-gray-400 hover:bg-gray-50 hover:text-gray-900'
+                    ? 'bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400'
+                    : 'text-gray-400 dark:text-dk-text2 hover:bg-gray-50 dark:hover:bg-dk-raised/60 hover:text-gray-900 dark:hover:text-dk-text'
                 }`;
 
                 if (item.external) {
@@ -470,14 +470,14 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
                       aria-expanded={isExpanded}
                       className={`w-full flex items-center rounded-xl py-2 px-3 transition-all relative text-[11px] font-semibold uppercase tracking-wider ${
                         isGroupActive
-                          ? 'text-gray-900 before:absolute before:left-0 before:top-2 before:bottom-2 before:w-1 before:bg-orange-500 before:rounded-r'
-                          : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                          ? 'text-gray-900 dark:text-dk-text before:absolute before:left-0 before:top-2 before:bottom-2 before:w-1 before:bg-orange-500 before:rounded-r'
+                          : 'text-gray-500 dark:text-dk-text2 hover:text-gray-900 dark:hover:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised/50'
                       }`}
                     >
-                      <item.icon className={`w-4 h-4 flex-shrink-0 mr-2.5 ${isGroupActive ? 'text-orange-500' : 'text-gray-400'}`} />
+                      <item.icon className={`w-4 h-4 flex-shrink-0 mr-2.5 ${isGroupActive ? 'text-orange-500 dark:text-orange-400' : 'text-gray-400 dark:text-dk-muted'}`} />
                       <span className="truncate flex-1 text-left">{item.name}</span>
                       <HiOutlineChevronRight
-                        className={`w-4 h-4 text-gray-400 shrink-0 ml-auto transition-transform duration-200 ${
+                        className={`w-4 h-4 text-gray-400 dark:text-dk-muted shrink-0 ml-auto transition-transform duration-200 ${
                           isExpanded ? 'rotate-90' : ''
                         }`}
                       />
@@ -508,9 +508,9 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
                       rel="noopener noreferrer"
                       title={item.name}
                       data-menu-level="item"
-                      className="w-full flex items-center rounded-xl py-2 px-3 text-[13px] transition-colors text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                      className="w-full flex items-center rounded-xl py-2 px-3 text-[13px] transition-colors text-gray-600 dark:text-dk-text hover:text-gray-900 dark:hover:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised/50"
                     >
-                      <item.icon className="w-4 h-4 flex-shrink-0 mr-2.5 text-gray-400" />
+                      <item.icon className="w-4 h-4 flex-shrink-0 mr-2.5 text-gray-400 dark:text-dk-muted" />
                       <span className="flex-1 text-left truncate">{item.name}</span>
                     </a>
                   </div>
@@ -527,18 +527,18 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
                     aria-current={isLeafActive ? 'page' : undefined}
                     className={`w-full flex items-center rounded-xl py-2 px-3 text-[13px] transition-colors ${
                       isLeafActive
-                        ? 'bg-orange-50 text-orange-600 font-medium'
-                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                        ? 'bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 font-medium'
+                        : 'text-gray-600 dark:text-dk-text hover:text-gray-900 dark:hover:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised/50'
                     }`}
                   >
-                    <item.icon className={`w-4 h-4 flex-shrink-0 mr-2.5 ${isLeafActive ? 'text-orange-600' : 'text-gray-400'}`} />
+                    <item.icon className={`w-4 h-4 flex-shrink-0 mr-2.5 ${isLeafActive ? 'text-orange-600 dark:text-orange-400' : 'text-gray-400 dark:text-dk-muted'}`} />
                     <span className="flex-1 text-left truncate">{item.name}</span>
                   </button>
                 </div>
               );
             })}
             {visibleMenuItems.length === 0 && (
-              <div className={`py-8 text-center text-gray-400 text-xs ${isOpen || isMobile ? 'px-2' : 'hidden'}`}>
+              <div className={`py-8 text-center text-gray-400 dark:text-dk-muted text-xs ${isOpen || isMobile ? 'px-2' : 'hidden'}`}>
                 {t('employee.noPermissionsAssigned')}
               </div>
             )}
@@ -551,7 +551,7 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
             <NavLink
               to={isSuperAdmin ? '/admin' : '/app/settings/ai-profile'}
               className={({ isActive }) =>
-                `flex items-center rounded-xl py-2 px-3 transition-colors ${isActive ? 'bg-purple-50 text-purple-600' : 'text-gray-400 hover:bg-gray-50 hover:text-gray-900'}`
+                `flex items-center rounded-xl py-2 px-3 transition-colors ${isActive ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400' : 'text-gray-400 dark:text-dk-text2 hover:bg-gray-50 dark:hover:bg-dk-raised/50 hover:text-gray-900 dark:hover:text-dk-text'}`
               }
               onClick={handleNavClose}
             >
@@ -559,15 +559,15 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
                 <span className="text-white font-bold text-[11px] leading-none">{avatarInitial}</span>
               </div>
               <div className="ml-2.5 flex flex-col min-w-0">
-                <span className="text-[13px] font-semibold text-gray-900 truncate">{user?.fullName || user?.username}</span>
-                <span className="text-[11px] text-gray-400 capitalize">{isSuperAdmin ? t('sidebar.superAdmin') : activeContext?.type === 'employee' ? t('sidebar.employee') : t('sidebar.owner')}</span>
+                <span className="text-[13px] font-semibold text-gray-900 dark:text-dk-text truncate">{user?.fullName || user?.username}</span>
+                <span className="text-[11px] text-gray-400 dark:text-dk-text2 capitalize">{isSuperAdmin ? t('sidebar.superAdmin') : activeContext?.type === 'employee' ? t('sidebar.employee') : t('sidebar.owner')}</span>
               </div>
             </NavLink>
           ) : (
             <button
               onClick={onToggle}
               title={isOpen ? t('sidebar.collapseMenu') : t('sidebar.expandMenu')}
-              className="w-full flex items-center justify-center rounded-xl py-2.5 text-gray-400 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+              className="w-full flex items-center justify-center rounded-xl py-2.5 text-gray-400 dark:text-dk-text2 hover:bg-gray-50 dark:hover:bg-dk-raised/50 hover:text-gray-900 dark:hover:text-dk-text transition-colors"
             >
               {isOpen
                 ? <HiOutlineChevronRight className="w-5 h-5" />

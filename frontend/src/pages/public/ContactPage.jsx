@@ -43,15 +43,15 @@ const getChannels = (t) => [
     meta: t('contact.channelTaxIdMeta'),
     href: null,
   },
-{
-  icon: HiOutlineLocationMarker,
-  iconBg: 'bg-gradient-to-br from-emerald-500 to-teal-600',
-  iconRing: 'bg-emerald-100',
-  label: t('contact.channelOfficeLabel'),
-  value: t('contact.channelOfficeValue'),
-  meta: t('contact.channelOfficeMeta'),
-  href: 'https://maps.google.com/?q=I101B+Building,+Software+Park,+VNU-HCM,+Ho+Chi+Minh+City',
-},
+  {
+    icon: HiOutlineLocationMarker,
+    iconBg: 'bg-gradient-to-br from-emerald-500 to-teal-600',
+    iconRing: 'bg-emerald-100',
+    label: t('contact.channelOfficeLabel'),
+    value: t('contact.channelOfficeValue'),
+    meta: t('contact.channelOfficeMeta'),
+    href: 'https://maps.google.com/?q=I101B+Building,+Software+Park,+VNU-HCM,+Ho+Chi+Minh+City',
+  },
 ];
 
 function useBusinessStatus(t) {
@@ -144,13 +144,12 @@ export default function ContactPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white text-slate-900 transition-colors">
 
       {/* ── Hero Section ── */}
-      <section className="relative px-6 pt-12 pb-16 md:pt-16 md:pb-20 overflow-hidden">
+      <section className="relative px-6 pt-12 pb-16 md:pt-16 md:pb-20 overflow-hidden bg-white">
         {/* Background dots */}
-        <div className="absolute inset-0 opacity-[0.3]" style={{
-          backgroundColor: '#f8fafc',
+        <div className="absolute inset-0 opacity-[0.3] pointer-events-none" style={{
           backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)',
           backgroundSize: '24px 24px'
         }} />
@@ -163,7 +162,7 @@ export default function ContactPage() {
 
         <div className="max-w-4xl mx-auto text-center relative z-10">
           {/* Badge */}
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 text-slate-700 text-sm font-medium mb-8">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 text-slate-700 text-sm font-medium mb-8 border border-transparent">
             <span className="w-2 h-2 rounded-full bg-orange-500" />
             <span data-edit="contact.tagline">{getValue('contact.tagline', t('contact.tagline'))}</span>
           </div>
@@ -196,8 +195,7 @@ export default function ContactPage() {
       {/* ── CONTACT SECTION ── */}
       <section className="pt-12 pb-10 md:pt-14 md:pb-24 bg-white relative overflow-hidden">
         {/* Grid background */}
-        <div className="absolute inset-0 opacity-[0.3]" style={{
-          backgroundColor: '#f8fafc',
+        <div className="absolute inset-0 opacity-[0.3] pointer-events-none" style={{
           backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)',
           backgroundSize: '24px 24px'
         }} />
@@ -399,7 +397,7 @@ export default function ContactPage() {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed text-sm"
+                    className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed text-sm shadow-sm"
                   >
                     {submitting ? t('contact.submitting') : (
                       <>{t('contact.submitButton')} <HiOutlineArrowRight className="w-4 h-4" /></>

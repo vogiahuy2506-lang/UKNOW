@@ -80,9 +80,9 @@ const CampaignCheckboxDropdown = ({ options, selectedIds, onChange }) => {
         type="button"
         className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border text-sm transition-base ${
           isOpen
-            ? 'border-primary-400 ring-1 ring-primary-400 bg-white'
-            : 'border-gray-300 bg-white hover:border-gray-400'
-        } ${selectedIds.length > 0 ? 'text-gray-900 font-medium' : 'text-gray-500'}`}
+            ? 'border-primary-400 ring-1 ring-primary-400 bg-white dark:bg-dk-inset dark:border-primary-500'
+            : 'border-gray-300 bg-white hover:border-gray-400 dark:bg-dk-inset dark:border-dk-border dark:hover:border-dk-border'
+        } ${selectedIds.length > 0 ? 'text-gray-900 dark:text-dk-text font-medium' : 'text-gray-500 dark:text-dk-text2'}`}
         onClick={() => setIsOpen((prev) => !prev)}
       >
         <div className="flex items-center gap-2 min-w-0">
@@ -95,7 +95,7 @@ const CampaignCheckboxDropdown = ({ options, selectedIds, onChange }) => {
         <div className="flex items-center gap-1.5 shrink-0">
           {selectedIds.length > 0 && (
             <span
-              className="flex items-center justify-center w-5 h-5 rounded-full bg-primary-100 text-primary-600 text-[10px] font-bold"
+              className="flex items-center justify-center w-5 h-5 rounded-full bg-primary-100 text-primary-600 dark:bg-primary-950/60 dark:text-primary-400 text-[10px] font-bold"
             >
               {selectedIds.length}
             </span>
@@ -111,9 +111,9 @@ const CampaignCheckboxDropdown = ({ options, selectedIds, onChange }) => {
 
       {/* Dropdown panel */}
       {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-1.5 bg-white rounded-xl border border-gray-200 shadow-xl z-10 overflow-hidden">
+        <div className="absolute top-full left-0 right-0 mt-1.5 bg-white dark:bg-dk-surface rounded-xl border border-gray-200 dark:border-dk-border shadow-xl z-10 overflow-hidden">
           {/* Search */}
-          <div className="p-2.5 border-b border-gray-100">
+          <div className="p-2.5 border-b border-gray-100 dark:border-dk-border/80">
             <div className="relative">
               <svg
                 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400"
@@ -124,7 +124,7 @@ const CampaignCheckboxDropdown = ({ options, selectedIds, onChange }) => {
               </svg>
               <input
                 type="text"
-                className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:border-primary-400 focus:ring-1 focus:ring-primary-400 transition-base"
+                className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text rounded-lg focus:border-primary-400 focus:ring-1 focus:ring-primary-400 transition-base"
                 placeholder={t('dashboard.searchCampaign')}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -135,15 +135,15 @@ const CampaignCheckboxDropdown = ({ options, selectedIds, onChange }) => {
 
           {/* Select all row */}
           {filtered.length > 0 && (
-            <div className="px-3 py-2 border-b border-gray-100 bg-gray-50/50">
+            <div className="px-3 py-2 border-b border-gray-100 dark:border-dk-border/80 bg-gray-50/50 dark:bg-dk-surface/70">
               <label className="flex items-center gap-2.5 cursor-pointer group">
                 <input
                   type="checkbox"
-                  className="w-3.5 h-3.5 rounded border-gray-300 text-primary-500 cursor-pointer accent-orange-500"
+                  className="w-3.5 h-3.5 rounded border-gray-300 dark:border-dk-border text-primary-500 cursor-pointer accent-orange-500"
                   checked={allFilteredSelected}
                   onChange={toggleAllFiltered}
                 />
-                <span className="text-xs font-medium text-gray-500 group-hover:text-gray-700">
+                <span className="text-xs font-medium text-gray-500 dark:text-dk-text2 group-hover:text-gray-700 dark:group-hover:text-dk-text">
                   {allFilteredSelected ? t('dashboard.deselectAll') : `${t('dashboard.selectAll')} (${filtered.length})`}
                 </span>
               </label>
@@ -164,7 +164,7 @@ const CampaignCheckboxDropdown = ({ options, selectedIds, onChange }) => {
                   <label
                     key={opt.id}
                     className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors ${
-                      checked ? 'bg-primary-50' : 'hover:bg-gray-50'
+                      checked ? 'bg-primary-50 dark:bg-primary-950/40' : 'hover:bg-gray-50 dark:hover:bg-dk-raised/60'
                     }`}
                   >
                     <input
@@ -173,7 +173,7 @@ const CampaignCheckboxDropdown = ({ options, selectedIds, onChange }) => {
                       checked={checked}
                       onChange={() => toggleItem(opt.id)}
                     />
-                    <span className="flex-1 text-sm text-gray-800 truncate leading-snug">
+                    <span className="flex-1 text-sm text-gray-800 dark:text-dk-text truncate leading-snug">
                       {opt.label}
                     </span>
                     <span className={`badge text-[10px] px-1.5 py-0 shrink-0 ${badgeCls}`}>
@@ -187,8 +187,8 @@ const CampaignCheckboxDropdown = ({ options, selectedIds, onChange }) => {
 
           {/* Footer summary */}
           {selectedIds.length > 0 && (
-            <div className="px-3 py-2 border-t border-gray-100 flex items-center justify-between bg-gray-50/50">
-              <span className="text-xs text-primary-600 font-medium">
+            <div className="px-3 py-2 border-t border-gray-100 dark:border-dk-border/80 flex items-center justify-between bg-gray-50/50 dark:bg-dk-surface/70">
+              <span className="text-xs text-primary-600 dark:text-primary-400 font-medium">
                 {t('dashboard.selectedCount', { count: selectedIds.length })}
               </span>
               <button
@@ -346,19 +346,19 @@ const DashboardFilterPanel = ({
 
       {/* Slide-over panel */}
       <div
-        className={`fixed top-0 right-0 h-screen w-[400px] bg-white shadow-2xl z-50 flex flex-col transition-transform duration-250 ease-out ${
+        className={`fixed top-0 right-0 h-screen w-[400px] bg-white dark:bg-dk-surface dark:border-l dark:border-dk-border shadow-2xl z-50 flex flex-col transition-transform duration-250 ease-out ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-dk-border/80 shrink-0">
           <div>
-            <h3 className="text-base font-semibold text-gray-900">{panelTitle || t('dashboard.filterPanel')}</h3>
-            <p className="text-xs text-gray-400 mt-0.5">{panelDescription || t('dashboard.filterPanelDesc')}</p>
+            <h3 className="text-base font-semibold text-gray-900 dark:text-dk-text">{panelTitle || t('dashboard.filterPanel')}</h3>
+            <p className="text-xs text-gray-400 dark:text-dk-text2 mt-0.5">{panelDescription || t('dashboard.filterPanelDesc')}</p>
           </div>
           <button
             type="button"
-            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-base"
+            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:text-dk-text2 dark:hover:text-dk-text dark:hover:bg-dk-raised transition-base"
             onClick={onClose}
             aria-label={t('dashboard.closeFilter')}
           >
@@ -374,13 +374,13 @@ const DashboardFilterPanel = ({
           {/* Date filter — mode toggle + conditional content */}
           <div>
             {/* Mode toggle tabs */}
-            <div className="flex gap-1 p-1 bg-gray-100 rounded-lg mb-4">
+            <div className="flex gap-1 p-1 bg-gray-100 dark:bg-dk-inset rounded-lg mb-4">
               <button
                 type="button"
                 className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-base ${
                   dateMode === 'quick'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'bg-white dark:bg-dk-raised text-gray-900 dark:text-dk-text shadow-sm'
+                    : 'text-gray-500 dark:text-dk-text2 hover:text-gray-700 dark:hover:text-dk-text'
                 }`}
                 onClick={handleSwitchToQuick}
               >
@@ -390,8 +390,8 @@ const DashboardFilterPanel = ({
                 type="button"
                 className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-base ${
                   dateMode === 'custom'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'bg-white dark:bg-dk-raised text-gray-900 dark:text-dk-text shadow-sm'
+                    : 'text-gray-500 dark:text-dk-text2 hover:text-gray-700 dark:hover:text-dk-text'
                 }`}
                 onClick={handleSwitchToCustom}
               >
@@ -409,7 +409,7 @@ const DashboardFilterPanel = ({
                     className={`py-2 rounded-lg text-xs font-semibold border transition-base ${
                       activeQuickKey === range.key
                         ? 'bg-primary-500 text-white border-primary-500 shadow-sm'
-                        : 'border-gray-200 text-gray-600 bg-white hover:border-primary-400 hover:text-primary-600 hover:bg-primary-50'
+                        : 'border-gray-200 text-gray-600 bg-white hover:border-primary-400 hover:text-primary-600 hover:bg-primary-50 dark:bg-dk-surface dark:border-dk-border dark:text-dk-text dark:hover:bg-dk-raised dark:hover:border-primary-500 dark:hover:text-primary-400'
                     }`}
                     onClick={() => applyQuickRange(range)}
                   >
@@ -423,19 +423,19 @@ const DashboardFilterPanel = ({
             {dateMode === 'custom' && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1.5">{t('dashboard.fromDate')}</label>
+                  <label className="block text-xs text-gray-500 dark:text-dk-text2 mb-1.5">{t('dashboard.fromDate')}</label>
                   <input
                     type="date"
-                    className="input text-sm"
+                    className="input text-sm dark:bg-dk-inset dark:border-dk-border dark:text-dk-text"
                     value={draftFilters.startDate}
                     onChange={(e) => handleDateChange('startDate', e.target.value)}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1.5">{t('dashboard.toDate')}</label>
+                  <label className="block text-xs text-gray-500 dark:text-dk-text2 mb-1.5">{t('dashboard.toDate')}</label>
                   <input
                     type="date"
-                    className="input text-sm"
+                    className="input text-sm dark:bg-dk-inset dark:border-dk-border dark:text-dk-text"
                     value={draftFilters.endDate}
                     onChange={(e) => handleDateChange('endDate', e.target.value)}
                   />
@@ -446,7 +446,7 @@ const DashboardFilterPanel = ({
 
           {/* Campaign type */}
           <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">{t('dashboard.channelType')}</p>
+            <p className="text-xs font-semibold text-gray-400 dark:text-dk-text2 uppercase tracking-wider mb-3">{t('dashboard.channelType')}</p>
             <div className="flex flex-wrap gap-2">
               {CAMPAIGN_TYPE_OPTIONS.map((opt) => (
                 <button
@@ -455,7 +455,7 @@ const DashboardFilterPanel = ({
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-base ${
                     draftFilters.campaignType === opt.value
                       ? 'bg-primary-500 text-white border-primary-500 shadow-sm'
-                      : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50 dark:bg-dk-surface dark:text-dk-text dark:border-dk-border dark:hover:bg-dk-raised'
                   }`}
                   onClick={() => setDraftFilters((prev) => ({ ...prev, campaignType: opt.value }))}
                 >
@@ -467,7 +467,7 @@ const DashboardFilterPanel = ({
 
           {/* Campaign multi-select — custom checkbox dropdown */}
           <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+            <p className="text-xs font-semibold text-gray-400 dark:text-dk-text2 uppercase tracking-wider mb-3">
               {t('dashboard.specificCampaigns')}
             </p>
             <CampaignCheckboxDropdown
@@ -475,14 +475,14 @@ const DashboardFilterPanel = ({
               selectedIds={selectedCampaignIds}
               onChange={handleCampaignChange}
             />
-            <p className="text-xs text-gray-400 mt-2">
+            <p className="text-xs text-gray-400 dark:text-dk-muted mt-2">
               {t('dashboard.noSelectionHint')}
             </p>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-100 flex gap-3 shrink-0 bg-gray-50/50">
+        <div className="px-6 py-4 border-t border-gray-100 dark:border-dk-border/80 flex gap-3 shrink-0 bg-gray-50/50 dark:bg-dk-bg">
           <button type="button" className="btn btn-secondary flex-1" onClick={onClose}>
             {t('dashboard.cancel')}
           </button>

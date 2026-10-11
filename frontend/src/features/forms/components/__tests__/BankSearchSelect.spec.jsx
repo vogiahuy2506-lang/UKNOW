@@ -1,21 +1,24 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import BankSearchSelect from '../BankSearchSelect';
+import { I18nProvider } from '../../../../i18n';
+
+const renderWithI18n = (ui) => render(<I18nProvider>{ui}</I18nProvider>);
 
 describe('BankSearchSelect component', () => {
   it('hiển thị placeholder khi chưa chọn ngân hàng', () => {
-    render(<BankSearchSelect value="" onChange={vi.fn()} placeholder="Chọn ngân hàng test" />);
+    renderWithI18n(<BankSearchSelect value="" onChange={vi.fn()} placeholder="Chọn ngân hàng test" />);
     expect(screen.getAllByText('Chọn ngân hàng test')[0]).toBeInTheDocument();
   });
 
   it('hiển thị tên và mã ngắn khi đã chọn ngân hàng (vd: 970436 - Vietcombank)', () => {
-    render(<BankSearchSelect value="970436" onChange={vi.fn()} />);
+    renderWithI18n(<BankSearchSelect value="970436" onChange={vi.fn()} />);
     expect(screen.getByText('Vietcombank')).toBeInTheDocument();
     expect(screen.getByText('(VCB)')).toBeInTheDocument();
   });
 
   it('mở dropdown tìm kiếm và lọc đúng theo mã viết tắt không dấu (vcb, mb, techcom)', () => {
-    render(<BankSearchSelect value="" onChange={vi.fn()} />);
+    renderWithI18n(<BankSearchSelect value="" onChange={vi.fn()} />);
     const triggerBtn = screen.getByRole('button');
     fireEvent.click(triggerBtn);
 
@@ -36,7 +39,7 @@ describe('BankSearchSelect component', () => {
 
   it('chọn một ngân hàng sẽ kích hoạt onChange và đóng dropdown', () => {
     const handleChange = vi.fn();
-    render(<BankSearchSelect value="" onChange={handleChange} />);
+    renderWithI18n(<BankSearchSelect value="" onChange={handleChange} />);
 
     fireEvent.click(screen.getByRole('button'));
     const searchInput = screen.getByPlaceholderText(/Tìm ngân hàng/i);

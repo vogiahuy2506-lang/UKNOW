@@ -103,26 +103,26 @@ const NodeConfigTemplatePreviewModal = ({
         if (event.target === event.currentTarget) onClose?.();
       }}
     >
-      <div className="w-full max-w-4xl max-h-[90vh] bg-white rounded-xl shadow-xl overflow-hidden flex flex-col">
-        <div className="px-4 py-3 border-b border-gray-200 flex items-start justify-between gap-3">
+      <div className="w-full max-w-4xl max-h-[90vh] bg-white dark:bg-dk-surface rounded-xl shadow-xl overflow-hidden flex flex-col border border-transparent dark:border-dk-border text-gray-900 dark:text-dk-text">
+        <div className="px-4 py-3 border-b border-gray-200 dark:border-dk-border flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h3 className="text-base font-semibold text-gray-900 truncate">{templateTitle}</h3>
+            <h3 className="text-base font-semibold text-gray-900 dark:text-dk-text truncate">{templateTitle}</h3>
             {subject && (
-              <p className="text-sm text-gray-600 mt-1 truncate">
-                <span className="font-medium text-gray-700">{resolvedSubjectLabel}: </span>
+              <p className="text-sm text-gray-600 dark:text-dk-text2 mt-1 truncate">
+                <span className="font-medium text-gray-700 dark:text-dk-text">{resolvedSubjectLabel}: </span>
                 {subject}
               </p>
             )}
             {attachments.length > 0 && (
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-600">
-                <span className="font-medium text-gray-700">{t('templatePreview.attachment')}</span>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-dk-text2">
+                <span className="font-medium text-gray-700 dark:text-dk-text">{t('templatePreview.attachment')}</span>
                 <div className="flex flex-wrap gap-2">
                   {attachments.map((attachment, index) => (
                     <button
                       key={`${attachment.key || attachment.url || attachment.name}-${index}`}
                       type="button"
                       onClick={() => handleAttachmentClick(attachment)}
-                      className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-gray-200 bg-white text-gray-700 hover:text-primary-600 hover:border-primary-200 transition-colors"
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-raised text-gray-700 dark:text-dk-text hover:text-primary-600 dark:hover:text-primary-400 hover:border-primary-200 dark:hover:border-primary-800 transition-colors"
                     >
                       <HiOutlinePaperClip className="w-3.5 h-3.5" />
                       <span className="truncate max-w-[220px]">{attachment.name}</span>
@@ -135,14 +135,14 @@ const NodeConfigTemplatePreviewModal = ({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-md text-gray-500 hover:bg-gray-100"
+            className="p-1.5 rounded-md text-gray-500 dark:text-dk-text2 hover:bg-gray-100 dark:hover:bg-dk-raised"
             aria-label={t('templatePreview.closePreview')}
           >
             <HiOutlineX className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-auto bg-gray-50 p-4">
+        <div className="flex-1 overflow-auto bg-gray-50 dark:bg-dk-bg p-4">
           {bodyHtml ? (
             // HTML template do tenant soạn: sandbox không có allow-scripts, tài liệu bọc qua
             // wrapEmailSrcDoc (CSP chặn script, link mở tab mới) như màn xem trước template.
@@ -150,25 +150,25 @@ const NodeConfigTemplatePreviewModal = ({
               sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
               srcDoc={wrapEmailSrcDoc(bodyHtml)}
               title="Template preview"
-              className="w-full min-h-[520px] bg-white rounded-lg border border-gray-200"
+              className="w-full min-h-[520px] bg-white rounded-lg border border-gray-200 dark:border-dk-border"
               style={{ border: '1px solid rgb(229 231 235)' }}
             />
           ) : bodyText ? (
-            <div className="bg-white border border-gray-200 rounded-lg p-4 text-sm text-gray-800 whitespace-pre-wrap">
+            <div className="bg-white dark:bg-dk-raised border border-gray-200 dark:border-dk-border rounded-lg p-4 text-sm text-gray-800 dark:text-dk-text whitespace-pre-wrap">
               {bodyText}
             </div>
           ) : (
-            <div className="bg-white border border-dashed border-gray-300 rounded-lg p-8 text-sm text-gray-500 text-center">
+            <div className="bg-white dark:bg-dk-raised border border-dashed border-gray-300 dark:border-dk-border rounded-lg p-8 text-sm text-gray-500 dark:text-dk-text2 text-center">
               {t('templatePreview.noContent')}
             </div>
           )}
         </div>
 
-        <div className="px-4 py-3 border-t border-gray-200 bg-white flex justify-end">
+        <div className="px-4 py-3 border-t border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface flex justify-end">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-sm rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
+            className="px-4 py-2 text-sm rounded-lg bg-gray-100 dark:bg-dk-raised text-gray-700 dark:text-dk-text hover:bg-gray-200 dark:hover:bg-dk-strong"
           >
             {t('templatePreview.close')}
           </button>

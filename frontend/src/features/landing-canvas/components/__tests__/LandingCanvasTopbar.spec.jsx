@@ -80,6 +80,6 @@ describe('LandingCanvasTopbar — link Biểu mẫu gắn landing (PR-5b-2b mụ
     expect(screen.getByTitle('landingCanvas.canvasPreview.code')).toBeDefined();
     expect(screen.getByText('Fit')).toBeDefined();
     expect(screen.getByText('100%')).toBeDefined();
-    expect(screen.getByTitle('Thu gọn chat để xem toàn cảnh')).toBeDefined();
+    expect(screen.getByTitle('landingCanvas.topbar.collapseChatTooltip')).toBeDefined();
   });
 });

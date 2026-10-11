@@ -119,12 +119,12 @@ export const PlanFormModal = ({ plan, onClose, onSaved, existingPlanCodes = [] }
                 onClick={() => applyPreset(preset)}
                 className={`rounded-xl border px-4 py-3 text-left transition-all ${
                   form.code === preset.code
-                    ? 'border-orange-300 bg-orange-50 text-orange-700 shadow-sm'
-                    : 'border-slate-200 bg-white text-slate-700 hover:border-orange-200 hover:bg-orange-50/60'
+                    ? 'border-orange-300 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 shadow-sm'
+                    : 'border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface text-slate-700 dark:text-dk-text hover:border-orange-200 dark:hover:border-orange-800 hover:bg-orange-50/60 dark:hover:bg-orange-950/20'
                 }`}
               >
                 <span className="block text-sm font-bold">{preset.name}</span>
-                <span className="mt-1 block text-xs text-slate-500">{fmtVnd(preset.price)} / {preset.durationDays === 10 ? '10 ngày' : 'tháng'}</span>
+                <span className="mt-1 block text-xs text-slate-500 dark:text-dk-text2">{fmtVnd(preset.price)} / {preset.durationDays === 10 ? '10 ngày' : 'tháng'}</span>
               </button>
             ))}
           </div>
@@ -184,12 +184,12 @@ export const PlanFormModal = ({ plan, onClose, onSaved, existingPlanCodes = [] }
             <NumberInput className="input h-11 w-full" value={Math.max(1, Math.round(Number(form.storageLimitBytes || 0) / 1048576))}
               onChange={(v) => set('storageLimitBytes', Number(v || 0) * 1048576)} />
           </Field>
-          <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <div className="flex items-center rounded-xl border border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-inset px-4 py-3">
             <input type="checkbox" id="isActive" className="h-4 w-4 rounded text-primary-600"
               checked={form.isActive} onChange={(e) => set('isActive', e.target.checked)} />
             <label htmlFor="isActive" className="ml-3 cursor-pointer">
-              <span className="block text-sm font-semibold text-slate-800">{t('adminPlans.displayPublic')}</span>
-              <span className="text-xs text-slate-500">{t('adminPlans.displayPublicHint')}</span>
+              <span className="block text-sm font-semibold text-slate-800 dark:text-dk-text">{t('adminPlans.displayPublic')}</span>
+              <span className="text-xs text-slate-500 dark:text-dk-text2">{t('adminPlans.displayPublicHint')}</span>
             </label>
           </div>
         </div>
@@ -201,7 +201,7 @@ export const PlanFormModal = ({ plan, onClose, onSaved, existingPlanCodes = [] }
         description={t('adminPlans.sendLimitsDescription')}
       >
         <SendLimitsFields form={form} set={set} hint={t('planInputs.hintEmailLimitsBackendBlocked')} />
-        <div className="mt-5 border-t border-slate-100 pt-5">
+        <div className="mt-5 border-t border-slate-100 dark:border-dk-border pt-5">
           <PeriodMessagesField form={form} set={set} />
         </div>
       </FormSection>

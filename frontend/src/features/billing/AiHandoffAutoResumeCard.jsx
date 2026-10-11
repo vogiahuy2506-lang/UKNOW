@@ -51,21 +51,21 @@ export default function AiHandoffAutoResumeCard({ data, t, onSaved }) {
   return (
     <form
       onSubmit={handleSave}
-      className="rounded-xl border border-gray-200 bg-white p-4 space-y-3"
+      className="rounded-xl border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface p-4 space-y-3"
     >
       <div className="flex items-start gap-2">
-        <HiOutlineClock className="mt-0.5 h-5 w-5 shrink-0 text-primary-600" />
+        <HiOutlineClock className="mt-0.5 h-5 w-5 shrink-0 text-primary-600 dark:text-primary-400" />
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-gray-900">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-dk-text">
             {t('aiHandoffResume.title')}
           </h3>
-          <p className="mt-1 text-xs text-gray-500 leading-relaxed">
+          <p className="mt-1 text-xs text-gray-500 dark:text-dk-text2 leading-relaxed">
             {t('aiHandoffResume.help')}
           </p>
-          <p className="mt-1 text-xs font-medium text-slate-600">
+          <p className="mt-1 text-xs font-medium text-slate-600 dark:text-dk-text">
             {t('aiHandoffResume.scopeNote')}
           </p>
-          <p className="mt-1 text-xs text-gray-500 leading-relaxed">
+          <p className="mt-1 text-xs text-gray-500 dark:text-dk-text2 leading-relaxed">
             {t('aiHandoffResume.toggleNote')}
           </p>
         </div>
@@ -82,7 +82,7 @@ export default function AiHandoffAutoResumeCard({ data, t, onSaved }) {
             setSavedOk(false);
             setValue(ev.target.value);
           }}
-          className="w-full sm:max-w-[14rem] rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+          className="w-full sm:max-w-[14rem] rounded-lg border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-inset px-3 py-2 text-sm text-gray-900 dark:text-dk-text focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
         >
           <option value="">{t('aiHandoffResume.off')}</option>
           <option value="5">{t('aiHandoffResume.minutes', { n: 5 })}</option>

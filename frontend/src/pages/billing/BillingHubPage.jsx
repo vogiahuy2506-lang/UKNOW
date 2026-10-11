@@ -64,7 +64,7 @@ const BillingHubPage = () => {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center text-sm text-slate-500">
+      <div className="flex min-h-[40vh] items-center justify-center text-sm text-slate-500 dark:text-dk-text2">
         {t('common.loading')}
       </div>
     );
@@ -79,10 +79,10 @@ const BillingHubPage = () => {
       />
 
       {error && (
-        <p className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
+        <p className="rounded-lg border border-red-100 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 px-3 py-2 text-sm text-red-600 dark:text-red-400">{error}</p>
       )}
 
-      <div className="flex gap-1 border-b border-gray-100">
+      <div className="flex gap-1 border-b border-gray-100 dark:border-dk-border">
         {[
           { key: 'overview', label: t('billingHub.tabOverview') },
           { key: 'locks', label: t('billingHub.tabLocks') },
@@ -94,8 +94,8 @@ const BillingHubPage = () => {
             onClick={() => setActiveTab(tab.key)}
             className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
               activeTab === tab.key
-                ? 'border-primary-500 text-primary-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+                ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+                : 'border-transparent text-gray-500 dark:text-dk-text2 hover:text-gray-700 dark:hover:text-dk-text'
             }`}
           >
             {tab.label}
@@ -115,14 +115,14 @@ const BillingHubPage = () => {
           <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
             <Link
               to="/app/topup"
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 py-3.5 text-sm font-semibold text-white hover:bg-primary-700"
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 py-3.5 text-sm font-semibold text-white hover:bg-primary-700 transition"
             >
               <HiOutlineCurrencyDollar className="h-5 w-5" />
               {t('billingHub.ctaTopup')}
             </Link>
             <Link
               to="/pricing"
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised px-4 py-3.5 text-sm font-semibold text-slate-800 dark:text-dk-text hover:bg-slate-50 dark:hover:bg-dk-strong transition"
             >
               <HiOutlineTag className="h-5 w-5" />
               {t('billingHub.ctaUpgrade')}

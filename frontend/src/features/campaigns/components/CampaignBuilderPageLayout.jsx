@@ -103,10 +103,10 @@ const NodePaletteItem = ({ node, orderIndex, onDragStart }) => {
     <div
       draggable
       onDragStart={(e) => onDragStart(e, node.type, node)}
-      className="flex items-center px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg hover:bg-gray-50 cursor-grab active:cursor-grabbing transition-colors gap-2 sm:gap-2.5"
+      className="flex items-center px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-dk-raised/60 cursor-grab active:cursor-grabbing transition-colors gap-2 sm:gap-2.5"
     >
       <span
-        className="shrink-0 w-5 h-5 sm:w-5 sm:h-5 rounded bg-slate-50 text-slate-400 text-[10px] font-medium flex items-center justify-center tabular-nums border border-slate-200/70"
+        className="shrink-0 w-5 h-5 sm:w-5 sm:h-5 rounded bg-slate-50 dark:bg-dk-raised text-slate-400 dark:text-dk-text2 text-[10px] font-medium flex items-center justify-center tabular-nums border border-slate-200/70 dark:border-dk-border/70"
         title={hasOrder ? 'Thứ tự gợi ý' : ''}
       >
         {orderIndex}
@@ -117,7 +117,7 @@ const NodePaletteItem = ({ node, orderIndex, onDragStart }) => {
       >
         <node.icon className="w-4 h-4" style={{ color: node.iconColor }} />
       </div>
-      <span className="text-sm text-gray-700 leading-5 truncate">
+      <span className="text-sm text-gray-700 dark:text-dk-text leading-5 truncate">
         {locale === 'vi' ? node.nameVi : node.name}
       </span>
     </div>
@@ -241,40 +241,40 @@ const CampaignBuilderPageLayout = ({
   const showZaloSection = zaloEnabled && normalizedCampaignType !== 'email';
 
   return (
-    <div className="h-full min-h-0 w-full min-w-0 overflow-hidden flex flex-col">
-    <div className="bg-white border-b border-gray-200 px-2.5 sm:px-4 py-2.5 sm:py-3">
+    <div className="h-full min-h-0 w-full min-w-0 overflow-hidden flex flex-col bg-white dark:bg-dk-inset">
+    <div className="bg-white dark:bg-dk-surface border-b border-gray-200 dark:border-dk-border px-2.5 sm:px-4 py-2.5 sm:py-3">
       <div className="flex flex-wrap items-start justify-between gap-2.5 sm:gap-3">
         <div className="flex items-start gap-2.5 sm:gap-3 min-w-0">
-          <button onClick={onBackToCampaigns} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-            <HiOutlineArrowLeft className="w-5 h-5 text-gray-600" />
+          <button onClick={onBackToCampaigns} className="p-2 hover:bg-gray-100 dark:hover:bg-dk-raised rounded-lg transition-colors">
+            <HiOutlineArrowLeft className="w-5 h-5 text-gray-600 dark:text-dk-text" />
           </button>
           <div className="min-w-0">
-            <div className="text-sm text-gray-500 flex items-center gap-2 min-w-0">
-              <span className="font-medium text-primary-600 truncate">{campaignName || t('campaignBuilder.newCampaign')}</span>
+            <div className="text-sm text-gray-500 dark:text-dk-text2 flex items-center gap-2 min-w-0">
+              <span className="font-medium text-primary-600 dark:text-primary-400 truncate">{campaignName || t('campaignBuilder.newCampaign')}</span>
               <span className={`px-2 py-0.5 rounded text-xs font-medium border ${campaignTypeMeta.className}`}>
                 {campaignTypeMeta.label}
               </span>
               <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                campaignStatus === 'active' ? 'bg-green-100 text-green-700'
-                  : campaignStatus === 'paused' ? 'bg-yellow-100 text-yellow-700'
-                    : 'bg-gray-100 text-gray-700'
+                campaignStatus === 'active' ? 'bg-green-100 text-green-700 dark:bg-green-950/60 dark:text-green-300'
+                  : campaignStatus === 'paused' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950/60 dark:text-yellow-300'
+                    : 'bg-gray-100 text-gray-700 dark:bg-dk-raised dark:text-dk-text'
               }`}>
                 {campaignStatus === 'active' ? t('campaignBuilder.active')
                   : campaignStatus === 'paused' ? t('campaignBuilder.paused')
                     : t('campaignBuilder.draft')}
               </span>
             </div>
-            <div className="text-xs text-gray-400 mt-1">
+            <div className="text-xs text-gray-400 dark:text-dk-muted mt-1">
               {isDirty ? (
-                <span className="text-amber-600 font-medium">{t('campaignBuilder.unsaved')}</span>
+                <span className="text-amber-600 dark:text-amber-400 font-medium">{t('campaignBuilder.unsaved')}</span>
               ) : lastSavedTime ? (
                 <>
-                  <span className="text-green-600 font-medium">✓ {t('campaignBuilder.saved')}</span>
+                  <span className="text-green-600 dark:text-green-400 font-medium">✓ {t('campaignBuilder.saved')}</span>
                   <span className="mx-1">—</span>
                   <span>{formatCampaignDateTime(lastSavedTime)}</span>
                 </>
               ) : (
-                <span className="text-amber-600 font-medium">{t('campaignBuilder.unsaved')}</span>
+                <span className="text-amber-600 dark:text-amber-400 font-medium">{t('campaignBuilder.unsaved')}</span>
               )}
             </div>
           </div>
@@ -298,14 +298,14 @@ const CampaignBuilderPageLayout = ({
     <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden flex-col">
       <div className="flex flex-1 min-h-0 min-w-0 h-full overflow-hidden">
         <div
-          className="bg-white border-r border-gray-200 flex flex-col min-h-0 h-full overflow-hidden"
+          className="bg-white dark:bg-dk-surface border-r border-gray-200 dark:border-dk-border flex flex-col min-h-0 h-full overflow-hidden"
           style={{ width: `${effectiveBuilderSidebarWidth}px` }}
         >
           {isNodeMenuCollapsed ? (
             <div className="p-2 flex justify-center">
               <button
                 onClick={() => setIsNodeMenuCollapsed(false)}
-                className="p-2 rounded-lg hover:bg-gray-100 text-gray-600 transition-colors"
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dk-raised text-gray-600 dark:text-dk-text transition-colors"
                 title={t('campaignBuilder.expandNodeMenu')}
               >
                 <HiOutlineChevronRight className="w-5 h-5" />
@@ -315,18 +315,18 @@ const CampaignBuilderPageLayout = ({
             <div className="p-2.5 sm:p-3">
               <div className="flex items-center gap-2">
                 <div className="relative flex-1">
-                  <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-dk-muted" />
                   <input
                     type="text"
                     placeholder={t('campaignBuilder.search')}
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    className="w-full pl-9 pr-3 py-2 border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-raised text-gray-900 dark:text-dk-text rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent placeholder:text-gray-400 dark:placeholder:text-dk-muted"
                   />
                 </div>
                 <button
                   onClick={() => setIsNodeMenuCollapsed(true)}
-                  className="p-2 rounded-lg hover:bg-gray-100 text-gray-600 transition-colors"
+                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dk-raised text-gray-600 dark:text-dk-text transition-colors"
                   title={t('campaignBuilder.collapseNodeMenu')}
                 >
                   <HiOutlineChevronLeft className="w-5 h-5" />
@@ -338,14 +338,14 @@ const CampaignBuilderPageLayout = ({
           {!isNodeMenuCollapsed && (
             <div className="flex-1 min-h-0 overflow-y-auto px-2.5 sm:px-3 pb-2.5 sm:pb-3">
             {/* Hint: thứ tự thực thi gợi ý — số ở đầu mỗi node trong palette. */}
-            <div className="mb-3 px-2 py-1.5 rounded-md bg-slate-50 border border-slate-100 text-[11px] text-slate-500 leading-relaxed">
+            <div className="mb-3 px-2 py-1.5 rounded-md bg-slate-50 dark:bg-dk-raised/50 border border-slate-100 dark:border-dk-border text-[11px] text-slate-500 dark:text-dk-text2 leading-relaxed">
               {t('campaignBuilder.paletteOrderHint')}
             </div>
 
             <div className="mb-2">
               <button
                 onClick={() => toggleCategory('Triggers')}
-                className="w-full flex items-center justify-between py-2 text-sm font-semibold text-gray-800"
+                className="w-full flex items-center justify-between py-2 text-sm font-semibold text-gray-800 dark:text-dk-text"
               >
                 <span>{t('campaignBuilder.triggers')}</span>
                 <HiOutlineChevronDown className={`w-4 h-4 transition-transform ${expandedCategories.includes('Triggers') ? '' : '-rotate-90'}`} />
@@ -368,7 +368,7 @@ const CampaignBuilderPageLayout = ({
             <div className="mb-2">
               <button
                 onClick={() => toggleCategory('Zalo')}
-                className="w-full flex items-center justify-between py-2 text-sm font-semibold text-gray-800"
+                className="w-full flex items-center justify-between py-2 text-sm font-semibold text-gray-800 dark:text-dk-text"
               >
                 <span>{t('campaignBuilder.zalo')}</span>
                 <HiOutlineChevronDown className={`w-4 h-4 transition-transform ${expandedCategories.includes('Zalo') ? '' : '-rotate-90'}`} />
@@ -395,7 +395,7 @@ const CampaignBuilderPageLayout = ({
             <div className="mb-2">
               <button
                 onClick={() => toggleCategory('Data')}
-                className="w-full flex items-center justify-between py-2 text-sm font-semibold text-gray-800"
+                className="w-full flex items-center justify-between py-2 text-sm font-semibold text-gray-800 dark:text-dk-text"
               >
                 <span>{t('campaignBuilder.data')}</span>
                 <HiOutlineChevronDown className={`w-4 h-4 transition-transform ${expandedCategories.includes('Data') ? '' : '-rotate-90'}`} />
@@ -420,7 +420,7 @@ const CampaignBuilderPageLayout = ({
             <div className="mb-2">
               <button
                 onClick={() => toggleCategory('Logic')}
-                className="w-full flex items-center justify-between py-2 text-sm font-semibold text-gray-800"
+                className="w-full flex items-center justify-between py-2 text-sm font-semibold text-gray-800 dark:text-dk-text"
               >
                 <span>{t('campaignBuilder.logic')}</span>
                 <HiOutlineChevronDown className={`w-4 h-4 transition-transform ${expandedCategories.includes('Logic') ? '' : '-rotate-90'}`} />
@@ -442,7 +442,7 @@ const CampaignBuilderPageLayout = ({
             <div className="mb-2">
               <button
                 onClick={() => toggleCategory('Actions')}
-                className="w-full flex items-center justify-between py-2 text-sm font-semibold text-gray-800"
+                className="w-full flex items-center justify-between py-2 text-sm font-semibold text-gray-800 dark:text-dk-text"
               >
                 <span>{t('campaignBuilder.actions')}</span>
                 <HiOutlineChevronDown className={`w-4 h-4 transition-transform ${expandedCategories.includes('Actions') ? '' : '-rotate-90'}`} />
@@ -467,14 +467,14 @@ const CampaignBuilderPageLayout = ({
         {!isNodeMenuCollapsed && (
           <div
             className={`h-full w-2 cursor-col-resize transition-colors ${
-              isResizingBuilderSidebar ? 'bg-primary-100' : 'hover:bg-primary-50'
+              isResizingBuilderSidebar ? 'bg-primary-100 dark:bg-primary-950/60' : 'hover:bg-primary-50 dark:hover:bg-primary-950/30'
             }`}
             onMouseDown={onBuilderSidebarResizeStart}
             role="separator"
             aria-orientation="vertical"
             title={t('campaignBuilder.dragToResize')}
           >
-            <div className="mx-auto h-full w-px bg-gray-200" />
+            <div className="mx-auto h-full w-px bg-gray-200 dark:bg-dk-raised" />
           </div>
         )}
 
@@ -503,16 +503,16 @@ const CampaignBuilderPageLayout = ({
         />
 
         {selectedNode && (
-          <div className="w-56 sm:w-60 md:w-64 xl:w-72 max-w-[52vw] bg-white border-l border-gray-200 flex flex-col">
-            <div className="flex items-center justify-between p-3 sm:p-4 border-b border-gray-200">
-              <h3 className="font-medium text-gray-900">{t('campaignBuilder.properties')}</h3>
-              <button onClick={() => setSelectedNode(null)} className="p-1 hover:bg-gray-100 rounded">
+          <div className="w-56 sm:w-60 md:w-64 xl:w-72 max-w-[52vw] bg-white dark:bg-dk-surface border-l border-gray-200 dark:border-dk-border flex flex-col">
+            <div className="flex items-center justify-between p-3 sm:p-4 border-b border-gray-200 dark:border-dk-border">
+              <h3 className="font-medium text-gray-900 dark:text-dk-text">{t('campaignBuilder.properties')}</h3>
+              <button onClick={() => setSelectedNode(null)} className="p-1 hover:bg-gray-100 dark:hover:bg-dk-raised text-gray-500 dark:text-dk-text2 rounded">
                 <HiOutlineX className="w-4 h-4" />
               </button>
             </div>
             <div className="flex-1 p-3 sm:p-4 space-y-3 sm:space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('campaignBuilder.name')}</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{t('campaignBuilder.name')}</label>
                 <input
                   type="text"
                   value={selectedNode.data.label || ''}
@@ -525,23 +525,23 @@ const CampaignBuilderPageLayout = ({
                     );
                     setSelectedNode((prev) => ({ ...prev, data: { ...prev.data, label: newLabel } }));
                   }}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2 border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-raised text-gray-900 dark:text-dk-text rounded-lg text-sm focus:ring-2 focus:ring-primary-500 placeholder:text-gray-400 dark:placeholder:text-dk-muted"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('campaignBuilder.type')}</label>
-                <p className="text-sm text-gray-500 capitalize">{selectedNode.data.nodeType || selectedNode.type}</p>
+                <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{t('campaignBuilder.type')}</label>
+                <p className="text-sm text-gray-500 dark:text-dk-text2 capitalize">{selectedNode.data.nodeType || selectedNode.type}</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('campaignBuilder.id')}</label>
-                <p className="text-sm text-gray-500 font-mono">{selectedNode.id}</p>
+                <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{t('campaignBuilder.id')}</label>
+                <p className="text-sm text-gray-500 dark:text-dk-text2 font-mono">{selectedNode.id}</p>
               </div>
               <button
                 onClick={() => {
                   setNodeToConfig(selectedNode);
                   setShowConfigModal(true);
                 }}
-                className="w-full px-4 py-2 bg-primary-50 text-primary-600 text-sm font-medium rounded-lg hover:bg-primary-100 transition-colors"
+                className="w-full px-4 py-2 bg-primary-50 dark:bg-primary-950/40 text-primary-600 dark:text-primary-400 text-sm font-medium rounded-lg hover:bg-primary-100 dark:hover:bg-primary-950/70 transition-colors"
               >
                 {t('campaignBuilder.configureDetails')}
               </button>
@@ -553,7 +553,7 @@ const CampaignBuilderPageLayout = ({
                   title={canCopySelectedNode
                     ? t('campaignBuilder.copyShortcut')
                     : t('campaignBuilder.cannotCopyTrigger')}
-                  className="px-3 py-2 bg-gray-50 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-100 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+                  className="px-3 py-2 bg-gray-50 dark:bg-dk-raised text-gray-700 dark:text-dk-text text-sm font-medium rounded-lg hover:bg-gray-100 dark:hover:bg-dk-strong transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {t('campaignBuilder.copyNode')}
                 </button>
@@ -562,15 +562,15 @@ const CampaignBuilderPageLayout = ({
                   onClick={onPasteNode}
                   disabled={!canPasteNode}
                   title={t('campaignBuilder.pasteShortcut')}
-                  className="px-3 py-2 bg-gray-50 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-100 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+                  className="px-3 py-2 bg-gray-50 dark:bg-dk-raised text-gray-700 dark:text-dk-text text-sm font-medium rounded-lg hover:bg-gray-100 dark:hover:bg-dk-strong transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {t('campaignBuilder.pasteNode')}
                 </button>
               </div>
-              <p className="text-xs text-gray-400">{t('campaignBuilder.copyPasteHint')}</p>
+              <p className="text-xs text-gray-400 dark:text-dk-muted">{t('campaignBuilder.copyPasteHint')}</p>
               <button
                 onClick={onDeleteNode}
-                className="w-full px-4 py-2 bg-red-50 text-red-600 text-sm font-medium rounded-lg hover:bg-red-100 transition-colors"
+                className="w-full px-4 py-2 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 text-sm font-medium rounded-lg hover:bg-red-100 dark:hover:bg-red-950/70 transition-colors"
               >
                 {t('campaignBuilder.deleteNode')}
               </button>
@@ -580,8 +580,8 @@ const CampaignBuilderPageLayout = ({
       </div>
 
       {activePause && (
-        <div className="flex-none px-4 py-2 bg-amber-50 border-t border-b border-amber-200 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 text-sm font-medium text-amber-900">
+        <div className="flex-none px-4 py-2 bg-amber-50 dark:bg-amber-950/40 border-t border-b border-amber-200 dark:border-amber-900/60 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-sm font-medium text-amber-900 dark:text-amber-200">
             <span>
               {t(getRunPauseI18nKey(activePause), {
                 until: formatCampaignDateTime(activePause.untilIso),
@@ -592,7 +592,7 @@ const CampaignBuilderPageLayout = ({
           {activePause.kind === 'plan_quota' && (
             <Link
               to="/app/topup"
-              className="text-xs font-medium text-primary-600 hover:text-primary-800 hover:underline"
+              className="text-xs font-medium text-primary-600 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 hover:underline"
             >
               {t('campaignRun.buyTopup')}
             </Link>
@@ -603,28 +603,28 @@ const CampaignBuilderPageLayout = ({
       {showRunLogs && (
         <div
           className={`h-2 w-full cursor-row-resize transition-colors ${
-            isResizingLog ? 'bg-primary-100' : 'hover:bg-primary-50'
+            isResizingLog ? 'bg-primary-100 dark:bg-primary-950/60' : 'hover:bg-primary-50 dark:hover:bg-primary-950/30'
           }`}
           onMouseDown={onLogResizeStart}
           role="separator"
           aria-orientation="horizontal"
           title={t('campaignBuilder.dragToResize')}
         >
-          <div className="mx-auto h-px w-full bg-gray-200" />
+          <div className="mx-auto h-px w-full bg-gray-200 dark:bg-dk-raised" />
         </div>
       )}
       <div
-        className={`border-t border-gray-200 bg-white px-3 py-2 flex-none flex flex-col min-h-0 w-full min-w-0 overflow-hidden ${
+        className={`border-t border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface px-3 py-2 flex-none flex flex-col min-h-0 w-full min-w-0 overflow-hidden ${
           showRunLogs ? '' : 'h-12'
         }`}
         style={showRunLogs ? { height: `${runLogHeight}px` } : undefined}
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="font-medium text-gray-900">{t('campaignBuilder.campaignRunLog')}</div>
+          <div className="font-medium text-gray-900 dark:text-dk-text">{t('campaignBuilder.campaignRunLog')}</div>
           <div className="flex flex-wrap items-center gap-2 justify-end">
             <button
               onClick={() => setShowRunLogs((prev) => !prev)}
-              className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
+              className="px-3 py-1.5 text-sm text-gray-600 dark:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-raised rounded-lg"
             >
               {showRunLogs ? t('campaignBuilder.collapse') : t('campaignBuilder.expand')}
             </button>
@@ -633,7 +633,7 @@ const CampaignBuilderPageLayout = ({
                 setRunLogs([]);
                 setSelectedRunLogId(null);
               }}
-              className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
+              className="px-3 py-1.5 text-sm text-gray-600 dark:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-raised rounded-lg"
             >
               {t('campaignBuilder.deleteLog')}
             </button>

@@ -1478,7 +1478,7 @@ const QuickSend = () => {
 
         {/* Step Indicators — kênh adapter có giao diện một trang riêng, không đi qua các bước này */}
         {!isAdapterChannel && (
-        <div className="flex items-center gap-2 overflow-x-auto pb-4 border-b border-gray-200">
+        <div className="flex items-center gap-2 overflow-x-auto pb-4 border-b border-gray-200 dark:border-dk-border">
           {steps.map((step, index) => {
             const isActive = step.key === currentStep;
             const isCompleted = index < currentStepIndex || currentStep === QUICK_SEND_STEPS.DONE;
@@ -1488,10 +1488,10 @@ const QuickSend = () => {
                 <div
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition ${
                     isActive
-                      ? 'bg-orange-100 text-orange-700'
+                      ? 'bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300'
                       : isCompleted
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-gray-100 text-gray-500'
+                      ? 'bg-green-100 text-green-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                      : 'bg-gray-100 text-gray-500 dark:bg-dk-raised dark:text-dk-text2'
                   }`}
                 >
                   {isCompleted ? (
@@ -1502,7 +1502,7 @@ const QuickSend = () => {
                   <span>{step.label}</span>
                 </div>
                 {index < steps.length - 1 && (
-                  <HiOutlineChevronRight className="w-4 h-4 text-gray-300 mx-1" />
+                  <HiOutlineChevronRight className="w-4 h-4 text-gray-300 dark:text-dk-muted mx-1" />
                 )}
               </div>
             );
@@ -1517,28 +1517,28 @@ const QuickSend = () => {
         {currentStep === QUICK_SEND_STEPS.RECIPIENTS && (
           <div className="space-y-6">
             {/* Channel Type */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('quickSend.selectChannel')}</h2>
+            <div className="bg-white dark:bg-dk-surface rounded-xl border border-gray-200 dark:border-dk-border p-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-dk-text mb-4">{t('quickSend.selectChannel')}</h2>
               <div className={`grid gap-4 ${CHANNEL_GRID_CLASSES[1 + (zaloEntitled ? 1 : 0) + adapterChannels.length] || 'grid-cols-3'}`}>
                 <button
                   onClick={() => handleChannelChange(CHANNEL_TYPES.EMAIL)}
                   className={`relative p-4 rounded-xl border-2 transition flex flex-col items-center gap-2.5 ${
                     selectedChannel === CHANNEL_TYPES.EMAIL
-                      ? 'border-orange-500 bg-orange-50/60 shadow-sm ring-1 ring-orange-500/20'
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50/70 shadow-xs'
+                      ? 'border-orange-500 bg-orange-50/60 dark:bg-orange-950/30 shadow-sm ring-1 ring-orange-500/20'
+                      : 'border-gray-200 dark:border-dk-border hover:border-gray-300 dark:hover:border-dk-border hover:bg-gray-50/70 dark:hover:bg-dk-raised/60 shadow-xs'
                   }`}
                 >
                   <span
                     className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors shadow-xs ${
                       selectedChannel === CHANNEL_TYPES.EMAIL
                         ? 'bg-blue-600 text-white'
-                        : 'bg-blue-50 text-blue-600 border border-blue-100/80'
+                        : 'bg-blue-50 text-blue-600 border border-blue-100/80 dark:bg-dk-raised dark:text-blue-400 dark:border-dk-border'
                     }`}
                     aria-hidden="true"
                   >
                     <HiOutlineMail className="w-6 h-6" />
                   </span>
-                  <span className={`font-semibold text-sm ${selectedChannel === CHANNEL_TYPES.EMAIL ? 'text-orange-950' : 'text-gray-700'}`}>
+                  <span className={`font-semibold text-sm ${selectedChannel === CHANNEL_TYPES.EMAIL ? 'text-orange-950 dark:text-orange-300' : 'text-gray-700 dark:text-dk-text'}`}>
                     Email
                   </span>
                   {selectedChannel === CHANNEL_TYPES.EMAIL && (
@@ -1556,21 +1556,21 @@ const QuickSend = () => {
                   onClick={() => { if (!isZaloFamily) handleChannelChange(CHANNEL_TYPES.ZALO); }}
                   className={`relative p-4 rounded-xl border-2 transition flex flex-col items-center gap-2.5 ${
                     isZaloFamily
-                      ? 'border-orange-500 bg-orange-50/60 shadow-sm ring-1 ring-orange-500/20'
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50/70 shadow-xs'
+                      ? 'border-orange-500 bg-orange-50/60 dark:bg-orange-950/30 shadow-sm ring-1 ring-orange-500/20'
+                      : 'border-gray-200 dark:border-dk-border hover:border-gray-300 dark:hover:border-dk-border hover:bg-gray-50/70 dark:hover:bg-dk-raised/60 shadow-xs'
                   }`}
                 >
                   <span
                     className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors shadow-xs ${
                       isZaloFamily
                         ? 'bg-sky-600 text-white'
-                        : 'bg-sky-50 text-sky-600 border border-sky-100/80'
+                        : 'bg-sky-50 text-sky-600 border border-sky-100/80 dark:bg-dk-raised dark:text-sky-400 dark:border-dk-border'
                     }`}
                     aria-hidden="true"
                   >
                     <HiOutlineChat className="w-6 h-6" />
                   </span>
-                  <span className={`font-semibold text-sm ${isZaloFamily ? 'text-orange-950' : 'text-gray-700'}`}>
+                  <span className={`font-semibold text-sm ${isZaloFamily ? 'text-orange-950 dark:text-orange-300' : 'text-gray-700 dark:text-dk-text'}`}>
                     Zalo
                   </span>
                   {isZaloFamily && (
@@ -1587,10 +1587,10 @@ const QuickSend = () => {
                   const isTelegram = adapter.key === 'telegram';
                   const isWhatsApp = adapter.key === 'whatsapp';
                   const iconBg = isTelegram
-                    ? 'bg-sky-50 text-sky-500 border border-sky-100/80'
+                    ? 'bg-sky-50 text-sky-500 border border-sky-100/80 dark:bg-dk-raised dark:text-sky-400 dark:border-dk-border'
                     : isWhatsApp
-                    ? 'bg-emerald-50 text-emerald-600 border border-emerald-100/80'
-                    : 'bg-gray-50 text-gray-600 border border-gray-100/80';
+                    ? 'bg-emerald-50 text-emerald-600 border border-emerald-100/80 dark:bg-dk-raised dark:text-emerald-400 dark:border-dk-border'
+                    : 'bg-gray-50 text-gray-600 border border-gray-100/80 dark:bg-dk-raised dark:text-dk-text2 dark:border-dk-border';
                   const activeIconBg = isTelegram
                     ? 'bg-sky-500 text-white'
                     : isWhatsApp
@@ -1604,8 +1604,8 @@ const QuickSend = () => {
                       onClick={() => handleChannelChange(adapter.key)}
                       className={`relative p-4 rounded-xl border-2 transition flex flex-col items-center gap-2.5 ${
                         isActive
-                          ? 'border-orange-500 bg-orange-50/60 shadow-sm ring-1 ring-orange-500/20'
-                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50/70 shadow-xs'
+                          ? 'border-orange-500 bg-orange-50/60 dark:bg-orange-950/30 shadow-sm ring-1 ring-orange-500/20'
+                          : 'border-gray-200 dark:border-dk-border hover:border-gray-300 dark:hover:border-dk-border hover:bg-gray-50/70 dark:hover:bg-dk-raised/60 shadow-xs'
                       }`}
                     >
                       <span
@@ -1616,7 +1616,7 @@ const QuickSend = () => {
                       >
                         <AdapterIcon className="w-6 h-6" />
                       </span>
-                      <span className={`font-semibold text-sm ${isActive ? 'text-orange-950' : 'text-gray-700'}`}>
+                      <span className={`font-semibold text-sm ${isActive ? 'text-orange-950 dark:text-orange-300' : 'text-gray-700 dark:text-dk-text'}`}>
                         {adapter.label}
                       </span>
                       {isActive && (
@@ -1644,14 +1644,14 @@ const QuickSend = () => {
 
             {/* Sender Account Selection */}
             {selectedChannel === CHANNEL_TYPES.EMAIL ? (
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('quickSend.selectSenderAccount')}</h2>
+              <div className="bg-white dark:bg-dk-surface rounded-xl border border-gray-200 dark:border-dk-border p-6">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-dk-text mb-4">{t('quickSend.selectSenderAccount')}</h2>
                 {isLoadingAccounts ? (
                   <div className="flex items-center justify-center py-6">
                     <div className="h-6 w-6 rounded-full border-2 border-orange-500 border-t-transparent animate-spin" />
                   </div>
                 ) : emailAccounts.length === 0 ? (
-                  <p className="text-sm text-gray-500">{t('quickSend.noEmailAccounts')}</p>
+                  <p className="text-sm text-gray-500 dark:text-dk-text2">{t('quickSend.noEmailAccounts')}</p>
                 ) : (
                   <div className="space-y-2">
                     {emailAccounts.map((account) => (
@@ -1659,8 +1659,8 @@ const QuickSend = () => {
                         key={account.id}
                         className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition ${
                           selectedEmailAccount?.id === account.id
-                            ? 'border-orange-500 bg-orange-50'
-                            : 'border-gray-200 hover:border-gray-300'
+                            ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/30'
+                            : 'border-gray-200 dark:border-dk-border hover:border-gray-300 dark:hover:border-dk-border dark:bg-dk-raised/40'
                         }`}
                       >
                         <input
@@ -1671,11 +1671,11 @@ const QuickSend = () => {
                           className="w-4 h-4 text-orange-500"
                         />
                         <div className="flex-1">
-                          <p className="font-medium text-gray-900">{account.name}</p>
-                          <p className="text-sm text-gray-500">{account.email || account.from_email}</p>
+                          <p className="font-medium text-gray-900 dark:text-dk-text">{account.name}</p>
+                          <p className="text-sm text-gray-500 dark:text-dk-text2">{account.email || account.from_email}</p>
                         </div>
                         {(account.isDefault || account.is_active) && (
-                          <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
+                          <span className="text-xs bg-green-100 text-green-700 dark:bg-emerald-950/40 dark:text-emerald-300 px-2 py-1 rounded">
                             {t('quickSend.default')}
                           </span>
                         )}
@@ -1685,14 +1685,14 @@ const QuickSend = () => {
                 )}
               </div>
             ) : (
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('quickSend.selectSenderAccount')}</h2>
+              <div className="bg-white dark:bg-dk-surface rounded-xl border border-gray-200 dark:border-dk-border p-6">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-dk-text mb-4">{t('quickSend.selectSenderAccount')}</h2>
                 {isLoadingAccounts ? (
                   <div className="flex items-center justify-center py-6">
                     <div className="h-6 w-6 rounded-full border-2 border-orange-500 border-t-transparent animate-spin" />
                   </div>
                 ) : zaloAccounts.length === 0 ? (
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-gray-500 dark:text-dk-text2">
                     {isEmployeeContext ? t('quickSend.noZaloAccountsAssigned') : t('quickSend.noZaloAccounts')}
                   </p>
                 ) : (
@@ -1702,8 +1702,8 @@ const QuickSend = () => {
                         key={account.id}
                         className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition ${
                           selectedZaloAccount?.id === account.id
-                            ? 'border-orange-500 bg-orange-50'
-                            : 'border-gray-200 hover:border-gray-300'
+                            ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/30'
+                            : 'border-gray-200 dark:border-dk-border hover:border-gray-300 dark:hover:border-dk-border dark:bg-dk-raised/40'
                         }`}
                       >
                         <input
@@ -1714,11 +1714,11 @@ const QuickSend = () => {
                           className="w-4 h-4 text-orange-500"
                         />
                         <div className="flex-1">
-                          <p className="font-medium text-gray-900">{account.displayName || account.zaloName || 'Tài khoản Zalo'}</p>
-                          <p className="text-sm text-gray-500">{account.zaloName && account.zaloName !== account.displayName ? account.zaloName : ''}</p>
+                          <p className="font-medium text-gray-900 dark:text-dk-text">{account.displayName || account.zaloName || 'Tài khoản Zalo'}</p>
+                          <p className="text-sm text-gray-500 dark:text-dk-text2">{account.zaloName && account.zaloName !== account.displayName ? account.zaloName : ''}</p>
                         </div>
                         {(account.isDefault || account.is_default) && (
-                          <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
+                          <span className="text-xs bg-green-100 text-green-700 dark:bg-emerald-950/40 dark:text-emerald-300 px-2 py-1 rounded">
                             {t('quickSend.default')}
                           </span>
                         )}
@@ -1730,15 +1730,15 @@ const QuickSend = () => {
             )}
 
             {/* Manual Input Section */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="bg-white dark:bg-dk-surface rounded-xl border border-gray-200 dark:border-dk-border p-6">
               <div className="flex items-center gap-2 mb-4">
                 <HiOutlinePlus className="w-5 h-5 text-orange-500" />
-                <h2 className="text-lg font-semibold text-gray-900">{t('quickSend.manualInput')}</h2>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-dk-text">{t('quickSend.manualInput')}</h2>
               </div>
 
               {isZaloFamily && (
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-2">
                     {t('quickSend.zaloRecipientTypeLabel')}
                   </label>
                   {/* Ba cách chọn người nhận Zalo trong MỘT ô: SĐT / UID giữ kênh nội bộ 'zalo' (kèm loại người
@@ -1746,7 +1746,7 @@ const QuickSend = () => {
                       uidRows, selectedGroups) là state riêng nên đổi qua lại không mất; mẫu/nội dung dùng chung
                       (cùng danh sách mẫu Zalo) nên handleChannelChange cũng không xoá. */}
                   <div className="flex flex-wrap gap-x-4 gap-y-2">
-                    <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-dk-text cursor-pointer">
                       <input
                         type="radio"
                         name="zaloRecipientType"
@@ -1759,7 +1759,7 @@ const QuickSend = () => {
                       />
                       {t('quickSend.zaloRecipientTypePhone')}
                     </label>
-                    <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-dk-text cursor-pointer">
                       <input
                         type="radio"
                         name="zaloRecipientType"
@@ -1772,7 +1772,7 @@ const QuickSend = () => {
                       />
                       {t('quickSend.zaloRecipientTypeUid')}
                     </label>
-                    <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-dk-text cursor-pointer">
                       <input
                         type="radio"
                         name="zaloRecipientType"
@@ -1789,7 +1789,7 @@ const QuickSend = () => {
               {selectedChannel === CHANNEL_TYPES.ZALO_GROUP ? (
                 <div className="space-y-3">
                   {!selectedZaloAccount?.id ? (
-                    <p className="text-sm text-amber-600">{t('quickSend.groupNoAccountSelected')}</p>
+                    <p className="text-sm text-amber-600 dark:text-amber-400">{t('quickSend.groupNoAccountSelected')}</p>
                   ) : (
                     <ZaloGroupPickerCard
                       data={{ accountId: selectedZaloAccount.id }}
@@ -1805,11 +1805,11 @@ const QuickSend = () => {
                     />
                   )}
                   {selectedGroups.length > 0 && (
-                    <div className="border border-gray-200 rounded-lg p-3">
-                      <p className="text-xs font-medium text-gray-500 mb-2">{t('quickSend.groupSelectedListLabel')}</p>
+                    <div className="border border-gray-200 dark:border-dk-border rounded-lg p-3">
+                      <p className="text-xs font-medium text-gray-500 dark:text-dk-text2 mb-2">{t('quickSend.groupSelectedListLabel')}</p>
                       <div className="flex flex-wrap gap-2">
                         {selectedGroups.map((g) => (
-                          <span key={g.id} className="inline-flex items-center gap-1 rounded-full bg-orange-50 border border-orange-200 px-3 py-1 text-xs text-orange-700">
+                          <span key={g.id} className="inline-flex items-center gap-1 rounded-full bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-500/30 px-3 py-1 text-xs text-orange-700 dark:text-orange-300">
                             {g.name || t('quickSend.groupNotFound', { last4: g.id.slice(-4) })}
                           </span>
                         ))}
@@ -1822,16 +1822,16 @@ const QuickSend = () => {
               {selectedChannel === CHANNEL_TYPES.ZALO && zaloRecipientType === ZALO_RECIPIENT_TYPES.UID ? (
                 <div className="space-y-4">
                   {!selectedZaloAccount?.id && (
-                    <p className="text-sm text-amber-600">{t('quickSend.uidNoAccountSelected')}</p>
+                    <p className="text-sm text-amber-600 dark:text-amber-400">{t('quickSend.uidNoAccountSelected')}</p>
                   )}
 
                   {/* Danh sách UID đã chọn / chờ xác nhận */}
                   {uidRows.length > 0 && (
-                    <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-72 overflow-y-auto">
+                    <div className="border border-gray-200 dark:border-dk-border rounded-lg divide-y divide-gray-100 dark:divide-dk-border max-h-72 overflow-y-auto">
                       {uidRows.map((row) => (
                         <label
                           key={row.uid}
-                          className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                          className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 dark:hover:bg-dk-raised/60 cursor-pointer"
                         >
                           <input
                             type="checkbox"
@@ -1841,11 +1841,11 @@ const QuickSend = () => {
                           />
                           <div className="flex-1 min-w-0">
                             {row.inContacts === null ? (
-                              <p className="text-sm text-gray-400 italic">{t('quickSend.uidLoadingContacts')}</p>
+                              <p className="text-sm text-gray-400 dark:text-dk-muted italic">{t('quickSend.uidLoadingContacts')}</p>
                             ) : row.inContacts ? (
-                              <p className="text-sm font-medium text-gray-900 truncate">{row.name}</p>
+                              <p className="text-sm font-medium text-gray-900 dark:text-dk-text truncate">{row.name}</p>
                             ) : (
-                              <p className="text-sm text-amber-700 truncate">
+                              <p className="text-sm text-amber-700 dark:text-amber-400 truncate">
                                 {t('quickSend.uidNotInContacts', { last4: row.uid.slice(-4) })}
                               </p>
                             )}
@@ -1862,12 +1862,12 @@ const QuickSend = () => {
                     </div>
                   )}
                   {uidRows.some((r) => r.inContacts === false) && (
-                    <p className="text-xs text-amber-600">{t('quickSend.uidConfirmHint')}</p>
+                    <p className="text-xs text-amber-600 dark:text-amber-400">{t('quickSend.uidConfirmHint')}</p>
                   )}
 
                   {/* Thêm từ danh bạ (tìm theo tên) */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-2">
                       {t('quickSend.uidAddFromContactsLabel')}
                     </label>
                     <input
@@ -1876,27 +1876,27 @@ const QuickSend = () => {
                       onChange={(e) => setUidSearch(e.target.value)}
                       placeholder={t('quickSend.uidSearchPlaceholder')}
                       disabled={!selectedZaloAccount?.id}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 disabled:bg-gray-50"
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 disabled:bg-gray-50 dark:disabled:bg-dk-bg"
                     />
                     {isLoadingUidSearch ? (
-                      <p className="text-xs text-gray-400 mt-2">{t('quickSend.uidLoadingContacts')}</p>
+                      <p className="text-xs text-gray-400 dark:text-dk-muted mt-2">{t('quickSend.uidLoadingContacts')}</p>
                     ) : uidSearch && uidSearchResults.length === 0 ? (
-                      <p className="text-xs text-gray-400 mt-2">{t('quickSend.uidNoSearchResults')}</p>
+                      <p className="text-xs text-gray-400 dark:text-dk-muted mt-2">{t('quickSend.uidNoSearchResults')}</p>
                     ) : uidSearchResults.length > 0 ? (
-                      <div className="mt-2 border border-gray-100 rounded-lg divide-y divide-gray-50 max-h-48 overflow-y-auto">
+                      <div className="mt-2 border border-gray-100 dark:border-dk-border rounded-lg divide-y divide-gray-50 dark:divide-dk-border max-h-48 overflow-y-auto">
                         {uidSearchResults.map((friend) => {
                           const id = String(friend.friend_id || friend.friendId || friend.id || '');
                           const name = friend.display_name || friend.displayName || id;
                           const isChecked = uidRows.some((r) => r.uid === id && r.checked);
                           return (
-                            <label key={id} className="flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm">
+                            <label key={id} className="flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 dark:hover:bg-dk-raised/60 cursor-pointer text-sm">
                               <input
                                 type="checkbox"
                                 checked={isChecked}
                                 onChange={() => toggleUidChecked(id, friend)}
                                 className="w-4 h-4 text-orange-500 rounded"
                               />
-                              <span className="truncate text-gray-800">{name}</span>
+                              <span className="truncate text-gray-800 dark:text-dk-text">{name}</span>
                             </label>
                           );
                         })}
@@ -1906,7 +1906,7 @@ const QuickSend = () => {
 
                   {/* Dán tay UID */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-2">
                       {t('quickSend.uidManualAddLabel')}
                     </label>
                     <textarea
@@ -1914,28 +1914,28 @@ const QuickSend = () => {
                       onChange={(e) => setUidManualInput(e.target.value)}
                       placeholder={t('quickSend.uidManualAddPlaceholder')}
                       rows={3}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
                     />
                     <button
                       type="button"
                       onClick={handleAddUidManual}
                       disabled={!uidManualInput.trim()}
-                      className="mt-2 px-4 py-2 text-sm font-medium text-orange-600 border border-orange-200 rounded-lg hover:bg-orange-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="mt-2 px-4 py-2 text-sm font-medium text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-500/30 rounded-lg hover:bg-orange-50 dark:hover:bg-orange-950/30 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {t('quickSend.uidManualAddButton')}
                     </button>
                   </div>
 
                   {isLoadingUidContacts && (
-                    <p className="text-xs text-gray-400">{t('quickSend.uidLoadingContacts')}</p>
+                    <p className="text-xs text-gray-400 dark:text-dk-muted">{t('quickSend.uidLoadingContacts')}</p>
                   )}
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-gray-500 dark:text-dk-text2">
                     {t('quickSend.uidSelectedCount', { count: uidRows.filter((r) => r.checked).length })}
                   </p>
                 </div>
               ) : (
                 <>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-2">
                     {selectedChannel === CHANNEL_TYPES.EMAIL
                       ? t('quickSend.manualEmails')
                       : t('quickSend.manualPhones')}
@@ -1953,9 +1953,9 @@ const QuickSend = () => {
                         : '0901234567\n0902345678'
                     }
                     rows={6}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                    className="w-full px-3 py-2 border border-gray-200 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
                   />
-                  <p className="text-xs text-gray-500 mt-2">
+                  <p className="text-xs text-gray-500 dark:text-dk-text2 mt-2">
                     {t('quickSend.manualInputHint')}
                   </p>
                 </>
@@ -1983,18 +1983,18 @@ const QuickSend = () => {
         {/* Content Selection */}
         {currentStep === QUICK_SEND_STEPS.TEMPLATE && (
           <div className="space-y-6">
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('quickSend.contentSourceLabel')}</h2>
+            <div className="bg-white dark:bg-dk-surface rounded-xl border border-gray-200 dark:border-dk-border p-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-dk-text mb-4">{t('quickSend.contentSourceLabel')}</h2>
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <button
                   onClick={() => setContentMode('template')}
                   className={`p-4 rounded-xl border-2 text-left transition ${
                     contentMode === 'template'
-                      ? 'border-orange-500 bg-orange-50'
-                      : 'border-gray-200 hover:border-gray-300'
+                      ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/30'
+                      : 'border-gray-200 dark:border-dk-border hover:border-gray-300 dark:hover:border-dk-border dark:bg-dk-raised/40'
                   }`}
                 >
-                  <p className={`font-medium ${contentMode === 'template' ? 'text-orange-700' : 'text-gray-700'}`}>
+                  <p className={`font-medium ${contentMode === 'template' ? 'text-orange-700 dark:text-orange-300' : 'text-gray-700 dark:text-dk-text'}`}>
                     {t('quickSend.contentModeTemplate')}
                   </p>
                 </button>
@@ -2002,11 +2002,11 @@ const QuickSend = () => {
                   onClick={() => setContentMode('custom')}
                   className={`p-4 rounded-xl border-2 text-left transition ${
                     contentMode === 'custom'
-                      ? 'border-orange-500 bg-orange-50'
-                      : 'border-gray-200 hover:border-gray-300'
+                      ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/30'
+                      : 'border-gray-200 dark:border-dk-border hover:border-gray-300 dark:hover:border-dk-border dark:bg-dk-raised/40'
                   }`}
                 >
-                  <p className={`font-medium ${contentMode === 'custom' ? 'text-orange-700' : 'text-gray-700'}`}>
+                  <p className={`font-medium ${contentMode === 'custom' ? 'text-orange-700 dark:text-orange-300' : 'text-gray-700 dark:text-dk-text'}`}>
                     {t('quickSend.contentModeCustom')}
                   </p>
                 </button>
@@ -2014,7 +2014,7 @@ const QuickSend = () => {
 
               {contentMode === 'template' ? (
                 <>
-                  <h3 className="text-base font-semibold text-gray-900 mb-4">{t('quickSend.selectTemplate')}</h3>
+                  <h3 className="text-base font-semibold text-gray-900 dark:text-dk-text mb-4">{t('quickSend.selectTemplate')}</h3>
                   {isLoadingTemplates ? (
                     <div className="flex items-center justify-center py-10">
                       <div className="h-8 w-8 rounded-full border-2 border-orange-500 border-t-transparent animate-spin" />
@@ -2027,17 +2027,17 @@ const QuickSend = () => {
                           onClick={() => handleSelectTemplate(template)}
                           className={`p-4 rounded-xl border-2 text-left transition ${
                             selectedTemplate?.id === template.id
-                              ? 'border-orange-500 bg-orange-50'
-                              : 'border-gray-200 hover:border-gray-300'
+                              ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/30'
+                              : 'border-gray-200 dark:border-dk-border hover:border-gray-300 dark:hover:border-dk-border dark:bg-dk-raised/40'
                           }`}
                         >
-                          <p className="font-medium text-gray-900 truncate">
+                          <p className="font-medium text-gray-900 dark:text-dk-text truncate">
                             {template.templateName || template.name || template.title || 'Untitled'}
                           </p>
                           {template.subject && (
-                            <p className="text-sm text-gray-500 truncate mt-1">{template.subject}</p>
+                            <p className="text-sm text-gray-500 dark:text-dk-text2 truncate mt-1">{template.subject}</p>
                           )}
-                          <p className="text-xs text-gray-400 truncate mt-1">
+                          <p className="text-xs text-gray-400 dark:text-dk-muted truncate mt-1">
                             {template.bodyText || template.body_html || template.body_text || ''}
                           </p>
                         </button>
@@ -2046,29 +2046,29 @@ const QuickSend = () => {
                   )}
 
                   {selectedTemplate && (
-                    <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                    <div className="mt-6 p-4 bg-gray-50 dark:bg-dk-raised/80 rounded-lg">
                       <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-gray-700">{t('quickSend.selectedTemplate')}</p>
+                        <p className="text-sm font-medium text-gray-700 dark:text-dk-text">{t('quickSend.selectedTemplate')}</p>
                         {isLoadingTemplateDetail && (
-                          <span className="text-xs text-orange-600 flex items-center gap-1.5 font-medium">
+                          <span className="text-xs text-orange-600 dark:text-orange-400 flex items-center gap-1.5 font-medium">
                             <span className="w-3.5 h-3.5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
                             {t('quickSend.loadingTemplateDetail')}
                           </span>
                         )}
                       </div>
-                      <p className="text-gray-900 font-medium mt-1">{selectedTemplate.templateName || selectedTemplate.name || selectedTemplate.title}</p>
+                      <p className="text-gray-900 dark:text-dk-text font-medium mt-1">{selectedTemplate.templateName || selectedTemplate.name || selectedTemplate.title}</p>
                       {selectedTemplate.attachments && selectedTemplate.attachments.length > 0 && (
-                        <div className="mt-3 pt-3 border-t border-gray-200">
-                          <p className="text-xs font-medium text-gray-600 mb-2 flex items-center gap-1">
-                            <HiOutlinePaperClip className="w-3.5 h-3.5 text-gray-500" />
+                        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-dk-border">
+                          <p className="text-xs font-medium text-gray-600 dark:text-dk-text2 mb-2 flex items-center gap-1">
+                            <HiOutlinePaperClip className="w-3.5 h-3.5 text-gray-500 dark:text-dk-text2" />
                             {t('quickSend.attachments')} ({selectedTemplate.attachments.length})
                           </p>
                           <div className="flex flex-wrap gap-2">
                             {selectedTemplate.attachments.map((att, idx) => (
-                              <span key={idx} className="inline-flex items-center gap-1 px-2.5 py-1 bg-white rounded border border-gray-200 text-xs text-gray-700">
-                                <HiOutlinePaperClip className="w-3 h-3 text-gray-400" />
+                              <span key={idx} className="inline-flex items-center gap-1 px-2.5 py-1 bg-white dark:bg-dk-surface rounded border border-gray-200 dark:border-dk-border text-xs text-gray-700 dark:text-dk-text">
+                                <HiOutlinePaperClip className="w-3 h-3 text-gray-400 dark:text-dk-muted" />
                                 <span className="truncate max-w-[200px]">{att.originalName || att.name || att.filename || att.key}</span>
-                                {att.size ? <span className="text-gray-400">({formatFileSize(att.size)})</span> : null}
+                                {att.size ? <span className="text-gray-400 dark:text-dk-muted">({formatFileSize(att.size)})</span> : null}
                               </span>
                             ))}
                           </div>
@@ -2081,7 +2081,7 @@ const QuickSend = () => {
                 <div className="space-y-4">
                   {selectedChannel === CHANNEL_TYPES.EMAIL && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-2">
                         {t('quickSend.customSubjectLabel')}
                       </label>
                       <input
@@ -2089,12 +2089,12 @@ const QuickSend = () => {
                         value={customContent.subject}
                         onChange={(e) => setCustomContent((prev) => ({ ...prev, subject: e.target.value }))}
                         placeholder={t('quickSend.customSubjectPlaceholder')}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                        className="w-full px-3 py-2 border border-gray-200 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
                       />
                     </div>
                   )}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-2">
                       {selectedChannel === CHANNEL_TYPES.EMAIL
                         ? t('quickSend.customEmailContentLabel')
                         : t('quickSend.customMessageContentLabel')}
@@ -2104,25 +2104,25 @@ const QuickSend = () => {
                       onChange={(e) => setCustomContent((prev) => ({ ...prev, body: e.target.value }))}
                       placeholder={t('quickSend.customBodyPlaceholder')}
                       rows={10}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
                     />
                   </div>
                 </div>
               )}
 
               {/* Tệp đính kèm — hiện ở cả 2 chế độ (mẫu + tự soạn), cộng vào extraAttachments */}
-              <div className="mt-6 pt-6 border-t border-gray-200">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+              <div className="mt-6 pt-6 border-t border-gray-200 dark:border-dk-border">
+                <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">
                   {t('quickSend.attachmentsLabel')}
                 </label>
-                <p className="text-xs text-gray-500 mb-3">{t('quickSend.attachmentsHint')}</p>
+                <p className="text-xs text-gray-500 dark:text-dk-text2 mb-3">{t('quickSend.attachmentsHint')}</p>
 
                 {extraAttachments.length > 0 && (
                   <div className="flex flex-wrap gap-2 mb-3">
                     {extraAttachments.map((att, idx) => (
                       <span
                         key={att.key || idx}
-                        className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 bg-gray-50 rounded-lg border border-gray-200 text-xs text-gray-700"
+                        className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 bg-gray-50 dark:bg-dk-raised rounded-lg border border-gray-200 dark:border-dk-border text-xs text-gray-700 dark:text-dk-text"
                       >
                         <HiOutlinePaperClip className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                         <span className="truncate max-w-[180px] font-medium">{att.originalName || att.name}</span>
@@ -2152,7 +2152,7 @@ const QuickSend = () => {
                   type="button"
                   onClick={() => quickSendAttachmentInputRef.current?.click()}
                   disabled={isUploadingAttachment}
-                  className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                  className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-dk-border rounded-lg text-sm text-gray-700 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised disabled:opacity-50 disabled:cursor-not-allowed transition"
                 >
                   {isUploadingAttachment ? (
                     <span className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
@@ -2168,7 +2168,7 @@ const QuickSend = () => {
             <div className="flex justify-between">
               <button
                 onClick={() => setCurrentStep(QUICK_SEND_STEPS.RECIPIENTS)}
-                className="px-6 py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition"
+                className="px-6 py-3 border border-gray-300 dark:border-dk-border text-gray-700 dark:text-dk-text font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-dk-raised transition"
               >
                 {t('quickSend.back')}
               </button>
@@ -2187,33 +2187,33 @@ const QuickSend = () => {
         {/* Preview & Send */}
         {currentStep === QUICK_SEND_STEPS.PREVIEW && (
           <div className="space-y-6">
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('quickSend.previewAndSend')}</h2>
+            <div className="bg-white dark:bg-dk-surface rounded-xl border border-gray-200 dark:border-dk-border p-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-dk-text mb-4">{t('quickSend.previewAndSend')}</h2>
 
               {/* Summary */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <p className="text-xs text-gray-500">{t('quickSend.channel')}</p>
-                  <p className="text-base font-semibold text-gray-900 capitalize mt-1">{selectedChannel}</p>
+                <div className="p-4 bg-gray-50 dark:bg-dk-raised/60 rounded-lg">
+                  <p className="text-xs text-gray-500 dark:text-dk-text2">{t('quickSend.channel')}</p>
+                  <p className="text-base font-semibold text-gray-900 dark:text-dk-text capitalize mt-1">{selectedChannel}</p>
                 </div>
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <p className="text-xs text-gray-500">{t('quickSend.senderAccount') || 'Tài khoản gửi'}</p>
-                  <p className="text-base font-semibold text-gray-900 truncate mt-1">
+                <div className="p-4 bg-gray-50 dark:bg-dk-raised/60 rounded-lg">
+                  <p className="text-xs text-gray-500 dark:text-dk-text2">{t('quickSend.senderAccount') || 'Tài khoản gửi'}</p>
+                  <p className="text-base font-semibold text-gray-900 dark:text-dk-text truncate mt-1">
                     {selectedChannel === CHANNEL_TYPES.EMAIL
                       ? (selectedEmailAccount?.name || selectedEmailAccount?.email || '-')
                       : (selectedZaloAccount?.name || selectedZaloAccount?.display_name || selectedZaloAccount?.zaloName || 'Tài khoản Zalo')}
                   </p>
                 </div>
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <p className="text-xs text-gray-500">{t('quickSend.recipients')}</p>
-                  <p className="text-base font-semibold text-gray-900 mt-1">{finalRecipients().length}</p>
+                <div className="p-4 bg-gray-50 dark:bg-dk-raised/60 rounded-lg">
+                  <p className="text-xs text-gray-500 dark:text-dk-text2">{t('quickSend.recipients')}</p>
+                  <p className="text-base font-semibold text-gray-900 dark:text-dk-text mt-1">{finalRecipients().length}</p>
                 </div>
-                <div className="p-4 bg-orange-50/60 border border-orange-100 rounded-lg">
-                  <p className="text-xs text-orange-600 font-medium flex items-center gap-1">
+                <div className="p-4 bg-orange-50/60 dark:bg-orange-950/20 border border-orange-100 dark:border-orange-500/20 rounded-lg">
+                  <p className="text-xs text-orange-600 dark:text-orange-400 font-medium flex items-center gap-1">
                     <HiOutlineClock className="w-3.5 h-3.5" />
                     {t('quickSend.estimatedDuration')}
                   </p>
-                  <p className="text-base font-semibold text-orange-900 mt-1">
+                  <p className="text-base font-semibold text-orange-900 dark:text-orange-300 mt-1">
                     {isLoadingEstimate ? '...' : (
                       estimate?.unit === 'immediate'
                         ? t('quickSend.immediate')
@@ -2232,15 +2232,15 @@ const QuickSend = () => {
               </div>
 
               {/* Việc 2 — nhắc giữ tab mở vì đợt gửi Zalo giờ có giãn cách thật ở trình duyệt */}
-              <p className="text-xs text-gray-400 mb-4 flex items-center gap-1.5">
+              <p className="text-xs text-gray-400 dark:text-dk-muted mb-4 flex items-center gap-1.5">
                 <HiOutlineClock className="w-3.5 h-3.5 shrink-0" />
                 {t('quickSend.keepPageOpenNotice')}
               </p>
 
               {/* Quiet hours notice if applicable */}
               {estimate?.quietHours?.enabled && (
-                <div className="mb-6 p-3.5 rounded-lg bg-indigo-50 border border-indigo-200 flex items-start gap-2.5 text-xs text-indigo-900 animate-fadeIn">
-                  <HiOutlineMoon className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+                <div className="mb-6 p-3.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 flex items-start gap-2.5 text-xs text-indigo-900 dark:text-indigo-200 animate-fadeIn">
+                  <HiOutlineMoon className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
                   <span className="leading-relaxed">
                     {t('quickSend.quietHoursNotice', {
                       start: estimate.quietHours.startFormatted || '23:00',
@@ -2252,8 +2252,8 @@ const QuickSend = () => {
 
               {/* Template / Message Content Preview */}
               {(activeTemplate || activeContent.subject || activeContent.body || activeAttachments.length > 0) && (
-                <div className="p-4 bg-gray-50 rounded-lg mb-4">
-                  <p className="text-sm font-medium text-gray-700">
+                <div className="p-4 bg-gray-50 dark:bg-dk-raised/60 rounded-lg mb-4">
+                  <p className="text-sm font-medium text-gray-700 dark:text-dk-text">
                     {activeTemplate
                       ? t('quickSend.template')
                       : (selectedChannel === CHANNEL_TYPES.EMAIL
@@ -2261,32 +2261,32 @@ const QuickSend = () => {
                         : t('quickSend.customMessageContentLabel'))}
                   </p>
                   {activeTemplate ? (
-                    <p className="text-gray-900 font-medium mt-1">{activeTemplate.templateName || activeTemplate.name || activeTemplate.title}</p>
+                    <p className="text-gray-900 dark:text-dk-text font-medium mt-1">{activeTemplate.templateName || activeTemplate.name || activeTemplate.title}</p>
                   ) : (
                     <>
                       {activeContent.subject && (
-                        <p className="text-gray-900 font-medium mt-1">{activeContent.subject}</p>
+                        <p className="text-gray-900 dark:text-dk-text font-medium mt-1">{activeContent.subject}</p>
                       )}
                       {/* Nội dung tự soạn hiển thị dưới dạng text an toàn (con React tự escape),
                           KHÔNG dùng dangerouslySetInnerHTML — đây là bản Markdown/plain text thô,
                           chưa qua miniMarkdownToHtml. */}
                       {activeContent.body && (
-                        <p className="text-gray-700 text-sm mt-1 whitespace-pre-wrap line-clamp-6">{activeContent.body}</p>
+                        <p className="text-gray-700 dark:text-dk-text text-sm mt-1 whitespace-pre-wrap line-clamp-6">{activeContent.body}</p>
                       )}
                     </>
                   )}
                   {activeAttachments.length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-gray-200">
-                      <p className="text-xs font-medium text-gray-600 mb-2 flex items-center gap-1">
-                        <HiOutlinePaperClip className="w-3.5 h-3.5 text-gray-500" />
+                    <div className="mt-3 pt-3 border-t border-gray-200 dark:border-dk-border">
+                      <p className="text-xs font-medium text-gray-600 dark:text-dk-text2 mb-2 flex items-center gap-1">
+                        <HiOutlinePaperClip className="w-3.5 h-3.5 text-gray-500 dark:text-dk-text2" />
                         {t('quickSend.attachments')} ({activeAttachments.length})
                       </p>
                       <div className="space-y-1.5">
                         {activeAttachments.map((att, idx) => (
-                          <div key={idx} className="flex items-center gap-2 text-xs text-gray-700 bg-white px-3 py-1.5 rounded border border-gray-200">
-                            <HiOutlinePaperClip className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                          <div key={idx} className="flex items-center gap-2 text-xs text-gray-700 dark:text-dk-text bg-white dark:bg-dk-surface px-3 py-1.5 rounded border border-gray-200 dark:border-dk-border">
+                            <HiOutlinePaperClip className="w-3.5 h-3.5 text-gray-400 dark:text-dk-muted shrink-0" />
                             <span className="font-medium truncate">{att.originalName || att.name || att.filename || att.key}</span>
-                            {att.size ? <span className="text-gray-400 shrink-0">({formatFileSize(att.size)})</span> : null}
+                            {att.size ? <span className="text-gray-400 dark:text-dk-muted shrink-0">({formatFileSize(att.size)})</span> : null}
                           </div>
                         ))}
                       </div>
@@ -2296,16 +2296,16 @@ const QuickSend = () => {
               )}
 
               {/* Recipients Preview */}
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <p className="text-sm font-medium text-gray-700 mb-2">{t('quickSend.recipientsList')}</p>
+              <div className="p-4 bg-gray-50 dark:bg-dk-raised/60 rounded-lg">
+                <p className="text-sm font-medium text-gray-700 dark:text-dk-text mb-2">{t('quickSend.recipientsList')}</p>
                 <div className="max-h-40 overflow-y-auto">
                   {finalRecipients().slice(0, 20).map((r, i) => (
-                    <p key={i} className="text-sm text-gray-600">
+                    <p key={i} className="text-sm text-gray-600 dark:text-dk-text">
                       {r.name || r.email || r.phone}
                     </p>
                   ))}
                   {finalRecipients().length > 20 && (
-                    <p className="text-sm text-gray-500 mt-2">
+                    <p className="text-sm text-gray-500 dark:text-dk-text2 mt-2">
                       ...{t('quickSend.andMore', { count: finalRecipients().length - 20 })}
                     </p>
                   )}
@@ -2316,12 +2316,12 @@ const QuickSend = () => {
             {/* Test Send Box — ẩn cho Zalo nhóm: không có khái niệm "gửi thử tới 1 địa chỉ",
                 đích đến CỐ ĐỊNH là nhóm đã chọn, "gửi thử" sẽ tức là gửi thật vào nhóm đó. */}
             {selectedChannel !== CHANNEL_TYPES.ZALO_GROUP && (
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="bg-white dark:bg-dk-surface rounded-xl border border-gray-200 dark:border-dk-border p-6">
               <div className="flex items-center gap-2 mb-1">
                 <HiOutlinePaperAirplane className="w-5 h-5 text-orange-500" />
-                <h3 className="text-base font-semibold text-gray-900">{t('quickSend.testSendTitle')}</h3>
+                <h3 className="text-base font-semibold text-gray-900 dark:text-dk-text">{t('quickSend.testSendTitle')}</h3>
               </div>
-              <p className="text-xs text-gray-500 mb-4">{t('quickSend.testSendDesc')}</p>
+              <p className="text-xs text-gray-500 dark:text-dk-text2 mb-4">{t('quickSend.testSendDesc')}</p>
               <div className="flex flex-col sm:flex-row gap-3">
                 <input
                   type={selectedChannel === CHANNEL_TYPES.EMAIL ? 'email' : 'tel'}
@@ -2332,13 +2332,13 @@ const QuickSend = () => {
                       ? t('quickSend.testRecipientEmailPlaceholder')
                       : t('quickSend.testRecipientPhonePlaceholder')
                   }
-                  className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                  className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
                 />
                 <button
                   type="button"
                   onClick={handleTestSend}
                   disabled={isTesting || !testRecipient.trim()}
-                  className="px-5 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                  className="px-5 py-2.5 bg-gray-900 dark:bg-dk-raised text-white text-sm font-medium rounded-lg hover:bg-gray-800 dark:hover:bg-dk-strong transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
                 >
                   {isTesting ? (
                     <>
@@ -2357,8 +2357,8 @@ const QuickSend = () => {
             )}
 
             {/* Warning */}
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-              <p className="text-amber-800 text-sm">
+            <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-500/30 rounded-lg p-4">
+              <p className="text-amber-800 dark:text-amber-300 text-sm">
                 <strong>{t('quickSend.warning')}:</strong> {t('quickSend.warningText')}
               </p>
             </div>
@@ -2367,7 +2367,7 @@ const QuickSend = () => {
             <div className="flex justify-between">
               <button
                 onClick={() => setCurrentStep(QUICK_SEND_STEPS.TEMPLATE)}
-                className="px-6 py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition"
+                className="px-6 py-3 border border-gray-300 dark:border-dk-border text-gray-700 dark:text-dk-text font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-dk-raised transition"
               >
                 {t('quickSend.back')}
               </button>
@@ -2385,45 +2385,45 @@ const QuickSend = () => {
 
         {/* Sending */}
         {currentStep === QUICK_SEND_STEPS.SENDING && (
-          <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+          <div className="bg-white dark:bg-dk-surface rounded-xl border border-gray-200 dark:border-dk-border p-12 text-center">
             <div className="h-16 w-16 rounded-full border-4 border-orange-500 border-t-transparent animate-spin mx-auto mb-6" />
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">{t('quickSend.sending')}</h2>
-            <p className="text-gray-500">{t('quickSend.sendingDesc')}</p>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-dk-text mb-2">{t('quickSend.sending')}</h2>
+            <p className="text-gray-500 dark:text-dk-text2">{t('quickSend.sendingDesc')}</p>
             {sendProgressMessage && (
-              <p className="text-sm text-orange-600 mt-3">{sendProgressMessage}</p>
+              <p className="text-sm text-orange-600 dark:text-orange-400 mt-3">{sendProgressMessage}</p>
             )}
           </div>
         )}
 
         {/* Done */}
         {currentStep === QUICK_SEND_STEPS.DONE && sendResult && (
-          <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
+          <div className="bg-white dark:bg-dk-surface rounded-xl border border-gray-200 dark:border-dk-border p-8 text-center">
             {sendResult.success ? (
               <>
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <div className="w-16 h-16 bg-green-100 dark:bg-emerald-950/40 rounded-full flex items-center justify-center mx-auto mb-6">
                   <HiOutlineCheckCircle className="w-8 h-8 text-green-500" />
                 </div>
-                <h2 className="text-xl font-semibold text-gray-900 mb-2">{t('quickSend.sendSuccessTitle')}</h2>
-                <p className="text-gray-500 mb-2">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-dk-text mb-2">{t('quickSend.sendSuccessTitle')}</h2>
+                <p className="text-gray-500 dark:text-dk-text2 mb-2">
                   {t('quickSend.sendSuccessDesc', { count: sendResult.successCount })}
                 </p>
                 {sendResult.failCount > 0 && (
-                  <p className="text-red-600 text-sm mb-4">
+                  <p className="text-red-600 dark:text-red-400 text-sm mb-4">
                     {t('quickSend.sendPartialFail', { failCount: sendResult.failCount })}
                   </p>
                 )}
               </>
             ) : (
               <>
-                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <div className="w-16 h-16 bg-red-100 dark:bg-red-950/40 rounded-full flex items-center justify-center mx-auto mb-6">
                   <HiOutlineXCircle className="w-8 h-8 text-red-500" />
                 </div>
-                <h2 className="text-xl font-semibold text-gray-900 mb-2">{t('quickSend.sendAllFailedTitle')}</h2>
-                <p className="text-gray-500 mb-4">{t('quickSend.sendAllFailedDesc')}</p>
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-dk-text mb-2">{t('quickSend.sendAllFailedTitle')}</h2>
+                <p className="text-gray-500 dark:text-dk-text2 mb-4">{t('quickSend.sendAllFailedDesc')}</p>
               </>
             )}
             {deferredNotice && (
-              <p className="text-amber-600 text-sm mb-4">
+              <p className="text-amber-600 dark:text-amber-400 text-sm mb-4">
                 {t('quickSend.deferredResumeNotice', {
                   reason: resolveDeferredReasonLabel(t, deferredNotice.reason),
                   time: formatResumeTimeVn(deferredNotice.resumeAt),
@@ -2431,7 +2431,7 @@ const QuickSend = () => {
               </p>
             )}
             {failedRecipients.length > 0 && !isRetrying && (
-              <p className="text-xs text-gray-400 mb-3">
+              <p className="text-xs text-gray-400 dark:text-dk-muted mb-3">
                 {deferredNotice
                   ? t('quickSend.deferredRecipientCount', { count: failedRecipients.length })
                   : (t('quickSend.failedRecipientCount', { count: failedRecipients.length }) ||
@@ -2455,7 +2455,7 @@ const QuickSend = () => {
               <button
                 onClick={handleStartOver}
                 disabled={isRetrying}
-                className="px-6 py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 disabled:opacity-60 transition"
+                className="px-6 py-3 border border-gray-300 dark:border-dk-border text-gray-700 dark:text-dk-text font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-dk-raised disabled:opacity-60 transition"
               >
                 {t('quickSend.sendAnother')}
               </button>

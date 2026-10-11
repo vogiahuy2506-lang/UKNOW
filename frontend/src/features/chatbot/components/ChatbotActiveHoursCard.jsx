@@ -205,19 +205,19 @@ export default function ChatbotActiveHoursCard({ value, onChange, onValidityChan
   };
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-4 space-y-4">
+    <section className="rounded-lg border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface p-4 space-y-4">
       <div className="flex items-start gap-3">
-        <HiOutlineClock className="mt-0.5 h-5 w-5 shrink-0 text-primary-600" />
+        <HiOutlineClock className="mt-0.5 h-5 w-5 shrink-0 text-primary-600 dark:text-primary-400" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-3">
-            <h3 className="text-sm font-semibold text-slate-900">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-dk-text">
               {t('chatbot.studio.activeHoursTitle') || 'Khung giờ hoạt động'}
             </h3>
-            <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">
+            <span className="inline-flex items-center rounded-full bg-slate-100 dark:bg-dk-raised px-2.5 py-0.5 text-xs font-medium text-slate-700 dark:text-dk-text">
               {badgeText}
             </span>
           </div>
-          <p className="mt-1 text-xs leading-relaxed text-slate-500">
+          <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-dk-text2">
             {t('chatbot.studio.activeHoursHelp') || 'Chatbot chỉ tự động trả lời trong khung giờ đã định. Ngoài khung giờ sẽ không gọi AI và không trừ credit.'}
           </p>
         </div>
@@ -230,8 +230,8 @@ export default function ChatbotActiveHoursCard({ value, onChange, onValidityChan
           onClick={() => updateState({ mode: 'always' })}
           className={`flex items-center justify-center rounded-md border px-3 py-2 font-medium transition-colors ${
             state.mode === 'always'
-              ? 'border-primary-500 bg-primary-50 text-primary-700'
-              : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+              ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/40 text-primary-700 dark:text-primary-300'
+              : 'border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised text-slate-700 dark:text-dk-text hover:bg-slate-50 dark:hover:bg-dk-strong'
           }`}
         >
           {t('chatbot.studio.activeHoursAlways') || 'Luôn trả lời (24/7)'}
@@ -241,8 +241,8 @@ export default function ChatbotActiveHoursCard({ value, onChange, onValidityChan
           onClick={() => updateState({ mode: 'custom' })}
           className={`flex items-center justify-center rounded-md border px-3 py-2 font-medium transition-colors ${
             state.mode === 'custom'
-              ? 'border-primary-500 bg-primary-50 text-primary-700'
-              : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+              ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/40 text-primary-700 dark:text-primary-300'
+              : 'border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised text-slate-700 dark:text-dk-text hover:bg-slate-50 dark:hover:bg-dk-strong'
           }`}
         >
           {t('chatbot.studio.activeHoursCustom') || 'Chỉ trả lời trong khung giờ'}
@@ -250,11 +250,11 @@ export default function ChatbotActiveHoursCard({ value, onChange, onValidityChan
       </div>
 
       {state.mode === 'custom' && (
-        <div className="rounded-md border border-slate-100 bg-slate-50/50 p-3 space-y-3.5 text-xs">
+        <div className="rounded-md border border-slate-100 dark:border-dk-border bg-slate-50/50 dark:bg-dk-raised/40 p-3 space-y-3.5 text-xs">
           {/* Chọn ngày trong tuần */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="block text-slate-700 font-medium">
+              <label className="block text-slate-700 dark:text-dk-text font-medium">
                 {t('chatbot.studio.activeHoursDaysLabel') || 'Ngày áp dụng trong tuần:'}
               </label>
               <div className="flex items-center gap-1.5 text-[11px]">
@@ -263,32 +263,32 @@ export default function ChatbotActiveHoursCard({ value, onChange, onValidityChan
                   onClick={() => updateState({ days: WORKDAYS })}
                   className={`px-2 py-0.5 rounded transition-colors ${
                     areDaysMatching(WORKDAYS)
-                      ? 'bg-primary-100 text-primary-800 font-semibold'
-                      : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/60'
+                      ? 'bg-primary-100 dark:bg-primary-950/60 text-primary-800 dark:text-primary-300 font-semibold'
+                      : 'text-slate-500 dark:text-dk-text2 hover:text-slate-800 dark:hover:text-dk-text hover:bg-slate-200/60 dark:hover:bg-dk-strong/60'
                   }`}
                 >
                   {t('chatbot.studio.activeHoursPresetWorkdays') || 'Thứ 2 – Thứ 6'}
                 </button>
-                <span className="text-slate-300">•</span>
+                <span className="text-slate-300 dark:text-dk-muted">•</span>
                 <button
                   type="button"
                   onClick={() => updateState({ days: MON_TO_SAT })}
                   className={`px-2 py-0.5 rounded transition-colors ${
                     areDaysMatching(MON_TO_SAT)
-                      ? 'bg-primary-100 text-primary-800 font-semibold'
-                      : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/60'
+                      ? 'bg-primary-100 dark:bg-primary-950/60 text-primary-800 dark:text-primary-300 font-semibold'
+                      : 'text-slate-500 dark:text-dk-text2 hover:text-slate-800 dark:hover:text-dk-text hover:bg-slate-200/60 dark:hover:bg-dk-strong/60'
                   }`}
                 >
                   {t('chatbot.studio.activeHoursPresetMonSat') || 'Thứ 2 – Thứ 7'}
                 </button>
-                <span className="text-slate-300">•</span>
+                <span className="text-slate-300 dark:text-dk-muted">•</span>
                 <button
                   type="button"
                   onClick={() => updateState({ days: DEFAULT_DAYS })}
                   className={`px-2 py-0.5 rounded transition-colors ${
                     areDaysMatching(DEFAULT_DAYS)
-                      ? 'bg-primary-100 text-primary-800 font-semibold'
-                      : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/60'
+                      ? 'bg-primary-100 dark:bg-primary-950/60 text-primary-800 dark:text-primary-300 font-semibold'
+                      : 'text-slate-500 dark:text-dk-text2 hover:text-slate-800 dark:hover:text-dk-text hover:bg-slate-200/60 dark:hover:bg-dk-strong/60'
                   }`}
                 >
                   {t('chatbot.studio.activeHoursPresetAllWeek') || 'Cả tuần'}
@@ -308,7 +308,7 @@ export default function ChatbotActiveHoursCard({ value, onChange, onValidityChan
                     className={`min-w-[36px] h-8 px-2 rounded-lg text-xs font-semibold transition-all border ${
                       isSelected
                         ? 'bg-primary-600 border-primary-600 text-white shadow-xs'
-                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                        : 'bg-white dark:bg-dk-bg border-slate-200 dark:border-dk-border text-slate-600 dark:text-dk-text hover:bg-slate-100 dark:hover:bg-dk-raised hover:text-slate-900 dark:hover:text-dk-text'
                     }`}
                   >
                     {day.label}
@@ -319,16 +319,16 @@ export default function ChatbotActiveHoursCard({ value, onChange, onValidityChan
           </div>
 
           {/* Danh sách các khung giờ (ca) trong ngày */}
-          <div className="pt-2 border-t border-slate-200/60 space-y-2.5">
+          <div className="pt-2 border-t border-slate-200/60 dark:border-dk-border/60 space-y-2.5">
             <div className="flex items-center justify-between">
-              <label className="block text-slate-700 font-medium">
+              <label className="block text-slate-700 dark:text-dk-text font-medium">
                 {t('chatbot.studio.activeHoursSlotsLabel') || 'Các khung giờ hoạt động trong ngày:'}
               </label>
               {state.slots.length < 5 && (
                 <button
                   type="button"
                   onClick={addSlot}
-                  className="inline-flex items-center gap-1 text-primary-600 hover:text-primary-700 font-medium text-xs hover:underline cursor-pointer"
+                  className="inline-flex items-center gap-1 text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium text-xs hover:underline cursor-pointer"
                 >
                   <HiOutlinePlus className="w-3.5 h-3.5" />
                   <span>{t('chatbot.studio.activeHoursAddSlot') || 'Thêm khung giờ'}</span>
@@ -340,8 +340,8 @@ export default function ChatbotActiveHoursCard({ value, onChange, onValidityChan
               {state.slots.map((slot, index) => {
                 const isOvernight = parseMinutes(slot.start) > parseMinutes(slot.end);
                 return (
-                  <div key={index} className="flex items-center gap-2 bg-white p-2 rounded-lg border border-slate-200 shadow-xs">
-                    <span className="text-[11px] font-medium text-slate-400 w-4 text-center">
+                  <div key={index} className="flex items-center gap-2 bg-white dark:bg-dk-bg p-2 rounded-lg border border-slate-200 dark:border-dk-border shadow-xs">
+                    <span className="text-[11px] font-medium text-slate-400 dark:text-dk-muted w-4 text-center">
                       {index + 1}.
                     </span>
                     <input
@@ -349,20 +349,20 @@ export default function ChatbotActiveHoursCard({ value, onChange, onValidityChan
                       aria-label={index === 0 ? 'start-time' : `start-time-${index}`}
                       value={slot.start}
                       onChange={(e) => updateSlot(index, 'start', e.target.value)}
-                      className="rounded border border-slate-300 bg-white px-2 py-1 text-slate-900 focus:border-primary-500 focus:outline-none text-xs font-mono"
+                      className="rounded border border-slate-300 dark:border-dk-border bg-white dark:bg-dk-raised px-2 py-1 text-slate-900 dark:text-dk-text focus:border-primary-500 focus:outline-none text-xs font-mono"
                     />
-                    <span className="text-slate-400 text-xs">đến</span>
+                    <span className="text-slate-400 dark:text-dk-muted text-xs">đến</span>
                     <input
                       type="time"
                       aria-label={index === 0 ? 'end-time' : `end-time-${index}`}
                       value={slot.end}
                       onChange={(e) => updateSlot(index, 'end', e.target.value)}
-                      className="rounded border border-slate-300 bg-white px-2 py-1 text-slate-900 focus:border-primary-500 focus:outline-none text-xs font-mono"
+                      className="rounded border border-slate-300 dark:border-dk-border bg-white dark:bg-dk-raised px-2 py-1 text-slate-900 dark:text-dk-text focus:border-primary-500 focus:outline-none text-xs font-mono"
                     />
 
                     {isOvernight && (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
-                        <HiOutlineMoon className="w-3 h-3 text-amber-600" />
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/60 shrink-0">
+                        <HiOutlineMoon className="w-3 h-3 text-amber-600 dark:text-amber-400" />
                         <span>{t('chatbot.studio.activeHoursOvernightBadge') || 'Qua đêm (+1)'}</span>
                       </span>
                     )}
@@ -374,7 +374,7 @@ export default function ChatbotActiveHoursCard({ value, onChange, onValidityChan
                         type="button"
                         onClick={() => removeSlot(index)}
                         title={t('chatbot.studio.activeHoursRemoveSlot') || 'Xoá khung giờ này'}
-                        className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                        className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
                       >
                         <HiOutlineTrash className="w-4 h-4" />
                       </button>
@@ -384,14 +384,14 @@ export default function ChatbotActiveHoursCard({ value, onChange, onValidityChan
               })}
             </div>
 
-            <p className="text-[11px] text-slate-400 leading-normal">
+            <p className="text-[11px] text-slate-400 dark:text-dk-muted leading-normal">
               {t('chatbot.studio.activeHoursTzNote') || 'Giờ Việt Nam (UTC+7). Được phép qua nửa đêm, ví dụ 18:00 – 05:00.'}
             </p>
           </div>
 
           {/* Hành vi khi ngoài giờ */}
-          <div className="pt-2 border-t border-slate-200/60">
-            <label className="block text-slate-700 font-medium mb-1.5">
+          <div className="pt-2 border-t border-slate-200/60 dark:border-dk-border/60">
+            <label className="block text-slate-700 dark:text-dk-text font-medium mb-1.5">
               {t('chatbot.studio.activeHoursOutsideAction') || 'Khi có tin nhắn ngoài khung giờ:'}
             </label>
             <div className="flex items-center gap-4 mb-2">
@@ -403,7 +403,7 @@ export default function ChatbotActiveHoursCard({ value, onChange, onValidityChan
                   onChange={() => updateState({ outsideAction: 'silent' })}
                   className="text-primary-600 focus:ring-primary-500"
                 />
-                <span className="text-slate-700">{t('chatbot.studio.activeHoursSilent') || 'Im lặng'}</span>
+                <span className="text-slate-700 dark:text-dk-text">{t('chatbot.studio.activeHoursSilent') || 'Im lặng'}</span>
               </label>
               <label className="inline-flex items-center gap-1.5 cursor-pointer">
                 <input
@@ -413,7 +413,7 @@ export default function ChatbotActiveHoursCard({ value, onChange, onValidityChan
                   onChange={() => updateState({ outsideAction: 'message' })}
                   className="text-primary-600 focus:ring-primary-500"
                 />
-                <span className="text-slate-700">{t('chatbot.studio.activeHoursSendMessage') || 'Gửi một câu'}</span>
+                <span className="text-slate-700 dark:text-dk-text">{t('chatbot.studio.activeHoursSendMessage') || 'Gửi một câu'}</span>
               </label>
             </div>
 
@@ -425,9 +425,9 @@ export default function ChatbotActiveHoursCard({ value, onChange, onValidityChan
                   value={state.outsideMessage}
                   onChange={(e) => updateState({ outsideMessage: e.target.value })}
                   placeholder={DEFAULT_OUTSIDE_MESSAGE}
-                  className="w-full rounded border border-slate-300 bg-white p-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none"
+                  className="w-full rounded border border-slate-300 dark:border-dk-border bg-white dark:bg-dk-bg p-2 text-xs text-slate-900 dark:text-dk-text placeholder:text-slate-400 dark:placeholder:text-dk-muted focus:border-primary-500 focus:outline-none"
                 />
-                <div className="flex justify-between text-[11px] text-slate-400">
+                <div className="flex justify-between text-[11px] text-slate-400 dark:text-dk-muted">
                   <span>{t('chatbot.studio.activeHoursOnceNotice') || 'Chỉ gửi tối đa 1 lần cho mỗi khách trong đợt ngoài giờ.'}</span>
                   <span>{state.outsideMessage.length}/500</span>
                 </div>

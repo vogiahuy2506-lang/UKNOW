@@ -37,26 +37,26 @@ export default function ReferralsCard({ referralLink, onCopyLink }) {
   const { items = [], total = 0, totalPages = 1 } = data || {};
 
   return (
-    <div className="card overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-100">
-        <h2 className="text-sm font-bold text-gray-900">
+    <div className="card overflow-hidden dark:bg-dk-raised dark:border-dk-border/80 dark:shadow-md">
+      <div className="px-6 py-4 border-b border-gray-100 dark:border-dk-border/60">
+        <h2 className="text-sm font-bold text-gray-900 dark:text-dk-text">
           {t('affiliate.referralsSectionTitle', { count: total })}
         </h2>
       </div>
 
       {loading && (
-        <div className="text-center py-8 text-sm text-gray-500">{t('common.loading')}</div>
+        <div className="text-center py-8 text-sm text-gray-500 dark:text-dk-text2">{t('common.loading')}</div>
       )}
 
       {!loading && error && (
-        <div className="text-center py-8 text-sm text-red-600">{error}</div>
+        <div className="text-center py-8 text-sm text-red-600 dark:text-red-400">{error}</div>
       )}
 
       {!loading && !error && items.length === 0 && (
         <div className="text-center py-8 px-6 space-y-3">
-          <p className="text-sm text-gray-500">{t('affiliate.referralsEmpty')}</p>
+          <p className="text-sm text-gray-500 dark:text-dk-text2">{t('affiliate.referralsEmpty')}</p>
           {referralLink && (
-            <button type="button" onClick={onCopyLink} className="btn btn-primary text-sm">
+            <button type="button" onClick={onCopyLink} className="btn btn-primary text-sm shadow-sm">
               {t('affiliate.copyLink')}
             </button>
           )}
@@ -67,7 +67,7 @@ export default function ReferralsCard({ referralLink, onCopyLink }) {
         <>
           <div className="table-container">
             <table className="table text-left">
-              <thead className="bg-gray-50 text-xs text-gray-500 uppercase font-semibold">
+              <thead className="bg-gray-50 dark:bg-dk-raised/80 text-xs text-gray-500 dark:text-dk-text uppercase font-semibold border-b border-gray-200 dark:border-dk-border">
                 <tr>
                   <th className="px-6 py-3">{t('affiliate.referralsColName')}</th>
                   <th className="px-6 py-3">{t('affiliate.referralsColEmail')}</th>
@@ -76,12 +76,12 @@ export default function ReferralsCard({ referralLink, onCopyLink }) {
                   <th className="px-6 py-3 text-right">{t('affiliate.referralsColRevenue')}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 text-gray-700">
+              <tbody className="divide-y divide-gray-100 dark:divide-dk-border text-gray-700 dark:text-dk-text">
                 {items.map((item, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50/60">
-                    <td className="px-6 py-3.5 font-medium text-gray-900">{item.name || '—'}</td>
+                  <tr key={idx} className="hover:bg-gray-50/60 dark:hover:bg-dk-raised/40">
+                    <td className="px-6 py-3.5 font-medium text-gray-900 dark:text-dk-text">{item.name || '—'}</td>
                     <td className="px-6 py-3.5 text-xs font-mono">{item.emailMasked}</td>
-                    <td className="px-6 py-3.5 text-xs text-gray-500">{formatDate(item.referredAt)}</td>
+                    <td className="px-6 py-3.5 text-xs text-gray-500 dark:text-dk-text2">{formatDate(item.referredAt)}</td>
                     <td className="px-6 py-3.5">
                       {item.hasPurchased && item.awaitingPhone ? (
                         <StatusChip tone="warning" title={t('affiliate.referralsAwaitingPhoneHint')}>
@@ -95,7 +95,7 @@ export default function ReferralsCard({ referralLink, onCopyLink }) {
                         </StatusChip>
                       )}
                     </td>
-                    <td className="px-6 py-3.5 text-right tabular-nums font-semibold text-emerald-600">
+                    <td className="px-6 py-3.5 text-right tabular-nums font-semibold text-emerald-600 dark:text-emerald-400">
                       {formatVnd(item.attributedRevenue)}
                     </td>
                   </tr>
@@ -105,7 +105,7 @@ export default function ReferralsCard({ referralLink, onCopyLink }) {
           </div>
 
           {totalPages > 1 && (
-            <div className="flex items-center justify-between px-6 py-3 border-t border-gray-100 text-sm">
+            <div className="flex items-center justify-between px-6 py-3 border-t border-gray-100 dark:border-dk-border/60 text-sm">
               <button
                 type="button"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
@@ -114,7 +114,7 @@ export default function ReferralsCard({ referralLink, onCopyLink }) {
               >
                 {t('common.previous')}
               </button>
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-gray-500 dark:text-dk-text2">
                 {page} / {totalPages}
               </span>
               <button

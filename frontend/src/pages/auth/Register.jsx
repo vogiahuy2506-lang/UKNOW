@@ -209,7 +209,7 @@ const OtpStep = ({ email, formData, onBack }) => {
             onChange={(e) => handleChange(i, e.target.value)}
             onKeyDown={(e) => handleKeyDown(i, e)}
             onPaste={i === 0 ? handlePaste : undefined}
-            className="w-12 h-14 text-center text-xl font-bold border-2 rounded-xl outline-none transition-all duration-200 bg-white border-slate-200 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10"
+            className="w-12 h-14 text-center text-xl font-bold border-2 rounded-xl outline-none transition-all duration-200 text-slate-900 bg-white border-slate-200 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10"
           />
         ))}
       </div>
@@ -477,7 +477,7 @@ const Register = () => {
               <input 
                 type="text" 
                 {...register('username')}
-                className={`w-full pl-12 pr-4 py-3.5 border rounded-xl outline-none transition-all duration-200 text-sm bg-white ${
+                className={`w-full pl-12 pr-4 py-3.5 border rounded-xl outline-none transition-all duration-200 text-sm text-slate-900 bg-white placeholder:text-slate-400 ${
                   errors.username 
                     ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' 
                     : 'border-slate-200 hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10'
@@ -508,7 +508,7 @@ const Register = () => {
                 className={`w-full pl-12 pr-4 py-3.5 border rounded-xl outline-none transition-all duration-200 text-sm ${
                   isInvite && (emailFromUrl || invitationInfo?.email)
                     ? 'bg-slate-100 text-slate-600 border-slate-200 cursor-not-allowed'
-                    : 'bg-white ' + (errors.email 
+                    : 'text-slate-900 bg-white placeholder:text-slate-400 ' + (errors.email 
                         ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' 
                         : 'border-slate-200 hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10')
                 }`}
@@ -535,7 +535,7 @@ const Register = () => {
               <input 
                 type="text" 
                 {...register('fullName')} 
-                className="w-full pl-12 pr-4 py-3.5 border border-slate-200 rounded-xl outline-none transition-all duration-200 text-sm bg-white hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10"
+                className="w-full pl-12 pr-4 py-3.5 border border-slate-200 rounded-xl outline-none transition-all duration-200 text-sm text-slate-900 bg-white placeholder:text-slate-400 hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10"
                 placeholder={t('register.fullNamePlaceholder')} 
               />
             </div>
@@ -553,7 +553,7 @@ const Register = () => {
                 <input
                   type="tel"
                   {...register('phone')}
-                  className={`w-full pl-12 pr-4 py-3.5 border rounded-xl outline-none transition-all duration-200 text-sm bg-white ${
+                  className={`w-full pl-12 pr-4 py-3.5 border rounded-xl outline-none transition-all duration-200 text-sm text-slate-900 bg-white placeholder:text-slate-400 ${
                     errors.phone
                       ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-500/10'
                       : 'border-slate-200 hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10'
@@ -582,7 +582,7 @@ const Register = () => {
               <input 
                 type={showPassword ? 'text' : 'password'} 
                 {...register('password')}
-                className={`w-full pl-12 pr-12 py-3.5 border rounded-xl outline-none transition-all duration-200 text-sm bg-white ${
+                className={`w-full pl-12 pr-12 py-3.5 border rounded-xl outline-none transition-all duration-200 text-sm text-slate-900 bg-white placeholder:text-slate-400 ${
                   errors.password 
                     ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' 
                     : 'border-slate-200 hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10'
@@ -614,7 +614,7 @@ const Register = () => {
               <input 
                 type={showConfirmPassword ? 'text' : 'password'} 
                 {...register('confirmPassword')}
-                className={`w-full pl-12 pr-12 py-3.5 border rounded-xl outline-none transition-all duration-200 text-sm bg-white ${
+                className={`w-full pl-12 pr-12 py-3.5 border rounded-xl outline-none transition-all duration-200 text-sm text-slate-900 bg-white placeholder:text-slate-400 ${
                   errors.confirmPassword 
                     ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' 
                     : 'border-slate-200 hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10'
@@ -648,7 +648,7 @@ const Register = () => {
             <input 
               type="text" 
               {...register('referralCode')}
-              className="w-full pl-12 pr-4 py-3.5 border border-slate-200 rounded-xl outline-none transition-all duration-200 text-sm bg-white uppercase hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10 font-mono tracking-wider"
+              className="w-full pl-12 pr-4 py-3.5 border border-slate-200 rounded-xl outline-none transition-all duration-200 text-sm text-slate-900 bg-white uppercase hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10 font-mono tracking-wider placeholder:text-slate-400"
               placeholder={t('register.referralCodePlaceholder')}
               maxLength={16}
             />
@@ -665,7 +665,7 @@ const Register = () => {
                 onChange={(e) => setTermsChecked(e.target.checked)}
                 className="sr-only peer"
               />
-              <div className="w-5 h-5 border-2 border-slate-300 rounded-md peer-checked:bg-orange-500 peer-checked:border-orange-500 transition-all duration-200 flex items-center justify-center">
+              <div className="w-5 h-5 border-2 border-slate-300 bg-white rounded-md peer-checked:bg-orange-500 peer-checked:border-orange-500 transition-all duration-200 flex items-center justify-center">
                 {termsChecked && <HiOutlineCheckCircle className="w-3.5 h-3.5 text-white" />}
               </div>
             </div>
@@ -683,7 +683,7 @@ const Register = () => {
                 onChange={(e) => setPrivacyChecked(e.target.checked)}
                 className="sr-only peer"
               />
-              <div className="w-5 h-5 border-2 border-slate-300 rounded-md peer-checked:bg-orange-500 peer-checked:border-orange-500 transition-all duration-200 flex items-center justify-center">
+              <div className="w-5 h-5 border-2 border-slate-300 bg-white rounded-md peer-checked:bg-orange-500 peer-checked:border-orange-500 transition-all duration-200 flex items-center justify-center">
                 {privacyChecked && <HiOutlineCheckCircle className="w-3.5 h-3.5 text-white" />}
               </div>
             </div>
@@ -701,7 +701,7 @@ const Register = () => {
                 onChange={(e) => setDpaChecked(e.target.checked)}
                 className="sr-only peer"
               />
-              <div className="w-5 h-5 border-2 border-slate-300 rounded-md peer-checked:bg-orange-500 peer-checked:border-orange-500 transition-all duration-200 flex items-center justify-center">
+              <div className="w-5 h-5 border-2 border-slate-300 bg-white rounded-md peer-checked:bg-orange-500 peer-checked:border-orange-500 transition-all duration-200 flex items-center justify-center">
                 {dpaChecked && <HiOutlineCheckCircle className="w-3.5 h-3.5 text-white" />}
               </div>
             </div>

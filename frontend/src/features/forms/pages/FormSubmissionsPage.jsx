@@ -267,7 +267,7 @@ export default function FormSubmissionsPage() {
 
       {showBookingColumns && (
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          <label htmlFor="date-filter" className="text-xs font-medium text-gray-600">
+          <label htmlFor="date-filter" className="text-xs font-medium text-gray-600 dark:text-dk-text2">
             {t('forms.submissionsPage.dateFilterLabel')}
           </label>
           <input
@@ -275,12 +275,12 @@ export default function FormSubmissionsPage() {
             type="date"
             value={dateFilter}
             onChange={(e) => setDateFilter(e.target.value)}
-            className="px-3 py-1.5 rounded-lg border border-gray-300 text-xs focus:outline-none focus:ring-1 focus:ring-primary-500"
+            className="px-3 py-1.5 rounded-lg border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-inset text-gray-900 dark:text-dk-text text-xs focus:outline-none focus:ring-1 focus:ring-primary-500"
           />
           <button
             type="button"
             onClick={handleSetTodayFilter}
-            className="px-2.5 py-1.5 rounded-lg border border-gray-300 text-xs text-gray-600 hover:bg-gray-50"
+            className="px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-raised text-xs text-gray-600 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-surface"
           >
             {t('forms.submissionsPage.today')}
           </button>
@@ -288,7 +288,7 @@ export default function FormSubmissionsPage() {
             <button
               type="button"
               onClick={handleClearFilter}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-gray-300 text-xs text-gray-600 hover:bg-gray-50"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-raised text-xs text-gray-600 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-surface"
             >
               <HiOutlineX className="w-3.5 h-3.5" />
               {t('forms.submissionsPage.clearFilter')}
@@ -298,33 +298,33 @@ export default function FormSubmissionsPage() {
       )}
 
       {error && (
-        <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+        <div className="mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 text-red-700 dark:text-red-300 text-sm">
           {error}
         </div>
       )}
 
       {isLoading ? (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center text-gray-500">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-200 border-t-primary-600 mb-3" />
+        <div className="bg-white dark:bg-dk-surface rounded-2xl shadow-sm border border-gray-100 dark:border-dk-border p-12 text-center text-gray-500 dark:text-dk-text2">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-200 dark:border-dk-border border-t-primary-600 mb-3" />
           <p className="text-sm">{t('forms.submissionsPage.loading')}</p>
         </div>
       ) : submissions.length === 0 ? (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-50 text-gray-400 flex items-center justify-center">
+        <div className="bg-white dark:bg-dk-surface rounded-2xl shadow-sm border border-gray-100 dark:border-dk-border p-12 text-center">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-50 dark:bg-dk-raised text-gray-400 dark:text-dk-muted flex items-center justify-center">
             <HiOutlineInbox className="w-8 h-8" />
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-1">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-dk-text mb-1">
             {t('forms.submissionsPage.empty')}
           </h3>
-          <p className="text-sm text-gray-500 max-w-sm mx-auto">
+          <p className="text-sm text-gray-500 dark:text-dk-text2 max-w-sm mx-auto">
             {t('forms.submissionsPage.emptyDescription')}
           </p>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="bg-white dark:bg-dk-surface rounded-2xl shadow-sm border border-gray-100 dark:border-dk-border overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-gray-700">
-              <thead className="bg-gray-50/75 border-b border-gray-100 text-xs font-semibold text-gray-600 uppercase tracking-wider">
+            <table className="w-full text-left text-sm text-gray-700 dark:text-dk-text">
+              <thead className="bg-gray-50/75 dark:bg-dk-raised/50 border-b border-gray-100 dark:border-dk-border text-xs font-semibold text-gray-600 dark:text-dk-text2 uppercase tracking-wider">
                 <tr>
                   <th className="py-3.5 px-4 sm:px-6 w-44">
                     {t('forms.submissionsPage.colSubmittedAt')}
@@ -365,7 +365,7 @@ export default function FormSubmissionsPage() {
                   )}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100 dark:divide-dk-border">
                 {submissions.map((sub) => {
                   const answersObj = sub.answers || {};
                   const answerEntries = Object.entries(answersObj).sort(([keyA], [keyB]) => {
@@ -376,9 +376,9 @@ export default function FormSubmissionsPage() {
                   });
 
                   return (
-                    <tr key={sub.id} className="hover:bg-gray-50/50 transition-colors align-top">
+                    <tr key={sub.id} className="hover:bg-gray-50/50 dark:hover:bg-dk-raised/40 transition-colors align-top">
                       {/* Thời gian nộp */}
-                      <td className="py-4 px-4 sm:px-6 text-xs text-gray-500 whitespace-nowrap">
+                      <td className="py-4 px-4 sm:px-6 text-xs text-gray-500 dark:text-dk-text2 whitespace-nowrap">
                         {sub.createdAt
                           ? new Date(sub.createdAt).toLocaleString('vi-VN')
                           : '—'}
@@ -387,19 +387,19 @@ export default function FormSubmissionsPage() {
                       {/* Người nộp */}
                       <td className="py-4 px-4 sm:px-6">
                         <div className="space-y-1">
-                          <div className="font-medium text-gray-900 flex items-center gap-1.5">
-                            <HiOutlineUser className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                          <div className="font-medium text-gray-900 dark:text-dk-text flex items-center gap-1.5">
+                            <HiOutlineUser className="w-3.5 h-3.5 text-gray-400 dark:text-dk-muted flex-shrink-0" />
                             <span>{sub.respondentName || t('forms.submissionsPage.notProvided')}</span>
                           </div>
                           {sub.respondentEmail && (
-                            <div className="text-xs text-gray-500 flex items-center gap-1.5 break-all">
-                              <HiOutlineMail className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                            <div className="text-xs text-gray-500 dark:text-dk-text2 flex items-center gap-1.5 break-all">
+                              <HiOutlineMail className="w-3.5 h-3.5 text-gray-400 dark:text-dk-muted flex-shrink-0" />
                               <span>{sub.respondentEmail}</span>
                             </div>
                           )}
                           {sub.respondentPhone && (
-                            <div className="text-xs text-gray-500 flex items-center gap-1.5">
-                              <HiOutlinePhone className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                            <div className="text-xs text-gray-500 dark:text-dk-text2 flex items-center gap-1.5">
+                              <HiOutlinePhone className="w-3.5 h-3.5 text-gray-400 dark:text-dk-muted flex-shrink-0" />
                               <span>{sub.respondentPhone}</span>
                             </div>
                           )}
@@ -408,7 +408,7 @@ export default function FormSubmissionsPage() {
 
                       {showBookingColumns && (
                         /* Giờ hẹn — LUÔN theo giờ Việt Nam, không phụ thuộc múi giờ trình duyệt */
-                        <td className="py-4 px-4 sm:px-6 text-xs text-gray-600 whitespace-nowrap">
+                        <td className="py-4 px-4 sm:px-6 text-xs text-gray-600 dark:text-dk-text whitespace-nowrap">
                           {sub.appointmentAt ? formatAppointmentAtVn(sub.appointmentAt, locale) : '—'}
                         </td>
                       )}
@@ -419,10 +419,10 @@ export default function FormSubmissionsPage() {
                           {sub.paymentCode ? (
                             <div className="space-y-1.5">
                               <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="font-mono font-semibold text-gray-800">{sub.paymentCode}</span>
+                                <span className="font-mono font-semibold text-gray-800 dark:text-dk-text">{sub.paymentCode}</span>
                                 {sub.status === 'pending_payment' && sub.payerReportedPaidAt && (
                                   <span
-                                    className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                    className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800"
                                     data-testid="badge-payer-reported"
                                   >
                                     {t('forms.submissionsPage.payerReportedPaidBadge', {
@@ -431,7 +431,7 @@ export default function FormSubmissionsPage() {
                                   </span>
                                 )}
                               </div>
-                              <div className="text-gray-500">{formatVnd(sub.paymentAmount)}</div>
+                              <div className="text-gray-500 dark:text-dk-text2">{formatVnd(sub.paymentAmount)}</div>
 
                               {/* PR-5: Nút xem ảnh chuyển khoản hoặc huy hiệu miễn gửi ảnh */}
                               {sub.paymentReceiptKey && (
@@ -440,7 +440,7 @@ export default function FormSubmissionsPage() {
                                     type="button"
                                     onClick={() => handleOpenReceipt(sub)}
                                     data-testid={`btn-view-receipt-${sub.id}`}
-                                    className="inline-flex items-center gap-1 text-[11px] font-medium text-primary-600 hover:text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 px-2 py-0.5 rounded transition-colors"
+                                    className="inline-flex items-center gap-1 text-[11px] font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 bg-primary-50 dark:bg-primary-950/30 hover:bg-primary-100 dark:hover:bg-primary-900/40 border border-primary-200 dark:border-primary-800 px-2 py-0.5 rounded transition-colors"
                                   >
                                     <HiOutlinePhotograph className="w-3.5 h-3.5" />
                                     <span>{t('forms.submissionsPage.viewReceiptBtn')}</span>
@@ -450,7 +450,7 @@ export default function FormSubmissionsPage() {
                               {sub.paymentReceiptWaivedReason && (
                                 <div>
                                   <span
-                                    className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200"
+                                    className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-900/50"
                                     data-testid={`badge-receipt-waived-${sub.id}`}
                                   >
                                     {t('forms.submissionsPage.receiptWaivedBadge')}
@@ -468,14 +468,14 @@ export default function FormSubmissionsPage() {
                         const displayStatus = getDisplayStatus(sub);
                         const statusClass =
                           displayStatus === 'cancelled'
-                            ? 'bg-gray-100 text-gray-600 border-gray-200'
+                            ? 'bg-gray-100 dark:bg-dk-raised text-gray-600 dark:text-dk-text border-gray-200 dark:border-dk-border'
                             : displayStatus === 'confirmed'
-                              ? 'bg-green-50 text-green-700 border-green-200'
+                              ? 'bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300 border-green-200 dark:border-green-900/50'
                               : displayStatus === 'pending_payment'
-                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                ? 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900/50'
                                 : displayStatus === 'hold_expired'
-                                  ? 'bg-red-50 text-red-600 border-red-200'
-                                  : 'bg-blue-50 text-blue-700 border-blue-200';
+                                  ? 'bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/50'
+                                  : 'bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-900/50';
                         return (
                           <td className="py-4 px-4 sm:px-6">
                             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${statusClass}`}>
@@ -492,10 +492,10 @@ export default function FormSubmissionsPage() {
                           {sub.landingPageSlug || sub.utmSource || sub.utmCampaign ? (
                             <div className="space-y-0.5">
                               {sub.landingPageSlug && (
-                                <div className="font-mono text-gray-700">{sub.landingPageSlug}</div>
+                                <div className="font-mono text-gray-700 dark:text-dk-text">{sub.landingPageSlug}</div>
                               )}
                               {(sub.utmSource || sub.utmCampaign) && (
-                                <div className="text-gray-500">
+                                <div className="text-gray-500 dark:text-dk-text2">
                                   {[sub.utmSource, sub.utmCampaign].filter(Boolean).join(' · ')}
                                 </div>
                               )}
@@ -512,7 +512,7 @@ export default function FormSubmissionsPage() {
                       <td className="py-4 px-4 sm:px-6 text-center">
                         {sub.consentWithdrawnAt ? (
                           <span
-                            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200"
+                            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-900/50"
                             title={new Date(sub.consentWithdrawnAt).toLocaleString('vi-VN')}
                           >
                             {t('forms.submissionsPage.consentWithdrawn', {
@@ -520,15 +520,15 @@ export default function FormSubmissionsPage() {
                             })}
                           </span>
                         ) : sub.marketingConsent === true ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-900/50">
                             {t('forms.submissionsPage.consentYes')}
                           </span>
                         ) : sub.marketingConsent === false ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-dk-raised text-gray-600 dark:text-dk-text border border-gray-200 dark:border-dk-border">
                             {t('forms.submissionsPage.consentNo')}
                           </span>
                         ) : (
-                          <span className="text-gray-400 font-medium">
+                          <span className="text-gray-400 dark:text-dk-muted font-medium">
                             {t('forms.submissionsPage.consentNone')}
                           </span>
                         )}
@@ -538,7 +538,7 @@ export default function FormSubmissionsPage() {
                       <td className="py-4 px-4 sm:px-6">
                         <div className="space-y-1.5 max-w-xl">
                           {answerEntries.length === 0 ? (
-                            <span className="text-xs text-gray-400 italic">{t('forms.submissionsPage.noAnswers')}</span>
+                            <span className="text-xs text-gray-400 dark:text-dk-muted italic">{t('forms.submissionsPage.noAnswers')}</span>
                           ) : (
                             answerEntries.map(([fKey, item]) => {
                               // Snapshot dạng { label, type, value }
@@ -557,8 +557,8 @@ export default function FormSubmissionsPage() {
 
                               return (
                                 <div key={fKey} className="text-xs leading-relaxed break-words">
-                                  <span className="font-semibold text-gray-700">{label}: </span>
-                                  <span className="text-gray-600">{displayVal || '—'}</span>
+                                  <span className="font-semibold text-gray-700 dark:text-dk-text">{label}: </span>
+                                  <span className="text-gray-600 dark:text-dk-text">{displayVal || '—'}</span>
                                 </div>
                               );
                             })
@@ -570,7 +570,7 @@ export default function FormSubmissionsPage() {
                         <td className="py-4 px-4 sm:px-6">
                           {confirmPaymentTargetId === sub.id ? (
                             <div className="space-y-1.5">
-                              <p className="text-xs text-gray-600">
+                              <p className="text-xs text-gray-600 dark:text-dk-text">
                                 {t('forms.submissionsPage.confirmPaymentConfirmDesc', {
                                   code: sub.paymentCode,
                                   amount: formatVnd(sub.paymentAmount),
@@ -591,7 +591,7 @@ export default function FormSubmissionsPage() {
                                   type="button"
                                   onClick={handleAbortConfirmPayment}
                                   disabled={confirmingPaymentId === sub.id}
-                                  className="px-2.5 py-1 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 text-xs font-medium"
+                                  className="px-2.5 py-1 rounded-lg border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-raised text-gray-600 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-surface text-xs font-medium"
                                 >
                                   {t('forms.submissionsPage.cancelConfirmNo')}
                                 </button>
@@ -599,7 +599,7 @@ export default function FormSubmissionsPage() {
                             </div>
                           ) : cancelTargetId === sub.id ? (
                             <div className="space-y-1.5">
-                              <p className="text-xs text-gray-600">
+                              <p className="text-xs text-gray-600 dark:text-dk-text">
                                 {t('forms.submissionsPage.cancelConfirmDesc')}
                               </p>
                               <div className="flex items-center gap-2">
@@ -617,7 +617,7 @@ export default function FormSubmissionsPage() {
                                   type="button"
                                   onClick={handleAbortCancel}
                                   disabled={cancellingId === sub.id}
-                                  className="px-2.5 py-1 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 text-xs font-medium"
+                                  className="px-2.5 py-1 rounded-lg border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-raised text-gray-600 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-surface text-xs font-medium"
                                 >
                                   {t('forms.submissionsPage.cancelConfirmNo')}
                                 </button>
@@ -629,7 +629,7 @@ export default function FormSubmissionsPage() {
                                 <button
                                   type="button"
                                   onClick={() => handleRequestConfirmPayment(sub.id)}
-                                  className="px-2.5 py-1.5 rounded-lg border border-green-200 text-green-700 hover:bg-green-50 text-xs font-medium"
+                                  className="px-2.5 py-1.5 rounded-lg border border-green-200 dark:border-green-900/50 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-950/30 text-xs font-medium"
                                 >
                                   {t('forms.submissionsPage.confirmPaymentButton')}
                                 </button>
@@ -638,13 +638,13 @@ export default function FormSubmissionsPage() {
                                 <button
                                   type="button"
                                   onClick={() => handleRequestCancel(sub.id)}
-                                  className="px-2.5 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-xs font-medium"
+                                  className="px-2.5 py-1.5 rounded-lg border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 text-xs font-medium"
                                 >
                                   {t('forms.submissionsPage.cancelButton')}
                                 </button>
                               )}
                               {sub.status !== 'pending_payment' && !CANCELLABLE_STATUSES.has(sub.status) && (
-                                <span className="text-gray-300 text-xs">—</span>
+                                <span className="text-gray-300 dark:text-dk-muted text-xs">—</span>
                               )}
                             </div>
                           )}
@@ -659,8 +659,8 @@ export default function FormSubmissionsPage() {
 
           {/* Phân trang */}
           {pagination.totalPages > 1 && (
-            <div className="px-4 py-3 sm:px-6 border-t border-gray-100 flex items-center justify-between bg-gray-50/50">
-              <div className="text-xs text-gray-500">
+            <div className="px-4 py-3 sm:px-6 border-t border-gray-100 dark:border-dk-border flex items-center justify-between bg-gray-50/50 dark:bg-dk-raised/30">
+              <div className="text-xs text-gray-500 dark:text-dk-text2">
                 {t('forms.submissionsPage.pageInfo', {
                   page: pagination.page,
                   totalPages: pagination.totalPages,
@@ -672,7 +672,7 @@ export default function FormSubmissionsPage() {
                   type="button"
                   onClick={() => handlePageChange(pagination.page - 1)}
                   disabled={pagination.page <= 1}
-                  className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="p-1.5 rounded-lg border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-raised text-gray-600 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-surface disabled:opacity-40 disabled:cursor-not-allowed"
                   title={t('forms.submissionsPage.prevPage')}
                   aria-label={t('forms.submissionsPage.prevPage')}
                 >
@@ -682,7 +682,7 @@ export default function FormSubmissionsPage() {
                   type="button"
                   onClick={() => handlePageChange(pagination.page + 1)}
                   disabled={pagination.page >= pagination.totalPages}
-                  className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="p-1.5 rounded-lg border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-raised text-gray-600 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-surface disabled:opacity-40 disabled:cursor-not-allowed"
                   title={t('forms.submissionsPage.nextPage')}
                   aria-label={t('forms.submissionsPage.nextPage')}
                 >
@@ -697,48 +697,48 @@ export default function FormSubmissionsPage() {
       {/* Modal xem ảnh biên lai chuyển khoản (PR-5) */}
       {viewingReceiptSub && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
-          <div className="w-full max-w-lg bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+          <div className="w-full max-w-lg bg-white dark:bg-dk-surface rounded-2xl shadow-xl border border-gray-100 dark:border-dk-border overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-4 border-b border-gray-100 dark:border-dk-border flex items-center justify-between">
               <div>
-                <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
-                  <HiOutlinePhotograph className="w-5 h-5 text-gray-600" />
+                <h3 className="text-base font-semibold text-gray-900 dark:text-dk-text flex items-center gap-2">
+                  <HiOutlinePhotograph className="w-5 h-5 text-gray-600 dark:text-dk-text2" />
                   <span>{t('forms.submissionsPage.receiptModalTitle')}</span>
                 </h3>
-                <p className="text-xs text-gray-500 mt-0.5">
+                <p className="text-xs text-gray-500 dark:text-dk-text2 mt-0.5">
                   {viewingReceiptSub.paymentCode} · {formatVnd(viewingReceiptSub.paymentAmount)} · {viewingReceiptSub.respondentName || '—'}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={handleCloseReceipt}
-                className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-dk-text p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-dk-raised transition-colors"
                 data-testid="btn-close-receipt-modal"
               >
                 <HiOutlineX className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-4 flex-1 overflow-auto flex items-center justify-center bg-gray-50/50 min-h-[250px]">
+            <div className="p-4 flex-1 overflow-auto flex items-center justify-center bg-gray-50/50 dark:bg-dk-inset min-h-[250px]">
               {isLoadingReceipt ? (
-                <div className="text-center py-10 text-gray-500">
-                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-200 border-t-primary-600 mb-2" />
+                <div className="text-center py-10 text-gray-500 dark:text-dk-text2">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-200 dark:border-dk-border border-t-primary-600 mb-2" />
                   <p className="text-xs">{t('forms.submissionsPage.receiptLoading')}</p>
                 </div>
               ) : receiptError ? (
-                <div className="text-center py-10 text-red-600 text-sm">
+                <div className="text-center py-10 text-red-600 dark:text-red-400 text-sm">
                   <p>{receiptError}</p>
                 </div>
               ) : receiptBlobUrl ? (
                 <img
                   src={receiptBlobUrl}
                   alt="Receipt"
-                  className="max-w-full max-h-[60vh] object-contain rounded-lg shadow-sm border border-gray-200"
+                  className="max-w-full max-h-[60vh] object-contain rounded-lg shadow-sm border border-gray-200 dark:border-dk-border"
                   data-testid="img-receipt-modal"
                 />
               ) : null}
             </div>
 
-            <div className="p-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between text-xs text-gray-500">
+            <div className="p-3 border-t border-gray-100 dark:border-dk-border bg-gray-50 dark:bg-dk-bg flex items-center justify-between text-xs text-gray-500 dark:text-dk-text2">
               <span>
                 {viewingReceiptSub.paymentReceiptUploadedAt
                   ? new Date(viewingReceiptSub.paymentReceiptUploadedAt).toLocaleString('vi-VN')
@@ -747,7 +747,7 @@ export default function FormSubmissionsPage() {
               <button
                 type="button"
                 onClick={handleCloseReceipt}
-                className="px-3 py-1.5 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 font-medium text-gray-700 shadow-sm transition-colors"
+                className="px-3 py-1.5 rounded-lg bg-white dark:bg-dk-raised border border-gray-300 dark:border-dk-border hover:bg-gray-50 dark:hover:bg-dk-strong font-medium text-gray-700 dark:text-dk-text shadow-sm transition-colors"
               >
                 Đóng
               </button>

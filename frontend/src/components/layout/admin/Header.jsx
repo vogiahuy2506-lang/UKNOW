@@ -17,8 +17,11 @@ import {
   HiOutlineMenu,
   HiOutlineBell,
   HiOutlineSupport,
+  HiOutlineSun,
+  HiOutlineMoon,
 } from 'react-icons/hi';
 import { useAuthStore } from '../../../stores/authStore';
+import { useThemeStore } from '../../../stores/themeStore';
 import { useI18n } from '../../../i18n';
 import { useMarketplaceModal } from '../../../contexts/useMarketplaceModal';
 import NotificationBell from '../NotificationBell';
@@ -37,6 +40,7 @@ const AVATAR_STYLES = {
 const Header = ({ onToggleSidebar }) => {
   const { t, locale, changeLocale } = useI18n();
   const { user, logout, activeContext, switchContext, refreshCurrentUser } = useAuthStore();
+  const { isDark, toggleTheme } = useThemeStore();
   const navigate = useNavigate();
   const { showMarketplace } = useMarketplaceModal();
 
@@ -74,13 +78,13 @@ const Header = ({ onToggleSidebar }) => {
 
   return (
     <>
-      <header className="w-full h-[44px] bg-white flex items-center pl-3 pr-3 border-b border-gray-200">
+      <header className="w-full h-[44px] bg-white dark:bg-dk-bg flex items-center pl-3 pr-3 border-b border-gray-200 dark:border-dk-border/80 transition-colors">
         {/* Mobile Menu Button */}
         {onToggleSidebar && (
           <button
             type="button"
             onClick={onToggleSidebar}
-            className="lg:hidden mr-2 p-1.5 text-gray-500 hover:bg-gray-100 rounded-md transition-colors"
+            className="lg:hidden mr-2 p-1.5 text-gray-500 hover:bg-gray-100 dark:text-dk-text2 dark:hover:bg-dk-raised rounded-md transition-colors"
             aria-label="Open sidebar"
           >
             <HiOutlineMenu className="w-5 h-5" />
@@ -92,7 +96,7 @@ const Header = ({ onToggleSidebar }) => {
           <span className="w-9 h-9 flex items-center justify-center shrink-0">
             <img src={logoIcon} alt="Founder AI" className="w-9 h-9 object-contain drop-shadow-sm" />
           </span>
-          <span className="text-[18px] font-extrabold text-gray-900 tracking-tight hidden sm:inline leading-none">
+          <span className="text-[18px] font-extrabold text-gray-900 dark:text-dk-text tracking-tight hidden sm:inline leading-none">
             Founder AI
           </span>
         </Link>
@@ -114,7 +118,7 @@ const Header = ({ onToggleSidebar }) => {
                     }}
                     aria-haspopup="menu"
                     aria-expanded={docsOpen}
-                    className="inline-flex items-center h-7 px-2 rounded-md text-[12px] font-medium whitespace-nowrap text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-all"
+                    className="inline-flex items-center h-7 px-2 rounded-md text-[12px] font-medium whitespace-nowrap text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-dk-text dark:hover:text-dk-text dark:hover:bg-dk-raised transition-all"
                   >
                     {item.label}
                     <HiOutlineChevronDown className={`w-3.5 h-3.5 ml-1 transition-transform ${docsOpen ? 'rotate-180' : ''}`} />
@@ -123,7 +127,7 @@ const Header = ({ onToggleSidebar }) => {
                   {docsOpen && (
                     <div
                       role="menu"
-                      className="absolute left-0 mt-2 w-52 rounded-xl border border-gray-100 bg-white p-1.5 shadow-xl z-50"
+                      className="absolute left-0 mt-2 w-52 rounded-xl border border-gray-100 dark:border-dk-border/80 bg-white dark:bg-dk-surface p-1.5 shadow-xl z-50"
                     >
                       <button
                         type="button"
@@ -132,7 +136,7 @@ const Header = ({ onToggleSidebar }) => {
                           setDocsOpen(false);
                           navigate('/huong-dan');
                         }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-gray-700 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised/80 rounded-lg transition-colors"
                       >
                         <HiOutlineDocumentText className="w-4 h-4 text-gray-400" />
                         {item.label}
@@ -143,7 +147,7 @@ const Header = ({ onToggleSidebar }) => {
                         rel="noopener noreferrer"
                         role="menuitem"
                         onClick={() => setDocsOpen(false)}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-gray-700 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised/80 rounded-lg transition-colors"
                       >
                         <HiOutlineAcademicCap className="w-4 h-4 text-gray-400" />
                         <span className="flex-1 text-left">{t('header.courses')}</span>
@@ -160,7 +164,7 @@ const Header = ({ onToggleSidebar }) => {
                 ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white hover:from-orange-600 hover:to-red-600 shadow-sm hover:shadow-md'
                 : item.accent
                 ? 'bg-orange-600 text-white hover:bg-orange-700 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100';
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-dk-text dark:hover:text-dk-text dark:hover:bg-dk-raised';
             return (
               <button
                 key={item.key}
@@ -189,6 +193,21 @@ const Header = ({ onToggleSidebar }) => {
         {/* Chuông thông báo — desktop lẫn mobile (mobile chỉ là icon), cả /app và /admin */}
         <NotificationBell />
 
+        {/* Theme Toggle Button (Light / Dark) */}
+        <button
+          type="button"
+          onClick={toggleTheme}
+          title={isDark ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
+          aria-label={isDark ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
+          className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 dark:text-dk-text dark:hover:text-amber-400 dark:hover:bg-dk-raised transition-colors mx-1 shrink-0"
+        >
+          {isDark ? (
+            <HiOutlineSun className="w-4 h-4 text-amber-400 transition-transform hover:rotate-45" />
+          ) : (
+            <HiOutlineMoon className="w-4 h-4 text-slate-600 transition-transform hover:-rotate-12" />
+          )}
+        </button>
+
         {/* Right: profile dropdown */}
         <div className="relative shrink-0" ref={profileRef}>
           <button
@@ -201,7 +220,7 @@ const Header = ({ onToggleSidebar }) => {
               // (chủ vừa thêm mình) hiện ra ngay, không phải F5 (PLAN_NHAN_VIEN mục 5.3).
               if (nextOpen) refreshCurrentUser();
             }}
-            className="flex items-center gap-1.5 h-8 px-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+            className="flex items-center gap-1.5 h-8 px-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-dk-raised transition-colors"
           >
             <div
               className={`w-7 h-7 rounded-lg bg-gradient-to-br ${avatarGradient} flex items-center justify-center shrink-0 shadow-sm`}
@@ -209,8 +228,8 @@ const Header = ({ onToggleSidebar }) => {
               <span className="text-white font-bold text-[11px] leading-none">{avatarInitial}</span>
             </div>
             <div className="hidden lg:flex flex-col items-start flex-1 min-w-0">
-              <span className="text-[13px] font-semibold text-gray-900 leading-tight truncate">{displayName}</span>
-              <span className="text-[10px] text-gray-400 leading-tight capitalize">
+              <span className="text-[13px] font-semibold text-gray-900 dark:text-dk-text leading-tight truncate">{displayName}</span>
+              <span className="text-[10px] text-gray-400 dark:text-dk-text2 leading-tight capitalize">
                 {activeContext?.type === 'employee' ? t('sidebar.employee') : t('sidebar.owner')}
               </span>
             </div>
@@ -218,15 +237,15 @@ const Header = ({ onToggleSidebar }) => {
           </button>
 
           {profileOpen && (
-            <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50">
-              <div className="px-4 py-3.5 bg-gradient-to-r from-gray-50 to-white border-b border-gray-100">
-                <p className="text-[13px] font-bold text-gray-900 truncate">{user?.fullName || user?.username}</p>
-                <p className="text-[12px] text-gray-500 truncate mt-0.5">{user?.email}</p>
+            <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-dk-surface rounded-2xl shadow-2xl border border-gray-100 dark:border-dk-border/80 overflow-hidden z-50">
+              <div className="px-4 py-3.5 bg-gradient-to-r from-gray-50 to-white dark:from-dk-inset dark:to-dk-surface border-b border-gray-100 dark:border-dk-border">
+                <p className="text-[13px] font-bold text-gray-900 dark:text-dk-text truncate">{user?.fullName || user?.username}</p>
+                <p className="text-[12px] text-gray-500 dark:text-dk-text2 truncate mt-0.5">{user?.email}</p>
               </div>
 
               {/* Context switcher */}
-              <div className="p-2 border-b border-gray-100">
-                <p className="px-3 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+              <div className="p-2 border-b border-gray-100 dark:border-dk-border">
+                <p className="px-3 py-1.5 text-[10px] font-bold text-gray-400 dark:text-dk-text2 uppercase tracking-wider">
                   {t('header.activeContext')}
                 </p>
                 {/* Dòng này hiện với MỌI người, kể cả người chưa có gói riêng. Chỗ họ tới là
@@ -239,8 +258,8 @@ const Header = ({ onToggleSidebar }) => {
                   onClick={async () => { setProfileOpen(false); await switchContext(null); navigate('/app'); }}
                   className={`w-full flex items-center justify-between px-3 py-2 text-[13px] rounded-xl transition-colors ${
                     activeContext.type === 'self'
-                      ? 'bg-orange-50 text-orange-600 font-semibold'
-                      : 'text-gray-700 hover:bg-gray-50'
+                      ? 'bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 font-semibold'
+                      : 'text-gray-700 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised/70'
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
@@ -254,10 +273,9 @@ const Header = ({ onToggleSidebar }) => {
                     key={m.ownerId}
                     onClick={async () => { setProfileOpen(false); await switchContext(m.ownerId); navigate('/app'); }}
                     className={`w-full flex items-center justify-between px-3 py-2 text-[13px] rounded-xl transition-colors mt-1 ${
-
                       activeContext.type === 'employee' && activeContext.ownerId === m.ownerId
-                        ? 'bg-orange-50 text-orange-600 font-semibold'
-                        : 'text-gray-700 hover:bg-gray-50'
+                        ? 'bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 font-semibold'
+                        : 'text-gray-700 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised/70'
                     }`}
                   >
                     <div className="flex items-center gap-2.5">
@@ -282,7 +300,7 @@ const Header = ({ onToggleSidebar }) => {
               <div className="p-1.5">
                 <button
                   onClick={() => { setShowAccountProfile(true); setProfileOpen(false); }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-gray-700 hover:bg-gray-50 rounded-xl transition-colors"
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-gray-700 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised/70 rounded-xl transition-colors"
                 >
                   <HiOutlineUserCircle className="w-4 h-4 text-gray-400" />
                   {t('sidebar.accountInfo')}
@@ -303,13 +321,13 @@ const Header = ({ onToggleSidebar }) => {
                 </button>
                 <button
                   onClick={() => { setShowChangePassword(true); setProfileOpen(false); }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-gray-700 hover:bg-gray-50 rounded-xl transition-colors"
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-gray-700 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised/70 rounded-xl transition-colors"
                 >
                   <HiOutlineLockClosed className="w-4 h-4 text-gray-400" />
                   {t('sidebar.changePassword')}
                 </button>
                 <div className="flex items-center justify-between px-3 py-2">
-                  <div className="flex items-center gap-2 text-[13px] text-gray-500">
+                  <div className="flex items-center gap-2 text-[13px] text-gray-500 dark:text-dk-text2">
                     <HiOutlineGlobeAlt className="w-4 h-4" />
                     {t('sidebar.language')}
                   </div>
@@ -319,7 +337,7 @@ const Header = ({ onToggleSidebar }) => {
                         key={code}
                         onClick={() => changeLocale(code)}
                         className={`text-[15px] px-1.5 py-1 rounded-lg transition-all ${
-                          locale === code ? 'bg-gray-100 opacity-100' : 'opacity-40 hover:opacity-80'
+                          locale === code ? 'bg-gray-100 dark:bg-dk-raised opacity-100' : 'opacity-40 hover:opacity-80'
                         }`}
                       >
                         {flag}
@@ -329,10 +347,10 @@ const Header = ({ onToggleSidebar }) => {
                 </div>
               </div>
 
-              <div className="p-1.5 border-t border-gray-100">
+              <div className="p-1.5 border-t border-gray-100 dark:border-dk-border">
                 <button
                   onClick={async () => { await logout(); navigate('/login'); }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-red-600 dark:text-rose-400 hover:bg-red-50 dark:hover:bg-rose-950/30 rounded-xl transition-colors"
                 >
                   <HiOutlineLogout className="w-4 h-4" />
                   {t('sidebar.logout')}

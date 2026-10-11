@@ -45,20 +45,20 @@ function parseArrayField(value) {
 // ── SectionCard ───────────────────────────────────────────────────────────────
 const SectionCard = ({ icon: Icon, title, subtitle, children, accent = 'orange' }) => {
   const colors = {
-    orange: 'bg-orange-50 text-orange-500',
-    blue:   'bg-blue-50 text-blue-500',
-    purple: 'bg-purple-50 text-purple-500',
-    slate:  'bg-slate-100 text-slate-500',
+    orange: 'bg-orange-50 dark:bg-orange-950/40 text-orange-500 dark:text-orange-400',
+    blue:   'bg-blue-50 dark:bg-blue-950/40 text-blue-500 dark:text-blue-400',
+    purple: 'bg-purple-50 dark:bg-purple-950/40 text-purple-500 dark:text-purple-400',
+    slate:  'bg-slate-100 dark:bg-dk-raised text-slate-500 dark:text-dk-text2',
   };
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-      <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100">
+    <div className="bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border rounded-2xl overflow-hidden">
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100 dark:border-dk-border">
         <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${colors[accent]}`}>
           <Icon className="w-4 h-4" />
         </div>
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-slate-700">{title}</p>
-          {subtitle && <p className="text-xs text-slate-400 truncate">{subtitle}</p>}
+          <p className="text-sm font-semibold text-slate-700 dark:text-dk-text">{title}</p>
+          {subtitle && <p className="text-xs text-slate-400 dark:text-dk-muted truncate">{subtitle}</p>}
         </div>
       </div>
       <div className="p-5">
@@ -85,46 +85,46 @@ const SegmentList = ({ segments, onChange }) => {
   return (
     <div className="space-y-2">
       {segments.map((s, i) => (
-        <div key={i} className="border border-slate-200 rounded-xl overflow-hidden">
-          <div className="flex items-center gap-2 px-3 py-2.5 bg-slate-50 cursor-pointer select-none" onClick={() => toggle(i)}>
-            <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-[10px] font-bold flex items-center justify-center shrink-0">
+        <div key={i} className="border border-slate-200 dark:border-dk-border rounded-xl overflow-hidden">
+          <div className="flex items-center gap-2 px-3 py-2.5 bg-slate-50 dark:bg-dk-raised/50 cursor-pointer select-none" onClick={() => toggle(i)}>
+            <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 text-[10px] font-bold flex items-center justify-center shrink-0">
               {i + 1}
             </span>
-            <span className="flex-1 text-sm font-medium text-slate-700 truncate">
+            <span className="flex-1 text-sm font-medium text-slate-700 dark:text-dk-text truncate">
               {s.name || `${t('businessProfile.segmentName')} ${i + 1}`}
             </span>
             <button type="button" onClick={(e) => { e.stopPropagation(); remove(i); }}
-              className="p-1 text-slate-400 hover:text-red-500 transition-colors">
+              className="p-1 text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors">
               <HiOutlineTrash className="w-3.5 h-3.5" />
             </button>
             {expanded[i] ? <HiOutlineChevronUp className="w-4 h-4 text-slate-400" /> : <HiOutlineChevronDown className="w-4 h-4 text-slate-400" />}
           </div>
           {expanded[i] && (
-            <div className="p-3 space-y-2">
+            <div className="p-3 space-y-2 bg-white dark:bg-dk-surface">
               <div>
-                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{t('businessProfile.segmentName')} *</label>
+                <label className="text-[10px] font-semibold text-slate-500 dark:text-dk-text2 uppercase tracking-wide">{t('businessProfile.segmentName')} *</label>
                 <input type="text" value={s.name} onChange={e => update(i, 'name', e.target.value)}
                   placeholder={t('businessProfile.segmentNamePlaceholder')}
-                  className="mt-1 w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm outline-none focus:border-orange-400 transition-all" />
+                  className="mt-1 w-full border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset text-slate-800 dark:text-dk-text rounded-lg px-2.5 py-2 text-sm outline-none focus:border-orange-400 transition-all" />
               </div>
               <div>
-                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{t('businessProfile.characteristics')}</label>
+                <label className="text-[10px] font-semibold text-slate-500 dark:text-dk-text2 uppercase tracking-wide">{t('businessProfile.characteristics')}</label>
                 <input type="text" value={s.description} onChange={e => update(i, 'description', e.target.value)}
                   placeholder={t('businessProfile.characteristicsPlaceholder')}
-                  className="mt-1 w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm outline-none focus:border-orange-400 transition-all" />
+                  className="mt-1 w-full border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset text-slate-800 dark:text-dk-text rounded-lg px-2.5 py-2 text-sm outline-none focus:border-orange-400 transition-all" />
               </div>
               <div>
-                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{t('businessProfile.painPoint')}</label>
+                <label className="text-[10px] font-semibold text-slate-500 dark:text-dk-text2 uppercase tracking-wide">{t('businessProfile.painPoint')}</label>
                 <input type="text" value={s.painPoint} onChange={e => update(i, 'painPoint', e.target.value)}
                   placeholder={t('businessProfile.painPointPlaceholder')}
-                  className="mt-1 w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm outline-none focus:border-orange-400 transition-all" />
+                  className="mt-1 w-full border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset text-slate-800 dark:text-dk-text rounded-lg px-2.5 py-2 text-sm outline-none focus:border-orange-400 transition-all" />
               </div>
             </div>
           )}
         </div>
       ))}
       <button type="button" onClick={add}
-        className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-slate-300 rounded-xl text-sm text-slate-500 hover:border-blue-400 hover:text-blue-500 transition-all">
+        className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-slate-300 dark:border-dk-border rounded-xl text-sm text-slate-500 dark:text-dk-text2 hover:border-blue-400 hover:text-blue-500 transition-all">
         <HiOutlinePlus className="w-4 h-4" />
         {t('businessProfile.addSegment')}
       </button>
@@ -264,7 +264,7 @@ const BusinessProfilePage = () => {
       />
 
       {hasProfile && (
-        <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded-xl px-4 py-2.5">
+        <div className="flex items-center gap-2 text-xs text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-xl px-4 py-2.5">
           <span className="w-1.5 h-1.5 bg-green-500 rounded-full shrink-0" />
           {t('businessProfile.inUseNote')}
         </div>
@@ -281,12 +281,12 @@ const BusinessProfilePage = () => {
           <div className="grid grid-cols-2 gap-6">
             {/* Cột trái — Logo */}
             <div className="space-y-2">
-              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{t('businessProfile.companyLogo')}</label>
+              <label className="text-[10px] font-semibold text-slate-500 dark:text-dk-text2 uppercase tracking-wide">{t('businessProfile.companyLogo')}</label>
               <div className="flex gap-3 items-stretch">
                 {/* Preview box nhỏ */}
                 <div
                   className={`shrink-0 w-36 h-36 rounded-xl border-2 border-dashed flex items-center justify-center overflow-hidden transition-all cursor-pointer
-                    ${logoDragging ? 'border-orange-400 bg-orange-50' : 'border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-slate-100'}`}
+                    ${logoDragging ? 'border-orange-400 bg-orange-50 dark:bg-orange-950/20' : 'border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-raised/50 hover:border-slate-300 dark:hover:border-dk-border-strong hover:bg-slate-100 dark:hover:bg-dk-strong'}`}
                   onDragOver={e => { e.preventDefault(); setLogoDragging(true); }}
                   onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setLogoDragging(false); }}
                   onDrop={handleLogoDrop}
@@ -295,7 +295,7 @@ const BusinessProfilePage = () => {
                   {(logoPreview || form.logo_url)
                     ? <img src={logoPreview || form.logo_url} alt="logo" onError={e => { e.target.style.display='none'; }}
                         className="w-full h-full object-contain p-2" />
-                    : <div className="flex flex-col items-center gap-1 text-slate-300">
+                    : <div className="flex flex-col items-center gap-1 text-slate-300 dark:text-dk-muted">
                         <HiOutlinePhotograph className="w-7 h-7" />
                         <span className="text-[9px]">Logo</span>
                       </div>
@@ -303,20 +303,20 @@ const BusinessProfilePage = () => {
                 </div>
                 {/* Controls bên phải */}
                 <div className="flex-1 flex flex-col justify-between gap-2">
-                  <p className="text-xs text-slate-500 leading-relaxed">{t('businessProfile.logoFormats')}</p>
+                  <p className="text-xs text-slate-500 dark:text-dk-text2 leading-relaxed">{t('businessProfile.logoFormats')}</p>
                   <button type="button" onClick={() => logoInputRef.current?.click()} disabled={isUploadingLogo}
-                    className="flex items-center justify-center gap-1.5 px-2 py-1.5 border border-slate-200 rounded-lg text-[11px] text-slate-600 hover:border-orange-400 hover:text-orange-500 transition-all disabled:opacity-50">
+                    className="flex items-center justify-center gap-1.5 px-2 py-1.5 border border-slate-200 dark:border-dk-border rounded-lg text-[11px] text-slate-600 dark:text-dk-text hover:border-orange-400 dark:hover:border-orange-400 hover:text-orange-500 dark:hover:text-orange-400 transition-all disabled:opacity-50">
                     {isUploadingLogo
                       ? <div className="w-3 h-3 border-2 border-orange-400/30 border-t-orange-400 rounded-full animate-spin" />
                       : <HiOutlineUpload className="w-3 h-3" />}
                     {t('businessProfile.selectFile')}
                   </button>
                   <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
-                    <div className="flex-1 h-px bg-slate-200" />{t('businessProfile.orUrl')}<div className="flex-1 h-px bg-slate-200" />
+                    <div className="flex-1 h-px bg-slate-200 dark:bg-dk-strong" />{t('businessProfile.orUrl')}<div className="flex-1 h-px bg-slate-200 dark:bg-dk-strong" />
                   </div>
                   <input type="url" value={form.logo_url} onChange={e => set('logo_url', e.target.value)}
                     placeholder={t('businessProfile.pasteUrl')}
-                    className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-[11px] outline-none focus:border-orange-400 transition-all" />
+                    className="w-full border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset text-slate-800 dark:text-dk-text rounded-lg px-2 py-1.5 text-[11px] outline-none focus:border-orange-400 transition-all" />
                 </div>
               </div>
               <p className="text-[10px] text-slate-400">{t('businessProfile.logoFormats')}</p>
@@ -325,19 +325,19 @@ const BusinessProfilePage = () => {
             {/* Cột phải — Tên công ty + Ngành nghề */}
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+                <label className="text-[10px] font-semibold text-slate-500 dark:text-dk-text2 uppercase tracking-wide">
                   {t('businessProfile.companyName')} <span className="text-red-400">*</span>
                 </label>
                 <input type="text" value={form.company_name} onChange={e => set('company_name', e.target.value)}
                   placeholder={t('businessProfile.companyNamePlaceholder')}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/10 transition-all" />
+                  className="w-full border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset text-slate-800 dark:text-dk-text rounded-xl px-3 py-2.5 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/10 transition-all" />
                 <p className="text-[10px] text-slate-400">{t('businessProfile.companyNameFull')}</p>
               </div>
               <div className="space-y-1.5">
-                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{t('businessProfile.industry')}</label>
+                <label className="text-[10px] font-semibold text-slate-500 dark:text-dk-text2 uppercase tracking-wide">{t('businessProfile.industry')}</label>
                 <input type="text" value={form.industry} onChange={e => set('industry', e.target.value)}
                   placeholder={t('businessProfile.industryPlaceholder')}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/10 transition-all" />
+                  className="w-full border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset text-slate-800 dark:text-dk-text rounded-xl px-3 py-2.5 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/10 transition-all" />
                 <p className="text-[10px] text-slate-400">{t('businessProfile.industryNote')}</p>
               </div>
             </div>
@@ -347,17 +347,17 @@ const BusinessProfilePage = () => {
         </SectionCard>
 
         {/* Sản phẩm / dịch vụ — quản lý tại trang Sản phẩm */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-5">
+        <div className="bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border rounded-2xl p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-slate-700">
+              <p className="text-sm font-semibold text-slate-700 dark:text-dk-text">
                 {t('businessProfile.productsPreviewTitle')} ({productTotal})
               </p>
               <p className="mt-0.5 text-xs text-slate-400">{t('businessProfile.productsMovedHint')}</p>
             </div>
             <Link
               to="/app/products"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-orange-600 hover:text-orange-700 shrink-0"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 shrink-0"
             >
               {t('businessProfile.manageProductsLink')}
               <HiOutlineArrowRight className="w-4 h-4" />
@@ -367,9 +367,9 @@ const BusinessProfilePage = () => {
           {productPreview.length > 0 ? (
             <ul className="mt-3 space-y-1.5">
               {productPreview.map((p) => (
-                <li key={p.id} className="flex items-center gap-2 text-sm text-slate-600 min-w-0">
+                <li key={p.id} className="flex items-center gap-2 text-sm text-slate-600 dark:text-dk-text min-w-0">
                   <span className="w-1.5 h-1.5 rounded-full bg-orange-400 shrink-0" />
-                  <span className="font-medium text-slate-700 truncate">{p.productName}</span>
+                  <span className="font-medium text-slate-700 dark:text-dk-text truncate">{p.productName}</span>
                   {p.price && <span className="text-slate-400 shrink-0">— {p.price}</span>}
                   {p.category && <span className="text-xs text-slate-400 shrink-0">· {p.category}</span>}
                 </li>
@@ -405,20 +405,20 @@ const BusinessProfilePage = () => {
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{t('businessProfile.tone')}</label>
+                <label className="text-[10px] font-semibold text-slate-500 dark:text-dk-text2 uppercase tracking-wide">{t('businessProfile.tone')}</label>
                 <select value={form.tone} onChange={e => set('tone', e.target.value)}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/10 transition-all bg-white">
-                  {TONE_OPTIONS(t).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  className="w-full border border-slate-200 dark:border-dk-border rounded-xl px-3 py-2 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/10 transition-all bg-white dark:bg-dk-inset text-slate-800 dark:text-dk-text">
+                  {TONE_OPTIONS(t).map(o => <option key={o.value} value={o.value} className="bg-white dark:bg-dk-surface text-slate-800 dark:text-dk-text">{o.label}</option>)}
                 </select>
               </div>
               <div className="space-y-1.5">
-                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{t('businessProfile.brandColor')}</label>
+                <label className="text-[10px] font-semibold text-slate-500 dark:text-dk-text2 uppercase tracking-wide">{t('businessProfile.brandColor')}</label>
                 <div className="flex items-center gap-2">
                   <input type="color" value={form.brand_color} onChange={e => set('brand_color', e.target.value)}
-                    className="w-9 h-9 rounded-lg border border-slate-200 cursor-pointer p-0.5 shrink-0" />
+                    className="w-9 h-9 rounded-lg border border-slate-200 dark:border-dk-border bg-transparent cursor-pointer p-0.5 shrink-0" />
                   <input type="text" value={form.brand_color} onChange={e => set('brand_color', e.target.value)}
                     placeholder="#FF6B35"
-                    className="flex-1 min-w-0 border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/10 transition-all font-mono" />
+                    className="flex-1 min-w-0 border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset text-slate-800 dark:text-dk-text rounded-xl px-3 py-2 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/10 transition-all font-mono" />
                 </div>
               </div>
             </div>
@@ -435,7 +435,7 @@ const BusinessProfilePage = () => {
           <textarea value={form.extra_context} onChange={e => set('extra_context', e.target.value)}
             placeholder={t('businessProfile.additionalInfoPlaceholder')}
             rows={4}
-            className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/10 transition-all resize-none" />
+            className="w-full border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset text-slate-800 dark:text-dk-text rounded-xl px-3 py-2.5 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/10 transition-all resize-none" />
         </SectionCard>
 
         <div className="flex justify-end pt-1">

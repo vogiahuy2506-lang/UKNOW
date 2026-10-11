@@ -335,7 +335,7 @@ export default function HeroChatWidget() {
                   placeholder="Họ và tên"
                   value={contactData.name}
                   onChange={(e) => setContactData({...contactData, name: e.target.value})}
-                  className="w-full px-3 py-2 text-sm border border-amber-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  className="w-full px-3 py-2 text-sm border border-amber-200 bg-white text-slate-800 placeholder:text-slate-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
                   required
                 />
                 <input
@@ -343,7 +343,7 @@ export default function HeroChatWidget() {
                   placeholder="Email"
                   value={contactData.email}
                   onChange={(e) => setContactData({...contactData, email: e.target.value})}
-                  className="w-full px-3 py-2 text-sm border border-amber-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  className="w-full px-3 py-2 text-sm border border-amber-200 bg-white text-slate-800 placeholder:text-slate-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
                   required
                 />
                 <input
@@ -351,14 +351,14 @@ export default function HeroChatWidget() {
                   placeholder="Số điện thoại"
                   value={contactData.phone}
                   onChange={(e) => setContactData({...contactData, phone: e.target.value})}
-                  className="w-full px-3 py-2 text-sm border border-amber-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  className="w-full px-3 py-2 text-sm border border-amber-200 bg-white text-slate-800 placeholder:text-slate-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
                   required
                 />
                 <textarea
                   placeholder="Câu hỏi của bạn"
                   value={contactData.message}
                   onChange={(e) => setContactData({...contactData, message: e.target.value})}
-                  className="w-full px-3 py-2 text-sm border border-amber-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
+                  className="w-full px-3 py-2 text-sm border border-amber-200 bg-white text-slate-800 placeholder:text-slate-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
                   rows={2}
                 />
                 <button
@@ -422,7 +422,7 @@ export default function HeroChatWidget() {
               onKeyPress={handleKeyPress}
               placeholder={placeholderText}
               disabled={isLoading || quotaExceeded}
-              className="flex-1 px-4 py-2.5 bg-gray-100 border-0 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 disabled:opacity-50"
+              className="flex-1 px-4 py-2.5 bg-gray-100 border-0 text-slate-900 placeholder:text-slate-400 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 disabled:opacity-50"
             />
             <button
               type="submit"

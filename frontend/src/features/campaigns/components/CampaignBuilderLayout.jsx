@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { HiOutlineExclamationCircle, HiOutlineX } from 'react-icons/hi';
 import FullScreenOverlay from '../../../components/FullScreenOverlay';
 import { useI18n } from '../../../i18n';
+import { useThemeStore } from '../../../stores/themeStore';
 import { isLogicNodeType } from '../utils/campaignBuilderFlow';
 
 export const CampaignNameModal = ({
@@ -25,42 +26,42 @@ export const CampaignNameModal = ({
 
   return (
     <FullScreenOverlay isOpen={isOpen}>
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
-        <div className="flex items-center justify-between p-4 border-b">
-          <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg">
+      <div className="bg-white dark:bg-dk-surface rounded-xl shadow-xl w-full max-w-md mx-4 border border-transparent dark:border-dk-border">
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-dk-border">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-dk-text">{title}</h3>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 dark:hover:bg-dk-raised text-gray-500 dark:text-dk-text2 rounded-lg">
             <HiOutlineX className="w-5 h-5" />
           </button>
         </div>
         <div className="p-4 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t('campaignBuilder.campaignName')}</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{t('campaignBuilder.campaignName')}</label>
             <input
               type="text"
               value={campaignName}
               onChange={(e) => setCampaignName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-raised text-gray-900 dark:text-dk-text rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               placeholder={t('campaignBuilder.campaignNamePlaceholder')}
               autoFocus
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t('campaignBuilder.description')}</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{t('campaignBuilder.description')}</label>
             <textarea
               value={campaignDescription}
               onChange={(e) => setCampaignDescription(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-raised text-gray-900 dark:text-dk-text rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
               placeholder={t('campaignBuilder.descriptionPlaceholder')}
               rows={4}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t('campaignBuilder.campaignType')}</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{t('campaignBuilder.campaignType')}</label>
             <select
               value={campaignType}
               onChange={(e) => setCampaignType?.(e.target.value)}
               disabled={isTypeLocked}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-500"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-raised text-gray-900 dark:text-dk-text rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100 dark:disabled:bg-dk-raised/60 disabled:text-gray-500 dark:disabled:text-dk-text2"
             >
               <option value="email">{t('campaignBuilder.email')}</option>
               <option value="zalo">{t('campaignBuilder.zaloPersonal')}</option>
@@ -72,8 +73,8 @@ export const CampaignNameModal = ({
             </select>
           </div>
         </div>
-        <div className="flex justify-end gap-3 p-4 border-t bg-gray-50 rounded-b-xl">
-          <button onClick={onClose} className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
+        <div className="flex justify-end gap-3 p-4 border-t border-gray-200 dark:border-dk-border bg-gray-50 dark:bg-dk-bg rounded-b-xl">
+          <button onClick={onClose} className="px-4 py-2 text-gray-700 dark:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-raised rounded-lg transition-colors">
             {t('campaignBuilder.cancel')}
           </button>
           <button
@@ -104,10 +105,10 @@ export const ConfirmModal = ({
 
   return (
     <FullScreenOverlay isOpen={isOpen}>
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
-        <div className="flex items-center justify-between p-4 border-b">
-          <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg">
+      <div className="bg-white dark:bg-dk-surface rounded-xl shadow-xl w-full max-w-md mx-4 border border-transparent dark:border-dk-border">
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-dk-border">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-dk-text">{title}</h3>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 dark:hover:bg-dk-raised text-gray-500 dark:text-dk-text2 rounded-lg">
             <HiOutlineX className="w-5 h-5" />
           </button>
         </div>
@@ -116,11 +117,11 @@ export const ConfirmModal = ({
             <div className={iconClassName}>
               <HiOutlineExclamationCircle className={iconColorClassName} />
             </div>
-            <p className="text-gray-600">{message}</p>
+            <p className="text-gray-600 dark:text-dk-text">{message}</p>
           </div>
         </div>
-        <div className="flex justify-end gap-3 p-4 border-t bg-gray-50 rounded-b-xl">
-          <button onClick={onClose} className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
+        <div className="flex justify-end gap-3 p-4 border-t border-gray-200 dark:border-dk-border bg-gray-50 dark:bg-dk-bg rounded-b-xl">
+          <button onClick={onClose} className="px-4 py-2 text-gray-700 dark:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-raised rounded-lg transition-colors">
             {cancelLabel}
           </button>
           <button
@@ -159,6 +160,7 @@ export const FlowCanvas = ({
   suppressGetAllFriendsPalette = false,
 }) => {
   const { t, locale } = useI18n();
+  const isDark = useThemeStore((s) => s.isDark);
   const reactFlowWrapper = useRef(null);
   const { project } = useReactFlow();
 
@@ -274,7 +276,7 @@ export const FlowCanvas = ({
   );
 
   return (
-    <div ref={reactFlowWrapper} className="flex-1 relative" style={{ background: '#FAFAFA' }}>
+    <div ref={reactFlowWrapper} className="flex-1 relative bg-[#FAFAFA] dark:bg-dk-bg">
       <ReactFlow
         nodes={nodes}
         edges={edgesWithSelection}
@@ -301,14 +303,19 @@ export const FlowCanvas = ({
         }}
         connectionLineStyle={{ stroke: '#FFB74D', strokeWidth: 2 }}
       >
-        <Background variant="dots" gap={20} size={1} color="#E5E7EB" />
+        <Background variant="dots" gap={20} size={1} color={isDark ? '#1e293b' : '#E5E7EB'} />
         <MiniMap
           position="bottom-left"
-          className="!w-32 !h-20 sm:!w-40 sm:!h-24 md:!w-48 md:!h-28 bg-white rounded-lg shadow border border-gray-200 overflow-hidden"
+          className="!w-32 !h-20 sm:!w-40 sm:!h-24 md:!w-48 md:!h-28 bg-white dark:bg-dk-surface rounded-lg shadow border border-gray-200 dark:border-dk-border overflow-hidden"
+          maskColor={isDark ? 'rgba(11, 15, 25, 0.7)' : 'rgba(240, 242, 245, 0.7)'}
+          nodeColor={isDark ? '#1e293b' : '#e2e8f0'}
           pannable
           zoomable
         />
-        <Controls position="bottom-right" />
+        <Controls
+          position="bottom-right"
+          className="dark:[&_button]:!bg-dk-surface dark:[&_button]:!border-dk-border dark:[&_button]:!fill-dk-text dark:[&_button_path]:!fill-dk-text dark:[&_button:hover]:!bg-dk-raised"
+        />
       </ReactFlow>
     </div>
   );

@@ -474,27 +474,27 @@ const OrderDetailDrawer = ({ order, onClose, onNavigateCustomer }) => {
   const customerZaloId = customer?.zaloId || order.customerZaloId;
 
   const DetailRow = ({ label, value, children }) => (
-    <div className="flex flex-col gap-0.5 py-2.5 border-b border-gray-100 last:border-0">
-      <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wide">{label}</span>
-      {children ?? <span className="text-sm text-gray-800">{value || '—'}</span>}
+    <div className="flex flex-col gap-0.5 py-2.5 border-b border-gray-100 dark:border-dk-border/80 last:border-0">
+      <span className="text-[11px] font-medium text-gray-400 dark:text-dk-text2 uppercase tracking-wide">{label}</span>
+      {children ?? <span className="text-sm text-gray-800 dark:text-dk-text">{value || '—'}</span>}
     </div>
   );
 
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/30 z-40" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-40" onClick={onClose} />
 
       {/* Drawer */}
-      <div className="fixed inset-y-0 right-0 w-full sm:w-[440px] bg-white shadow-2xl z-50 flex flex-col">
+      <div className="fixed inset-y-0 right-0 w-full sm:w-[440px] bg-white dark:bg-dk-surface dark:border-l dark:border-dk-border shadow-2xl z-50 flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50/60 shrink-0">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-dk-border/80 bg-gray-50/60 dark:bg-dk-bg shrink-0">
           <div>
-            <h3 className="text-sm font-semibold text-gray-900">{t('ordersTable.orderDetail')}</h3>
-            <p className="text-xs text-gray-400 mt-0.5">#{order.orderId}</p>
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-dk-text">{t('ordersTable.orderDetail')}</h3>
+            <p className="text-xs text-gray-400 dark:text-dk-text2 mt-0.5">#{order.orderId}</p>
           </div>
           <button type="button" onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600">
+            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-dk-raised transition-colors text-gray-400 hover:text-gray-600 dark:text-dk-text2 dark:hover:text-dk-text">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -512,12 +512,12 @@ const OrderDetailDrawer = ({ order, onClose, onNavigateCustomer }) => {
 
           {/* Sản phẩm */}
           <section>
-            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">{t('ordersTable.product')}</p>
-            <div className="bg-gray-50 rounded-xl px-4 divide-y divide-gray-100">
+            <p className="text-[11px] font-semibold text-gray-400 dark:text-dk-text2 uppercase tracking-wide mb-2">{t('ordersTable.product')}</p>
+            <div className="bg-gray-50 dark:bg-dk-bg rounded-xl px-4 divide-y divide-gray-100 dark:divide-dk-border/80">
               <DetailRow label={t('ordersTable.productName')} value={order.productName} />
               {order.orderRef && <DetailRow label={t('ordersTable.orderRef')} value={order.orderRef} />}
               <DetailRow label={t('ordersTable.amount')}>
-                <span className="text-base font-semibold text-gray-900">
+                <span className="text-base font-semibold text-gray-900 dark:text-dk-text">
                   {formatCurrency(order.amount, order.currency, locale)}
                 </span>
               </DetailRow>
@@ -528,15 +528,15 @@ const OrderDetailDrawer = ({ order, onClose, onNavigateCustomer }) => {
 
           {/* Khách hàng */}
           <section>
-            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">{t('ordersTable.customer')}</p>
+            <p className="text-[11px] font-semibold text-gray-400 dark:text-dk-text2 uppercase tracking-wide mb-2">{t('ordersTable.customer')}</p>
             {isLoadingDetail && !customer ? (
-              <div className="bg-gray-50 rounded-xl px-4 py-3 space-y-2">
+              <div className="bg-gray-50 dark:bg-dk-bg rounded-xl px-4 py-3 space-y-2">
                 {[60, 80, 50].map((w, i) => (
-                  <div key={i} className="h-3 bg-gray-200 rounded animate-pulse" style={{ width: `${w}%` }} />
+                  <div key={i} className="h-3 bg-gray-200 dark:bg-dk-raised rounded animate-pulse" style={{ width: `${w}%` }} />
                 ))}
               </div>
             ) : (
-              <div className="bg-gray-50 rounded-xl px-4 divide-y divide-gray-100">
+              <div className="bg-gray-50 dark:bg-dk-bg rounded-xl px-4 divide-y divide-gray-100 dark:divide-dk-border/80">
                 <DetailRow label={t('ordersTable.customerName')} value={displayName} />
                 <DetailRow label={t('ordersTable.customerEmail')} value={customerEmail} />
                 <DetailRow label={t('ordersTable.phone')} value={customerPhone} />
@@ -550,8 +550,8 @@ const OrderDetailDrawer = ({ order, onClose, onNavigateCustomer }) => {
 
           {/* Chiến dịch / Lượt chạy */}
           <section>
-            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">{t('ordersTable.orderSource')}</p>
-            <div className="bg-gray-50 rounded-xl px-4 divide-y divide-gray-100">
+            <p className="text-[11px] font-semibold text-gray-400 dark:text-dk-text2 uppercase tracking-wide mb-2">{t('ordersTable.orderSource')}</p>
+            <div className="bg-gray-50 dark:bg-dk-bg rounded-xl px-4 divide-y divide-gray-100 dark:divide-dk-border/80">
               <DetailRow label={t('ordersTable.campaign')} value={order.campaignName} />
               <DetailRow label={t('ordersTable.run')} value={order.runName || t('ordersTable.noRunAvailable')} />
             </div>
@@ -560,7 +560,7 @@ const OrderDetailDrawer = ({ order, onClose, onNavigateCustomer }) => {
           {/* Hành trình khách hàng */}
           {order.customerId && order.campaignId && (
             <section>
-              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">
+              <p className="text-[11px] font-semibold text-gray-400 dark:text-dk-text2 uppercase tracking-wide mb-2">
                 {t('ordersTable.campaignJourney')}
               </p>
 
@@ -568,16 +568,16 @@ const OrderDetailDrawer = ({ order, onClose, onNavigateCustomer }) => {
                 <div className="space-y-3">
                   {Array.from({ length: 3 }).map((_, i) => (
                     <div key={i} className="flex items-start gap-3">
-                      <div className="w-6 h-6 bg-gray-200 rounded-full animate-pulse shrink-0 mt-0.5" />
+                      <div className="w-6 h-6 bg-gray-200 dark:bg-dk-raised rounded-full animate-pulse shrink-0 mt-0.5" />
                       <div className="flex-1 space-y-1.5 pt-0.5">
-                        <div className="h-3 bg-gray-200 rounded animate-pulse w-3/4" />
-                        <div className="h-2.5 bg-gray-100 rounded animate-pulse w-1/2" />
+                        <div className="h-3 bg-gray-200 dark:bg-dk-raised rounded animate-pulse w-3/4" />
+                        <div className="h-2.5 bg-gray-100 dark:bg-dk-raised/60 rounded animate-pulse w-1/2" />
                       </div>
                     </div>
                   ))}
                 </div>
               ) : journeyTimeline.length === 0 ? (
-                <div className="flex flex-col items-center gap-2 py-6 text-gray-400">
+                <div className="flex flex-col items-center gap-2 py-6 text-gray-400 dark:text-dk-muted">
                   <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1}
                       d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -587,7 +587,7 @@ const OrderDetailDrawer = ({ order, onClose, onNavigateCustomer }) => {
               ) : (
                 <div className="relative">
                   {/* Timeline line */}
-                  <div className="absolute left-[11px] top-2 bottom-2 w-px bg-gray-200" />
+                  <div className="absolute left-[11px] top-2 bottom-2 w-px bg-gray-200 dark:bg-dk-raised" />
                   <div className="space-y-3">
                     {journeyTimeline.map((event) => (
                       <div key={event.id} className="flex items-start gap-3 relative">
@@ -595,11 +595,11 @@ const OrderDetailDrawer = ({ order, onClose, onNavigateCustomer }) => {
                           <JourneyEventIcon eventType={event.eventType} />
                         </div>
                         <div className="flex-1 min-w-0 pt-0.5">
-                          <p className="text-xs font-medium text-gray-800 leading-snug">{event.label}</p>
+                          <p className="text-xs font-medium text-gray-800 dark:text-dk-text leading-snug">{event.label}</p>
                           {event.sourceLabel && (
-                            <p className="text-[11px] text-primary-600 mt-0.5">{event.sourceLabel}</p>
+                            <p className="text-[11px] text-primary-600 dark:text-primary-400 mt-0.5">{event.sourceLabel}</p>
                           )}
-                          <p className="text-[11px] text-gray-400 mt-0.5">{formatDateTime(event.at)}</p>
+                          <p className="text-[11px] text-gray-400 dark:text-dk-muted mt-0.5">{formatDateTime(event.at)}</p>
                         </div>
                       </div>
                     ))}
@@ -612,7 +612,7 @@ const OrderDetailDrawer = ({ order, onClose, onNavigateCustomer }) => {
 
         {/* Footer */}
         {order.customerId && order.campaignId && (
-          <div className="px-5 py-4 border-t border-gray-100 bg-gray-50/40 shrink-0">
+          <div className="px-5 py-4 border-t border-gray-100 dark:border-dk-border/80 bg-gray-50/40 dark:bg-dk-bg shrink-0">
             <button
               type="button"
               className="btn btn-primary w-full flex items-center justify-center gap-2 text-sm"
@@ -640,9 +640,9 @@ const OrderDetailDrawer = ({ order, onClose, onNavigateCustomer }) => {
 const SkeletonRow = () => (
   <tr>
     {Array.from({ length: 7 }).map((_, i) => (
-      <td key={i} className="px-4 py-3 border-b border-gray-100">
-        <div className="h-3.5 bg-gray-100 rounded animate-pulse" style={{ width: i === 0 ? '75%' : '55%' }} />
-        {i === 0 && <div className="h-2.5 bg-gray-100 rounded animate-pulse mt-1.5 w-1/2" />}
+      <td key={i} className="px-4 py-3 border-b border-gray-100 dark:border-dk-border/80">
+        <div className="h-3.5 bg-gray-100 dark:bg-dk-raised rounded animate-pulse" style={{ width: i === 0 ? '75%' : '55%' }} />
+        {i === 0 && <div className="h-2.5 bg-gray-100 dark:bg-dk-raised rounded animate-pulse mt-1.5 w-1/2" />}
       </td>
     ))}
   </tr>
@@ -654,14 +654,14 @@ const EmptyState = ({ hasFilter }) => {
     <tr>
       <td colSpan={7} className="py-16 text-center">
         <div className="flex flex-col items-center gap-3">
-          <svg className="w-14 h-14 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="w-14 h-14 text-gray-200 dark:text-dk-border" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1}
               d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
           </svg>
-          <p className="text-sm font-medium text-gray-500">
+          <p className="text-sm font-medium text-gray-500 dark:text-dk-text">
             {hasFilter ? t('ordersTable.noOrdersMatchFilter') : t('ordersTable.noOrdersInRange')}
           </p>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-gray-400 dark:text-dk-muted">
             {hasFilter ? t('ordersTable.tryChangeFilter') : t('ordersTable.adjustTimeCampaign')}
           </p>
         </div>
@@ -816,7 +816,7 @@ const DashboardOrdersListTable = ({
   // Sortable <th>
   const SortTh = ({ column, children, className = '' }) => (
     <th
-      className={`px-4 py-3 text-left font-medium text-gray-500 bg-gray-50 border-b cursor-pointer select-none hover:bg-gray-100 transition-colors whitespace-nowrap ${className}`}
+      className={`px-4 py-3 text-left font-medium text-gray-500 dark:text-dk-text bg-gray-50 dark:bg-dk-surface border-b dark:border-dk-border cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-dk-raised transition-colors whitespace-nowrap ${className}`}
       onClick={() => handleSort(column)}
     >
       <span className="inline-flex items-center gap-0.5">
@@ -855,16 +855,16 @@ const DashboardOrdersListTable = ({
   };
 
   return (
-    <div className="rounded-2xl border border-slate-200/90 bg-white shadow-2xs overflow-hidden">
+    <div className="rounded-2xl border border-slate-200/90 dark:border-dk-border/90 bg-white dark:bg-dk-surface shadow-2xs overflow-hidden">
       {/* Card header */}
-      <div className="p-4 md:p-5 border-b border-slate-100 bg-slate-50/40">
+      <div className="p-4 md:p-5 border-b border-slate-100 dark:border-dk-border/80 bg-slate-50/40 dark:bg-dk-surface/70">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
           <div>
-            <h3 className="text-sm sm:text-base font-bold text-slate-900">{t('ordersTable.title')}</h3>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-dk-text">{t('ordersTable.title')}</h3>
+            <p className="text-xs text-slate-500 dark:text-dk-text2 mt-0.5">
               {formatNumber(pagination.total)} {t('ordersTable.orders')}
               {filtered.length !== items.length && (
-                <span className="ml-1 text-orange-600 font-semibold">
+                <span className="ml-1 text-orange-600 dark:text-orange-400 font-semibold">
                   {t('ordersTable.showingResults', { count: filtered.length })}
                 </span>
               )}
@@ -880,14 +880,14 @@ const DashboardOrdersListTable = ({
             </svg>
             <input
               type="text"
-              className="w-full pl-9 pr-8 py-2 text-xs sm:text-sm bg-white hover:bg-slate-50/70 focus:bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400"
+              className="w-full pl-9 pr-8 py-2 text-xs sm:text-sm bg-white hover:bg-slate-50/70 focus:bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 dark:bg-dk-inset dark:border-dk-border dark:text-dk-text dark:hover:bg-dk-surface dark:focus:bg-dk-inset"
               placeholder={t('ordersTable.searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
             {searchQuery && (
               <button type="button"
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-dk-text"
                 onClick={() => setSearchQuery('')}>
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -898,7 +898,7 @@ const DashboardOrdersListTable = ({
         </div>
 
         {/* Status filter tabs */}
-        <div className="inline-flex rounded-xl bg-slate-100 p-0.5 border border-slate-200/80">
+        <div className="inline-flex rounded-xl bg-slate-100 dark:bg-dk-inset p-0.5 border border-slate-200/80 dark:border-dk-border">
           {STATUS_TABS.map((tab) => (
             <button
               key={tab.key}
@@ -906,8 +906,8 @@ const DashboardOrdersListTable = ({
               onClick={() => handleStatusTab(tab.key)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 ordersStatusFilter === tab.key
-                  ? 'bg-white text-slate-900 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-800'
+                  ? 'bg-white dark:bg-dk-raised text-slate-900 dark:text-dk-text shadow-xs'
+                  : 'text-slate-500 dark:text-dk-text2 hover:text-slate-800 dark:hover:text-dk-text'
               }`}
             >
               {tab.label}
@@ -922,19 +922,19 @@ const DashboardOrdersListTable = ({
           <thead>
             <tr>
               {/* Product */}
-              <th className="px-4 py-3 text-left font-medium text-gray-500 bg-gray-50 border-b min-w-[180px]">
+              <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-dk-text bg-gray-50 dark:bg-dk-surface border-b dark:border-dk-border min-w-[180px]">
                 {t('ordersTable.product')}
               </th>
 
               {/* Status — sortable + filterable */}
               <th
-                className="px-4 py-3 text-left font-medium text-gray-500 bg-gray-50 border-b whitespace-nowrap relative"
+                className="px-4 py-3 text-left font-medium text-gray-500 dark:text-dk-text bg-gray-50 dark:bg-dk-surface border-b dark:border-dk-border whitespace-nowrap relative"
               >
                 <div className="flex items-center gap-0.5">
                   <span>{t('ordersTable.status')}</span>
                   <button
                     type="button"
-                    className={`p-0.5 rounded transition-colors ${statusDropOpen ? 'bg-primary-50' : 'hover:bg-gray-100'}`}
+                    className={`p-0.5 rounded transition-colors ${statusDropOpen ? 'bg-primary-50 dark:bg-primary-950/40' : 'hover:bg-gray-100 dark:hover:bg-dk-raised'}`}
                     onClick={() => setStatusDropOpen((v) => !v)}
                     title={t('ordersTable.filterByStatus')}
                   >
@@ -955,10 +955,10 @@ const DashboardOrdersListTable = ({
 
                 {statusDropOpen && (
                   <div
-                    className="absolute mt-1 min-w-[170px] bg-white rounded-xl border border-gray-200 shadow-xl z-30 overflow-hidden"
+                    className="absolute mt-1 min-w-[170px] bg-white dark:bg-dk-surface rounded-xl border border-gray-200 dark:border-dk-border shadow-xl z-30 overflow-hidden"
                     onMouseDown={(e) => e.stopPropagation()}
                   >
-                    <div className="px-3 py-2 border-b border-gray-100 bg-gray-50/60">
+                    <div className="px-3 py-2 border-b border-gray-100 dark:border-dk-border/80 bg-gray-50/60 dark:bg-dk-surface/70">
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="checkbox"
@@ -966,14 +966,14 @@ const DashboardOrdersListTable = ({
                           checked={statusFilters.length === 0}
                           onChange={() => setStatusFilters([])}
                         />
-                        <span className="text-xs font-medium text-gray-500">{t('ordersTable.all')}</span>
+                        <span className="text-xs font-medium text-gray-500 dark:text-dk-text2">{t('ordersTable.all')}</span>
                       </label>
                     </div>
                     <div className="py-1">
                       {STATUS_OPTIONS.map((opt) => (
                         <label
                           key={opt.value}
-                          className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-gray-50 ${statusFilters.includes(opt.value) ? 'bg-primary-50/60' : ''}`}
+                          className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-dk-raised/60 ${statusFilters.includes(opt.value) ? 'bg-primary-50/60 dark:bg-primary-950/40' : ''}`}
                         >
                           <input
                             type="checkbox"
@@ -986,7 +986,7 @@ const DashboardOrdersListTable = ({
                       ))}
                     </div>
                     {isStatusFiltered && (
-                      <div className="px-3 py-2 border-t border-gray-100 bg-gray-50/60">
+                      <div className="px-3 py-2 border-t border-gray-100 dark:border-dk-border/80 bg-gray-50/60 dark:bg-dk-surface/70">
                         <button
                           type="button"
                           className="text-xs text-red-400 hover:text-red-600 transition-colors"
@@ -1001,19 +1001,19 @@ const DashboardOrdersListTable = ({
               </th>
 
               {/* Campaign / Run */}
-              <th className="px-4 py-3 text-left font-medium text-gray-500 bg-gray-50 border-b min-w-[200px]">
+              <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-dk-text bg-gray-50 dark:bg-dk-surface border-b dark:border-dk-border min-w-[200px]">
                 {t('ordersTable.campaignRun')}
               </th>
 
               {/* Channel — filterable */}
               <th
-                className="px-4 py-3 text-left font-medium text-gray-500 bg-gray-50 border-b whitespace-nowrap relative"
+                className="px-4 py-3 text-left font-medium text-gray-500 dark:text-dk-text bg-gray-50 dark:bg-dk-surface border-b dark:border-dk-border whitespace-nowrap relative"
               >
                 <div className="flex items-center gap-0.5">
                   <span>{t('ordersTable.channel')}</span>
                   <button
                     type="button"
-                    className={`p-0.5 rounded transition-colors ${channelDropOpen ? 'bg-primary-50' : 'hover:bg-gray-100'}`}
+                    className={`p-0.5 rounded transition-colors ${channelDropOpen ? 'bg-primary-50 dark:bg-primary-950/40' : 'hover:bg-gray-100 dark:hover:bg-dk-raised'}`}
                     onClick={() => setChannelDropOpen((v) => !v)}
                     title={t('ordersTable.filterByChannel')}
                   >
@@ -1034,21 +1034,21 @@ const DashboardOrdersListTable = ({
 
                 {channelDropOpen && (
                   <div
-                    className="absolute mt-1 min-w-[160px] bg-white rounded-xl border border-gray-200 shadow-xl z-30 overflow-hidden"
+                    className="absolute mt-1 min-w-[160px] bg-white dark:bg-dk-surface rounded-xl border border-gray-200 dark:border-dk-border shadow-xl z-30 overflow-hidden"
                     onMouseDown={(e) => e.stopPropagation()}
                   >
-                    <div className="px-3 py-2 border-b border-gray-100 bg-gray-50/60">
+                    <div className="px-3 py-2 border-b border-gray-100 dark:border-dk-border/80 bg-gray-50/60 dark:bg-dk-surface/70">
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input type="checkbox" className="w-3.5 h-3.5 rounded accent-orange-500 cursor-pointer"
                           checked={allChannelSelected}
                           onChange={() => setChannelFilters([])}
                         />
-                        <span className="text-xs font-medium text-gray-500">{t('ordersTable.all')}</span>
+                        <span className="text-xs font-medium text-gray-500 dark:text-dk-text2">{t('ordersTable.all')}</span>
                       </label>
                     </div>
                     <div className="py-1">
                       {CHANNEL_OPTIONS.map((opt) => (
-                        <label key={opt.value} className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-gray-50 ${channelFilters.includes(opt.value) ? 'bg-primary-50/60' : ''}`}>
+                        <label key={opt.value} className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-dk-raised/60 ${channelFilters.includes(opt.value) ? 'bg-primary-50/60 dark:bg-primary-950/40' : ''}`}>
                           <input type="checkbox" className="w-3.5 h-3.5 rounded accent-orange-500 cursor-pointer shrink-0"
                             checked={channelFilters.includes(opt.value)}
                             onChange={() => toggleChannel(opt.value)}
@@ -1058,7 +1058,7 @@ const DashboardOrdersListTable = ({
                       ))}
                     </div>
                     {isChannelFiltered && (
-                      <div className="px-3 py-2 border-t border-gray-100 bg-gray-50/60">
+                      <div className="px-3 py-2 border-t border-gray-100 dark:border-dk-border/80 bg-gray-50/60 dark:bg-dk-surface/70">
                         <button type="button"
                           className="text-xs text-red-400 hover:text-red-600 transition-colors"
                           onClick={() => { setChannelFilters([]); setChannelDropOpen(false); }}>
@@ -1089,19 +1089,19 @@ const DashboardOrdersListTable = ({
                   return (
                     <tr
                       key={item.orderId}
-                      className="hover:bg-primary-50/40 transition-colors cursor-pointer"
+                      className="hover:bg-primary-50/40 dark:hover:bg-dk-raised/60 transition-colors cursor-pointer"
                       onClick={() => setSelectedOrder(item)}
                     >
                       {/* Product */}
-                      <td className="px-4 py-3 border-b border-gray-100">
-                        <div className="font-medium text-gray-900 text-sm leading-snug">
+                      <td className="px-4 py-3 border-b border-gray-100 dark:border-dk-border/80">
+                        <div className="font-medium text-gray-900 dark:text-dk-text text-sm leading-snug">
                           {item.productName || t('ordersTable.order', { id: item.orderId })}
                         </div>
-                        <div className="text-[10px] text-gray-400 mt-0.5">ID: {item.orderId}</div>
+                        <div className="text-[10px] text-gray-400 dark:text-dk-text2 mt-0.5">ID: {item.orderId}</div>
                       </td>
 
                       {/* Status */}
-                      <td className="px-4 py-3 border-b border-gray-100">
+                      <td className="px-4 py-3 border-b border-gray-100 dark:border-dk-border/80">
                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border shadow-2xs ${statusCfg.cls}`}>
                           {statusCfg.dot && <span className={`h-1.5 w-1.5 rounded-full ${statusCfg.dot}`} />}
                           {statusCfg.label}
@@ -1109,31 +1109,31 @@ const DashboardOrdersListTable = ({
                       </td>
 
                       {/* Campaign / Run */}
-                      <td className="px-4 py-3 border-b border-gray-100">
-                        <div className="text-sm font-medium text-gray-800 leading-snug truncate max-w-[220px]">
+                      <td className="px-4 py-3 border-b border-gray-100 dark:border-dk-border/80">
+                        <div className="text-sm font-medium text-gray-800 dark:text-dk-text leading-snug truncate max-w-[220px]">
                           {item.campaignName || '—'}
                         </div>
                         {item.runName ? (
-                          <div className="text-xs text-gray-400 mt-0.5 truncate max-w-[220px]">
+                          <div className="text-xs text-gray-400 dark:text-dk-text2 mt-0.5 truncate max-w-[220px]">
                             {item.runName}
                           </div>
                         ) : (
-                          <div className="text-xs text-gray-300 mt-0.5">{t('ordersTable.noRun')}</div>
+                          <div className="text-xs text-gray-300 dark:text-dk-muted mt-0.5">{t('ordersTable.noRun')}</div>
                         )}
                       </td>
 
                       {/* Channel */}
-                      <td className="px-4 py-3 border-b border-gray-100">
+                      <td className="px-4 py-3 border-b border-gray-100 dark:border-dk-border/80">
                         <span className={`badge ${channelCfg.cls} text-xs`}>{channelCfg.label}</span>
                       </td>
 
                       {/* Số tiền */}
-                      <td className="px-4 py-3 border-b border-gray-100 text-sm text-right tabular-nums font-medium text-gray-700 whitespace-nowrap">
+                      <td className="px-4 py-3 border-b border-gray-100 dark:border-dk-border/80 text-sm text-right tabular-nums font-medium text-gray-700 dark:text-dk-text whitespace-nowrap">
                         {formatCurrency(item.amount, item.currency, locale)}
                       </td>
 
                       {/* Ngày */}
-                      <td className="px-4 py-3 border-b border-gray-100 text-sm text-gray-500 whitespace-nowrap">
+                      <td className="px-4 py-3 border-b border-gray-100 dark:border-dk-border/80 text-sm text-gray-500 dark:text-dk-text2 whitespace-nowrap">
                         {formatDateOnly(item.orderDate)}
                       </td>
                     </tr>
@@ -1144,9 +1144,9 @@ const DashboardOrdersListTable = ({
       </div>
 
       {/* Pagination */}
-      <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/50">
+      <div className="px-6 py-4 border-t border-slate-100 dark:border-dk-border/80 flex items-center justify-between bg-slate-50/50 dark:bg-dk-bg">
         <button type="button"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 disabled:opacity-40 transition-colors shadow-2xs"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface hover:bg-slate-50 dark:hover:bg-dk-raised text-xs font-semibold text-slate-700 dark:text-dk-text disabled:opacity-40 transition-colors shadow-2xs"
           disabled={isLoadingOrders || pagination.page <= 1}
           onClick={() => onChangePage(pagination.page - 1)}>
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1156,14 +1156,14 @@ const DashboardOrdersListTable = ({
         </button>
 
         <div className="flex items-center gap-1.5 text-xs sm:text-sm">
-          <span className="text-slate-500 font-medium">{t('ordersTable.page')}</span>
-          <span className="font-bold text-slate-900">{pagination.page}</span>
+          <span className="text-slate-500 dark:text-dk-text2 font-medium">{t('ordersTable.page')}</span>
+          <span className="font-bold text-slate-900 dark:text-dk-text">{pagination.page}</span>
           <span className="text-slate-400">/</span>
-          <span className="text-slate-500 font-medium">{pagination.totalPages}</span>
+          <span className="text-slate-500 dark:text-dk-text2 font-medium">{pagination.totalPages}</span>
         </div>
 
         <button type="button"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 disabled:opacity-40 transition-colors shadow-2xs"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface hover:bg-slate-50 dark:hover:bg-dk-raised text-xs font-semibold text-slate-700 dark:text-dk-text disabled:opacity-40 transition-colors shadow-2xs"
           disabled={isLoadingOrders || pagination.page >= pagination.totalPages}
           onClick={() => onChangePage(pagination.page + 1)}>
           {t('ordersTable.nextPage')}

@@ -334,15 +334,15 @@ export default function CanvasEditor() {
   const hasChanges = Object.keys(editedValues).length > 0;
 
   return (
-    <div className="h-full flex flex-col bg-slate-100">
+    <div className="h-full flex flex-col bg-slate-100 dark:bg-dk-bg">
       {/* Header */}
-      <div className="px-6 py-4 bg-white border-b border-slate-200 shadow-sm">
+      <div className="px-6 py-4 bg-white dark:bg-dk-surface border-b border-slate-200 dark:border-dk-border shadow-sm">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-bold text-slate-800">
+            <h2 className="text-xl font-bold text-slate-800 dark:text-dk-text">
               Landing Page Editor
             </h2>
-            <p className="text-sm text-slate-500 mt-1">
+            <p className="text-sm text-slate-500 dark:text-dk-muted mt-1">
               Click on any element in the preview to edit. Changes save per language.
             </p>
           </div>
@@ -352,7 +352,7 @@ export default function CanvasEditor() {
               <>
                 <button
                   onClick={handleReset}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                  className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-dk-text2 hover:bg-slate-100 dark:hover:bg-dk-raised rounded-lg transition-colors"
                 >
                   Reset
                 </button>
@@ -374,8 +374,8 @@ export default function CanvasEditor() {
 
         {/* Page Selector */}
         <div className="flex items-center gap-4 mt-4 flex-wrap">
-          <label className="text-sm font-medium text-slate-600">Trang:</label>
-          <div className="flex bg-slate-100 rounded-lg p-1">
+          <label className="text-sm font-medium text-slate-600 dark:text-dk-text2">Trang:</label>
+          <div className="flex bg-slate-100 dark:bg-dk-inset rounded-lg p-1">
             {PAGES.map((page) => (
               <button
                 key={page.id}
@@ -383,7 +383,7 @@ export default function CanvasEditor() {
                 className={`px-5 py-2.5 text-sm font-semibold rounded-lg transition-all ${
                   selectedPage === page.id
                     ? 'bg-orange-500 text-white shadow-md'
-                    : 'text-slate-600 hover:bg-white'
+                    : 'text-slate-600 dark:text-dk-text2 hover:bg-white dark:hover:bg-dk-surface'
                 }`}
               >
                 {page.labelVi}
@@ -391,14 +391,14 @@ export default function CanvasEditor() {
             ))}
           </div>
 
-          <div className="h-8 w-px bg-slate-300 mx-2" />
+          <div className="h-8 w-px bg-slate-300 dark:bg-dk-border mx-2" />
 
-          <label className="text-sm font-medium text-slate-600">Ngôn ngữ preview:</label>
-          <div className="flex bg-slate-100 rounded-lg p-1">
+          <label className="text-sm font-medium text-slate-600 dark:text-dk-text2">Ngôn ngữ preview:</label>
+          <div className="flex bg-slate-100 dark:bg-dk-inset rounded-lg p-1">
             <span className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-500 text-white">
               Tiếng Việt
             </span>
-            <span className="px-4 py-2 text-sm font-medium rounded-lg text-slate-600">
+            <span className="px-4 py-2 text-sm font-medium rounded-lg text-slate-600 dark:text-dk-text2">
               English
             </span>
           </div>
@@ -410,13 +410,13 @@ export default function CanvasEditor() {
         {/* Preview Area */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Toolbar */}
-          <div className="px-4 py-2 bg-white border-b border-slate-200 flex items-center justify-between">
+          <div className="px-4 py-2 bg-white dark:bg-dk-surface border-b border-slate-200 dark:border-dk-border flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-bold">
+              <span className="px-3 py-1 bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 rounded-full text-xs font-bold">
                 Preview Mode
               </span>
               {selectedElement && (
-                <span className="text-xs text-slate-500">
+                <span className="text-xs text-slate-500 dark:text-dk-muted">
                   Selected: {selectedElement.label}
                 </span>
               )}
@@ -424,19 +424,19 @@ export default function CanvasEditor() {
             
             <div className="flex items-center gap-4">
               {/* Zoom controls */}
-              <div className="flex items-center gap-2 bg-slate-100 rounded-lg px-2 py-1">
+              <div className="flex items-center gap-2 bg-slate-100 dark:bg-dk-inset rounded-lg px-2 py-1">
                 <button 
                   onClick={() => setPreviewScale(Math.max(0.25, previewScale - 0.25))}
-                  className="w-7 h-7 flex items-center justify-center text-slate-600 hover:bg-slate-200 rounded"
+                  className="w-7 h-7 flex items-center justify-center text-slate-600 dark:text-dk-text2 hover:bg-slate-200 dark:hover:bg-dk-raised rounded"
                 >
                   −
                 </button>
-                <span className="text-xs font-medium text-slate-600 w-14 text-center">
+                <span className="text-xs font-medium text-slate-600 dark:text-dk-text2 w-14 text-center">
                   {Math.round(previewScale * 100)}%
                 </span>
                 <button 
                   onClick={() => setPreviewScale(Math.min(2, previewScale + 0.25))}
-                  className="w-7 h-7 flex items-center justify-center text-slate-600 hover:bg-slate-200 rounded"
+                  className="w-7 h-7 flex items-center justify-center text-slate-600 dark:text-dk-text2 hover:bg-slate-200 dark:hover:bg-dk-raised rounded"
                 >
                   +
                 </button>
@@ -447,7 +447,7 @@ export default function CanvasEditor() {
                 <button 
                   onClick={() => setDevice('mobile')} 
                   className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                    device === 'mobile' ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    device === 'mobile' ? 'bg-orange-500 text-white' : 'bg-slate-100 dark:bg-dk-raised text-slate-600 dark:text-dk-text hover:bg-slate-200 dark:hover:bg-dk-strong'
                   }`}
                 >
                   Mobile
@@ -455,7 +455,7 @@ export default function CanvasEditor() {
                 <button 
                   onClick={() => setDevice('tablet')} 
                   className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                    device === 'tablet' ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    device === 'tablet' ? 'bg-orange-500 text-white' : 'bg-slate-100 dark:bg-dk-raised text-slate-600 dark:text-dk-text hover:bg-slate-200 dark:hover:bg-dk-strong'
                   }`}
                 >
                   Tablet
@@ -463,7 +463,7 @@ export default function CanvasEditor() {
                 <button 
                   onClick={() => setDevice('desktop')} 
                   className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                    device === 'desktop' ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    device === 'desktop' ? 'bg-orange-500 text-white' : 'bg-slate-100 dark:bg-dk-raised text-slate-600 dark:text-dk-text hover:bg-slate-200 dark:hover:bg-dk-strong'
                   }`}
                 >
                   Desktop
@@ -473,8 +473,8 @@ export default function CanvasEditor() {
           </div>
 
           {/* Preview */}
-          <div className="flex-1 overflow-auto bg-slate-300 p-4">
-            <div className="relative mx-auto bg-white shadow-2xl" style={{ width: getDeviceWidth() }}>
+          <div className="flex-1 overflow-auto bg-slate-300 dark:bg-dk-inset p-4">
+            <div className="relative mx-auto bg-white dark:bg-dk-surface shadow-2xl" style={{ width: getDeviceWidth() }}>
               {/* Browser chrome */}
               <div className="bg-slate-800 px-4 py-2 flex items-center gap-3">
                 <div className="flex gap-1.5">
@@ -512,7 +512,7 @@ export default function CanvasEditor() {
         </div>
 
         {/* Right Panel - Edit Form */}
-        <div className="w-96 bg-slate-800 border-l border-slate-700 flex flex-col max-h-full overflow-hidden">
+        <div className="w-96 bg-slate-800 dark:bg-dk-surface border-l border-slate-700 dark:border-dk-border flex flex-col max-h-full overflow-hidden">
           {selectedElement ? (
             <PropertiesPanel
               element={selectedElement}
@@ -522,10 +522,10 @@ export default function CanvasEditor() {
             />
           ) : (
             /* No selection state */
-            <div className="flex-1 flex items-center justify-center text-slate-500 text-sm p-6 text-center">
+            <div className="flex-1 flex items-center justify-center text-slate-500 dark:text-dk-muted text-sm p-6 text-center">
               <div>
                 <div className="text-5xl mb-4">👆</div>
-                <p className="text-base font-medium mb-2">Click vào phần tử trong preview</p>
+                <p className="text-base font-medium mb-2 dark:text-dk-text">Click vào phần tử trong preview</p>
                 <p className="text-sm">để chỉnh sửa nội dung, màu sắc, icon...</p>
               </div>
             </div>

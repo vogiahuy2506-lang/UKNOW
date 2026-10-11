@@ -85,7 +85,7 @@ const CanvasChatPanelContent = forwardRef(function CanvasChatPanelContent(
   }
 
   return (
-    <div className="flex flex-col h-full bg-gradient-to-b from-gray-50/50 to-white">
+    <div className="flex flex-col h-full bg-gradient-to-b from-gray-50/50 to-white dark:from-dk-surface dark:to-dk-surface">
       <ModernHeader onToggleCollapsed={onToggleCollapsed} />
       <div className="flex-1 min-h-0 overflow-y-auto px-4 pt-4 pb-3">
         {messages.length === 0 ? (
@@ -139,6 +139,7 @@ function CenteredStudioView({
   onOpenImportHtml,
   onOpenTemplateGallery,
 }) {
+  const tc = useI18n('landingCanvas.chat');
   const ICON_MAP = {
     sparkles: HiOutlineSparkles,
     lightbulb: HiOutlineLightBulb,
@@ -153,23 +154,26 @@ function CenteredStudioView({
   return (
     <div className="w-full flex flex-col items-center text-center">
       {/* Badge lấp lánh */}
-      <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-orange-500/10 border border-orange-200/60 text-orange-700 text-xs font-semibold mb-3 shadow-2xs backdrop-blur-sm animate-pulse">
+      <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-orange-500/10 border border-orange-200/60 dark:border-orange-500/30 text-orange-700 dark:text-orange-400 text-xs font-semibold mb-3 shadow-2xs backdrop-blur-sm animate-pulse">
         <HiOutlineSparkles className="w-4 h-4 text-orange-500" />
-        <span>Trợ lý AI Thiết kế Landing Page</span>
+        <span>{tc('initialBadge', 'Trợ lý AI Thiết kế Landing Page')}</span>
       </div>
 
       {/* Tiêu đề lớn */}
-      <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-gray-900 tracking-tight leading-tight">
-        Bạn muốn tạo Landing Page gì hôm nay?
+      <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-gray-900 dark:text-dk-text tracking-tight leading-tight">
+        {tc('initialTitle', 'Bạn muốn tạo Landing Page gì hôm nay?')}
       </h1>
 
       {/* Mô tả phụ */}
-      <p className="text-xs sm:text-sm text-gray-500 max-w-xl mt-2 leading-relaxed">
-        Mô tả ngắn gọn sản phẩm, mục tiêu hoặc phong cách mong muốn — AI sẽ tự động phác thảo bố cục, viết nội dung và hoàn thiện giao diện cho bạn trong vài giây.
+      <p className="text-xs sm:text-sm text-gray-500 dark:text-dk-text2 max-w-xl mt-2 leading-relaxed">
+        {tc(
+          'initialSubtitle',
+          'Mô tả ngắn gọn sản phẩm, mục tiêu hoặc phong cách mong muốn — AI sẽ tự động phác thảo bố cục, viết nội dung và hoàn thiện giao diện cho bạn trong vài giây.'
+        )}
       </p>
 
       {/* Khung Chat Composer lớn ở giữa */}
-      <div className="w-full mt-6 bg-white rounded-2xl border border-gray-200/90 shadow-[0_8px_30px_rgb(0,0,0,0.06)] hover:shadow-[0_12px_36px_rgb(0,0,0,0.09)] focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-500/10 transition-all p-3 sm:p-4 text-left">
+      <div className="w-full mt-6 bg-white dark:bg-dk-surface rounded-2xl border border-gray-200/90 dark:border-dk-border shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.4)] hover:shadow-[0_12px_36px_rgb(0,0,0,0.09)] focus-within:border-orange-400 dark:focus-within:border-orange-500 focus-within:ring-4 focus-within:ring-orange-500/10 transition-all p-3 sm:p-4 text-left">
         <ChatComposer
           ref={composerRef}
           onSend={handleSend}
@@ -182,33 +186,37 @@ function CenteredStudioView({
       {/* Gợi ý nhanh Quick Picks */}
       <div className="w-full mt-8 text-left">
         <div className="flex items-center justify-between mb-3 px-1">
-          <span className="text-xs font-bold text-gray-600 uppercase tracking-wider flex items-center gap-1.5">
+          <span className="text-xs font-bold text-gray-600 dark:text-dk-text uppercase tracking-wider flex items-center gap-1.5">
             <HiOutlineLightBulb className="w-4 h-4 text-amber-500" />
-            Hoặc chọn một mẫu ý tưởng phổ biến:
+            {tc('initialQuickPicksTitle', 'Hoặc chọn một mẫu ý tưởng phổ biến:')}
           </span>
-          <span className="text-[11px] text-gray-400 font-medium">6 gợi ý có sẵn</span>
+          <span className="text-[11px] text-gray-400 dark:text-dk-muted font-medium">
+            {tc('initialQuickPicksCount', '6 gợi ý có sẵn')}
+          </span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {quickPicks.map((pick) => {
             const Icon = ICON_MAP[pick.iconName] || HiOutlineSparkles;
+            const pickName = tc(`quickPicks.${pick.id}.name`, pick.name);
+            const pickDesc = tc(`quickPicks.${pick.id}.shortDesc`, pick.shortDesc);
             return (
               <button
                 key={pick.id}
                 type="button"
                 onClick={() => handleSend?.({ prompt: pick.prompt })}
                 disabled={isStreaming}
-                className="group relative flex items-start gap-3 p-3.5 rounded-xl border border-gray-200/90 bg-white hover:border-orange-400 hover:shadow-sm hover:scale-[1.01] transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                className="group relative flex items-start gap-3 p-3.5 rounded-xl border border-gray-200/90 dark:border-dk-border bg-white dark:bg-dk-surface hover:border-orange-400 dark:hover:border-orange-500/60 hover:shadow-sm dark:hover:bg-dk-raised hover:scale-[1.01] transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
-                <span className="w-9 h-9 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center shrink-0 group-hover:scale-110 group-hover:bg-orange-100 transition-all">
+                <span className="w-9 h-9 rounded-lg bg-orange-50 dark:bg-orange-500/15 text-orange-600 dark:text-orange-400 flex items-center justify-center shrink-0 group-hover:scale-110 group-hover:bg-orange-100 dark:group-hover:bg-orange-500/25 transition-all">
                   <Icon className="w-4.5 h-4.5" />
                 </span>
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs sm:text-sm font-bold text-gray-900 group-hover:text-orange-600 transition-colors truncate">
-                    {pick.name}
+                  <div className="text-xs sm:text-sm font-bold text-gray-900 dark:text-dk-text group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors truncate">
+                    {pickName}
                   </div>
-                  <div className="text-[11px] text-gray-500 mt-0.5 line-clamp-2 leading-relaxed">
-                    {pick.shortDesc}
+                  <div className="text-[11px] text-gray-500 dark:text-dk-text2 mt-0.5 line-clamp-2 leading-relaxed">
+                    {pickDesc}
                   </div>
                 </div>
               </button>
@@ -218,26 +226,28 @@ function CenteredStudioView({
       </div>
 
       {/* Tùy chọn thay thế (Dán HTML / Thư viện mẫu) */}
-      <div className="w-full mt-7 pt-5 border-t border-gray-200/60 flex flex-wrap items-center justify-center gap-3 text-xs text-gray-500">
-        <span className="text-gray-400">Bạn đã có mã nguồn hoặc muốn tự chọn mẫu?</span>
+      <div className="w-full mt-7 pt-5 border-t border-gray-200/60 dark:border-dk-border flex flex-wrap items-center justify-center gap-3 text-xs text-gray-500 dark:text-dk-text2">
+        <span className="text-gray-400 dark:text-dk-muted">
+          {tc('sourceOrTemplateQuestion', 'Bạn đã có mã nguồn hoặc muốn tự chọn mẫu?')}
+        </span>
         {onOpenImportHtml && (
           <button
             type="button"
             onClick={onOpenImportHtml}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 hover:border-gray-300 text-gray-700 font-semibold transition-all shadow-2xs cursor-pointer active:scale-95"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-gray-200 dark:border-dk-border/80 bg-white dark:bg-dk-raised hover:bg-gray-50 dark:hover:bg-dk-strong hover:border-gray-300 dark:hover:border-dk-border-strong text-gray-700 dark:text-dk-text font-semibold transition-all shadow-2xs cursor-pointer active:scale-95"
           >
-            <HiOutlineCode className="w-4 h-4 text-gray-500" />
-            <span>Dán mã HTML</span>
+            <HiOutlineCode className="w-4 h-4 text-gray-500 dark:text-dk-text2" />
+            <span>{tc('pasteHtml', 'Dán mã HTML')}</span>
           </button>
         )}
         {onOpenTemplateGallery && (
           <button
             type="button"
             onClick={onOpenTemplateGallery}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 hover:border-gray-300 text-gray-700 font-semibold transition-all shadow-2xs cursor-pointer active:scale-95"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-gray-200 dark:border-dk-border/80 bg-white dark:bg-dk-raised hover:bg-gray-50 dark:hover:bg-dk-strong hover:border-gray-300 dark:hover:border-dk-border-strong text-gray-700 dark:text-dk-text font-semibold transition-all shadow-2xs cursor-pointer active:scale-95"
           >
             <HiOutlineSparkles className="w-4 h-4 text-orange-500" />
-            <span>Thư viện mẫu</span>
+            <span>{tc('templateGallery', 'Thư viện mẫu')}</span>
           </button>
         )}
       </div>
@@ -250,19 +260,19 @@ function CenteredStudioView({
 function ModernHeader({ onToggleCollapsed }) {
   const tc = useI18n('landingCanvas.chat');
   return (
-    <div className="h-14 px-4 flex items-center justify-between border-b border-gray-100 shrink-0 bg-white/95 backdrop-blur-md">
+    <div className="h-14 px-4 flex items-center justify-between border-b border-gray-100 dark:border-dk-border shrink-0 bg-white/95 dark:bg-dk-surface/95 backdrop-blur-md">
       <div className="flex items-center gap-2.5 min-w-0">
         <div className="relative shrink-0">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-orange-500 to-amber-500 flex items-center justify-center shadow-xs">
             <HiOutlineSparkles className="w-4.5 h-4.5 text-white" />
           </div>
-          <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white" />
+          <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white dark:border-dk-border" />
         </div>
         <div className="flex flex-col min-w-0">
-          <span className="text-sm font-bold text-gray-900 truncate leading-tight">
+          <span className="text-sm font-bold text-gray-900 dark:text-dk-text truncate leading-tight">
             {tc('title')}
           </span>
-          <span className="text-[11px] text-gray-500 truncate leading-tight mt-0.5">
+          <span className="text-[11px] text-gray-500 dark:text-dk-text2 truncate leading-tight mt-0.5">
             {tc('headerSubtitle')}
           </span>
         </div>
@@ -272,7 +282,7 @@ function ModernHeader({ onToggleCollapsed }) {
         onClick={onToggleCollapsed}
         title={tc('collapseTooltip')}
         aria-label={tc('collapseTooltip')}
-        className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+        className="p-1.5 rounded-lg text-gray-400 dark:text-dk-text2 hover:text-gray-700 dark:hover:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-raised transition-colors"
       >
         <HiOutlineX className="w-4 h-4" />
       </button>
@@ -301,17 +311,17 @@ function ModernEmptyState({ onPick, disabled }) {
       {/* Greeting */}
       <div className="space-y-1.5">
         <div className="flex items-center gap-2">
-          <h2 className="text-lg font-bold text-gray-900 tracking-tight">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-dk-text tracking-tight">
             {tc('welcomeGreeting')}
           </h2>
           <span className="text-lg leading-none animate-[wave_1.8s_ease-in-out_infinite] origin-[70%_70%] inline-block">
             👋
           </span>
         </div>
-        <p className="text-xs text-gray-500 leading-relaxed">
+        <p className="text-xs text-gray-500 dark:text-dk-text2 leading-relaxed">
           {tc('welcomeIntro').split(new RegExp(`(${tc('welcomeIntroBold')}|${tc('welcomeIntroItalic')})`)).map((part, idx) => {
-            if (part === tc('welcomeIntroBold')) return <strong key={idx} className="text-gray-800 font-semibold">{part}</strong>;
-            if (part === tc('welcomeIntroItalic')) return <em key={idx} className="not-italic text-orange-600 font-medium">{part}</em>;
+            if (part === tc('welcomeIntroBold')) return <strong key={idx} className="text-gray-800 dark:text-dk-text font-semibold">{part}</strong>;
+            if (part === tc('welcomeIntroItalic')) return <em key={idx} className="not-italic text-orange-600 dark:text-orange-400 font-medium">{part}</em>;
             return <span key={idx}>{part}</span>;
           })}
         </p>
@@ -328,10 +338,10 @@ function ModernEmptyState({ onPick, disabled }) {
       {/* Quick picks */}
       <div>
         <div className="flex items-center justify-between mb-2.5">
-          <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+          <p className="text-[11px] font-semibold text-gray-500 dark:text-dk-text2 uppercase tracking-wider">
             {tc('quickPicksTitle')}
           </p>
-          <span className="text-[11px] text-gray-400">{tc('quickPicksCount', { n: quickPicks.length })}</span>
+          <span className="text-[11px] text-gray-400 dark:text-dk-muted">{tc('quickPicksCount', { n: quickPicks.length })}</span>
         </div>
         <div className="space-y-2">
           {quickPicks.map((pick) => {
@@ -342,16 +352,16 @@ function ModernEmptyState({ onPick, disabled }) {
                 type="button"
                 onClick={() => onPick?.(pick)}
                 disabled={disabled}
-                className="group w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border border-gray-200/80 bg-white hover:border-orange-300 hover:shadow-xs text-left transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="group w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border border-gray-200/80 dark:border-dk-border bg-white dark:bg-dk-raised hover:border-orange-300 dark:hover:border-orange-500/50 hover:shadow-xs text-left transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <span className="w-8 h-8 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <span className="w-8 h-8 rounded-lg bg-orange-50 dark:bg-orange-500/15 text-orange-600 dark:text-orange-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
                   <Icon className="w-4 h-4" />
                 </span>
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs font-semibold text-gray-800 truncate">{pick.name}</div>
-                  <div className="text-[11px] text-gray-500 truncate">{pick.shortDesc}</div>
+                  <div className="text-xs font-semibold text-gray-800 dark:text-dk-text truncate">{pick.name}</div>
+                  <div className="text-[11px] text-gray-500 dark:text-dk-text2 truncate">{pick.shortDesc}</div>
                 </div>
-                <span className="text-gray-400 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all text-xs">
+                <span className="text-gray-400 dark:text-dk-muted group-hover:text-orange-500 dark:group-hover:text-orange-400 group-hover:translate-x-0.5 transition-all text-xs">
                   →
                 </span>
               </button>
@@ -364,20 +374,20 @@ function ModernEmptyState({ onPick, disabled }) {
 }
 
 const TONE_STYLES = {
-  orange: { bg: 'bg-orange-50', text: 'text-orange-600' },
-  amber: { bg: 'bg-amber-50', text: 'text-amber-600' },
-  yellow: { bg: 'bg-yellow-50', text: 'text-yellow-600' },
-  red: { bg: 'bg-red-50', text: 'text-red-600' },
+  orange: { bg: 'bg-orange-50 dark:bg-orange-500/15', text: 'text-orange-600 dark:text-orange-400' },
+  amber: { bg: 'bg-amber-50 dark:bg-amber-500/15', text: 'text-amber-600 dark:text-amber-400' },
+  yellow: { bg: 'bg-yellow-50 dark:bg-yellow-500/15', text: 'text-yellow-600 dark:text-yellow-400' },
+  red: { bg: 'bg-red-50 dark:bg-red-500/15', text: 'text-red-600 dark:text-red-400' },
 };
 
 function CapCard({ icon: Icon, label, tone }) {
   const style = TONE_STYLES[tone] || TONE_STYLES.orange;
   return (
-    <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-gray-200/70 bg-white shadow-2xs hover:shadow-xs transition-all">
+    <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-gray-200/70 dark:border-dk-border bg-white dark:bg-dk-raised shadow-2xs hover:shadow-xs transition-all">
       <span className={`w-6 h-6 rounded-md ${style.bg} flex items-center justify-center shrink-0`}>
         <Icon className={`w-3.5 h-3.5 ${style.text}`} />
       </span>
-      <span className="text-xs font-semibold text-gray-700 truncate">{label}</span>
+      <span className="text-xs font-semibold text-gray-700 dark:text-dk-text truncate">{label}</span>
     </div>
   );
 }

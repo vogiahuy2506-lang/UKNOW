@@ -7,12 +7,24 @@ export default {
   // App chỉ có giao diện sáng. Không khai báo thì Tailwind 3 mặc định 'media' → mọi class `dark:`
   // tự bật theo chế độ tối của hệ điều hành: 15/09/2026 trang Chương trình đối tác, trang quản lý
   // đối tác và modal rút tiền (~340 class dark:) hiện nền xanh đen giữa app nền trắng, khung cảnh
-  // báo chữ vàng nhạt trên nền be không đọc được. 'class' = chỉ bật khi <html class="dark">, app
-  // không bao giờ gắn class đó.
+  // báo chữ vàng nhạt trên nền be không đọc được. 'class' = chỉ bật khi <html class="dark">,
+  // chỉ gắn trên /app, /admin khi người dùng tự bật (themeStore.applyThemeToDocument).
   darkMode: 'class',
   theme: {
     extend: {
       colors: {
+        dk: {
+          inset: 'rgb(var(--dk-inset) / <alpha-value>)',
+          bg: 'rgb(var(--dk-bg) / <alpha-value>)',
+          surface: 'rgb(var(--dk-surface) / <alpha-value>)',
+          raised: 'rgb(var(--dk-raised) / <alpha-value>)',
+          strong: 'rgb(var(--dk-strong) / <alpha-value>)',
+          border: 'rgb(var(--dk-border) / <alpha-value>)',
+          'border-strong': 'rgb(var(--dk-border-strong) / <alpha-value>)',
+          text: 'rgb(var(--dk-text) / <alpha-value>)',
+          text2: 'rgb(var(--dk-text2) / <alpha-value>)',
+          muted: 'rgb(var(--dk-muted) / <alpha-value>)',
+        },
         primary: {
           50: '#fef7ee',
           100: '#fdedd6',

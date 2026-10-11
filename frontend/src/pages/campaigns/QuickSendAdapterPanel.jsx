@@ -569,16 +569,16 @@ const QuickSendAdapterPanel = ({ channel, channelLabel, isEmployeeContext = fals
     return null;
   })();
 
-  const cardClass = 'bg-white rounded-xl border border-gray-200 p-6';
+  const cardClass = 'bg-white dark:bg-dk-surface rounded-xl border border-gray-200 dark:border-dk-border p-6';
   const selectedAccount = accounts.find((a) => a.ref === selectedRef) || null;
 
   if (phase === 'sending') {
     return (
       <div className={`${cardClass} p-12 text-center`} data-testid="quick-send-adapter-sending">
         <div className="h-16 w-16 rounded-full border-4 border-orange-500 border-t-transparent animate-spin mx-auto mb-6" />
-        <h2 className="text-xl font-semibold text-gray-900 mb-2">{t('quickSend.sending')}</h2>
-        <p className="text-gray-500">{t('quickSend.keepPageOpenNotice')}</p>
-        {progressMessage && <p className="text-sm text-orange-600 mt-3">{progressMessage}</p>}
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-dk-text mb-2">{t('quickSend.sending')}</h2>
+        <p className="text-gray-500 dark:text-dk-text2">{t('quickSend.keepPageOpenNotice')}</p>
+        {progressMessage && <p className="text-sm text-orange-600 dark:text-orange-400 mt-3">{progressMessage}</p>}
       </div>
     );
   }
@@ -587,17 +587,17 @@ const QuickSendAdapterPanel = ({ channel, channelLabel, isEmployeeContext = fals
     const nothingSent = result.success === 0;
     return (
       <div className={`${cardClass} p-8 text-center`} data-testid="quick-send-adapter-done">
-        <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 ${nothingSent ? 'bg-red-100' : 'bg-green-100'}`}>
+        <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 ${nothingSent ? 'bg-red-100 dark:bg-red-950/40' : 'bg-green-100 dark:bg-emerald-950/40'}`}>
           {nothingSent
             ? <HiOutlineXCircle className="w-8 h-8 text-red-500" />
             : <HiOutlineCheckCircle className="w-8 h-8 text-green-500" />}
         </div>
-        <h2 className="text-xl font-semibold text-gray-900 mb-2">
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-dk-text mb-2">
           {nothingSent ? t('quickSend.sendAllFailedTitle') : t('quickSend.sendSuccessTitle')}
         </h2>
-        <p className="text-gray-500 mb-2">{t('quickSendAdapter.resultSent', { count: result.success })}</p>
+        <p className="text-gray-500 dark:text-dk-text2 mb-2">{t('quickSendAdapter.resultSent', { count: result.success })}</p>
         {result.fail > 0 && (
-          <p className="text-red-600 text-sm mb-2">{t('quickSendAdapter.resultFailed', { count: result.fail })}</p>
+          <p className="text-red-600 dark:text-red-400 text-sm mb-2">{t('quickSendAdapter.resultFailed', { count: result.fail })}</p>
         )}
         {result.partialCount > 0 && (
           <div className="text-amber-700 text-sm mb-2" data-testid="quick-send-adapter-partial">
@@ -617,7 +617,7 @@ const QuickSendAdapterPanel = ({ channel, channelLabel, isEmployeeContext = fals
           </ul>
         )}
         {result.deferredStop && (
-          <p className="text-amber-600 text-sm mb-2">
+          <p className="text-amber-600 dark:text-amber-400 text-sm mb-2">
             {t('quickSend.deferredResumeNotice', {
               reason: resolveReasonLabel(result.deferredStop.reason),
               time: formatResumeTimeVn(result.deferredStop.resumeAt),
@@ -625,13 +625,13 @@ const QuickSendAdapterPanel = ({ channel, channelLabel, isEmployeeContext = fals
           </p>
         )}
         {result.stopError && (
-          <p className="text-red-600 text-sm mb-2">
+          <p className="text-red-600 dark:text-red-400 text-sm mb-2">
             {t('quickSendAdapter.batchStopped', { channel: label })}
             {result.stopError.message ? ` (${result.stopError.message})` : ''}
           </p>
         )}
         {result.unsentCount > 0 && (
-          <p className="text-xs text-gray-400 mb-3">{t('quickSendAdapter.unsentCount', { count: result.unsentCount })}</p>
+          <p className="text-xs text-gray-400 dark:text-dk-muted mb-3">{t('quickSendAdapter.unsentCount', { count: result.unsentCount })}</p>
         )}
         <div className="flex justify-center gap-3 flex-wrap mt-4">
           {result.retryList.length > 0 && (
@@ -647,7 +647,7 @@ const QuickSendAdapterPanel = ({ channel, channelLabel, isEmployeeContext = fals
           <button
             type="button"
             onClick={handleStartOver}
-            className="px-6 py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition"
+            className="px-6 py-3 border border-gray-300 dark:border-dk-border text-gray-700 dark:text-dk-text font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-dk-raised transition"
           >
             {t('quickSend.sendAnother')}
           </button>
@@ -660,16 +660,16 @@ const QuickSendAdapterPanel = ({ channel, channelLabel, isEmployeeContext = fals
     <div className="space-y-6" data-testid="quick-send-adapter-panel">
       {/* Tài khoản gửi */}
       <div className={cardClass}>
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('quickSendAdapter.accountTitle', { channel: label })}</h2>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-dk-text mb-4">{t('quickSendAdapter.accountTitle', { channel: label })}</h2>
         {isLoadingAccounts ? (
           <div className="flex items-center justify-center py-6">
             <div className="h-6 w-6 rounded-full border-2 border-orange-500 border-t-transparent animate-spin" />
           </div>
         ) : accountsFailed ? (
-          <p className="text-sm text-red-600">{t('quickSendAdapter.accountsLoadFailed')}</p>
+          <p className="text-sm text-red-600 dark:text-red-400">{t('quickSendAdapter.accountsLoadFailed')}</p>
         ) : accounts.length === 0 ? (
           <div className="space-y-3">
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-gray-500 dark:text-dk-text2">
               {isEmployeeContext
                 ? t('quickSendAdapter.noAccountsAssigned', { channel: label })
                 : t('quickSendAdapter.noAccounts', { channel: label })}
@@ -677,7 +677,7 @@ const QuickSendAdapterPanel = ({ channel, channelLabel, isEmployeeContext = fals
             <button
               type="button"
               onClick={() => navigate(CHANNELS_SETTINGS_PATH)}
-              className="px-4 py-2 text-sm font-medium text-orange-700 border border-orange-300 rounded-lg hover:bg-orange-50"
+              className="px-4 py-2 text-sm font-medium text-orange-700 dark:text-orange-400 border border-orange-300 dark:border-orange-500/30 rounded-lg hover:bg-orange-50 dark:hover:bg-orange-950/30"
             >
               {t('quickSendAdapter.goConnect')}
             </button>
@@ -688,8 +688,8 @@ const QuickSendAdapterPanel = ({ channel, channelLabel, isEmployeeContext = fals
               <label
                 key={account.ref}
                 className={`flex items-center gap-3 p-3 rounded-lg border-2 transition ${
-                  selectedRef === account.ref ? 'border-orange-500 bg-orange-50' : 'border-gray-200'
-                } ${account.usable ? 'cursor-pointer hover:border-gray-300' : 'opacity-60 cursor-not-allowed'}`}
+                  selectedRef === account.ref ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/20' : 'border-gray-200 dark:border-dk-border'
+                } ${account.usable ? 'cursor-pointer hover:border-gray-300 dark:hover:border-dk-border' : 'opacity-60 cursor-not-allowed'}`}
               >
                 <input
                   type="radio"
@@ -699,9 +699,9 @@ const QuickSendAdapterPanel = ({ channel, channelLabel, isEmployeeContext = fals
                   onChange={() => setSelectedRef(account.ref)}
                   className="text-orange-500"
                 />
-                <span className="font-medium text-gray-900">{account.name}</span>
+                <span className="font-medium text-gray-900 dark:text-dk-text">{account.name}</span>
                 {!account.usable && (
-                  <span className="text-xs text-amber-600">{t('quickSendAdapter.accountOffline')}</span>
+                  <span className="text-xs text-amber-600 dark:text-amber-400">{t('quickSendAdapter.accountOffline')}</span>
                 )}
               </label>
             ))}
@@ -711,7 +711,7 @@ const QuickSendAdapterPanel = ({ channel, channelLabel, isEmployeeContext = fals
 
       {/* Người nhận */}
       <div className={cardClass}>
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('quickSendAdapter.recipientsTitle')}</h2>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-dk-text mb-4">{t('quickSendAdapter.recipientsTitle')}</h2>
         <div className="flex gap-2 mb-4">
           {[RECIPIENT_MODES.CONVERSATIONS, RECIPIENT_MODES.MANUAL, RECIPIENT_MODES.GROUPS].map((mode) => (
             <button
@@ -719,7 +719,7 @@ const QuickSendAdapterPanel = ({ channel, channelLabel, isEmployeeContext = fals
               type="button"
               onClick={() => setRecipientMode(mode)}
               className={`px-4 py-2 text-sm font-medium rounded-lg border-2 transition ${
-                recipientMode === mode ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                recipientMode === mode ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/20 text-orange-700 dark:text-orange-400' : 'border-gray-200 dark:border-dk-border text-gray-600 dark:text-dk-text2 hover:border-gray-300 dark:hover:border-dk-border hover:bg-slate-50 dark:hover:bg-dk-raised'
               }`}
             >
               {mode === RECIPIENT_MODES.CONVERSATIONS && t('quickSendAdapter.modeConversations')}
@@ -732,27 +732,27 @@ const QuickSendAdapterPanel = ({ channel, channelLabel, isEmployeeContext = fals
 
         {recipientMode === RECIPIENT_MODES.GROUPS ? (
           <div data-testid="quick-send-adapter-groups" className="space-y-3">
-            <p className="text-xs text-gray-500">{t('quickSendAdapter.groupsHint', { channel: label })}</p>
+            <p className="text-xs text-gray-500 dark:text-dk-text2">{t('quickSendAdapter.groupsHint', { channel: label })}</p>
             {!selectedAccount ? (
-              <p className="text-sm text-gray-500">{t('quickSendAdapter.pickAccountFirst')}</p>
+              <p className="text-sm text-gray-500 dark:text-dk-text2">{t('quickSendAdapter.pickAccountFirst')}</p>
             ) : (
               <button
                 type="button"
                 onClick={handleLoadGroups}
                 disabled={groupsStatus === 'loading'}
-                className="px-3 py-1.5 text-sm font-semibold bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-60"
+                className="px-3 py-1.5 text-sm font-semibold bg-white dark:bg-dk-raised border border-gray-300 dark:border-dk-border text-gray-700 dark:text-dk-text rounded-lg hover:bg-gray-50 dark:hover:bg-dk-strong disabled:opacity-60"
               >
                 {groupsStatus === 'loaded' ? t('quickSendAdapter.groupsReload') : t('quickSendAdapter.groupsLoad')}
               </button>
             )}
             {groupsStatus === 'loading' && (
-              <p role="status" className="text-sm text-gray-500">{t('quickSendAdapter.groupsLoading')}</p>
+              <p role="status" className="text-sm text-gray-500 dark:text-dk-text2">{t('quickSendAdapter.groupsLoading')}</p>
             )}
             {groupsStatus === 'error' && (
-              <p role="alert" className="text-sm text-red-600">{t('quickSendAdapter.groupsLoadFailed')}</p>
+              <p role="alert" className="text-sm text-red-600 dark:text-red-400">{t('quickSendAdapter.groupsLoadFailed')}</p>
             )}
             {groupsStatus === 'loaded' && groups.length === 0 && (
-              <p className="text-sm text-gray-500">{t('quickSendAdapter.groupsEmpty')}</p>
+              <p className="text-sm text-gray-500 dark:text-dk-text2">{t('quickSendAdapter.groupsEmpty')}</p>
             )}
             {groupsStatus === 'loaded' && groups.length > 0 && (
               <div>
@@ -761,23 +761,23 @@ const QuickSendAdapterPanel = ({ channel, channelLabel, isEmployeeContext = fals
                   value={groupsFilter}
                   onChange={(e) => setGroupsFilter(e.target.value)}
                   placeholder={t('quickSendAdapter.groupsFilterPlaceholder')}
-                  className="w-full px-3 py-2 mb-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                  className="w-full px-3 py-2 mb-2 border border-gray-300 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
                 />
-                <div className="text-sm text-gray-500 mb-2">
+                <div className="text-sm text-gray-500 dark:text-dk-text2 mb-2">
                   {t('quickSendAdapter.selectedCount', { count: selectedGroupKeys.size, total: groups.length })}
                 </div>
-                <div className="max-h-72 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                <div className="max-h-72 overflow-y-auto border border-gray-200 dark:border-dk-border rounded-lg divide-y divide-gray-100 dark:divide-dk-border">
                   {visibleGroups.map((g) => (
-                    <label key={g.recipientKey} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-gray-50">
+                    <label key={g.recipientKey} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-dk-raised/60">
                       <input
                         type="checkbox"
                         checked={selectedGroupKeys.has(g.recipientKey)}
                         onChange={() => toggleGroupKey(g.recipientKey)}
                         className="text-orange-500"
                       />
-                      <span className="flex-1 truncate text-sm text-gray-900">{g.name || g.recipientKey}</span>
+                      <span className="flex-1 truncate text-sm text-gray-900 dark:text-dk-text">{g.name || g.recipientKey}</span>
                       {g.membersCount != null && (
-                        <span className="text-xs text-gray-400">{t('telegramNodeSend.groupsMembers', { count: g.membersCount })}</span>
+                        <span className="text-xs text-gray-400 dark:text-dk-muted">{t('telegramNodeSend.groupsMembers', { count: g.membersCount })}</span>
                       )}
                     </label>
                   ))}
@@ -791,32 +791,32 @@ const QuickSendAdapterPanel = ({ channel, channelLabel, isEmployeeContext = fals
               <div className="h-6 w-6 rounded-full border-2 border-orange-500 border-t-transparent animate-spin" />
             </div>
           ) : conversationsFailed ? (
-            <p className="text-sm text-red-600">{t('quickSendAdapter.conversationsLoadFailed')}</p>
+            <p className="text-sm text-red-600 dark:text-red-400">{t('quickSendAdapter.conversationsLoadFailed')}</p>
           ) : !selectedAccount ? (
-            <p className="text-sm text-gray-500">{t('quickSendAdapter.pickAccountFirst')}</p>
+            <p className="text-sm text-gray-500 dark:text-dk-text2">{t('quickSendAdapter.pickAccountFirst')}</p>
           ) : conversations.length === 0 ? (
-            <p className="text-sm text-gray-500">{t('quickSendAdapter.conversationsEmpty')}</p>
+            <p className="text-sm text-gray-500 dark:text-dk-text2">{t('quickSendAdapter.conversationsEmpty')}</p>
           ) : (
             <div>
               <div className="flex items-center justify-between mb-2">
-                <button type="button" onClick={toggleAll} className="text-sm text-orange-600 hover:underline">
+                <button type="button" onClick={toggleAll} className="text-sm text-orange-600 dark:text-orange-400 hover:underline">
                   {allSelected ? t('quickSendAdapter.clearAll') : t('quickSendAdapter.selectAll')}
                 </button>
-                <span className="text-sm text-gray-500">
+                <span className="text-sm text-gray-500 dark:text-dk-text2">
                   {t('quickSendAdapter.selectedCount', { count: selectedKeys.size, total: conversations.length })}
                 </span>
               </div>
-              <div className="max-h-72 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+              <div className="max-h-72 overflow-y-auto border border-gray-200 dark:border-dk-border rounded-lg divide-y divide-gray-100 dark:divide-dk-border">
                 {conversations.map((c) => (
-                  <label key={c.recipientKey} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-gray-50">
+                  <label key={c.recipientKey} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-dk-raised/60">
                     <input
                       type="checkbox"
                       checked={selectedKeys.has(c.recipientKey)}
                       onChange={() => toggleKey(c.recipientKey)}
                       className="text-orange-500"
                     />
-                    <span className="text-sm text-gray-900">{c.name || c.recipientKey}</span>
-                    {c.name && <span className="text-xs text-gray-400">{c.recipientKey}</span>}
+                    <span className="text-sm text-gray-900 dark:text-dk-text">{c.name || c.recipientKey}</span>
+                    {c.name && <span className="text-xs text-gray-400 dark:text-dk-muted">{c.recipientKey}</span>}
                   </label>
                 ))}
               </div>
@@ -829,13 +829,13 @@ const QuickSendAdapterPanel = ({ channel, channelLabel, isEmployeeContext = fals
               onChange={(e) => setManualText(e.target.value)}
               rows={5}
               placeholder={t(channel === 'whatsapp' ? 'quickSendAdapter.manualPlaceholderWhatsApp' : 'quickSendAdapter.manualPlaceholderTelegram')}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+              className="w-full px-4 py-2.5 border border-gray-300 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
             />
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-gray-500 dark:text-dk-text2 mt-1">
               {t(channel === 'whatsapp' ? 'quickSendAdapter.manualHintWhatsApp' : 'quickSendAdapter.manualHintTelegram')}
             </p>
             {parsedManual.invalid.length > 0 && (
-              <p className="text-sm text-red-600 mt-2" data-testid="quick-send-adapter-invalid">
+              <p className="text-sm text-red-600 dark:text-red-400 mt-2" data-testid="quick-send-adapter-invalid">
                 {t('quickSendAdapter.manualInvalidLines', { lines: parsedManual.invalid.join(', ') })}
               </p>
             )}
@@ -843,7 +843,7 @@ const QuickSendAdapterPanel = ({ channel, channelLabel, isEmployeeContext = fals
         )}
 
         {overLimit && (
-          <p className="text-sm text-red-600 mt-3" data-testid="quick-send-adapter-over-limit">
+          <p className="text-sm text-red-600 dark:text-red-400 mt-3" data-testid="quick-send-adapter-over-limit">
             {t('quickSendAdapter.maxRecipients', { max: cfg.maxRecipients, count: recipients.length })}
           </p>
         )}
@@ -851,7 +851,7 @@ const QuickSendAdapterPanel = ({ channel, channelLabel, isEmployeeContext = fals
 
       {/* Nội dung */}
       <div className={cardClass}>
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('quickSendAdapter.messageTitle')}</h2>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-dk-text mb-4">{t('quickSendAdapter.messageTitle')}</h2>
         <div className="mb-4">
           <ChannelTemplateAttachmentPicker
             channel={channel}
@@ -872,16 +872,16 @@ const QuickSendAdapterPanel = ({ channel, channelLabel, isEmployeeContext = fals
           onChange={(e) => setMessage(e.target.value)}
           rows={6}
           placeholder={t('quickSendAdapter.messagePlaceholder')}
-          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+          className="w-full px-4 py-2.5 border border-gray-300 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
         />
         <div className="flex justify-between text-xs mt-1">
-          <span className="text-gray-500">{t('quickSendAdapter.messageHint')}</span>
-          <span className={message.length > cfg.maxMessageLength ? 'text-red-600' : 'text-gray-400'}>
+          <span className="text-gray-500 dark:text-dk-text2">{t('quickSendAdapter.messageHint')}</span>
+          <span className={message.length > cfg.maxMessageLength ? 'text-red-600 dark:text-red-400' : 'text-gray-400 dark:text-dk-muted'}>
             {t('quickSendAdapter.messageCounter', { count: message.length, max: cfg.maxMessageLength })}
           </span>
         </div>
 
-        <div className="mt-4 pt-4 border-t border-gray-200">
+        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-dk-border">
           <input
             ref={attachmentInputRef}
             type="file"
@@ -895,7 +895,7 @@ const QuickSendAdapterPanel = ({ channel, channelLabel, isEmployeeContext = fals
             type="button"
             onClick={() => attachmentInputRef.current?.click()}
             disabled={isUploadingAttachment}
-            className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-dk-border rounded-lg text-sm text-gray-700 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised disabled:opacity-50 disabled:cursor-not-allowed transition"
           >
             {isUploadingAttachment ? (
               <span className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
@@ -911,12 +911,12 @@ const QuickSendAdapterPanel = ({ channel, channelLabel, isEmployeeContext = fals
       <div className={cardClass}>
         {recipients.length > 0 && !overLimit && (
           <div className="flex items-center justify-between text-sm mb-3">
-            <span className="text-gray-600">{t('quickSend.estimatedDuration')}</span>
-            <span className="font-medium text-gray-900" data-testid="quick-send-adapter-estimate">{estimateText}</span>
+            <span className="text-gray-600 dark:text-dk-text2">{t('quickSend.estimatedDuration')}</span>
+            <span className="font-medium text-gray-900 dark:text-dk-text" data-testid="quick-send-adapter-estimate">{estimateText}</span>
           </div>
         )}
         {estimate?.quietHours?.startFormatted && (
-          <p className="text-xs text-gray-500 mb-3">
+          <p className="text-xs text-gray-500 dark:text-dk-text2 mb-3">
             {t('quickSendAdapter.quietHoursNote', {
               start: estimate.quietHours.startFormatted,
               end: estimate.quietHours.endFormatted,

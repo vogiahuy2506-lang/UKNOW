@@ -217,13 +217,13 @@ export const FeatureEditor = ({ features, onChange }) => {
           const isTranslating = translatingIdxs.has(i);
           const isEditing = editingIdx === i;
           return (
-            <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-1.5">
+            <div key={i} className="flex items-center gap-2 bg-gray-50 dark:bg-dk-raised rounded-lg px-3 py-1.5">
               <div className="flex shrink-0 items-center gap-0.5">
                 <button
                   type="button"
                   onClick={() => moveFeature(i, -1)}
                   disabled={i === 0}
-                  className="rounded p-0.5 text-gray-400 transition-colors hover:bg-white hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-30"
+                  className="rounded p-0.5 text-gray-400 dark:text-dk-muted transition-colors hover:bg-white dark:hover:bg-dk-strong hover:text-gray-700 dark:hover:text-dk-text disabled:cursor-not-allowed disabled:opacity-30"
                   title={t('common.previous')}
                 >
                   <HiChevronUp className="h-3.5 w-3.5" />
@@ -232,13 +232,13 @@ export const FeatureEditor = ({ features, onChange }) => {
                   type="button"
                   onClick={() => moveFeature(i, 1)}
                   disabled={i === list.length - 1}
-                  className="rounded p-0.5 text-gray-400 transition-colors hover:bg-white hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-30"
+                  className="rounded p-0.5 text-gray-400 dark:text-dk-muted transition-colors hover:bg-white dark:hover:bg-dk-strong hover:text-gray-700 dark:hover:text-dk-text disabled:cursor-not-allowed disabled:opacity-30"
                   title={t('common.next')}
                 >
                   <HiChevronDown className="h-3.5 w-3.5" />
                 </button>
               </div>
-              <HiOutlineCheck className="w-3.5 h-3.5 text-green-500 shrink-0" />
+              <HiOutlineCheck className="w-3.5 h-3.5 text-green-500 dark:text-green-400 shrink-0" />
               {isEditing ? (
                 <input
                   type="text"
@@ -262,28 +262,28 @@ export const FeatureEditor = ({ features, onChange }) => {
                       cancelEdit({ skipBlurCommit: true });
                     }
                   }}
-                  className="min-w-0 flex-1 rounded border border-orange-200 bg-white px-2 py-1 text-sm text-gray-800 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+                  className="min-w-0 flex-1 rounded border border-orange-200 dark:border-orange-800 bg-white dark:bg-dk-inset px-2 py-1 text-sm text-gray-800 dark:text-dk-text outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-900/40"
                 />
               ) : (
                 <button
                   type="button"
                   onClick={() => startEdit(i, f)}
-                  className="group min-w-0 flex-1 rounded px-1 py-0.5 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100"
+                  className="group min-w-0 flex-1 rounded px-1 py-0.5 text-left text-sm text-gray-700 dark:text-dk-text transition-colors hover:bg-gray-100 dark:hover:bg-dk-raised"
                 >
                   <span className="break-words">{getDisplayText(f)}</span>
-                  <HiOutlinePencil className="ml-1 inline h-3 w-3 text-gray-300 opacity-0 transition-opacity group-hover:opacity-100" />
+                  <HiOutlinePencil className="ml-1 inline h-3 w-3 text-gray-300 dark:text-dk-muted opacity-0 transition-opacity group-hover:opacity-100" />
                 </button>
               )}
               {isTranslating && !isEditing && (
-                <span className="text-[10px] text-gray-400 animate-pulse">translating...</span>
+                <span className="text-[10px] text-gray-400 dark:text-dk-muted animate-pulse">translating...</span>
               )}
               {!isObj && !isTranslating && !isEditing && (
-                <span className="text-[10px] text-amber-500 font-medium">VI only</span>
+                <span className="text-[10px] text-amber-500 dark:text-amber-400 font-medium">VI only</span>
               )}
               <button
                 type="button"
                 onClick={() => onChange(list.filter((_, j) => j !== i))}
-                className="text-gray-400 hover:text-red-500 transition-colors"
+                className="text-gray-400 dark:text-dk-muted hover:text-red-500 dark:hover:text-red-400 transition-colors"
               >
                 <HiOutlineX className="w-3.5 h-3.5" />
               </button>
@@ -357,27 +357,27 @@ export const EmailAutocomplete = ({ value, onChange, placeholder = 'user@example
         type="text"
         autoFocus
         autoComplete="off"
-        className="input w-full bg-white"
+        className="input w-full bg-white dark:bg-dk-inset"
         placeholder={placeholder}
         value={value}
         onChange={handleChange}
         onFocus={handleFocus}
       />
       {open && (
-        <ul className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+        <ul className="absolute z-50 left-0 right-0 mt-1 bg-white dark:bg-dk-surface border border-gray-200 dark:border-dk-border rounded-lg shadow-lg overflow-hidden">
           {suggestions.map((u) => (
             <li key={u.id}>
               <button
                 type="button"
                 onMouseDown={(e) => { e.preventDefault(); pick(u.email); }}
-                className="w-full flex items-start gap-2 px-3 py-2.5 hover:bg-gray-50 text-left transition-colors"
+                className="w-full flex items-start gap-2 px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-dk-raised/50 text-left transition-colors"
               >
                 <div>
-                  <p className="text-sm font-medium text-gray-800">{u.email}</p>
-                  {u.full_name && <p className="text-xs text-gray-400">{u.full_name}</p>}
+                  <p className="text-sm font-medium text-gray-800 dark:text-dk-text">{u.email}</p>
+                  {u.full_name && <p className="text-xs text-gray-400 dark:text-dk-text2">{u.full_name}</p>}
                 </div>
                 {u.active_plan_id && (
-                  <span className="ml-auto text-xs text-primary-600 bg-primary-50 px-2 py-0.5 rounded-full shrink-0 self-center">
+                  <span className="ml-auto text-xs text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-950/40 px-2 py-0.5 rounded-full shrink-0 self-center">
                     {t('planInputs.hasPlan')}
                   </span>
                 )}
@@ -501,11 +501,11 @@ export const DurationInput = ({ value, onChange }) => {
           onClick={() => handleUnlimitedChange(!unlimited)}
           className={`inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition-all sm:w-auto ${
             unlimited
-              ? 'bg-orange-50 border-orange-200 text-orange-700'
-              : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
+              ? 'bg-orange-50 dark:bg-orange-950/40 border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-300'
+              : 'bg-white dark:bg-dk-surface border-gray-200 dark:border-dk-border text-gray-500 dark:text-dk-text2 hover:border-gray-300 dark:hover:border-dk-border-strong'
           }`}
         >
-          <span className={`w-2 h-2 rounded-full ${unlimited ? 'bg-orange-500' : 'bg-gray-300'}`} />
+          <span className={`w-2 h-2 rounded-full ${unlimited ? 'bg-orange-500' : 'bg-gray-300 dark:bg-dk-strong'}`} />
           {t('planInputs.durationUnlimited')}
         </button>
 
@@ -514,7 +514,7 @@ export const DurationInput = ({ value, onChange }) => {
             <input
               type="text"
               inputMode="numeric"
-              className="h-11 min-w-0 rounded-lg border border-gray-300 bg-white px-3 py-2 text-center text-sm font-semibold text-slate-900 transition-base focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
+              className="h-11 min-w-0 rounded-lg border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-inset px-3 py-2 text-center text-sm font-semibold text-slate-900 dark:text-dk-text transition-base focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
               placeholder="1"
               value={num}
               onChange={handleNumChange}
@@ -523,13 +523,13 @@ export const DurationInput = ({ value, onChange }) => {
               <button
                 type="button"
                 onClick={() => setUnitMenuOpen((open) => !open)}
-                className="flex h-11 w-full items-center justify-between rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:border-orange-300 hover:bg-orange-50/40 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100"
+                className="flex h-11 w-full items-center justify-between rounded-lg border border-slate-300 dark:border-dk-border bg-white dark:bg-dk-surface px-3 text-sm font-semibold text-slate-700 dark:text-dk-text shadow-sm transition-all hover:border-orange-300 dark:hover:border-orange-800 hover:bg-orange-50/40 dark:hover:bg-orange-950/20 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-900/40"
               >
                 <span>{t(`planInputs.${DURATION_UNITS_KEYS.find((u) => u.value === unit)?.key || 'durationUnitDay'}`)}</span>
                 <HiChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${unitMenuOpen ? 'rotate-180' : ''}`} />
               </button>
               {unitMenuOpen && (
-                <div className="absolute left-0 right-0 z-30 mt-1 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-xl">
+                <div className="absolute left-0 right-0 z-30 mt-1 overflow-hidden rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface p-1 shadow-xl">
                   {DURATION_UNITS_KEYS.map((u) => {
                     const selected = unit === u.value;
                     return (
@@ -539,8 +539,8 @@ export const DurationInput = ({ value, onChange }) => {
                         onClick={() => handleUnitChange(u.value)}
                         className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-semibold transition-colors ${
                           selected
-                            ? 'bg-orange-50 text-orange-700'
-                            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                            ? 'bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300'
+                            : 'text-slate-600 dark:text-dk-text hover:bg-slate-50 dark:hover:bg-dk-raised hover:text-slate-900 dark:hover:text-dk-text'
                         }`}
                       >
                         {t(`planInputs.${u.key}`)}
@@ -555,7 +555,7 @@ export const DurationInput = ({ value, onChange }) => {
         )}
       </div>
       {totalDays !== null && unit !== 'day' && (
-        <span className="inline-flex rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-500">
+        <span className="inline-flex rounded-lg border border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-raised px-2.5 py-1 text-xs font-medium text-slate-500 dark:text-dk-text2">
           {t('planInputs.durationEqualsNDays', { n: totalDays })}
         </span>
       )}
@@ -604,8 +604,8 @@ export const LimitInput = ({ value, onChange, placeholder }) => {
   return (
     <div className="flex gap-2">
       {isNotSupported ? (
-        <div className="input h-11 flex-1 flex items-center bg-rose-50 border-rose-200">
-          <span className="text-sm font-semibold text-rose-600">{t('planInputs.notSupported')}</span>
+        <div className="input h-11 flex-1 flex items-center bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-900/40">
+          <span className="text-sm font-semibold text-rose-600 dark:text-rose-400">{t('planInputs.notSupported')}</span>
         </div>
       ) : (
         <input
@@ -623,8 +623,8 @@ export const LimitInput = ({ value, onChange, placeholder }) => {
         onClick={handleToggleNA}
         className={`shrink-0 h-11 px-3 rounded-xl border text-xs font-bold transition-all ${
           isNotSupported
-            ? 'bg-rose-100 border-rose-300 text-rose-700 hover:bg-rose-50'
-            : 'bg-white border-gray-200 text-gray-500 hover:border-rose-300 hover:text-rose-600'
+            ? 'bg-rose-100 dark:bg-rose-950/60 border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30'
+            : 'bg-white dark:bg-dk-surface border-gray-200 dark:border-dk-border text-gray-500 dark:text-dk-text2 hover:border-rose-300 dark:hover:border-rose-800 hover:text-rose-600 dark:hover:text-rose-400'
         }`}
       >
         N/A
@@ -640,7 +640,7 @@ export const SendLimitsFields = ({ form, set, hint }) => {
 
   return (
     <div>
-      <p className="text-sm text-gray-500 mb-4">{hintText}</p>
+      <p className="text-sm text-gray-500 dark:text-dk-text2 mb-4">{hintText}</p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {[
           ['dailyEmailLimit',   t('planInputs.emailPerDay'),   t('planInputs.emailPerDayPlaceholder')],
@@ -652,7 +652,7 @@ export const SendLimitsFields = ({ form, set, hint }) => {
           ['monthlyWhatsappLimit', t('planInputs.whatsappPerMonth'), t('planInputs.whatsappPerMonthPlaceholder')],
         ].map(([key, label, ph]) => (
           <div key={key}>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">{label}</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1.5">{label}</label>
             <LimitInput value={form[key]} onChange={(v) => set(key, v)} placeholder={ph} />
           </div>
         ))}
@@ -671,10 +671,10 @@ export const PeriodMessagesField = ({ form, set }) => {
   };
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+    <div className="rounded-2xl border border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-raised p-4">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+          <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1.5">
             {t('planInputs.messagesPerPeriod')}
           </label>
           <input
@@ -685,7 +685,7 @@ export const PeriodMessagesField = ({ form, set }) => {
             value={formatIntGrouped(form.messagesPerPeriod)}
             onChange={handleInputChange}
           />
-          <p className="mt-1.5 text-xs text-slate-400">{t('planInputs.messagesPerPeriodHint')}</p>
+          <p className="mt-1.5 text-xs text-slate-400 dark:text-dk-muted">{t('planInputs.messagesPerPeriodHint')}</p>
         </div>
         {/*
           Ô "Bật FUP" đã ẩn 06/08/2026. Cờ `is_fup_enabled` CHƯA CÓ HÀNH VI —
@@ -711,7 +711,7 @@ export const ResourceLimitsFields = ({ form, set, hint }) => {
 
   return (
     <div>
-      <p className="text-sm text-gray-500 mb-4">{hintText}</p>
+      <p className="text-sm text-gray-500 dark:text-dk-text2 mb-4">{hintText}</p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {[
           ['maxLandingPages',       t('planInputs.landingPages')],
@@ -739,7 +739,7 @@ export const ResourceLimitsFields = ({ form, set, hint }) => {
           // AI, cạnh số liệu thật. Cột DB và cột báo cáo giữ nguyên.
         ].map(([key, label]) => (
           <div key={key}>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">{label}</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1.5">{label}</label>
             <LimitInput value={form[key] ?? ''} onChange={(v) => set(key, v)} />
           </div>
         ))}

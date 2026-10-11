@@ -50,18 +50,18 @@ export default function AdminHelpUnansweredPage() {
         subtitle={t('adminHelp.unansweredSubtitle')}
       />
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-dk-border dark:bg-dk-surface">
         {isLoading ? (
-          <div className="p-10 text-center text-sm text-slate-400">{t('common.loading')}</div>
+          <div className="p-10 text-center text-sm text-slate-400 dark:text-dk-muted">{t('common.loading')}</div>
         ) : rows.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-3 p-14 text-slate-400">
+          <div className="flex flex-col items-center justify-center gap-3 p-14 text-slate-400 dark:text-dk-muted">
             <HiOutlineQuestionMarkCircle className="h-10 w-10" />
             <p>{t('adminHelp.unansweredEmpty')}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-100 text-sm">
-              <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <table className="min-w-full divide-y divide-slate-100 text-sm dark:divide-dk-border">
+              <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-dk-raised dark:text-dk-text2">
                 <tr>
                   <th className="px-5 py-3">{t('adminHelp.question')}</th>
                   <th className="px-5 py-3">{t('adminHelp.askCount')}</th>
@@ -69,13 +69,13 @@ export default function AdminHelpUnansweredPage() {
                   <th className="px-5 py-3">{t('adminHelp.lastAsked')}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-dk-border">
                 {rows.map((row, idx) => (
                   <tr key={idx}>
-                    <td className="px-5 py-4 max-w-md text-slate-800">{row.question}</td>
-                    <td className="px-5 py-4 font-medium text-slate-700">{row.ask_count}</td>
-                    <td className="px-5 py-4 text-slate-500">{formatSimilarity(row.avg_similarity)}</td>
-                    <td className="px-5 py-4 text-slate-500">{formatDate(row.last_asked_at)}</td>
+                    <td className="px-5 py-4 max-w-md text-slate-800 dark:text-dk-text">{row.question}</td>
+                    <td className="px-5 py-4 font-medium text-slate-700 dark:text-dk-text">{row.ask_count}</td>
+                    <td className="px-5 py-4 text-slate-500 dark:text-dk-text2">{formatSimilarity(row.avg_similarity)}</td>
+                    <td className="px-5 py-4 text-slate-500 dark:text-dk-text2">{formatDate(row.last_asked_at)}</td>
                   </tr>
                 ))}
               </tbody>

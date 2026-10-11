@@ -847,18 +847,18 @@ const EmailTemplates = ({
       />
 
       <FullScreenOverlay isOpen={Boolean(lockedTemplate)} className="p-4">
-        <div className="w-full max-w-lg bg-white rounded-xl shadow-xl border border-gray-200 p-5 space-y-4">
+        <div className="w-full max-w-lg bg-white dark:bg-dk-surface rounded-xl shadow-xl border border-gray-200 dark:border-dk-border p-5 space-y-4">
           <div className="space-y-2">
-            <h3 className="text-base font-semibold text-gray-900">{t('templates.lockedTitle')}</h3>
-            <p className="text-sm text-gray-600">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-dk-text">{t('templates.lockedTitle')}</h3>
+            <p className="text-sm text-gray-600 dark:text-dk-text">
               {t('templates.lockedDescription')}
             </p>
           </div>
 
           {Array.isArray(lockedTemplate?.activeUsage?.activeCampaigns) && lockedTemplate.activeUsage.activeCampaigns.length > 0 && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-              <p className="text-xs font-medium text-amber-800 mb-1">{t('templates.activeCampaignsUsingTemplate')}:</p>
-              <ul className="text-sm text-amber-900 space-y-1">
+            <div className="rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/30 p-3">
+              <p className="text-xs font-medium text-amber-800 dark:text-amber-300 mb-1">{t('templates.activeCampaignsUsingTemplate')}:</p>
+              <ul className="text-sm text-amber-900 dark:text-amber-200 space-y-1">
                 {lockedTemplate.activeUsage.activeCampaigns.map((campaign) => (
                   <li key={campaign.id}>- {campaign.campaignName || `${t('templates.campaign')} #${campaign.id}`}</li>
                 ))}
@@ -871,7 +871,7 @@ const EmailTemplates = ({
               type="button"
               onClick={() => setLockedTemplate(null)}
               disabled={isCreatingLockedTemplateCopy}
-              className="px-4 py-2 text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+              className="px-4 py-2 text-sm rounded-lg border border-gray-300 dark:border-dk-border text-gray-700 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised disabled:opacity-60 transition-colors"
             >
               {t('common.close')}
             </button>
@@ -879,7 +879,7 @@ const EmailTemplates = ({
               type="button"
               onClick={handleCreateCopyForLockedTemplate}
               disabled={isCreatingLockedTemplateCopy}
-              className="px-4 py-2 text-sm rounded-lg bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-60"
+              className="px-4 py-2 text-sm rounded-lg bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-60 transition-colors"
             >
               {isCreatingLockedTemplateCopy ? t('templates.creating') : t('templates.createCopyToEditLocked')}
             </button>

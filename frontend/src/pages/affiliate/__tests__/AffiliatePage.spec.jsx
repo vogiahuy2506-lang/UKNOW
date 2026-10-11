@@ -315,7 +315,7 @@ describe('AffiliatePage — Frontend UI', () => {
     expect(queryByText('0071000123456789')).not.toBeInTheDocument();
   });
 
-  it('6. Không phần tử nào có class chứa dark:', async () => {
+  it('6. Hỗ trợ dark mode: có class dark: trên các thẻ và thành phần', async () => {
     mockGetOverview.mockResolvedValueOnce({
       data: baseOverviewData({
         pendingApproval: {
@@ -337,7 +337,7 @@ describe('AffiliatePage — Frontend UI', () => {
     const elementsWithDarkClass = Array.from(container.querySelectorAll('[class]')).filter((el) =>
       /\bdark:[a-zA-Z0-9[]/.test(el.className)
     );
-    expect(elementsWithDarkClass).toHaveLength(0);
+    expect(elementsWithDarkClass.length).toBeGreaterThan(0);
   });
 
   // PR-10 (C-17a) — "{n} đơn chưa được tính hoa hồng" / "Xem {n} đơn" trước đây nhận số NGƯỜI MUA

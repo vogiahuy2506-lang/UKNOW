@@ -47,11 +47,11 @@ const CampaignSchedulesTable = ({
 
   return (
     <div className="card">
-      <div className="p-6 border-b border-gray-200">
-        <h2 className="text-lg font-semibold text-gray-900">{t('campaignRun.scheduledCampaigns')}</h2>
+      <div className="p-6 border-b border-gray-200 dark:border-dk-border">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-dk-text">{t('campaignRun.scheduledCampaigns')}</h2>
         <div className="mt-4">
-          <div className="max-w-md flex items-center rounded-lg border border-gray-300 bg-white text-sm focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-500">
-            <span className="pl-3 flex items-center text-gray-400" aria-hidden>
+          <div className="max-w-md flex items-center rounded-lg border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-inset text-sm focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-500">
+            <span className="pl-3 flex items-center text-gray-400 dark:text-dk-muted" aria-hidden>
               <HiOutlineSearch className="w-5 h-5" />
             </span>
             <input
@@ -59,7 +59,7 @@ const CampaignSchedulesTable = ({
               value={scheduledCampaignSearch}
               onChange={(e) => onScheduledCampaignSearchChange(e.target.value)}
               placeholder={t('campaignRun.searchScheduleOrCampaign')}
-              className="flex-1 min-w-0 py-2 pr-3 border-0 bg-transparent focus:ring-0 focus:outline-none"
+              className="flex-1 min-w-0 py-2 pr-3 border-0 bg-transparent text-gray-900 dark:text-dk-text placeholder:text-gray-400 dark:placeholder:text-dk-muted focus:ring-0 focus:outline-none"
             />
           </div>
         </div>
@@ -67,27 +67,27 @@ const CampaignSchedulesTable = ({
 
       {filteredSchedules.length === 0 ? (
         <div className="p-12 text-center">
-          <p className="text-gray-500">
+          <p className="text-gray-500 dark:text-dk-text2">
             {schedules.length === 0 ? t('campaignRun.noSchedules') : t('campaignRun.noMatchingCampaigns')}
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
+        <div className="overflow-x-auto w-full">
+          <table className="min-w-[1050px] w-full">
+            <thead className="bg-gray-50 dark:bg-dk-surface/70 border-b border-gray-200 dark:border-dk-border">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('campaignRun.scheduleName')}</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('campaigns.title')}</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">{t('campaignRun.campaignId')}</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('campaignRun.scheduleType')}</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('campaignRun.lastRun')}</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('campaignRun.nextRun')}</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('common.status')}</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('campaignRun.toggleSchedule')}</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">{t('common.actions')}</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap">{t('campaignRun.scheduleName')}</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap">{t('campaigns.title')}</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dk-text2 uppercase tracking-wider w-28 whitespace-nowrap">{t('campaignRun.campaignId')}</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap">{t('campaignRun.scheduleType')}</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap">{t('campaignRun.lastRun')}</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap">{t('campaignRun.nextRun')}</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap">{t('common.status')}</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap">{t('campaignRun.toggleSchedule')}</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap">{t('common.actions')}</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-white dark:bg-dk-surface divide-y divide-gray-200 dark:divide-dk-border/80">
               {filteredSchedules.map((schedule) => {
                 const isReadonly = isReadonlyOnceSchedule(schedule);
                 const isCampaignRunning = Boolean(
@@ -103,19 +103,19 @@ const CampaignSchedulesTable = ({
                 }
 
                 return (
-                  <tr key={schedule.id} className="hover:bg-gray-50">
+                  <tr key={schedule.id} className="hover:bg-gray-50 dark:hover:bg-dk-raised/60 transition-colors">
                     <td className="px-6 py-4">
-                      <div className="font-medium text-gray-900">{schedule.scheduleName}</div>
+                      <div className="font-medium text-gray-900 dark:text-dk-text">{schedule.scheduleName}</div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-sm text-gray-900">{schedule.campaignName}</div>
+                      <div className="text-sm text-gray-900 dark:text-dk-text">{schedule.campaignName}</div>
                       {getScheduleCampaignNotActiveWarning(schedule, t) && (
-                        <div className="text-xs text-amber-600 font-medium mt-0.5">
+                        <div className="text-xs text-amber-600 dark:text-amber-400 font-medium mt-0.5">
                           {getScheduleCampaignNotActiveWarning(schedule, t)}
                         </div>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 tabular-nums">
+                    <td className="px-6 py-4 text-sm text-gray-600 dark:text-dk-text2 tabular-nums">
                       {schedule.campaignId != null ? String(schedule.campaignId) : '—'}
                     </td>
                     <td className="px-6 py-4">
@@ -125,11 +125,11 @@ const CampaignSchedulesTable = ({
                           : getScheduleTypeLabel(schedule.scheduleType, t)}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
+                    <td className="px-6 py-4 text-sm text-gray-600 dark:text-dk-text2">
                       {schedule.lastRunAt ? (
                         <div>
-                          <div className="text-gray-900 font-medium">{formatCampaignDateTime(schedule.lastRunAt, '-', locale)}</div>
-                          <div className="text-xs text-gray-500">
+                          <div className="text-gray-900 dark:text-dk-text font-medium">{formatCampaignDateTime(schedule.lastRunAt, '-', locale)}</div>
+                          <div className="text-xs text-gray-500 dark:text-dk-text2">
                             {schedule.runCount || 0} {t('campaignRun.times')}
                           </div>
                           {getScheduleLastRunFailureBadgeLabel(schedule, t) && (
@@ -141,14 +141,14 @@ const CampaignSchedulesTable = ({
                           )}
                         </div>
                       ) : (
-                        <span className="text-gray-400">—</span>
+                        <span className="text-gray-400 dark:text-dk-muted">—</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
+                    <td className="px-6 py-4 text-sm text-gray-600 dark:text-dk-text2">
                       {schedule.enabled && schedule.nextRunAt ? (
-                        <span className="text-gray-900 font-medium">{formatCampaignDateTime(schedule.nextRunAt, '-', locale)}</span>
+                        <span className="text-gray-900 dark:text-dk-text font-medium">{formatCampaignDateTime(schedule.nextRunAt, '-', locale)}</span>
                       ) : (
-                        <span className="text-gray-400">—</span>
+                        <span className="text-gray-400 dark:text-dk-muted">—</span>
                       )}
                     </td>
                     <td className="px-6 py-4">
@@ -171,7 +171,7 @@ const CampaignSchedulesTable = ({
                             }}
                             className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
                               isReadonly ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-                            } ${schedule.enabled ? 'bg-primary-600' : 'bg-gray-200'}`}
+                            } ${schedule.enabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dk-strong'}`}
                           >
                             <span
                               className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
@@ -179,12 +179,12 @@ const CampaignSchedulesTable = ({
                               }`}
                             />
                           </button>
-                          <span className={`text-xs font-medium select-none ${isReadonly ? 'text-gray-400' : 'text-gray-700'}`}>
+                          <span className={`text-xs font-medium select-none ${isReadonly ? 'text-gray-400 dark:text-dk-muted' : 'text-gray-700 dark:text-dk-text'}`}>
                             {schedule.enabled ? t('campaignRun.switchOn') : t('campaignRun.switchOff')}
                           </span>
                         </div>
                       ) : (
-                        <span className="text-gray-400">—</span>
+                        <span className="text-gray-400 dark:text-dk-muted">—</span>
                       )}
                     </td>
                     <td className="px-6 py-4 text-right">
@@ -200,10 +200,10 @@ const CampaignSchedulesTable = ({
                             }}
                             className={`text-xs font-medium hover:underline ${
                               isReadonly
-                                ? 'text-gray-400 cursor-not-allowed opacity-60'
+                                ? 'text-gray-400 dark:text-dk-muted cursor-not-allowed opacity-60'
                                 : schedule.enabled
-                                  ? 'text-amber-600 hover:text-amber-800'
-                                  : 'text-primary-600 hover:text-primary-800'
+                                  ? 'text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300'
+                                  : 'text-primary-600 dark:text-primary-400 hover:text-primary-800'
                             }`}
                           >
                             {schedule.enabled ? t('campaignRun.disableSchedule') : t('campaignRun.enableSchedule2')}
@@ -212,7 +212,7 @@ const CampaignSchedulesTable = ({
                         <button
                           type="button"
                           onClick={() => onOpenScheduleDetailModal(schedule)}
-                          className="text-blue-600 hover:text-blue-800"
+                          className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
                           title={t('campaignRun.viewDetails')}
                         >
                           <HiOutlineEye className="w-5 h-5" />
@@ -221,7 +221,7 @@ const CampaignSchedulesTable = ({
                           <button
                             type="button"
                             onClick={() => onDeleteSchedule(schedule.id)}
-                            className="text-red-600 hover:text-red-800"
+                            className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
                             title={t('campaignRun.deleteSchedule')}
                           >
                             <HiOutlineTrash className="w-5 h-5" />

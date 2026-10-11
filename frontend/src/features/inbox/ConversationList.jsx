@@ -169,29 +169,29 @@ const ConversationItem = ({
       tabIndex={0}
       onClick={handleSelect}
       onKeyDown={handleKeyDown}
-      className={`w-full cursor-pointer px-3 py-2.5 text-left transition-colors group relative border-b border-gray-50 ${
+      className={`w-full cursor-pointer px-3 py-2.5 text-left transition-colors group relative border-b border-gray-50 dark:border-dk-border/60 ${
         isSelected
-          ? 'bg-primary-50 border-l-2 border-l-primary-500'
-          : 'hover:bg-gray-50 border-l-2 border-l-transparent'
+          ? 'bg-primary-50 dark:bg-primary-950/30 border-l-2 border-l-primary-500'
+          : 'hover:bg-gray-50 dark:hover:bg-dk-raised/60 border-l-2 border-l-transparent'
       }`}
     >
       <div className="flex items-start gap-2.5">
         <div className="relative flex-shrink-0">
           <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold ${
             isGroup
-              ? 'bg-violet-100 text-violet-600'
-              : 'bg-gray-100 text-gray-600'
+              ? 'bg-violet-100 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400'
+              : 'bg-gray-100 dark:bg-dk-raised text-gray-600 dark:text-dk-text'
           }`}>
             {displayName ? displayName[0]?.toUpperCase() : '?'}
           </div>
           <span
-            className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] border border-white ${channel.bg}`}
+            className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] border border-white dark:border-dk-border ${channel.bg}`}
             title={channel.label}
           >
             {channel.icon}
           </span>
           {hasUnread && (
-            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-0.5 bg-red-500 rounded-full border border-white flex items-center justify-center">
+            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-0.5 bg-red-500 rounded-full border border-white dark:border-dk-border flex items-center justify-center">
               <span className="text-[9px] text-white font-bold leading-none">
                 {conv.unreadCount > 9 ? '9+' : conv.unreadCount}
               </span>
@@ -204,23 +204,23 @@ const ConversationItem = ({
             <div className="flex items-center gap-1 min-w-0">
               {isGroup && <span className="text-violet-500 text-xs">👥</span>}
               <span className={`font-semibold text-sm truncate ${
-                isSelected ? 'text-primary-700' : 'text-gray-900'
+                isSelected ? 'text-primary-700 dark:text-primary-300' : 'text-gray-900 dark:text-dk-text'
               }`}>
                 {displayName || t('inbox.customer')}
               </span>
               {aiBadge === 'off' && (
-                <span className="shrink-0 text-[9px] px-1 py-px rounded bg-amber-50 text-amber-700 border border-amber-200">
+                <span className="shrink-0 text-[9px] px-1 py-px rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
                   {t('inbox.badgeAiOff')}
                 </span>
               )}
               {aiBadge === 'replying' && (
-                <span className="shrink-0 text-[9px] px-1 py-px rounded bg-slate-50 text-slate-600 border border-slate-200">
+                <span className="shrink-0 text-[9px] px-1 py-px rounded bg-slate-50 dark:bg-dk-raised text-slate-600 dark:text-dk-text border border-slate-200 dark:border-dk-border">
                   {t('inbox.badgeYouReplying')}
                 </span>
               )}
             </div>
             <div className="flex h-6 w-12 shrink-0 items-center justify-end">
-              <span className={`text-[10px] text-gray-400 transition-opacity ${onDelete ? 'group-hover:opacity-0' : ''}`}>
+              <span className={`text-[10px] text-gray-400 dark:text-dk-muted transition-opacity ${onDelete ? 'group-hover:opacity-0' : ''}`}>
                 {lastMessageTime}
               </span>
               {onDelete && (
@@ -232,7 +232,7 @@ const ConversationItem = ({
                     e.stopPropagation();
                     onDelete(conv, e);
                   }}
-                  className="absolute right-2 top-2 hidden p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all group-hover:flex focus:outline-none focus:ring-2 focus:ring-red-300"
+                  className="absolute right-2 top-2 hidden p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-all group-hover:flex focus:outline-none focus:ring-2 focus:ring-red-300"
                   title={t('inbox.confirmDeleteTitle')}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -245,7 +245,7 @@ const ConversationItem = ({
 
           {preview && (
             <p className={`text-xs truncate ${
-              hasUnread ? 'text-gray-800 font-medium' : 'text-gray-500'
+              hasUnread ? 'text-gray-800 dark:text-dk-text font-medium' : 'text-gray-500 dark:text-dk-text2'
             }`}>
               {truncateMessage(preview, 52)}
             </p>
@@ -257,13 +257,13 @@ const ConversationItem = ({
 };
 
 const EmptyState = ({ title, hint }) => (
-  <div className="flex-1 flex items-center justify-center text-gray-500">
+  <div className="flex-1 flex items-center justify-center text-gray-500 dark:text-dk-text2">
     <div className="text-center p-8">
-      <div className="w-20 h-20 mx-auto mb-4 rounded-3xl bg-gray-100 flex items-center justify-center">
+      <div className="w-20 h-20 mx-auto mb-4 rounded-3xl bg-gray-100 dark:bg-dk-raised flex items-center justify-center">
         <span className="text-4xl">💬</span>
       </div>
-      <p className="text-base font-semibold text-gray-600">{title}</p>
-      <p className="text-sm text-gray-400 mt-2">{hint}</p>
+      <p className="text-base font-semibold text-gray-600 dark:text-dk-text">{title}</p>
+      <p className="text-sm text-gray-400 dark:text-dk-muted mt-2">{hint}</p>
     </div>
   </div>
 );
@@ -272,13 +272,13 @@ const LoadingSkeleton = () => (
   <div className="flex-1 overflow-y-auto px-3 py-2 space-y-3">
     {[1, 2, 3, 4, 5, 6].map((i) => (
       <div key={i} className="flex items-start gap-2.5 animate-pulse">
-        <div className="w-10 h-10 rounded-xl bg-gray-200" />
+        <div className="w-10 h-10 rounded-xl bg-gray-200 dark:bg-dk-raised" />
         <div className="flex-1">
           <div className="flex justify-between mb-1.5">
-            <div className="h-3.5 bg-gray-200 rounded w-32" />
-            <div className="h-3 bg-gray-200 rounded w-10" />
+            <div className="h-3.5 bg-gray-200 dark:bg-dk-raised rounded w-32" />
+            <div className="h-3 bg-gray-200 dark:bg-dk-raised rounded w-10" />
           </div>
-          <div className="h-3 bg-gray-200 rounded w-full" />
+          <div className="h-3 bg-gray-200 dark:bg-dk-raised rounded w-full" />
         </div>
       </div>
     ))}
@@ -315,7 +315,7 @@ const ConversationList = ({
   };
 
   return (
-    <div className="flex flex-col h-full min-h-0 bg-white">
+    <div className="flex flex-col h-full min-h-0 bg-white dark:bg-dk-surface">
       {isLoading && conversations.length === 0 && <LoadingSkeleton />}
 
       {!isLoading && filteredConversations.length === 0 && (
@@ -343,7 +343,7 @@ const ConversationList = ({
             <button
               onClick={onLoadMore}
               disabled={isLoading}
-              className="w-full p-4 text-sm text-primary-600 hover:bg-primary-50 transition-colors font-semibold border-t border-gray-100"
+              className="w-full p-4 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-950/20 transition-colors font-semibold border-t border-gray-100 dark:border-dk-border"
             >
               {isLoading ? (
                 <span className="flex items-center justify-center gap-2">

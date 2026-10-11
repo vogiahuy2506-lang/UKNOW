@@ -133,16 +133,15 @@ export default function HeroPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white text-slate-900 transition-colors">
 
       {/* ── Navigation ── */}
       <HeroNavbar />
 
       {/* ── Hero Section ── */}
-      <section className="relative px-6 pt-12 pb-20 md:pt-16 md:pb-28 overflow-hidden">
+      <section className="relative px-6 pt-12 pb-20 md:pt-16 md:pb-28 overflow-hidden bg-white">
         {/* Background dots */}
-        <div className="absolute inset-0 opacity-[0.3]" style={{
-          backgroundColor: '#f8fafc',
+        <div className="absolute inset-0 opacity-[0.3] pointer-events-none" style={{
           backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)',
           backgroundSize: '24px 24px'
         }} />
@@ -173,7 +172,7 @@ export default function HeroPage() {
 
         <div className="max-w-4xl mx-auto text-center relative z-10">
           {/* Badge */}
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 text-slate-700 text-sm font-medium mb-8">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 text-slate-700 text-sm font-medium mb-8 border border-transparent">
             <span className="w-2 h-2 rounded-full bg-orange-500" />
             <span data-edit="hero.tagline">{getValue('hero.tagline', t('heroPage.tagline'))}</span>
           </div>
@@ -250,8 +249,7 @@ export default function HeroPage() {
       {/* ══════════════════════════════════════════════════════════════════ */}
       <section className="py-20 md:py-28 bg-white relative overflow-hidden">
         {/* Grid background */}
-        <div className="absolute inset-0 opacity-[0.3]" style={{
-          backgroundColor: '#f8fafc',
+        <div className="absolute inset-0 opacity-[0.3] pointer-events-none" style={{
           backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)',
           backgroundSize: '24px 24px'
         }} />
@@ -292,7 +290,7 @@ export default function HeroPage() {
       {/* ══════════════════════════════════════════════════════════════════ */}
       {/* ── SECTION 2: Bắt đầu trong 15 phút ── */}
       {/* ══════════════════════════════════════════════════════════════════ */}
-      <section className="py-20 md:py-28">
+      <section className="py-20 md:py-28 bg-slate-50/50">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-16">
             <span className="inline-block px-4 py-1.5 bg-slate-200 text-slate-700 rounded-full text-xs font-bold uppercase tracking-wider mb-4">
@@ -316,7 +314,7 @@ export default function HeroPage() {
                 <AnimatedSection key={i} delay={i * 100}>
                   <div className="text-center relative">
                     {/* Step number */}
-                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-white border-2 border-orange-500 text-orange-600 font-bold text-sm mb-6 relative z-10">
+                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-white border-2 border-orange-500 text-orange-600 font-bold text-sm mb-6 relative z-10 shadow-sm">
                       {step.number}
                     </div>
                     {/* Icon */}
@@ -344,8 +342,7 @@ export default function HeroPage() {
       {/* ══════════════════════════════════════════════════════════════════ */}
       <section className="py-20 md:py-28 bg-white relative overflow-hidden">
         {/* Grid background */}
-        <div className="absolute inset-0 opacity-[0.3]" style={{
-          backgroundColor: '#f8fafc',
+        <div className="absolute inset-0 opacity-[0.3] pointer-events-none" style={{
           backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)',
           backgroundSize: '24px 24px'
         }} />
@@ -373,8 +370,7 @@ export default function HeroPage() {
       {/* ══════════════════════════════════════════════════════════════════ */}
       <section className="py-20 md:py-28 bg-white relative overflow-hidden">
         {/* Grid background */}
-        <div className="absolute inset-0 opacity-[0.3]" style={{
-          backgroundColor: '#f8fafc',
+        <div className="absolute inset-0 opacity-[0.3] pointer-events-none" style={{
           backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)',
           backgroundSize: '24px 24px'
         }} />
@@ -391,7 +387,7 @@ export default function HeroPage() {
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
             {benefits.map((b, i) => (
               <AnimatedSection key={i} delay={i * 80}>
-                <div className="h-full text-center p-6 rounded-2xl border border-slate-200 hover:border-orange-200 hover:bg-orange-50/30 transition-colors relative z-10 flex flex-col items-center">
+                <div className="h-full text-center p-6 rounded-2xl border border-slate-200 bg-white/50 hover:border-orange-200 hover:bg-orange-50/30 transition-colors relative z-10 flex flex-col items-center">
                   <div className="w-14 h-14 mb-5 flex items-center justify-center bg-orange-100 rounded-xl shrink-0">
                     <b.icon className="w-6 h-6 text-orange-500" />
                   </div>
@@ -412,10 +408,9 @@ export default function HeroPage() {
       {/* ══════════════════════════════════════════════════════════════════ */}
       {/* ── SECTION 4: Đơn vị phát triển ── */}
       {/* ══════════════════════════════════════════════════════════════════ */}
-      <section className="py-20 md:py-24 bg-white relative overflow-hidden">
+      <section className="py-20 md:py-24 bg-slate-50/40 relative overflow-hidden">
         {/* Grid background */}
-        <div className="absolute inset-0 opacity-[0.3]" style={{
-          backgroundColor: '#f8fafc',
+        <div className="absolute inset-0 opacity-[0.3] pointer-events-none" style={{
           backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)',
           backgroundSize: '24px 24px'
         }} />

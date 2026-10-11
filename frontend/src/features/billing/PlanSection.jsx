@@ -138,7 +138,7 @@ export default function PlanSection({ data, t }) {
   return (
     <div className="space-y-5">
       {/* Plan name + price */}
-      <div className="flex items-start justify-between gap-4 rounded-2xl border border-amber-200/80 bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-white px-6 py-5 shadow-xs">
+      <div className="flex items-start justify-between gap-4 rounded-2xl border border-amber-200/80 bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-white px-6 py-5 shadow-xs dark:border-amber-500/30 dark:bg-gradient-to-br dark:from-amber-500/15 dark:via-orange-500/10 dark:to-dk-raised">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold bg-primary-600 text-white rounded-full shadow-xs">
@@ -146,19 +146,19 @@ export default function PlanSection({ data, t }) {
               {planLabel}
             </span>
             {data.activePlanCode && (
-              <span className="text-xs text-primary-700 bg-primary-50 px-2 py-0.5 rounded-md border border-primary-200/50 font-mono">
+              <span className="text-xs text-primary-700 bg-primary-50 px-2 py-0.5 rounded-md border border-primary-200/50 font-mono dark:bg-primary-950/40 dark:text-orange-400 dark:border-orange-500/30">
                 {data.activePlanCode}
               </span>
             )}
-            <span className="inline-flex px-2.5 py-0.5 text-[11px] font-medium rounded-full bg-white text-primary-700 border border-primary-200/60 shadow-2xs">
+            <span className="inline-flex px-2.5 py-0.5 text-[11px] font-medium rounded-full bg-white text-primary-700 border border-primary-200/60 shadow-2xs dark:bg-dk-raised dark:text-orange-400 dark:border-orange-500/30">
               {isYearly ? t('accountProfileModal.billingYearly') : t('accountProfileModal.billingMonthly')}
             </span>
           </div>
-          <p className="text-2xl font-extrabold text-gray-900 mt-2 tracking-tight">
+          <p className="text-2xl font-extrabold text-gray-900 dark:text-dk-text mt-2 tracking-tight">
             {formatPrice(displayPrice, t, isPlaceholder)}
           </p>
           {!isPlaceholder && displayPrice > 0 && (
-            <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+            <p className="text-xs text-gray-500 dark:text-dk-text mt-0.5 flex items-center gap-1">
               <span>{isYearly ? t('accountProfileModal.perYear') : t('accountProfileModal.perMonth')}</span>
               <span>·</span>
               <span>{t('pricing.taxNoteKct')}</span>
@@ -166,9 +166,9 @@ export default function PlanSection({ data, t }) {
           )}
         </div>
         {data.planMaxEmployees !== null && (
-          <div className="text-right shrink-0 bg-white/90 backdrop-blur-xs px-4 py-2.5 rounded-xl border border-amber-100 shadow-2xs">
-            <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wider">{t('accountProfileModal.maxEmployees')}</p>
-            <p className="text-sm font-bold text-gray-900 mt-0.5">
+          <div className="text-right shrink-0 bg-white/90 backdrop-blur-xs px-4 py-2.5 rounded-xl border border-amber-100 shadow-2xs dark:bg-dk-surface/90 dark:border-amber-500/20">
+            <p className="text-[11px] font-medium text-gray-500 dark:text-dk-text2 uppercase tracking-wider">{t('accountProfileModal.maxEmployees')}</p>
+            <p className="text-sm font-bold text-gray-900 dark:text-dk-text mt-0.5">
               {data.planMaxEmployees === -1 ? t('accountProfileModal.unlimited') : t('accountProfileModal.people', { count: data.planMaxEmployees })}
             </p>
           </div>
@@ -238,7 +238,7 @@ export default function PlanSection({ data, t }) {
           {features.map((feat, i) => (
             <span
               key={i}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs bg-white text-gray-700 rounded-lg border border-gray-200/70 shadow-2xs"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs bg-white text-gray-700 rounded-lg border border-gray-200/70 shadow-2xs dark:bg-dk-surface dark:text-dk-text dark:border-dk-border"
             >
               <HiOutlineBadgeCheck className="w-3.5 h-3.5 text-emerald-500" />
               {unwrapFeature(feat, locale)}
@@ -248,14 +248,14 @@ export default function PlanSection({ data, t }) {
       )}
 
       {/* Tin nhắn trong kỳ — mọi số lấy từ ĐÚNG hàm của cổng chặn gửi tin, cùng kỳ 30 ngày từ ngày kích hoạt gói */}
-      <div className="rounded-2xl border border-gray-200/80 bg-white p-5 space-y-3.5 shadow-xs" data-testid="messages-usage">
-        <div className="flex items-center justify-between pb-2 border-b border-gray-100">
-          <p className="text-xs font-bold text-gray-600 uppercase tracking-wider">
+      <div className="rounded-2xl border border-gray-200/80 bg-white p-5 space-y-3.5 shadow-xs dark:border-dk-border dark:bg-dk-surface" data-testid="messages-usage">
+        <div className="flex items-center justify-between pb-2 border-b border-gray-100 dark:border-dk-border">
+          <p className="text-xs font-bold text-gray-600 dark:text-dk-text uppercase tracking-wider">
             {sendCycleEnd
               ? t('accountProfileModal.messagesInCycleUntil', { date: sendCycleEnd })
               : t('accountProfileModal.messagesInCycle')}
           </p>
-          <span className="text-[11px] font-medium text-gray-400 bg-gray-50 px-2 py-0.5 rounded-md border border-gray-100">
+          <span className="text-[11px] font-medium text-gray-400 dark:text-dk-text2 bg-gray-50 dark:bg-dk-raised px-2 py-0.5 rounded-md border border-gray-100 dark:border-dk-border">
             Đã dùng · Hạn mức
           </span>
         </div>
@@ -331,14 +331,14 @@ export default function PlanSection({ data, t }) {
             serviceSuspended={serviceSuspended}
           />
         )}
-        <p className="text-[11px] text-gray-400 pt-0.5">{t('accountProfileModal.includesQuickSend')}</p>
+        <p className="text-[11px] text-gray-400 dark:text-dk-text2 pt-0.5">{t('accountProfileModal.includesQuickSend')}</p>
       </div>
 
       {/* Lượt AI — đã dùng / hạn mức kỳ, còn lại, ngày làm mới; ví mua thêm không hết hạn */}
-      <div className="rounded-2xl border border-gray-200/80 bg-white p-5 space-y-3.5 shadow-xs" data-testid="ai-usage">
-        <div className="flex items-center justify-between pb-2 border-b border-gray-100">
-          <p className="text-xs font-bold text-gray-600 uppercase tracking-wider">{t('accountProfileModal.aiUsageTitle')}</p>
-          <span className="text-[11px] font-medium text-gray-400 bg-gray-50 px-2 py-0.5 rounded-md border border-gray-100">
+      <div className="rounded-2xl border border-gray-200/80 bg-white p-5 space-y-3.5 shadow-xs dark:border-dk-border dark:bg-dk-surface" data-testid="ai-usage">
+        <div className="flex items-center justify-between pb-2 border-b border-gray-100 dark:border-dk-border">
+          <p className="text-xs font-bold text-gray-600 dark:text-dk-text uppercase tracking-wider">{t('accountProfileModal.aiUsageTitle')}</p>
+          <span className="text-[11px] font-medium text-gray-400 dark:text-dk-text2 bg-gray-50 dark:bg-dk-raised px-2 py-0.5 rounded-md border border-gray-100 dark:border-dk-border">
             Đã dùng · Hạn mức
           </span>
         </div>
@@ -352,24 +352,24 @@ export default function PlanSection({ data, t }) {
           usingAddons={aiWalletRemaining > 0}
         />
         {!serviceSuspended && aiRemaining !== null && (
-          <p className="text-xs text-gray-500 font-medium" data-testid="ai-usage-remaining">
+          <p className="text-xs text-gray-500 dark:text-dk-text font-medium" data-testid="ai-usage-remaining">
             {aiRefreshDate
               ? t('accountProfileModal.aiRemainingRefresh', { remaining: formatNumber(aiRemaining), date: aiRefreshDate })
               : t('accountProfileModal.aiRemaining', { remaining: formatNumber(aiRemaining) })}
           </p>
         )}
         {!serviceSuspended && aiWalletRemaining > 0 && (
-          <p className="text-xs text-amber-700 font-medium bg-amber-50/80 p-2.5 rounded-xl border border-amber-200/60" data-testid="ai-usage-wallet">
+          <p className="text-xs text-amber-700 dark:text-amber-300 font-medium bg-amber-50/80 dark:bg-amber-950/30 p-2.5 rounded-xl border border-amber-200/60 dark:border-amber-900/50" data-testid="ai-usage-wallet">
             {t('accountProfileModal.aiWalletExtra', { n: formatNumber(aiWalletRemaining) })}
           </p>
         )}
       </div>
 
       {/* Tài nguyên — cùng hàm đếm và cùng trần với cổng tạo mới (trần đã gồm slot mua thêm còn hạn) */}
-      <div className="rounded-2xl border border-gray-200/80 bg-white p-5 space-y-3.5 shadow-xs" data-testid="resources-usage">
-        <div className="flex items-center justify-between pb-2 border-b border-gray-100">
-          <p className="text-xs font-bold text-gray-600 uppercase tracking-wider">{t('accountProfileModal.resourcesTitle')}</p>
-          <span className="text-[11px] font-medium text-gray-400 bg-gray-50 px-2 py-0.5 rounded-md border border-gray-100">
+      <div className="rounded-2xl border border-gray-200/80 bg-white p-5 space-y-3.5 shadow-xs dark:border-dk-border dark:bg-dk-surface" data-testid="resources-usage">
+        <div className="flex items-center justify-between pb-2 border-b border-gray-100 dark:border-dk-border">
+          <p className="text-xs font-bold text-gray-600 dark:text-dk-text uppercase tracking-wider">{t('accountProfileModal.resourcesTitle')}</p>
+          <span className="text-[11px] font-medium text-gray-400 dark:text-dk-text2 bg-gray-50 dark:bg-dk-raised px-2 py-0.5 rounded-md border border-gray-100 dark:border-dk-border">
             Đang dùng · Hạn mức
           </span>
         </div>

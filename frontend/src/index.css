@@ -21,6 +21,23 @@ body {
   overflow-x: hidden;
 }
 
+html.dark {
+  --dk-inset: 10 16 28;
+  --dk-bg: 12 19 34;
+  --dk-surface: 27 37 55;
+  --dk-raised: 37 50 73;
+  --dk-strong: 48 62 88;
+  --dk-border: 54 68 92;
+  --dk-border-strong: 74 90 117;
+  --dk-text: 226 232 240;
+  --dk-text2: 169 181 199;
+  --dk-muted: 145 158 178;
+}
+
+.dark body {
+  background-color: rgb(var(--dk-bg));
+  color: rgb(var(--dk-text));
+}
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
@@ -39,6 +56,19 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: rgb(var(--dk-inset));
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgb(var(--dk-border));
+  border-radius: 3px;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--dk-border-strong));
 }
 
 /* Custom focus styles */
@@ -73,7 +103,7 @@ body {
 }
 
 .btn-secondary {
-  @apply bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 active:bg-gray-100;
+  @apply bg-white dark:bg-dk-surface text-gray-700 dark:text-dk-text border border-gray-300 dark:border-dk-border/80 hover:bg-gray-50 dark:hover:bg-dk-raised active:bg-gray-100 dark:active:bg-dk-strong;
 }
 
 .btn-warning {
@@ -86,7 +116,7 @@ body {
 
 /* Input base styles */
 .input {
-  @apply w-full px-3 py-2 text-base md:text-sm border border-gray-300 rounded-lg focus:border-orange-400 focus:ring-1 focus:ring-orange-100 transition-all;
+  @apply w-full px-3 py-2 text-base md:text-sm border border-gray-300 dark:border-dk-border/80 rounded-lg dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted focus:border-orange-400 focus:ring-1 focus:ring-orange-100 transition-all;
 }
 
 .input-error {
@@ -95,7 +125,7 @@ body {
 
 /* Label styles */
 .label {
-  @apply text-sm font-semibold text-slate-700;
+  @apply block text-sm font-medium text-gray-700 dark:text-dk-text mb-1;
 }
 
 /* Chặn nút reveal/clear của trình duyệt để tránh lộ mật khẩu SMTP trên UI */
@@ -118,16 +148,11 @@ input[type='number'] {
 
 /* Card styles */
 .card {
-  @apply bg-white rounded-xl shadow-sm border border-gray-100;
+  @apply bg-white dark:bg-dk-surface rounded-xl shadow-sm border border-gray-100 dark:border-dk-border/90 dark:text-dk-text transition-colors;
 }
 
 .card-body {
   @apply p-6;
-}
-
-/* Form label */
-.label {
-  @apply block text-sm font-medium text-gray-700 mb-1;
 }
 
 /* Table styles */
@@ -140,15 +165,15 @@ input[type='number'] {
 }
 
 .table th {
-  @apply px-4 py-3 text-left font-medium text-gray-500 bg-gray-50 border-b;
+  @apply px-4 py-3 text-left font-medium text-gray-500 dark:text-dk-text bg-gray-50 dark:bg-dk-surface border-b dark:border-dk-border;
 }
 
 .table td {
-  @apply px-4 py-3 border-b border-gray-100;
+  @apply px-4 py-3 border-b border-gray-100 dark:border-dk-border/80 dark:text-dk-text;
 }
 
 .table tbody tr:hover {
-  @apply bg-gray-50;
+  @apply bg-gray-50 dark:bg-dk-raised/60;
 }
 
 /* Status badges */
@@ -218,6 +243,11 @@ input[type='number'] {
   animation: modal-backdrop-in 0.18s ease-out both;
 }
 
+html.dark .modal-overlay {
+  background-color: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(5px);
+}
+
 @keyframes modal-backdrop-in {
   from { opacity: 0; }
   to   { opacity: 1; }
@@ -233,7 +263,7 @@ input[type='number'] {
 }
 
 .modal-content {
-  @apply bg-white rounded-xl shadow-xl max-h-[90vh] overflow-auto;
+  @apply bg-white dark:bg-dk-raised dark:border dark:border-dk-border/80 rounded-xl shadow-xl max-h-[90vh] overflow-auto dark:text-dk-text;
 }
 
 /* Loading spinner */

@@ -58,12 +58,12 @@ const CampaignDuplicateModal = ({ campaign, open, onClose, onDone }) => {
         className="absolute inset-0 bg-black/50"
         onClick={onClose}
       />
-      <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">{t('campaigns.duplicateModalTitle')}</h3>
+      <div className="relative bg-white dark:bg-dk-surface rounded-lg shadow-xl max-w-md w-full border border-transparent dark:border-dk-border text-gray-900 dark:text-dk-text">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-dk-border">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-dk-text">{t('campaigns.duplicateModalTitle')}</h3>
         </div>
         <div className="px-6 py-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-2">
             {t('campaigns.newCampaignName')}
           </label>
           <input
@@ -75,15 +75,15 @@ const CampaignDuplicateModal = ({ campaign, open, onClose, onDone }) => {
               if (e.key === 'Escape') onClose();
             }}
             placeholder={t('campaigns.newCampaignNamePlaceholder')}
-            className="input w-full"
+            className="input w-full dark:bg-dk-raised dark:border-dk-border dark:text-dk-text"
             autoFocus
           />
         </div>
-        <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-end space-x-3">
+        <div className="px-6 py-4 border-t border-gray-200 dark:border-dk-border bg-gray-50 dark:bg-dk-bg rounded-b-lg flex items-center justify-end space-x-3">
           <button
             onClick={onClose}
             disabled={isDuplicating}
-            className="btn btn-secondary"
+            className="btn btn-secondary dark:bg-dk-raised dark:border-dk-border dark:text-dk-text dark:hover:bg-dk-strong"
           >
             {t('common.cancel')}
           </button>

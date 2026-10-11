@@ -71,16 +71,16 @@ const ConsentRequiredModal = ({ isOpen, onConsented, onDecline, isOutdated = fal
   return createPortal(
     <div className="modal-overlay">
       <div
-        className="modal-content modal-content-animate w-full max-w-lg mx-4"
+        className="modal-content modal-content-animate w-full max-w-lg mx-4 dark:border dark:border-dk-border/80 dark:shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-2 px-6 py-4 border-b border-gray-100">
-          <HiOutlineShieldCheck className="w-5 h-5 text-primary-600" />
-          <h2 className="text-base font-semibold text-gray-900">{title}</h2>
+        <div className="flex items-center gap-2.5 px-6 py-4 border-b border-gray-100 dark:border-dk-border">
+          <HiOutlineShieldCheck className="w-5 h-5 text-orange-500 shrink-0" />
+          <h2 className="text-base font-bold text-gray-900 dark:text-dk-text tracking-tight">{title}</h2>
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-          <p className="text-sm text-gray-600 leading-relaxed">
+          <p className="text-sm text-gray-600 dark:text-dk-text leading-relaxed">
             {t('consentRequired.description')}
           </p>
 
@@ -93,15 +93,15 @@ const ConsentRequiredModal = ({ isOpen, onConsented, onDecline, isOutdated = fal
                   setTerms(e.target.checked);
                   setError('');
                 }}
-                className="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                className="mt-0.5 w-4 h-4 text-orange-500 border-gray-300 dark:border-dk-border-strong rounded bg-white dark:bg-dk-surface focus:ring-orange-500"
               />
-              <span className="text-sm text-gray-700 leading-snug">
+              <span className="text-sm text-gray-700 dark:text-dk-text leading-snug">
                 {t('consentRequired.agreeTerms')}{' '}
                 <a
                   href="/terms"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-primary-600 hover:underline font-medium"
+                  className="text-orange-600 dark:text-orange-400 hover:underline font-medium"
                 >
                   {t('consentRequired.termsLink')}
                 </a>
@@ -116,15 +116,15 @@ const ConsentRequiredModal = ({ isOpen, onConsented, onDecline, isOutdated = fal
                   setPrivacy(e.target.checked);
                   setError('');
                 }}
-                className="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                className="mt-0.5 w-4 h-4 text-orange-500 border-gray-300 dark:border-dk-border-strong rounded bg-white dark:bg-dk-surface focus:ring-orange-500"
               />
-              <span className="text-sm text-gray-700 leading-snug">
+              <span className="text-sm text-gray-700 dark:text-dk-text leading-snug">
                 {t('consentRequired.agreePrivacy')}{' '}
                 <a
                   href="/privacy-policy"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-primary-600 hover:underline font-medium"
+                  className="text-orange-600 dark:text-orange-400 hover:underline font-medium"
                 >
                   {t('consentRequired.privacyLink')}
                 </a>
@@ -139,15 +139,15 @@ const ConsentRequiredModal = ({ isOpen, onConsented, onDecline, isOutdated = fal
                   setDpa(e.target.checked);
                   setError('');
                 }}
-                className="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                className="mt-0.5 w-4 h-4 text-orange-500 border-gray-300 dark:border-dk-border-strong rounded bg-white dark:bg-dk-surface focus:ring-orange-500"
               />
-              <span className="text-sm text-gray-700 leading-snug">
+              <span className="text-sm text-gray-700 dark:text-dk-text leading-snug">
                 {t('consentRequired.agreeDpa')}{' '}
                 <a
                   href="/public-dpa"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-primary-600 hover:underline font-medium"
+                  className="text-orange-600 dark:text-orange-400 hover:underline font-medium"
                 >
                   {t('consentRequired.dpaLink')}
                 </a>
@@ -156,7 +156,7 @@ const ConsentRequiredModal = ({ isOpen, onConsented, onDecline, isOutdated = fal
           </div>
 
           {error && (
-            <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+            <p className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-100 dark:border-red-900/50 rounded-lg px-3 py-2">
               {error}
             </p>
           )}
@@ -164,7 +164,7 @@ const ConsentRequiredModal = ({ isOpen, onConsented, onDecline, isOutdated = fal
           <div className="pt-2 space-y-3">
             <button
               type="submit"
-              className="btn btn-primary w-full"
+              className="btn btn-primary w-full shadow-sm"
               disabled={loading || declining || !allChecked}
             >
               {loading ? t('consentRequired.saving') : t('consentRequired.submit')}
@@ -177,11 +177,11 @@ const ConsentRequiredModal = ({ isOpen, onConsented, onDecline, isOutdated = fal
             >
               {declining ? t('consentRequired.loggingOut') : t('consentRequired.declineAndLogout')}
             </button>
-            <p className="text-xs text-center text-gray-500">
+            <p className="text-xs text-center text-gray-500 dark:text-dk-text2">
               {t('consentRequired.disagreePrompt')}{' '}
               <a
                 href="/contact"
-                className="text-primary-600 hover:underline font-medium"
+                className="text-orange-600 dark:text-orange-400 hover:underline font-medium"
               >
                 {t('consentRequired.accountSettingsLink')}
               </a>

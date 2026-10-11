@@ -146,18 +146,18 @@ export const PLAN_PRESETS = [
 
 export const Field = ({ label, children, note, className = '' }) => (
   <div className={className}>
-    <label className="block text-sm font-semibold text-slate-700 mb-1.5">{label}</label>
+    <label className="block text-sm font-semibold text-slate-700 dark:text-dk-text mb-1.5">{label}</label>
     {children}
-    {note && <p className="mt-1.5 text-xs text-slate-400">{note}</p>}
+    {note && <p className="mt-1.5 text-xs text-slate-400 dark:text-dk-muted">{note}</p>}
   </div>
 );
 
 export const FormSection = ({ kicker, title, description, children }) => (
-  <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+  <section className="rounded-2xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface p-5 shadow-sm">
     <div className="mb-5">
-      {kicker && <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-orange-600">{kicker}</p>}
-      <h3 className="mt-1 text-base font-bold text-slate-900">{title}</h3>
-      {description && <p className="mt-1 text-sm leading-relaxed text-slate-500">{description}</p>}
+      {kicker && <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-orange-600 dark:text-orange-400">{kicker}</p>}
+      <h3 className="mt-1 text-base font-bold text-slate-900 dark:text-dk-text">{title}</h3>
+      {description && <p className="mt-1 text-sm leading-relaxed text-slate-500 dark:text-dk-text2">{description}</p>}
     </div>
     {children}
   </section>
@@ -176,14 +176,14 @@ export const normalizePlanPayload = (form) => {
 
 export const ModalShell = ({ title, subtitle, children, footer, onSubmit }) => (
   <form onSubmit={onSubmit} className="flex max-h-[92vh] flex-col">
-    <div className="border-b border-slate-200 bg-slate-50/80 px-6 py-5">
-      <h2 className="text-2xl font-black tracking-tight text-slate-950">{title}</h2>
-      {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
+    <div className="border-b border-slate-200 dark:border-dk-border bg-slate-50/80 dark:bg-dk-raised px-6 py-5">
+      <h2 className="text-2xl font-black tracking-tight text-slate-950 dark:text-dk-text">{title}</h2>
+      {subtitle && <p className="mt-1 text-sm text-slate-500 dark:text-dk-text2">{subtitle}</p>}
     </div>
-    <div className="flex-1 overflow-y-auto bg-slate-50 px-6 py-5">
+    <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-dk-inset px-6 py-5">
       <div className="space-y-5">{children}</div>
     </div>
-    <div className="flex justify-end gap-3 border-t border-slate-200 bg-white px-6 py-4">
+    <div className="flex justify-end gap-3 border-t border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface px-6 py-4">
       {footer}
     </div>
   </form>

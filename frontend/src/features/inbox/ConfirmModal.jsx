@@ -37,25 +37,25 @@ const ConfirmModal = ({ isOpen, title, message, onConfirm, onCancel, confirmText
       <div
         ref={modalRef}
         tabIndex={-1}
-        className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+        className="relative bg-white dark:bg-dk-surface rounded-xl shadow-2xl border border-transparent dark:border-dk-border w-full max-w-md mx-4 overflow-hidden animate-in fade-in zoom-in-95 duration-200"
         role="dialog"
         aria-modal="true"
       >
         <div className="p-6">
           <div className="flex items-start gap-4">
-            <div className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center ${danger ? 'bg-red-100' : 'bg-primary-100'}`}>
-              <HiOutlineExclamation className={`w-6 h-6 ${danger ? 'text-red-600' : 'text-primary-600'}`} />
+            <div className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center ${danger ? 'bg-red-100 dark:bg-red-950/50' : 'bg-primary-100 dark:bg-primary-950/50'}`}>
+              <HiOutlineExclamation className={`w-6 h-6 ${danger ? 'text-red-600 dark:text-red-400' : 'text-primary-600 dark:text-primary-400'}`} />
             </div>
             <div className="flex-1">
-              <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
-              {message && <p className="mt-2 text-sm text-gray-600">{message}</p>}
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-dk-text">{title}</h3>
+              {message && <p className="mt-2 text-sm text-gray-600 dark:text-dk-text">{message}</p>}
             </div>
           </div>
         </div>
-        <div className="flex justify-end gap-3 px-6 pb-5 bg-gray-50">
+        <div className="flex justify-end gap-3 px-6 pb-5 pt-3 bg-gray-50 dark:bg-dk-raised/60 border-t border-transparent dark:border-dk-border">
           <button
             onClick={onCancel}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors"
+            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-dk-text bg-white dark:bg-dk-raised border border-gray-300 dark:border-dk-border rounded-lg hover:bg-gray-50 dark:hover:bg-dk-strong focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors"
           >
             {cancelText || t('common.cancel') || 'Hủy'}
           </button>

@@ -218,14 +218,14 @@ const CampaignCustomers = () => {
     >
 
       {isZaloGroupCampaign && (
-        <div className="card p-2 inline-flex gap-1">
+        <div className="card p-2 inline-flex gap-1 bg-white dark:bg-dk-surface border-slate-200 dark:border-dk-border">
           <button
             type="button"
             onClick={() => setActiveTab('customers')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               activeTab === 'customers'
-                ? 'bg-primary-100 text-primary-700'
-                : 'text-gray-600 hover:bg-gray-100'
+                ? 'bg-primary-100 dark:bg-primary-950/40 text-primary-700 dark:text-primary-300'
+                : 'text-gray-600 dark:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-raised'
             }`}
           >
             {t('campaignCustomers.customerListTab')}
@@ -238,8 +238,8 @@ const CampaignCustomers = () => {
             }}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               activeTab === 'messages'
-                ? 'bg-primary-100 text-primary-700'
-                : 'text-gray-600 hover:bg-gray-100'
+                ? 'bg-primary-100 dark:bg-primary-950/40 text-primary-700 dark:text-primary-300'
+                : 'text-gray-600 dark:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-raised'
             }`}
           >
             {t('campaignCustomers.messagesTab')}
@@ -249,10 +249,10 @@ const CampaignCustomers = () => {
 
       {/* Search bar */}
       {(!isZaloGroupCampaign || activeTab === 'customers') && (
-        <div className="card p-4">
+        <div className="card p-4 bg-white dark:bg-dk-surface border-slate-200 dark:border-dk-border">
           <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3">
-            <div className="flex items-center flex-1 min-w-0 rounded-lg border border-gray-300 bg-white transition-base focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-500">
-              <span className="pl-3 pr-2 text-gray-400 pointer-events-none shrink-0">
+            <div className="flex items-center flex-1 min-w-0 rounded-lg border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-inset transition-base focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-500">
+              <span className="pl-3 pr-2 text-gray-400 dark:text-dk-muted pointer-events-none shrink-0">
                 <HiOutlineSearch className="w-4 h-4" />
               </span>
               <input
@@ -260,7 +260,7 @@ const CampaignCustomers = () => {
                 value={pendingSearch}
                 onChange={(e) => setPendingSearch(e.target.value)}
                 placeholder={t('campaignCustomers.searchCustomer')}
-                className="w-full py-2 pr-3 text-sm bg-transparent border-0 focus:outline-none"
+                className="w-full py-2 pr-3 text-sm bg-transparent border-0 focus:outline-none text-slate-800 dark:text-dk-text placeholder:text-gray-400 dark:placeholder:text-dk-muted"
               />
             </div>
             <div className="w-full sm:w-48 shrink-0">
@@ -270,7 +270,7 @@ const CampaignCustomers = () => {
                   setConsentSource(e.target.value);
                   setPagination((p) => ({ ...p, page: 1 }));
                 }}
-                className="w-full py-2 px-3 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:border-primary-500 text-gray-700"
+                className="w-full py-2 px-3 text-sm bg-white dark:bg-dk-inset border border-gray-300 dark:border-dk-border rounded-lg focus:outline-none focus:border-primary-500 text-gray-700 dark:text-dk-text"
               >
                 <option value="">{t('campaignCustomers.consentSources.all')}</option>
                 <option value="manual">{t('campaignCustomers.consentSources.manual')}</option>
@@ -297,21 +297,21 @@ const CampaignCustomers = () => {
       ) : (
         <>
           {/* Customer table */}
-          <div className="card">
+          <div className="card bg-white dark:bg-dk-surface border-slate-200 dark:border-dk-border">
             <div className="table-container">
               <table className="table">
                 <thead>
-                  <tr>
-                    <th>{t('campaignCustomers.customer')}</th>
-                    <th>{t('campaignCustomers.email')}</th>
-                    <th>{t('campaignCustomers.phone')}</th>
-                    <th>{t('campaignCustomers.status')}</th>
-                    <th>{t('campaignCustomers.consentSource')}</th>
-                    <th>{t('campaignCustomers.joinDate')}</th>
-                    <th className="text-right">{t('campaignCustomers.actions')}</th>
+                  <tr className="border-b border-gray-200 dark:border-dk-border bg-slate-50/80 dark:bg-dk-raised/50">
+                    <th className="text-slate-500 dark:text-dk-text2">{t('campaignCustomers.customer')}</th>
+                    <th className="text-slate-500 dark:text-dk-text2">{t('campaignCustomers.email')}</th>
+                    <th className="text-slate-500 dark:text-dk-text2">{t('campaignCustomers.phone')}</th>
+                    <th className="text-slate-500 dark:text-dk-text2">{t('campaignCustomers.status')}</th>
+                    <th className="text-slate-500 dark:text-dk-text2">{t('campaignCustomers.consentSource')}</th>
+                    <th className="text-slate-500 dark:text-dk-text2">{t('campaignCustomers.joinDate')}</th>
+                    <th className="text-right text-slate-500 dark:text-dk-text2">{t('campaignCustomers.actions')}</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-gray-100 dark:divide-dk-border">
                   {isLoading ? (
                     <tr>
                       <td colSpan={7} className="py-10 text-center">
@@ -320,37 +320,37 @@ const CampaignCustomers = () => {
                     </tr>
                   ) : customers.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-12 text-center text-gray-400">
+                      <td colSpan={7} className="py-12 text-center text-gray-400 dark:text-dk-muted">
                         {t('customers.noCustomersInCampaign')}
                       </td>
                     </tr>
                   ) : (
                     customers.map((c) => (
-                      <tr key={c.id} className="hover:bg-gray-50 transition-colors">
+                      <tr key={c.id} className="hover:bg-gray-50 dark:hover:bg-dk-raised/40 transition-colors">
                         <td>
                           <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-full bg-primary-100 flex items-center justify-center shrink-0">
-                              <span className="font-semibold text-sm text-primary-600">{getInitial(c)}</span>
+                            <div className="w-9 h-9 rounded-full bg-primary-100 dark:bg-primary-950/40 flex items-center justify-center shrink-0">
+                              <span className="font-semibold text-sm text-primary-600 dark:text-primary-400">{getInitial(c)}</span>
                             </div>
-                            <span className="font-medium text-gray-900 truncate max-w-[180px]">
+                            <span className="font-medium text-gray-900 dark:text-dk-text truncate max-w-[180px]">
                               {getDisplayName(c) || '—'}
                             </span>
                           </div>
                         </td>
                         <td>
-                          <div className="flex items-center gap-1.5 text-gray-600 min-w-0">
-                            <HiOutlineMail className="w-4 h-4 text-gray-400 shrink-0" />
+                          <div className="flex items-center gap-1.5 text-gray-600 dark:text-dk-text min-w-0">
+                            <HiOutlineMail className="w-4 h-4 text-gray-400 dark:text-dk-muted shrink-0" />
                             <span className="truncate max-w-[180px]">{c.email || '--'}</span>
                           </div>
                         </td>
                         <td>
                           {c.phone ? (
-                            <div className="flex items-center gap-1.5 text-gray-600">
-                              <HiOutlinePhone className="w-4 h-4 text-gray-400 shrink-0" />
+                            <div className="flex items-center gap-1.5 text-gray-600 dark:text-dk-text">
+                              <HiOutlinePhone className="w-4 h-4 text-gray-400 dark:text-dk-muted shrink-0" />
                               {c.phone}
                             </div>
                           ) : (
-                            <span className="text-gray-400">--</span>
+                            <span className="text-gray-400 dark:text-dk-muted">--</span>
                           )}
                         </td>
                         <td>
@@ -365,12 +365,12 @@ const CampaignCustomers = () => {
                               {t(`campaignCustomers.consentSources.${c.consentSource}`, { defaultValue: c.consentSource })}
                             </span>
                           ) : (
-                            <span className="text-gray-400 text-xs">--</span>
+                            <span className="text-gray-400 dark:text-dk-muted text-xs">--</span>
                           )}
                         </td>
                         <td>
-                          <div className="flex items-center gap-1.5 text-sm text-gray-500">
-                            <HiOutlineCalendar className="w-4 h-4 text-gray-400 shrink-0" />
+                          <div className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-dk-text2">
+                            <HiOutlineCalendar className="w-4 h-4 text-gray-400 dark:text-dk-muted shrink-0" />
                             {formatDate(c.createdAt)}
                           </div>
                         </td>
@@ -378,7 +378,7 @@ const CampaignCustomers = () => {
                           <div className="flex items-center justify-end gap-2">
                             <button
                               onClick={() => openCustomerModal(c)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-300 transition-colors whitespace-nowrap"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-dk-border text-gray-700 dark:text-dk-text bg-white dark:bg-dk-raised hover:bg-gray-50 dark:hover:bg-dk-surface hover:border-gray-300 dark:hover:border-dk-border-strong transition-colors whitespace-nowrap"
                             >
                               <HiOutlineUser className="w-3.5 h-3.5" />
                               {t('campaignCustomers.detail')}
@@ -386,7 +386,7 @@ const CampaignCustomers = () => {
                             {!isZaloGroupCampaign && (
                               <button
                                 onClick={() => openJourneyModal(c)}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-primary-200 text-primary-700 bg-primary-50 hover:bg-primary-100 hover:border-primary-300 transition-colors whitespace-nowrap"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-primary-200 dark:border-primary-800 text-primary-700 dark:text-primary-300 bg-primary-50 dark:bg-primary-950/30 hover:bg-primary-100 dark:hover:bg-primary-900/40 hover:border-primary-300 dark:hover:border-primary-700 transition-colors whitespace-nowrap"
                               >
                                 <HiOutlineEye className="w-3.5 h-3.5" />
                                 {t('campaignCustomers.journey')}
@@ -402,8 +402,8 @@ const CampaignCustomers = () => {
             </div>
 
             {pagination.totalPages > 1 && (
-              <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100">
-                <p className="text-sm text-gray-500">
+              <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 dark:border-dk-border">
+                <p className="text-sm text-gray-500 dark:text-dk-text2">
                   {t('campaignCustomers.paginationInfo', {
                     start: (pagination.page - 1) * 20 + 1,
                     end: Math.min(pagination.page * 20, pagination.total),
@@ -418,7 +418,7 @@ const CampaignCustomers = () => {
                   >
                     <HiOutlineChevronLeft className="w-4 h-4" />
                   </button>
-                  <span className="text-sm px-1 text-gray-600">
+                  <span className="text-sm px-1 text-gray-600 dark:text-dk-text">
                     {pagination.page} / {pagination.totalPages}
                   </span>
                   <button

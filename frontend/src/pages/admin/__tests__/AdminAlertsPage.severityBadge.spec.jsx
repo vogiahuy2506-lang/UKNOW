@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AdminAlertsPage from '../AdminAlertsPage';
+import { I18nProvider } from '../../../i18n';
 
 /**
  * PR-10 (C-15) — huy hiệu mức "critical" ở bảng quy tắc cảnh báo dùng class `badge-danger` KHÔNG tồn tại
@@ -34,7 +35,11 @@ describe('AdminAlertsPage — huy hiệu mức độ', () => {
   });
 
   it('critical → badge-error (có màu đỏ), warning → badge-warning; không còn badge-danger', async () => {
-    const { container } = render(<AdminAlertsPage />);
+    const { container } = render(
+      <I18nProvider>
+        <AdminAlertsPage />
+      </I18nProvider>
+    );
     const critical = await screen.findByText('critical');
     expect(critical.className).toContain('badge-error');
     expect(screen.getByText('warning').className).toContain('badge-warning');

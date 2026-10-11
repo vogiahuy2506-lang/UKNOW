@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
@@ -17,6 +17,7 @@ import {
   HiOutlineRefresh, HiOutlineSearch,
   HiOutlineLockClosed, HiOutlineLockOpen, HiOutlineShieldCheck, HiOutlineShieldExclamation,
   HiOutlineCurrencyDollar, HiOutlineXCircle, HiOutlineMailOpen, HiOutlineTrash, HiOutlineUsers, HiOutlineKey,
+  HiOutlineEye, HiOutlineClipboardCopy, HiOutlineUser, HiOutlineX,
 } from 'react-icons/hi';
 import PageContainer from '../../components/common/PageContainer';
 import adminMembersApiService from '../../features/admin/services/adminMembersApi.service';
@@ -42,17 +43,17 @@ const SummaryCard = ({ cardKey, value, hint, active, onClick, label }) => (
     type="button"
     onClick={onClick}
     data-testid={`members-summary-${cardKey}`}
-    className={`card p-4 text-left transition-colors ${active ? 'ring-2 ring-primary-500' : 'hover:bg-gray-50'}`}
+    className={`card p-4 text-left transition-colors ${active ? 'ring-2 ring-primary-500' : 'hover:bg-gray-50 dark:hover:bg-dk-raised/40'}`}
   >
-    <p className="text-xs text-gray-500">{label}</p>
-    <p className="text-2xl font-bold text-gray-900 mt-0.5">{value}</p>
-    {hint && <p className="text-xs text-gray-400 mt-0.5">{hint}</p>}
+    <p className="text-xs text-gray-500 dark:text-dk-text2">{label}</p>
+    <p className="text-2xl font-bold text-gray-900 dark:text-dk-text mt-0.5">{value}</p>
+    {hint && <p className="text-xs text-gray-400 dark:text-dk-muted mt-0.5">{hint}</p>}
   </button>
 );
 
 const ExpiryBadge = ({ expiresAt, _hasPlan }) => {
   const { t } = useI18n();
-  if (!expiresAt) return <span className="text-xs text-gray-400">—</span>;
+  if (!expiresAt) return <span className="text-xs text-gray-400 dark:text-dk-muted">—</span>;
 
   const now = Date.now();
   const exp = new Date(expiresAt);
@@ -60,7 +61,7 @@ const ExpiryBadge = ({ expiresAt, _hasPlan }) => {
 
   if (exp < now) {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-red-50 text-red-600 border border-red-200">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/40">
         {t('plans.expired')}
       </span>
     );
@@ -68,34 +69,35 @@ const ExpiryBadge = ({ expiresAt, _hasPlan }) => {
   if (daysLeft <= 3) {
     return (
       <div>
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-red-50 text-red-600 border border-red-200">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/40">
           ⚠ {t('plans.daysLeft', { n: daysLeft })}
         </span>
-        <p className="text-xs text-gray-400 mt-0.5">{exp.toLocaleDateString('vi-VN')}</p>
+        <p className="text-xs text-gray-400 dark:text-dk-muted mt-0.5">{exp.toLocaleDateString('vi-VN')}</p>
       </div>
     );
   }
   if (daysLeft <= 7) {
     return (
       <div>
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-amber-50 text-amber-600 border border-amber-200">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900/40">
           ⚠ {t('plans.daysLeft', { n: daysLeft })}
         </span>
-        <p className="text-xs text-gray-400 mt-0.5">{exp.toLocaleDateString('vi-VN')}</p>
+        <p className="text-xs text-gray-400 dark:text-dk-muted mt-0.5">{exp.toLocaleDateString('vi-VN')}</p>
       </div>
     );
   }
   return (
     <div>
-      <span className="text-xs text-gray-600 font-medium">{exp.toLocaleDateString('vi-VN')}</span>
-      <p className="text-xs text-gray-400">{t('plans.daysLeft', { n: daysLeft })}</p>
+      <span className="text-xs text-gray-600 dark:text-dk-text font-medium">{exp.toLocaleDateString('vi-VN')}</span>
+      <p className="text-xs text-gray-400 dark:text-dk-muted">{t('plans.daysLeft', { n: daysLeft })}</p>
     </div>
   );
 };
 
 const MODAL_OVERLAY = 'fixed inset-0 z-[9999] flex items-center justify-center p-4';
-const MODAL_SM = 'relative z-10 w-full max-w-md rounded-xl bg-white shadow-xl p-6';
-const MODAL_MD = 'relative z-10 w-full max-w-lg rounded-xl bg-white shadow-xl p-6';
+const MODAL_SM = 'relative z-10 w-full max-w-md rounded-xl bg-white dark:bg-dk-surface shadow-xl p-6 border border-transparent dark:border-dk-border text-gray-900 dark:text-dk-text';
+const MODAL_MD = 'relative z-10 w-full max-w-lg rounded-xl bg-white dark:bg-dk-surface shadow-xl p-6 border border-transparent dark:border-dk-border text-gray-900 dark:text-dk-text';
+const MODAL_LG = 'relative z-10 w-full max-w-2xl rounded-2xl bg-white dark:bg-dk-surface shadow-2xl p-6 border border-slate-200/80 dark:border-dk-border text-gray-900 dark:text-dk-text max-h-[90vh] overflow-y-auto';
 
 const renderModal = (content, onClose, cls = MODAL_SM) =>
   createPortal(
@@ -141,19 +143,19 @@ const AssignPlanModal = ({ member, plans, onClose, onDone }) => {
   return renderModal(
     <div className="space-y-4">
       <div>
-        <h2 className="text-xl font-semibold text-gray-900">{t('adminMembers.assignPlan')}</h2>
-        <p className="text-sm text-gray-500 mt-1">
-          {t('adminMembers.member')}: <strong>{member.fullName || member.username}</strong> ({member.email})
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-dk-text">{t('adminMembers.assignPlan')}</h2>
+        <p className="text-sm text-gray-500 dark:text-dk-text2 mt-1">
+          {t('adminMembers.member')}: <strong className="text-gray-900 dark:text-dk-text">{member.fullName || member.username}</strong> ({member.email})
         </p>
         {member.planName && (
-          <p className="text-sm text-gray-400 mt-0.5">{t('adminMembers.currentPlan')}: <strong>{member.planName}</strong></p>
+          <p className="text-sm text-gray-400 dark:text-dk-text2 mt-0.5">{t('adminMembers.currentPlan')}: <strong className="text-gray-800 dark:text-dk-text">{member.planName}</strong></p>
         )}
       </div>
-      <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
+      <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-transparent dark:border-amber-900/40 rounded-lg px-3 py-2">
         {t('adminMembers.assignNote')}
       </p>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{t('adminMembers.selectPlan')}</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{t('adminMembers.selectPlan')}</label>
         <select className="input w-full" value={selectedPlanId} onChange={(e) => setSelectedPlanId(e.target.value)}>
           <option value="">{t('adminMembers.selectPlanPlaceholder')}</option>
           {/* Gói giữ chỗ "Tùy chọn"/"Liên hệ" không gán được (backend trả 400 PLACEHOLDER_PLAN_NOT_ASSIGNABLE) — loại khỏi danh sách chọn. */}
@@ -166,13 +168,13 @@ const AssignPlanModal = ({ member, plans, onClose, onDone }) => {
         </select>
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{t('adminMembers.billingPeriod')}</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{t('adminMembers.billingPeriod')}</label>
         <select className="input w-full" value={billingPeriod} onChange={(e) => setBillingPeriod(e.target.value)}>
           <option value="monthly">{t('adminMembers.billingMonthly')}</option>
           <option value="yearly">{t('adminMembers.billingYearly')}</option>
         </select>
         {selectedPlan && (
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-gray-500 dark:text-dk-text2 mt-1">
             {billingPeriod === 'yearly' && selectedPlan.priceYearly
               ? `${Number(selectedPlan.priceYearly).toLocaleString('vi-VN')} đ/năm`
               : billingPeriod === 'yearly'
@@ -182,7 +184,7 @@ const AssignPlanModal = ({ member, plans, onClose, onDone }) => {
         )}
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{t('adminMembers.quantityLabel')}</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{t('adminMembers.quantityLabel')}</label>
         <input
           type="number"
           className="input w-full"
@@ -198,17 +200,17 @@ const AssignPlanModal = ({ member, plans, onClose, onDone }) => {
             }
           }}
         />
-        <p className="text-xs text-gray-500 mt-1">{t('adminMembers.quantityHint')}</p>
+        <p className="text-xs text-gray-500 dark:text-dk-text2 mt-1">{t('adminMembers.quantityHint')}</p>
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{t('adminMembers.paymentMethod')}</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{t('adminMembers.paymentMethod')}</label>
         <select className="input w-full" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
           <option value="free">{t('adminMembers.freeDemo')}</option>
           <option value="manual">{t('adminMembers.manualPayment')}</option>
         </select>
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{t('adminMembers.note')}</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{t('adminMembers.note')}</label>
         <input
           className="input w-full"
           placeholder={t('adminMembers.placeholderNote')}
@@ -245,8 +247,8 @@ const TypeToConfirmModal = ({
   const [typed, setTyped] = useState('');
   const [releaseTrialHistory, setReleaseTrialHistory] = useState(false);
   const matches = typed.trim().toLowerCase() === (member.email || '').trim().toLowerCase();
-  const iconBg = danger ? 'bg-red-100' : 'bg-amber-100';
-  const iconColor = danger ? 'text-red-600' : 'text-amber-600';
+  const iconBg = danger ? 'bg-red-100 dark:bg-red-950/60' : 'bg-amber-100 dark:bg-amber-950/60';
+  const iconColor = danger ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400';
   const btnClass = danger ? 'btn-primary bg-red-600 hover:bg-red-700 border-red-600' : 'btn-primary bg-amber-600 hover:bg-amber-700 border-amber-600';
 
   return renderModal(
@@ -255,19 +257,19 @@ const TypeToConfirmModal = ({
         <div className={`w-10 h-10 rounded-full ${iconBg} flex items-center justify-center shrink-0`}>
           {danger ? <HiOutlineTrash className={`w-5 h-5 ${iconColor}`} /> : <HiOutlineMailOpen className={`w-5 h-5 ${iconColor}`} />}
         </div>
-        <h2 className="text-xl font-semibold text-gray-900">{t(titleKey)}</h2>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-dk-text">{t(titleKey)}</h2>
       </div>
-      <p className="text-sm text-gray-600 mb-1">
-        <strong>{member.fullName || member.username}</strong> ({member.email})
+      <p className="text-sm text-gray-600 dark:text-dk-text mb-1">
+        <strong className="text-gray-900 dark:text-dk-text">{member.fullName || member.username}</strong> ({member.email})
       </p>
-      <p className="text-sm text-gray-600">{t(warningKey)}</p>
+      <p className="text-sm text-gray-600 dark:text-dk-text">{t(warningKey)}</p>
 
       {showReleaseTrialOption && (
-        <div className="mt-4 p-3 bg-amber-50/70 border border-amber-200 rounded-lg space-y-1.5">
-          <label className="flex items-start gap-2.5 cursor-pointer text-sm text-gray-800 select-none">
+        <div className="mt-4 p-3 bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 rounded-lg space-y-1.5">
+          <label className="flex items-start gap-2.5 cursor-pointer text-sm text-gray-800 dark:text-dk-text select-none">
             <input
               type="checkbox"
-              className="mt-0.5 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+              className="mt-0.5 rounded border-gray-300 dark:border-dk-border text-amber-600 focus:ring-amber-500"
               checked={releaseTrialHistory}
               onChange={(e) => setReleaseTrialHistory(e.target.checked)}
             />
@@ -276,7 +278,7 @@ const TypeToConfirmModal = ({
             </span>
           </label>
           {releaseTrialHistory && (
-            <p className="text-xs text-amber-700 pl-6">
+            <p className="text-xs text-amber-700 dark:text-amber-300 pl-6">
               {t('adminMembers.releaseTrialHistoryWarning')}
             </p>
           )}
@@ -284,7 +286,7 @@ const TypeToConfirmModal = ({
       )}
 
       <div className="mt-4">
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">
           {t('adminMembers.typeEmailToConfirm', { email: member.email })}
         </label>
         <input
@@ -312,6 +314,311 @@ const TypeToConfirmModal = ({
   );
 };
 
+// ── MemberDetailModal ─────────────────────────────────────────────────────────
+const MemberDetailModal = ({
+  member,
+  phoneOtpEnabled,
+  segmentLabel,
+  onClose,
+  onOpenAssignPlan,
+  onToggleStatus,
+  statusUpdating,
+}) => {
+  const { t } = useI18n();
+  const [copiedId, setCopiedId] = useState(false);
+  const [copiedEmail, setCopiedEmail] = useState(false);
+
+  if (!member) return null;
+
+  const isActive = member.status === 'active';
+  const handleCopy = (text, type) => {
+    if (!text) return;
+    navigator.clipboard.writeText(String(text))
+      .then(() => {
+        if (type === 'id') {
+          setCopiedId(true);
+          toast.success(t('adminMembers.memberDetailModal.copiedId', 'Đã sao chép ID'));
+          setTimeout(() => setCopiedId(false), 2000);
+        } else {
+          setCopiedEmail(true);
+          toast.success(t('common.copied', 'Đã sao chép'));
+          setTimeout(() => setCopiedEmail(false), 2000);
+        }
+      })
+      .catch((err) => {
+        console.error(err);
+        toast.error(t('common.copyFailed', 'Sao chép thất bại'));
+      });
+  };
+
+  return renderModal(
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3 pb-3 border-b border-gray-100 dark:border-dk-border">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-primary-500 to-amber-500 flex items-center justify-center text-white text-lg font-bold shadow-md shrink-0">
+            {(member.fullName || member.username || '?')[0].toUpperCase()}
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold text-primary-600 dark:text-primary-400 uppercase tracking-wider">
+              {t('adminMembers.memberDetailModal.title')}
+            </p>
+            <h2 className="text-lg font-bold text-gray-900 dark:text-dk-text truncate">
+              {member.fullName || member.username}
+            </h2>
+            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+              <span className="text-xs text-gray-500 dark:text-dk-text2 font-mono">
+                {member.email}
+              </span>
+              <button
+                type="button"
+                onClick={() => handleCopy(member.email, 'email')}
+                className="text-[11px] text-primary-600 dark:text-primary-400 hover:underline inline-flex items-center gap-0.5"
+                title={t('common.copy', 'Sao chép')}
+              >
+                <HiOutlineClipboardCopy className="w-3.5 h-3.5" />
+                <span>{copiedEmail ? t('common.copied', 'Đã sao chép') : t('common.copy', 'Sao chép')}</span>
+              </button>
+            </div>
+            <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+              <span className="badge badge-gray text-[10px]">
+                {member.role === 'admin' ? t('adminMembers.roles.admin', 'Admin') : t('adminMembers.roles.user', 'User')}
+              </span>
+              <span className="badge badge-primary text-[10px]">
+                {segmentLabel ? segmentLabel(member) : member.segment}
+              </span>
+              {member.status === 'deleted' ? (
+                <span className="badge badge-gray text-[10px]">{t('adminMembers.statusDeleted')}</span>
+              ) : (
+                <span className={`badge ${isActive ? 'badge-success' : 'badge-gray'} text-[10px]`}>
+                  {isActive ? t('adminMembers.statusActive') : t('adminMembers.statusLocked')}
+                </span>
+              )}
+              {member.twoFactorEnabled && (
+                <span className="badge badge-success text-[10px]">{t('adminMembers.twoFactorBadge')}</span>
+              )}
+              {member.churnRisk && (
+                <span className="badge badge-warning text-[10px]">{t('adminMembers.table.churnRiskBadge')}</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-raised transition-colors"
+          title={t('common.close', 'Đóng')}
+        >
+          <HiOutlineX className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* 4 Cards Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+        {/* Card 1: Account Profile */}
+        <div className="p-3.5 rounded-xl bg-gray-50/70 dark:bg-dk-bg/40 border border-gray-100 dark:border-dk-border/80 space-y-2">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-gray-900 dark:text-dk-text uppercase tracking-wider pb-1 border-b border-gray-200/50 dark:border-dk-border">
+            <HiOutlineUser className="w-4 h-4 text-primary-500" />
+            <span>{t('adminMembers.memberDetailModal.sectionProfile')}</span>
+          </div>
+          <div className="space-y-1.5 text-xs">
+            <div className="flex justify-between items-center py-0.5">
+              <span className="text-gray-500 dark:text-dk-text2">{t('adminMembers.memberDetailModal.userId')}:</span>
+              <div className="flex items-center gap-1.5 font-mono text-gray-800 dark:text-dk-text font-medium">
+                <span>#{member.id}</span>
+                <button
+                  type="button"
+                  onClick={() => handleCopy(member.id, 'id')}
+                  className="p-1 hover:text-primary-600 dark:hover:text-primary-400 transition-colors inline-flex items-center gap-0.5"
+                  title={t('adminMembers.memberDetailModal.copyId')}
+                >
+                  <HiOutlineClipboardCopy className="w-3.5 h-3.5" />
+                  {copiedId && (
+                    <span className="text-[10px] text-primary-600 font-sans font-normal">
+                      {t('common.copied', 'Đã sao chép')}
+                    </span>
+                  )}
+                </button>
+              </div>
+            </div>
+            <div className="flex justify-between items-center py-0.5">
+              <span className="text-gray-500 dark:text-dk-text2">{t('adminMembers.memberDetailModal.fullName')}:</span>
+              <span className="text-gray-900 dark:text-dk-text font-medium">{member.fullName || '—'}</span>
+            </div>
+            <div className="flex justify-between items-center py-0.5">
+              <span className="text-gray-500 dark:text-dk-text2">{t('adminMembers.memberDetailModal.username')}:</span>
+              <span className="font-mono text-gray-800 dark:text-dk-text">{member.username || '—'}</span>
+            </div>
+            <div className="flex justify-between items-start py-0.5">
+              <span className="text-gray-500 dark:text-dk-text2">{t('adminMembers.memberDetailModal.phone')}:</span>
+              <div className="text-right">
+                <span className="font-mono text-gray-900 dark:text-dk-text font-medium">{member.phone || '—'}</span>
+                {phoneOtpEnabled && member.phone && (
+                  <div className="text-[11px] mt-0.5">
+                    {member.phoneVerifiedAt ? (
+                      <span className="text-green-600 dark:text-green-400 font-medium">
+                        ✓ {t('adminMembers.phoneVerified', { date: fmtDate(member.phoneVerifiedAt) })}
+                      </span>
+                    ) : (
+                      <span className="text-amber-600 dark:text-amber-400 font-medium">
+                        ! {t('adminMembers.phoneNotVerified')}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex justify-between items-center py-0.5">
+              <span className="text-gray-500 dark:text-dk-text2">{t('adminMembers.memberDetailModal.createdAt')}:</span>
+              <span className="text-gray-700 dark:text-dk-text">{fmtDate(member.createdAt)}</span>
+            </div>
+            <div className="flex justify-between items-center py-0.5">
+              <span className="text-gray-500 dark:text-dk-text2">{t('adminMembers.memberDetailModal.lastActivity')}:</span>
+              <span className="text-gray-700 dark:text-dk-text">
+                {member.lastActivityAt ? new Date(member.lastActivityAt).toLocaleDateString('vi-VN') : '—'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 2: Service Plan */}
+        <div className="p-3.5 rounded-xl bg-gray-50/70 dark:bg-dk-bg/40 border border-gray-100 dark:border-dk-border/80 space-y-2">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-gray-900 dark:text-dk-text uppercase tracking-wider pb-1 border-b border-gray-200/50 dark:border-dk-border">
+            <HiOutlineCurrencyDollar className="w-4 h-4 text-emerald-500" />
+            <span>{t('adminMembers.memberDetailModal.sectionPlan')}</span>
+          </div>
+          <div className="space-y-1.5 text-xs">
+            <div className="flex justify-between items-center py-0.5">
+              <span className="text-gray-500 dark:text-dk-text2">{t('adminMembers.memberDetailModal.planName')}:</span>
+              {member.planName ? (
+                <span className="badge badge-success font-semibold">{member.planName}</span>
+              ) : (
+                <span className="badge badge-gray">{t('adminMembers.noPlan')}</span>
+              )}
+            </div>
+            <div className="flex justify-between items-center py-0.5">
+              <span className="text-gray-500 dark:text-dk-text2">{t('adminMembers.memberDetailModal.planState')}:</span>
+              <span className="text-gray-800 dark:text-dk-text font-medium">
+                {member.planState ? t(`adminMembers.planState.${member.planState}`, member.planState) : '—'}
+              </span>
+            </div>
+            <div className="flex justify-between items-start py-0.5">
+              <span className="text-gray-500 dark:text-dk-text2">{t('adminMembers.memberDetailModal.subscriptionExpiry')}:</span>
+              <div className="text-right">
+                <ExpiryBadge expiresAt={member.subscriptionExpiresAt} hasPlan={!!member.activePlanId} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 3: Team & Organization */}
+        <div className="p-3.5 rounded-xl bg-gray-50/70 dark:bg-dk-bg/40 border border-gray-100 dark:border-dk-border/80 space-y-2">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-gray-900 dark:text-dk-text uppercase tracking-wider pb-1 border-b border-gray-200/50 dark:border-dk-border">
+            <HiOutlineUsers className="w-4 h-4 text-blue-500" />
+            <span>{t('adminMembers.memberDetailModal.sectionTeam')}</span>
+          </div>
+          <div className="space-y-1.5 text-xs">
+            <div className="flex justify-between items-center py-0.5">
+              <span className="text-gray-500 dark:text-dk-text2">{t('adminMembers.memberDetailModal.employeeCount')}:</span>
+              <span className="text-base font-bold text-gray-900 dark:text-dk-text">
+                {member.employeeCount ?? 0}
+              </span>
+            </div>
+            <div className="flex justify-between items-center py-0.5">
+              <span className="text-gray-500 dark:text-dk-text2">{t('adminMembers.memberDetailModal.segment')}:</span>
+              <span className="text-gray-800 dark:text-dk-text font-medium">{segmentLabel ? segmentLabel(member) : member.segment}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 4: Security & Risk */}
+        <div className="p-3.5 rounded-xl bg-gray-50/70 dark:bg-dk-bg/40 border border-gray-100 dark:border-dk-border/80 space-y-2">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-gray-900 dark:text-dk-text uppercase tracking-wider pb-1 border-b border-gray-200/50 dark:border-dk-border">
+            <HiOutlineShieldCheck className="w-4 h-4 text-purple-500" />
+            <span>{t('adminMembers.memberDetailModal.sectionSecurity')}</span>
+          </div>
+          <div className="space-y-1.5 text-xs">
+            <div className="flex justify-between items-center py-0.5">
+              <span className="text-gray-500 dark:text-dk-text2">{t('adminMembers.memberDetailModal.accountStatus')}:</span>
+              <span className={`badge ${isActive ? 'badge-success' : 'badge-gray'} font-medium`}>
+                {member.status === 'deleted'
+                  ? t('adminMembers.statusDeleted')
+                  : isActive
+                  ? t('adminMembers.statusActive')
+                  : t('adminMembers.statusLocked')}
+              </span>
+            </div>
+            <div className="flex justify-between items-center py-0.5">
+              <span className="text-gray-500 dark:text-dk-text2">{t('adminMembers.memberDetailModal.twoFactor')}:</span>
+              <span className={member.twoFactorEnabled ? 'text-green-600 dark:text-green-400 font-medium' : 'text-gray-400 dark:text-dk-muted'}>
+                {member.twoFactorEnabled ? t('adminMembers.memberDetailModal.twoFactorEnabled') : t('adminMembers.memberDetailModal.twoFactorDisabled')}
+              </span>
+            </div>
+            <div className="flex justify-between items-start py-0.5">
+              <span className="text-gray-500 dark:text-dk-text2">{t('adminMembers.memberDetailModal.churnRisk')}:</span>
+              <div className="text-right">
+                {member.churnRisk ? (
+                  <div>
+                    <span className="badge badge-warning">{t('adminMembers.memberDetailModal.churnRiskWarning')}</span>
+                    {member.churnRiskReason && (
+                      <p className="text-[11px] text-gray-500 dark:text-dk-text2 mt-0.5">
+                        {t(`adminMembers.churnReason.${member.churnRiskReason}`)}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-gray-500 dark:text-dk-text2">{t('adminMembers.memberDetailModal.churnRiskSafe')}</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer Actions */}
+      <div className="flex items-center justify-between gap-3 pt-3 border-t border-gray-100 dark:border-dk-border">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              onOpenAssignPlan(member);
+            }}
+            className="btn btn-secondary text-xs flex items-center gap-1.5"
+          >
+            <HiOutlineCurrencyDollar className="w-4 h-4 text-emerald-500" />
+            <span>{t('adminMembers.memberDetailModal.assignPlanBtn')}</span>
+          </button>
+          <button
+            type="button"
+            disabled={statusUpdating}
+            onClick={() => onToggleStatus(member)}
+            className={`btn text-xs flex items-center gap-1.5 ${
+              isActive
+                ? 'btn-secondary text-yellow-600 dark:text-yellow-400 hover:text-yellow-700'
+                : 'btn-secondary text-green-600 dark:text-green-400 hover:text-green-700'
+            }`}
+          >
+            {isActive ? <HiOutlineLockClosed className="w-4 h-4" /> : <HiOutlineLockOpen className="w-4 h-4" />}
+            <span>{isActive ? t('adminMembers.memberDetailModal.lockAccountBtn') : t('adminMembers.memberDetailModal.unlockAccountBtn')}</span>
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="btn btn-primary text-xs"
+        >
+          {t('adminMembers.memberDetailModal.close')}
+        </button>
+      </div>
+    </div>,
+    onClose,
+    MODAL_LG
+  );
+};
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 const AdminMembersPage = () => {
   const { t } = useI18n();
@@ -320,6 +627,11 @@ const AdminMembersPage = () => {
   const [plans, setPlans]         = useState([]);
   const [summary, setSummary]     = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [detailMemberId, setDetailMemberId] = useState(null);
+  const detailMember = useMemo(
+    () => members.find((m) => m.id === detailMemberId) || null,
+    [members, detailMemberId]
+  );
 
   // Filters
   const [search, setSearch]       = useState('');
@@ -576,14 +888,14 @@ const AdminMembersPage = () => {
       {/* Filters — 1 hàng */}
       <div className="card p-3">
         <form onSubmit={handleSearch} className="flex items-center gap-2">
-          <div className="flex rounded-lg border border-gray-300 overflow-hidden shrink-0">
+          <div className="flex rounded-lg border border-gray-300 dark:border-dk-border overflow-hidden shrink-0">
             <button
               type="button"
               onClick={() => handleRoleFilterChange('user')}
               className={`px-3 py-1.5 text-sm font-medium transition-colors ${
                 roleFilter === 'user'
                   ? 'bg-primary-600 text-white'
-                  : 'bg-white text-gray-600 hover:bg-gray-50'
+                  : 'bg-white dark:bg-dk-raised text-gray-600 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-strong'
               }`}
             >
               {t('adminMembers.roleFilterUser')}
@@ -591,10 +903,10 @@ const AdminMembersPage = () => {
             <button
               type="button"
               onClick={() => handleRoleFilterChange('admin')}
-              className={`px-3 py-1.5 text-sm font-medium transition-colors border-l border-gray-300 ${
+              className={`px-3 py-1.5 text-sm font-medium transition-colors border-l border-gray-300 dark:border-dk-border ${
                 roleFilter === 'admin'
                   ? 'bg-primary-600 text-white'
-                  : 'bg-white text-gray-600 hover:bg-gray-50'
+                  : 'bg-white dark:bg-dk-raised text-gray-600 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-strong'
               }`}
             >
               {t('adminMembers.roleFilterAdmin')}
@@ -614,14 +926,14 @@ const AdminMembersPage = () => {
               <option value="all">{t('adminMembers.segment.all')}</option>
             </select>
           )}
-          <div className="flex flex-[2] min-w-0 items-center rounded-lg border border-gray-300 bg-white px-3 focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-500">
-            <HiOutlineSearch className="w-4 h-4 text-gray-400 shrink-0" />
+          <div className="flex flex-[2] min-w-0 items-center rounded-lg border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-raised px-3 focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-500">
+            <HiOutlineSearch className="w-4 h-4 text-gray-400 dark:text-dk-muted shrink-0" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('adminMembers.searchPlaceholder')}
-              className="flex-1 py-1.5 pl-2 text-sm border-0 bg-transparent focus:ring-0 focus:outline-none"
+              className="flex-1 py-1.5 pl-2 text-sm border-0 bg-transparent text-gray-900 dark:text-dk-text placeholder-gray-400 dark:placeholder-dk-muted focus:ring-0 focus:outline-none"
             />
           </div>
           <select
@@ -674,7 +986,7 @@ const AdminMembersPage = () => {
         {isLoading ? (
           <div className="h-56 flex items-center justify-center"><div className="spinner w-8 h-8" /></div>
         ) : members.length === 0 ? (
-          <div className="py-16 text-center text-gray-400">{t('adminMembers.noMembersFound')}</div>
+          <div className="py-16 text-center text-gray-400 dark:text-dk-muted">{t('adminMembers.noMembersFound')}</div>
         ) : (
           <div className="table-container">
             <table className="table !min-w-0">
@@ -683,13 +995,9 @@ const AdminMembersPage = () => {
                   <th>{t('adminMembers.table.member')}</th>
                   <th>{t('adminMembers.table.segment')}</th>
                   <th>{t('adminMembers.table.servicePlan')}</th>
-                  <th>{t('adminMembers.table.employees')}</th>
-                  <th>{t('adminMembers.table.phone')}</th>
                   <th>{t('adminMembers.table.lastActivity')}</th>
-                  <th>{t('adminMembers.table.churnRisk')}</th>
                   <th>{t('adminMembers.table.status')}</th>
                   <th>{t('adminMembers.table.expiry')}</th>
-                  <th>{t('adminMembers.table.createdAt')}</th>
                   <th className="whitespace-nowrap w-px px-2">{t('adminMembers.table.actions')}</th>
                 </tr>
               </thead>
@@ -697,81 +1005,99 @@ const AdminMembersPage = () => {
                 {members.map((m) => {
                   const isActive = m.status === 'active';
                   return (
-                    <tr key={m.id}>
+                    <tr
+                      key={m.id}
+                      className="hover:bg-gray-50/60 dark:hover:bg-dk-raised/30 transition-colors cursor-pointer"
+                      onClick={() => setDetailMemberId(m.id)}
+                    >
                       <td>
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center shrink-0">
-                            <span className="text-primary-600 text-sm font-semibold">
+                          <div className="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-950/60 flex items-center justify-center shrink-0">
+                            <span className="text-primary-600 dark:text-primary-400 text-sm font-semibold">
                               {(m.fullName || m.username || '?')[0].toUpperCase()}
                             </span>
                           </div>
                           <div className="min-w-0">
-                            <p className="text-sm font-medium text-gray-900 truncate">{m.fullName || m.username}</p>
-                            <p className="text-xs text-gray-400 truncate">{m.email}</p>
+                            <p className="text-sm font-medium text-gray-900 dark:text-dk-text truncate hover:text-primary-600 dark:hover:text-primary-400">
+                              {m.fullName || m.username}
+                            </p>
+                            <p className="text-xs text-gray-400 dark:text-dk-text2 truncate">{m.email}</p>
+                            {m.phone && (
+                              <div className="text-xs text-gray-500 dark:text-dk-text2 flex items-center gap-1.5 mt-0.5">
+                                <span className="font-mono">{m.phone}</span>
+                                {phoneOtpEnabled && (
+                                  m.phoneVerifiedAt ? (
+                                    <span className="text-green-600 dark:text-green-400 text-[11px]">
+                                      {t('adminMembers.phoneVerified', { date: fmtDate(m.phoneVerifiedAt) })}
+                                    </span>
+                                  ) : (
+                                    <span className="text-amber-600 dark:text-amber-400 text-[11px]">
+                                      {t('adminMembers.phoneNotVerified')}
+                                    </span>
+                                  )
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </td>
-                      <td className="text-sm text-gray-600">{segmentLabel(m)}</td>
+                      <td className="text-sm text-gray-600 dark:text-dk-text">{segmentLabel(m)}</td>
                       <td>
                         {m.planName
                           ? <span className="badge badge-success">{m.planName}</span>
                           : <span className="badge badge-gray">{t('adminMembers.noPlan')}</span>
                         }
                         {(m.planState === 'paying' || m.planState === 'trial') && (
-                          <p className="text-xs text-gray-400 mt-0.5">{t(`adminMembers.planState.${m.planState}`)}</p>
+                          <p className="text-xs text-gray-400 dark:text-dk-text2 mt-0.5">{t(`adminMembers.planState.${m.planState}`)}</p>
                         )}
                       </td>
-                      <td className="text-sm text-gray-600">{m.employeeCount ?? 0}</td>
-                      <td className="text-sm text-gray-600 whitespace-nowrap">
-                        {m.phone || '—'}
-                        {phoneOtpEnabled && m.phone && (
-                          <div className="text-xs mt-0.5">
-                            {m.phoneVerifiedAt
-                              ? <span className="text-green-600">{t('adminMembers.phoneVerified', { date: fmtDate(m.phoneVerifiedAt) })}</span>
-                              : <span className="text-amber-600">{t('adminMembers.phoneNotVerified')}</span>}
-                          </div>
-                        )}
-                      </td>
-                      <td className="text-sm text-gray-500 whitespace-nowrap">
+                      <td className="text-sm text-gray-500 dark:text-dk-text2 whitespace-nowrap">
                         {m.lastActivityAt ? new Date(m.lastActivityAt).toLocaleDateString('vi-VN') : '—'}
                       </td>
                       <td>
-                        {m.churnRisk ? (
-                          <div>
+                        <div>
+                          {m.status === 'deleted' ? (
+                            <span className="badge badge-gray">{t('adminMembers.statusDeleted')}</span>
+                          ) : (
+                            <span className={`badge ${isActive ? 'badge-success' : 'badge-gray'}`}>
+                              {isActive ? t('adminMembers.statusActive') : t('adminMembers.statusLocked')}
+                            </span>
+                          )}
+                          {m.twoFactorEnabled && (
+                            <span className="badge badge-success ml-1.5">{t('adminMembers.twoFactorBadge')}</span>
+                          )}
+                        </div>
+                        {m.churnRisk && (
+                          <div className="mt-1">
                             <span className="badge badge-warning">{t('adminMembers.table.churnRiskBadge')}</span>
                             {m.churnRiskReason && (
-                              <p className="text-xs text-gray-500 mt-0.5">{t(`adminMembers.churnReason.${m.churnRiskReason}`)}</p>
+                              <p className="text-xs text-gray-500 dark:text-dk-text2 mt-0.5">{t(`adminMembers.churnReason.${m.churnRiskReason}`)}</p>
                             )}
                           </div>
-                        ) : <span className="text-gray-300">—</span>}
-                      </td>
-                      <td>
-                        {m.status === 'deleted' ? (
-                          <span className="badge badge-gray">{t('adminMembers.statusDeleted')}</span>
-                        ) : (
-                          <span className={`badge ${isActive ? 'badge-success' : 'badge-gray'}`}>
-                            {isActive ? t('adminMembers.statusActive') : t('adminMembers.statusLocked')}
-                          </span>
-                        )}
-                        {m.twoFactorEnabled && (
-                          <p className="mt-1">
-                            <span className="badge badge-success">{t('adminMembers.twoFactorBadge')}</span>
-                          </p>
                         )}
                       </td>
                       <td>
                         <ExpiryBadge expiresAt={m.subscriptionExpiresAt} hasPlan={!!m.activePlanId} />
                       </td>
-                      <td className="text-sm text-gray-500 whitespace-nowrap">{fmtDate(m.createdAt)}</td>
-                      <td className="whitespace-nowrap w-px px-2">
+                      <td className="whitespace-nowrap w-px px-2" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-1">
                           {/* Gán gói */}
                           <Tooltip label={t('adminMembers.assignPlan')}>
                             <button
                               onClick={() => setAssignMember(m)}
-                              className="p-2 rounded hover:bg-gray-100 transition-colors text-gray-500 hover:text-primary-600"
+                              className="p-2 rounded hover:bg-gray-100 dark:hover:bg-dk-raised transition-colors text-gray-500 dark:text-dk-text2 hover:text-primary-600 dark:hover:text-primary-400"
                             >
                               <HiOutlineCurrencyDollar className="w-5 h-5" />
+                            </button>
+                          </Tooltip>
+
+                          {/* Chi tiết người dùng */}
+                          <Tooltip label={t('adminMembers.viewDetails', 'Xem chi tiết')}>
+                            <button
+                              onClick={() => setDetailMemberId(m.id)}
+                              className="p-2 rounded hover:bg-gray-100 dark:hover:bg-dk-raised transition-colors text-gray-500 dark:text-dk-text2 hover:text-primary-600 dark:hover:text-primary-400"
+                            >
+                              <HiOutlineEye className="w-5 h-5" />
                             </button>
                           </Tooltip>
 
@@ -780,7 +1106,7 @@ const AdminMembersPage = () => {
                             <Tooltip label={t('adminMembers.unassignPlan')}>
                               <button
                                 onClick={() => setUnassignConfirm(m)}
-                                className="p-2 rounded hover:bg-red-50 transition-colors text-gray-400 hover:text-red-600"
+                                className="p-2 rounded hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors text-gray-400 dark:text-dk-text2 hover:text-red-600 dark:hover:text-red-400"
                               >
                                 <HiOutlineXCircle className="w-5 h-5" />
                               </button>
@@ -792,7 +1118,7 @@ const AdminMembersPage = () => {
                             <button
                               onClick={() => handleToggleStatus(m)}
                               disabled={statusUpdatingId === m.id}
-                              className={`p-2 rounded hover:bg-gray-100 transition-colors ${isActive ? 'text-yellow-500 hover:text-yellow-600' : 'text-green-500 hover:text-green-600'}`}
+                              className={`p-2 rounded hover:bg-gray-100 dark:hover:bg-dk-raised transition-colors ${isActive ? 'text-yellow-500 hover:text-yellow-600 dark:text-yellow-400 dark:hover:text-yellow-300' : 'text-green-500 hover:text-green-600 dark:text-green-400 dark:hover:text-green-300'}`}
                             >
                               {statusUpdatingId === m.id
                                 ? <div className="spinner w-5 h-5" />
@@ -808,7 +1134,7 @@ const AdminMembersPage = () => {
                             <Tooltip label={t('adminMembers.promoteToAdmin')}>
                               <button
                                 onClick={() => setPromoteConfirm(m)}
-                                className="p-2 rounded hover:bg-purple-50 transition-colors text-gray-400 hover:text-purple-600"
+                                className="p-2 rounded hover:bg-purple-50 dark:hover:bg-purple-950/40 transition-colors text-gray-400 dark:text-dk-text2 hover:text-purple-600 dark:hover:text-purple-400"
                               >
                                 <HiOutlineShieldCheck className="w-5 h-5" />
                               </button>
@@ -820,7 +1146,7 @@ const AdminMembersPage = () => {
                             <Tooltip label={t('adminMembers.demote')}>
                               <button
                                 onClick={() => setDemoteConfirm(m)}
-                                className="p-2 rounded hover:bg-orange-50 transition-colors text-gray-400 hover:text-orange-600"
+                                className="p-2 rounded hover:bg-orange-50 dark:hover:bg-orange-950/40 transition-colors text-gray-400 dark:text-dk-text2 hover:text-orange-600 dark:hover:text-orange-400"
                               >
                                 <HiOutlineShieldExclamation className="w-5 h-5" />
                               </button>
@@ -832,7 +1158,7 @@ const AdminMembersPage = () => {
                             <Tooltip label={t('adminMembers.resetTwoFactor')}>
                               <button
                                 onClick={() => setResetTwoFactorConfirm(m)}
-                                className="p-2 rounded hover:bg-amber-50 transition-colors text-gray-400 hover:text-amber-600"
+                                className="p-2 rounded hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-colors text-gray-400 dark:text-dk-text2 hover:text-amber-600 dark:hover:text-amber-400"
                               >
                                 <HiOutlineKey className="w-5 h-5" />
                               </button>
@@ -844,7 +1170,7 @@ const AdminMembersPage = () => {
                             <Tooltip label={t('adminMembers.detachEmail')}>
                               <button
                                 onClick={() => setDetachEmailConfirm(m)}
-                                className="p-2 rounded hover:bg-amber-50 transition-colors text-gray-400 hover:text-amber-600"
+                                className="p-2 rounded hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-colors text-gray-400 dark:text-dk-text2 hover:text-amber-600 dark:hover:text-amber-400"
                               >
                                 <HiOutlineMailOpen className="w-5 h-5" />
                               </button>
@@ -856,7 +1182,7 @@ const AdminMembersPage = () => {
                             <Tooltip label={t('adminMembers.purge')}>
                               <button
                                 onClick={() => setPurgeConfirm(m)}
-                                className="p-2 rounded hover:bg-red-50 transition-colors text-gray-400 hover:text-red-700"
+                                className="p-2 rounded hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors text-gray-400 dark:text-dk-text2 hover:text-red-700 dark:hover:text-red-400"
                               >
                                 <HiOutlineTrash className="w-5 h-5" />
                               </button>
@@ -874,7 +1200,7 @@ const AdminMembersPage = () => {
 
         {/* Summary */}
         {!isLoading && members.length > 0 && (
-          <div className="px-5 py-3 border-t border-gray-100 text-sm text-gray-400">
+          <div className="px-5 py-3 border-t border-gray-100 dark:border-dk-border text-sm text-gray-400 dark:text-dk-muted">
             {members.length} {t('adminMembers.table.member').toLowerCase()}
           </div>
         )}
@@ -894,13 +1220,13 @@ const AdminMembersPage = () => {
       {promoteConfirm && renderModal(
         <div>
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center shrink-0">
-              <HiOutlineShieldCheck className="w-5 h-5 text-purple-600" />
+            <div className="w-10 h-10 rounded-full bg-purple-100 dark:bg-purple-950/60 flex items-center justify-center shrink-0">
+              <HiOutlineShieldCheck className="w-5 h-5 text-purple-600 dark:text-purple-400" />
             </div>
-            <h2 className="text-xl font-semibold text-gray-900">{t('adminMembers.promoteTitle')}</h2>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-dk-text">{t('adminMembers.promoteTitle')}</h2>
           </div>
-          <p className="text-sm text-gray-600">
-            {t('adminMembers.promoteWarning')} <strong>{promoteConfirm.fullName || promoteConfirm.username}</strong> ({promoteConfirm.email}) {t('adminMembers.promoteToAdminLevel')}
+          <p className="text-sm text-gray-600 dark:text-dk-text">
+            {t('adminMembers.promoteWarning')} <strong className="text-gray-900 dark:text-dk-text">{promoteConfirm.fullName || promoteConfirm.username}</strong> ({promoteConfirm.email}) {t('adminMembers.promoteToAdminLevel')}
           </p>
           <div className="flex justify-end gap-2 mt-6">
             <button type="button" className="btn btn-secondary" onClick={() => setPromoteConfirm(null)} disabled={isPromoting}>{t('common.cancel')}</button>
@@ -921,13 +1247,13 @@ const AdminMembersPage = () => {
       {demoteConfirm && renderModal(
         <div>
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
-              <HiOutlineShieldExclamation className="w-5 h-5 text-orange-600" />
+            <div className="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-950/60 flex items-center justify-center shrink-0">
+              <HiOutlineShieldExclamation className="w-5 h-5 text-orange-600 dark:text-orange-400" />
             </div>
-            <h2 className="text-xl font-semibold text-gray-900">{t('adminMembers.demoteTitle')}</h2>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-dk-text">{t('adminMembers.demoteTitle')}</h2>
           </div>
-          <p className="text-sm text-gray-600">
-            {t('adminMembers.demoteWarning')} <strong>{demoteConfirm.fullName || demoteConfirm.username}</strong> ({demoteConfirm.email}) {t('adminMembers.demoteToUserLevel')}
+          <p className="text-sm text-gray-600 dark:text-dk-text">
+            {t('adminMembers.demoteWarning')} <strong className="text-gray-900 dark:text-dk-text">{demoteConfirm.fullName || demoteConfirm.username}</strong> ({demoteConfirm.email}) {t('adminMembers.demoteToUserLevel')}
           </p>
           <div className="flex justify-end gap-2 mt-6">
             <button type="button" className="btn btn-secondary" onClick={() => setDemoteConfirm(null)} disabled={isDemoting}>{t('common.cancel')}</button>
@@ -948,17 +1274,17 @@ const AdminMembersPage = () => {
       {unassignConfirm && renderModal(
         <div>
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-              <HiOutlineXCircle className="w-5 h-5 text-red-600" />
+            <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-950/60 flex items-center justify-center shrink-0">
+              <HiOutlineXCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
             </div>
-            <h2 className="text-xl font-semibold text-gray-900">{t('adminMembers.unassignConfirmTitle')}</h2>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-dk-text">{t('adminMembers.unassignConfirmTitle')}</h2>
           </div>
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-gray-600 dark:text-dk-text">
             {t('adminMembers.unassignWarning')}
           </p>
-          <p className="text-sm text-gray-500 mt-2">
-            <strong>{unassignConfirm.fullName || unassignConfirm.username}</strong> ({unassignConfirm.email})
-            {unassignConfirm.planName && <> — {t('adminMembers.currentPlan')}: <strong>{unassignConfirm.planName}</strong></>}
+          <p className="text-sm text-gray-500 dark:text-dk-text2 mt-2">
+            <strong className="text-gray-900 dark:text-dk-text">{unassignConfirm.fullName || unassignConfirm.username}</strong> ({unassignConfirm.email})
+            {unassignConfirm.planName && <> — {t('adminMembers.currentPlan')}: <strong className="text-gray-800 dark:text-dk-text">{unassignConfirm.planName}</strong></>}
           </p>
           <div className="flex justify-end gap-2 mt-6">
             <button type="button" className="btn btn-secondary" onClick={() => setUnassignConfirm(null)} disabled={isUnassigning}>{t('common.cancel')}</button>
@@ -1015,6 +1341,19 @@ const AdminMembersPage = () => {
           isBusy={isPurging}
           onConfirm={handlePurge}
           onClose={() => setPurgeConfirm(null)}
+        />
+      )}
+
+      {/* Modal chi tiết người dùng */}
+      {detailMember && (
+        <MemberDetailModal
+          member={detailMember}
+          phoneOtpEnabled={phoneOtpEnabled}
+          segmentLabel={segmentLabel}
+          onClose={() => setDetailMemberId(null)}
+          onOpenAssignPlan={(m) => setAssignMember(m)}
+          onToggleStatus={handleToggleStatus}
+          statusUpdating={statusUpdatingId === detailMember.id}
         />
       )}
     </PageContainer>

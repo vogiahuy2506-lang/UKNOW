@@ -53,7 +53,7 @@ const ScheduleFormErrorBlock = ({ message, suggestions }) => {
     ref.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
   }, [message]);
   return (
-    <div ref={ref} role="alert" className="rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">
+    <div ref={ref} role="alert" className="rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/40 text-red-700 dark:text-red-300 text-sm px-4 py-3">
       <p>{message}</p>
       {suggestions.length > 0 && (
         <ul className="mt-2 list-disc pl-5 space-y-0.5" data-testid="schedule-overlap-suggestions">
@@ -122,32 +122,32 @@ const CampaignRunModals = ({
     <>
     {showRunConfirmModal && (
       <FullScreenOverlay isOpen={showRunConfirmModal}>
-        <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 max-h-[90vh] flex flex-col">
-          <div className="flex items-center justify-between p-6 border-b">
-            <h3 className="text-lg font-semibold text-gray-900">{t('campaignRunModals.confirmRunCampaign')}</h3>
-            <button onClick={closeRunConfirmModal} className="p-1 hover:bg-gray-100 rounded-lg">
+        <div className="bg-white dark:bg-dk-surface rounded-xl shadow-xl w-full max-w-md mx-4 max-h-[90vh] flex flex-col border border-transparent dark:border-dk-border text-gray-900 dark:text-dk-text">
+          <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-dk-border">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-dk-text">{t('campaignRunModals.confirmRunCampaign')}</h3>
+            <button onClick={closeRunConfirmModal} className="p-1 hover:bg-gray-100 dark:hover:bg-dk-raised text-gray-500 dark:text-dk-text2 rounded-lg">
               <HiOutlineX className="w-5 h-5" />
             </button>
           </div>
           <div className="p-6 space-y-4 min-h-0 flex-1 overflow-y-auto">
-            <p className="text-sm text-gray-600">
-              {t('campaignRunModals.aboutToRunCampaign')} <span className="font-semibold text-gray-900">{runConfirmCampaign?.campaignName}</span>.
+            <p className="text-sm text-gray-600 dark:text-dk-text">
+              {t('campaignRunModals.aboutToRunCampaign')} <span className="font-semibold text-gray-900 dark:text-dk-text">{runConfirmCampaign?.campaignName}</span>.
             </p>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('campaignRunModals.runName')}</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{t('campaignRunModals.runName')}</label>
               <input
                 type="text"
                 value={runNameInput}
                 onChange={(e) => setRunNameInput(e.target.value)}
-                className="input"
+                className="input dark:bg-dk-raised dark:border-dk-border dark:text-dk-text"
                 placeholder={t('campaignRunModals.runNamePlaceholder')}
                 disabled={isRunResumeLocked}
               />
             </div>
             {shouldShowRunContinuousOptions && (
-              <div className="rounded-lg border border-gray-200 p-3 space-y-3">
+              <div className="rounded-lg border border-gray-200 dark:border-dk-border bg-transparent dark:bg-dk-raised/30 p-3 space-y-3">
                 <div className="flex items-center justify-between gap-3">
-                  <label htmlFor="run-continuous-mode" className="text-sm font-medium text-gray-700">
+                  <label htmlFor="run-continuous-mode" className="text-sm font-medium text-gray-700 dark:text-dk-text">
                     {t('campaignRunModals.continuousMode')}
                   </label>
                   <input
@@ -155,13 +155,13 @@ const CampaignRunModals = ({
                     type="checkbox"
                     checked={Boolean(runContinuousMode)}
                     onChange={(e) => setRunContinuousMode(e.target.checked)}
-                    className="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
+                    className="w-4 h-4 text-primary-600 rounded dark:border-dk-border-strong dark:bg-dk-raised focus:ring-primary-500"
                   />
                 </div>
                 {runContinuousMode && (
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">
                         {t('campaignRunModals.scanIntervalMinutes')}
                       </label>
                       <input
@@ -170,20 +170,20 @@ const CampaignRunModals = ({
                         step={1}
                         value={runPollIntervalMinutes}
                         onChange={(e) => setRunPollIntervalMinutes(e.target.value)}
-                        className="input"
+                        className="input dark:bg-dk-raised dark:border-dk-border dark:text-dk-text"
                         disabled={isRunResumeLocked}
                       />
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-xs text-gray-500 dark:text-dk-text2 mt-1">
                         {t('campaignRunModals.scanIntervalHint')}
                       </p>
                       {isRunResumeLocked && (
-                        <p className="text-xs text-amber-600 mt-1">
+                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
                           {t('campaignRunModals.resumeLockedHint')}
                         </p>
                       )}
                     </div>
                     <div className="flex items-center justify-between gap-3">
-                      <label htmlFor="run-resume-mode" className="text-sm font-medium text-gray-700">
+                      <label htmlFor="run-resume-mode" className="text-sm font-medium text-gray-700 dark:text-dk-text">
                         {t('campaignRunModals.resumeContinuous')}
                       </label>
                       <input
@@ -191,18 +191,18 @@ const CampaignRunModals = ({
                         type="checkbox"
                         checked={Boolean(runResumeMode)}
                         onChange={(e) => setRunResumeMode(e.target.checked)}
-                        className="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
+                        className="w-4 h-4 text-primary-600 rounded dark:border-dk-border-strong dark:bg-dk-raised focus:ring-primary-500"
                       />
                     </div>
                     {runResumeMode && (
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">
                           {t('campaignRunModals.selectContinuousRun')}
                         </label>
                         <select
                           value={runResumeFromId}
                           onChange={(e) => setRunResumeFromId(e.target.value)}
-                          className="input"
+                          className="input dark:bg-dk-raised dark:border-dk-border dark:text-dk-text"
                           disabled={isLoadingContinuousResumeOptions}
                         >
                           <option value="">
@@ -217,7 +217,7 @@ const CampaignRunModals = ({
                           ))}
                         </select>
                         {!isLoadingContinuousResumeOptions && (!continuousResumeRunOptions || continuousResumeRunOptions.length === 0) && (
-                          <p className="text-xs text-amber-600 mt-1">
+                          <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
                             {t('campaignRunModals.noContinuousRuns')}
                           </p>
                         )}
@@ -229,8 +229,8 @@ const CampaignRunModals = ({
             )}
             {runEstimate && <CampaignEstimatePanel status={runEstimate.status} estimate={runEstimate.estimate} t={t} />}
           </div>
-          <div className="flex justify-end gap-3 p-6 border-t bg-gray-50 rounded-b-xl">
-            <button onClick={closeRunConfirmModal} className="btn btn-secondary" disabled={isSubmittingRun}>
+          <div className="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-dk-border bg-gray-50 dark:bg-dk-bg rounded-b-xl">
+            <button onClick={closeRunConfirmModal} className="btn btn-secondary dark:bg-dk-raised dark:border-dk-border dark:text-dk-text dark:hover:bg-dk-strong" disabled={isSubmittingRun}>
               {t('campaignRunModals.cancel')}
             </button>
             <button onClick={handleRunNow} className="btn btn-primary" disabled={isSubmittingRun}>
@@ -243,37 +243,37 @@ const CampaignRunModals = ({
 
     {stopRunConfirmTarget && (
       <FullScreenOverlay isOpen={Boolean(stopRunConfirmTarget)}>
-        <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
-          <div className="flex items-center justify-between p-6 border-b">
-            <h3 className="text-lg font-semibold text-gray-900">{t('campaignRunModals.confirmStopRun')}</h3>
-            <button onClick={closeStopRunConfirmModal} className="p-1 hover:bg-gray-100 rounded-lg">
+        <div className="bg-white dark:bg-dk-surface rounded-xl shadow-xl w-full max-w-md mx-4 border border-transparent dark:border-dk-border text-gray-900 dark:text-dk-text">
+          <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-dk-border">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-dk-text">{t('campaignRunModals.confirmStopRun')}</h3>
+            <button onClick={closeStopRunConfirmModal} className="p-1 hover:bg-gray-100 dark:hover:bg-dk-raised text-gray-500 dark:text-dk-text2 rounded-lg">
               <HiOutlineX className="w-5 h-5" />
             </button>
           </div>
           <div className="p-6 space-y-4">
-            <div className="flex items-start gap-3 rounded-lg border border-red-100 bg-red-50 p-3">
-              <HiOutlineExclamation className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
-              <div className="text-sm text-red-700">
+            <div className="flex items-start gap-3 rounded-lg border border-red-100 dark:border-red-900/40 bg-red-50 dark:bg-red-950/30 p-3">
+              <HiOutlineExclamation className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
+              <div className="text-sm text-red-700 dark:text-red-300">
                 <p className="font-medium">{t('campaignRunModals.aboutToStopRun')}</p>
                 <p className="mt-1">
                   {t('campaignRunModals.stopRunHint')}
                 </p>
               </div>
             </div>
-            <div className="text-sm text-gray-600 space-y-1">
+            <div className="text-sm text-gray-600 dark:text-dk-text space-y-1">
               <p>
-                <span className="font-medium text-gray-900">{t('campaignRunModals.runName2')}</span>{' '}
+                <span className="font-medium text-gray-900 dark:text-dk-text">{t('campaignRunModals.runName2')}</span>{' '}
                 {String(stopRunConfirmTarget?.runName || '').trim() || `#${stopRunConfirmTarget?.id}`}
               </p>
               <p>
-                <span className="font-medium text-gray-900">{t('campaignRunModals.runId')}</span> {stopRunConfirmTarget?.id}
+                <span className="font-medium text-gray-900 dark:text-dk-text">{t('campaignRunModals.runId')}</span> {stopRunConfirmTarget?.id}
               </p>
             </div>
           </div>
-          <div className="flex justify-end gap-3 p-6 border-t bg-gray-50 rounded-b-xl">
+          <div className="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-dk-border bg-gray-50 dark:bg-dk-bg rounded-b-xl">
             <button
               onClick={closeStopRunConfirmModal}
-              className="btn btn-secondary"
+              className="btn btn-secondary dark:bg-dk-raised dark:border-dk-border dark:text-dk-text dark:hover:bg-dk-strong"
               disabled={stoppingRunIds.has(Number(stopRunConfirmTarget?.id))}
             >
               {t('campaignRunModals.cancel')}
@@ -292,19 +292,19 @@ const CampaignRunModals = ({
 
     {showScheduleModal && (
       <FullScreenOverlay isOpen={showScheduleModal}>
-        <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col">
-          <div className="flex items-center justify-between p-6 border-b">
-            <h3 className="text-lg font-semibold text-gray-900">
+        <div className="bg-white dark:bg-dk-surface rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col border border-transparent dark:border-dk-border text-gray-900 dark:text-dk-text">
+          <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-dk-border">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-dk-text">
               {t('campaignRunModals.setupSchedule')} - {selectedCampaign?.campaignName}
             </h3>
-            <button onClick={closeScheduleModal} className="p-1 hover:bg-gray-100 rounded-lg">
+            <button onClick={closeScheduleModal} className="p-1 hover:bg-gray-100 dark:hover:bg-dk-raised text-gray-500 dark:text-dk-text2 rounded-lg">
               <HiOutlineX className="w-5 h-5" />
             </button>
           </div>
 
           <div className="p-6 space-y-4 min-h-0 flex-1 overflow-y-auto">
             {scheduleCreationWillActivateCampaign(selectedCampaign?.status, scheduleForm.enabled) && (
-              <div className="rounded-lg bg-blue-50 border border-blue-200 text-blue-800 text-sm px-4 py-3">
+              <div className="rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/40 text-blue-800 dark:text-blue-300 text-sm px-4 py-3">
                 {buildScheduleActivateCampaignNotice(selectedCampaign?.status, t)}
               </div>
             )}
@@ -312,20 +312,20 @@ const CampaignRunModals = ({
               <ScheduleFormErrorBlock message={scheduleFormError} suggestions={scheduleOverlapSuggestions} />
             )}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">
                 {t('campaignRunModals.scheduleName')}
               </label>
               <input
                 type="text"
                 value={scheduleForm.scheduleName}
                 onChange={(e) => setScheduleForm({ ...scheduleForm, scheduleName: e.target.value })}
-                className="input"
+                className="input dark:bg-dk-raised dark:border-dk-border dark:text-dk-text"
                 placeholder={t('campaignRunModals.scheduleNamePlaceholder')}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">
                 {t('campaignRunModals.scheduleType')}
               </label>
               <select
@@ -337,7 +337,7 @@ const CampaignRunModals = ({
                     weeklyDay: e.target.value === 'weekly' ? (scheduleForm.weeklyDay || '1') : scheduleForm.weeklyDay,
                   })
                 }
-                className="input"
+                className="input dark:bg-dk-raised dark:border-dk-border dark:text-dk-text"
               >
                 <option value="once">{t('campaignRunModals.runOnce')}</option>
                 <option value="daily">{t('campaignRunModals.daily')}</option>
@@ -350,13 +350,13 @@ const CampaignRunModals = ({
 
             {scheduleForm.scheduleType === 'weekly' && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">
                   {t('campaignRunModals.runOnDay')}
                 </label>
                 <select
                   value={scheduleForm.weeklyDay || '1'}
                   onChange={(e) => setScheduleForm({ ...scheduleForm, weeklyDay: e.target.value })}
-                  className="input"
+                  className="input dark:bg-dk-raised dark:border-dk-border dark:text-dk-text"
                 >
                   {weeklyDayOptions.map((day) => (
                     <option key={day.value} value={day.value}>
@@ -369,14 +369,14 @@ const CampaignRunModals = ({
 
             {scheduleForm.scheduleType === 'once' && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">
                   {t('campaignRunModals.runDate')}
                 </label>
                 <input
                   type="date"
                   value={scheduleForm.scheduleDate}
                   onChange={(e) => setScheduleForm({ ...scheduleForm, scheduleDate: e.target.value })}
-                  className="input"
+                  className="input dark:bg-dk-raised dark:border-dk-border dark:text-dk-text"
                   min={getTodayDateInHanoiForInput()}
                 />
               </div>
@@ -384,7 +384,7 @@ const CampaignRunModals = ({
 
             {(scheduleForm.scheduleType === 'custom') && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">
                   {t('campaignRunModals.everyNthDay')}
                 </label>
                 <input
@@ -393,7 +393,7 @@ const CampaignRunModals = ({
                   step={1}
                   value={scheduleForm.customIntervalDays}
                   onChange={(e) => setScheduleForm({ ...scheduleForm, customIntervalDays: e.target.value })}
-                  className="input"
+                  className="input dark:bg-dk-raised dark:border-dk-border dark:text-dk-text"
                   placeholder={t('campaignRunModals.exampleValue')}
                 />
               </div>
@@ -402,7 +402,7 @@ const CampaignRunModals = ({
             {(scheduleForm.scheduleType === 'after_delay') && (
               <div className="space-y-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">
                     {t('campaignRunModals.runAfterDelay')}
                   </label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -412,13 +412,13 @@ const CampaignRunModals = ({
                       step={1}
                       value={scheduleForm.delayValue}
                       onChange={(e) => setScheduleForm({ ...scheduleForm, delayValue: e.target.value })}
-                      className="input"
+                      className="input dark:bg-dk-raised dark:border-dk-border dark:text-dk-text"
                       placeholder={t('campaignRunModals.exampleValue')}
                     />
                     <select
                       value={scheduleForm.delayUnit}
                       onChange={(e) => setScheduleForm({ ...scheduleForm, delayUnit: e.target.value })}
-                      className="input"
+                      className="input dark:bg-dk-raised dark:border-dk-border dark:text-dk-text"
                     >
                       <option value="minutes">{t('campaignRunModals.minutes')}</option>
                       <option value="hours">{t('campaignRunModals.hours')}</option>
@@ -427,11 +427,11 @@ const CampaignRunModals = ({
                   </div>
                 </div>
                 {scheduleForm.delayPreviewAt ? (
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-gray-500 dark:text-dk-text2">
                     {t('campaignRunModals.estimatedRunTime')} {formatCampaignDateTime(scheduleForm.delayPreviewAt)}
                   </p>
                 ) : (
-                  <p className="text-xs text-amber-600">
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
                     {t('campaignRunModals.enterValidTime')}
                   </p>
                 )}
@@ -440,14 +440,14 @@ const CampaignRunModals = ({
 
             {scheduleForm.scheduleType !== 'after_delay' && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">
                   {t('campaignRunModals.runTime')}
                 </label>
                 <input
                   type="time"
                   value={scheduleForm.scheduleTime}
                   onChange={(e) => setScheduleForm({ ...scheduleForm, scheduleTime: e.target.value })}
-                  className="input"
+                  className="input dark:bg-dk-raised dark:border-dk-border dark:text-dk-text"
                 />
               </div>
             )}
@@ -458,17 +458,17 @@ const CampaignRunModals = ({
                 id="enabled"
                 checked={scheduleForm.enabled}
                 onChange={(e) => setScheduleForm({ ...scheduleForm, enabled: e.target.checked })}
-                className="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
+                className="w-4 h-4 text-primary-600 rounded dark:border-dk-border-strong dark:bg-dk-raised focus:ring-primary-500"
               />
-              <label htmlFor="enabled" className="ml-2 text-sm text-gray-700">
+              <label htmlFor="enabled" className="ml-2 text-sm text-gray-700 dark:text-dk-text">
                 {t('campaignRunModals.enableSchedule')}
               </label>
             </div>
             {scheduleEstimate && <CampaignEstimatePanel status={scheduleEstimate.status} estimate={scheduleEstimate.estimate} t={t} />}
           </div>
 
-          <div className="flex justify-end gap-3 p-6 border-t bg-gray-50 rounded-b-xl">
-            <button onClick={closeScheduleModal} className="btn btn-secondary">
+          <div className="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-dk-border bg-gray-50 dark:bg-dk-bg rounded-b-xl">
+            <button onClick={closeScheduleModal} className="btn btn-secondary dark:bg-dk-raised dark:border-dk-border dark:text-dk-text dark:hover:bg-dk-strong">
               {t('campaignRunModals.cancel')}
             </button>
             <button onClick={handleSaveSchedule} className="btn btn-primary">
@@ -484,62 +484,62 @@ const CampaignRunModals = ({
 
     {showScheduleDetailModal && selectedSchedule && (
       <FullScreenOverlay isOpen={showScheduleDetailModal}>
-        <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
-          <div className="flex items-center justify-between p-6 border-b sticky top-0 bg-white z-10">
-            <h3 className="text-lg font-semibold text-gray-900">
+        <div className="bg-white dark:bg-dk-surface rounded-xl shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto border border-transparent dark:border-dk-border text-gray-900 dark:text-dk-text">
+          <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-dk-border sticky top-0 bg-white dark:bg-dk-surface z-10">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-dk-text">
               {t('campaignRunModals.scheduleDetails')} - {selectedSchedule.scheduleName}
             </h3>
-            <button onClick={closeScheduleDetailModal} className="p-1 hover:bg-gray-100 rounded-lg">
+            <button onClick={closeScheduleDetailModal} className="p-1 hover:bg-gray-100 dark:hover:bg-dk-raised text-gray-500 dark:text-dk-text2 rounded-lg">
               <HiOutlineX className="w-5 h-5" />
             </button>
           </div>
 
           <div className="p-6 space-y-6">
-            <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+            <div className="bg-gray-50 dark:bg-dk-raised/40 rounded-lg p-4 space-y-2 border border-gray-200 dark:border-dk-border">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-sm text-gray-500">{t('campaignRunModals.campaign')}</p>
-                  <p className="font-medium text-gray-900">{selectedSchedule.campaignName}</p>
+                  <p className="text-sm text-gray-500 dark:text-dk-text2">{t('campaignRunModals.campaign')}</p>
+                  <p className="font-medium text-gray-900 dark:text-dk-text">{selectedSchedule.campaignName}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">{t('campaignRunModals.scheduleType2')}</p>
-                  <p className="font-medium text-gray-900">
+                  <p className="text-sm text-gray-500 dark:text-dk-text2">{t('campaignRunModals.scheduleType2')}</p>
+                  <p className="font-medium text-gray-900 dark:text-dk-text">
                     {selectedSchedule.scheduleType === 'weekly'
                       ? `${t('campaignRunModals.weekly')} (${getWeeklyDayLabel(getWeeklyDayFromCron(selectedSchedule.cronExpression))})`
                       : getScheduleTypeLabel(selectedSchedule.scheduleType, t)}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">{t('campaignRunModals.runHour')}</p>
-                  <p className="font-medium text-gray-900">
+                  <p className="text-sm text-gray-500 dark:text-dk-text2">{t('campaignRunModals.runHour')}</p>
+                  <p className="font-medium text-gray-900 dark:text-dk-text">
                     {scheduleClockUiLabel(selectedSchedule.cronExpression, t)}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">{t('campaignRunModals.cronExpression')}</p>
-                  <code className="text-xs bg-white px-2 py-1 rounded border">{selectedSchedule.cronExpression}</code>
+                  <p className="text-sm text-gray-500 dark:text-dk-text2">{t('campaignRunModals.cronExpression')}</p>
+                  <code className="text-xs bg-white dark:bg-dk-surface px-2 py-1 rounded border border-gray-200 dark:border-dk-border text-gray-800 dark:text-dk-text">{selectedSchedule.cronExpression}</code>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">{t('campaignRunModals.status')}</p>
+                  <p className="text-sm text-gray-500 dark:text-dk-text2">{t('campaignRunModals.status')}</p>
                   <span className={`badge ${getScheduleStatusClassName(selectedSchedule)}`}>
                     {getScheduleStatusLabel(selectedSchedule, t)}
                   </span>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">{t('campaignRunModals.runCount')}</p>
-                  <p className="font-medium text-gray-900">{selectedSchedule.runCount || 0} {t('campaignRunModals.times')}</p>
+                  <p className="text-sm text-gray-500 dark:text-dk-text2">{t('campaignRunModals.runCount')}</p>
+                  <p className="font-medium text-gray-900 dark:text-dk-text">{selectedSchedule.runCount || 0} {t('campaignRunModals.times')}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">{t('campaignRunModals.lastRun')}</p>
-                  <p className="font-medium text-gray-900">
+                  <p className="text-sm text-gray-500 dark:text-dk-text2">{t('campaignRunModals.lastRun')}</p>
+                  <p className="font-medium text-gray-900 dark:text-dk-text">
                     {selectedSchedule.lastRunAt
                       ? formatCampaignDateTime(selectedSchedule.lastRunAt)
                       : t('campaignRunModals.neverRun')}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">{getScheduleRunTimingFieldLabelVi(selectedSchedule)}</p>
-                  <p className="font-medium text-gray-900">
+                  <p className="text-sm text-gray-500 dark:text-dk-text2">{getScheduleRunTimingFieldLabelVi(selectedSchedule)}</p>
+                  <p className="font-medium text-gray-900 dark:text-dk-text">
                     {getScheduleNextRunUiLabel(selectedSchedule, t)}
                   </p>
                 </div>
@@ -547,30 +547,30 @@ const CampaignRunModals = ({
             </div>
 
             <div>
-              <h4 className="text-md font-semibold text-gray-900 mb-3">{t('campaignRunModals.runHistory')}</h4>
+              <h4 className="text-md font-semibold text-gray-900 dark:text-dk-text mb-3">{t('campaignRunModals.runHistory')}</h4>
 
               {scheduleRuns.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
+                <div className="text-center py-8 text-gray-500 dark:text-dk-text2">
                   {t('campaignRunModals.noRunHistory')}
                 </div>
               ) : (
-                <div className="overflow-x-auto border rounded-lg">
+                <div className="overflow-x-auto border border-gray-200 dark:border-dk-border rounded-lg">
                   <table className="w-full">
-                    <thead className="bg-gray-50 border-b">
+                    <thead className="bg-gray-50 dark:bg-dk-raised/60 border-b border-gray-200 dark:border-dk-border">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('campaignRunModals.startTime')}</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('campaignRunModals.status')}</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('campaignRunModals.recipient')}</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('campaignRunModals.success')}</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-dk-text2 uppercase">{t('campaignRunModals.startTime')}</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-dk-text2 uppercase">{t('campaignRunModals.status')}</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-dk-text2 uppercase">{t('campaignRunModals.recipient')}</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-dk-text2 uppercase">{t('campaignRunModals.success')}</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-amber-600 uppercase">Bỏ qua</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('campaignRunModals.failed')}</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('campaignRunModals.completed')}</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-dk-text2 uppercase">{t('campaignRunModals.failed')}</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-dk-text2 uppercase">{t('campaignRunModals.completed')}</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-200">
+                    <tbody className="divide-y divide-gray-200 dark:divide-dk-border">
                       {scheduleRuns.map((run) => (
-                        <tr key={run.id} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 text-sm text-gray-900">
+                        <tr key={run.id} className="hover:bg-gray-50 dark:hover:bg-dk-raised/40">
+                          <td className="px-4 py-3 text-sm text-gray-900 dark:text-dk-text">
                             {formatCampaignDateTime(run.startedAt)}
                           </td>
                           <td className="px-4 py-3">
@@ -582,26 +582,26 @@ const CampaignRunModals = ({
                             }`}>
                               {run.status === 'completed' ? t('campaignRunModals.completed') :
                                run.status === 'running' ? t('campaignRunModals.inProgress') :
-                               run.status === 'failed' ? t('campaignRunModals.failed') :
+                                run.status === 'failed' ? t('campaignRunModals.failed') :
                                run.status}
                             </span>
                             {run.status === 'failed' && run.errorMessage && (
-                              <p className="mt-1 text-xs text-red-600 max-w-[16rem] break-words">{run.errorMessage}</p>
+                              <p className="mt-1 text-xs text-red-600 dark:text-red-400 max-w-[16rem] break-words">{run.errorMessage}</p>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-sm text-gray-900">
+                          <td className="px-4 py-3 text-sm text-gray-900 dark:text-dk-text">
                             {run.totalRecipients || 0}
                           </td>
-                          <td className="px-4 py-3 text-sm text-green-600">
+                          <td className="px-4 py-3 text-sm text-green-600 dark:text-green-400">
                             {run.successfulSends || 0}
                           </td>
-                          <td className="px-4 py-3 text-sm text-amber-600">
+                          <td className="px-4 py-3 text-sm text-amber-600 dark:text-amber-400">
                             {run.skippedSends || 0}
                           </td>
-                          <td className="px-4 py-3 text-sm text-red-600">
+                          <td className="px-4 py-3 text-sm text-red-600 dark:text-red-400">
                             {run.failedSends || 0}
                           </td>
-                          <td className="px-4 py-3 text-sm text-gray-500">
+                          <td className="px-4 py-3 text-sm text-gray-500 dark:text-dk-text2">
                             {formatCampaignDateTime(run.completedAt)}
                           </td>
                         </tr>
@@ -613,14 +613,14 @@ const CampaignRunModals = ({
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 p-6 border-t bg-gray-50">
+          <div className="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-dk-border bg-gray-50 dark:bg-dk-bg">
             <button
               onClick={() => handleToggleSchedule(selectedSchedule.id, selectedSchedule.enabled)}
               className={`btn ${
                 isReadonlyOnceSchedule(selectedSchedule)
-                  ? 'btn-secondary opacity-60 cursor-not-allowed'
+                  ? 'btn-secondary opacity-60 cursor-not-allowed dark:bg-dk-raised dark:border-dk-border dark:text-dk-text'
                   : selectedSchedule.enabled
-                    ? 'btn-secondary'
+                    ? 'btn-secondary dark:bg-dk-raised dark:border-dk-border dark:text-dk-text dark:hover:bg-dk-strong'
                     : 'btn-primary'
               }`}
               disabled={isReadonlyOnceSchedule(selectedSchedule)}
@@ -631,7 +631,7 @@ const CampaignRunModals = ({
                   ? t('campaignRunModals.disableSchedule')
                   : t('campaignRunModals.enableSchedule2')}
             </button>
-            <button onClick={closeScheduleDetailModal} className="btn btn-secondary">
+            <button onClick={closeScheduleDetailModal} className="btn btn-secondary dark:bg-dk-raised dark:border-dk-border dark:text-dk-text dark:hover:bg-dk-strong">
               {t('campaignRunModals.close')}
             </button>
           </div>
@@ -641,21 +641,21 @@ const CampaignRunModals = ({
 
     {campaignSchedulesModalCampaign && (
       <FullScreenOverlay isOpen={Boolean(campaignSchedulesModalCampaign)}>
-        <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto">
-          <div className="flex items-center justify-between p-6 border-b sticky top-0 bg-white z-10">
+        <div className="bg-white dark:bg-dk-surface rounded-xl shadow-xl w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto border border-transparent dark:border-dk-border text-gray-900 dark:text-dk-text">
+          <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-dk-border sticky top-0 bg-white dark:bg-dk-surface z-10">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">{t('campaignRunModals.configuredSchedules')}</h3>
-              <p className="text-sm text-gray-600 mt-0.5">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-dk-text">{t('campaignRunModals.configuredSchedules')}</h3>
+              <p className="text-sm text-gray-600 dark:text-dk-text2 mt-0.5">
                 {campaignSchedulesModalCampaign.campaignName}
                 {campaignSchedulesModalCampaign.id != null && (
-                  <span className="text-gray-400"> · ID {String(campaignSchedulesModalCampaign.id)}</span>
+                  <span className="text-gray-400 dark:text-dk-muted"> · ID {String(campaignSchedulesModalCampaign.id)}</span>
                 )}
               </p>
             </div>
             <button
               type="button"
               onClick={closeCampaignSchedulesSummaryModal}
-              className="p-1 hover:bg-gray-100 rounded-lg"
+              className="p-1 hover:bg-gray-100 dark:hover:bg-dk-raised text-gray-500 dark:text-dk-text2 rounded-lg"
               aria-label={t('campaignRunModals.closeAria')}
             >
               <HiOutlineX className="w-5 h-5" />
@@ -667,7 +667,7 @@ const CampaignRunModals = ({
               const list = filterSchedulesByCampaignId(allSchedules, campaignSchedulesModalCampaign.id);
               if (list.length === 0) {
                 return (
-                  <p className="text-sm text-gray-500 text-center py-6">
+                  <p className="text-sm text-gray-500 dark:text-dk-text2 text-center py-6">
                     {t('campaignRunModals.noSchedulesForCampaign')}
                   </p>
                 );
@@ -682,24 +682,24 @@ const CampaignRunModals = ({
                     return (
                       <li
                         key={sch.id}
-                        className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-2"
+                        className="rounded-lg border border-gray-200 dark:border-dk-border bg-gray-50 dark:bg-dk-raised/40 p-4 space-y-2"
                       >
                         <div className="flex items-start justify-between gap-2">
-                          <p className="font-medium text-gray-900 text-sm">{sch.scheduleName}</p>
+                          <p className="font-medium text-gray-900 dark:text-dk-text text-sm">{sch.scheduleName}</p>
                           <span className={`badge shrink-0 ${getScheduleStatusClassName(sch)}`}>
                             {getScheduleStatusLabel(sch, t)}
                           </span>
                         </div>
-                        <p className="text-sm text-gray-600">{pattern}</p>
-                        <p className="text-sm text-gray-800">
+                        <p className="text-sm text-gray-600 dark:text-dk-text">{pattern}</p>
+                        <p className="text-sm text-gray-800 dark:text-dk-text">
                           <span className="font-medium">{t('campaignRunModals.runs')}</span> {runTimes} {t('campaignRunModals.times')}
                         </p>
-                        <p className="text-sm text-gray-800">
+                        <p className="text-sm text-gray-800 dark:text-dk-text">
                           <span className="font-medium">{getScheduleRunTimingFieldLabelVi(sch, t)}:</span>{' '}
                           {getScheduleNextRunUiLabel(sch, t)}
                         </p>
                         {notActiveWarning && (
-                          <p className="text-xs text-amber-600 font-medium">{notActiveWarning}</p>
+                          <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">{notActiveWarning}</p>
                         )}
                         {canEditSchedules && (
                           <div
@@ -718,7 +718,7 @@ const CampaignRunModals = ({
                               }}
                               className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
                                 isReadonlyOnceSchedule(sch) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-                              } ${sch.enabled ? 'bg-primary-600' : 'bg-gray-200'}`}
+                              } ${sch.enabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dk-strong'}`}
                             >
                               <span
                                 className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
@@ -728,7 +728,7 @@ const CampaignRunModals = ({
                             </button>
                             <span
                               className={`text-xs font-medium select-none ${
-                                isReadonlyOnceSchedule(sch) ? 'text-gray-400' : 'text-gray-700'
+                                isReadonlyOnceSchedule(sch) ? 'text-gray-400 dark:text-dk-muted' : 'text-gray-700 dark:text-dk-text'
                               }`}
                             >
                               {sch.enabled ? t('campaignRun.switchOn') : t('campaignRun.switchOff')}
@@ -743,8 +743,8 @@ const CampaignRunModals = ({
             })()}
           </div>
 
-          <div className="flex justify-end gap-3 p-6 border-t bg-gray-50 rounded-b-xl">
-            <button type="button" onClick={closeCampaignSchedulesSummaryModal} className="btn btn-secondary">
+          <div className="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-dk-border bg-gray-50 dark:bg-dk-bg rounded-b-xl">
+            <button type="button" onClick={closeCampaignSchedulesSummaryModal} className="btn btn-secondary dark:bg-dk-raised dark:border-dk-border dark:text-dk-text dark:hover:bg-dk-strong">
               {t('campaignRunModals.close')}
             </button>
           </div>

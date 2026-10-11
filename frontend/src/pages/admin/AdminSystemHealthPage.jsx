@@ -23,7 +23,7 @@ const AdminSystemHealthPage = () => {
       subtitle={t('adminHealth.subtitle')}
       icon={HiOutlineHeart}
     >
-      <div className="flex flex-wrap gap-2 border-b border-gray-200 pb-2">
+      <div className="flex flex-wrap gap-2 border-b border-gray-200 pb-2 dark:border-dk-border">
         {tabs.map((tab) => (
           <NavLink
             key={tab.to}
@@ -31,7 +31,9 @@ const AdminSystemHealthPage = () => {
             end={tab.end}
             className={({ isActive }) =>
               `px-3 py-1.5 rounded-lg text-sm font-medium ${
-                isActive ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50'
+                isActive
+                  ? 'bg-primary-50 text-primary-700 dark:bg-primary-950/40 dark:text-primary-300'
+                  : 'text-gray-600 hover:bg-gray-50 dark:text-dk-text2 dark:hover:bg-dk-raised dark:hover:text-dk-text'
               }`
             }
           >

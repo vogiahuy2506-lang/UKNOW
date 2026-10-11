@@ -27,7 +27,7 @@ export default function NotificationEditor({ data, onChange, previewContent }) {
               flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200
               ${activeTab === 'vi'
                 ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-sm'
-                : 'bg-white border border-gray-200 text-gray-600 hover:border-orange-200 hover:text-orange-600'
+                : 'bg-white border border-gray-200 text-gray-600 hover:border-orange-200 hover:text-orange-600 dark:bg-dk-surface dark:border-dk-border dark:text-dk-text dark:hover:text-orange-400'
               }
             `}
           >
@@ -41,7 +41,7 @@ export default function NotificationEditor({ data, onChange, previewContent }) {
               flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200
               ${activeTab === 'en'
                 ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-sm'
-                : 'bg-white border border-gray-200 text-gray-600 hover:border-orange-200 hover:text-orange-600'
+                : 'bg-white border border-gray-200 text-gray-600 hover:border-orange-200 hover:text-orange-600 dark:bg-dk-surface dark:border-dk-border dark:text-dk-text dark:hover:text-orange-400'
               }
             `}
           >
@@ -58,7 +58,7 @@ export default function NotificationEditor({ data, onChange, previewContent }) {
 
       {/* Title */}
       <div>
-        <label className="block text-sm font-medium text-gray-600 mb-2">
+        <label className="block text-sm font-medium text-gray-600 dark:text-dk-text mb-2">
           Tiêu đề {activeTab === 'vi' ? '' : '(EN)'}
         </label>
         <input
@@ -72,13 +72,13 @@ export default function NotificationEditor({ data, onChange, previewContent }) {
             ? 'Nhập tiêu đề thông báo...'
             : 'Enter notification title...'
           }
-          className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-100 focus:border-orange-400 transition-all bg-white text-gray-900"
+          className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-100 focus:border-orange-400 transition-all bg-white text-gray-900 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
         />
       </div>
 
       {/* Message */}
       <div>
-        <label className="block text-sm font-medium text-gray-600 mb-2">
+        <label className="block text-sm font-medium text-gray-600 dark:text-dk-text mb-2">
           Nội dung {activeTab === 'vi' ? '' : '(EN)'}
         </label>
         <textarea
@@ -92,22 +92,22 @@ export default function NotificationEditor({ data, onChange, previewContent }) {
             : 'Enter notification content...\n\nYou can use variables like:\n{{user_name}} - User name\n{{user_plan}} - Service plan'
           }
           rows={8}
-          className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-100 focus:border-orange-400 transition-all resize-none bg-white text-gray-900"
+          className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-100 focus:border-orange-400 transition-all resize-none bg-white text-gray-900 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
         />
       </div>
 
       {/* Preview */}
       {previewContent && (
-        <div className="border border-orange-200 rounded-xl p-4 bg-orange-50">
-          <h4 className="text-sm font-medium text-gray-700 mb-2">Xem trước nội dung</h4>
+        <div className="border border-orange-200 rounded-xl p-4 bg-orange-50 dark:border-orange-900/50 dark:bg-orange-950/20">
+          <h4 className="text-sm font-medium text-gray-700 dark:text-orange-300 mb-2">Xem trước nội dung</h4>
           <div className="space-y-2">
             <div>
-              <span className="text-xs text-gray-500">Tiêu đề: </span>
-              <span className="text-sm font-medium">{previewContent.title || previewContent.title_en}</span>
+              <span className="text-xs text-gray-500 dark:text-dk-text2">Tiêu đề: </span>
+              <span className="text-sm font-medium dark:text-dk-text">{previewContent.title || previewContent.title_en}</span>
             </div>
             <div>
-              <span className="text-xs text-gray-500">Nội dung: </span>
-              <p className="text-sm whitespace-pre-wrap">{previewContent.message || previewContent.message_en}</p>
+              <span className="text-xs text-gray-500 dark:text-dk-text2">Nội dung: </span>
+              <p className="text-sm whitespace-pre-wrap dark:text-dk-text">{previewContent.message || previewContent.message_en}</p>
             </div>
           </div>
         </div>
@@ -115,7 +115,7 @@ export default function NotificationEditor({ data, onChange, previewContent }) {
 
       {/* Quick Variable Insert */}
       <div>
-        <label className="block text-sm font-medium text-gray-600 mb-2">
+        <label className="block text-sm font-medium text-gray-600 dark:text-dk-text mb-2">
           Chèn nhanh biến số
         </label>
         <div className="flex flex-wrap gap-2">
@@ -133,7 +133,7 @@ export default function NotificationEditor({ data, onChange, previewContent }) {
                 const field = activeTab === 'vi' ? 'message' : 'message_en';
                 insertVariable(field, variable.key);
               }}
-              className="px-3 py-1.5 text-xs bg-white border border-orange-200 text-orange-600 rounded-lg hover:bg-orange-50 transition-colors font-medium"
+              className="px-3 py-1.5 text-xs bg-white border border-orange-200 text-orange-600 rounded-lg hover:bg-orange-50 dark:border-orange-900/50 dark:bg-dk-surface dark:text-orange-400 dark:hover:bg-dk-raised transition-colors font-medium"
             >
               {variable.label}
             </button>

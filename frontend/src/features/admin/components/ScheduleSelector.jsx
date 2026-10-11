@@ -1,4 +1,5 @@
 import { FaClock, FaCalendarAlt, FaSyncAlt } from 'react-icons/fa';
+import { useI18n } from '../../../i18n';
 
 const SCHEDULE_TYPES = {
   now: { label: 'Gửi ngay', icon: FaClock },
@@ -13,6 +14,7 @@ const RECURRENCE_PATTERNS = [
 ];
 
 export default function ScheduleSelector({ value, onChange }) {
+  const { t } = useI18n();
   const scheduleType = value?.schedule_type || 'now';
   const scheduledAt = value?.scheduled_at || '';
   const recurrencePattern = value?.recurrence_pattern || 'daily';
@@ -43,41 +45,43 @@ export default function ScheduleSelector({ value, onChange }) {
               className={`
                 flex items-center justify-center gap-2 p-4 rounded-xl border-2 transition-all duration-200
                 ${isSelected
-                  ? 'border-orange-500 bg-orange-50 text-orange-700 shadow-sm'
-                  : 'border border-gray-200 hover:border-orange-200 hover:bg-gray-50 text-gray-600 hover:text-gray-900'
+                  ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400 shadow-sm'
+                  : 'border border-gray-200 dark:border-dk-border hover:border-orange-200 dark:hover:border-orange-800 hover:bg-gray-50 dark:hover:bg-dk-raised/50 text-gray-600 dark:text-dk-text hover:text-gray-900 dark:hover:text-dk-text'
                 }
               `}
             >
-              <Icon className={`w-5 h-5 ${isSelected ? 'text-orange-500' : 'text-gray-400'}`} />
-              <span className="text-sm font-semibold">{config.label}</span>
+              <Icon className={`w-5 h-5 ${isSelected ? 'text-orange-500' : 'text-gray-400 dark:text-dk-muted'}`} />
+              <span className="text-sm font-semibold">
+                {t(`notificationCenter.schedule.${type}`, config.label)}
+              </span>
             </button>
           );
         })}
       </div>
 
       {scheduleType === 'scheduled' && (
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <label className="block text-sm font-medium text-gray-600 mb-2">
-            Chọn ngày và giờ gửi
+        <div className="bg-white dark:bg-dk-surface rounded-xl border border-gray-200 dark:border-dk-border p-4">
+          <label className="block text-sm font-medium text-gray-600 dark:text-dk-text mb-2">
+            {t('notificationCenter.schedule.pickDateTime')}
           </label>
           <input
             type="datetime-local"
             value={scheduledAt}
             onChange={(e) => updateValue({ scheduled_at: e.target.value })}
             min={getMinDateTime()}
-            className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-100 focus:border-orange-400 transition-all"
+            className="w-full px-4 py-3 border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-inset text-gray-900 dark:text-dk-text rounded-xl focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-900/40 focus:border-orange-400 transition-all"
           />
-          <p className="mt-2 text-xs text-gray-500">
-            Thông báo sẽ được gửi vào thời gian đã chọn
+          <p className="mt-2 text-xs text-gray-500 dark:text-dk-text2">
+            {t('notificationCenter.schedule.scheduledHint')}
           </p>
         </div>
       )}
 
       {scheduleType === 'recurring' && (
-        <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
+        <div className="bg-white dark:bg-dk-surface rounded-xl border border-gray-200 dark:border-dk-border p-4 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-600 mb-3">
-              Chu kỳ lặp
+            <label className="block text-sm font-medium text-gray-600 dark:text-dk-text mb-3">
+              {t('notificationCenter.schedule.repeatCycle')}
             </label>
             <div className="flex gap-2">
               {RECURRENCE_PATTERNS.map(pattern => (
@@ -89,29 +93,29 @@ export default function ScheduleSelector({ value, onChange }) {
                     px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200
                     ${recurrencePattern === pattern.value
                       ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-sm'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      : 'bg-gray-100 dark:bg-dk-raised text-gray-600 dark:text-dk-text hover:bg-gray-200 dark:hover:bg-dk-strong'
                     }
                   `}
                 >
-                  {pattern.label}
+                  {t(`notificationCenter.schedule.${pattern.value}`, pattern.label)}
                 </button>
               ))}
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-600 mb-2">
-              Ngày kết thúc (tùy chọn)
+            <label className="block text-sm font-medium text-gray-600 dark:text-dk-text mb-2">
+              {t('notificationCenter.schedule.endDateOptional')}
             </label>
             <input
               type="datetime-local"
               value={recurrenceEndDate}
               onChange={(e) => updateValue({ recurrence_end_date: e.target.value })}
               min={getMinDateTime()}
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-100 focus:border-orange-400 transition-all"
+              className="w-full px-4 py-3 border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-inset text-gray-900 dark:text-dk-text rounded-xl focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-900/40 focus:border-orange-400 transition-all"
             />
-            <p className="mt-2 text-xs text-gray-500">
-              Để trống nếu muốn lặp vô hạn
+            <p className="mt-2 text-xs text-gray-500 dark:text-dk-text2">
+              {t('notificationCenter.schedule.endDateHint')}
             </p>
           </div>
         </div>

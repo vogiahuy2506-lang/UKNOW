@@ -25,7 +25,7 @@ import { dashboardFiltersMatch } from '../features/dashboard/utils/dashboardInsi
 
 /** Skeleton placeholder block */
 const Skeleton = ({ className = '' }) => (
-  <div className={`bg-gray-100 rounded-xl animate-pulse ${className}`} />
+  <div className={`bg-gray-100 dark:bg-dk-raised rounded-xl animate-pulse ${className}`} />
 );
 
 /**
@@ -290,7 +290,7 @@ const Dashboard = () => {
 
   return (
     <div className="relative">
-    <div className="space-y-6">
+    <div className="space-y-6 pb-6">
       {/* Page header */}
       <DashboardHeader
         filters={filters}

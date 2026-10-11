@@ -159,15 +159,15 @@ const BaseModal = ({ isOpen, onClose, title, children }) => {
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className="modal-content-animate relative flex flex-col bg-white rounded-xl shadow-2xl overflow-hidden"
+        className="modal-content-animate relative flex flex-col bg-white dark:bg-dk-surface rounded-xl shadow-2xl border border-slate-200 dark:border-dk-border overflow-hidden"
         style={{ width: '80vw', maxWidth: '1100px', height: '80vh' }}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 shrink-0 bg-white">
-          <h2 className="text-lg font-semibold text-gray-900 truncate pr-4">{title}</h2>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-dk-border shrink-0 bg-white dark:bg-dk-surface">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-dk-text truncate pr-4">{title}</h2>
           <button
             ref={closeBtnRef}
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors shrink-0"
+            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dk-raised text-gray-500 dark:text-dk-text2 transition-colors shrink-0"
             aria-label={t('common.close')}
           >
             <HiOutlineX className="w-5 h-5" />
@@ -250,27 +250,27 @@ const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose }) => {
               <span className="text-2xl font-bold text-primary-600">{getInitial(customer)}</span>
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="text-xl font-bold text-gray-900 mb-3">{displayName || '—'}</h3>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-dk-text mb-3">{displayName || '—'}</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="flex items-center gap-2.5 text-sm text-gray-700">
-                  <HiOutlineMail className="w-4 h-4 text-gray-400 shrink-0" />
+                <div className="flex items-center gap-2.5 text-sm text-gray-700 dark:text-dk-text">
+                  <HiOutlineMail className="w-4 h-4 text-gray-400 dark:text-dk-muted shrink-0" />
                   <span className="truncate">{customer?.email || '--'}</span>
                 </div>
-                <div className="flex items-center gap-2.5 text-sm text-gray-700">
-                  <HiOutlinePhone className="w-4 h-4 text-gray-400 shrink-0" />
+                <div className="flex items-center gap-2.5 text-sm text-gray-700 dark:text-dk-text">
+                  <HiOutlinePhone className="w-4 h-4 text-gray-400 dark:text-dk-muted shrink-0" />
                   <span>{customer?.phone || '--'}</span>
                 </div>
-                <div className="flex items-center gap-2.5 text-sm text-gray-700">
-                  <HiOutlineCalendar className="w-4 h-4 text-gray-400 shrink-0" />
+                <div className="flex items-center gap-2.5 text-sm text-gray-700 dark:text-dk-text">
+                  <HiOutlineCalendar className="w-4 h-4 text-gray-400 dark:text-dk-muted shrink-0" />
                   <span>{t('campaignCustomerModals.joined')} {formatDateOnly(customer?.createdAt)}</span>
                 </div>
                 <div className="flex items-center gap-2.5 text-sm">
-                  <HiOutlineUser className="w-4 h-4 text-gray-400 shrink-0" />
+                  <HiOutlineUser className="w-4 h-4 text-gray-400 dark:text-dk-muted shrink-0" />
                   <CustomerStatusBadge status={status} t={t} />
                 </div>
                 {customer?.consentSource ? (
-                  <div className="flex items-center gap-2.5 text-sm text-gray-700">
-                    <span className="text-gray-500 font-medium">{t('campaignCustomers.consentSource')}:</span>
+                  <div className="flex items-center gap-2.5 text-sm text-gray-700 dark:text-dk-text">
+                    <span className="text-gray-500 dark:text-dk-text2 font-medium">{t('campaignCustomers.consentSource')}:</span>
                     <span className="badge badge-info text-xs">
                       {t(`campaignCustomers.consentSources.${customer.consentSource}`, { defaultValue: customer.consentSource })}
                     </span>
@@ -282,7 +282,7 @@ const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose }) => {
         </section>
 
         <section>
-          <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <h3 className="text-base font-semibold text-gray-900 dark:text-dk-text mb-4 flex items-center gap-2">
             <HiOutlineInformationCircle className="w-5 h-5 text-primary-500" />
             {t('campaignCustomerModals.coursesFromCampaign')}
           </h3>
@@ -292,7 +292,7 @@ const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose }) => {
               <div className="spinner w-8 h-8" />
             </div>
           ) : purchases.length === 0 ? (
-            <div className="py-8 text-center text-gray-400 bg-gray-50 rounded-xl border border-gray-100">
+            <div className="py-8 text-center text-gray-400 dark:text-dk-muted bg-gray-50 dark:bg-dk-raised/40 rounded-xl border border-gray-100 dark:border-dk-border">
               {t('campaignCustomerModals.noCourseData')}
             </div>
           ) : (
@@ -335,17 +335,17 @@ const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose }) => {
                 const linkedOrderEvents = p.idEmailMessage ? (orderEventsById[p.idEmailMessage] || []) : [];
 
                 return (
-                  <div key={key} className="rounded-xl border border-gray-200 overflow-hidden">
+                  <div key={key} className="rounded-xl border border-gray-200 dark:border-dk-border overflow-hidden">
                     <button
                       type="button"
                       onClick={() => setExpandedPurchaseId(isExpanded ? null : key)}
-                      className="w-full flex items-center justify-between gap-3 px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+                      className="w-full flex items-center justify-between gap-3 px-4 py-3 bg-gray-50 dark:bg-dk-raised/50 hover:bg-gray-100 dark:hover:bg-dk-strong transition-colors text-left"
                     >
                       <div className="min-w-0 flex-1">
-                        <p className="font-semibold text-gray-900 text-sm leading-snug truncate">
+                        <p className="font-semibold text-gray-900 dark:text-dk-text text-sm leading-snug truncate">
                           {decodeHtmlEntities(p.courseName || p.productName || '--')}
                         </p>
-                        <p className="text-xs text-gray-400 mt-0.5">
+                        <p className="text-xs text-gray-400 dark:text-dk-muted mt-0.5">
                           {p.orderId ? `#${p.orderId}` : t('campaignCustomerModals.noOrderCode')}
                           {p.courseCode ? ` · ${t('campaignCustomerModals.productCode')}: ${p.courseCode}` : ''}
                         </p>
@@ -354,7 +354,7 @@ const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose }) => {
                         {purchased && <span className="badge badge-success">{t('campaignCustomerModals.purchased')}</span>}
                         {interested && !purchased && <span className="badge badge-warning">{t('campaignCustomerModals.leadShort')}</span>}
                         <HiOutlineChevronDown
-                          className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                          className={`w-4 h-4 text-gray-400 dark:text-dk-muted transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
                         />
                       </div>
                     </button>

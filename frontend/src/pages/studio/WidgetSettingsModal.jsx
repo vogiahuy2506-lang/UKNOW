@@ -41,7 +41,7 @@ function Toggle({ checked, onChange }) {
       aria-checked={checked}
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
-        checked ? 'bg-primary-600' : 'bg-slate-200'
+        checked ? 'bg-primary-600' : 'bg-slate-200 dark:bg-dk-strong'
       }`}
     >
       <span
@@ -55,16 +55,16 @@ function Toggle({ checked, onChange }) {
 
 function ColorRow({ label, value, onChange }) {
   return (
-    <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
+    <div className="flex items-center gap-3 bg-slate-50 dark:bg-dk-raised p-3 rounded-xl border border-slate-100 dark:border-dk-border">
       <input
         type="color"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-9 h-9 rounded-lg cursor-pointer border border-slate-200 shrink-0"
+        className="w-9 h-9 rounded-lg cursor-pointer border border-slate-200 dark:border-dk-border shrink-0"
       />
       <div className="min-w-0 flex-1">
-        <p className="text-xs text-slate-500">{label}</p>
-        <p className="text-xs font-mono text-slate-700 truncate">{value}</p>
+        <p className="text-xs text-slate-500 dark:text-dk-text2">{label}</p>
+        <p className="text-xs font-mono text-slate-700 dark:text-dk-text truncate">{value}</p>
       </div>
     </div>
   );
@@ -171,9 +171,9 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-2 md:p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full h-full md:h-[90vh] md:w-[90vw] max-w-[1200px] overflow-hidden flex flex-col">
+      <div className="bg-white dark:bg-dk-bg rounded-2xl shadow-2xl w-full h-full md:h-[90vh] md:w-[90vw] max-w-[1200px] overflow-hidden flex flex-col border border-transparent dark:border-dk-border">
         {/* Header */}
-        <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-slate-200 shrink-0 bg-white">
+        <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-slate-200 dark:border-dk-border shrink-0 bg-white dark:bg-dk-surface">
           <div className="flex items-center gap-3 min-w-0">
             <div
               className="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0"
@@ -182,10 +182,10 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
               <HiOutlineColorSwatch className="w-5 h-5" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base md:text-lg font-semibold text-slate-900 truncate">
+              <h2 className="text-base md:text-lg font-semibold text-slate-900 dark:text-dk-text truncate">
                 {t('chatbot.studio.wTitle')}
               </h2>
-              <p className="text-xs text-slate-500 truncate">
+              <p className="text-xs text-slate-500 dark:text-dk-text2 truncate">
                 {t('chatbot.studio.wAppliesAll', { name: chatbot.name })}
               </p>
             </div>
@@ -193,7 +193,7 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-dk-text dark:hover:bg-dk-raised transition-colors"
             title={t('chatbot.studio.close')}
           >
             <HiOutlineX className="w-5 h-5" />
@@ -203,8 +203,8 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
         {/* Body: 3-tab layout */}
         <div className="flex flex-1 min-h-0">
           {/* Left: tab list */}
-          <nav className="w-60 lg:w-72 border-r border-slate-100 bg-slate-50/50 p-3 overflow-y-auto shrink-0">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-3 mb-2">
+          <nav className="w-60 lg:w-72 border-r border-slate-100 dark:border-dk-border bg-slate-50/50 dark:bg-dk-surface p-3 overflow-y-auto shrink-0">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-dk-muted px-3 mb-2">
               {t('chatbot.studio.wEmbedTypes')}
             </p>
             <div className="space-y-1">
@@ -218,18 +218,18 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                     onClick={() => setActiveTab(tab.id)}
                     className={`w-full flex items-start gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left ${
                       isActive
-                        ? 'bg-white text-primary-700 shadow-sm border border-slate-200'
-                        : 'text-slate-600 hover:bg-white border border-transparent'
+                        ? 'bg-white dark:bg-dk-raised text-primary-700 dark:text-primary-400 shadow-sm border border-slate-200 dark:border-dk-border'
+                        : 'text-slate-600 dark:text-dk-text hover:bg-white dark:hover:bg-dk-raised/60 border border-transparent'
                     }`}
                   >
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                      isActive ? 'bg-primary-100 text-primary-600' : 'bg-slate-100 text-slate-500'
+                      isActive ? 'bg-primary-100 dark:bg-primary-950/40 text-primary-600 dark:text-primary-400' : 'bg-slate-100 dark:bg-dk-raised text-slate-500 dark:text-dk-text2'
                     }`}>
                       <Icon className="w-4 h-4" />
                     </div>
                     <div className="min-w-0">
                       <p className="truncate">{t(tab.labelKey)}</p>
-                      <p className="text-[11px] text-slate-400 font-normal truncate">{t(tab.descKey)}</p>
+                      <p className="text-[11px] text-slate-400 dark:text-dk-muted font-normal truncate">{t(tab.descKey)}</p>
                     </div>
                   </button>
                 );
@@ -238,7 +238,7 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
 
             {/* Live preview — uses cfg so all tabs show the same saved colors */}
             <div className="mt-5 px-3">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-dk-muted mb-2">
                 Preview
               </p>
               {activeTab === 'script' && (
@@ -257,14 +257,14 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
           <div className="flex-1 overflow-y-auto overscroll-contain">
             <div className="p-6 md:p-8 space-y-5 max-w-2xl">
               <div className="flex items-center gap-2">
-                <activeTabMeta.icon className="w-5 h-5 text-primary-600" />
-                <h3 className="text-base font-semibold text-slate-900">{t(activeTabMeta.labelKey)}</h3>
+                <activeTabMeta.icon className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+                <h3 className="text-base font-semibold text-slate-900 dark:text-dk-text">{t(activeTabMeta.labelKey)}</h3>
               </div>
 
               {/* ── Common to all tabs: color palette + logo preview + border radius ── */}
               {/* Color palette */}
-              <section className="bg-white rounded-xl border border-slate-200 p-5">
-                <h4 className="text-sm font-semibold text-slate-900 mb-3">{t('chatbot.studio.wColors')}</h4>
+              <section className="bg-white dark:bg-dk-surface rounded-xl border border-slate-200 dark:border-dk-border p-5">
+                <h4 className="text-sm font-semibold text-slate-900 dark:text-dk-text mb-3">{t('chatbot.studio.wColors')}</h4>
                 <div className="grid grid-cols-2 gap-3">
                   <ColorRow label={t('chatbot.studio.wColorPrimary')} value={cfg.primary_color} onChange={(v) => update({ primary_color: v })} />
                   <ColorRow label={t('chatbot.studio.wColorAccent')} value={cfg.accent_color} onChange={(v) => update({ accent_color: v })} />
@@ -274,29 +274,29 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
               </section>
 
               {/* Logo preview — read-only. Logo luon lay tu avatar_url cua Setting Chatbot. */}
-              <section className="bg-white rounded-xl border border-slate-200 p-5">
-                <h4 className="text-sm font-semibold text-slate-900 mb-3">Logo widget</h4>
+              <section className="bg-white dark:bg-dk-surface rounded-xl border border-slate-200 dark:border-dk-border p-5">
+                <h4 className="text-sm font-semibold text-slate-900 dark:text-dk-text mb-3">Logo widget</h4>
                 {chatbot?.avatar_url ? (
                   <div className="flex items-center gap-3">
                     <img
                       src={chatbot.avatar_url}
                       alt="Logo chatbot"
-                      className="w-12 h-12 rounded-lg object-cover border border-slate-200"
+                      className="w-12 h-12 rounded-lg object-cover border border-slate-200 dark:border-dk-border"
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs text-slate-500 truncate">{chatbot.avatar_url}</p>
-                      <p className="text-xs text-slate-400 mt-1">
+                      <p className="text-xs text-slate-500 dark:text-dk-text2 truncate">{chatbot.avatar_url}</p>
+                      <p className="text-xs text-slate-400 dark:text-dk-muted mt-1">
                         {t('chatbot.studio.widgetLogoHint')}
                       </p>
                     </div>
                   </div>
                 ) : (
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 text-xs">
+                    <div className="w-12 h-12 rounded-lg bg-slate-100 dark:bg-dk-raised flex items-center justify-center text-slate-400 text-xs">
                       No logo
                     </div>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-slate-500 dark:text-dk-text2">
                       {t('chatbot.studio.widgetLogoEmptyHint')}
                     </p>
                   </div>
@@ -304,8 +304,8 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
               </section>
 
               {/* Border radius */}
-              <section className="bg-white rounded-xl border border-slate-200 p-5">
-                <h4 className="text-sm font-semibold text-slate-900 mb-3">{t('chatbot.studio.wRadius')}</h4>
+              <section className="bg-white dark:bg-dk-surface rounded-xl border border-slate-200 dark:border-dk-border p-5">
+                <h4 className="text-sm font-semibold text-slate-900 dark:text-dk-text mb-3">{t('chatbot.studio.wRadius')}</h4>
                 <div className="flex items-center gap-3">
                   <input
                     type="range"
@@ -315,7 +315,7 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                     onChange={(e) => update({ border_radius: Number(e.target.value) })}
                     className="flex-1"
                   />
-                  <span className="text-sm font-mono text-slate-700 w-12 text-right">{cfg.border_radius}px</span>
+                  <span className="text-sm font-mono text-slate-700 dark:text-dk-text w-12 text-right">{cfg.border_radius}px</span>
                 </div>
               </section>
 
@@ -323,8 +323,8 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
               {activeTab === 'script' && (
                 <>
                   {/* Position */}
-                  <section className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h4 className="text-sm font-semibold text-slate-900 mb-3">{t('chatbot.studio.wPosition')}</h4>
+                  <section className="bg-white dark:bg-dk-surface rounded-xl border border-slate-200 dark:border-dk-border p-5">
+                    <h4 className="text-sm font-semibold text-slate-900 dark:text-dk-text mb-3">{t('chatbot.studio.wPosition')}</h4>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                       {POSITIONS.map((pos) => (
                         <button
@@ -333,8 +333,8 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                           onClick={() => update({ position: pos.key })}
                           className={`py-2 text-xs font-medium rounded-lg border transition-colors ${
                             cfg.position === pos.key
-                              ? 'border-primary-500 bg-primary-50 text-primary-700'
-                              : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                              ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/30 text-primary-700 dark:text-primary-300'
+                              : 'border-slate-200 dark:border-dk-border text-slate-600 dark:text-dk-text hover:bg-slate-50 dark:hover:bg-dk-raised'
                           }`}
                         >
                           {t(pos.labelKey)}
@@ -346,15 +346,15 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                   {/* Launcher label — viên nhãn kêu gọi cạnh bong bóng, chỉ áp dụng cho dạng
                       nhúng script (không có ở iframe/public link). Mặc định rỗng — để trống
                       thì widget chỉ hiện nút tròn như hôm nay. */}
-                  <section className="bg-white rounded-xl border border-slate-200 p-5">
+                  <section className="bg-white dark:bg-dk-surface rounded-xl border border-slate-200 dark:border-dk-border p-5">
                     <div className="flex items-center justify-between mb-3">
-                      <h4 className="text-sm font-semibold text-slate-900">{t('chatbot.studio.wLauncherTitle')}</h4>
+                      <h4 className="text-sm font-semibold text-slate-900 dark:text-dk-text">{t('chatbot.studio.wLauncherTitle')}</h4>
                       {cfg.launcher_label?.trim() ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                           {t('chatbot.studio.wLauncherOn')}
                         </span>
                       ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
                           {t('chatbot.studio.wLauncherOff')}
                         </span>
                       )}
@@ -365,14 +365,14 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                       onChange={(e) => update({ launcher_label: e.target.value })}
                       placeholder={t('chatbot.studio.wLauncherDefault')}
                       maxLength={40}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10"
+                      className="w-full border border-slate-200 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text rounded-lg px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10"
                     />
                     <div className="flex items-center justify-between mt-1.5">
                       {!cfg.launcher_label?.trim() ? (
                         <button
                           type="button"
                           onClick={() => update({ launcher_label: t('chatbot.studio.wLauncherDefault') })}
-                          className="text-xs text-primary-600 hover:text-primary-700 hover:underline font-medium cursor-pointer"
+                          className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 hover:underline font-medium cursor-pointer"
                         >
                           {t('chatbot.studio.wLauncherApply', { label: t('chatbot.studio.wLauncherDefault') })}
                         </button>
@@ -390,17 +390,17 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                   </section>
 
                   {/* Script toggles */}
-                  <section className="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
+                  <section className="bg-white dark:bg-dk-surface rounded-xl border border-slate-200 dark:border-dk-border p-5 space-y-3">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-slate-700">{t('chatbot.studio.wShowAvatar')}</p>
+                        <p className="text-sm font-medium text-slate-700 dark:text-dk-text">{t('chatbot.studio.wShowAvatar')}</p>
                         <p className="text-xs text-slate-400">{t('chatbot.studio.wShowAvatarBotHelp')}</p>
                       </div>
                       <Toggle checked={cfg.show_avatar} onChange={(v) => update({ show_avatar: v })} />
                     </div>
-                    <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                    <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-dk-border">
                       <div>
-                        <p className="text-sm font-medium text-slate-700">{t('chatbot.studio.wAutoOpen')}</p>
+                        <p className="text-sm font-medium text-slate-700 dark:text-dk-text">{t('chatbot.studio.wAutoOpen')}</p>
                         <p className="text-xs text-slate-400">{t('chatbot.studio.wAutoOpenHelp')}</p>
                       </div>
                       <Toggle checked={cfg.widget_auto_open} onChange={(v) => update({ widget_auto_open: v })} />
@@ -413,8 +413,8 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
               {(activeTab === 'iframe' || activeTab === 'public_link') && (
                 <>
                   {/* Size */}
-                  <section className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h4 className="text-sm font-semibold text-slate-900 mb-3">{t('chatbot.studio.wSizeTitle')}</h4>
+                  <section className="bg-white dark:bg-dk-surface rounded-xl border border-slate-200 dark:border-dk-border p-5">
+                    <h4 className="text-sm font-semibold text-slate-900 dark:text-dk-text mb-3">{t('chatbot.studio.wSizeTitle')}</h4>
                     <div className="grid grid-cols-3 gap-2">
                       {SIZES.map((s) => (
                         <button
@@ -423,8 +423,8 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                           onClick={() => setEmbedSize(s.key)}
                           className={`py-2 text-xs font-medium rounded-lg border transition-colors ${
                             embedSize === s.key
-                              ? 'border-primary-500 bg-primary-50 text-primary-700'
-                              : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                              ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/30 text-primary-700 dark:text-primary-300'
+                              : 'border-slate-200 dark:border-dk-border text-slate-600 dark:text-dk-text hover:bg-slate-50 dark:hover:bg-dk-raised'
                           }`}
                         >
                           {t(s.labelKey)}
@@ -435,17 +435,17 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                   </section>
 
                   {/* Toggles */}
-                  <section className="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
+                  <section className="bg-white dark:bg-dk-surface rounded-xl border border-slate-200 dark:border-dk-border p-5 space-y-3">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-slate-700">{t('chatbot.studio.wShowHeader')}</p>
+                        <p className="text-sm font-medium text-slate-700 dark:text-dk-text">{t('chatbot.studio.wShowHeader')}</p>
                         <p className="text-xs text-slate-400">{t('chatbot.studio.wShowHeaderHelp')}</p>
                       </div>
                       <Toggle checked={cfg.embed_show_header} onChange={(v) => update({ embed_show_header: v })} />
                     </div>
-                    <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                    <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-dk-border">
                       <div>
-                        <p className="text-sm font-medium text-slate-700">{t('chatbot.studio.wShowAvatar')}</p>
+                        <p className="text-sm font-medium text-slate-700 dark:text-dk-text">{t('chatbot.studio.wShowAvatar')}</p>
                         <p className="text-xs text-slate-400">{t('chatbot.studio.wShowAvatarPageHelp')}</p>
                       </div>
                       <Toggle checked={cfg.show_avatar} onChange={(v) => update({ show_avatar: v })} />
@@ -458,8 +458,8 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50 shrink-0">
-          <p className="text-xs text-slate-500 hidden md:block">
+        <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-surface shrink-0">
+          <p className="text-xs text-slate-500 dark:text-dk-text2 hidden md:block">
             {t('chatbot.studio.widgetApplyAllHint')}
           </p>
           <div className="flex items-center gap-2 ml-auto">
@@ -467,7 +467,7 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 rounded-lg transition-colors disabled:opacity-50"
+              className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-dk-text hover:bg-slate-200 dark:hover:bg-dk-raised rounded-lg transition-colors disabled:opacity-50"
             >
               {t('chatbot.studio.cancel')}
             </button>
@@ -508,16 +508,16 @@ function ScriptPreview({ cfg, chatbot }) {
   const hasLauncherLabel = Boolean(cfg.launcher_label && cfg.launcher_label.trim());
 
   return (
-    <div className="relative h-44 bg-slate-100 rounded-lg overflow-hidden border border-slate-200">
+    <div className="relative h-44 bg-slate-100 dark:bg-dk-raised rounded-lg overflow-hidden border border-slate-200 dark:border-dk-border">
       <div className="absolute inset-0 p-2">
-        <div className="w-full h-full bg-white rounded-md border border-slate-100" />
+        <div className="w-full h-full bg-white dark:bg-dk-inset rounded-md border border-slate-100 dark:border-dk-border" />
       </div>
       {/* Nhãn nút mở chat — vị trí THẬT trên widget (cạnh bong bóng), chỉ vẽ khi có nội
           dung. Trước đây preview này vẽ nhãn làm tiêu đề khung chat (sai — tiêu đề khung
           chat thật ra luôn là tên chatbot, không đổi theo nhãn) nên "xem trước nói dối". */}
       {hasLauncherLabel && (
         <div
-          className="absolute max-w-[110px] truncate px-2 py-1 rounded-full bg-white shadow border border-slate-200 text-[9px]"
+          className="absolute max-w-[110px] truncate px-2 py-1 rounded-full bg-white dark:bg-dk-surface shadow border border-slate-200 dark:border-dk-border text-[9px]"
           style={{
             color: cfg.text_color,
             [isBottom ? 'bottom' : 'top']: 22,
@@ -572,9 +572,9 @@ function IframePreview({ cfg, chatbot }) {
   const avatarSrc = chatbot.avatar_url;
 
   return (
-    <div className="bg-slate-100 rounded-lg p-3 border border-slate-200">
+    <div className="bg-slate-100 dark:bg-dk-raised rounded-lg p-3 border border-slate-200 dark:border-dk-border">
       <div
-        className="mx-auto overflow-hidden border border-slate-200"
+        className="mx-auto overflow-hidden border border-slate-200 dark:border-dk-border"
         style={{ width: sz.w, height: sz.h, background: cfg.background_color, color: cfg.text_color, borderRadius: cfg.border_radius }}
       >
         {cfg.embed_show_header && (
@@ -596,10 +596,10 @@ function IframePreview({ cfg, chatbot }) {
               avatarSrc ? (
                 <img src={avatarSrc} alt="" className="w-3 h-3 rounded-full object-cover shrink-0" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
               ) : (
-                <span className="w-3 h-3 rounded-full bg-slate-200 shrink-0" />
+                <span className="w-3 h-3 rounded-full bg-slate-200 dark:bg-dk-strong shrink-0" />
               )
             )}
-            <div className="px-2 py-1 rounded-md bg-slate-100 text-[9px]">{t('chatbot.studio.previewHello')}</div>
+            <div className="px-2 py-1 rounded-md bg-slate-100 dark:bg-dk-raised text-[9px]">{t('chatbot.studio.previewHello')}</div>
           </div>
         </div>
       </div>

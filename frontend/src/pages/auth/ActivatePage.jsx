@@ -294,7 +294,7 @@ const ActivatePage = () => {
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full pl-11 pr-11 py-3 text-sm bg-white border border-slate-200 rounded-xl outline-none transition-all duration-150 hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10"
+              className="w-full pl-11 pr-11 py-3 text-sm text-slate-900 bg-white border border-slate-200 rounded-xl outline-none transition-all duration-150 placeholder:text-slate-400 hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10"
               placeholder={t('auth.enterNewPassword')}
               minLength={8}
               required
@@ -324,7 +324,7 @@ const ActivatePage = () => {
               type={showConfirmPassword ? 'text' : 'password'}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full pl-11 pr-11 py-3 text-sm bg-white border border-slate-200 rounded-xl outline-none transition-all duration-150 hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10"
+              className="w-full pl-11 pr-11 py-3 text-sm text-slate-900 bg-white border border-slate-200 rounded-xl outline-none transition-all duration-150 placeholder:text-slate-400 hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10"
               placeholder={t('auth.confirmNewPassword')}
               minLength={8}
               required

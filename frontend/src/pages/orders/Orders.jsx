@@ -9,7 +9,7 @@ import { HiOutlineShoppingBag } from 'react-icons/hi';
 // ─── Page skeleton ─────────────────────────────────────────────────────────────
 
 const Skeleton = ({ className = '' }) => (
-  <div className={`bg-gray-100 rounded-xl animate-pulse ${className}`} />
+  <div className={`bg-gray-100 dark:bg-dk-raised rounded-xl animate-pulse ${className}`} />
 );
 
 const OrdersSkeleton = () => (
@@ -25,7 +25,7 @@ const OrdersSkeleton = () => (
       </div>
     </div>
     <div className="card">
-      <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+      <div className="p-5 border-b border-gray-100 dark:border-dk-border/80 flex items-center justify-between">
         <div className="space-y-1.5">
           <Skeleton className="h-4 w-32" />
           <Skeleton className="h-3 w-24" />
@@ -94,7 +94,7 @@ const Orders = () => {
   }
 
   const extraActions = (
-    <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm text-gray-600 shadow-sm">
+    <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface text-sm text-gray-600 dark:text-dk-text shadow-sm">
       <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path
           strokeLinecap="round"
@@ -138,7 +138,7 @@ const Orders = () => {
 
       {/* Error banner */}
       {errorMessage && (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-red-50 border border-red-100 text-sm text-red-600">
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-100 dark:border-red-900/60 text-sm text-red-600 dark:text-red-300">
           <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
               d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />

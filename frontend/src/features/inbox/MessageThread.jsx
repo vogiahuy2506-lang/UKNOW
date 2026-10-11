@@ -151,7 +151,7 @@ const MessageBubble = ({
     <>
       {showDate && (
         <div className="flex items-center justify-center my-6">
-          <span className="text-xs font-medium text-gray-400 bg-gray-100/80 px-4 py-1.5 rounded-full backdrop-blur-sm">
+          <span className="text-xs font-medium text-gray-400 dark:text-dk-text2 bg-gray-100/80 dark:bg-dk-raised/80 px-4 py-1.5 rounded-full backdrop-blur-sm">
             {formatMessageDate(message.createdAt, t, locale)}
           </span>
         </div>
@@ -163,19 +163,19 @@ const MessageBubble = ({
           <div className={`flex items-center justify-between gap-3 mb-1.5 ${isAgentMessage ? 'flex-row-reverse' : ''}`}>
             {isVisitor && showSenderName && senderName && (
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-xs font-bold text-gray-600">
+                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 dark:from-dk-raised dark:to-dk-strong flex items-center justify-center text-xs font-bold text-gray-600 dark:text-dk-text">
                   {senderName[0]?.toUpperCase() || '?'}
                 </div>
-                <span className="text-sm font-semibold text-gray-700">{senderName}</span>
+                <span className="text-sm font-semibold text-gray-700 dark:text-dk-text">{senderName}</span>
               </div>
             )}
             {isBot && (
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-600 bg-primary-50 px-2.5 py-1 rounded-full">
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-950/40 px-2.5 py-1 rounded-full">
                 🤖 {t('inbox.bot')}
               </span>
             )}
             {isAgent && (
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-600 bg-primary-50 px-2.5 py-1 rounded-full">
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-950/40 px-2.5 py-1 rounded-full">
                 ✨ {sentByOther ? t('inbox.agent') : t('inbox.you')}
               </span>
             )}
@@ -185,23 +185,23 @@ const MessageBubble = ({
           <div
             className={`relative group min-w-0 ${
               sendFailed
-                ? 'bg-red-50 text-red-900 rounded-3xl rounded-br-sm border border-red-200 shadow-sm'
+                ? 'bg-red-50 dark:bg-red-950/40 text-red-900 dark:text-red-200 rounded-3xl rounded-br-sm border border-red-200 dark:border-red-900/50 shadow-sm'
                 : sendRetrying
-                  ? 'bg-amber-50 text-amber-950 rounded-3xl rounded-br-sm border border-amber-200 shadow-sm'
+                  ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-950 dark:text-amber-200 rounded-3xl rounded-br-sm border border-amber-200 dark:border-amber-900/50 shadow-sm'
                 : isAgentMessage
                 ? 'bg-gradient-to-br from-primary-500 to-primary-600 text-white rounded-3xl rounded-br-sm shadow-lg shadow-primary-500/20'
-                : 'bg-white text-gray-800 rounded-3xl rounded-bl-sm border border-gray-100 shadow-sm'
+                : 'bg-white dark:bg-dk-raised text-gray-800 dark:text-dk-text rounded-3xl rounded-bl-sm border border-gray-100 dark:border-dk-border shadow-sm'
             }`}
           >
             {/* Tail */}
             <div className={`absolute top-3 w-3 h-3 ${
               sendFailed
-                ? '-right-1.5 bg-red-50 rotate-45 border-r border-t border-red-200'
+                ? '-right-1.5 bg-red-50 dark:bg-red-950/40 rotate-45 border-r border-t border-red-200 dark:border-red-900/50'
                 : sendRetrying
-                  ? '-right-1.5 bg-amber-50 rotate-45 border-r border-t border-amber-200'
+                  ? '-right-1.5 bg-amber-50 dark:bg-amber-950/40 rotate-45 border-r border-t border-amber-200 dark:border-amber-900/50'
                 : isAgentMessage 
                 ? '-right-1.5 bg-primary-500 rotate-45' 
-                : '-left-1.5 bg-white rotate-45 border-l border-b border-gray-100'
+                : '-left-1.5 bg-white dark:bg-dk-raised rotate-45 border-l border-b border-gray-100 dark:border-dk-border'
             }`} />
             
             <div className="px-4 py-3 min-w-0">
@@ -222,7 +222,7 @@ const MessageBubble = ({
                       target="_blank"
                       rel="noopener noreferrer"
                       className={`flex items-center gap-2 text-sm font-medium underline hover:opacity-80 ${
-                        sendFailed || sendRetrying ? 'text-red-700' : isAgentMessage ? 'text-white/90' : 'text-primary-600'
+                        sendFailed || sendRetrying ? 'text-red-700' : isAgentMessage ? 'text-white/90' : 'text-primary-600 dark:text-primary-400'
                       }`}
                     >
                       <HiOutlinePaperClip className="w-4 h-4 shrink-0" />
@@ -435,11 +435,11 @@ const MessageThread = ({
     return (
       <div className="h-full min-h-0 flex items-center justify-center">
         <div className="text-center p-8">
-          <div className="w-20 h-20 mx-auto mb-4 rounded-3xl bg-gray-100 flex items-center justify-center">
+          <div className="w-20 h-20 mx-auto mb-4 rounded-3xl bg-gray-100 dark:bg-dk-raised flex items-center justify-center">
             <span className="text-4xl">💬</span>
           </div>
-          <p className="text-lg font-semibold text-gray-700">{t('inbox.noMessages')}</p>
-          <p className="text-sm text-gray-400 mt-2">{t('inbox.startConversation')}</p>
+          <p className="text-lg font-semibold text-gray-700 dark:text-dk-text">{t('inbox.noMessages')}</p>
+          <p className="text-sm text-gray-400 dark:text-dk-text2 mt-2">{t('inbox.startConversation')}</p>
         </div>
       </div>
     );
@@ -448,12 +448,12 @@ const MessageThread = ({
   return (
     <div className="grid h-full min-h-0 min-w-0 grid-rows-[auto,minmax(0,1fr)] overflow-hidden">
       {/* Search bar — ẩn mặc định, nút kính lúp ở góc mở/đóng (H-29) */}
-      <div className={`bg-white border-b border-gray-100 flex-shrink-0 ${showSearch ? 'px-5 py-3' : 'px-5 py-1.5'}`}>
+      <div className={`bg-white dark:bg-dk-surface border-b border-gray-100 dark:border-dk-border flex-shrink-0 ${showSearch ? 'px-5 py-3' : 'px-5 py-1.5'}`}>
         <div className="flex items-center gap-3">
           {showSearch ? (
             <>
               <div className="relative flex-1">
-                <HiSearch className="absolute left-3.5 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <HiSearch className="absolute left-3.5 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-dk-muted" />
                 <input
                   ref={searchInputRef}
                   autoFocus
@@ -461,19 +461,19 @@ const MessageThread = ({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={t('inbox.searchMessages')}
-                  className="w-full pl-10 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
+                  className="w-full pl-10 pr-10 py-2.5 bg-gray-50 dark:bg-dk-inset border border-gray-200 dark:border-dk-border dark:text-dk-text dark:placeholder-dk-muted rounded-xl text-sm focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
                 />
                 {searchQuery && (
                   <button
                     onClick={() => setSearchQuery('')}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-lg transition-all"
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-dk-text hover:bg-gray-200 dark:hover:bg-dk-strong rounded-lg transition-all"
                   >
                     <HiX className="w-4 h-4" />
                   </button>
                 )}
               </div>
               {searchResults.length > 0 && (
-                <span className="text-xs font-semibold text-primary-600 bg-primary-50 px-3.5 py-2 rounded-xl">
+                <span className="text-xs font-semibold text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-950/40 px-3.5 py-2 rounded-xl">
                   {searchResults.length} {t('inbox.results')}
                 </span>
               )}
@@ -486,7 +486,7 @@ const MessageThread = ({
             aria-label={t('inbox.searchMessages')}
             title={t('inbox.searchMessages')}
             className={`p-2.5 rounded-xl transition-all ${
-              showSearch ? 'text-primary-600 bg-primary-50 shadow-sm' : 'text-gray-400 hover:bg-gray-100'
+              showSearch ? 'text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-950/40 shadow-sm' : 'text-gray-400 dark:text-dk-text2 hover:bg-gray-100 dark:hover:bg-dk-raised'
             }`}
           >
             {showSearch ? <HiX className="w-5 h-5" /> : <HiSearch className="w-5 h-5" />}
@@ -502,7 +502,7 @@ const MessageThread = ({
               type="button"
               onClick={handleLoadOlder}
               disabled={isLoadingOlder}
-              className="rounded-full border border-gray-200 bg-white px-4 py-1.5 text-xs font-semibold text-primary-600 shadow-sm hover:bg-primary-50 disabled:opacity-60"
+              className="rounded-full border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-raised px-4 py-1.5 text-xs font-semibold text-primary-600 dark:text-primary-400 shadow-sm hover:bg-primary-50 dark:hover:bg-dk-strong disabled:opacity-60"
             >
               {isLoadingOlder ? t('common.loading') : t('inbox.loadOlderMessages')}
             </button>

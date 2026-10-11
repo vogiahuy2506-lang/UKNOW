@@ -16,7 +16,7 @@ export function StudioEmptyState({ chatbot }) {
   const { primaryColor, gradientStyle } = getChatbotTheme(chatbot);
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-8 bg-white relative overflow-hidden">
+    <div className="flex-1 flex flex-col items-center justify-center p-8 bg-white dark:bg-dk-surface relative overflow-hidden">
       <div
         className="absolute top-1/4 left-1/4 w-64 h-64 rounded-full blur-3xl opacity-10"
         style={{ background: primaryColor }}
@@ -33,7 +33,7 @@ export function StudioEmptyState({ chatbot }) {
         >
           <HiOutlineSparkles className="w-8 h-8 text-white" />
         </div>
-        <p className="text-base font-medium text-slate-700 leading-relaxed">
+        <p className="text-base font-medium text-slate-700 dark:text-dk-text leading-relaxed">
           {t('chatbot.studio.emptySelectBot')}
         </p>
       </div>

@@ -173,12 +173,12 @@ const SelectablePill = ({ checked, title, subtitle, onClick, disabled = false, d
     title={disabled ? disabledTitle : undefined}
     className={`rounded-xl border px-4 py-3 text-left transition-all ${
       checked
-        ? 'border-orange-300 bg-orange-50 text-orange-700 shadow-sm'
-        : 'border-slate-200 bg-white text-slate-700 hover:border-orange-200 hover:bg-orange-50/60'
+        ? 'border-orange-300 dark:border-orange-500/50 bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-300 shadow-sm'
+        : 'border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface text-slate-700 dark:text-dk-text hover:border-orange-200 dark:hover:border-orange-500/30 hover:bg-orange-50/60 dark:hover:bg-orange-950/20'
     } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
   >
     <span className="block text-sm font-bold">{title}</span>
-    {subtitle && <span className="mt-1 block text-xs text-slate-500">{subtitle}</span>}
+    {subtitle && <span className="mt-1 block text-xs text-slate-500 dark:text-dk-text2">{subtitle}</span>}
   </button>
 );
 
@@ -256,7 +256,7 @@ const VoucherForm = ({ editing, form, setForm, onCancel, onSubmit, saving, plans
           />
         </div>
         {editing && (
-          <p className={`mt-3 text-xs ${isModeLocked ? 'text-amber-700' : 'text-slate-500'}`}>
+          <p className={`mt-3 text-xs ${isModeLocked ? 'text-amber-700 dark:text-amber-400' : 'text-slate-500 dark:text-dk-text2'}`}>
             {isModeLocked ? t('voucherAdmin.modeLockedHint') : t('voucherAdmin.modeEditableHint')}
           </p>
         )}
@@ -311,7 +311,7 @@ const VoucherForm = ({ editing, form, setForm, onCancel, onSubmit, saving, plans
                   value={form.discountValue}
                   onChange={(e) => setForm((p) => ({ ...p, discountValue: e.target.value }))}
                 />
-                <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 text-sm text-gray-400">%</span>
+                <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 text-sm text-gray-400 dark:text-dk-muted">%</span>
               </div>
             ) : (
               <PriceInput
@@ -334,7 +334,7 @@ const VoucherForm = ({ editing, form, setForm, onCancel, onSubmit, saving, plans
                 placeholder={t('voucherAdmin.maxDiscountPlaceholder')}
               />
               {Number(form.maxDiscountAmount) > 0 && Number(form.maxDiscountAmount) < 1000 && (
-                <p className="mt-1.5 text-xs text-amber-600">
+                <p className="mt-1.5 text-xs text-amber-600 dark:text-amber-400">
                   {t('voucherAdmin.maxDiscountLowWarning', { amount: fmtVnd(form.maxDiscountAmount) })}
                 </p>
               )}
@@ -451,8 +451,8 @@ const VoucherForm = ({ editing, form, setForm, onCancel, onSubmit, saving, plans
         title={t('voucherAdmin.status')}
         description={isAutomatic ? t('voucherAdmin.autoStatusDescription') : t('voucherAdmin.manualStatusDescription')}
       >
-        <p className="mb-3 text-sm text-slate-500">{t('voucherAdmin.oneCodePerOrder')}</p>
-        <label className="flex items-center rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+        <p className="mb-3 text-sm text-slate-500 dark:text-dk-text2">{t('voucherAdmin.oneCodePerOrder')}</p>
+        <label className="flex items-center rounded-xl border border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-surface px-4 py-3 text-sm text-slate-700 dark:text-dk-text">
           <input type="checkbox" className="h-4 w-4 rounded text-primary-600" checked={form.isActive} onChange={(e) => setForm((p) => ({ ...p, isActive: e.target.checked }))} />
           <span className="ml-3 font-semibold">{t('voucherAdmin.active')}</span>
         </label>
@@ -664,9 +664,9 @@ export default function AdminVouchersPage() {
     >
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="card p-4"><p className="text-xs text-gray-400 uppercase">{t('voucherAdmin.activeVouchers')}</p><p className="text-2xl font-bold">{counts.active}</p></div>
-        <div className="card p-4"><p className="text-xs text-gray-400 uppercase">{t('voucherAdmin.expiredVouchers')}</p><p className="text-2xl font-bold">{counts.expired}</p></div>
-        <div className="card p-4"><p className="text-xs text-gray-400 uppercase">{t('voucherAdmin.disabledVouchers')}</p><p className="text-2xl font-bold">{counts.disabled}</p></div>
+        <div className="card p-4 dark:bg-dk-surface dark:border-dk-border"><p className="text-xs text-gray-400 dark:text-dk-text2 uppercase">{t('voucherAdmin.activeVouchers')}</p><p className="text-2xl font-bold dark:text-dk-text">{counts.active}</p></div>
+        <div className="card p-4 dark:bg-dk-surface dark:border-dk-border"><p className="text-xs text-gray-400 dark:text-dk-text2 uppercase">{t('voucherAdmin.expiredVouchers')}</p><p className="text-2xl font-bold dark:text-dk-text">{counts.expired}</p></div>
+        <div className="card p-4 dark:bg-dk-surface dark:border-dk-border"><p className="text-xs text-gray-400 dark:text-dk-text2 uppercase">{t('voucherAdmin.disabledVouchers')}</p><p className="text-2xl font-bold dark:text-dk-text">{counts.disabled}</p></div>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -676,8 +676,8 @@ export default function AdminVouchersPage() {
               key={key}
               type="button"
               onClick={() => setTab(key)}
-              className={`rounded-lg px-4 py-2 text-sm font-semibold ${
-                tab === key ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                tab === key ? 'bg-primary-600 text-white' : 'bg-slate-100 dark:bg-dk-raised text-slate-700 dark:text-dk-text hover:bg-slate-200 dark:hover:bg-dk-strong'
               }`}
             >
               {t(`voucherAdmin.tab.${key}`)} ({counts[key]})
@@ -711,10 +711,10 @@ export default function AdminVouchersPage() {
         />
       )}
 
-      <div className="card overflow-hidden">
+      <div className="card overflow-hidden dark:bg-dk-surface dark:border-dk-border">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="bg-gray-50 dark:bg-dk-raised border-b border-gray-200 dark:border-dk-border">
               <tr>
                 {[
                   t('voucherAdmin.tableCode'),
@@ -726,15 +726,15 @@ export default function AdminVouchersPage() {
                   t('voucherAdmin.tableStatus'),
                   '',
                 ].map((h) => (
-                  <th key={h || 'actions'} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                  <th key={h || 'actions'} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-dk-text2 uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100 dark:divide-dk-border/60">
               {loading ? (
-                <tr><td colSpan={8} className="px-4 py-10 text-center text-gray-400">{t('voucherAdmin.loading')}</td></tr>
+                <tr><td colSpan={8} className="px-4 py-10 text-center text-gray-400 dark:text-dk-muted">{t('voucherAdmin.loading')}</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-10 text-center text-gray-400">{t('voucherAdmin.empty')}</td></tr>
+                <tr><td colSpan={8} className="px-4 py-10 text-center text-gray-400 dark:text-dk-muted">{t('voucherAdmin.empty')}</td></tr>
               ) : filtered.map((voucher) => {
                 const status = getVoucherLifecycleStatus(voucher);
                 const mode = voucher.offerMode || (voucher.autoApply ? 'automatic' : 'public_code');
@@ -747,15 +747,15 @@ export default function AdminVouchersPage() {
                       : `••••${String(voucher.code || '').slice(-4)}`
                     : voucher.code;
                 return (
-                  <tr key={voucher.id} className="hover:bg-gray-50">
+                  <tr key={voucher.id} className="hover:bg-gray-50 dark:hover:bg-dk-raised/40">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
-                        <div className="font-mono font-semibold text-gray-900">{codeDisplay}</div>
+                        <div className="font-mono font-semibold text-gray-900 dark:text-dk-text">{codeDisplay}</div>
                         {mode === 'private_code' && (
                           <>
                             <button
                               type="button"
-                              className="p-1 text-gray-400 hover:text-primary-600"
+                              className="p-1 text-gray-400 dark:text-dk-muted hover:text-primary-600 dark:hover:text-primary-400"
                               onClick={() => togglePrivateCode(voucher.id)}
                               title={privateCodeRevealed ? t('voucherAdmin.hideCode') : t('voucherAdmin.revealCode')}
                             >
@@ -763,7 +763,7 @@ export default function AdminVouchersPage() {
                             </button>
                             <button
                               type="button"
-                              className="p-1 text-gray-400 hover:text-primary-600"
+                              className="p-1 text-gray-400 dark:text-dk-muted hover:text-primary-600 dark:hover:text-primary-400"
                               onClick={() => copyPrivateCode(voucher.code)}
                               title={t('voucherAdmin.copyCode')}
                             >
@@ -772,18 +772,18 @@ export default function AdminVouchersPage() {
                           </>
                         )}
                       </div>
-                      <div className="text-xs text-gray-500">{voucher.name}</div>
+                      <div className="text-xs text-gray-500 dark:text-dk-text2">{voucher.name}</div>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span className="badge badge-yellow text-xs">{t(`voucherAdmin.modeBadge.${mode}`)}</span>
                     </td>
-                    <td className="px-4 py-3 font-semibold text-gray-900">{discountLabel(voucher, t)}</td>
-                    <td className="px-4 py-3 text-gray-600">
+                    <td className="px-4 py-3 font-semibold text-gray-900 dark:text-dk-text">{discountLabel(voucher, t)}</td>
+                    <td className="px-4 py-3 text-gray-600 dark:text-dk-text">
                       <div>{t('voucherAdmin.orderFrom', { amount: fmtVnd(voucher.minOrderAmount) })}</div>
-                      <div className="text-xs text-gray-400">{(voucher.appliesToPlanCodes || []).join(', ') || t('voucherAdmin.anyPlan')} · {(voucher.appliesToBillingPeriods || []).join(', ') || t('voucherAdmin.anyCycle')}</div>
+                      <div className="text-xs text-gray-400 dark:text-dk-text2">{(voucher.appliesToPlanCodes || []).join(', ') || t('voucherAdmin.anyPlan')} · {(voucher.appliesToBillingPeriods || []).join(', ') || t('voucherAdmin.anyCycle')}</div>
                     </td>
-                    <td className="px-4 py-3 text-gray-600">{fmtDate(voucher.startsAt, locale)} → {fmtDate(voucher.endsAt, locale)}</td>
-                    <td className="px-4 py-3 text-gray-600">{voucher.usedCount || 0}{voucher.usageLimit ? ` / ${voucher.usageLimit}` : ''}</td>
+                    <td className="px-4 py-3 text-gray-600 dark:text-dk-text">{fmtDate(voucher.startsAt, locale)} → {fmtDate(voucher.endsAt, locale)}</td>
+                    <td className="px-4 py-3 text-gray-600 dark:text-dk-text">{voucher.usedCount || 0}{voucher.usageLimit ? ` / ${voucher.usageLimit}` : ''}</td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1">
                         <span className={`badge text-xs ${status === 'active' ? 'badge-green' : 'badge-gray'}`}>
@@ -792,18 +792,18 @@ export default function AdminVouchersPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
-                      <button type="button" className="p-2 text-gray-400 hover:text-primary-600" onClick={() => openEdit(voucher)} title={t('voucherAdmin.editTitle')}><HiOutlinePencilAlt /></button>
+                      <button type="button" className="p-2 text-gray-400 dark:text-dk-muted hover:text-primary-600 dark:hover:text-primary-400" onClick={() => openEdit(voucher)} title={t('voucherAdmin.editTitle')}><HiOutlinePencilAlt /></button>
                       {status === 'active' ? (
-                        <button type="button" className="p-2 text-gray-400 hover:text-red-600" onClick={() => handleDeactivate(voucher)} title={t('voucherAdmin.deactivate')}>
+                        <button type="button" className="p-2 text-gray-400 dark:text-dk-muted hover:text-red-600 dark:hover:text-red-400" onClick={() => handleDeactivate(voucher)} title={t('voucherAdmin.deactivate')}>
                           <HiOutlineTrash />
                         </button>
                       ) : (
                         <>
-                          <button type="button" className="p-2 text-gray-400 hover:text-green-600" onClick={() => handleRestore(voucher)} title={t('voucherAdmin.restore')}>
+                          <button type="button" className="p-2 text-gray-400 dark:text-dk-muted hover:text-green-600 dark:hover:text-green-400" onClick={() => handleRestore(voucher)} title={t('voucherAdmin.restore')}>
                             <HiOutlineReply />
                           </button>
                           {Number(voucher.usedCount) === 0 && (
-                            <button type="button" className="p-2 text-gray-400 hover:text-red-600" onClick={() => handleHardDelete(voucher)} title={t('voucherAdmin.hardDelete')}>
+                            <button type="button" className="p-2 text-gray-400 dark:text-dk-muted hover:text-red-600 dark:hover:text-red-400" onClick={() => handleHardDelete(voucher)} title={t('voucherAdmin.hardDelete')}>
                               <HiOutlineTrash />
                             </button>
                           )}

@@ -77,17 +77,17 @@ export default function EmailTagsInput({
   return (
     <div>
       <div
-        className={`flex flex-wrap items-center gap-1.5 min-h-[42px] w-full px-2 py-1.5 rounded-xl border bg-white transition-all ${
+        className={`flex flex-wrap items-center gap-1.5 min-h-[42px] w-full px-2 py-1.5 rounded-xl border bg-white dark:bg-dk-raised text-gray-900 dark:text-dk-text transition-all ${
           error || draftError
-            ? 'border-red-300'
-            : 'border-gray-200 focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-100'
+            ? 'border-red-300 dark:border-red-500'
+            : 'border-gray-200 dark:border-dk-border focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-100 dark:focus-within:ring-orange-950/40'
         } ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
         onClick={() => inputRef.current?.focus()}
       >
         {value.map((email) => (
           <span
             key={email}
-            className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-md bg-orange-50 border border-orange-200 text-orange-800 text-sm"
+            className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-md bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800/60 text-orange-800 dark:text-orange-300 text-sm"
           >
             <HiOutlineMail className="w-3.5 h-3.5" />
             <span className="max-w-[180px] truncate">{email}</span>
@@ -98,7 +98,7 @@ export default function EmailTagsInput({
                   e.stopPropagation();
                   removeEmail(email);
                 }}
-                className="ml-0.5 p-0.5 rounded hover:bg-orange-200/70 text-orange-700"
+                className="ml-0.5 p-0.5 rounded hover:bg-orange-200/70 dark:hover:bg-orange-900/60 text-orange-700 dark:text-orange-400"
                 aria-label={`Xóa ${email}`}
               >
                 <HiOutlineX className="w-3 h-3" />
@@ -120,7 +120,7 @@ export default function EmailTagsInput({
           placeholder={value.length === 0 ? placeholder : ''}
           disabled={disabled}
           autoFocus={autoFocus}
-          className="flex-1 min-w-[160px] px-1 py-1 text-sm bg-transparent outline-none placeholder:text-gray-400"
+          className="flex-1 min-w-[160px] px-1 py-1 text-sm bg-transparent outline-none text-gray-900 dark:text-dk-text placeholder:text-gray-400 dark:placeholder:text-dk-muted"
         />
       </div>
       {(error || draftError) && (

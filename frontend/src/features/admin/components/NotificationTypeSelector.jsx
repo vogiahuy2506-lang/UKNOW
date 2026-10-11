@@ -303,23 +303,27 @@ export default function NotificationTypeSelector({ value, onChange, priority, on
                   flex items-center gap-3 p-4 rounded-xl border-2 transition-all duration-200
                   ${isSelected
                     ? 'shadow-md transform scale-[1.02]'
-                    : 'hover:shadow-sm hover:scale-[1.01]'
+                    : 'bg-white hover:shadow-sm hover:scale-[1.01] dark:bg-dk-surface dark:border-dk-border dark:hover:border-dk-border'
                   }
                 `}
                 style={{
-                  borderColor: isSelected ? config.color : '#e5e7eb',
-                  backgroundColor: isSelected ? config.bgColor : '#fff'
+                  borderColor: isSelected ? config.color : undefined,
+                  backgroundColor: isSelected ? config.bgColor : undefined
                 }}
               >
                 <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center"
-                  style={{ backgroundColor: isSelected ? config.color + '20' : '#f3f4f6' }}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                    isSelected ? '' : 'bg-gray-100 dark:bg-dk-raised'
+                  }`}
+                  style={{ backgroundColor: isSelected ? config.color + '20' : undefined }}
                 >
                   <Icon style={{ color: config.color }} className="w-5 h-5" />
                 </div>
                 <span
-                  className="text-sm font-semibold"
-                  style={{ color: isSelected ? config.color : '#374151' }}
+                  className={`text-sm font-semibold ${
+                    isSelected ? '' : 'text-gray-700 dark:text-dk-text'
+                  }`}
+                  style={{ color: isSelected ? config.color : undefined }}
                 >
                   {config.label}
                 </span>
@@ -331,7 +335,7 @@ export default function NotificationTypeSelector({ value, onChange, priority, on
 
       {showPriority && (
         <div>
-          <label className="block text-sm font-medium text-gray-600 mb-3">
+          <label className="block text-sm font-medium text-gray-600 dark:text-dk-text mb-3">
             Mức độ ưu tiên
           </label>
           <div className="flex gap-2 flex-wrap">
@@ -344,7 +348,7 @@ export default function NotificationTypeSelector({ value, onChange, priority, on
                   px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200
                   ${priority === p
                     ? 'text-white shadow-sm'
-                    : 'bg-white border border-gray-200 text-gray-600 hover:border-orange-300 hover:text-orange-600'
+                    : 'bg-white border border-gray-200 text-gray-600 hover:border-orange-300 hover:text-orange-600 dark:border-dk-border dark:bg-dk-surface dark:text-dk-text dark:hover:border-orange-400 dark:hover:text-orange-400'
                   }
                 `}
                 style={{

@@ -39,7 +39,7 @@ const ICONS = {
 const KpiCard = ({ testId, label, values, icon, gradient, text, sub, isEmpty, emptyHint, emptyTo, startText }) => (
   <div
     data-testid={testId}
-    className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-md transition-all duration-200 group"
+    className="bg-white dark:bg-dk-surface rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-dk-border hover:shadow-md transition-all duration-200 group"
   >
     {/* Colored top strip */}
     <div className={`bg-gradient-to-r ${gradient} px-5 pt-4 pb-3`}>
@@ -64,10 +64,10 @@ const KpiCard = ({ testId, label, values, icon, gradient, text, sub, isEmpty, em
     </div>
 
     {/* Bottom section */}
-    <div className="px-5 py-3">
+    <div className="px-5 py-3 bg-white dark:bg-dk-surface">
       {isEmpty && emptyHint ? (
         <div className="flex items-center justify-between">
-          <p className="text-[11px] text-gray-400">{emptyHint}</p>
+          <p className="text-[11px] text-gray-400 dark:text-dk-text2">{emptyHint}</p>
           {emptyTo && (
             <Link to={emptyTo} className={`text-[11px] font-semibold ${text} hover:underline`}>
               {startText}
@@ -75,7 +75,7 @@ const KpiCard = ({ testId, label, values, icon, gradient, text, sub, isEmpty, em
           )}
         </div>
       ) : (
-        <div className="text-[11px] text-gray-500 leading-relaxed">{sub}</div>
+        <div className="text-[11px] text-gray-500 dark:text-dk-text leading-relaxed">{sub}</div>
       )}
     </div>
   </div>
@@ -88,9 +88,9 @@ const ChannelChips = ({ rows, valueKey, label, fn }) => {
   return (
     <div className="flex flex-wrap gap-1.5">
       {visible.map((row) => (
-        <span key={row.channel} data-testid={`chip-${row.channel}`} className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-gray-600">
+        <span key={row.channel} data-testid={`chip-${row.channel}`} className="inline-flex items-center gap-1 rounded-full bg-gray-100 dark:bg-dk-raised px-2 py-0.5 text-gray-600 dark:text-dk-text">
           {label(row.channel)}
-          <strong className="font-semibold text-gray-800">{fn(row[valueKey])}</strong>
+          <strong className="font-semibold text-gray-800 dark:text-dk-text">{fn(row[valueKey])}</strong>
         </span>
       ))}
     </div>

@@ -96,11 +96,11 @@ export default function ChannelAccountSendSettings({ channel, accountRef }) {
   };
 
   return (
-    <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50/60 p-3" data-testid={`${idPrefix}-block`}>
-      <p className="text-xs font-semibold text-slate-700">{t('channelSendSettings.title')}</p>
+    <div className="mt-3 rounded-xl border border-slate-100 dark:border-dk-border bg-slate-50/60 dark:bg-dk-raised/40 p-3" data-testid={`${idPrefix}-block`}>
+      <p className="text-xs font-semibold text-slate-700 dark:text-dk-text">{t('channelSendSettings.title')}</p>
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <label htmlFor={`${idPrefix}-limit`} className="text-xs text-slate-600">
+        <label htmlFor={`${idPrefix}-limit`} className="text-xs text-slate-600 dark:text-dk-text2">
           {t('channelSendSettings.dailyLimit')}:
         </label>
         {/* Bề rộng đặt ở div bọc: lớp `.input` dùng `@apply w-full` nên thắng mọi utility w-* đặt trên chính ô. */}
@@ -124,25 +124,25 @@ export default function ChannelAccountSendSettings({ channel, accountRef }) {
           {savingLimit ? t('common.saving') : t('common.save')}
         </button>
         {overWarn && (
-          <span className="text-xs text-amber-600" data-testid={`${idPrefix}-limit-warn`}>
+          <span className="text-xs text-amber-600 dark:text-amber-400" data-testid={`${idPrefix}-limit-warn`}>
             {t(`channelSendSettings.dailyLimitWarn${channelKey}`, { threshold: String(warnThreshold) })}
           </span>
         )}
       </div>
 
-      <p className="mt-1 text-xs text-slate-500" data-testid={`${idPrefix}-sent-today`}>
+      <p className="mt-1 text-xs text-slate-500 dark:text-dk-text2" data-testid={`${idPrefix}-sent-today`}>
         {data.userDailySendLimit != null
           ? t('channelSendSettings.sentTodayWithLimit', { sent: String(data.sentToday), limit: String(data.userDailySendLimit) })
           : t('channelSendSettings.sentTodayNoLimit', { sent: String(data.sentToday) })}
         {' '}
-        <span className="text-slate-400">{t('channelSendSettings.sentTodayNote')}</span>
+        <span className="text-slate-400 dark:text-dk-muted">{t('channelSendSettings.sentTodayNote')}</span>
       </p>
       {reachedLimit && (
-        <p className="mt-0.5 text-xs font-medium text-amber-700">{t('channelSendSettings.limitReached')}</p>
+        <p className="mt-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">{t('channelSendSettings.limitReached')}</p>
       )}
 
       {data.userDailySendLimit != null && (
-        <div className="mt-2 pt-1.5 border-t border-slate-200/50" data-testid={`${idPrefix}-quota-progress`}>
+        <div className="mt-2 pt-1.5 border-t border-slate-200/50 dark:border-dk-border/50" data-testid={`${idPrefix}-quota-progress`}>
           {(() => {
             const sentNum = Number(data.sentToday || 0);
             const limitNum = Number(data.userDailySendLimit);
@@ -150,13 +150,13 @@ export default function ChannelAccountSendSettings({ channel, accountRef }) {
             const progressColor = percent >= 90 ? 'bg-rose-500' : percent >= 70 ? 'bg-amber-500' : 'bg-emerald-500';
             return (
               <>
-                <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1">
+                <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-dk-text2 mb-1">
                   <span>Tiến độ hạn mức hôm nay</span>
-                  <span className={`font-semibold ${percent >= 90 ? 'text-rose-600' : percent >= 70 ? 'text-amber-600' : 'text-slate-700'}`}>
+                  <span className={`font-semibold ${percent >= 90 ? 'text-rose-600 dark:text-rose-400' : percent >= 70 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-dk-text'}`}>
                     {percent}%
                   </span>
                 </div>
-                <div className="w-full h-1.5 bg-slate-200/80 rounded-full overflow-hidden">
+                <div className="w-full h-1.5 bg-slate-200/80 dark:bg-dk-strong/80 rounded-full overflow-hidden">
                   <div
                     className={`h-full rounded-full transition-all duration-300 ${progressColor}`}
                     style={{ width: `${percent}%` }}
@@ -169,7 +169,7 @@ export default function ChannelAccountSendSettings({ channel, accountRef }) {
       )}
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <label htmlFor={`${idPrefix}-speed`} className="text-xs text-slate-600">
+        <label htmlFor={`${idPrefix}-speed`} className="text-xs text-slate-600 dark:text-dk-text2">
           {t('channelSendSettings.speed')}:
         </label>
         <div className="w-64">
@@ -196,15 +196,15 @@ export default function ChannelAccountSendSettings({ channel, accountRef }) {
           {savingSpeed ? t('common.saving') : t('common.save')}
         </button>
         {speedValue === 'fast' && (
-          <span className="text-xs text-amber-600">{t('channelSendSettings.speedFastWarning')}</span>
+          <span className="text-xs text-amber-600 dark:text-amber-400">{t('channelSendSettings.speedFastWarning')}</span>
         )}
         {speedValue === 'very_fast' && (
-          <span className="text-xs font-medium text-red-600">
+          <span className="text-xs font-medium text-red-600 dark:text-red-400">
             {t(`channelSendSettings.speedVeryFastWarning${channelKey}`)}
           </span>
         )}
       </div>
-      <p className="mt-0.5 text-xs text-slate-400">{t('channelSendSettings.speedAppliedNextRunHint')}</p>
+      <p className="mt-0.5 text-xs text-slate-400 dark:text-dk-muted">{t('channelSendSettings.speedAppliedNextRunHint')}</p>
     </div>
   );
 }

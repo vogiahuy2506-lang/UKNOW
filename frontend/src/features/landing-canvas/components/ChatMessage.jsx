@@ -18,7 +18,7 @@ function ThinkingDots({ label = null }) {
           />
         ))}
       </div>
-      <span className="text-[13px] text-gray-500 animate-pulse ml-1">{label || 'Thinking...'}</span>
+      <span className="text-[13px] text-gray-500 dark:text-dk-text2 animate-pulse ml-1">{label || 'Thinking...'}</span>
       {/* Sparkle accents */}
       <div className="flex items-center gap-0.5 ml-2">
         <SparkleDot delay={0} />
@@ -35,7 +35,7 @@ function SparkleDot({ delay }) {
       className="w-1 h-1 rounded-full bg-amber-400"
       style={{
         animation: `sparklePulse 2s ease-in-out infinite`,
-        animationDelay: `${delay}s`,
+        delay: `${delay}s`,
         opacity: 0.6,
       }}
     />
@@ -59,13 +59,13 @@ export default function ChatMessage({ msg, onUndo, onRelayout }) {
   if (role === 'user') {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[85%] bg-orange-50 text-gray-900 rounded-2xl px-4 py-2.5 text-[15px] break-words leading-relaxed space-y-2">
+        <div className="max-w-[85%] bg-orange-50 dark:bg-orange-950/40 border border-transparent dark:border-orange-500/20 text-gray-900 dark:text-dk-text rounded-2xl px-4 py-2.5 text-[15px] break-words leading-relaxed space-y-2">
           {Array.isArray(files) && files.length > 0 && (
             <div className="flex flex-wrap gap-1.5 pb-0.5">
               {files.map((f, i) => (
                 <div
                   key={f.tempId || f.storageKey || i}
-                  className="flex items-center gap-1.5 bg-white border border-orange-200 rounded-lg px-2.5 py-1 text-xs text-slate-700 shadow-sm"
+                  className="flex items-center gap-1.5 bg-white dark:bg-dk-raised border border-orange-200 dark:border-orange-500/30 rounded-lg px-2.5 py-1 text-xs text-slate-700 dark:text-dk-text shadow-sm"
                 >
                   {f.previewUrl ? (
                     <img src={f.previewUrl} alt="" className="w-4 h-4 object-cover rounded shrink-0" />
@@ -93,23 +93,23 @@ export default function ChatMessage({ msg, onUndo, onRelayout }) {
       <div className="flex-1 min-w-0">
         {/* Streaming state: show thinking animation */}
         {status === 'streaming' ? (
-          <div className="bg-gray-50 rounded-2xl px-4 py-3">
+          <div className="bg-gray-50 dark:bg-dk-raised rounded-2xl px-4 py-3">
             <ThinkingDots label={stageLabel} />
           </div>
         ) : (
-          <div className="bg-gray-50 rounded-2xl px-4 py-2.5 text-[15px] text-gray-900 break-words leading-relaxed">
+          <div className="bg-gray-50 dark:bg-dk-raised border border-transparent dark:border-dk-border rounded-2xl px-4 py-2.5 text-[15px] text-gray-900 dark:text-dk-text break-words leading-relaxed">
             {content}
           </div>
         )}
 
         {/* B-9: bộ đo hiển thị thấy lỗi ở trang AI vừa dựng → câu tiếng người + nút "Trình bày lại" (trả phí 1 lượt AI). */}
         {status === 'applied' && Array.isArray(msg.layoutFindings) && msg.layoutFindings.length > 0 && onRelayout ? (
-          <div className="mt-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5" data-testid="canvas-layout-note">
-            <p className="text-[13px] text-amber-800">{msg.layoutNote}</p>
+          <div className="mt-2.5 rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-950/30 px-3 py-2.5" data-testid="canvas-layout-note">
+            <p className="text-[13px] text-amber-800 dark:text-amber-300">{msg.layoutNote}</p>
             <button
               type="button"
               onClick={() => onRelayout(msg.id)}
-              className="mt-2 inline-flex items-center px-3 h-9 rounded-lg bg-white text-amber-800 border border-amber-300 text-[14px] font-semibold hover:bg-amber-100 transition-colors"
+              className="mt-2 inline-flex items-center px-3 h-9 rounded-lg bg-white dark:bg-dk-raised text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-500/40 text-[14px] font-semibold hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
             >
               {tc('relayoutSection')}
             </button>
@@ -118,14 +118,14 @@ export default function ChatMessage({ msg, onUndo, onRelayout }) {
 
         {status === 'applied' && previousHtml != null ? (
           <div className="flex items-center gap-2 mt-2.5">
-            <span className="inline-flex items-center gap-1 text-[14px] text-green-600 font-semibold">
+            <span className="inline-flex items-center gap-1 text-[14px] text-green-600 dark:text-emerald-400 font-semibold">
               <HiOutlineCheck className="w-4 h-4" />
               {tc('applied')}
             </span>
             <button
               type="button"
               onClick={() => onUndo?.(msg.id)}
-              className="inline-flex items-center gap-1 px-3 h-9 rounded-lg bg-white text-gray-700 border border-gray-300 text-[14px] font-semibold hover:bg-gray-50 hover:border-orange-300 hover:text-orange-700 transition-colors"
+              className="inline-flex items-center gap-1 px-3 h-9 rounded-lg bg-white dark:bg-dk-raised text-gray-700 dark:text-dk-text border border-gray-300 dark:border-dk-border text-[14px] font-semibold hover:bg-gray-50 dark:hover:bg-dk-strong hover:border-orange-300 dark:hover:border-orange-500/60 hover:text-orange-700 dark:hover:text-orange-400 transition-colors"
               title={tc('undoTooltip')}
             >
               <HiOutlineRefresh className="w-4 h-4" />

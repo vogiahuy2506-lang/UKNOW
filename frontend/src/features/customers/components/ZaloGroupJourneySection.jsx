@@ -49,12 +49,12 @@ const ZaloGroupJourneyCard = ({
   const hasCompleted = orderEvents.some((event) => String(event?.eventType || '').toLowerCase() === 'order_completed');
 
   return (
-    <div className="rounded-xl border border-gray-200 overflow-hidden">
-      <div className="w-full px-5 py-4 bg-gray-50 text-left">
-        <p className="font-semibold text-gray-900 text-sm leading-snug truncate">
+    <div className="rounded-xl border border-gray-200 dark:border-dk-border overflow-hidden">
+      <div className="w-full px-5 py-4 bg-gray-50 dark:bg-dk-raised text-left">
+        <p className="font-semibold text-gray-900 dark:text-dk-text text-sm leading-snug truncate">
           {t('zaloGroupJourney.sent')} #{message?.groupId || '--'}
         </p>
-        <p className="text-xs text-gray-400 mt-0.5">
+        <p className="text-xs text-gray-400 dark:text-dk-text2 mt-0.5">
           {formatDateTime(message?.sentAt)}
           {message?.id != null ? ` · ID: ${message.id}` : ''}
           {message?.accountName ? ` · TK: ${message.accountName}` : ''}
@@ -79,36 +79,36 @@ const ZaloGroupJourneyCard = ({
         </div>
       </div>
 
-      <div className="px-5 py-4 border-t border-gray-100 space-y-2">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1.5 text-sm text-gray-700">
+      <div className="px-5 py-4 border-t border-gray-100 dark:border-dk-border space-y-2 bg-white dark:bg-dk-surface">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1.5 text-sm text-gray-700 dark:text-dk-text">
           <div>
-            <span className="text-xs text-gray-400">{t('zaloGroupJourney.clickCount')}</span>
+            <span className="text-xs text-gray-400 dark:text-dk-text2">{t('zaloGroupJourney.clickCount')}</span>
             <p>{Number(message?.clickCount || 0)}</p>
           </div>
           <div>
-            <span className="text-xs text-gray-400">{t('zaloGroupJourney.clickEvents')}</span>
+            <span className="text-xs text-gray-400 dark:text-dk-text2">{t('zaloGroupJourney.clickEvents')}</span>
             <p>{clickedEvents.length}</p>
           </div>
           <div className="md:col-span-2">
-            <span className="text-xs text-gray-400">{t('zaloGroupJourney.clickedLinks')} ({clickedLinks.length})</span>
+            <span className="text-xs text-gray-400 dark:text-dk-text2">{t('zaloGroupJourney.clickedLinks')} ({clickedLinks.length})</span>
             {clickedLinks.length > 0 ? (
               <div className="space-y-1 mt-1">
                 {clickedLinks.map((clickedLink) => (
-                  <p key={clickedLink.linkKey} className="text-xs text-gray-500 break-all">
+                  <p key={clickedLink.linkKey} className="text-xs text-gray-500 dark:text-dk-text2 break-all">
                     - {clickedLink.targetUrl || t('zaloGroupJourney.clickedLinkItem')}
                   </p>
                 ))}
               </div>
             ) : (
-              <p className="text-gray-400">{t('zaloGroupJourney.noLinks')}</p>
+              <p className="text-gray-400 dark:text-dk-muted">{t('zaloGroupJourney.noLinks')}</p>
             )}
           </div>
           <div>
-            <span className="text-xs text-gray-400">{t('zaloGroupJourney.orderEvents')}</span>
+            <span className="text-xs text-gray-400 dark:text-dk-text2">{t('zaloGroupJourney.orderEvents')}</span>
             <p>{orderEvents.length}</p>
           </div>
           <div>
-            <span className="text-xs text-gray-400">{t('zaloGroupJourney.channel')}</span>
+            <span className="text-xs text-gray-400 dark:text-dk-text2">{t('zaloGroupJourney.channel')}</span>
             <p>{message?.channel || 'zalo_group'}</p>
           </div>
         </div>
@@ -116,13 +116,13 @@ const ZaloGroupJourneyCard = ({
         <button
           type="button"
           onClick={() => setShowMessageContent((prev) => !prev)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-300 transition-colors"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-dk-border text-gray-600 dark:text-dk-text bg-white dark:bg-dk-raised hover:bg-gray-50 dark:hover:bg-dk-strong hover:border-gray-300 transition-colors"
         >
           <HiOutlineEye className="w-3.5 h-3.5" />
           {showMessageContent ? t('zaloGroupJourney.hideMessageContent') : t('zaloGroupJourney.showMessageContent')}
         </button>
         {showMessageContent && (
-          <p className="text-sm text-gray-700 whitespace-pre-wrap rounded-lg bg-white border border-gray-200 p-3">
+          <p className="text-sm text-gray-700 dark:text-dk-text whitespace-pre-wrap rounded-lg bg-white dark:bg-dk-inset border border-gray-200 dark:border-dk-border p-3">
             {message?.messageText || t('zaloGroupJourney.noMessageContent')}
           </p>
         )}
@@ -147,7 +147,7 @@ const ZaloGroupJourneySection = ({
 
   if (!Array.isArray(messages) || messages.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">
+      <div className="rounded-lg border border-dashed border-gray-200 dark:border-dk-border bg-gray-50 dark:bg-dk-raised/40 px-4 py-3 text-sm text-gray-500 dark:text-dk-text2">
         {t('zaloGroupJourney.noEvents')}
       </div>
     );

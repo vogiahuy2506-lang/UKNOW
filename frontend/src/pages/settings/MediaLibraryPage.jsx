@@ -86,7 +86,7 @@ function UsageLine({ item, t, locale }) {
 
   if (!main && !autoDelete) return null;
   return (
-    <div data-testid="usage-line" className="text-[11px] text-slate-500 mt-1 leading-snug">
+    <div data-testid="usage-line" className="text-[11px] text-slate-500 dark:text-dk-text2 mt-1 leading-snug">
       {main}
       {main && autoDelete ? ' · ' : ''}
       {autoDelete}
@@ -103,11 +103,11 @@ function StorageObjectCard({ item, onDeleteClick, t, locale = 'vi' }) {
     : '';
 
   return (
-    <div className="border border-slate-200 rounded-xl p-3 bg-white flex flex-col justify-between gap-3 hover:shadow-sm transition-shadow">
+    <div className="border border-slate-200 dark:border-dk-border rounded-xl p-3 bg-white dark:bg-dk-surface flex flex-col justify-between gap-3 hover:shadow-sm transition-shadow">
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-2">
           <CategoryBadge category={item.category} t={t} />
-          <span className="text-[11px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
+          <span className="text-[11px] font-semibold text-slate-600 dark:text-dk-text bg-slate-100 dark:bg-dk-raised px-2 py-0.5 rounded">
             {formatBytes(item.sizeBytes || item.size)}
           </span>
         </div>
@@ -117,7 +117,7 @@ function StorageObjectCard({ item, onDeleteClick, t, locale = 'vi' }) {
             href={item.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="block aspect-video w-full overflow-hidden rounded-lg bg-slate-50 border border-slate-100 group relative"
+            className="block aspect-video w-full overflow-hidden rounded-lg bg-slate-50 dark:bg-dk-raised border border-slate-100 dark:border-dk-border group relative"
           >
             <img
               src={item.url}
@@ -132,32 +132,32 @@ function StorageObjectCard({ item, onDeleteClick, t, locale = 'vi' }) {
             </div>
           </a>
         ) : (
-          <div className="aspect-video w-full rounded-lg bg-slate-50 border border-slate-100 flex flex-col items-center justify-center gap-1.5 p-3">
+          <div className="aspect-video w-full rounded-lg bg-slate-50 dark:bg-dk-raised border border-slate-100 dark:border-dk-border flex flex-col items-center justify-center gap-1.5 p-3">
             <FileTypeIcon fileName={item.displayName || item.name} className="w-8 h-8" />
-            <span className="text-[11px] text-slate-500 font-mono uppercase">
+            <span className="text-[11px] text-slate-500 dark:text-dk-text2 font-mono uppercase">
               {item.displayName?.split('.').pop() || 'FILE'}
             </span>
           </div>
         )}
 
         <div>
-          <div className="text-xs font-medium text-slate-800 truncate" title={name}>
+          <div className="text-xs font-medium text-slate-800 dark:text-dk-text truncate" title={name}>
             {name}
           </div>
           {item.createdAt && (
-            <div className="text-[11px] text-slate-400 mt-0.5">{formatDate(item.createdAt, locale)}</div>
+            <div className="text-[11px] text-slate-400 dark:text-dk-muted mt-0.5">{formatDate(item.createdAt, locale)}</div>
           )}
           <UsageLine item={item} t={t} locale={locale} />
         </div>
       </div>
 
-      <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+      <div className="pt-2 border-t border-slate-100 dark:border-dk-border flex items-center justify-between gap-2">
         {item.url ? (
           <a
             href={item.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-medium"
+            className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-1 font-medium"
           >
             <HiOutlineExternalLink className="w-3.5 h-3.5" />
             {t('mediaLibrary.viewFile')}
@@ -170,7 +170,7 @@ function StorageObjectCard({ item, onDeleteClick, t, locale = 'vi' }) {
             type="button"
             onClick={() => onDeleteClick(item)}
             disabled={item.inUse}
-            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40 disabled:hover:text-slate-400 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+            className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors disabled:opacity-40 disabled:hover:text-slate-400 disabled:hover:bg-transparent disabled:cursor-not-allowed"
             title={item.inUse ? t('mediaLibrary.deleteLocked', { place: usedPlace }) : t('mediaLibrary.deleteBtn')}
             aria-label={`${t('mediaLibrary.deleteBtn')}: ${name}`}
           >
@@ -293,8 +293,8 @@ export default function MediaLibraryPage() {
 
   const tileClass = (selected) => `p-2.5 rounded-xl border text-left transition-all ${
     selected
-      ? 'border-orange-500 bg-orange-50/50 ring-2 ring-orange-200'
-      : 'border-slate-200 bg-white hover:border-slate-300'
+      ? 'border-orange-500 bg-orange-50/50 dark:bg-orange-950/20 ring-2 ring-orange-200 dark:ring-orange-900/40'
+      : 'border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface hover:border-slate-300 dark:hover:border-dk-border'
   }`;
 
   return (
@@ -309,21 +309,21 @@ export default function MediaLibraryPage() {
         <StorageUsageSection />
         {!isEmployee && (
           <div className="text-right">
-            <Link to="/app/topup" className="text-xs font-semibold text-orange-600 hover:text-orange-700 hover:underline">
+            <Link to="/app/topup" className="text-xs font-semibold text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 hover:underline">
               {t('mediaLibrary.buyMoreStorage')} &rarr;
             </Link>
           </div>
         )}
       </div>
 
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-slate-500 dark:text-dk-text2">
         {t('mediaLibrary.zaloNote', { inbox: t('nav.inbox') })}
       </p>
 
       {/* Thẻ tổng theo loại tệp — bấm để lọc; "Tất cả" thay cho ô chọn danh mục cũ. */}
       {categorySummary.length > 0 && (
         <div className="space-y-2">
-          <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+          <div className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-dk-muted">
             {t('mediaLibrary.categorySummary')}
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2.5">
@@ -334,24 +334,24 @@ export default function MediaLibraryPage() {
               onClick={() => selectCategory('')}
               className={tileClass(category === '')}
             >
-              <div className="text-xs text-slate-500 truncate">
-                <span className="text-[11px] font-medium border px-2 py-0.5 rounded-md bg-slate-900 text-white border-slate-900">
+              <div className="text-xs text-slate-500 dark:text-dk-text2 truncate">
+                <span className="text-[11px] font-medium border px-2 py-0.5 rounded-md bg-slate-900 dark:bg-dk-raised text-white border-slate-900 dark:border-dk-border">
                   {t('mediaLibrary.allFiles')}
                 </span>
               </div>
-              <div className="text-sm font-bold text-slate-800 mt-1.5">{formatBytes(allBytes)}</div>
-              <div className="text-[11px] text-slate-400">{t('mediaLibrary.fileCount', { count: allCount })}</div>
+              <div className="text-sm font-bold text-slate-800 dark:text-dk-text mt-1.5">{formatBytes(allBytes)}</div>
+              <div className="text-[11px] text-slate-400 dark:text-dk-muted">{t('mediaLibrary.fileCount', { count: allCount })}</div>
             </button>
             {categorySummary.map((summary) => {
               const content = (
                 <>
-                  <div className="text-xs text-slate-500 truncate">
+                  <div className="text-xs text-slate-500 dark:text-dk-text2 truncate">
                     <CategoryBadge category={summary.category} t={t} />
                   </div>
-                  <div className="text-sm font-bold text-slate-800 mt-1.5">
+                  <div className="text-sm font-bold text-slate-800 dark:text-dk-text mt-1.5">
                     {formatBytes(summary.totalBytes)}
                   </div>
-                  <div className="text-[11px] text-slate-400">
+                  <div className="text-[11px] text-slate-400 dark:text-dk-muted">
                     {t('mediaLibrary.fileCount', { count: summary.count })}
                   </div>
                 </>
@@ -362,7 +362,7 @@ export default function MediaLibraryPage() {
                     key={summary.category}
                     data-testid="tile-landing-version"
                     title={t('mediaLibrary.landingVersionHint')}
-                    className="p-2.5 rounded-xl border border-dashed border-slate-200 bg-slate-50/60 text-left cursor-default"
+                    className="p-2.5 rounded-xl border border-dashed border-slate-200 dark:border-dk-border bg-slate-50/60 dark:bg-dk-raised/60 text-left cursor-default"
                   >
                     {content}
                   </div>
@@ -386,20 +386,20 @@ export default function MediaLibraryPage() {
       )}
 
       {/* Tìm theo tên + sắp xếp */}
-      <div className="rounded-2xl border border-slate-200/90 bg-white p-3.5 shadow-2xs flex flex-wrap gap-3 items-center justify-between">
+      <div className="rounded-2xl border border-slate-200/90 dark:border-dk-border bg-white dark:bg-dk-surface p-3.5 shadow-2xs flex flex-wrap gap-3 items-center justify-between">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <HiOutlineSearch className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <HiOutlineSearch className="w-4 h-4 text-slate-400 dark:text-dk-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             placeholder={t('mediaLibrary.searchPlaceholder')}
             aria-label={t('mediaLibrary.searchPlaceholder')}
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400"
+            className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm bg-slate-50 dark:bg-dk-inset hover:bg-slate-100/70 dark:hover:bg-dk-raised/50 focus:bg-white dark:focus:bg-dk-inset border border-slate-200 dark:border-dk-border text-slate-900 dark:text-dk-text rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 dark:placeholder:text-dk-muted"
           />
         </div>
 
-        <div className="inline-flex rounded-xl bg-slate-100 p-0.5 border border-slate-200/80" role="group" aria-label={t('mediaLibrary.sortLabel')}>
+        <div className="inline-flex rounded-xl bg-slate-100 dark:bg-dk-raised p-0.5 border border-slate-200/80 dark:border-dk-border" role="group" aria-label={t('mediaLibrary.sortLabel')}>
           {SORT_OPTIONS.map((option) => (
             <button
               key={option.value}
@@ -411,8 +411,8 @@ export default function MediaLibraryPage() {
               }}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 sort === option.value
-                  ? 'bg-white text-slate-900 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-800'
+                  ? 'bg-white dark:bg-dk-surface text-slate-900 dark:text-dk-text shadow-xs'
+                  : 'text-slate-500 dark:text-dk-text2 hover:text-slate-800 dark:hover:text-dk-text'
               }`}
             >
               {t(option.labelKey)}
@@ -422,15 +422,15 @@ export default function MediaLibraryPage() {
       </div>
 
       {conflictBanner && (
-        <div className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start justify-between gap-3">
+        <div className="text-sm text-amber-900 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl p-3 flex items-start justify-between gap-3">
           <div className="flex gap-2 items-start">
-            <HiOutlineExclamation className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+            <HiOutlineExclamation className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
             <div>
               <p className="font-medium">{conflictBanner.message}</p>
               {conflictBanner.url && (
                 <Link
                   to={conflictBanner.url}
-                  className="text-xs text-amber-800 underline hover:text-amber-950 mt-1 inline-block font-semibold"
+                  className="text-xs text-amber-800 dark:text-amber-300 underline hover:text-amber-950 dark:hover:text-amber-100 mt-1 inline-block font-semibold"
                 >
                   {t('mediaLibrary.goToManageScreen')} &rarr;
                 </Link>
@@ -440,7 +440,7 @@ export default function MediaLibraryPage() {
           <button
             type="button"
             onClick={() => setConflictBanner(null)}
-            className="text-xs text-amber-600 hover:text-amber-800 px-2 py-1"
+            className="text-xs text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200 px-2 py-1"
           >
             {t('common.close')}
           </button>
@@ -448,15 +448,15 @@ export default function MediaLibraryPage() {
       )}
 
       {error && (
-        <div role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3.5 py-2.5">{error}</div>
+        <div role="alert" className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-100 dark:border-red-900/50 rounded-xl px-3.5 py-2.5">{error}</div>
       )}
 
       {loading ? (
-        <div className="text-sm text-slate-500 py-16 text-center">{t('common.loading')}</div>
+        <div className="text-sm text-slate-500 dark:text-dk-text2 py-16 text-center">{t('common.loading')}</div>
       ) : items.length === 0 ? (
         // Có lỗi thì chỉ hiện khối lỗi ở trên: "Chưa có tệp nào" cạnh một lỗi tải là nói sai.
         !error && (
-          <div className="text-sm text-slate-500 py-16 text-center border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+          <div className="text-sm text-slate-500 dark:text-dk-text2 py-16 text-center border border-dashed border-slate-200 dark:border-dk-border rounded-xl bg-slate-50/50 dark:bg-dk-raised/20">
             {search ? t('mediaLibrary.emptySearch', { q: search }) : t('mediaLibrary.empty')}
           </div>
         )
@@ -475,22 +475,22 @@ export default function MediaLibraryPage() {
       )}
 
       {pagination.pages > 1 && (
-        <div className="flex items-center justify-center gap-3 pt-4 border-t border-slate-100">
+        <div className="flex items-center justify-center gap-3 pt-4 border-t border-slate-100 dark:border-dk-border">
           <button
             type="button"
             disabled={page <= 1}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 disabled:opacity-40 transition-colors shadow-2xs"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised hover:bg-slate-50 dark:hover:bg-dk-surface text-xs font-semibold text-slate-700 dark:text-dk-text disabled:opacity-40 transition-colors shadow-2xs"
           >
             <HiOutlineChevronLeft className="w-4 h-4" />
             {t('common.previous')}
           </button>
-          <span className="text-xs sm:text-sm font-semibold text-slate-700">{page} / {pagination.pages}</span>
+          <span className="text-xs sm:text-sm font-semibold text-slate-700 dark:text-dk-text">{page} / {pagination.pages}</span>
           <button
             type="button"
             disabled={page >= pagination.pages}
             onClick={() => setPage((p) => p + 1)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 disabled:opacity-40 transition-colors shadow-2xs"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised hover:bg-slate-50 dark:hover:bg-dk-surface text-xs font-semibold text-slate-700 dark:text-dk-text disabled:opacity-40 transition-colors shadow-2xs"
           >
             {t('common.next')}
             <HiOutlineChevronRight className="w-4 h-4" />
@@ -505,17 +505,17 @@ export default function MediaLibraryPage() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="media-delete-title"
-            className="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-xl border border-slate-200"
+            className="bg-white dark:bg-dk-surface rounded-2xl max-w-md w-full p-5 space-y-4 shadow-xl border border-slate-200 dark:border-dk-border"
           >
-            <div className="flex items-center gap-3 text-red-600">
-              <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center shrink-0">
+            <div className="flex items-center gap-3 text-red-600 dark:text-red-400">
+              <div className="w-10 h-10 rounded-xl bg-red-50 dark:bg-red-950/40 flex items-center justify-center shrink-0">
                 <HiOutlineTrash className="w-5 h-5" />
               </div>
-              <h3 id="media-delete-title" className="text-base font-bold text-slate-900">
+              <h3 id="media-delete-title" className="text-base font-bold text-slate-900 dark:text-dk-text">
                 {t('mediaLibrary.deleteConfirmTitle')}
               </h3>
             </div>
-            <p className="text-sm text-slate-600 leading-relaxed">
+            <p className="text-sm text-slate-600 dark:text-dk-text leading-relaxed">
               {t('mediaLibrary.deleteConfirmMessage', {
                 name: deletingItem.displayName || deletingItem.name,
                 size: formatBytes(deletingItem.sizeBytes || deletingItem.size),
@@ -526,7 +526,7 @@ export default function MediaLibraryPage() {
                 type="button"
                 disabled={isDeleting}
                 onClick={() => setDeletingItem(null)}
-                className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+                className="px-4 py-2 rounded-xl border border-slate-200 dark:border-dk-border text-sm font-medium text-slate-700 dark:text-dk-text hover:bg-slate-50 dark:hover:bg-dk-raised transition-colors"
               >
                 {t('common.cancel')}
               </button>

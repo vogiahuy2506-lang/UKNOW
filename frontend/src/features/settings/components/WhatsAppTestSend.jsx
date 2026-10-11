@@ -46,11 +46,11 @@ export default function WhatsAppTestSend({ sessionKey }) {
 
   if (!open) {
     return (
-      <div className="mt-3 border-t border-slate-100 pt-3">
+      <div className="mt-3 border-t border-slate-100 dark:border-dk-border pt-3">
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:border-primary-200 hover:text-primary-700"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-dk-text transition hover:border-primary-200 dark:hover:border-primary-700 hover:text-primary-700 dark:hover:text-primary-400"
         >
           <HiOutlinePaperAirplane className="h-3.5 w-3.5 rotate-45" />
           {t('whatsAppSettings.testSend.toggle')}
@@ -60,10 +60,10 @@ export default function WhatsAppTestSend({ sessionKey }) {
   }
 
   return (
-    <div className="mt-3 space-y-2 border-t border-slate-100 pt-3" data-testid="whatsapp-test-send">
-      <p className="text-xs font-semibold text-slate-700">{t('whatsAppSettings.testSend.title')}</p>
+    <div className="mt-3 space-y-2 border-t border-slate-100 dark:border-dk-border pt-3" data-testid="whatsapp-test-send">
+      <p className="text-xs font-semibold text-slate-700 dark:text-dk-text">{t('whatsAppSettings.testSend.title')}</p>
       <div className="grid gap-2 sm:grid-cols-2">
-        <label className="block text-xs text-slate-600">
+        <label className="block text-xs text-slate-600 dark:text-dk-text2">
           {t('whatsAppSettings.testSend.phoneLabel')}
           <input
             type="text"
@@ -71,10 +71,10 @@ export default function WhatsAppTestSend({ sessionKey }) {
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder={t('whatsAppSettings.testSend.phonePlaceholder')}
-            className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            className="mt-1 w-full rounded-md border border-slate-300 dark:border-dk-border bg-white dark:bg-dk-inset px-2 py-1 text-sm text-slate-900 dark:text-dk-text focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
           />
         </label>
-        <label className="block text-xs text-slate-600">
+        <label className="block text-xs text-slate-600 dark:text-dk-text2">
           {t('whatsAppSettings.testSend.textLabel')}
           <input
             type="text"
@@ -82,11 +82,11 @@ export default function WhatsAppTestSend({ sessionKey }) {
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder={t('whatsAppSettings.testSend.defaultText')}
-            className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            className="mt-1 w-full rounded-md border border-slate-300 dark:border-dk-border bg-white dark:bg-dk-inset px-2 py-1 text-sm text-slate-900 dark:text-dk-text focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
           />
         </label>
       </div>
-      {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
+      {error && <p role="alert" className="text-xs text-red-600 dark:text-red-400">{error}</p>}
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -101,11 +101,11 @@ export default function WhatsAppTestSend({ sessionKey }) {
           type="button"
           onClick={() => setOpen(false)}
           disabled={sending}
-          className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+          className="rounded-lg border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-dk-text hover:bg-slate-50 dark:hover:bg-dk-strong disabled:opacity-60"
         >
           {t('whatsAppSettings.testSend.close')}
         </button>
-        <span className="text-[11px] text-slate-500">{t('whatsAppSettings.testSend.hint')}</span>
+        <span className="text-[11px] text-slate-500 dark:text-dk-text2">{t('whatsAppSettings.testSend.hint')}</span>
       </div>
     </div>
   );

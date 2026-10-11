@@ -206,7 +206,7 @@ export default function AdminAiModelsPage() {
     >
 
       {systemModelUnpriced && (
-        <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
           <HiOutlineExclamation className="mt-0.5 h-5 w-5 shrink-0" />
           <p>
             {t('adminAiModels.systemModelUnpricedBanner', {
@@ -217,8 +217,8 @@ export default function AdminAiModelsPage() {
       )}
 
       {retiredSystemModel && (
-        <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
-          <HiOutlineExclamation className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
+        <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-300">
+          <HiOutlineExclamation className="mt-0.5 h-5 w-5 shrink-0 text-rose-600 dark:text-rose-400" />
           <p>
             {t('adminAiModels.systemModelRetiredBanner', {
               model: toModelId(retiredSystemModel),
@@ -231,8 +231,8 @@ export default function AdminAiModelsPage() {
       )}
 
       {retiredFallbackModel && (
-        <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
-          <HiOutlineExclamation className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
+        <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-300">
+          <HiOutlineExclamation className="mt-0.5 h-5 w-5 shrink-0 text-rose-600 dark:text-rose-400" />
           <p>
             {t('adminAiModels.fallbackRetiredBanner', {
               model: toModelId(retiredFallbackModel),
@@ -241,14 +241,14 @@ export default function AdminAiModelsPage() {
         </div>
       )}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <label htmlFor="fallback-model-select" className="block text-sm font-semibold text-slate-800">
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-dk-border dark:bg-dk-surface">
+        <label htmlFor="fallback-model-select" className="block text-sm font-semibold text-slate-800 dark:text-dk-text">
           {t('adminAiModels.fallbackTitle')}
         </label>
         <div className="mt-2 max-w-md">
           <select
             id="fallback-model-select"
-            className="input h-10 w-full"
+            className="input h-10 w-full dark:border-dk-border dark:bg-dk-inset dark:text-dk-text"
             value={currentFallbackId}
             disabled={savingFallback || loading}
             onChange={(e) => handleFallbackChange(e.target.value || null)}
@@ -263,20 +263,20 @@ export default function AdminAiModelsPage() {
               );
             })}
           </select>
-          <p className="mt-1.5 text-xs text-slate-500">{t('adminAiModels.fallbackHint')}</p>
+          <p className="mt-1.5 text-xs text-slate-500 dark:text-dk-text2">{t('adminAiModels.fallbackHint')}</p>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-dk-border dark:bg-dk-surface">
+        <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 dark:border-dk-border sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <HiOutlineSparkles className="h-5 w-5 text-orange-500" />
-            <p className="font-semibold text-slate-800">{t('adminAiModels.catalog')}</p>
+            <p className="font-semibold text-slate-800 dark:text-dk-text">{t('adminAiModels.catalog')}</p>
           </div>
-          <label className="inline-flex items-center gap-2 text-sm text-slate-600">
+          <label className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-dk-text">
             <input
               type="checkbox"
-              className="h-4 w-4 rounded border-slate-300 text-orange-600"
+              className="h-4 w-4 rounded border-slate-300 text-orange-600 dark:border-dk-border dark:bg-dk-inset"
               checked={showAll}
               onChange={(e) => setShowAll(e.target.checked)}
             />
@@ -284,11 +284,11 @@ export default function AdminAiModelsPage() {
           </label>
         </div>
         {loading ? (
-          <div className="p-10 text-center text-sm text-slate-400">{t('common.loading')}</div>
+          <div className="p-10 text-center text-sm text-slate-400 dark:text-dk-muted">{t('common.loading')}</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-100 text-sm">
-              <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <table className="min-w-full divide-y divide-slate-100 text-sm dark:divide-dk-border">
+              <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-dk-raised dark:text-dk-text2">
                 <tr>
                   <th className="px-5 py-3">{t('adminAiModels.model')}</th>
                   <th className="px-5 py-3">{t('adminAiModels.displayName')}</th>
@@ -296,10 +296,10 @@ export default function AdminAiModelsPage() {
                   <th className="px-5 py-3">{t('adminAiModels.systemModelColumn')}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-dk-border">
                 {visibleModels.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="px-5 py-10 text-center text-slate-400">
+                    <td colSpan={4} className="px-5 py-10 text-center text-slate-400 dark:text-dk-muted">
                       {models.length === 0 ? t('adminAiModels.noModels') : t('adminAiModels.noEnabledModels')}
                     </td>
                   </tr>
@@ -312,25 +312,25 @@ export default function AdminAiModelsPage() {
                     <tr key={modelId} className="align-top">
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-mono font-semibold text-slate-800">{modelId}</p>
+                          <p className="font-mono font-semibold text-slate-800 dark:text-dk-text">{modelId}</p>
                           {model.isFallback && (
-                            <span className="inline-flex rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                            <span className="inline-flex rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:border-amber-800/50 dark:bg-amber-950/40 dark:text-amber-300">
                               {t('adminAiModels.fallbackBadge')}
                             </span>
                           )}
                         </div>
                         {model.thinking && (
-                          <span className="mt-1 inline-flex rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
+                          <span className="mt-1 inline-flex rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700 dark:bg-violet-950/40 dark:text-violet-300">
                             {t('adminAiModels.thinking')}
                           </span>
                         )}
                         {!model.supportsGenerateContent && (
-                          <p className="mt-1 text-xs text-amber-600">{t('adminAiModels.notSupported')}</p>
+                          <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">{t('adminAiModels.notSupported')}</p>
                         )}
                       </td>
                       <td className="px-5 py-4">
                         <input
-                          className="input h-9 min-w-[220px]"
+                          className="input h-9 min-w-[220px] dark:border-dk-border dark:bg-dk-inset dark:text-dk-text"
                           defaultValue={model.displayName}
                           disabled={busy}
                           onBlur={(e) => {
@@ -343,10 +343,10 @@ export default function AdminAiModelsPage() {
                           <div>
                             {pricing.measured ? (
                               <>
-                                <p className="font-semibold text-slate-800">
+                                <p className="font-semibold text-slate-800 dark:text-dk-text">
                                   ~{Number(pricing.measured.costPerCallVnd).toLocaleString('vi-VN')}đ
                                 </p>
-                                <p className="mt-0.5 text-xs text-slate-500">
+                                <p className="mt-0.5 text-xs text-slate-500 dark:text-dk-text2">
                                   {t('adminAiModels.measuredHint', {
                                     calls: Number(pricing.measured.calls).toLocaleString('vi-VN'),
                                   })}
@@ -354,19 +354,19 @@ export default function AdminAiModelsPage() {
                               </>
                             ) : (
                               <>
-                                <p className="font-semibold text-slate-500">
+                                <p className="font-semibold text-slate-500 dark:text-dk-text2">
                                   ~{Number(pricing.costPerAnswerVnd).toLocaleString('vi-VN')}đ{' '}
                                   <span className="text-xs font-normal">({t('adminAiModels.estimatedTag')})</span>
                                 </p>
-                                <p className="mt-0.5 text-xs text-slate-500">{t('adminAiModels.noCallsHint')}</p>
+                                <p className="mt-0.5 text-xs text-slate-500 dark:text-dk-text2">{t('adminAiModels.noCallsHint')}</p>
                               </>
                             )}
-                            <p className="mt-0.5 text-xs text-slate-500">
+                            <p className="mt-0.5 text-xs text-slate-500 dark:text-dk-text2">
                               {fmtUsd(pricing.inputUsdPerM)} / {fmtUsd(pricing.outputUsdPerM)}{' '}
                               {t('adminAiModels.perMillionTokens')}
                             </p>
                             {pricing.upcoming && (
-                              <p className="mt-0.5 text-xs font-medium text-amber-700" data-testid={`upcoming-price-${modelId}`}>
+                              <p className="mt-0.5 text-xs font-medium text-amber-700 dark:text-amber-300" data-testid={`upcoming-price-${modelId}`}>
                                 {t('adminAiModels.upcomingPrice', {
                                   date: fmtDay(pricing.upcoming.from),
                                   input: fmtUsd(pricing.upcoming.inputUsdPerM),
@@ -377,10 +377,10 @@ export default function AdminAiModelsPage() {
                           </div>
                         ) : (
                           <div>
-                            <p className="font-semibold text-amber-700">
+                            <p className="font-semibold text-amber-700 dark:text-amber-400">
                               ⚠ {t('adminAiModels.priceMissing')}
                             </p>
-                            <p className="mt-0.5 text-xs text-slate-500">
+                            <p className="mt-0.5 text-xs text-slate-500 dark:text-dk-text2">
                               {t('adminAiModels.priceMissingHint')}
                             </p>
                           </div>
@@ -391,12 +391,12 @@ export default function AdminAiModelsPage() {
                           <input
                             type="radio"
                             name="system-model"
-                            className="h-4 w-4 border-slate-300 text-orange-600"
+                            className="h-4 w-4 border-slate-300 text-orange-600 dark:border-dk-border dark:bg-dk-inset"
                             checked={Boolean(model.isEnabled)}
                             disabled={busy || !model.supportsGenerateContent}
                             onChange={() => chooseSystemModel(model)}
                           />
-                          <span className={model.isEnabled ? 'font-semibold text-emerald-700' : 'text-slate-500'}>
+                          <span className={model.isEnabled ? 'font-semibold text-emerald-700 dark:text-emerald-400' : 'text-slate-500 dark:text-dk-text2'}>
                             {model.isEnabled
                               ? (t('adminAiModels.systemModelActive') || 'Đang dùng')
                               : (t('adminAiModels.systemModelPick') || 'Chọn')}
@@ -408,7 +408,7 @@ export default function AdminAiModelsPage() {
                 })}
               </tbody>
             </table>
-            <div className="border-t border-slate-100 px-5 py-3 text-xs text-slate-500 space-y-1">
+            <div className="border-t border-slate-100 px-5 py-3 text-xs text-slate-500 space-y-1 dark:border-dk-border dark:text-dk-text2">
               <p>
                 {t('adminAiModels.usdRateNote', {
                   rate: Number(pricingMeta.usdVndRate).toLocaleString('vi-VN'),

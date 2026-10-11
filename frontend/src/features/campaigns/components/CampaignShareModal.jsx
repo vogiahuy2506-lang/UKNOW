@@ -111,18 +111,18 @@ const CampaignShareModal = ({ campaign, open, onClose, onDone }) => {
         className="absolute inset-0 bg-black/50"
         onClick={onClose}
       />
-      <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">
+      <div className="relative bg-white dark:bg-dk-surface rounded-lg shadow-xl max-w-md w-full border border-transparent dark:border-dk-border text-gray-900 dark:text-dk-text">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-dk-border">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-dk-text">
             {t('campaigns.shareModalTitle') || 'Chia sẻ chiến dịch'}
           </h3>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-gray-500 dark:text-dk-text2 mt-1">
             {campaign?.campaignName}
           </p>
         </div>
         <div className="px-6 py-4 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-2">
               {t('campaigns.recipientEmail') || 'Email người nhận'}
             </label>
             <EmailTagsInput
@@ -133,13 +133,13 @@ const CampaignShareModal = ({ campaign, open, onClose, onDone }) => {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-2">
               {t('campaigns.sharePermission') || 'Quyền chia sẻ'}
             </label>
             <select
               value={shareForm.shareType}
               onChange={(e) => setShareForm({ ...shareForm, shareType: e.target.value })}
-              className="input w-full"
+              className="input w-full dark:bg-dk-raised dark:border-dk-border dark:text-dk-text"
             >
               <option value="view">{t('campaigns.viewOnly') || 'Chỉ xem'}</option>
               <option value="edit">{t('campaigns.viewAndEdit') || 'Xem và chỉnh sửa'}</option>
@@ -151,18 +151,18 @@ const CampaignShareModal = ({ campaign, open, onClose, onDone }) => {
               id="canRun"
               checked={shareForm.canRun}
               onChange={(e) => setShareForm({ ...shareForm, canRun: e.target.checked })}
-              className="h-4 w-4 text-primary-600 rounded border-gray-300 focus:ring-primary-500"
+              className="h-4 w-4 text-primary-600 rounded border-gray-300 dark:border-dk-border-strong dark:bg-dk-raised focus:ring-primary-500"
             />
-            <label htmlFor="canRun" className="ml-2 text-sm text-gray-700">
+            <label htmlFor="canRun" className="ml-2 text-sm text-gray-700 dark:text-dk-text">
               {t('campaigns.canRunCampaign') || 'Cho phép chạy chiến dịch'}
             </label>
           </div>
         </div>
-        <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-end space-x-3">
+        <div className="px-6 py-4 border-t border-gray-200 dark:border-dk-border bg-gray-50 dark:bg-dk-bg rounded-b-lg flex items-center justify-end space-x-3">
           <button
             onClick={onClose}
             disabled={isSharing}
-            className="btn btn-secondary"
+            className="btn btn-secondary dark:bg-dk-raised dark:border-dk-border dark:text-dk-text dark:hover:bg-dk-strong"
           >
             {t('common.cancel')}
           </button>

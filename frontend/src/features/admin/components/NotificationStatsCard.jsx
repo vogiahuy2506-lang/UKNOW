@@ -5,9 +5,9 @@ export default function NotificationStatsCard({ stats, loading }) {
     return (
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {[...Array(5)].map((_, i) => (
-          <div key={i} className="bg-white rounded-lg p-4 border border-gray-200 animate-pulse">
-            <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
-            <div className="h-8 bg-gray-200 rounded w-3/4"></div>
+          <div key={i} className="bg-white rounded-lg p-4 border border-gray-200 animate-pulse dark:border-dk-border dark:bg-dk-surface">
+            <div className="h-4 bg-gray-200 dark:bg-dk-raised rounded w-1/2 mb-2"></div>
+            <div className="h-8 bg-gray-200 dark:bg-dk-raised rounded w-3/4"></div>
           </div>
         ))}
       </div>
@@ -63,7 +63,7 @@ export default function NotificationStatsCard({ stats, loading }) {
         return (
           <div
             key={index}
-            className="bg-white rounded-lg p-4 border border-gray-200"
+            className="bg-white rounded-lg p-4 border border-gray-200 dark:border-dk-border dark:bg-dk-surface"
           >
             <div className="flex items-center gap-2 mb-2">
               <div
@@ -72,7 +72,7 @@ export default function NotificationStatsCard({ stats, loading }) {
               >
                 <Icon style={{ color: item.color }} size={16} />
               </div>
-              <span className="text-sm text-gray-600">{item.label}</span>
+              <span className="text-sm text-gray-600 dark:text-dk-text">{item.label}</span>
             </div>
             <p
               className="text-2xl font-bold"
@@ -92,7 +92,7 @@ export function NotificationStatsBar({ sent, delivered, opened, failed }) {
 
   return (
     <div className="space-y-2">
-      <div className="h-2 bg-gray-200 rounded-full overflow-hidden flex">
+      <div className="h-2 bg-gray-200 dark:bg-dk-raised rounded-full overflow-hidden flex">
         {sent > 0 && (
           <div
             className="bg-gray-400 h-full transition-all"
@@ -122,7 +122,7 @@ export function NotificationStatsBar({ sent, delivered, opened, failed }) {
           />
         )}
       </div>
-      <div className="flex justify-between text-xs text-gray-500">
+      <div className="flex justify-between text-xs text-gray-500 dark:text-dk-text2">
         <span>Đã gửi: {sent}</span>
         <span>Đã nhận: {delivered}</span>
         <span>Đã mở: {opened}</span>

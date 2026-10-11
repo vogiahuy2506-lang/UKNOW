@@ -46,7 +46,7 @@ export default function PropertiesPanel({ element, value, onChange, onClose }) {
                 type="text"
                 value={currentValue.valueVi || ''}
                 onChange={(e) => handleChange('vi', e.target.value)}
-                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full px-3 py-2 bg-slate-700 dark:bg-dk-inset border border-slate-600 dark:border-dk-border rounded-lg text-white dark:text-dk-text text-sm font-mono focus:outline-none focus:ring-2 focus:ring-orange-500"
                 placeholder="FaRocket"
               />
               <IconPicker 
@@ -63,7 +63,7 @@ export default function PropertiesPanel({ element, value, onChange, onClose }) {
                 type="text"
                 value={currentValue.valueEn || ''}
                 onChange={(e) => handleChange('en', e.target.value)}
-                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full px-3 py-2 bg-slate-700 dark:bg-dk-inset border border-slate-600 dark:border-dk-border rounded-lg text-white dark:text-dk-text text-sm font-mono focus:outline-none focus:ring-2 focus:ring-orange-500"
                 placeholder="FaRocket"
               />
               <IconPicker 
@@ -93,7 +93,7 @@ export default function PropertiesPanel({ element, value, onChange, onClose }) {
                 type="text"
                 value={currentValue.valueVi || ''}
                 onChange={(e) => handleChange('vi', e.target.value)}
-                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full px-3 py-2 bg-slate-700 dark:bg-dk-inset border border-slate-600 dark:border-dk-border rounded-lg text-white dark:text-dk-text text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                 placeholder="https://..."
               />
             </div>
@@ -113,7 +113,7 @@ export default function PropertiesPanel({ element, value, onChange, onClose }) {
                 type="text"
                 value={currentValue.valueEn || ''}
                 onChange={(e) => handleChange('en', e.target.value)}
-                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full px-3 py-2 bg-slate-700 dark:bg-dk-inset border border-slate-600 dark:border-dk-border rounded-lg text-white dark:text-dk-text text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                 placeholder="https://..."
               />
             </div>
@@ -132,7 +132,7 @@ export default function PropertiesPanel({ element, value, onChange, onClose }) {
                 value={currentValue.valueVi || ''}
                 onChange={(e) => handleChange('vi', e.target.value)}
                 rows={4}
-                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full px-3 py-2 bg-slate-700 dark:bg-dk-inset border border-slate-600 dark:border-dk-border rounded-lg text-white dark:text-dk-text text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-500"
                 placeholder="Nhập nội dung..."
               />
             </div>
@@ -145,7 +145,7 @@ export default function PropertiesPanel({ element, value, onChange, onClose }) {
                 value={currentValue.valueEn || ''}
                 onChange={(e) => handleChange('en', e.target.value)}
                 rows={4}
-                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full px-3 py-2 bg-slate-700 dark:bg-dk-inset border border-slate-600 dark:border-dk-border rounded-lg text-white dark:text-dk-text text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-500"
                 placeholder="Enter content..."
               />
             </div>
@@ -164,7 +164,7 @@ export default function PropertiesPanel({ element, value, onChange, onClose }) {
                 type="text"
                 value={currentValue.valueVi || ''}
                 onChange={(e) => handleChange('vi', e.target.value)}
-                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full px-3 py-2 bg-slate-700 dark:bg-dk-inset border border-slate-600 dark:border-dk-border rounded-lg text-white dark:text-dk-text text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                 placeholder="Nhập nội dung..."
               />
             </div>
@@ -177,7 +177,7 @@ export default function PropertiesPanel({ element, value, onChange, onClose }) {
                 type="text"
                 value={currentValue.valueEn || ''}
                 onChange={(e) => handleChange('en', e.target.value)}
-                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full px-3 py-2 bg-slate-700 dark:bg-dk-inset border border-slate-600 dark:border-dk-border rounded-lg text-white dark:text-dk-text text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                 placeholder="Enter content..."
               />
             </div>
@@ -187,21 +187,21 @@ export default function PropertiesPanel({ element, value, onChange, onClose }) {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full dark:bg-dk-surface">
       {/* Header - Fixed */}
-      <div className="px-4 py-3 bg-slate-900 border-b border-slate-700 flex-shrink-0">
+      <div className="px-4 py-3 bg-slate-900 dark:bg-dk-surface border-b border-slate-700 dark:border-dk-border flex-shrink-0">
         <div className="flex items-start justify-between">
           <div>
             <div className="text-xs text-orange-400 font-medium">{element.section}</div>
-            <div className="text-white font-semibold">{element.label}</div>
-            <div className="text-xs text-slate-400 mt-1">ID: {element.id}</div>
+            <div className="text-white dark:text-dk-text font-semibold">{element.label}</div>
+            <div className="text-xs text-slate-400 dark:text-dk-muted mt-1">ID: {element.id}</div>
             <div className="mt-1">
               <span className={`inline-block px-2 py-0.5 text-[10px] rounded ${
                 element.type === 'color' ? 'bg-purple-500/20 text-purple-400' :
                 element.type === 'icon' ? 'bg-blue-500/20 text-blue-400' :
                 element.type === 'image' ? 'bg-green-500/20 text-green-400' :
                 element.type === 'textarea' ? 'bg-yellow-500/20 text-yellow-400' :
-                'bg-slate-500/20 text-slate-400'
+                'bg-slate-500/20 text-slate-400 dark:text-dk-muted'
               }`}>
                 {element.type.toUpperCase()}
               </span>
@@ -209,7 +209,7 @@ export default function PropertiesPanel({ element, value, onChange, onClose }) {
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
+            className="w-8 h-8 flex items-center justify-center text-slate-400 dark:text-dk-muted hover:text-white dark:hover:text-dk-text hover:bg-slate-700 dark:hover:bg-dk-strong rounded transition-colors"
           >
             ✕
           </button>
@@ -217,7 +217,7 @@ export default function PropertiesPanel({ element, value, onChange, onClose }) {
       </div>
       
       {/* Editor - Scrollable */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-4 dark:bg-dk-surface">
         {renderEditor()}
       </div>
     </div>
@@ -244,7 +244,7 @@ function ColorEditor({ label, lang, value, onChange }) {
           type="text"
           value={value || ''}
           onChange={(e) => onChange(e.target.value)}
-          className="flex-1 px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-orange-500"
+          className="flex-1 px-3 py-2 bg-slate-700 dark:bg-dk-inset border border-slate-600 dark:border-dk-border rounded-lg text-white dark:text-dk-text text-sm font-mono focus:outline-none focus:ring-2 focus:ring-orange-500"
           placeholder="#000000"
         />
       </div>

@@ -3,7 +3,7 @@ import { HiOutlineRefresh } from 'react-icons/hi';
 import adminAlertsApiService from '../../features/admin/services/adminAlertsApi.service';
 import { useI18n } from '../../i18n';
 
-const fmtDate = (d) => (d ? new Date(d).toLocaleString('vi-VN') : '—');
+const fmtDate = (d, locale) => (d ? new Date(d).toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN') : '—');
 
 function statusBadgeClass(kind) {
   if (kind === 'failure') return 'badge-error';
@@ -36,7 +36,7 @@ function showImpact(statusKind) {
 }
 
 const AdminCronStatusPanel = () => {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [jobs, setJobs] = useState(null);
   const [latest, setLatest] = useState([]);
   const [recent, setRecent] = useState([]);
@@ -91,15 +91,15 @@ const AdminCronStatusPanel = () => {
   }, [jobs]);
 
   if (loading) {
-    return <div className="card p-8 text-center text-gray-500">{t('adminHealth.cronLoading')}</div>;
+    return <div className="card p-8 text-center text-gray-500 dark:text-dk-text2">{t('adminHealth.cronLoading')}</div>;
   }
-  if (error) return <div className="card p-8 text-red-500">{error}</div>;
+  if (error) return <div className="card p-8 text-red-500 dark:text-red-400">{error}</div>;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         {trackingSummary ? (
-          <p className="text-sm text-gray-600 max-w-2xl">
+          <p className="text-sm text-gray-600 dark:text-dk-text max-w-2xl">
             {t('adminHealth.cronTrackingSummary', {
               n: trackingSummary.tracked,
               total: trackingSummary.total,
@@ -114,7 +114,7 @@ const AdminCronStatusPanel = () => {
       </div>
 
       <div className="card overflow-hidden">
-        <div className="px-5 py-3 border-b border-gray-100 font-semibold">
+        <div className="px-5 py-3 border-b border-gray-100 dark:border-dk-border font-semibold text-gray-900 dark:text-dk-text">
           {t('adminHealth.cronLatestTitle')}
         </div>
         <div className="table-container">
@@ -132,42 +132,47 @@ const AdminCronStatusPanel = () => {
             <tbody>
               {tableRows.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="text-center text-gray-400 py-6">
+                  <td colSpan={6} className="text-center text-gray-400 dark:text-dk-muted py-6">
                     {t('adminHealth.cronEmpty')}
                   </td>
                 </tr>
               )}
               {tableRows.map(({ key, job, run }) => {
                 const status = resolveRowStatus(job, run, t);
+                const localizedLabel = t(`adminHealth.cronJobs.${job.code}.label`, job.label || job.code);
+                const localizedSchedule = job.schedule ? t(`adminHealth.cronJobs.${job.code}.schedule`, job.schedule) : '';
+                const localizedDesc = job.description ? t(`adminHealth.cronJobs.${job.code}.description`, job.description) : '';
+                const localizedImpact = job.impact ? t(`adminHealth.cronJobs.${job.code}.impact`, job.impact) : '';
+
                 return (
                   <tr key={key}>
                     <td className="align-top min-w-[14rem] max-w-sm">
-                      <div className="font-semibold text-sm text-gray-900">
-                        {job.label || job.code}
+                      <div className="font-semibold text-sm text-gray-900 dark:text-dk-text">
+                        {localizedLabel}
                       </div>
-                      <div className="text-xs text-gray-400 mt-0.5 font-mono">
+                      <div className="text-xs text-gray-400 dark:text-dk-text2 mt-0.5 font-mono">
                         {job.code}
-                        {job.schedule ? ` · ${job.schedule}` : ''}
+                        {localizedSchedule ? ` · ${localizedSchedule}` : ''}
                       </div>
-                      {job.description ? (
+                      {localizedDesc ? (
                         <div
-                          className="text-xs text-gray-500 mt-1 truncate"
-                          title={job.description}
+                          className="text-xs text-gray-500 dark:text-dk-text2 mt-1 truncate"
+                          title={localizedDesc}
                         >
-                          {job.description}
+                          {localizedDesc}
                         </div>
                       ) : null}
-                      {showImpact(status.kind) && job.impact ? (
-                        <div className="text-xs text-amber-700 mt-1.5">
-                          {t('adminHealth.cronImpactPrefix')} {job.impact}
+                      {showImpact(status.kind) && localizedImpact ? (
+                        <div className="text-xs text-amber-700 dark:text-amber-400 mt-1.5">
+                          {t('adminHealth.cronImpactPrefix')} {localizedImpact}
                         </div>
                       ) : null}
                     </td>
                     <td className="text-sm whitespace-nowrap align-top">
-                      {run ? fmtDate(run.startedAt) : '—'}
+                      {run ? fmtDate(run.startedAt, locale) : '—'}
                     </td>
                     <td className="text-sm whitespace-nowrap align-top">
-                      {run ? fmtDate(run.finishedAt) : '—'}
+                      {run ? fmtDate(run.finishedAt, locale) : '—'}
                     </td>
                     <td className="text-sm align-top">{run?.durationMs ?? '—'}</td>
                     <td className="align-top">
@@ -175,7 +180,7 @@ const AdminCronStatusPanel = () => {
                         {status.label}
                       </span>
                     </td>
-                    <td className="text-xs text-gray-500 max-w-xs truncate align-top">
+                    <td className="text-xs text-gray-500 dark:text-dk-text2 max-w-xs truncate align-top">
                       {run
                         ? (run.errorMessage || JSON.stringify(run.result || {}))
                         : '—'}
@@ -189,7 +194,7 @@ const AdminCronStatusPanel = () => {
       </div>
 
       <div className="card overflow-hidden">
-        <div className="px-5 py-3 border-b border-gray-100 font-semibold">
+        <div className="px-5 py-3 border-b border-gray-100 dark:border-dk-border font-semibold text-gray-900 dark:text-dk-text">
           {t('adminHealth.cronRecentTitle')}
         </div>
         <div className="table-container">

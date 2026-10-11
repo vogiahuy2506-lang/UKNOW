@@ -119,17 +119,17 @@ export default function TelegramChannelModal({ open, onClose, chatbotId }) {
 
   const modal = (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden">
+      <div className="bg-white dark:bg-dk-surface rounded-xl shadow-xl w-full max-w-lg overflow-hidden border border-transparent dark:border-dk-border">
         {/* Header */}
-        <div className="px-5 py-4 flex items-center gap-3 border-b border-slate-100">
-          <div className="w-10 h-10 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center shrink-0">
+        <div className="px-5 py-4 flex items-center gap-3 border-b border-slate-100 dark:border-dk-border">
+          <div className="w-10 h-10 rounded-lg bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
             <FaTelegramPlane className="w-5 h-5" />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-semibold text-slate-900 truncate">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-dk-text truncate">
               Cấu hình Telegram cá nhân
             </h3>
-            <p className="text-xs text-slate-500 mt-0.5 truncate">
+            <p className="text-xs text-slate-500 dark:text-dk-text2 mt-0.5 truncate">
               Bật chatbot cho từng tài khoản Telegram đã liên kết
             </p>
           </div>
@@ -139,7 +139,7 @@ export default function TelegramChannelModal({ open, onClose, chatbotId }) {
               setLoading(true);
               fetchAccounts();
             }}
-            className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 shrink-0"
+            className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-dk-text dark:hover:bg-dk-raised shrink-0"
             title="Tải lại"
           >
             <HiOutlineRefresh className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -147,7 +147,7 @@ export default function TelegramChannelModal({ open, onClose, chatbotId }) {
           <button
             type="button"
             onClick={onClose}
-            className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 shrink-0"
+            className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-dk-text dark:hover:bg-dk-raised shrink-0"
           >
             <HiOutlineX className="w-4 h-4" />
           </button>
@@ -155,8 +155,8 @@ export default function TelegramChannelModal({ open, onClose, chatbotId }) {
 
         {/* Body */}
         <div className="px-5 py-5">
-          <div className="bg-sky-50/50 border border-sky-100 rounded-lg p-3 mb-4">
-            <p className="text-xs text-slate-600">
+          <div className="bg-sky-50/50 dark:bg-sky-950/20 border border-sky-100 dark:border-sky-900/30 rounded-lg p-3 mb-4">
+            <p className="text-xs text-slate-600 dark:text-dk-text">
               Mỗi tài khoản Telegram cá nhân đã liên kết có thể bật/tắt chatbot
               độc lập. Khi tắt, tài khoản vẫn nhận tin nhắn nhưng không tự trả lời.
             </p>
@@ -169,11 +169,11 @@ export default function TelegramChannelModal({ open, onClose, chatbotId }) {
                 Đang tải danh sách tài khoản...
               </div>
             ) : accounts.length === 0 ? (
-              <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-2">
+              <div className="text-center py-8 bg-slate-50 dark:bg-dk-raised/40 rounded-xl border border-dashed border-slate-200 dark:border-dk-border">
+                <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-dk-raised flex items-center justify-center mx-auto mb-2">
                   <FaTelegramPlane className="w-5 h-5 text-slate-400" />
                 </div>
-                <p className="text-sm font-medium text-slate-700">
+                <p className="text-sm font-medium text-slate-700 dark:text-dk-text">
                   {isEmployeeContext ? t('telegramNodeSend.noAccountsAssigned') : 'Chưa liên kết tài khoản Telegram'}
                 </p>
                 <p className="text-xs text-slate-400 mt-1 px-6 leading-relaxed">
@@ -182,7 +182,7 @@ export default function TelegramChannelModal({ open, onClose, chatbotId }) {
                     href="/app/settings/channels#telegram"
                     target="_blank"
                     rel="noreferrer"
-                    className="text-sky-600 hover:text-sky-700 font-medium underline underline-offset-2"
+                    className="text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 font-medium underline underline-offset-2"
                   >
                     {t('chatbot.studio.channelsPathTelegram')}
                   </a>
@@ -207,15 +207,15 @@ export default function TelegramChannelModal({ open, onClose, chatbotId }) {
                     key={acc.id}
                     className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
                       acc.isActive
-                        ? 'bg-white border border-slate-200 hover:border-slate-300'
-                        : 'bg-slate-50 border border-dashed border-slate-200 opacity-70'
+                        ? 'bg-white dark:bg-dk-raised border border-slate-200 dark:border-dk-border hover:border-slate-300 dark:hover:border-dk-border-strong'
+                        : 'bg-slate-50 dark:bg-dk-raised/40 border border-dashed border-slate-200 dark:border-dk-border opacity-70'
                     }`}
                   >
                     {/* Avatar */}
                     <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 font-bold ${
                       acc.isActive
-                        ? 'bg-sky-50 text-sky-600'
-                        : 'bg-slate-100 text-slate-400'
+                        ? 'bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400'
+                        : 'bg-slate-100 dark:bg-dk-raised text-slate-400'
                     }`}>
                       {avatarChar}
                     </div>
@@ -223,17 +223,17 @@ export default function TelegramChannelModal({ open, onClose, chatbotId }) {
                     {/* Info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <p className="text-sm font-medium text-slate-900 truncate">
+                        <p className="text-sm font-medium text-slate-900 dark:text-dk-text truncate">
                           {displayName}
                         </p>
                         {!acc.isActive && (
-                          <span className="text-[10px] font-medium text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded shrink-0">
+                          <span className="text-[10px] font-medium text-slate-400 bg-slate-100 dark:bg-dk-raised px-1.5 py-0.5 rounded shrink-0">
                             {statusLabel}
                           </span>
                         )}
                         {acc.linkedToOtherChatbot && (
                           <span
-                            className="text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-100 px-1.5 py-0.5 rounded shrink-0 max-w-[140px] truncate"
+                            className="text-[10px] font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-100 dark:border-amber-800 px-1.5 py-0.5 rounded shrink-0 max-w-[140px] truncate"
                             title={t(isOn ? 'chatbot.studio.zaloBoundBothTitle' : 'chatbot.studio.zaloBoundBlockedTitle', { name: acc.linkedChatbotName })}
                           >
                             {t('chatbot.studio.zaloBoundBadge', { name: acc.linkedChatbotName })}
@@ -249,7 +249,7 @@ export default function TelegramChannelModal({ open, onClose, chatbotId }) {
                       </p>
                     </div>
 
-                    {/* Toggle — disable khi account isActive=false (cần bật ở ChannelSettings trước) */}
+                    {/* Toggle */}
                     <button
                       type="button"
                       role="switch"
@@ -265,7 +265,7 @@ export default function TelegramChannelModal({ open, onClose, chatbotId }) {
                       }
                       onClick={() => handleToggle(acc, !isOn)}
                       className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors shrink-0 ${
-                        isOn ? 'bg-sky-600' : 'bg-slate-200'
+                        isOn ? 'bg-sky-600' : 'bg-slate-200 dark:bg-dk-strong'
                       } ${busy || !acc.isActive || blockedByOther ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       <span
@@ -282,11 +282,11 @@ export default function TelegramChannelModal({ open, onClose, chatbotId }) {
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex justify-end">
+        <div className="px-5 py-3 bg-slate-50 dark:bg-dk-raised border-t border-slate-100 dark:border-dk-border flex justify-end">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 rounded-lg transition-colors"
+            className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-dk-text hover:bg-slate-200 dark:hover:bg-dk-raised rounded-lg transition-colors"
           >
             Đóng
           </button>

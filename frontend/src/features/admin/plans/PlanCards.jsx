@@ -10,23 +10,23 @@ export const PlanCard = ({ plan, onEdit, onDelete, onAssign, onToggle }) => {
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="flex items-center gap-2">
-            <h3 className="text-base font-semibold text-gray-900">{plan.name}</h3>
+            <h3 className="text-base font-semibold text-gray-900 dark:text-dk-text">{plan.name}</h3>
             {!plan.isActive && <span className="badge badge-gray text-xs">{t('plans.hiddenStatus')}</span>}
             
           </div>
-          {plan.code && <p className="text-xs text-gray-400 mt-0.5">#{plan.code}</p>}
+          {plan.code && <p className="text-xs text-gray-400 dark:text-dk-muted mt-0.5">#{plan.code}</p>}
         </div>
-        <p className="text-xl font-bold text-primary-600 shrink-0">{fmtVnd(plan.price)}</p>
+        <p className="text-xl font-bold text-primary-600 dark:text-primary-400 shrink-0">{fmtVnd(plan.price)}</p>
       </div>
 
-      <div className="flex items-center gap-4 text-sm text-gray-500">
+      <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-dk-text2">
         <span>{fmtEmp(plan.maxEmployees, t)}</span>
-        <span className="text-gray-200">|</span>
+        <span className="text-gray-200 dark:text-dk-border">|</span>
         <span>{plan.user_count ?? 0} {t('plans.membersUsing')}</span>
       </div>
 
       {(plan.messagesPerPeriod !== null && plan.messagesPerPeriod !== undefined && plan.messagesPerPeriod !== '') && (
-        <div className="rounded-lg border border-orange-100 bg-orange-50 px-3 py-2 text-xs text-orange-700">
+        <div className="rounded-lg border border-orange-100 dark:border-orange-950/40 bg-orange-50 dark:bg-orange-950/20 px-3 py-2 text-xs text-orange-700 dark:text-orange-300">
           <span className="font-semibold">{t('planInputs.messagesPerPeriod')}:</span>{' '}
           {fmtPeriodMessages(plan.messagesPerPeriod)}
           
@@ -40,8 +40,8 @@ export const PlanCard = ({ plan, onEdit, onDelete, onAssign, onToggle }) => {
               ? (f[locale] || getTranslatedFeature(f.vi || f.en || '', t, locale))
               : getTranslatedFeature(f, t, locale);
             return (
-              <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
-                <HiOutlineCheck className="w-3.5 h-3.5 text-green-500 mt-0.5 shrink-0" />
+              <li key={i} className="flex items-start gap-2 text-sm text-gray-600 dark:text-dk-text">
+                <HiOutlineCheck className="w-3.5 h-3.5 text-green-500 dark:text-green-400 mt-0.5 shrink-0" />
                 {text}
               </li>
             );
@@ -50,10 +50,10 @@ export const PlanCard = ({ plan, onEdit, onDelete, onAssign, onToggle }) => {
       )}
 
       {plan.description && (
-        <p className="text-xs text-gray-400 italic">{getTranslatedPlanDescription(plan, t, locale)}</p>
+        <p className="text-xs text-gray-400 dark:text-dk-text2 italic">{getTranslatedPlanDescription(plan, t, locale)}</p>
       )}
 
-      <div className="flex items-center gap-2 pt-1 border-t border-gray-100 mt-auto">
+      <div className="flex items-center gap-2 pt-1 border-t border-gray-100 dark:border-dk-border mt-auto">
         <button onClick={() => onEdit(plan)} className="btn btn-secondary flex-1 text-sm">
           <HiOutlinePencil className="w-4 h-4 mr-1.5" />
           {t('plans.edit')}
@@ -64,7 +64,7 @@ export const PlanCard = ({ plan, onEdit, onDelete, onAssign, onToggle }) => {
         <button onClick={() => onAssign(plan)} className="btn btn-secondary text-sm px-3" title={t('plans.assignToUser')}>
           <HiOutlineUserAdd className="w-4 h-4" />
         </button>
-        <button onClick={() => onDelete(plan)} className="btn btn-secondary text-sm px-3 text-red-500 hover:bg-red-50" title={t('plans.deletePlan')}>
+        <button onClick={() => onDelete(plan)} className="btn btn-secondary text-sm px-3 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40" title={t('plans.deletePlan')}>
           <HiOutlineTrash className="w-4 h-4" />
         </button>
       </div>
@@ -81,29 +81,29 @@ export const CustomPlanCard = ({ plan, onEdit, onDelete, onActivate, onRestore }
   const { t, locale } = useI18n();
   const isHidden = plan.isActive === false;
   return (
-    <div className={`card p-5 flex flex-col gap-4 transition-opacity ${isHidden ? 'opacity-60 bg-gray-50' : ''}`}>
-      <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
+    <div className={`card p-5 flex flex-col gap-4 transition-opacity ${isHidden ? 'opacity-60 bg-gray-50 dark:bg-dk-raised/40' : ''}`}>
+      <div className="flex items-center gap-3 pb-3 border-b border-gray-100 dark:border-dk-border">
         <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
-          isHidden ? 'bg-gray-300' : 'bg-gradient-to-br from-orange-500 to-red-500'
+          isHidden ? 'bg-gray-300 dark:bg-dk-strong' : 'bg-gradient-to-br from-orange-500 to-red-500'
         }`}>
           <span className="text-white font-bold text-sm">
             {(plan.assignedName?.[0] || plan.assignedEmail?.[0] || '?').toUpperCase()}
           </span>
         </div>
         <div className="min-w-0 flex-1">
-          {plan.assignedName && <p className="text-sm font-semibold text-gray-800 truncate">{plan.assignedName}</p>}
-          <p className="text-xs text-gray-400 truncate">{plan.assignedEmail ?? t('adminMembers.noPlan')}</p>
+          {plan.assignedName && <p className="text-sm font-semibold text-gray-800 dark:text-dk-text truncate">{plan.assignedName}</p>}
+          <p className="text-xs text-gray-400 dark:text-dk-text2 truncate">{plan.assignedEmail ?? t('adminMembers.noPlan')}</p>
         </div>
         {isHidden ? (
-          <span className="shrink-0 flex items-center gap-1 text-xs font-medium text-gray-600 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-full">
+          <span className="shrink-0 flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-dk-text bg-gray-100 dark:bg-dk-raised border border-gray-200 dark:border-dk-border px-2 py-0.5 rounded-full">
             <HiOutlineEyeOff className="w-3 h-3" /> {t('plans.hiddenStatus')}
           </span>
         ) : plan.isActivated ? (
-          <span className="shrink-0 flex items-center gap-1 text-xs font-medium text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
+          <span className="shrink-0 flex items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-900/40 px-2 py-0.5 rounded-full">
             <HiOutlineCheck className="w-3 h-3" /> {t('plans.activeStatus')}
           </span>
         ) : (
-          <span className="shrink-0 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+          <span className="shrink-0 text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/40 px-2 py-0.5 rounded-full">
             {t('plans.pendingStatus')}
           </span>
         )}
@@ -111,32 +111,31 @@ export const CustomPlanCard = ({ plan, onEdit, onDelete, onActivate, onRestore }
 
       <div className="flex items-start justify-between gap-2">
         <div>
-          <h3 className="text-sm font-semibold text-gray-900">{plan.name}</h3>
-          
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-dk-text">{plan.name}</h3>
         </div>
-        <p className="text-base font-bold text-primary-600 shrink-0">{fmtVnd(plan.price)}</p>
+        <p className="text-base font-bold text-primary-600 dark:text-primary-400 shrink-0">{fmtVnd(plan.price)}</p>
       </div>
 
       {plan.description && (
-        <p className="text-xs text-gray-400 italic -mt-2">{getTranslatedPlanDescription(plan, t, locale)}</p>
+        <p className="text-xs text-gray-400 dark:text-dk-text2 italic -mt-2">{getTranslatedPlanDescription(plan, t, locale)}</p>
       )}
 
-      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500">
-        <span>{t('plans.emailPerDay')}: <strong className="text-gray-700">{fmtLimit(plan.dailyEmailLimit)}</strong></span>
-        <span>{t('plans.emailPerMonth')}: <strong className="text-gray-700">{fmtLimit(plan.monthlyEmailLimit)}</strong></span>
-        <span>{t('plans.zaloPerDay')}: <strong className="text-gray-700">{fmtLimit(plan.dailyZaloLimit)}</strong></span>
-        <span>{t('plans.zaloPerMonth')}: <strong className="text-gray-700">{fmtLimit(plan.monthlyZaloLimit)}</strong></span>
-        <span>{t('plans.telegramPerMonth')}: <strong className="text-gray-700">{fmtLimit(plan.monthlyTelegramLimit)}</strong></span>
-        <span>{t('plans.whatsappPerMonth')}: <strong className="text-gray-700">{fmtLimit(plan.monthlyWhatsappLimit)}</strong></span>
-        <span className="col-span-2">{t('planInputs.messagesPerPeriod')}: <strong className="text-gray-700">{fmtPeriodMessages(plan.messagesPerPeriod)}</strong></span>
-        <span className="col-span-2">{t('plans.employees')}: <strong className="text-gray-700">{fmtEmp(plan.maxEmployees, t)}</strong></span>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-dk-text2">
+        <span>{t('plans.emailPerDay')}: <strong className="text-gray-700 dark:text-dk-text">{fmtLimit(plan.dailyEmailLimit)}</strong></span>
+        <span>{t('plans.emailPerMonth')}: <strong className="text-gray-700 dark:text-dk-text">{fmtLimit(plan.monthlyEmailLimit)}</strong></span>
+        <span>{t('plans.zaloPerDay')}: <strong className="text-gray-700 dark:text-dk-text">{fmtLimit(plan.dailyZaloLimit)}</strong></span>
+        <span>{t('plans.zaloPerMonth')}: <strong className="text-gray-700 dark:text-dk-text">{fmtLimit(plan.monthlyZaloLimit)}</strong></span>
+        <span>{t('plans.telegramPerMonth')}: <strong className="text-gray-700 dark:text-dk-text">{fmtLimit(plan.monthlyTelegramLimit)}</strong></span>
+        <span>{t('plans.whatsappPerMonth')}: <strong className="text-gray-700 dark:text-dk-text">{fmtLimit(plan.monthlyWhatsappLimit)}</strong></span>
+        <span className="col-span-2">{t('planInputs.messagesPerPeriod')}: <strong className="text-gray-700 dark:text-dk-text">{fmtPeriodMessages(plan.messagesPerPeriod)}</strong></span>
+        <span className="col-span-2">{t('plans.employees')}: <strong className="text-gray-700 dark:text-dk-text">{fmtEmp(plan.maxEmployees, t)}</strong></span>
       </div>
 
-      <div className="flex items-center gap-2 pt-1 border-t border-gray-100 mt-auto">
+      <div className="flex items-center gap-2 pt-1 border-t border-gray-100 dark:border-dk-border mt-auto">
         {isHidden ? (
           <button
             onClick={() => onRestore?.(plan)}
-            className="btn btn-secondary flex-1 text-sm text-green-600 hover:bg-green-50"
+            className="btn btn-secondary flex-1 text-sm text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-950/40"
             title={t('plans.showPlan')}
           >
             <HiOutlineEye className="w-4 h-4 mr-1.5" />
@@ -158,7 +157,7 @@ export const CustomPlanCard = ({ plan, onEdit, onDelete, onActivate, onRestore }
               <HiOutlinePencil className="w-4 h-4 mr-1.5" />
               {t('plans.edit')}
             </button>
-            <button onClick={() => onDelete(plan)} className="btn btn-secondary text-sm px-3 text-red-500 hover:bg-red-50" title={t('plans.hideOrDelete')}>
+            <button onClick={() => onDelete(plan)} className="btn btn-secondary text-sm px-3 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40" title={t('plans.hideOrDelete')}>
               <HiOutlineTrash className="w-4 h-4" />
             </button>
           </>

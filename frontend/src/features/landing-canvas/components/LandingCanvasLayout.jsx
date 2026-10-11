@@ -205,7 +205,7 @@ export default function LandingCanvasLayout({
       >
         {isCentered ? (
           /* Giao diện Studio AI ở giữa trang khi chưa có nội dung / tương tác */
-          <div className="flex-1 min-h-0 overflow-y-auto bg-gradient-to-b from-gray-50/70 via-white to-orange-50/20 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8">
+          <div className="flex-1 min-h-0 overflow-y-auto bg-gradient-to-b from-gray-50/70 via-white to-orange-50/20 dark:from-dk-bg dark:via-dk-surface dark:to-dk-bg flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8">
             <div className="w-full max-w-3xl my-auto py-6">
               {chatPanel ?? (
                 <CanvasChatPanel
@@ -242,7 +242,7 @@ export default function LandingCanvasLayout({
             {/* Chat Panel (left, resizable) */}
             <aside
               style={{ width: chatCollapsed ? 0 : `${chatWidth}px` }}
-              className={`shrink-0 border-r border-gray-200 bg-white flex flex-col min-h-0 transition-[width] ${
+              className={`shrink-0 border-r border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface flex flex-col min-h-0 transition-[width] ${
                 isResizing ? 'transition-none select-none' : 'duration-150'
               } ${chatCollapsed ? 'border-r-0 overflow-hidden' : ''}`}
             >
@@ -278,7 +278,7 @@ export default function LandingCanvasLayout({
               >
                 <div
                   className={`w-0.5 h-7 rounded-full transition-colors ${
-                    isResizing ? 'bg-white' : 'bg-gray-300 group-hover:bg-white'
+                    isResizing ? 'bg-white' : 'bg-gray-300 dark:bg-dk-strong group-hover:bg-white'
                   }`}
                 />
               </div>
@@ -286,7 +286,7 @@ export default function LandingCanvasLayout({
 
             {/* Preview Area (right, flex) */}
             <section
-              className={`flex-1 min-w-0 bg-[#f8fafc] flex flex-col min-h-0 ${
+              className={`flex-1 min-w-0 bg-[#f8fafc] dark:bg-dk-inset flex flex-col min-h-0 ${
                 isResizing ? 'pointer-events-none select-none' : ''
               }`}
             >

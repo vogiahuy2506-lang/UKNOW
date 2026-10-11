@@ -87,11 +87,11 @@ export default function AdminFormsPage() {
       }
     >
 
-      <form onSubmit={handleSearch} className="card p-4 flex flex-wrap items-end gap-3">
+      <form onSubmit={handleSearch} className="card p-4 flex flex-wrap items-end gap-3 dark:bg-dk-surface dark:border-dk-border">
         <div className="flex-1 min-w-[220px]">
-          <label className="block text-xs text-gray-500 mb-1">{t('adminForms.search')}</label>
+          <label className="block text-xs text-gray-500 dark:text-dk-text2 mb-1">{t('adminForms.search')}</label>
           <div className="relative">
-            <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-dk-muted" />
             <input
               type="text"
               className="input pl-9 w-full"
@@ -104,10 +104,10 @@ export default function AdminFormsPage() {
         <button type="submit" className="btn btn-primary">{t('adminForms.searchButton')}</button>
       </form>
 
-      <div className="card overflow-hidden">
+      <div className="card overflow-hidden dark:bg-dk-surface dark:border-dk-border">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-gray-700">
-            <thead className="bg-gray-50/75 border-b border-gray-100 text-xs font-semibold text-gray-600 uppercase tracking-wider">
+          <table className="w-full text-left text-sm text-gray-700 dark:text-dk-text">
+            <thead className="bg-gray-50/75 dark:bg-dk-raised border-b border-gray-100 dark:border-dk-border text-xs font-semibold text-gray-600 dark:text-dk-text2 uppercase tracking-wider">
               <tr>
                 <th className="py-3.5 px-4 sm:px-6">{t('adminForms.colForm')}</th>
                 <th className="py-3.5 px-4 sm:px-6">{t('adminForms.colOwner')}</th>
@@ -117,49 +117,49 @@ export default function AdminFormsPage() {
                 <th className="py-3.5 px-4 sm:px-6">{t('adminForms.colActions')}</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100 dark:divide-dk-border/60">
               {isLoading ? (
                 <tr>
-                  <td colSpan={6} className="py-10 text-center text-gray-500">
-                    <div className="inline-block animate-spin rounded-full h-6 w-6 border-4 border-gray-200 border-t-primary-600" />
+                  <td colSpan={6} className="py-10 text-center text-gray-500 dark:text-dk-text2">
+                    <div className="inline-block animate-spin rounded-full h-6 w-6 border-4 border-gray-200 dark:border-dk-border border-t-primary-600" />
                   </td>
                 </tr>
               ) : forms.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-10 text-center text-gray-400 text-sm">
+                  <td colSpan={6} className="py-10 text-center text-gray-400 dark:text-dk-muted text-sm">
                     {t('adminForms.empty')}
                   </td>
                 </tr>
               ) : (
                 forms.map((form) => (
-                  <tr key={form.id} className="hover:bg-gray-50/50 transition-colors align-top">
+                  <tr key={form.id} className="hover:bg-gray-50/50 dark:hover:bg-dk-raised/40 transition-colors align-top">
                     <td className="py-3.5 px-4 sm:px-6">
-                      <div className="font-medium text-gray-900 break-words">{form.title}</div>
-                      <div className="text-xs text-gray-400 font-mono">{form.publicKey}</div>
-                      <div className="text-xs text-gray-400">{fmtDate(form.createdAt)}</div>
+                      <div className="font-medium text-gray-900 dark:text-dk-text break-words">{form.title}</div>
+                      <div className="text-xs text-gray-400 dark:text-dk-muted font-mono">{form.publicKey}</div>
+                      <div className="text-xs text-gray-400 dark:text-dk-muted">{fmtDate(form.createdAt)}</div>
                     </td>
-                    <td className="py-3.5 px-4 sm:px-6 text-xs text-gray-600 break-all">{form.ownerEmail || '—'}</td>
+                    <td className="py-3.5 px-4 sm:px-6 text-xs text-gray-600 dark:text-dk-text2 break-all">{form.ownerEmail || '—'}</td>
                     <td className="py-3.5 px-4 sm:px-6 text-center">
                       {form.hasPayment ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-900/50">
                           {t('adminForms.paymentYes')}
                         </span>
                       ) : (
-                        <span className="text-gray-300 text-xs">—</span>
+                        <span className="text-gray-300 dark:text-dk-muted text-xs">—</span>
                       )}
                     </td>
-                    <td className="py-3.5 px-4 sm:px-6 text-center text-gray-700">{form.submissionCount ?? 0}</td>
+                    <td className="py-3.5 px-4 sm:px-6 text-center text-gray-700 dark:text-dk-text">{form.submissionCount ?? 0}</td>
                     <td className="py-3.5 px-4 sm:px-6">
                       {form.adminDisabledAt ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-900/50">
                           {t('adminForms.statusDisabled')}
                         </span>
                       ) : form.isPublished ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-900/50">
                           {t('adminForms.statusPublished')}
                         </span>
                       ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-dk-raised text-gray-600 dark:text-dk-text2 border border-gray-200 dark:border-dk-border">
                           {t('adminForms.statusDraft')}
                         </span>
                       )}
@@ -167,7 +167,7 @@ export default function AdminFormsPage() {
                     <td className="py-3.5 px-4 sm:px-6">
                       {confirmTargetId === form.id ? (
                         <div className="space-y-1.5">
-                          <p className="text-xs text-gray-600">
+                          <p className="text-xs text-gray-600 dark:text-dk-text">
                             {form.adminDisabledAt
                               ? t('adminForms.enableConfirmDesc')
                               : t('adminForms.disableConfirmDesc')}
@@ -189,7 +189,7 @@ export default function AdminFormsPage() {
                               type="button"
                               onClick={handleAbortToggle}
                               disabled={togglingId === form.id}
-                              className="px-2.5 py-1 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 text-xs font-medium"
+                              className="px-2.5 py-1 rounded-lg border border-gray-300 dark:border-dk-border text-gray-600 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised text-xs font-medium"
                             >
                               {t('adminForms.confirmNo')}
                             </button>
@@ -199,7 +199,7 @@ export default function AdminFormsPage() {
                         <button
                           type="button"
                           onClick={() => handleRequestToggle(form.id)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-green-200 text-green-700 hover:bg-green-50 text-xs font-medium"
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-950/30 text-xs font-medium"
                         >
                           <HiOutlineCheck className="w-3.5 h-3.5" />
                           {t('adminForms.enableButton')}
@@ -208,7 +208,7 @@ export default function AdminFormsPage() {
                         <button
                           type="button"
                           onClick={() => handleRequestToggle(form.id)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-xs font-medium"
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 text-xs font-medium"
                         >
                           <HiOutlineBan className="w-3.5 h-3.5" />
                           {t('adminForms.disableButton')}
@@ -223,8 +223,8 @@ export default function AdminFormsPage() {
         </div>
 
         {totalPages > 1 && (
-          <div className="px-4 py-3 sm:px-6 border-t border-gray-100 flex items-center justify-between bg-gray-50/50">
-            <div className="text-xs text-gray-500">
+          <div className="px-4 py-3 sm:px-6 border-t border-gray-100 dark:border-dk-border flex items-center justify-between bg-gray-50/50 dark:bg-dk-raised">
+            <div className="text-xs text-gray-500 dark:text-dk-text2">
               {t('adminForms.pageInfo', { page, totalPages, total })}
             </div>
             <div className="flex items-center gap-2">
@@ -232,7 +232,7 @@ export default function AdminFormsPage() {
                 type="button"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1}
-                className="px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-xs"
+                className="px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface text-gray-600 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised disabled:opacity-40 disabled:cursor-not-allowed text-xs transition-colors"
               >
                 {t('adminForms.prevPage')}
               </button>
@@ -240,7 +240,7 @@ export default function AdminFormsPage() {
                 type="button"
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page >= totalPages}
-                className="px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-xs"
+                className="px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface text-gray-600 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised disabled:opacity-40 disabled:cursor-not-allowed text-xs transition-colors"
               >
                 {t('adminForms.nextPage')}
               </button>

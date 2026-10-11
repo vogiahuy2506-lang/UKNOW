@@ -47,11 +47,11 @@ const DashboardHeader = ({
           </div>
         )}
         <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-dk-text">
             {_title}
           </h1>
           {_description && (
-            <p className="text-xs sm:text-sm text-slate-500 mt-0.5 leading-relaxed">
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-dk-text2 mt-0.5 leading-relaxed">
               {_description}
             </p>
           )}
@@ -61,7 +61,7 @@ const DashboardHeader = ({
       {/* Actions */}
       <div className="flex flex-wrap items-center gap-2">
         {/* Active date range pill */}
-        <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm text-slate-600 shadow-2xs font-medium">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface text-xs sm:text-sm text-slate-600 dark:text-dk-text shadow-2xs font-medium">
           <svg className="w-4 h-4 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
               strokeLinecap="round"
@@ -78,11 +78,11 @@ const DashboardHeader = ({
         {/* Filter button */}
         <button
           type="button"
-          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs sm:text-sm font-semibold text-slate-700 transition-colors shadow-2xs disabled:opacity-50"
+          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface hover:bg-slate-50 dark:hover:bg-dk-raised text-xs sm:text-sm font-semibold text-slate-700 dark:text-dk-text transition-colors shadow-2xs disabled:opacity-50"
           onClick={onOpenFilter}
           disabled={isLoading}
         >
-          <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="w-4 h-4 text-slate-500 dark:text-dk-text2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
               strokeLinecap="round"
               strokeLinejoin="round"

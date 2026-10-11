@@ -52,21 +52,21 @@ const SectionCard = ({ icon: Icon, title, subtitle, children, accent = 'orange' 
   };
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+    <div className="bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border rounded-2xl overflow-hidden">
       <div
-        className="flex items-center gap-3 px-5 py-4 border-b border-slate-100 cursor-pointer hover:bg-slate-50 transition"
+        className="flex items-center gap-3 px-5 py-4 border-b border-slate-100 dark:border-dk-border/80 cursor-pointer hover:bg-slate-50 dark:hover:bg-dk-raised/60 transition"
         onClick={() => setIsOpen(!isOpen)}
       >
         <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${colors[accent]}`}>
           <Icon className="w-4 h-4" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-slate-700">{title}</p>
-          {subtitle && <p className="text-xs text-slate-400 truncate">{subtitle}</p>}
+          <p className="text-sm font-semibold text-slate-700 dark:text-dk-text">{title}</p>
+          {subtitle && <p className="text-xs text-slate-400 dark:text-dk-text2 truncate">{subtitle}</p>}
         </div>
         <button
           type="button"
-          className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 transition"
+          className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-dk-raised text-slate-400 dark:text-dk-muted transition"
         >
           {isOpen ? (
             <HiOutlineChevronDown className="w-4 h-4" />
@@ -116,14 +116,14 @@ const SmtpGuideAccordion = ({ t }) => {
   };
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
+    <div className="rounded-xl border border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-bg overflow-hidden">
       <button
         type="button"
-        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-100 transition"
+        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-100 dark:hover:bg-dk-surface transition"
         onClick={() => setIsOpen(!isOpen)}
       >
         <HiOutlineQuestionMarkCircle className="w-5 h-5 text-orange-500" />
-        <span className="flex-1 text-left text-sm font-medium text-slate-700">
+        <span className="flex-1 text-left text-sm font-medium text-slate-700 dark:text-dk-text">
           {t('emailSettings.smtpGuideAccordionTitle')}
         </span>
         {isOpen ? (
@@ -136,8 +136,8 @@ const SmtpGuideAccordion = ({ t }) => {
       {isOpen && (
         <div className="px-4 pb-4 space-y-4">
           {/* Quick Reference */}
-          <div className="flex flex-wrap gap-3 p-3 bg-blue-50 rounded-lg border border-blue-100">
-            <div className="flex items-start gap-2 text-xs text-blue-700">
+          <div className="flex flex-wrap gap-3 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-100 dark:border-blue-900/40">
+            <div className="flex items-start gap-2 text-xs text-blue-700 dark:text-blue-300">
               <HiOutlineGlobe className="w-4 h-4 mt-0.5 shrink-0" />
               <span><strong>{t('emailSettings.smtpGuideQuickRef')}:</strong> {t('emailSettings.smtpGuidePortList')}</span>
             </div>
@@ -152,8 +152,8 @@ const SmtpGuideAccordion = ({ t }) => {
                 onClick={() => setActiveProvider(p.key)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
                   activeProvider === p.key
-                    ? 'bg-orange-100 text-orange-700 border border-orange-200'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                    ? 'bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800'
+                    : 'bg-white dark:bg-dk-surface text-slate-600 dark:text-dk-text border border-slate-200 dark:border-dk-border hover:bg-slate-50 dark:hover:bg-dk-raised'
                 }`}
               >
                 {t(p.labelKey)}
@@ -162,10 +162,10 @@ const SmtpGuideAccordion = ({ t }) => {
           </div>
 
           {/* Steps */}
-          <ol className="space-y-3 text-xs text-slate-600">
+          <ol className="space-y-3 text-xs text-slate-600 dark:text-dk-text">
             {providerSteps[activeProvider].map((stepKey, idx) => (
               <li key={idx} className="flex gap-3">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-orange-100 text-center text-[10px] font-bold text-orange-600">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-950/40 text-center text-[10px] font-bold text-orange-600 dark:text-orange-400">
                   {idx + 1}
                 </span>
                 <span className="flex-1 leading-relaxed">{t(stepKey)}</span>
@@ -175,14 +175,14 @@ const SmtpGuideAccordion = ({ t }) => {
 
           {/* Note */}
           {providerNotes[activeProvider] && (
-            <div className="flex items-start gap-2 p-3 bg-amber-50 rounded-lg border border-amber-100 text-xs text-amber-700">
+            <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-100 dark:border-amber-900/40 text-xs text-amber-700 dark:text-amber-300">
               <HiOutlineInformationCircle className="w-4 h-4 mt-0.5 shrink-0" />
               <span>{t(providerNotes[activeProvider])}</span>
             </div>
           )}
 
           {/* Security Warning */}
-          <div className="flex items-start gap-2 p-3 bg-red-50 rounded-lg border border-red-100 text-xs text-red-700">
+          <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-950/30 rounded-lg border border-red-100 dark:border-red-900/40 text-xs text-red-700 dark:text-red-300">
             <HiOutlineShieldCheck className="w-4 h-4 mt-0.5 shrink-0" />
             <span>{t('emailSettings.smtpGuideSecurityNote')}</span>
           </div>
@@ -275,20 +275,20 @@ export const TestEmailModal = ({ isOpen, onClose, onSend, isSending, t }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100">
-          <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
-            <HiOutlineMail className="w-5 h-5 text-orange-600" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs">
+      <div className="bg-white dark:bg-dk-surface border border-transparent dark:border-dk-border rounded-2xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100 dark:border-dk-border/80">
+          <div className="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-950/40 flex items-center justify-center">
+            <HiOutlineMail className="w-5 h-5 text-orange-600 dark:text-orange-400" />
           </div>
           <div>
-            <h3 className="text-base font-semibold text-slate-800">{t('emailSettings.sendTestEmail')}</h3>
-            <p className="text-xs text-slate-500">{t('emailSettings.testEmailPlaceholder')}</p>
+            <h3 className="text-base font-semibold text-slate-800 dark:text-dk-text">{t('emailSettings.sendTestEmail')}</h3>
+            <p className="text-xs text-slate-500 dark:text-dk-text2">{t('emailSettings.testEmailPlaceholder')}</p>
           </div>
         </div>
         <div className="p-5 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+            <label className="block text-sm font-medium text-slate-700 dark:text-dk-text mb-1.5">
               {t('emailSettings.replyTo')}
             </label>
             <input
@@ -297,40 +297,40 @@ export const TestEmailModal = ({ isOpen, onClose, onSend, isSending, t }) => {
               onChange={(e) => setEmail(e.target.value)}
               placeholder={t('emailSettings.testEmailPlaceholder')}
               className={`w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition ${
-                error ? 'border-red-400 bg-red-50/40' : 'border-slate-200'
+                error ? 'border-red-400 bg-red-50/40 dark:bg-red-950/20 text-red-900 dark:text-red-200' : 'border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset text-slate-900 dark:text-dk-text placeholder:text-slate-400 dark:placeholder:text-dk-muted'
               }`}
             />
-            {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+            {error && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{error}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+            <label className="block text-sm font-medium text-slate-700 dark:text-dk-text mb-1.5">
               {t('emailSettings.testEmailSubject')}
             </label>
             <input
               type="text"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition"
+              className="w-full border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset text-slate-900 dark:text-dk-text rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+            <label className="block text-sm font-medium text-slate-700 dark:text-dk-text mb-1.5">
               {t('emailSettings.testEmailContent')}
             </label>
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
               rows={3}
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition resize-none"
+              className="w-full border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset text-slate-900 dark:text-dk-text rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition resize-none"
             />
           </div>
         </div>
-        <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-slate-100 bg-slate-50">
+        <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-slate-100 dark:border-dk-border/80 bg-slate-50 dark:bg-dk-bg">
           <button
             type="button"
             onClick={handleClose}
             disabled={isSending || isPreparing}
-            className="px-4 py-2 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition disabled:opacity-50"
+            className="px-4 py-2 rounded-lg border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface text-sm font-medium text-slate-700 dark:text-dk-text hover:bg-slate-50 dark:hover:bg-dk-raised transition disabled:opacity-50"
           >
             {t('common.cancel')}
           </button>
@@ -637,7 +637,7 @@ const EmailSettings = () => {
     }
     return (
       <div className="max-h-[540px] overflow-y-auto">
-        <div className="divide-y divide-slate-100">
+        <div className="divide-y divide-slate-100 dark:divide-dk-border/80">
           {emailSettings.map((item) => {
             const isActive = selectedEmailId === item.id && !isAddingNew;
             const modeCfg = EMAIL_MODES[item.emailMode] || EMAIL_MODES.smtp;
@@ -649,25 +649,25 @@ const EmailSettings = () => {
                 onClick={() => handleSelectEmail(item)}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSelectEmail(item); } }}
                 className={`flex w-full items-start gap-3 px-4 py-3 text-left transition cursor-pointer ${
-                  isActive ? 'border-l-4 border-orange-500 bg-orange-50/60' : 'border-l-4 border-transparent hover:bg-slate-50'
+                  isActive ? 'border-l-4 border-orange-500 bg-orange-50/60 dark:bg-orange-950/30' : 'border-l-4 border-transparent hover:bg-slate-50 dark:hover:bg-dk-raised/60'
                 }`}
               >
                 <div
                   className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border ${
-                    isActive ? 'border-orange-200 bg-orange-100 text-orange-700' : 'border-slate-200 bg-slate-50 text-slate-500'
+                    isActive ? 'border-orange-200 dark:border-orange-900/60 bg-orange-100 dark:bg-orange-950/50 text-orange-700 dark:text-orange-300' : 'border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-bg text-slate-500 dark:text-dk-text2'
                   }`}
                 >
                   <modeCfg.Icon className="h-4 w-4" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <p className="truncate text-sm font-semibold text-slate-900">{item.name || t('emailSettings.noName')}</p>
+                    <p className="truncate text-sm font-semibold text-slate-900 dark:text-dk-text">{item.name || t('emailSettings.noName')}</p>
                     <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${modeCfg.badgeCls}`}>
                       <modeCfg.Icon className="h-3 w-3" />
                       {t(modeCfg.labelKey)}
                     </span>
                   </div>
-                  <p className="mt-1 flex items-center gap-1 truncate text-xs text-slate-500">
+                  <p className="mt-1 flex items-center gap-1 truncate text-xs text-slate-500 dark:text-dk-text2">
                     <HiOutlineReply className="h-3 w-3" />
                     {item.replyTo || t('emailSettings.noReplyTo')}
                   </p>
@@ -680,7 +680,7 @@ const EmailSettings = () => {
                   }}
                   disabled={isDeletingId === item.id}
                   className={`rounded-lg p-2 transition ${
-                    isActive ? 'text-slate-500 hover:bg-red-50 hover:text-red-600' : 'text-slate-400 hover:bg-red-50 hover:text-red-600'
+                    isActive ? 'text-slate-500 dark:text-dk-text2 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-600 dark:hover:text-red-400' : 'text-slate-400 dark:text-dk-muted hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-600 dark:hover:text-red-400'
                   }`}
                   title={t('emailSettings.delete')}
                 >
@@ -703,15 +703,15 @@ const EmailSettings = () => {
     const Icon = modeCfg.Icon;
     const previewEmail = String(formData.replyTo || '').trim();
     return (
-      <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-xs text-slate-600">
-        <span className="inline-flex items-center gap-2 text-slate-700">
+      <div className="flex items-center justify-between rounded-lg border border-slate-100 dark:border-dk-border bg-slate-50 dark:bg-dk-bg px-4 py-3 text-xs text-slate-600 dark:text-dk-text">
+        <span className="inline-flex items-center gap-2 text-slate-700 dark:text-dk-text">
           <Icon className="h-4 w-4 text-orange-500" />
           <span>
             {t('emailSettings.previewLabel')}{' '}
-            <span className="font-semibold text-slate-900">{previewEmail || '—'}</span>
+            <span className="font-semibold text-slate-900 dark:text-dk-text">{previewEmail || '—'}</span>
           </span>
         </span>
-        <span className="hidden text-slate-400 md:inline">{t('emailSettings.previewHint')}</span>
+        <span className="hidden text-slate-400 dark:text-dk-muted md:inline">{t('emailSettings.previewHint')}</span>
       </div>
     );
   };
@@ -725,7 +725,7 @@ const EmailSettings = () => {
     return (
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-100">
+        <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-100 dark:border-dk-border/80">
           <div>
             <div className="flex items-center gap-2">
               <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${modeCfg.badgeCls}`}>
@@ -733,15 +733,15 @@ const EmailSettings = () => {
                 {t(modeCfg.labelKey)}
               </span>
             </div>
-            <p className="mt-1 text-base font-semibold text-slate-900">{title}</p>
-            <p className="mt-1 text-xs text-slate-500">{hint}</p>
+            <p className="mt-1 text-base font-semibold text-slate-900 dark:text-dk-text">{title}</p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-dk-text2">{hint}</p>
           </div>
           {selectedEmailId && !isAddingNew ? (
             <button
               type="button"
               onClick={() => handleDelete(selectedEmailId)}
               disabled={isDeletingId === selectedEmailId}
-              className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700 transition hover:border-red-300 hover:bg-red-100 disabled:opacity-70"
+              className="inline-flex items-center gap-2 rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-3 py-2 text-xs font-medium text-red-700 dark:text-red-300 transition hover:border-red-300 hover:bg-red-100 dark:hover:bg-red-900/50 disabled:opacity-70"
             >
               {isDeletingId === selectedEmailId ? (
                 <span className="inline-block h-3.5 w-3.5 rounded-full border-2 border-red-300 border-t-transparent animate-spin" />
@@ -755,7 +755,7 @@ const EmailSettings = () => {
 
         {/* SMTP Mode Badge */}
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+          <span className="inline-flex items-center rounded-full border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-300">
             <HiOutlineLockClosed className="mr-1 h-3.5 w-3.5" />
             {t('emailSettings.modeSmtp')}
           </span>
@@ -770,30 +770,30 @@ const EmailSettings = () => {
         >
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-slate-700">{t('emailSettings.displayName')}</label>
+              <label className="text-sm font-medium text-slate-700 dark:text-dk-text">{t('emailSettings.displayName')}</label>
               <input
                 type="text"
                 value={formData.name}
                 onChange={(event) => setFormData((prev) => ({ ...prev, name: event.target.value }))}
                 className={`w-full border rounded-lg px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 ${
-                  formErrors.name ? 'border-red-400 bg-red-50/40' : 'border-slate-200'
+                  formErrors.name ? 'border-red-400 bg-red-50/40 dark:bg-red-950/20 text-slate-900 dark:text-dk-text' : 'border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset text-slate-900 dark:text-dk-text placeholder:text-slate-400 dark:placeholder:text-dk-muted'
                 }`}
                 placeholder={t('emailSettings.displayNamePlaceholder')}
               />
-              {formErrors.name && <p className="text-xs text-red-600">{formErrors.name}</p>}
+              {formErrors.name && <p className="text-xs text-red-600 dark:text-red-400">{formErrors.name}</p>}
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-slate-700">{t('emailSettings.replyTo')}</label>
+              <label className="text-sm font-medium text-slate-700 dark:text-dk-text">{t('emailSettings.replyTo')}</label>
               <input
                 type="email"
                 value={formData.replyTo}
                 onChange={(event) => setFormData((prev) => ({ ...prev, replyTo: event.target.value }))}
                 className={`w-full border rounded-lg px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 ${
-                  formErrors.replyTo ? 'border-red-400 bg-red-50/40' : 'border-slate-200'
+                  formErrors.replyTo ? 'border-red-400 bg-red-50/40 dark:bg-red-950/20 text-slate-900 dark:text-dk-text' : 'border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset text-slate-900 dark:text-dk-text placeholder:text-slate-400 dark:placeholder:text-dk-muted'
                 }`}
                 placeholder={t('emailSettings.replyToPlaceholder')}
               />
-              {formErrors.replyTo && <p className="text-xs text-red-600">{formErrors.replyTo}</p>}
+              {formErrors.replyTo && <p className="text-xs text-red-600 dark:text-red-400">{formErrors.replyTo}</p>}
             </div>
           </div>
         </SectionCard>
@@ -808,56 +808,56 @@ const EmailSettings = () => {
           >
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-slate-700">{t('emailSettings.smtpHost')}</label>
+                <label className="text-sm font-medium text-slate-700 dark:text-dk-text">{t('emailSettings.smtpHost')}</label>
                 <input
                   type="text"
                   value={formData.smtpHost}
                   onChange={(event) => setFormData((prev) => ({ ...prev, smtpHost: event.target.value }))}
                   className={`w-full border rounded-lg px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 ${
-                    formErrors.smtpHost ? 'border-red-400 bg-red-50/40' : 'border-slate-200'
+                    formErrors.smtpHost ? 'border-red-400 bg-red-50/40 dark:bg-red-950/20 text-slate-900 dark:text-dk-text' : 'border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset text-slate-900 dark:text-dk-text placeholder:text-slate-400 dark:placeholder:text-dk-muted'
                   }`}
                   placeholder="smtp.gmail.com"
                 />
-                {formErrors.smtpHost && <p className="text-xs text-red-600">{formErrors.smtpHost}</p>}
+                {formErrors.smtpHost && <p className="text-xs text-red-600 dark:text-red-400">{formErrors.smtpHost}</p>}
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-slate-700">{t('emailSettings.smtpPort')}</label>
+                <label className="text-sm font-medium text-slate-700 dark:text-dk-text">{t('emailSettings.smtpPort')}</label>
                 <input
                   type="text"
                   value={formData.smtpPort}
                   onChange={(event) => setFormData((prev) => ({ ...prev, smtpPort: event.target.value }))}
                   className={`w-full border rounded-lg px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 ${
-                    formErrors.smtpPort ? 'border-red-400 bg-red-50/40' : 'border-slate-200'
+                    formErrors.smtpPort ? 'border-red-400 bg-red-50/40 dark:bg-red-950/20 text-slate-900 dark:text-dk-text' : 'border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset text-slate-900 dark:text-dk-text placeholder:text-slate-400 dark:placeholder:text-dk-muted'
                   }`}
                   placeholder="587"
                 />
-                {formErrors.smtpPort && <p className="text-xs text-red-600">{formErrors.smtpPort}</p>}
+                {formErrors.smtpPort && <p className="text-xs text-red-600 dark:text-red-400">{formErrors.smtpPort}</p>}
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-slate-700">{t('emailSettings.smtpUsername')}</label>
+                <label className="text-sm font-medium text-slate-700 dark:text-dk-text">{t('emailSettings.smtpUsername')}</label>
                 <input
                   type="text"
                   value={formData.smtpUsername}
                   onChange={(event) => setFormData((prev) => ({ ...prev, smtpUsername: event.target.value }))}
                   className={`w-full border rounded-lg px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 ${
-                    formErrors.smtpUsername ? 'border-red-400 bg-red-50/40' : 'border-slate-200'
+                    formErrors.smtpUsername ? 'border-red-400 bg-red-50/40 dark:bg-red-950/20 text-slate-900 dark:text-dk-text' : 'border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset text-slate-900 dark:text-dk-text placeholder:text-slate-400 dark:placeholder:text-dk-muted'
                   }`}
                   placeholder="your@email.com"
                 />
-                {formErrors.smtpUsername && <p className="text-xs text-red-600">{formErrors.smtpUsername}</p>}
+                {formErrors.smtpUsername && <p className="text-xs text-red-600 dark:text-red-400">{formErrors.smtpUsername}</p>}
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-slate-700">{t('emailSettings.smtpPassword')}</label>
+                <label className="text-sm font-medium text-slate-700 dark:text-dk-text">{t('emailSettings.smtpPassword')}</label>
                 <input
                   type="password"
                   value={formData.smtpPassword}
                   onChange={(event) => setFormData((prev) => ({ ...prev, smtpPassword: event.target.value }))}
                   className={`w-full border rounded-lg px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 ${
-                    formErrors.smtpPassword ? 'border-red-400 bg-red-50/40' : 'border-slate-200'
+                    formErrors.smtpPassword ? 'border-red-400 bg-red-50/40 dark:bg-red-950/20 text-slate-900 dark:text-dk-text' : 'border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset text-slate-900 dark:text-dk-text placeholder:text-slate-400 dark:placeholder:text-dk-muted'
                   }`}
                   placeholder="••••••••"
                 />
-                {formErrors.smtpPassword && <p className="text-xs text-red-600">{formErrors.smtpPassword}</p>}
+                {formErrors.smtpPassword && <p className="text-xs text-red-600 dark:text-red-400">{formErrors.smtpPassword}</p>}
               </div>
             </div>
           </SectionCard>
@@ -877,20 +877,20 @@ const EmailSettings = () => {
               value={formData.userDailySendLimit}
               onChange={(v) => setFormData((prev) => ({ ...prev, userDailySendLimit: String(v) }))}
               className={`w-full border rounded-lg px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 ${
-                formErrors.userDailySendLimit ? 'border-red-400 bg-red-50/40' : 'border-slate-200'
+                formErrors.userDailySendLimit ? 'border-red-400 bg-red-50/40 dark:bg-red-950/20 text-slate-900 dark:text-dk-text' : 'border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset text-slate-900 dark:text-dk-text placeholder:text-slate-400 dark:placeholder:text-dk-muted'
               }`}
               placeholder={t('emailSettings.dailySendLimitPlaceholder')}
             />
             {formErrors.userDailySendLimit && (
-              <p className="text-xs text-red-600">{formErrors.userDailySendLimit}</p>
+              <p className="text-xs text-red-600 dark:text-red-400">{formErrors.userDailySendLimit}</p>
             )}
             {/* Nguong 2.000 = daily_email_limit cua goi tra tien cao nhat (Pro). Duoi muc do la
                 con so co the dat duoc tren mot goi nao do; tren do chi Enterprise/Custom (khong gioi
                 han) moi cham toi. Khac Zalo — ben do 100 la so an toan chong khoa nick, doc lap voi goi. */}
             {!formErrors.userDailySendLimit && Number(formData.userDailySendLimit) > 2000 && (
-              <p className="text-xs text-amber-600">{t('emailSettings.dailySendLimitHighWarning')}</p>
+              <p className="text-xs text-amber-600 dark:text-amber-400">{t('emailSettings.dailySendLimitHighWarning')}</p>
             )}
-            <p className="text-xs text-slate-500">{t('emailSettings.dailySendLimitEmptyHint')}</p>
+            <p className="text-xs text-slate-500 dark:text-dk-text2">{t('emailSettings.dailySendLimitEmptyHint')}</p>
           </div>
         </SectionCard>
 
@@ -903,14 +903,14 @@ const EmailSettings = () => {
         {renderFromPreview()}
 
         {/* Actions */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100">
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100 dark:border-dk-border/80">
           <div className="flex flex-wrap items-center gap-2">
             {isSmtpMode && (
               <button
                 type="button"
                 onClick={handleTestConnection}
                 disabled={isTestingConnection || !formData.smtpHost || !formData.smtpPort || !formData.smtpUsername || !formData.smtpPassword}
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface px-4 py-2 text-sm font-medium text-slate-700 dark:text-dk-text transition hover:bg-slate-50 dark:hover:bg-dk-raised disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isTestingConnection ? (
                   <>
@@ -929,7 +929,7 @@ const EmailSettings = () => {
               <button
                 type="button"
                 onClick={() => setShowTestEmailModal(true)}
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface px-4 py-2 text-sm font-medium text-slate-700 dark:text-dk-text transition hover:bg-slate-50 dark:hover:bg-dk-raised"
               >
                 <HiOutlineMail className="h-4 w-4" />
                 {t('emailSettings.sendTestEmail')}
@@ -944,7 +944,7 @@ const EmailSettings = () => {
                 setIsAddingNew(false);
                 resetForm();
               }}
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              className="rounded-lg border border-slate-300 dark:border-dk-border bg-white dark:bg-dk-surface px-4 py-2 text-sm font-medium text-slate-700 dark:text-dk-text transition hover:bg-slate-50 dark:hover:bg-dk-raised"
             >
               {t('common.cancel')}
             </button>
@@ -984,7 +984,7 @@ const EmailSettings = () => {
               type="button"
               onClick={refresh}
               disabled={isRefreshing}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-orange-200 hover:text-orange-700 disabled:opacity-70"
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface px-3 py-2 text-sm text-slate-700 dark:text-dk-text transition hover:border-orange-200 hover:text-orange-700 disabled:opacity-70"
             >
               <HiOutlineRefresh className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
               {t('common.refresh')}
@@ -1005,10 +1005,10 @@ const EmailSettings = () => {
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         {/* Left: Email List */}
         <div className="lg:col-span-1">
-          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100">
+          <div className="bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border rounded-2xl overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 dark:border-dk-border/80">
               <HiOutlineMail className="h-4 w-4 text-orange-500" />
-              <p className="text-sm font-semibold text-slate-900">{t('emailSettings.listTitle')}</p>
+              <p className="text-sm font-semibold text-slate-900 dark:text-dk-text">{t('emailSettings.listTitle')}</p>
             </div>
             {renderList()}
           </div>
@@ -1017,15 +1017,15 @@ const EmailSettings = () => {
         {/* Right: Form */}
         <div className="lg:col-span-2">
           {!selectedEmailId && !isAddingNew ? (
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 py-16 text-center">
-              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-orange-100 text-orange-600">
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-bg px-6 py-16 text-center">
+              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400">
                 <HiOutlineSparkles className="h-7 w-7" />
               </div>
-              <p className="text-base font-semibold text-slate-900">{t('emailSettings.selectEmailToView')}</p>
-              <p className="mt-1 max-w-xs text-sm text-slate-500">{t('emailSettings.selectEmailToEditTip')}</p>
+              <p className="text-base font-semibold text-slate-900 dark:text-dk-text">{t('emailSettings.selectEmailToView')}</p>
+              <p className="mt-1 max-w-xs text-sm text-slate-500 dark:text-dk-text2">{t('emailSettings.selectEmailToEditTip')}</p>
             </div>
           ) : (
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="rounded-2xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface p-5 shadow-sm">
               {renderForm()}
             </div>
           )}

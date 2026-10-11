@@ -329,11 +329,11 @@ const TopupPage = () => {
       )}
 
       {!structuralBlocked && (
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
-          <label className="block text-sm font-semibold text-slate-900" htmlFor="topup-months">
+        <div className="rounded-2xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface p-4 sm:p-5">
+          <label className="block text-sm font-semibold text-slate-900 dark:text-dk-text" htmlFor="topup-months">
             {t('topup.monthsLabel')}
           </label>
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="mt-1 text-xs text-slate-500 dark:text-dk-text2">
             {t('topup.monthsPlanRemaining', { n: maxMonths })}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -345,8 +345,8 @@ const TopupPage = () => {
                 onClick={() => setMonths(m)}
                 className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
                   months === m
-                    ? 'border-primary-600 bg-primary-50 text-primary-700'
-                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    ? 'border-primary-600 bg-primary-50 dark:bg-primary-950/30 text-primary-700 dark:text-primary-300'
+                    : 'border-slate-200 dark:border-dk-border text-slate-600 dark:text-dk-text hover:bg-slate-50 dark:hover:bg-dk-raised'
                 }`}
               >
                 {t('topup.monthsOption', { n: m })}
@@ -371,16 +371,16 @@ const TopupPage = () => {
           return (
             <div
               key={item.itemKey}
-              className={`rounded-2xl border bg-white p-4 sm:p-5 ${
-                disabled ? 'border-slate-100 opacity-60' : 'border-slate-200'
+              className={`rounded-2xl border bg-white dark:bg-dk-surface p-4 sm:p-5 ${
+                disabled ? 'border-slate-100 dark:border-dk-border/40 opacity-60' : 'border-slate-200 dark:border-dk-border'
               }`}
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <div className="font-semibold text-slate-900">
+                  <div className="font-semibold text-slate-900 dark:text-dk-text">
                     {t(ITEM_LABEL_KEYS[item.itemKey] || item.itemKey)}
                   </div>
-                  <div className="text-xs text-slate-500">
+                  <div className="text-xs text-slate-500 dark:text-dk-text2">
                     {fmtVnd(item.unitPrice)} / {t(UNIT_LABEL_KEYS[item.itemKey] || 'topup.units.generic')}
                     {' · '}
                     {t('topup.stepHint', { step: item.stepQty })}
@@ -389,29 +389,29 @@ const TopupPage = () => {
                     )}
                   </div>
                   {isStructural && (
-                    <div className="mt-1 text-xs text-slate-500">
+                    <div className="mt-1 text-xs text-slate-500 dark:text-dk-text2">
                       {disabled ? t('topup.structuralDisabledGrace') : t('topup.structuralHint')}
                     </div>
                   )}
                   {REMAINING_LABEL_KEY[item.itemKey] && remainingByItem[item.itemKey] != null && (
-                    <div className="mt-1 text-xs text-amber-700">
+                    <div className="mt-1 text-xs text-amber-700 dark:text-amber-400">
                       {t(REMAINING_LABEL_KEY[item.itemKey], { n: Number(remainingByItem[item.itemKey]).toLocaleString('vi-VN') })}
                     </div>
                   )}
                   {item.itemKey === 'storage_gb' && storageRemaining != null && (
-                    <div className="mt-1 text-xs text-amber-700">
+                    <div className="mt-1 text-xs text-amber-700 dark:text-amber-400">
                       {t('topup.storageRemaining', { n: Number(storageRemaining).toLocaleString('vi-VN') })}
                     </div>
                   )}
                 </div>
-                <div className="text-sm font-medium text-slate-700">{fmtVnd(subtotal)}</div>
+                <div className="text-sm font-medium text-slate-700 dark:text-dk-text">{fmtVnd(subtotal)}</div>
               </div>
               <div className="mt-3 flex items-center gap-2">
                 <button
                   type="button"
                   disabled={disabled}
                   onClick={() => adjustQty(item, -1)}
-                  className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded-lg border border-slate-200 dark:border-dk-border p-2 text-slate-600 dark:text-dk-text hover:bg-slate-50 dark:hover:bg-dk-raised disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
                   aria-label="decrease"
                 >
                   <HiMinus className="h-4 w-4" />
@@ -421,8 +421,8 @@ const TopupPage = () => {
                   inputMode="numeric"
                   disabled={disabled}
                   aria-invalid={Boolean(issue)}
-                  className={`w-28 rounded-lg border px-3 py-2 text-center text-sm disabled:bg-slate-50 ${
-                    issue ? 'border-red-300 text-red-600' : 'border-slate-200'
+                  className={`w-28 rounded-lg border px-3 py-2 text-center text-sm disabled:bg-slate-50 dark:disabled:bg-dk-bg dark:bg-dk-inset dark:text-dk-text ${
+                    issue ? 'border-red-300 dark:border-red-800 text-red-600 dark:text-red-400' : 'border-slate-200 dark:border-dk-border'
                   }`}
                   value={formatQtyInput(qty)}
                   onChange={(e) => setQty(item, e.target.value)}
@@ -431,17 +431,17 @@ const TopupPage = () => {
                   type="button"
                   disabled={disabled}
                   onClick={() => adjustQty(item, 1)}
-                  className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded-lg border border-slate-200 dark:border-dk-border p-2 text-slate-600 dark:text-dk-text hover:bg-slate-50 dark:hover:bg-dk-raised disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
                   aria-label="increase"
                 >
                   <HiPlus className="h-4 w-4" />
                 </button>
-                <span className="text-xs text-slate-400">
+                <span className="text-xs text-slate-400 dark:text-dk-muted">
                   {t(UNIT_LABEL_KEYS[item.itemKey] || 'topup.units.generic')}
                 </span>
               </div>
               {issue && (
-                <p className="mt-1.5 text-[11px] font-medium text-red-600 leading-snug">{issue}</p>
+                <p className="mt-1.5 text-[11px] font-medium text-red-600 dark:text-red-400 leading-snug">{issue}</p>
               )}
             </div>
           );
@@ -449,7 +449,7 @@ const TopupPage = () => {
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 px-3 py-2 text-sm text-red-700 dark:text-red-300">
           {error}
         </div>
       )}
@@ -465,8 +465,8 @@ const TopupPage = () => {
         />
       )}
 
-      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5 space-y-3">
-        <div className="flex items-center justify-between text-sm text-slate-600">
+      <div className="rounded-2xl border border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-surface p-4 sm:p-5 space-y-3">
+        <div className="flex items-center justify-between text-sm text-slate-600 dark:text-dk-text">
           <span>{t('topup.total')}</span>
           <span>
             {hasQuantityIssues
@@ -476,10 +476,10 @@ const TopupPage = () => {
                 : fmtVnd(total)}
           </span>
         </div>
-        <div className="flex items-center justify-between text-base font-bold text-slate-900">
+        <div className="flex items-center justify-between text-base font-bold text-slate-900 dark:text-dk-text">
           <div>
             <span className="block">{t('checkout.total')}</span>
-            <span className="text-[10px] text-slate-400 font-normal">
+            <span className="text-[10px] text-slate-400 dark:text-dk-muted font-normal">
               {t('checkout.finalPriceKct')}
             </span>
           </div>
@@ -492,26 +492,26 @@ const TopupPage = () => {
           </span>
         </div>
         {!hasQuantityIssues && !meetsMinimum && total > 0 && (
-          <p className="text-sm text-amber-700">
+          <p className="text-sm text-amber-700 dark:text-amber-400">
             {t('topup.shortfall', {
               min: fmtVnd(quote?.minOrderAmount || 50000),
               shortfall: fmtVnd(shortfall),
             })}
           </p>
         )}
-        <p className="text-xs text-slate-500">{t('topup.expiryNotice')}</p>
+        <p className="text-xs text-slate-500 dark:text-dk-text2">{t('topup.expiryNotice')}</p>
         <button
           type="button"
           disabled={!canPay}
           onClick={handlePay}
-          className="w-full rounded-xl bg-primary-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+          className="w-full rounded-xl bg-primary-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-dk-raised dark:disabled:text-dk-muted"
         >
           {paying ? t('topup.paying') : t('topup.pay')}
         </button>
         <button
           type="button"
           onClick={() => navigate('/pricing')}
-          className="w-full text-center text-sm font-medium text-slate-600 hover:text-slate-900"
+          className="w-full text-center text-sm font-medium text-slate-600 dark:text-dk-text2 hover:text-slate-900 dark:hover:text-dk-text transition-colors"
         >
           {t('topup.upgradePlanInstead')}
         </button>

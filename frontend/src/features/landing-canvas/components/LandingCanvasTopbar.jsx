@@ -103,30 +103,30 @@ export default function LandingCanvasTopbar({
   }, [form.title, onSave, tc]);
 
   return (
-    <div className="h-[52px] bg-white border-b border-gray-200/90 flex items-center justify-between px-3 sm:px-4 shrink-0 select-none shadow-2xs z-20 gap-2">
+    <div className="h-[52px] bg-white dark:bg-dk-surface border-b border-gray-200/90 dark:border-dk-border flex items-center justify-between px-3 sm:px-4 shrink-0 select-none shadow-2xs z-20 gap-2">
       {/* Cụm Trái: Nút Quay lại + Ô nhập Tên trang */}
       <div className="flex items-center gap-2 min-w-0 flex-1 max-w-[280px] lg:max-w-xs shrink-0">
         <button
           type="button"
           onClick={onClose}
-          className="p-1.5 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors shrink-0"
+          className="p-1.5 rounded-xl text-gray-500 dark:text-dk-text2 hover:text-gray-900 dark:hover:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-raised transition-colors shrink-0"
           title={tc('backTooltip')}
           ref={closeBtnRef}
         >
           <HiOutlineChevronLeft className="w-5 h-5" />
         </button>
 
-        <div className="flex items-center gap-2 bg-gray-50/90 hover:bg-gray-100/80 focus-within:bg-white border border-gray-200/90 focus-within:border-orange-500 focus-within:ring-2 focus-within:ring-orange-500/15 rounded-xl px-2.5 h-[36px] transition-all w-full box-border">
+        <div className="flex items-center gap-2 bg-gray-50/90 dark:bg-dk-raised hover:bg-gray-100/80 dark:hover:bg-dk-strong focus-within:bg-white dark:focus-within:bg-dk-raised border border-gray-200/90 dark:border-dk-border/80 focus-within:border-orange-500 dark:focus-within:border-orange-500 focus-within:ring-2 focus-within:ring-orange-500/15 rounded-xl px-2.5 h-[36px] transition-all w-full box-border">
           <HiOutlineDocumentText className="w-4 h-4 text-orange-500 shrink-0" />
           <input
             type="text"
             value={form.title || ''}
             onChange={handleTitleChange}
             placeholder={tc('titlePlaceholder')}
-            className="text-xs sm:text-sm font-semibold text-gray-900 bg-transparent border-none focus:outline-none min-w-0 flex-1 placeholder:text-gray-400 placeholder:font-normal"
+            className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-dk-text bg-transparent border-none focus:outline-none min-w-0 flex-1 placeholder:text-gray-400 dark:placeholder:text-dk-muted placeholder:font-normal"
           />
           {!form.title?.trim() && (
-            <span className="text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200/70 px-1.5 py-0.5 rounded shrink-0 hidden sm:inline">
+            <span className="text-[10px] font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200/70 dark:border-amber-800/60 px-1.5 py-0.5 rounded shrink-0 hidden sm:inline">
               {tc('titleRequired')}
             </span>
           )}
@@ -137,14 +137,14 @@ export default function LandingCanvasTopbar({
       {showPreviewControls && (
         <div className="hidden md:flex items-center gap-2 min-w-0 shrink">
           {/* Mode Switcher: Xem trước / Mã HTML */}
-          <div className="flex items-center gap-0.5 p-1 bg-gray-100/90 rounded-xl">
+          <div className="flex items-center gap-0.5 p-1 bg-gray-100/90 dark:bg-dk-raised rounded-xl border border-transparent dark:border-dk-border">
             <button
               type="button"
               onClick={() => onPreviewModeChange?.('view')}
               className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
                 previewMode === 'view'
-                  ? 'bg-white text-orange-600 shadow-xs ring-1 ring-orange-500/20'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-white/60'
+                  ? 'bg-white dark:bg-dk-surface text-orange-600 dark:text-orange-400 shadow-xs ring-1 ring-orange-500/20'
+                  : 'text-gray-600 dark:text-dk-text hover:text-gray-900 dark:hover:text-dk-text hover:bg-white/60 dark:hover:bg-dk-raised/60'
               }`}
               title={tp('view')}
             >
@@ -156,8 +156,8 @@ export default function LandingCanvasTopbar({
               onClick={() => onPreviewModeChange?.('code')}
               className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
                 previewMode === 'code'
-                  ? 'bg-white text-orange-600 shadow-xs ring-1 ring-orange-500/20'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-white/60'
+                  ? 'bg-white dark:bg-dk-surface text-orange-600 dark:text-orange-400 shadow-xs ring-1 ring-orange-500/20'
+                  : 'text-gray-600 dark:text-dk-text hover:text-gray-900 dark:hover:text-dk-text hover:bg-white/60 dark:hover:bg-dk-raised/60'
               }`}
               title={tp('code')}
             >
@@ -186,20 +186,20 @@ export default function LandingCanvasTopbar({
                   onClick={onToggleChat}
                   className={`h-[34px] px-2.5 rounded-xl border text-xs font-semibold transition-all inline-flex items-center gap-1.5 ${
                     isChatCollapsed
-                      ? 'bg-orange-50 text-orange-700 border-orange-200 ring-2 ring-orange-500/15'
-                      : 'bg-white text-gray-600 border-gray-200/90 hover:bg-gray-50 hover:text-gray-900'
+                      ? 'bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-800/60 ring-2 ring-orange-500/15'
+                      : 'bg-white dark:bg-dk-raised text-gray-600 dark:text-dk-text border-gray-200/90 dark:border-dk-border/80 hover:bg-gray-50 dark:hover:bg-dk-strong hover:text-gray-900 dark:hover:text-dk-text'
                   }`}
-                  title={isChatCollapsed ? 'Mở lại khung chat AI' : 'Thu gọn chat để xem toàn cảnh'}
+                  title={isChatCollapsed ? tc('expandChatTooltip') : tc('collapseChatTooltip')}
                 >
                   {isChatCollapsed ? (
                     <>
                       <HiOutlineSparkles className="w-3.5 h-3.5 text-orange-600 animate-pulse" />
-                      <span className="hidden xl:inline">Mở chat</span>
+                      <span className="hidden xl:inline">{tc('openChatBtn')}</span>
                     </>
                   ) : (
                     <>
-                      <HiOutlineArrowsExpand className="w-3.5 h-3.5 text-gray-500" />
-                      <span className="hidden xl:inline">Toàn cảnh</span>
+                      <HiOutlineArrowsExpand className="w-3.5 h-3.5 text-gray-500 dark:text-dk-text2" />
+                      <span className="hidden xl:inline">{tc('fullscreenBtn')}</span>
                     </>
                   )}
                 </button>
@@ -218,7 +218,7 @@ export default function LandingCanvasTopbar({
           className={`h-[36px] px-3 rounded-xl text-xs sm:text-sm font-semibold transition-all inline-flex items-center justify-center gap-1.5 shadow-2xs box-border ${
             activeModalTab
               ? 'bg-orange-500 text-white shadow-xs border border-transparent'
-              : 'bg-gray-100/90 text-gray-700 hover:bg-gray-200 hover:text-gray-900 border border-gray-200/60'
+              : 'bg-gray-100/90 dark:bg-dk-raised text-gray-700 dark:text-dk-text hover:bg-gray-200 dark:hover:bg-dk-strong hover:text-gray-900 dark:hover:text-dk-text border border-gray-200/60 dark:border-dk-border/60'
           }`}
         >
           <HiOutlineCog className="w-4 h-4 shrink-0" />
@@ -232,20 +232,20 @@ export default function LandingCanvasTopbar({
             onClick={() => setToolsOpen((prev) => !prev)}
             className={`h-[36px] px-2.5 sm:px-3 rounded-xl text-xs sm:text-sm font-medium transition-all inline-flex items-center justify-center gap-1 border shadow-2xs box-border ${
               toolsOpen
-                ? 'bg-orange-50 text-orange-700 border-orange-200 ring-2 ring-orange-500/15'
-                : 'bg-white text-gray-700 border-gray-200/90 hover:bg-gray-50 hover:text-gray-900'
+                ? 'bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-800/60 ring-2 ring-orange-500/15'
+                : 'bg-white dark:bg-dk-raised text-gray-700 dark:text-dk-text border-gray-200/90 dark:border-dk-border/80 hover:bg-gray-50 dark:hover:bg-dk-strong hover:text-gray-900 dark:hover:text-dk-text'
             }`}
-            title="Công cụ bổ trợ & Mẫu"
+            title={tc('toolsTooltip')}
           >
-            <HiOutlineAdjustments className="w-3.5 h-3.5 text-gray-500" />
-            <span className="hidden md:inline">Công cụ</span>
+            <HiOutlineAdjustments className="w-3.5 h-3.5 text-gray-500 dark:text-dk-text2" />
+            <span className="hidden md:inline">{tc('tools')}</span>
             <HiOutlineChevronDown className={`w-3 h-3 text-gray-400 transition-transform duration-150 ${toolsOpen ? 'rotate-180 text-orange-600' : ''}`} />
           </button>
 
           {toolsOpen && (
-            <div className="absolute right-0 mt-1.5 w-64 bg-white rounded-2xl shadow-xl border border-gray-200/90 py-1.5 z-50 animate-in fade-in slide-in-from-top-1 duration-150">
-              <div className="px-3.5 py-1.5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-                Mẫu & Trình dựng
+            <div className="absolute right-0 mt-1.5 w-64 bg-white dark:bg-dk-surface rounded-2xl shadow-xl border border-gray-200/90 dark:border-dk-border py-1.5 z-50 animate-in fade-in slide-in-from-top-1 duration-150">
+              <div className="px-3.5 py-1.5 text-[11px] font-semibold text-gray-400 dark:text-dk-text2 uppercase tracking-wider">
+                {tc('toolsSectionTemplates')}
               </div>
 
               <button
@@ -254,14 +254,14 @@ export default function LandingCanvasTopbar({
                   setToolsOpen(false);
                   onOpenTemplateGallery?.();
                 }}
-                className="w-full text-left px-3.5 py-2 text-xs sm:text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-900 flex items-center gap-2.5 transition-colors"
+                className="w-full text-left px-3.5 py-2 text-xs sm:text-sm text-gray-700 dark:text-dk-text hover:bg-orange-50 dark:hover:bg-orange-950/30 hover:text-orange-900 dark:hover:text-orange-300 flex items-center gap-2.5 transition-colors"
               >
-                <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                <div className="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
                   <HiOutlineTemplate className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
-                  <div className="font-semibold text-gray-800">{tc('templates')}</div>
-                  <div className="text-[11px] text-gray-500 truncate">Chọn từ thư viện mẫu có sẵn</div>
+                  <div className="font-semibold text-gray-800 dark:text-dk-text">{tc('templates')}</div>
+                  <div className="text-[11px] text-gray-500 dark:text-dk-text2 truncate">{tc('toolsTemplatesDesc')}</div>
                 </div>
               </button>
 
@@ -271,14 +271,14 @@ export default function LandingCanvasTopbar({
                   setToolsOpen(false);
                   onOpenVisualEditor?.();
                 }}
-                className="w-full text-left px-3.5 py-2 text-xs sm:text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-900 flex items-center gap-2.5 transition-colors"
+                className="w-full text-left px-3.5 py-2 text-xs sm:text-sm text-gray-700 dark:text-dk-text hover:bg-orange-50 dark:hover:bg-orange-950/30 hover:text-orange-900 dark:hover:text-orange-300 flex items-center gap-2.5 transition-colors"
               >
-                <div className="w-7 h-7 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+                <div className="w-7 h-7 rounded-lg bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
                   <HiOutlineViewGrid className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
-                  <div className="font-semibold text-gray-800">{tc('visualEditor')}</div>
-                  <div className="text-[11px] text-gray-500 truncate">Chỉnh sửa trực quan kéo thả khối</div>
+                  <div className="font-semibold text-gray-800 dark:text-dk-text">{tc('visualEditor')}</div>
+                  <div className="text-[11px] text-gray-500 dark:text-dk-text2 truncate">{tc('toolsVisualEditorDesc')}</div>
                 </div>
               </button>
 
@@ -288,21 +288,21 @@ export default function LandingCanvasTopbar({
                   setToolsOpen(false);
                   onOpenImportHtml?.();
                 }}
-                className="w-full text-left px-3.5 py-2 text-xs sm:text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-900 flex items-center gap-2.5 transition-colors"
+                className="w-full text-left px-3.5 py-2 text-xs sm:text-sm text-gray-700 dark:text-dk-text hover:bg-orange-50 dark:hover:bg-orange-950/30 hover:text-orange-900 dark:hover:text-orange-300 flex items-center gap-2.5 transition-colors"
               >
-                <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                <div className="w-7 h-7 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
                   <HiOutlineCode className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
-                  <div className="font-semibold text-gray-800">{ti('button')}</div>
-                  <div className="text-[11px] text-gray-500 truncate">Nhập hoặc dán mã HTML có sẵn</div>
+                  <div className="font-semibold text-gray-800 dark:text-dk-text">{ti('button')}</div>
+                  <div className="text-[11px] text-gray-500 dark:text-dk-text2 truncate">{tc('toolsImportHtmlDesc')}</div>
                 </div>
               </button>
 
-              <div className="my-1 border-t border-gray-100" />
+              <div className="my-1 border-t border-gray-100 dark:border-dk-border" />
 
-              <div className="px-3.5 py-1.5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-                Lưu trữ & Lịch sử
+              <div className="px-3.5 py-1.5 text-[11px] font-semibold text-gray-400 dark:text-dk-text2 uppercase tracking-wider">
+                {tc('toolsSectionStorage')}
               </div>
 
               <button
@@ -311,14 +311,14 @@ export default function LandingCanvasTopbar({
                   setToolsOpen(false);
                   onOpenSaveTemplate?.();
                 }}
-                className="w-full text-left px-3.5 py-2 text-xs sm:text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-900 flex items-center gap-2.5 transition-colors"
+                className="w-full text-left px-3.5 py-2 text-xs sm:text-sm text-gray-700 dark:text-dk-text hover:bg-orange-50 dark:hover:bg-orange-950/30 hover:text-orange-900 dark:hover:text-orange-300 flex items-center gap-2.5 transition-colors"
               >
-                <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
                   <HiOutlineBookmark className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
-                  <div className="font-semibold text-gray-800">{tc('saveAsTemplate')}</div>
-                  <div className="text-[11px] text-gray-500 truncate">Lưu trang này vào kho mẫu riêng</div>
+                  <div className="font-semibold text-gray-800 dark:text-dk-text">{tc('saveAsTemplate')}</div>
+                  <div className="text-[11px] text-gray-500 dark:text-dk-text2 truncate">{tc('toolsSaveTemplateDesc')}</div>
                 </div>
               </button>
 
@@ -329,14 +329,14 @@ export default function LandingCanvasTopbar({
                     setToolsOpen(false);
                     onOpenVersionHistory?.();
                   }}
-                  className="w-full text-left px-3.5 py-2 text-xs sm:text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-900 flex items-center gap-2.5 transition-colors"
+                  className="w-full text-left px-3.5 py-2 text-xs sm:text-sm text-gray-700 dark:text-dk-text hover:bg-orange-50 dark:hover:bg-orange-950/30 hover:text-orange-900 dark:hover:text-orange-300 flex items-center gap-2.5 transition-colors"
                 >
-                  <div className="w-7 h-7 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
+                  <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-dk-raised text-slate-600 dark:text-dk-text flex items-center justify-center shrink-0">
                     <HiOutlineClock className="w-4 h-4" />
                   </div>
                   <div className="min-w-0">
-                    <div className="font-semibold text-gray-800">{tc('history')}</div>
-                    <div className="text-[11px] text-gray-500 truncate">Xem các phiên bản đã lưu</div>
+                    <div className="font-semibold text-gray-800 dark:text-dk-text">{tc('history')}</div>
+                    <div className="text-[11px] text-gray-500 dark:text-dk-text2 truncate">{tc('toolsHistoryDesc')}</div>
                   </div>
                 </button>
               ) : null}
@@ -351,23 +351,23 @@ export default function LandingCanvasTopbar({
             target="_blank"
             rel="noopener noreferrer"
             title={tc('openLinkedForm')}
-            className="h-[36px] px-2.5 rounded-xl transition-colors text-blue-700 bg-blue-50/80 hover:bg-blue-100 border border-blue-200/80 inline-flex items-center justify-center gap-1.5 text-xs font-semibold box-border"
+            className="h-[36px] px-2.5 rounded-xl transition-colors text-blue-700 dark:text-blue-400 bg-blue-50/80 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200/80 dark:border-blue-800/60 inline-flex items-center justify-center gap-1.5 text-xs font-semibold box-border"
           >
             <HiOutlineClipboardList className="w-4 h-4" />
             <span className="hidden lg:inline">{tc('openLinkedForm')}</span>
           </a>
         ) : null}
 
-        <div className="w-px h-5 bg-gray-200 mx-0.5 sm:mx-1" />
+        <div className="w-px h-5 bg-gray-200 dark:bg-dk-raised mx-0.5 sm:mx-1" />
 
         {/* 2 Nút hành động chính: Đóng & Lưu */}
         <div className="inline-flex items-center gap-1.5 sm:gap-2">
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex items-center justify-center h-[36px] px-3 sm:px-3.5 rounded-xl bg-white text-gray-700 border border-gray-300/90 hover:bg-gray-50 hover:border-gray-400 active:bg-gray-100 text-xs sm:text-sm font-semibold transition-all shadow-2xs gap-1 box-border"
+            className="inline-flex items-center justify-center h-[36px] px-3 sm:px-3.5 rounded-xl bg-white dark:bg-dk-raised text-gray-700 dark:text-dk-text border border-gray-300/90 dark:border-dk-border/80 hover:bg-gray-50 dark:hover:bg-dk-strong hover:border-gray-400 dark:hover:border-dk-border-strong active:bg-gray-100 dark:active:bg-dk-raised text-xs sm:text-sm font-semibold transition-all shadow-2xs gap-1 box-border"
           >
-            <HiOutlineX className="w-3.5 h-3.5 text-gray-500" />
+            <HiOutlineX className="w-3.5 h-3.5 text-gray-500 dark:text-dk-text2" />
             <span>{tc('close')}</span>
           </button>
 

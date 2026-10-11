@@ -21,14 +21,14 @@ export default function AdminSubscriptionReminderScheduleSection({
   onSave,
 }) {
   if (isLoading) {
-    return <div className="py-16 text-center text-sm text-gray-400">{t('common.loading')}</div>;
+    return <div className="py-16 text-center text-sm text-gray-400 dark:text-dk-muted">{t('common.loading')}</div>;
   }
 
   return (
     <div className="grid gap-6 xl:grid-cols-2">
-      <section className="space-y-5 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <section className="space-y-5 rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-dk-border dark:bg-dk-surface">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="font-semibold text-gray-900">{t('adminSubscriptionReminderSchedule.title')}</h2>
+          <h2 className="font-semibold text-gray-900 dark:text-dk-text">{t('adminSubscriptionReminderSchedule.title')}</h2>
           <button
             type="button"
             className="btn btn-primary inline-flex items-center gap-2"
@@ -39,16 +39,16 @@ export default function AdminSubscriptionReminderScheduleSection({
             {isSaving ? t('common.saving') : t('common.save')}
           </button>
         </div>
-        <p className="text-sm text-gray-500">{t('adminSubscriptionReminderSchedule.subtitle')}</p>
+        <p className="text-sm text-gray-500 dark:text-dk-text2">{t('adminSubscriptionReminderSchedule.subtitle')}</p>
 
-        <div className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
-          <HiOutlineClock className="mt-0.5 h-4 w-4 flex-shrink-0 text-gray-400" />
+        <div className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600 dark:border-dk-border dark:bg-dk-raised dark:text-dk-text">
+          <HiOutlineClock className="mt-0.5 h-4 w-4 flex-shrink-0 text-gray-400 dark:text-dk-muted" />
           <span>{t('adminSubscriptionReminderSchedule.fixedTimeNote')}</span>
         </div>
 
         <div className="space-y-2">
-          <span className="text-sm font-medium text-gray-700">{t('adminSubscriptionReminderSchedule.daysLabel')}</span>
-          <p className="text-xs text-gray-500">{t('adminSubscriptionReminderSchedule.daysHint')}</p>
+          <span className="text-sm font-medium text-gray-700 dark:text-dk-text">{t('adminSubscriptionReminderSchedule.daysLabel')}</span>
+          <p className="text-xs text-gray-500 dark:text-dk-text2">{t('adminSubscriptionReminderSchedule.daysHint')}</p>
 
           <div className="space-y-2">
             {draftDays.map((day, index) => (
@@ -60,14 +60,14 @@ export default function AdminSubscriptionReminderScheduleSection({
                   onChange={(event) => onChangeDay(index, event.target.value)}
                   min={1}
                   max={365}
-                  className="w-28 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                  className="w-28 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text"
                 />
-                <span className="text-sm text-gray-500">{t('adminSubscriptionReminderSchedule.daysUnit')}</span>
+                <span className="text-sm text-gray-500 dark:text-dk-text2">{t('adminSubscriptionReminderSchedule.daysUnit')}</span>
                 <button
                   type="button"
                   aria-label={t('adminSubscriptionReminderSchedule.removeDay')}
                   onClick={() => onRemoveDay(index)}
-                  className="rounded-md p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                  className="rounded-md p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:text-dk-muted dark:hover:bg-red-950/40 dark:hover:text-red-400"
                 >
                   <HiOutlineTrash className="h-4 w-4" />
                 </button>
@@ -86,7 +86,7 @@ export default function AdminSubscriptionReminderScheduleSection({
         </div>
 
         {errors.length > 0 && (
-          <div role="alert" className="space-y-1 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <div role="alert" className="space-y-1 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
             {errors.map((message) => (
               <p key={message}>{message}</p>
             ))}
@@ -94,14 +94,14 @@ export default function AdminSubscriptionReminderScheduleSection({
         )}
 
         {showEmptyWarning && (
-          <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
             <p className="font-semibold">{t('adminSubscriptionReminderSchedule.emptyWarningTitle')}</p>
             <p className="mt-1">{t('adminSubscriptionReminderSchedule.emptyWarningBody')}</p>
           </div>
         )}
 
         {updatedAt && (
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-gray-400 dark:text-dk-muted">
             {t('adminSubscriptionReminderSchedule.updatedAt', {
               time: new Date(updatedAt).toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN'),
             })}
@@ -109,9 +109,9 @@ export default function AdminSubscriptionReminderScheduleSection({
         )}
       </section>
 
-      <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-        <h2 className="font-semibold text-gray-900">{t('adminSubscriptionReminderSchedule.previewTitle')}</h2>
-        <p className="mt-3 rounded-lg bg-orange-50 p-4 text-sm text-orange-800">{previewText}</p>
+      <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-dk-border dark:bg-dk-surface">
+        <h2 className="font-semibold text-gray-900 dark:text-dk-text">{t('adminSubscriptionReminderSchedule.previewTitle')}</h2>
+        <p className="mt-3 rounded-lg bg-orange-50 p-4 text-sm text-orange-800 dark:border dark:border-orange-900/50 dark:bg-orange-950/30 dark:text-orange-300">{previewText}</p>
       </section>
     </div>
   );

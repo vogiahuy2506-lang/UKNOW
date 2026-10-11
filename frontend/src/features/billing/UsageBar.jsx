@@ -51,13 +51,13 @@ export default function UsageBar({
 
   if (isUnlimitedPlanLimit(limit)) {
     return (
-      <div className="flex items-center justify-between py-2 px-1.5 hover:bg-gray-50/70 rounded-lg transition-colors">
-        <span className="flex items-center gap-2 text-sm text-gray-700">
-          {Icon && <Icon className="w-4 h-4 text-gray-400 shrink-0" />}
+      <div className="flex items-center justify-between py-2 px-1.5 hover:bg-gray-50/70 dark:hover:bg-dk-raised/40 rounded-lg transition-colors">
+        <span className="flex items-center gap-2 text-sm text-gray-700 dark:text-dk-text">
+          {Icon && <Icon className="w-4 h-4 text-gray-400 dark:text-dk-text2 shrink-0" />}
           <span className="font-medium">{label}</span>
         </span>
         <span
-          className="inline-flex items-center text-xs font-medium text-gray-600 bg-gray-100/90 hover:bg-gray-100 px-2.5 py-0.5 rounded-full border border-gray-200/70 transition-colors cursor-default"
+          className="inline-flex items-center text-xs font-medium text-gray-600 bg-gray-100/90 hover:bg-gray-100 px-2.5 py-0.5 rounded-full border border-gray-200/70 dark:bg-dk-raised dark:text-dk-text dark:border-dk-border transition-colors cursor-default"
           title={
             usedNumber > 0
               ? `Đang sử dụng: ${formatNumber(usedNumber)} · Hạn mức: ${t('accountProfileModal.unlimited')}`
@@ -77,21 +77,21 @@ export default function UsageBar({
   const isDanger = pct >= 95;
   const isWarning = pct >= 80;
   const barColor = isDanger ? 'bg-red-500' : isWarning ? 'bg-orange-400' : 'bg-primary-500';
-  const textColor = isDanger ? 'text-red-600' : isWarning ? 'text-orange-500' : 'text-gray-700';
+  const textColor = isDanger ? 'text-red-600 dark:text-red-400' : isWarning ? 'text-orange-500 dark:text-orange-400' : 'text-gray-700 dark:text-dk-text';
   const showAddonsHint = usingAddons && usedNumber > limitNumber;
 
   return (
     <div className="py-1 px-1">
       <div className="flex items-center justify-between mb-1.5">
-        <span className="flex items-center gap-2 text-sm text-gray-700">
-          {Icon && <Icon className="w-4 h-4 text-gray-400 shrink-0" />}
+        <span className="flex items-center gap-2 text-sm text-gray-700 dark:text-dk-text">
+          {Icon && <Icon className="w-4 h-4 text-gray-400 dark:text-dk-text2 shrink-0" />}
           <span className="font-medium">{label}</span>
         </span>
         <span className={`text-xs font-semibold tabular-nums ${textColor}`}>
           {formatNumber(usedNumber)} / {formatNumber(limitNumber)}
         </span>
       </div>
-      <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden shadow-inner">
+      <div className="h-2 w-full rounded-full bg-gray-100 dark:bg-dk-raised overflow-hidden shadow-inner">
         <div className={`h-full rounded-full transition-all duration-300 ${barColor}`} style={{ width: `${pct}%` }} />
       </div>
       {showAddonsHint && (

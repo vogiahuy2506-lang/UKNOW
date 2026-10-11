@@ -35,7 +35,7 @@ export default function VariablesHelper({ onInsert }) {
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
       >
         <FaInfoCircle />
         Biến số có sẵn
@@ -47,10 +47,10 @@ export default function VariablesHelper({ onInsert }) {
             className="fixed inset-0 z-10"
             onClick={() => setIsOpen(false)}
           />
-          <div className="absolute z-20 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200">
-            <div className="p-3 border-b border-gray-100">
-              <h4 className="font-medium text-gray-900">Biến số có sẵn</h4>
-              <p className="text-xs text-gray-500 mt-1">
+          <div className="absolute z-20 mt-2 w-80 bg-white dark:bg-dk-surface rounded-lg shadow-lg border border-gray-200 dark:border-dk-border">
+            <div className="p-3 border-b border-gray-100 dark:border-dk-border">
+              <h4 className="font-medium text-gray-900 dark:text-dk-text">Biến số có sẵn</h4>
+              <p className="text-xs text-gray-500 dark:text-dk-text2 mt-1">
                 Click để chèn vào nội dung hoặc copy
               </p>
             </div>
@@ -58,19 +58,19 @@ export default function VariablesHelper({ onInsert }) {
               {AVAILABLE_VARIABLES.map(variable => (
                 <div
                   key={variable.key}
-                  className="flex items-center justify-between p-2 rounded hover:bg-gray-50 group"
+                  className="flex items-center justify-between p-2 rounded hover:bg-gray-50 dark:hover:bg-dk-raised/50 group"
                 >
                   <div>
-                    <code className="text-sm bg-gray-100 px-1.5 py-0.5 rounded text-purple-700">
+                    <code className="text-sm bg-gray-100 dark:bg-dk-raised px-1.5 py-0.5 rounded text-purple-700 dark:text-purple-300">
                       {variable.key}
                     </code>
-                    <p className="text-xs text-gray-500 mt-0.5">{variable.description}</p>
+                    <p className="text-xs text-gray-500 dark:text-dk-text2 mt-0.5">{variable.description}</p>
                   </div>
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       type="button"
                       onClick={() => handleInsert(variable)}
-                      className="p-1.5 text-blue-600 hover:bg-blue-100 rounded"
+                      className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-950/50 rounded"
                       title="Chèn"
                     >
                       +
@@ -78,11 +78,11 @@ export default function VariablesHelper({ onInsert }) {
                     <button
                       type="button"
                       onClick={() => handleCopy(variable)}
-                      className="p-1.5 text-gray-500 hover:bg-gray-100 rounded"
+                      className="p-1.5 text-gray-500 dark:text-dk-text2 hover:bg-gray-100 dark:hover:bg-dk-raised rounded"
                       title="Copy"
                     >
                       {copied === variable.key ? (
-                        <FaCheck className="text-green-600" size={14} />
+                        <FaCheck className="text-green-600 dark:text-green-400" size={14} />
                       ) : (
                         <FaCopy size={14} />
                       )}
@@ -91,8 +91,8 @@ export default function VariablesHelper({ onInsert }) {
                 </div>
               ))}
             </div>
-            <div className="p-2 border-t border-gray-100 bg-gray-50 rounded-b-lg">
-              <p className="text-xs text-gray-500">
+            <div className="p-2 border-t border-gray-100 dark:border-dk-border bg-gray-50 dark:bg-dk-raised rounded-b-lg">
+              <p className="text-xs text-gray-500 dark:text-dk-text2">
                 Biến sẽ được thay thế tự động khi gửi email
               </p>
             </div>

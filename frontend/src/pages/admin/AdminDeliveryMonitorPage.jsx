@@ -73,8 +73,8 @@ const categoryClass = {
 };
 
 const severityClass = {
-  critical: 'border-red-100 bg-red-50 text-red-700',
-  warning: 'border-amber-100 bg-amber-50 text-amber-700',
+  critical: 'border-red-100 bg-red-50 text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300',
+  warning: 'border-amber-100 bg-amber-50 text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300',
 };
 
 const KNOWN_RUN_STATUSES = ['running', 'completed', 'stopped', 'failed'];
@@ -90,18 +90,18 @@ const runStatusBadgeClass = (run) => {
 };
 
 const toneMap = {
-  green: 'bg-emerald-50 text-emerald-600',
-  red: 'bg-red-50 text-red-600',
-  neutral: 'bg-gray-100 text-gray-600',
+  green: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
+  red: 'bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400',
+  neutral: 'bg-gray-100 text-gray-600 dark:bg-dk-raised dark:text-dk-text',
 };
 
 const SummaryCard = ({ testId, icon: Icon, label, value, tone = 'green', children }) => (
   <div className="card p-5" data-testid={testId}>
     <div className="flex items-start justify-between gap-4">
       <div className="min-w-0">
-        <p className="truncate text-sm text-gray-500">{label}</p>
-        <p className="mt-1 text-2xl font-bold text-gray-900" data-testid={`${testId}-value`}>{value}</p>
-        <div className="mt-1 space-y-1 text-xs text-gray-500">{children}</div>
+        <p className="truncate text-sm text-gray-500 dark:text-dk-text2">{label}</p>
+        <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-dk-text" data-testid={`${testId}-value`}>{value}</p>
+        <div className="mt-1 space-y-1 text-xs text-gray-500 dark:text-dk-text2">{children}</div>
       </div>
       <div className={`rounded-xl p-3 ${toneMap[tone] || toneMap.green}`}>
         <Icon className="h-6 w-6" />
@@ -114,10 +114,10 @@ const ChartTooltip = ({ active, payload, label, t }) => {
   if (!active || !payload?.length) return null;
   const rows = payload.filter((item) => Number(item.value) > 0);
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-3 text-sm shadow-lg">
-      <p className="mb-1 font-semibold text-gray-700">{label}</p>
+    <div className="rounded-xl border border-gray-200 bg-white p-3 text-sm shadow-lg dark:border-dk-border dark:bg-dk-surface">
+      <p className="mb-1 font-semibold text-gray-700 dark:text-dk-text">{label}</p>
       {rows.length === 0 ? (
-        <p className="text-gray-400">{t('adminDeliveryMonitor.chart.none')}</p>
+        <p className="text-gray-400 dark:text-dk-muted">{t('adminDeliveryMonitor.chart.none')}</p>
       ) : rows.map((item) => (
         <p key={item.dataKey} style={{ color: item.color }}>
           {t(`adminDeliveryMonitor.channel.${item.dataKey}`)}: <strong>{fmt(item.value)}</strong>
@@ -155,13 +155,13 @@ const SignalsBanner = ({ signals, t }) => {
 
 const ReasonsTable = ({ reasons, t }) => (
   <div className="card overflow-hidden" data-testid="reasons-table">
-    <div className="border-b border-gray-100 px-5 py-4">
-      <h2 className="text-sm font-semibold text-gray-700">{t('adminDeliveryMonitor.reasons.title')}</h2>
-      <p className="mt-0.5 text-xs text-gray-400">{t('adminDeliveryMonitor.reasons.desc')}</p>
+    <div className="border-b border-gray-100 dark:border-dk-border px-5 py-4">
+      <h2 className="text-sm font-semibold text-gray-700 dark:text-dk-text">{t('adminDeliveryMonitor.reasons.title')}</h2>
+      <p className="mt-0.5 text-xs text-gray-400 dark:text-dk-muted">{t('adminDeliveryMonitor.reasons.desc')}</p>
     </div>
     <div className="overflow-x-auto">
       <table className="min-w-full text-sm">
-        <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+        <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500 dark:bg-dk-raised dark:text-dk-text2">
           <tr>
             <th className="px-5 py-3">{t('adminDeliveryMonitor.reasons.col.reason')}</th>
             <th className="px-5 py-3">{t('adminDeliveryMonitor.reasons.col.channel')}</th>
@@ -169,22 +169,22 @@ const ReasonsTable = ({ reasons, t }) => (
             <th className="px-5 py-3">{t('adminDeliveryMonitor.reasons.col.lastAt')}</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-gray-100 dark:divide-dk-border">
           {reasons.length === 0 ? (
-            <tr><td colSpan={4} className="px-5 py-8 text-center text-gray-400">{t('adminDeliveryMonitor.reasons.empty')}</td></tr>
+            <tr><td colSpan={4} className="px-5 py-8 text-center text-gray-400 dark:text-dk-muted">{t('adminDeliveryMonitor.reasons.empty')}</td></tr>
           ) : reasons.map((item, index) => (
             <tr key={`${item.channel}-${item.reason ?? 'none'}-${index}`} data-testid="reason-row">
               <td className="px-5 py-3">
                 <span className={`badge mr-2 text-xs ${categoryClass[item.category] || 'badge-gray'}`}>
                   {t(`adminDeliveryMonitor.failureCategory.${item.category}`)}
                 </span>
-                <span className="text-gray-700" title={item.reason || ''}>
+                <span className="text-gray-700 dark:text-dk-text" title={item.reason || ''}>
                   {item.reason || t('adminDeliveryMonitor.reasons.unknown')}
                 </span>
               </td>
-              <td className="whitespace-nowrap px-5 py-3 text-gray-700">{t(`adminDeliveryMonitor.channel.${item.channel}`)}</td>
-              <td className="whitespace-nowrap px-5 py-3 font-medium text-red-600" data-testid="reason-count">{fmt(item.count)}</td>
-              <td className="whitespace-nowrap px-5 py-3 text-gray-500">{formatVnDayMonthTime(item.lastAt)}</td>
+              <td className="whitespace-nowrap px-5 py-3 text-gray-700 dark:text-dk-text">{t(`adminDeliveryMonitor.channel.${item.channel}`)}</td>
+              <td className="whitespace-nowrap px-5 py-3 font-medium text-red-600 dark:text-red-400" data-testid="reason-count">{fmt(item.count)}</td>
+              <td className="whitespace-nowrap px-5 py-3 text-gray-500 dark:text-dk-text2">{formatVnDayMonthTime(item.lastAt)}</td>
             </tr>
           ))}
         </tbody>
@@ -195,22 +195,22 @@ const ReasonsTable = ({ reasons, t }) => (
 
 const OwnersTable = ({ owners, onSelectOwner, t }) => (
   <div className="card overflow-hidden" data-testid="owners-table">
-    <div className="border-b border-gray-100 px-5 py-4">
-      <h2 className="text-sm font-semibold text-gray-700">{t('adminDeliveryMonitor.owners.title')}</h2>
-      <p className="mt-0.5 text-xs text-gray-400">{t('adminDeliveryMonitor.owners.desc')}</p>
+    <div className="border-b border-gray-100 dark:border-dk-border px-5 py-4">
+      <h2 className="text-sm font-semibold text-gray-700 dark:text-dk-text">{t('adminDeliveryMonitor.owners.title')}</h2>
+      <p className="mt-0.5 text-xs text-gray-400 dark:text-dk-muted">{t('adminDeliveryMonitor.owners.desc')}</p>
     </div>
     <div className="overflow-x-auto">
       <table className="min-w-full text-sm">
-        <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+        <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500 dark:bg-dk-raised dark:text-dk-text2">
           <tr>
             <th className="px-5 py-3">{t('adminDeliveryMonitor.owners.col.owner')}</th>
             <th className="px-5 py-3">{t('adminDeliveryMonitor.owners.col.sent')}</th>
             <th className="px-5 py-3">{t('adminDeliveryMonitor.owners.col.failed')}</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-gray-100 dark:divide-dk-border">
           {owners.length === 0 ? (
-            <tr><td colSpan={3} className="px-5 py-8 text-center text-gray-400">{t('adminDeliveryMonitor.owners.empty')}</td></tr>
+            <tr><td colSpan={3} className="px-5 py-8 text-center text-gray-400 dark:text-dk-muted">{t('adminDeliveryMonitor.owners.empty')}</td></tr>
           ) : owners.map((owner) => (
             <tr key={owner.ownerId} data-testid={`owner-row-${owner.ownerId}`}>
               <td className="px-5 py-3">
@@ -220,14 +220,14 @@ const OwnersTable = ({ owners, onSelectOwner, t }) => (
                   title={t('adminDeliveryMonitor.owners.filterTitle')}
                   className="text-left hover:underline focus:outline-none"
                 >
-                  <span className="font-semibold text-gray-900">{owner.name || `#${owner.ownerId}`}</span>
+                  <span className="font-semibold text-gray-900 dark:text-dk-text">{owner.name || `#${owner.ownerId}`}</span>
                   {owner.username && owner.username !== owner.name && (
-                    <span className="ml-1.5 text-xs text-gray-400">@{owner.username}</span>
+                    <span className="ml-1.5 text-xs text-gray-400 dark:text-dk-muted">@{owner.username}</span>
                   )}
                 </button>
               </td>
-              <td className="whitespace-nowrap px-5 py-3 font-medium text-gray-900" data-testid="owner-sent">{fmt(owner.sent)}</td>
-              <td className={`whitespace-nowrap px-5 py-3 ${owner.failed > 0 ? 'font-medium text-red-600' : 'text-gray-400'}`} data-testid="owner-failed">
+              <td className="whitespace-nowrap px-5 py-3 font-medium text-gray-900 dark:text-dk-text" data-testid="owner-sent">{fmt(owner.sent)}</td>
+              <td className={`whitespace-nowrap px-5 py-3 ${owner.failed > 0 ? 'font-medium text-red-600 dark:text-red-400' : 'text-gray-400 dark:text-dk-muted'}`} data-testid="owner-failed">
                 {fmt(owner.failed)}
               </td>
             </tr>
@@ -253,13 +253,13 @@ const RunsTable = ({ runs, now, t }) => {
 
   return (
     <div className="card overflow-hidden" data-testid="runs-table">
-      <div className="border-b border-gray-100 px-5 py-4">
-        <h2 className="text-sm font-semibold text-gray-700">{t('adminDeliveryMonitor.runs.title')}</h2>
-        <p className="mt-0.5 text-xs text-gray-400">{t('adminDeliveryMonitor.runs.desc')}</p>
+      <div className="border-b border-gray-100 dark:border-dk-border px-5 py-4">
+        <h2 className="text-sm font-semibold text-gray-700 dark:text-dk-text">{t('adminDeliveryMonitor.runs.title')}</h2>
+        <p className="mt-0.5 text-xs text-gray-400 dark:text-dk-muted">{t('adminDeliveryMonitor.runs.desc')}</p>
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+          <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500 dark:bg-dk-raised dark:text-dk-text2">
             <tr>
               <th className="px-5 py-3">{t('adminDeliveryMonitor.runs.col.campaign')}</th>
               <th className="px-5 py-3">{t('adminDeliveryMonitor.runs.col.owner')}</th>
@@ -269,38 +269,38 @@ const RunsTable = ({ runs, now, t }) => {
               <th className="px-5 py-3">{t('adminDeliveryMonitor.runs.col.failed')}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-gray-100 dark:divide-dk-border">
             {runs.length === 0 ? (
-              <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-400">{t('adminDeliveryMonitor.runs.empty')}</td></tr>
+              <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-400 dark:text-dk-muted">{t('adminDeliveryMonitor.runs.empty')}</td></tr>
             ) : runs.map((run) => {
               const typeMeta = getCampaignTypeMeta(run.campaignType);
               return (
                 <tr key={run.runId} data-testid={`run-row-${run.runId}`}>
                   <td className="px-5 py-3">
-                    <p className="font-semibold text-gray-900">{run.campaignName || `#${run.runId}`}</p>
+                    <p className="font-semibold text-gray-900 dark:text-dk-text">{run.campaignName || `#${run.runId}`}</p>
                     <span className={`mt-1 inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${typeMeta.className}`}>
                       {typeMeta.label}
                     </span>
                   </td>
-                  <td className="px-5 py-3 text-gray-700" data-testid="run-owner">
+                  <td className="px-5 py-3 text-gray-700 dark:text-dk-text" data-testid="run-owner">
                     <p>{run.ownerName || `#${run.ownerId}`}</p>
                     {run.ownerUsername && run.ownerUsername !== run.ownerName && (
-                      <p className="text-xs text-gray-400">@{run.ownerUsername}</p>
+                      <p className="text-xs text-gray-400 dark:text-dk-muted">@{run.ownerUsername}</p>
                     )}
                   </td>
-                  <td className="whitespace-nowrap px-5 py-3 text-gray-700">{formatVnDayMonthTime(run.startedAt)}</td>
+                  <td className="whitespace-nowrap px-5 py-3 text-gray-700 dark:text-dk-text">{formatVnDayMonthTime(run.startedAt)}</td>
                   <td className="px-5 py-3">
                     <span className={`badge text-xs ${runStatusBadgeClass(run)}`} data-testid="run-status">
                       {statusLabel(run)}
                     </span>
                   </td>
                   <td className="whitespace-nowrap px-5 py-3">
-                    <span className="font-medium text-gray-900" data-testid="run-sent">
+                    <span className="font-medium text-gray-900 dark:text-dk-text" data-testid="run-sent">
                       {run.planned != null ? `${fmt(run.sent)} / ${fmt(run.planned)}` : fmt(run.sent)}
                     </span>
                   </td>
                   <td className="whitespace-nowrap px-5 py-3" data-testid="run-failed">
-                    {run.failed > 0 ? <span className="font-medium text-red-600">{fmt(run.failed)}</span> : <span className="text-gray-400">0</span>}
+                    {run.failed > 0 ? <span className="font-medium text-red-600 dark:text-red-400">{fmt(run.failed)}</span> : <span className="text-gray-400 dark:text-dk-muted">0</span>}
                   </td>
                 </tr>
               );
@@ -399,11 +399,11 @@ export default function AdminDeliveryMonitorPage() {
   if (loading && !data) {
     return (
       <div className="space-y-6">
-        <div className="h-10 w-72 animate-pulse rounded-xl bg-gray-100" />
+        <div className="h-10 w-72 animate-pulse rounded-xl bg-gray-100 dark:bg-dk-raised" />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-          {[0, 1, 2, 3].map((item) => <div key={item} className="h-32 animate-pulse rounded-2xl bg-gray-100" />)}
+          {[0, 1, 2, 3].map((item) => <div key={item} className="h-32 animate-pulse rounded-2xl bg-gray-100 dark:bg-dk-raised" />)}
         </div>
-        <div className="h-80 animate-pulse rounded-2xl bg-gray-100" />
+        <div className="h-80 animate-pulse rounded-2xl bg-gray-100 dark:bg-dk-raised" />
       </div>
     );
   }
@@ -416,13 +416,13 @@ export default function AdminDeliveryMonitorPage() {
         subtitle={t('adminDeliveryMonitor.description')}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex rounded-xl border border-gray-200 bg-white p-1">
+            <div className="flex rounded-xl border border-gray-200 bg-white p-1 dark:border-dk-border dark:bg-dk-surface">
               {windowOptions.map((days) => (
                 <button
                   key={days}
                   type="button"
                   onClick={() => setWindowDays(days)}
-                  className={`rounded-lg px-3 py-2 text-sm font-semibold ${windowDays === days ? 'bg-orange-50 text-orange-700' : 'text-gray-500 hover:bg-gray-50'}`}
+                  className={`rounded-lg px-3 py-2 text-sm font-semibold ${windowDays === days ? 'bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300' : 'text-gray-500 hover:bg-gray-50 dark:text-dk-text2 dark:hover:bg-dk-raised dark:hover:text-dk-text'}`}
                 >
                   {t(`adminDeliveryMonitor.window.${days}`)}
                 </button>
@@ -437,7 +437,7 @@ export default function AdminDeliveryMonitorPage() {
       />
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm" data-testid="toolbar">
-        <label className={`inline-flex items-center gap-2 text-gray-700 ${ownerFilter ? 'opacity-50' : 'cursor-pointer'}`}>
+        <label className={`inline-flex items-center gap-2 text-gray-700 dark:text-dk-text ${ownerFilter ? 'opacity-50' : 'cursor-pointer'}`}>
           <input
             type="checkbox"
             data-testid="include-internal"
@@ -449,20 +449,20 @@ export default function AdminDeliveryMonitorPage() {
           {t('adminDeliveryMonitor.includeInternal')}
         </label>
         {data && !ownerFilter && (
-          <span className="text-xs text-gray-500" data-testid="internal-hint">
+          <span className="text-xs text-gray-500 dark:text-dk-text2" data-testid="internal-hint">
             {data.filter?.excludedOwnerIds?.length > 0
               ? t('adminDeliveryMonitor.internalExcluded', { ids: data.filter.excludedOwnerIds.join(', ') })
               : t('adminDeliveryMonitor.internalIncluded')}
           </span>
         )}
         {ownerFilter && (
-          <span className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1 text-xs font-medium text-orange-700" data-testid="owner-filter">
+          <span className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1 text-xs font-medium text-orange-700 dark:border dark:border-orange-900/50 dark:bg-orange-950/40 dark:text-orange-300" data-testid="owner-filter">
             {t('adminDeliveryMonitor.ownerFilter', { name: ownerFilter.name })}
             <button
               type="button"
               data-testid="owner-filter-clear"
               onClick={() => setOwnerFilter(null)}
-              className="rounded-full px-1.5 text-orange-700 hover:bg-orange-100 focus:outline-none"
+              className="rounded-full px-1.5 text-orange-700 hover:bg-orange-100 focus:outline-none dark:text-orange-300 dark:hover:bg-orange-900/50"
               aria-label={t('adminDeliveryMonitor.ownerFilterClear')}
               title={t('adminDeliveryMonitor.ownerFilterClear')}
             >
@@ -470,7 +470,7 @@ export default function AdminDeliveryMonitorPage() {
             </button>
           </span>
         )}
-        <span className="ml-auto flex flex-wrap items-center gap-x-3 text-xs text-gray-400">
+        <span className="ml-auto flex flex-wrap items-center gap-x-3 text-xs text-gray-400 dark:text-dk-muted">
           {rangeInfo && <span data-testid="range-info">{rangeInfo}</span>}
           {data?.generatedAt && (
             <span data-testid="updated-at">{t('adminDeliveryMonitor.updatedAt', { time: formatVnTime(data.generatedAt) })}</span>
@@ -479,7 +479,7 @@ export default function AdminDeliveryMonitorPage() {
       </div>
 
       {error && (
-        <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+        <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">{error}</div>
       )}
 
       {data && (
@@ -500,7 +500,7 @@ export default function AdminDeliveryMonitorPage() {
                     <span
                       key={row.channel}
                       data-testid="sent-channel-chip"
-                      className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600"
+                      className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600 dark:bg-dk-raised dark:text-dk-text"
                     >
                       <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: channelColor[row.channel] }} />
                       {t(`adminDeliveryMonitor.channel.${row.channel}`)} {fmt(row.sent)}
@@ -549,7 +549,7 @@ export default function AdminDeliveryMonitorPage() {
                 <p data-testid="runs-waiting">{t('adminDeliveryMonitor.cards.waitingNone')}</p>
               )}
               {runs?.failed > 0 ? (
-                <p className="font-medium text-red-600" data-testid="runs-failed">{t('adminDeliveryMonitor.cards.runsFailed', { count: fmt(runs.failed) })}</p>
+                <p className="font-medium text-red-600 dark:text-red-400" data-testid="runs-failed">{t('adminDeliveryMonitor.cards.runsFailed', { count: fmt(runs.failed) })}</p>
               ) : (
                 <p data-testid="runs-failed">{t('adminDeliveryMonitor.cards.runsFailedNone')}</p>
               )}
@@ -574,7 +574,7 @@ export default function AdminDeliveryMonitorPage() {
               )}
               {data.alerts?.open > 0 ? (
                 <p data-testid="alerts-open">
-                  <Link to="/admin/alerts" className="font-medium text-amber-700 hover:underline">
+                  <Link to="/admin/alerts" className="font-medium text-amber-700 dark:text-amber-400 hover:underline">
                     {t('adminDeliveryMonitor.cards.alertsOpen', { count: fmt(data.alerts.open) })}
                   </Link>
                 </p>
@@ -585,11 +585,11 @@ export default function AdminDeliveryMonitorPage() {
           </div>
 
           <div className="card p-5" data-testid="chart-card">
-            <h2 className="mb-4 text-sm font-semibold text-gray-700" data-testid="chart-title">{chartTitle}</h2>
+            <h2 className="mb-4 text-sm font-semibold text-gray-700 dark:text-dk-text" data-testid="chart-title">{chartTitle}</h2>
             {hasChartData ? (
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={chartSlots} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" className="dark:stroke-slate-800" />
                   <XAxis dataKey="label" tick={{ fontSize: 11 }} interval="preserveStartEnd" minTickGap={16} />
                   <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
                   <Tooltip content={<ChartTooltip t={t} />} />
@@ -606,7 +606,7 @@ export default function AdminDeliveryMonitorPage() {
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <p className="py-16 text-center text-sm text-gray-400" data-testid="chart-empty">{t('adminDeliveryMonitor.chart.empty')}</p>
+              <p className="py-16 text-center text-sm text-gray-400 dark:text-dk-muted" data-testid="chart-empty">{t('adminDeliveryMonitor.chart.empty')}</p>
             )}
           </div>
 

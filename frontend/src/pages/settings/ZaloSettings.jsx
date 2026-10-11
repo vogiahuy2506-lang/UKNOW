@@ -468,10 +468,10 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
           <button
             type="button"
             onClick={handleRefreshStatus}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-colors shadow-2xs disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface hover:bg-slate-50 dark:hover:bg-dk-raised text-xs font-semibold text-slate-700 dark:text-dk-text transition-colors shadow-2xs disabled:opacity-50"
             disabled={isRefreshing}
           >
-            <HiOutlineRefresh className={`w-4 h-4 text-slate-500 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <HiOutlineRefresh className={`w-4 h-4 text-slate-500 dark:text-dk-text2 ${isRefreshing ? 'animate-spin' : ''}`} />
             {isRefreshing ? t('zaloSettings.refreshing') : t('zaloSettings.refresh')}
           </button>
         }
@@ -492,8 +492,8 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
       )}
 
       {!readOnly && (
-        <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-2xs space-y-4">
-          <div className="flex items-center gap-2 text-slate-900">
+        <div className="rounded-2xl border border-slate-200/90 dark:border-dk-border bg-white dark:bg-dk-surface p-6 shadow-2xs space-y-4">
+          <div className="flex items-center gap-2 text-slate-900 dark:text-dk-text">
             <HiOutlineQrcode className="w-5 h-5 text-orange-500" />
             <h2 className="text-base sm:text-lg font-bold">{t('zaloSettings.loginByQr')}</h2>
           </div>
@@ -511,10 +511,10 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
         </div>
       )}
 
-      <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-2xs">
+      <div className="rounded-2xl border border-slate-200/90 dark:border-dk-border bg-white dark:bg-dk-surface p-6 shadow-2xs">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base sm:text-lg font-bold text-slate-900">{t('zaloSettings.accounts')}</h2>
-          <span className="text-xs sm:text-sm font-medium text-slate-500">{t('zaloSettings.totalAccounts')}: {sortedAccounts.length}</span>
+          <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-dk-text">{t('zaloSettings.accounts')}</h2>
+          <span className="text-xs sm:text-sm font-medium text-slate-500 dark:text-dk-text2">{t('zaloSettings.totalAccounts')}: {sortedAccounts.length}</span>
         </div>
 
         {isLoading ? (
@@ -528,11 +528,11 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
         ) : (
           <div className="space-y-3">
             {sortedAccounts.map((account) => (
-              <div key={account.id} className="rounded-xl border border-slate-200/90 bg-slate-50/40 hover:bg-slate-50/70 p-4 transition-colors">
+              <div key={account.id} className="rounded-xl border border-slate-200/90 dark:border-dk-border bg-slate-50/40 dark:bg-dk-raised hover:bg-slate-50/70 dark:hover:bg-dk-strong p-4 transition-colors">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <div className="flex items-center flex-wrap gap-2">
-                      <h3 className="font-semibold text-slate-900">{account.displayName}</h3>
+                      <h3 className="font-semibold text-slate-900 dark:text-dk-text">{account.displayName}</h3>
                       {account.isDefault && (
                         <span className="inline-flex items-center text-xs px-2.5 py-0.5 rounded-full font-semibold bg-orange-50 text-orange-700 border border-orange-200/80 shadow-2xs">
                           {t('zaloSettings.default')}
@@ -576,25 +576,25 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
                           : ''}
                       </p>
                     )}
-                    <p className="text-sm text-gray-600 mt-1">
+                    <p className="text-sm text-gray-600 dark:text-dk-text mt-1">
                       {t('zaloSettings.zaloId')}: {account.zaloUserId || t('zaloSettings.notConfigured')}
                     </p>
-                    <p className="text-sm text-gray-600 mt-1">
+                    <p className="text-sm text-gray-600 dark:text-dk-text mt-1">
                       {t('zaloSettings.zaloName')}: {account.zaloName || account.displayName || t('zaloSettings.unknown')}
                     </p>
-                    <p className="text-sm text-gray-600 mt-1">
+                    <p className="text-sm text-gray-600 dark:text-dk-text mt-1">
                       {t('zaloSettings.phone')}: {account.zaloPhone || t('zaloSettings.unknown')}
                     </p>
                     {account.assignedEmployeeCount !== null && (
-                      <p className="text-sm text-gray-600 mt-1">
+                      <p className="text-sm text-gray-600 dark:text-dk-text mt-1">
                         {t('zaloSettings.assignedEmployees', { count: account.assignedEmployeeCount })}
                       </p>
                     )}
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-xs text-gray-500 dark:text-dk-text2 mt-1">
                       {t('zaloSettings.lastSync')}: {account.updatedAt ? formatCampaignDateTime(account.updatedAt) : 'N/A'}
                     </p>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <label htmlFor={`send-limit-${account.id}`} className="text-sm text-gray-600">
+                      <label htmlFor={`send-limit-${account.id}`} className="text-sm text-gray-600 dark:text-dk-text">
                         {t('zaloSettings.dailySendLimit')}:
                       </label>
                       {/* Bề rộng phải đặt Ở ĐÂY, không phải trên <input>: lớp `.input` dùng
@@ -626,7 +626,7 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
                     </div>
                     <div className="mt-2">
                       <div className="flex flex-wrap items-center gap-2">
-                        <label htmlFor={`send-speed-${account.id}`} className="text-sm text-gray-600">
+                        <label htmlFor={`send-speed-${account.id}`} className="text-sm text-gray-600 dark:text-dk-text">
                           {t('zaloSettings.sendSpeed')}:
                         </label>
                         <div className="w-64">
@@ -675,11 +675,11 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
                         )}
                       </div>
                       {account.sendSpeed === 'custom' && (
-                        <p className="text-xs text-gray-500 mt-1 italic">
+                        <p className="text-xs text-gray-500 dark:text-dk-text2 mt-1 italic">
                           {t('zaloSettings.sendSpeedCustom')}
                         </p>
                       )}
-                      <p className="text-xs text-gray-400 mt-0.5">
+                      <p className="text-xs text-gray-400 dark:text-dk-text2 mt-0.5">
                         {t('zaloSettings.sendSpeedAppliedNextRunHint')}
                       </p>
                     </div>
@@ -754,13 +754,13 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
         createPortal(
           // Render ra document.body để overlay luôn phủ full viewport,
           // tránh bị giới hạn bởi layout cha có overflow/transform.
-          <div className="fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center px-4">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
-              <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-                <h3 className="font-semibold text-gray-900">{t('zaloSettings.qrModalTitle')}</h3>
+          <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-xs flex items-center justify-center px-4">
+            <div className="bg-white dark:bg-dk-surface border border-gray-200 dark:border-dk-border rounded-xl shadow-xl w-full max-w-sm">
+              <div className="px-4 py-3 border-b border-gray-200 dark:border-dk-border flex items-center justify-between">
+                <h3 className="font-semibold text-gray-900 dark:text-dk-text">{t('zaloSettings.qrModalTitle')}</h3>
                 <button
                   type="button"
-                  className="p-2 rounded-md hover:bg-gray-100 text-gray-500"
+                  className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-dk-raised text-gray-500 dark:text-dk-text2"
                   onClick={closeQrPreview}
                   aria-label={t('zaloSettings.close')}
                 >
@@ -768,10 +768,10 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
                 </button>
               </div>
               <div className="p-4 space-y-3">
-                <div className="rounded-lg border border-gray-200 p-3 flex items-center justify-center">
+                <div className="rounded-lg border border-gray-200 dark:border-dk-border bg-white p-3 flex items-center justify-center">
                   <img src={qrPreview.image} alt={t('zaloSettings.qrAlt')} className="w-64 h-64 object-contain" />
                 </div>
-                <p className="text-sm text-gray-600 text-center">
+                <p className="text-sm text-gray-600 dark:text-dk-text text-center">
                   {t('zaloSettings.qrScanInstruction')}
                 </p>
                 {qrPreview.path && (
@@ -799,9 +799,9 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
 
       {/* Custom Domain Guide Modal */}
       {showHelp && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] overflow-auto">
-            <div className="sticky top-0 bg-white border-b border-slate-100 p-6 pb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="bg-white dark:bg-dk-surface border border-slate-100 dark:border-dk-border rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] overflow-auto">
+            <div className="sticky top-0 bg-white dark:bg-dk-bg border-b border-slate-100 dark:border-dk-border/80 p-6 pb-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white">
@@ -810,13 +810,13 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
                     </svg>
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-gray-900">Kết nối tên miền riêng</h3>
-                    <p className="text-xs text-slate-500">Sử dụng domain của bạn cho chatbot</p>
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-dk-text">Kết nối tên miền riêng</h3>
+                    <p className="text-xs text-slate-500 dark:text-dk-text2">Sử dụng domain của bạn cho chatbot</p>
                   </div>
                 </div>
                 <button
                   onClick={() => setShowHelp(false)}
-                  className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors"
+                  className="w-8 h-8 rounded-lg hover:bg-slate-100 dark:hover:bg-dk-raised flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-dk-text transition-colors"
                 >
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
@@ -825,28 +825,28 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
 
             <div className="p-6 space-y-6">
               {/* What is custom domain */}
-              <div className="bg-gradient-to-r from-violet-50 to-indigo-50 border border-violet-100 rounded-xl p-4">
+              <div className="bg-gradient-to-r from-violet-50 to-indigo-50 dark:from-violet-950/30 dark:to-indigo-950/30 border border-violet-100 dark:border-violet-900/40 rounded-xl p-4">
                 <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center text-violet-600 flex-shrink-0 mt-0.5">
+                  <div className="w-8 h-8 rounded-lg bg-violet-100 dark:bg-violet-900/50 flex items-center justify-center text-violet-600 dark:text-violet-300 flex-shrink-0 mt-0.5">
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                   </div>
                   <div>
-                    <p className="font-semibold text-violet-900 mb-1">Tên miền riêng là gì?</p>
-                    <p className="text-sm text-violet-700">Thay vì dùng link mặc định <code className="bg-violet-100 px-1.5 py-0.5 rounded text-xs">app.uknow.vn/chat/&#123;id&#125;</code>, bạn có thể dùng domain riêng như <code className="bg-violet-100 px-1.5 py-0.5 rounded text-xs">senna.founderai.biz</code> để tạo thương hiệu chuyên nghiệp hơn.</p>
+                    <p className="font-semibold text-violet-900 dark:text-violet-200 mb-1">Tên miền riêng là gì?</p>
+                    <p className="text-sm text-violet-700 dark:text-violet-300">Thay vì dùng link mặc định <code className="bg-violet-100 dark:bg-violet-900/50 text-violet-900 dark:text-violet-200 px-1.5 py-0.5 rounded text-xs">app.uknow.vn/chat/&#123;id&#125;</code>, bạn có thể dùng domain riêng như <code className="bg-violet-100 dark:bg-violet-900/50 text-violet-900 dark:text-violet-200 px-1.5 py-0.5 rounded text-xs">senna.founderai.biz</code> để tạo thương hiệu chuyên nghiệp hơn.</p>
                   </div>
                 </div>
               </div>
 
               {/* Steps */}
               <div className="space-y-4">
-                <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                <h4 className="font-semibold text-gray-900 dark:text-dk-text flex items-center gap-2">
                   <span className="w-6 h-6 rounded-full bg-violet-600 text-white text-xs flex items-center justify-center font-bold">1</span>
                   Thêm DNS Records
                 </h4>
-                <p className="text-sm text-slate-600 pl-8">Đăng nhập vào dashboard nhà cung cấp domain (GoDaddy, Namecheap, VNPT...) và thêm 2 records sau:</p>
+                <p className="text-sm text-slate-600 dark:text-dk-text pl-8">Đăng nhập vào dashboard nhà cung cấp domain (GoDaddy, Namecheap, VNPT...) và thêm 2 records sau:</p>
 
                 {/* DNS Records */}
-                <div className="bg-slate-900 rounded-xl p-4 space-y-3 pl-8">
+                <div className="bg-slate-900 dark:bg-dk-inset border border-slate-800 rounded-xl p-4 space-y-3 pl-8">
                   {/* Example */}
                   <div className="text-xs text-slate-500 mb-3 flex items-center gap-2">
                     <span>Ví dụ:</span>
@@ -924,30 +924,30 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
                 </div>
 
                 {/* Step 2 */}
-                <h4 className="font-semibold text-gray-900 flex items-center gap-2 pt-2">
+                <h4 className="font-semibold text-gray-900 dark:text-dk-text flex items-center gap-2 pt-2">
                   <span className="w-6 h-6 rounded-full bg-violet-600 text-white text-xs flex items-center justify-center font-bold">2</span>
                   Thêm domain trong hệ thống
                 </h4>
-                <p className="text-sm text-slate-600 pl-8">Sau khi thêm DNS records, vào <strong>Cài đặt &gt; Tên miền</strong> và nhấn <strong>"Thêm tên miền"</strong>. Nhập domain của bạn (vd: <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">senna.founderai.biz</code>).</p>
+                <p className="text-sm text-slate-600 dark:text-dk-text pl-8">Sau khi thêm DNS records, vào <strong>Cài đặt &gt; Tên miền</strong> và nhấn <strong>"Thêm tên miền"</strong>. Nhập domain của bạn (vd: <code className="bg-slate-100 dark:bg-dk-raised text-slate-800 dark:text-dk-text px-1.5 py-0.5 rounded text-xs">senna.founderai.biz</code>).</p>
 
                 {/* Step 3 */}
-                <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                <h4 className="font-semibold text-gray-900 dark:text-dk-text flex items-center gap-2">
                   <span className="w-6 h-6 rounded-full bg-violet-600 text-white text-xs flex items-center justify-center font-bold">3</span>
                   Chờ xác minh
                 </h4>
-                <p className="text-sm text-slate-600 pl-8">DNS propagation có thể mất <strong>5-30 phút</strong>. Nhấn <strong>"Xác minh"</strong> để kiểm tra trạng thái. SSL sẽ được cấp tự động sau khi domain được xác nhận.</p>
+                <p className="text-sm text-slate-600 dark:text-dk-text pl-8">DNS propagation có thể mất <strong>5-30 phút</strong>. Nhấn <strong>"Xác minh"</strong> để kiểm tra trạng thái. SSL sẽ được cấp tự động sau khi domain được xác nhận.</p>
               </div>
 
               {/* Tips */}
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+              <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 rounded-xl p-4">
                 <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center text-amber-600 flex-shrink-0">
+                  <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center text-amber-600 dark:text-amber-400 flex-shrink-0">
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
                   </div>
                   <div>
-                    <p className="font-semibold text-amber-900 mb-1">Lưu ý</p>
-                    <ul className="text-sm text-amber-700 space-y-1 list-disc list-inside">
-                      <li>Với <code className="bg-amber-100 px-1 py-0.5 rounded text-xs">senna.founderai.biz</code>: Host là <code className="bg-amber-100 px-1 py-0.5 rounded text-xs">senna</code>, không phải <code className="bg-amber-100 px-1 py-0.5 rounded text-xs">@</code></li>
+                    <p className="font-semibold text-amber-900 dark:text-amber-200 mb-1">Lưu ý</p>
+                    <ul className="text-sm text-amber-700 dark:text-amber-300 space-y-1 list-disc list-inside">
+                      <li>Với <code className="bg-amber-100 dark:bg-amber-900/50 text-amber-900 dark:text-amber-200 px-1 py-0.5 rounded text-xs">senna.founderai.biz</code>: Host là <code className="bg-amber-100 dark:bg-amber-900/50 text-amber-900 dark:text-amber-200 px-1 py-0.5 rounded text-xs">senna</code>, không phải <code className="bg-amber-100 dark:bg-amber-900/50 text-amber-900 dark:text-amber-200 px-1 py-0.5 rounded text-xs">@</code></li>
                       <li>Liên hệ support nếu gặp lỗi xác minh sau 24h</li>
                     </ul>
                   </div>
@@ -955,7 +955,7 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
               </div>
             </div>
 
-            <div className="sticky bottom-0 bg-white border-t border-slate-100 p-4">
+            <div className="sticky bottom-0 bg-white dark:bg-dk-bg border-t border-slate-100 dark:border-dk-border/80 p-4">
               <button
                 onClick={() => setShowHelp(false)}
                 className="w-full py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-semibold rounded-xl hover:from-violet-700 hover:to-indigo-700 transition-all shadow-lg shadow-violet-500/25"

@@ -40,6 +40,7 @@ function UserMenu({ user, logout, activeContext }) {
   return (
     <div className="relative" ref={ref}>
       <button
+        type="button"
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2 px-2 py-1.5 rounded-full hover:bg-neutral-100 transition-colors"
       >
@@ -51,7 +52,7 @@ function UserMenu({ user, logout, activeContext }) {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-lg border border-gray-100 py-1.5 z-50">
+        <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl shadow-lg border border-gray-100 py-1.5 z-50">
           <div className="px-4 py-2.5 border-b border-gray-100">
             <p className="text-[11px] text-gray-400 leading-none mb-0.5">{t('navbar.account')}</p>
             <p className="text-[13px] font-semibold text-gray-800 truncate">{user?.email || displayName}</p>
@@ -92,8 +93,8 @@ export default function HeroNavbar() {
   ];
 
   return (
-    <div className="flex justify-center pt-4 sm:pt-6 px-3 sm:px-4">
-      <div className="bg-white rounded-full shadow-sm border border-neutral-200 pl-3 pr-3 py-2 w-full max-w-[760px] relative">
+    <div className="relative z-50 flex justify-center pt-4 sm:pt-6 px-3 sm:px-4">
+      <div className="bg-white rounded-full shadow-sm border border-neutral-200 pl-3 pr-3 py-2 w-full max-w-[760px] relative z-50 transition-colors">
         <div className="flex items-center gap-3">
           {/* Logo */}
           <Link to="/" className="shrink-0 flex items-center gap-2">

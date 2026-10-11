@@ -52,10 +52,10 @@ export const PaymentResultModal = ({ qrCode, checkoutUrl, orderCode, planName, u
   return renderModal(
     <div className="space-y-5">
       <div>
-        <h2 className="text-xl font-semibold text-gray-900">
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-dk-text">
           {isPaid ? 'Đã thanh toán thành công' : isCancelled ? 'Giao dịch đã huỷ' : 'Link thanh toán đã sẵn sàng'}
         </h2>
-        <p className="text-sm text-gray-500 mt-1">
+        <p className="text-sm text-gray-500 dark:text-dk-text2 mt-1">
           Gói <strong>{planName}</strong> — {isPaid
             ? <>đã kích hoạt cho <strong>{userEmail}</strong>.</>
             : <>gửi QR hoặc link này cho <strong>{userEmail}</strong> qua Zalo.</>}
@@ -64,14 +64,14 @@ export const PaymentResultModal = ({ qrCode, checkoutUrl, orderCode, planName, u
 
       {/* Trạng thái polling — chỉ hiện khi chưa thanh toán */}
       {!isPaid && !isCancelled && (
-        <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm text-amber-700">
+        <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/40 rounded-lg px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
           <div className="w-3 h-3 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
           <span>Đang chờ khách hàng thanh toán… (tự cập nhật mỗi 3s)</span>
         </div>
       )}
 
       {isPaid && (
-        <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-3 text-sm text-green-700">
+        <div className="flex items-center gap-2 bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-900/40 rounded-lg px-3 py-3 text-sm text-green-700 dark:text-green-300">
           <HiOutlineCheck className="w-5 h-5 shrink-0" />
           <span>Gói đã được gán cho khách hàng. Đóng modal này để xem lại trong danh sách gói.</span>
         </div>
@@ -80,13 +80,13 @@ export const PaymentResultModal = ({ qrCode, checkoutUrl, orderCode, planName, u
       {/* QR code — chỉ hiện khi chưa thanh toán */}
       {!isPaid && (
         <div className="flex flex-col items-center gap-3">
-          <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm w-52 h-52 flex items-center justify-center">
+          <div className="bg-white dark:bg-dk-inset border border-gray-200 dark:border-dk-border rounded-2xl p-4 shadow-sm w-52 h-52 flex items-center justify-center">
             {qrImageUrl
-              ? <img src={qrImageUrl} alt="QR thanh toán" className="w-44 h-44 rounded-lg" />
+              ? <img src={qrImageUrl} alt="QR thanh toán" className="w-44 h-44 rounded-lg bg-white p-1" />
               : <div className="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin" />
             }
           </div>
-          <p className="text-xs text-gray-400 font-medium uppercase tracking-widest">Quét để thanh toán</p>
+          <p className="text-xs text-gray-400 dark:text-dk-muted font-medium uppercase tracking-widest">Quét để thanh toán</p>
         </div>
       )}
 
@@ -110,7 +110,7 @@ export const PaymentResultModal = ({ qrCode, checkoutUrl, orderCode, planName, u
           <input
             readOnly
             value={checkoutUrl}
-            className="input flex-1 text-xs text-gray-500 truncate"
+            className="input flex-1 text-xs text-gray-500 dark:text-dk-text2 truncate"
           />
           <button type="button" onClick={handleCopy} className={`btn shrink-0 ${copied ? 'btn-primary' : 'btn-secondary'}`}>
             {copied

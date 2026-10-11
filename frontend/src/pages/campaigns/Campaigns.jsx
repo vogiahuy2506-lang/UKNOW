@@ -437,14 +437,14 @@ const Campaigns = () => {
       />
 
       {/* Main Tabs: Chiến dịch (?tab=campaigns) vs Lịch chạy (?tab=schedules) */}
-      <div className="flex gap-2 border-b border-slate-200/80 pb-2">
+      <div className="flex gap-2 border-b border-slate-200/80 dark:border-dk-border/80 pb-2">
         <button
           type="button"
           onClick={() => handleTabChange('campaigns')}
           className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-xl transition-all flex items-center gap-2 ${
             activeTab === 'campaigns'
               ? 'bg-orange-500 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              : 'text-slate-600 dark:text-dk-text2 hover:text-slate-900 dark:hover:text-dk-text hover:bg-slate-100 dark:hover:bg-dk-raised/60'
           }`}
         >
           <HiOutlineViewList className="w-4 h-4" aria-hidden="true" />
@@ -456,7 +456,7 @@ const Campaigns = () => {
           className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-xl transition-all flex items-center gap-2 ${
             activeTab === 'schedules'
               ? 'bg-orange-500 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              : 'text-slate-600 dark:text-dk-text2 hover:text-slate-900 dark:hover:text-dk-text hover:bg-slate-100 dark:hover:bg-dk-raised/60'
           }`}
         >
           <HiOutlineClock className="w-4 h-4" aria-hidden="true" />
@@ -487,7 +487,7 @@ const Campaigns = () => {
           {/* Subheader Toolbar: Origin Selector + Operational State Pills */}
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
             {/* Origin Tabs */}
-            <div className="inline-flex rounded-xl bg-slate-100 p-0.5 border border-slate-200/80 shrink-0">
+            <div className="inline-flex rounded-xl bg-slate-100 dark:bg-dk-inset p-0.5 border border-slate-200/80 dark:border-dk-border shrink-0">
               <button
                 type="button"
                 onClick={() => {
@@ -496,8 +496,8 @@ const Campaigns = () => {
                 }}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                   originTab === 'self_created'
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800'
+                    ? 'bg-white dark:bg-dk-raised text-slate-900 dark:text-dk-text shadow-xs'
+                    : 'text-slate-500 dark:text-dk-text2 hover:text-slate-800 dark:hover:text-dk-text'
                 }`}
               >
                 {t('campaigns.selfCreated') || 'Tự tạo'}
@@ -510,8 +510,8 @@ const Campaigns = () => {
                 }}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                   originTab === 'marketplace_purchased'
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800'
+                    ? 'bg-white dark:bg-dk-raised text-slate-900 dark:text-dk-text shadow-xs'
+                    : 'text-slate-500 dark:text-dk-text2 hover:text-slate-800 dark:hover:text-dk-text'
                 }`}
               >
                 {t('campaigns.purchased') || 'Đã mua từ Marketplace'}
@@ -524,8 +524,8 @@ const Campaigns = () => {
                 }}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                   originTab === 'shared_with_me'
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800'
+                    ? 'bg-white dark:bg-dk-raised text-slate-900 dark:text-dk-text shadow-xs'
+                    : 'text-slate-500 dark:text-dk-text2 hover:text-slate-800 dark:hover:text-dk-text'
                 }`}
               >
                 {t('campaigns.sharedWithMe') || 'Được chia sẻ'}
@@ -550,7 +550,7 @@ const Campaigns = () => {
                     className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-all ${
                       isSelected
                         ? 'bg-orange-500 text-white shadow-xs font-semibold'
-                        : 'bg-slate-100 hover:bg-slate-200/80 text-slate-600 hover:text-slate-900 font-medium'
+                        : 'bg-slate-100 dark:bg-dk-surface hover:bg-slate-200/80 dark:hover:bg-dk-raised text-slate-600 dark:text-dk-text2 hover:text-slate-900 dark:hover:text-dk-text font-medium border border-transparent dark:border-dk-border/60'
                     }`}
                   >
                     {item.dot && !isSelected && (
@@ -564,11 +564,11 @@ const Campaigns = () => {
           </div>
 
           {/* Filters Bar: Search + Status + Type in a single neat row */}
-          <div className="rounded-2xl border border-slate-200/90 bg-white p-3.5 shadow-2xs flex flex-col md:flex-row items-stretch md:items-center gap-3">
+          <div className="rounded-2xl border border-slate-200/90 dark:border-dk-border/90 bg-white dark:bg-dk-surface p-3.5 shadow-2xs flex flex-col md:flex-row items-stretch md:items-center gap-3">
             {/* Search */}
             <form onSubmit={handleSearch} className="flex-1 min-w-[200px]">
               <div className="relative flex items-center">
-                <span className="absolute left-3.5 flex items-center text-slate-400 pointer-events-none" aria-hidden="true">
+                <span className="absolute left-3.5 flex items-center text-slate-400 dark:text-dk-muted pointer-events-none" aria-hidden="true">
                   <HiOutlineSearch className="w-4 h-4" />
                 </span>
                 <input
@@ -576,7 +576,7 @@ const Campaigns = () => {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder={t('campaigns.searchPlaceholder')}
-                  className="w-full pl-9 pr-8 py-2 text-xs bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 rounded-xl text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all"
+                  className="w-full pl-9 pr-8 py-2 text-xs bg-slate-50 dark:bg-dk-inset hover:bg-slate-100/70 dark:hover:bg-dk-bg focus:bg-white dark:focus:bg-dk-inset border border-slate-200 dark:border-dk-border rounded-xl text-slate-800 dark:text-dk-text placeholder:text-slate-400 dark:placeholder:text-dk-muted focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all"
                 />
                 {search && (
                   <button
@@ -585,7 +585,7 @@ const Campaigns = () => {
                       setSearch('');
                       fetchCampaigns(1, statusFilter, '', typeFilter, stateFilter);
                     }}
-                    className="absolute right-2.5 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200/60 transition-colors"
+                    className="absolute right-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-dk-text p-0.5 rounded-full hover:bg-slate-200/60 dark:hover:bg-dk-raised transition-colors"
                   >
                     <HiOutlineX className="w-3.5 h-3.5" />
                   </button>
@@ -603,7 +603,7 @@ const Campaigns = () => {
                     setStatusFilter(e.target.value);
                     setPagination((prev) => ({ ...prev, page: 1 }));
                   }}
-                  className="w-full px-3 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl text-slate-700 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 shadow-2xs cursor-pointer"
+                  className="w-full px-3 py-2 text-xs font-semibold bg-white dark:bg-dk-inset border border-slate-200 dark:border-dk-border rounded-xl text-slate-700 dark:text-dk-text focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 shadow-2xs cursor-pointer"
                 >
                   <option value="">{t('campaigns.allStatuses')}</option>
                   <option value="pending_owner_approval">{t('campaigns.pendingOwnerApproval')}</option>
@@ -621,7 +621,7 @@ const Campaigns = () => {
                     setTypeFilter(e.target.value);
                     setPagination((prev) => ({ ...prev, page: 1 }));
                   }}
-                  className="w-full px-3 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl text-slate-700 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 shadow-2xs cursor-pointer"
+                  className="w-full px-3 py-2 text-xs font-semibold bg-white dark:bg-dk-inset border border-slate-200 dark:border-dk-border rounded-xl text-slate-700 dark:text-dk-text focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 shadow-2xs cursor-pointer"
                 >
                   <option value="">{t('campaigns.allTypes')}</option>
                   <option value="email">{t('campaigns.email')}</option>
@@ -638,19 +638,19 @@ const Campaigns = () => {
           </div>
 
           {/* Table */}
-          <div className="rounded-2xl border border-slate-200/90 bg-white shadow-2xs overflow-hidden">
+          <div className="rounded-2xl border border-slate-200/90 dark:border-dk-border/90 bg-white dark:bg-dk-surface shadow-2xs overflow-hidden">
             {isLoading ? (
               <div className="flex flex-col items-center justify-center py-16 gap-3">
                 <div className="w-7 h-7 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
-                <p className="text-xs text-slate-500 font-medium">Đang tải danh sách chiến dịch…</p>
+                <p className="text-xs text-slate-500 dark:text-dk-text2 font-medium">Đang tải danh sách chiến dịch…</p>
               </div>
             ) : campaigns.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center px-4">
-                <div className="w-14 h-14 rounded-2xl bg-orange-50 border border-orange-200/60 flex items-center justify-center text-orange-400 mb-3 shadow-xs">
+                <div className="w-14 h-14 rounded-2xl bg-orange-50 dark:bg-orange-950/30 border border-orange-200/60 dark:border-orange-900/50 flex items-center justify-center text-orange-400 mb-3 shadow-xs">
                   <HiOutlinePlus className="w-7 h-7" />
                 </div>
-                <h3 className="text-sm font-semibold text-slate-700">{t('campaigns.noCampaigns')}</h3>
-                <p className="text-xs text-slate-400 mt-1 max-w-sm leading-relaxed">{t('campaigns.startFirst')}</p>
+                <h3 className="text-sm font-semibold text-slate-700 dark:text-dk-text">{t('campaigns.noCampaigns')}</h3>
+                <p className="text-xs text-slate-400 dark:text-dk-muted mt-1 max-w-sm leading-relaxed">{t('campaigns.startFirst')}</p>
                 {originTab === 'self_created' && (
                   <button
                     onClick={openCreateModal}
@@ -662,22 +662,22 @@ const Campaigns = () => {
                 )}
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-slate-100">
-                  <thead className="bg-slate-50/80">
+              <div className="overflow-x-auto w-full">
+                <table className="min-w-[1180px] w-full divide-y divide-slate-100 dark:divide-dk-border/80">
+                  <thead className="bg-slate-50/80 dark:bg-dk-surface/70">
                     <tr>
-                      <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('campaigns.campaignName')}</th>
-                      <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('common.status')}</th>
-                      <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('campaigns.operation')}</th>
-                      <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('campaigns.campaignType')}</th>
-                      <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('campaigns.createdBy')}</th>
-                      <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('campaigns.createdAt')}</th>
-                      <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('campaigns.updatedAt')}</th>
-                      <th className="px-6 py-3.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider" title={t('campaigns.completedRunsHint')}>{t('campaigns.completedRuns')}</th>
-                      <th className="px-6 py-3.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('common.actions')}</th>
+                      <th className="px-5 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap">{t('campaigns.campaignName')}</th>
+                      <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap">{t('common.status')}</th>
+                      <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap">{t('campaigns.operation')}</th>
+                      <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap">{t('campaigns.campaignType')}</th>
+                      <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap">{t('campaigns.createdBy')}</th>
+                      <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap">{t('campaigns.createdAt')}</th>
+                      <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap">{t('campaigns.updatedAt')}</th>
+                      <th className="px-4 py-3.5 text-center text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap" title={t('campaigns.completedRunsHint')}>{t('campaigns.completedRuns')}</th>
+                      <th className="px-5 py-3.5 text-right text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap">{t('common.actions')}</th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-slate-100">
+                  <tbody className="bg-white dark:bg-dk-surface divide-y divide-slate-100 dark:divide-dk-border/80">
                     {campaigns.map((campaign) => {
                       const isRunning =
                         runController.isCampaignRunningById(campaign.id) ||
@@ -706,28 +706,28 @@ const Campaigns = () => {
                       const isStopping = Number.isFinite(runId) && runController.stoppingRunIds.has(runId);
 
                       return (
-                        <tr key={campaign.id} className="hover:bg-slate-50/70 transition-colors">
-                          <td className="px-6 py-4">
+                        <tr key={campaign.id} className="hover:bg-slate-50/70 dark:hover:bg-dk-raised/60 transition-colors">
+                          <td className="px-5 py-4 min-w-[240px] max-w-[340px]">
                             <div className="flex flex-col py-0.5">
                               <Link
                                 to={`/app/campaigns/${campaign.id}/builder`}
-                                className="font-semibold text-slate-900 hover:text-orange-600 transition-colors inline-flex items-center gap-1.5 flex-wrap group text-sm"
+                                className="font-semibold text-slate-900 dark:text-dk-text hover:text-orange-600 dark:hover:text-orange-400 transition-colors inline-flex items-center gap-1.5 flex-wrap group text-sm"
                               >
                                 <span className="group-hover:underline">{campaign.campaignName}</span>
                                 {campaign.origin === 'marketplace_purchased' && (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60">
                                     {t('campaigns.marketplace') || 'Marketplace'}
                                   </span>
                                 )}
                                 {campaign.origin === 'shared_received' && (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60">
                                     {t('campaigns.shared') || 'Được chia sẻ'}
                                   </span>
                                 )}
                               </Link>
                               {Number(campaign.failedCount || 0) > 0 && campaign.lastFailedRun && (
-                                <p className="mt-1 text-xs text-rose-500 flex items-center gap-1">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                                <p className="mt-1 text-xs text-rose-500 dark:text-rose-400 flex items-start gap-1 leading-snug">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0 mt-1" />
                                   <span>
                                     {t('campaigns.lastRunFailed', {
                                       label: campaign.lastFailedRun.label || campaign.lastFailedRun.errorMessage || '',
@@ -737,42 +737,42 @@ const Campaigns = () => {
                               )}
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-4 py-4 whitespace-nowrap">
                             {campaign.status === 'active' ? (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/60 shadow-2xs">
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                 <span>{t('campaigns.active')}</span>
                               </span>
                             ) : campaign.status === 'draft' ? (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200 shadow-2xs">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-dk-raised text-slate-600 dark:text-dk-text border border-slate-200 dark:border-dk-border shadow-2xs">
                                 <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
                                 <span>{t('campaigns.draft')}</span>
                               </span>
                             ) : campaign.status === 'paused' ? (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200/80 shadow-2xs">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800/60 shadow-2xs">
                                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
                                 <span>{t('campaigns.paused')}</span>
                               </span>
                             ) : campaign.status === 'pending_owner_approval' ? (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200/80 shadow-2xs">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/60 shadow-2xs">
                                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
                                 <span>{t('campaigns.pendingOwnerApproval')}</span>
                               </span>
                             ) : (
-                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-dk-raised text-slate-700 dark:text-dk-text border border-slate-200 dark:border-dk-border">
                                 {campaign.status}
                               </span>
                             )}
                           </td>
-                          <td>
+                          <td className="px-4 py-4 whitespace-nowrap">
                             {isRunning ? (
                               <div className="flex flex-col items-start gap-1">
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/25 shadow-2xs">
-                                  <HiOutlineRefresh className="w-3 h-3 animate-spin text-emerald-600" />
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-600/25 dark:ring-emerald-500/40 shadow-2xs">
+                                  <HiOutlineRefresh className="w-3 h-3 animate-spin text-emerald-600 dark:text-emerald-400" />
                                   <span>{t('campaigns.operationRunning')}</span>
                                 </span>
                                 {isContinuous && (
-                                  <span className="text-[11px] text-emerald-600 font-medium pl-1">
+                                  <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium pl-1">
                                     {pollIntervalMinutes
                                       ? t('campaignRun.continuousRunningEvery', { interval: pollIntervalMinutes })
                                       : t('campaignRun.continuousRunning')}
@@ -789,7 +789,7 @@ const Campaigns = () => {
                                     {activePause.kind === 'plan_quota' && (
                                       <Link
                                         to="/app/topup"
-                                        className="text-xs font-medium text-orange-600 hover:text-orange-800 hover:underline pl-1"
+                                        className="text-xs font-medium text-orange-600 dark:text-orange-400 hover:text-orange-800 dark:hover:text-orange-300 hover:underline pl-1"
                                       >
                                         {t('campaignRun.buyTopup')}
                                       </Link>
@@ -801,22 +801,22 @@ const Campaigns = () => {
                               <button
                                 type="button"
                                 onClick={() => runController.openCampaignSchedulesSummaryModal(campaign)}
-                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200/80 hover:bg-blue-100 transition-colors shadow-2xs"
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/60 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors shadow-2xs"
                                 title={t('campaignRun.viewSchedules')}
                               >
-                                <HiOutlineClock className="w-3.5 h-3.5 text-blue-600" />
+                                <HiOutlineClock className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                                 <span>
                                   {t('campaigns.operationScheduledCount', { count: campaign.enabledScheduleCount })}
                                 </span>
                               </button>
                             ) : (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs text-gray-500 bg-gray-50/80 border border-gray-200/60">
-                                <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs text-gray-500 dark:text-dk-text2 bg-gray-50/80 dark:bg-dk-surface border border-gray-200/60 dark:border-dk-border">
+                                <span className="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-dk-strong" />
                                 <span>{t('campaigns.inactive')}</span>
                               </span>
                             )}
                           </td>
-                          <td>
+                          <td className="px-4 py-4 whitespace-nowrap">
                             {(() => {
                               const typeMeta = getCampaignTypeMeta(campaign.campaignType);
                               const typeKey = String(campaign.campaignType || '').trim().toLowerCase();
@@ -836,22 +836,24 @@ const Campaigns = () => {
                               );
                             })()}
                           </td>
-                          <td>
+                          <td className="px-4 py-4 whitespace-nowrap">
                             <div className="flex items-center gap-2">
                               <div className="w-6 h-6 bg-gradient-to-tr from-orange-500 to-amber-500 rounded-full flex items-center justify-center shrink-0 shadow-2xs">
                                 <span className="text-white text-[11px] font-bold">{(campaign.createdBy?.name || 'A')[0]?.toUpperCase()}</span>
                               </div>
-                              <span className="text-sm font-medium text-gray-700 truncate max-w-[120px]">{campaign.createdBy?.name || campaign.createdBy || 'Unknown'}</span>
+                              <span className="text-xs font-medium text-gray-700 dark:text-dk-text truncate max-w-[130px]">{campaign.createdBy?.name || campaign.createdBy || 'Unknown'}</span>
                             </div>
                           </td>
-                          <td className="text-xs text-gray-500 whitespace-nowrap">
+                          <td className="px-4 py-4 text-xs text-gray-500 dark:text-dk-text2 whitespace-nowrap">
                             {formatCampaignDateTime(campaign.createdAt)}
                           </td>
-                          <td className="text-xs text-gray-500 whitespace-nowrap">
+                          <td className="px-4 py-4 text-xs text-gray-500 dark:text-dk-text2 whitespace-nowrap">
                             {formatCampaignDateTime(campaign.updatedAt)}
                           </td>
-                          <td className="text-center">{campaign.completedCount ?? 0}</td>
-                          <td>
+                          <td className="px-4 py-4 text-center text-xs font-medium text-slate-700 dark:text-dk-text whitespace-nowrap">
+                            {campaign.completedCount ?? 0}
+                          </td>
+                          <td className="px-5 py-4 whitespace-nowrap text-right">
                             <div className="flex items-center justify-end gap-1.5">
                               {/* Nút hành động vận hành (Chạy/Dừng, Lịch, Nhật ký) */}
                               {campaign.status === 'active' && canRun && (
@@ -907,18 +909,18 @@ const Campaigns = () => {
 
                               {hasRuns && (
                                 <button
-                                  type="button"
-                                  onClick={() => runController.toggleCampaignLogs(campaign)}
-                                  className={`btn btn-sm inline-flex items-center gap-1 ${
-                                    isShowingLogs
-                                      ? 'bg-blue-600 text-white hover:bg-blue-700 border-blue-600'
-                                      : 'btn-secondary'
-                                  }`}
-                                  title={isShowingLogs ? t('campaignRun.hideLog') : t('campaignRun.viewLog')}
-                                >
-                                  <HiOutlineEye className="w-3.5 h-3.5" />
-                                  <span>{t('campaigns.logs')}</span>
-                                </button>
+                                    type="button"
+                                    onClick={() => runController.toggleCampaignLogs(campaign)}
+                                    className={`btn btn-sm inline-flex items-center gap-1 ${
+                                      isShowingLogs
+                                        ? 'bg-blue-600 text-white hover:bg-blue-700 border-blue-600'
+                                        : 'btn-secondary'
+                                    }`}
+                                    title={isShowingLogs ? t('campaignRun.hideLog') : t('campaignRun.viewLog')}
+                                  >
+                                    <HiOutlineEye className="w-3.5 h-3.5" />
+                                    <span>{t('campaigns.logs')}</span>
+                                  </button>
                               )}
 
                               {campaign.status === 'pending_owner_approval' && isOwner && (
@@ -926,7 +928,7 @@ const Campaigns = () => {
                                   <button
                                     type="button"
                                     onClick={() => setApproveModal({ show: true, campaign })}
-                                    className="px-2.5 py-1 text-xs font-semibold rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors"
+                                    className="px-2.5 py-1 text-xs font-semibold rounded bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800 transition-colors"
                                     title={t('campaigns.approve')}
                                   >
                                     {t('campaigns.approve')}
@@ -934,7 +936,7 @@ const Campaigns = () => {
                                   <button
                                     type="button"
                                     onClick={() => setRejectModal({ show: true, campaign, reason: '' })}
-                                    className="px-2.5 py-1 text-xs font-semibold rounded bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 transition-colors"
+                                    className="px-2.5 py-1 text-xs font-semibold rounded bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/60 border border-red-200 dark:border-red-800 transition-colors"
                                     title={t('campaigns.reject')}
                                   >
                                     {t('campaigns.reject')}
@@ -957,9 +959,9 @@ const Campaigns = () => {
                                     });
                                     setActiveMenu(id);
                                   }}
-                                  className="p-1 rounded hover:bg-gray-100 transition-colors"
+                                  className="p-1 rounded hover:bg-gray-100 dark:hover:bg-dk-raised transition-colors"
                                 >
-                                  <HiOutlineDotsVertical className="w-5 h-5 text-gray-400" />
+                                  <HiOutlineDotsVertical className="w-5 h-5 text-gray-400 dark:text-dk-muted" />
                                 </button>
 
                                 {activeMenu === campaign.id && createPortal(
@@ -970,7 +972,7 @@ const Campaigns = () => {
                                       onClick={() => setActiveMenu(null)}
                                     />
                                     <div
-                                      className="fixed w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-[100]"
+                                      className="fixed w-48 bg-white dark:bg-dk-surface rounded-xl shadow-xl border border-gray-200 dark:border-dk-border py-1 z-[100]"
                                       style={{ top: menuPosition.top, left: menuPosition.left }}
                                       onClick={(e) => e.stopPropagation()}
                                     >
@@ -981,7 +983,7 @@ const Campaigns = () => {
                                               setActiveMenu(null);
                                               setApproveModal({ show: true, campaign });
                                             }}
-                                            className="w-full flex items-center px-4 py-2 text-sm font-medium text-emerald-600 hover:bg-emerald-50"
+                                            className="w-full flex items-center px-4 py-2 text-sm font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
                                           >
                                             <HiOutlineCheckCircle className="w-4 h-4 mr-3" />
                                             {t('campaigns.approve')}
@@ -991,7 +993,7 @@ const Campaigns = () => {
                                               setActiveMenu(null);
                                               setRejectModal({ show: true, campaign, reason: '' });
                                             }}
-                                            className="w-full flex items-center px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+                                            className="w-full flex items-center px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"
                                           >
                                             <HiOutlineXCircle className="w-4 h-4 mr-3" />
                                             {t('campaigns.reject')}
@@ -1000,7 +1002,7 @@ const Campaigns = () => {
                                       )}
                                       <button
                                         onClick={() => navigate(`/app/campaigns/${campaign.id}/builder`)}
-                                        className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                        className="w-full flex items-center px-4 py-2 text-sm text-gray-700 dark:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-raised"
                                       >
                                         <HiOutlinePencil className="w-4 h-4 mr-3" />
                                         {t('common.edit')}
@@ -1008,7 +1010,7 @@ const Campaigns = () => {
                                       {campaign.status === 'active' && (
                                         <button
                                           onClick={() => handlePause(campaign.id)}
-                                          className="w-full flex items-center px-4 py-2 text-sm text-yellow-600 hover:bg-yellow-50"
+                                          className="w-full flex items-center px-4 py-2 text-sm text-yellow-600 dark:text-amber-400 hover:bg-yellow-50 dark:hover:bg-amber-950/30"
                                         >
                                           <HiOutlinePause className="w-4 h-4 mr-3" />
                                           {t('campaigns.pause')}
@@ -1017,7 +1019,7 @@ const Campaigns = () => {
                                       {campaign.status === 'paused' && (
                                         <button
                                           onClick={() => handlePublish(campaign.id)}
-                                          className="w-full flex items-center px-4 py-2 text-sm text-green-600 hover:bg-green-50"
+                                          className="w-full flex items-center px-4 py-2 text-sm text-green-600 dark:text-emerald-400 hover:bg-green-50 dark:hover:bg-emerald-950/30"
                                         >
                                           <HiOutlinePlay className="w-4 h-4 mr-3" />
                                           {t('campaigns.resumeSchedule')}
@@ -1027,7 +1029,7 @@ const Campaigns = () => {
                                       {campaign.origin === 'self_created' && (
                                         <button
                                           onClick={() => openShareModal(campaign)}
-                                          className="w-full flex items-center px-4 py-2 text-sm text-blue-600 hover:bg-blue-50"
+                                          className="w-full flex items-center px-4 py-2 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30"
                                         >
                                           <HiOutlineMail className="w-4 h-4 mr-3" />
                                           {t('campaigns.share') || 'Chia sẻ'}
@@ -1040,7 +1042,7 @@ const Campaigns = () => {
                                             setActiveMenu(null);
                                             setMarketplaceModal({ show: true, campaign });
                                           }}
-                                          className="w-full flex items-center px-4 py-2 text-sm text-violet-600 hover:bg-violet-50"
+                                          className="w-full flex items-center px-4 py-2 text-sm text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/30"
                                         >
                                           <HiOutlineShoppingBag className="w-4 h-4 mr-3" />
                                           Đăng Marketplace
@@ -1050,7 +1052,7 @@ const Campaigns = () => {
                                       {originTab !== 'shared_with_me' && (!campaign.origin || campaign.origin === 'self_created') && (
                                         <button
                                           onClick={() => openDuplicateModal(campaign)}
-                                          className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                          className="w-full flex items-center px-4 py-2 text-sm text-gray-700 dark:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-raised"
                                         >
                                           <HiOutlineDuplicate className="w-4 h-4 mr-3" />
                                           {t('campaigns.duplicate')}
@@ -1058,7 +1060,7 @@ const Campaigns = () => {
                                       )}
                                       <button
                                         onClick={() => handleDelete(campaign.id)}
-                                        className="w-full flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                                        className="w-full flex items-center px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"
                                       >
                                         <HiOutlineTrash className="w-4 h-4 mr-3" />
                                         {t('common.delete')}
@@ -1080,8 +1082,8 @@ const Campaigns = () => {
 
             {/* Pagination */}
             {pagination.totalPages > 1 && (
-              <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
-                <p className="text-xs text-slate-500 font-medium">
+              <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 dark:border-dk-border/80 bg-slate-50/50 dark:bg-dk-bg">
+                <p className="text-xs text-slate-500 dark:text-dk-text2 font-medium">
                   {t('common.showing')} {campaigns.length} / {pagination.total} {t('common.results')}
                 </p>
                 <div className="flex items-center gap-2">
@@ -1089,18 +1091,18 @@ const Campaigns = () => {
                     type="button"
                     onClick={() => setPagination((prev) => ({ ...prev, page: prev.page - 1 }))}
                     disabled={pagination.page <= 1}
-                    className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    className="p-1.5 rounded-lg border border-slate-200 dark:border-dk-border text-slate-600 dark:text-dk-text hover:bg-slate-100 dark:hover:bg-dk-raised disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
                     <HiOutlineChevronLeft className="w-4 h-4" />
                   </button>
-                  <span className="text-xs font-semibold text-slate-700">
+                  <span className="text-xs font-semibold text-slate-700 dark:text-dk-text">
                     {pagination.page} / {pagination.totalPages}
                   </span>
                   <button
                     type="button"
                     onClick={() => setPagination((prev) => ({ ...prev, page: prev.page + 1 }))}
                     disabled={pagination.page >= pagination.totalPages}
-                    className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    className="p-1.5 rounded-lg border border-slate-200 dark:border-dk-border text-slate-600 dark:text-dk-text hover:bg-slate-100 dark:hover:bg-dk-raised disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
                     <HiOutlineChevronRight className="w-4 h-4" />
                   </button>
@@ -1138,16 +1140,16 @@ const Campaigns = () => {
           }}
         >
           <div className="absolute inset-0" onClick={closeCreateModal} />
-          <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-100 max-w-2xl w-full overflow-hidden transform transition-all duration-200">
+          <div className="relative bg-white dark:bg-dk-surface rounded-2xl shadow-2xl border border-slate-100 dark:border-dk-border max-w-2xl w-full overflow-hidden transform transition-all duration-200">
             {/* Header */}
-            <div className="px-6 py-5 border-b border-slate-100 flex items-start justify-between bg-gradient-to-b from-slate-50/70 to-white">
+            <div className="px-6 py-5 border-b border-slate-100 dark:border-dk-border/80 flex items-start justify-between bg-gradient-to-b from-slate-50/70 dark:from-dk-bg to-white dark:to-dk-surface">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-200/80 flex items-center justify-center text-orange-600 shadow-xs shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-950/40 border border-orange-200/80 dark:border-orange-800/60 flex items-center justify-center text-orange-600 dark:text-orange-400 shadow-xs shrink-0">
                   <HiOutlineSparkles className="w-5 h-5" aria-hidden="true" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-slate-900 leading-snug">{t('campaigns.createModalTitle')}</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-dk-text leading-snug">{t('campaigns.createModalTitle')}</h3>
+                  <p className="text-xs text-slate-500 dark:text-dk-text2 mt-0.5">
                     {t('campaigns.createModalSubtitle') || 'Thiết lập tên và kênh tương tác để khởi tạo kịch bản'}
                   </p>
                 </div>
@@ -1155,7 +1157,7 @@ const Campaigns = () => {
               <button
                 type="button"
                 onClick={closeCreateModal}
-                className="text-slate-400 hover:text-slate-600 p-2 rounded-xl hover:bg-slate-100 transition-colors"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-dk-text p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-dk-raised transition-colors"
                 aria-label={t('common.close') || 'Đóng'}
               >
                 <HiOutlineX className="w-5 h-5" />
@@ -1166,10 +1168,10 @@ const Campaigns = () => {
             <div className="p-6 space-y-5">
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-sm font-semibold text-slate-700">
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-dk-text">
                     {t('campaigns.campaignName')}
                   </label>
-                  <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wide">
+                  <span className="text-[11px] font-medium text-slate-400 dark:text-dk-muted uppercase tracking-wide">
                     {t('common.required') || 'Bắt buộc'}
                   </span>
                 </div>
@@ -1183,7 +1185,7 @@ const Campaigns = () => {
                       handleCreateCampaign();
                     }
                   }}
-                  className="w-full px-3.5 py-2.5 text-sm bg-slate-50/60 hover:bg-white focus:bg-white border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 transition-all shadow-xs"
+                  className="w-full px-3.5 py-2.5 text-sm bg-slate-50/60 dark:bg-dk-inset hover:bg-white dark:hover:bg-dk-surface focus:bg-white dark:focus:bg-dk-inset border border-slate-200 dark:border-dk-border rounded-xl text-slate-900 dark:text-dk-text placeholder:text-slate-400 dark:placeholder:text-dk-muted focus:outline-none focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 transition-all shadow-xs"
                   placeholder={t('campaigns.campaignNamePlaceholder')}
                   autoFocus
                 />
@@ -1191,10 +1193,10 @@ const Campaigns = () => {
 
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="block text-sm font-semibold text-slate-700">
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-dk-text">
                     {t('campaigns.campaignType')}
                   </label>
-                  <span className="text-xs text-slate-400 font-normal">
+                  <span className="text-xs text-slate-400 dark:text-dk-muted font-normal">
                     {t('campaigns.selectOneChannel') || 'Chọn 1 kênh'}
                   </span>
                 </div>
@@ -1210,8 +1212,8 @@ const Campaigns = () => {
                         onClick={() => setCreateCampaignForm((prev) => ({ ...prev, campaignType: ch.id }))}
                         className={`group relative flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border text-left transition-all ${
                           isSelected
-                            ? 'border-orange-500 bg-orange-50/70 shadow-sm shadow-orange-500/10 ring-1 ring-orange-500/30 text-orange-950 font-semibold'
-                            : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/80 text-slate-700 hover:text-slate-900 shadow-xs'
+                            ? 'border-orange-500 bg-orange-50/70 dark:bg-orange-950/40 shadow-sm shadow-orange-500/10 ring-1 ring-orange-500/30 text-orange-950 dark:text-orange-200 font-semibold'
+                            : 'border-slate-200 dark:border-dk-border bg-white dark:bg-dk-bg hover:border-slate-300 dark:hover:border-dk-border hover:bg-slate-50/80 dark:hover:bg-dk-surface text-slate-700 dark:text-dk-text shadow-xs'
                         }`}
                       >
                         <span
@@ -1241,7 +1243,7 @@ const Campaigns = () => {
             </div>
 
             {/* Footer */}
-            <div className="px-6 py-4 bg-slate-50/80 border-t border-slate-100 flex items-center justify-end gap-3 rounded-b-2xl">
+            <div className="px-6 py-4 bg-slate-50/80 dark:bg-dk-bg border-t border-slate-100 dark:border-dk-border/80 flex items-center justify-end gap-3 rounded-b-2xl">
               <button
                 type="button"
                 onClick={closeCreateModal}
@@ -1281,15 +1283,15 @@ const Campaigns = () => {
       {approveModal.show && approveModal.campaign && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
-            className="absolute inset-0 bg-black/50"
+            className="absolute inset-0 bg-black/60 backdrop-blur-xs"
             onClick={() => !isApproving && setApproveModal({ show: false, campaign: null })}
           />
-          <div className="relative bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
-            <div className="flex items-center gap-3 text-emerald-600">
-              <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+          <div className="relative bg-white dark:bg-dk-surface rounded-xl shadow-xl max-w-md w-full p-6 space-y-4 border border-transparent dark:border-dk-border">
+            <div className="flex items-center gap-3 text-emerald-600 dark:text-emerald-400">
+              <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center shrink-0">
                 <HiOutlineCheckCircle className="w-6 h-6" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-dk-text">
                 {t('campaigns.approveConfirmTitle')}
               </h3>
             </div>
@@ -1299,7 +1301,7 @@ const Campaigns = () => {
               const recipientCount = Number(approveModal.campaign.totalCustomers) || 0;
               return (
                 <>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-gray-600 dark:text-dk-text">
                     {recipientCount > 0
                       ? t('campaigns.approveConfirmMessage', {
                           name: approveModal.campaign.campaignName,
@@ -1309,7 +1311,7 @@ const Campaigns = () => {
                           name: approveModal.campaign.campaignName,
                         })}
                   </p>
-                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+                  <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-lg text-xs text-amber-800 dark:text-amber-200">
                     ⚠️{' '}
                     {recipientCount > 0 && (
                       <>
@@ -1349,25 +1351,25 @@ const Campaigns = () => {
       {rejectModal.show && rejectModal.campaign && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
-            className="absolute inset-0 bg-black/50"
+            className="absolute inset-0 bg-black/60 backdrop-blur-xs"
             onClick={() => !isRejecting && setRejectModal({ show: false, campaign: null, reason: '' })}
           />
-          <div className="relative bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
-            <div className="flex items-center gap-3 text-red-600">
-              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+          <div className="relative bg-white dark:bg-dk-surface rounded-xl shadow-xl max-w-md w-full p-6 space-y-4 border border-transparent dark:border-dk-border">
+            <div className="flex items-center gap-3 text-red-600 dark:text-red-400">
+              <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-950/40 flex items-center justify-center shrink-0">
                 <HiOutlineXCircle className="w-6 h-6" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-dk-text">
                 {t('campaigns.rejectConfirmTitle')}
               </h3>
             </div>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-600 dark:text-dk-text">
               {t('campaigns.rejectConfirmMessage', {
                 name: rejectModal.campaign.campaignName,
               })}
             </p>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-medium text-gray-700 dark:text-dk-text mb-1">
                 Lý do từ chối (tùy chọn)
               </label>
               <input

@@ -36,12 +36,11 @@ export default function PricingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white text-slate-900 transition-colors">
       {/* ── Hero Section ── */}
-      <section className="relative px-6 pt-12 pb-16 md:pt-16 md:pb-24 overflow-hidden">
+      <section className="relative px-6 pt-12 pb-16 md:pt-16 md:pb-24 overflow-hidden bg-white">
         {/* Background dots */}
-        <div className="absolute inset-0 opacity-[0.3]" style={{
-          backgroundColor: '#f8fafc',
+        <div className="absolute inset-0 opacity-[0.3] pointer-events-none" style={{
           backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)',
           backgroundSize: '24px 24px'
         }} />
@@ -54,7 +53,7 @@ export default function PricingPage() {
 
         <div className="max-w-4xl mx-auto text-center relative z-10">
           {/* Badge */}
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 text-slate-700 text-sm font-medium mb-8">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 text-slate-700 text-sm font-medium mb-8 border border-transparent">
             <span className="w-2 h-2 rounded-full bg-orange-500" />
             <span data-edit="pricing.badge">{getValue('pricing.badge', t('pricingPage.badge'))}</span>
           </div>
@@ -110,8 +109,7 @@ export default function PricingPage() {
 
       {/* ── FAQ ── */}
       <section className="py-20 md:py-28 bg-white relative overflow-hidden">
-        <div className="absolute inset-0 opacity-[0.3]" style={{
-          backgroundColor: '#f8fafc',
+        <div className="absolute inset-0 opacity-[0.3] pointer-events-none" style={{
           backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)',
           backgroundSize: '24px 24px'
         }} />

@@ -61,9 +61,9 @@ const canOfferRefund = (order) => {
 const KpiCard = ({ label, value, sub, onClick, active, testId }) => {
   const body = (
     <>
-      <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">{label}</p>
-      <p className="text-2xl font-bold text-gray-900">{value}</p>
-      {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
+      <p className="text-xs text-gray-400 dark:text-dk-text2 uppercase tracking-wide mb-1">{label}</p>
+      <p className="text-2xl font-bold text-gray-900 dark:text-dk-text">{value}</p>
+      {sub && <p className="text-xs text-gray-400 dark:text-dk-muted mt-1">{sub}</p>}
     </>
   );
   if (onClick) {
@@ -72,7 +72,7 @@ const KpiCard = ({ label, value, sub, onClick, active, testId }) => {
         type="button"
         onClick={onClick}
         data-testid={testId}
-        className={`card p-5 text-left transition-colors ${active ? 'ring-2 ring-primary-500' : 'hover:bg-gray-50'}`}
+        className={`card p-5 text-left transition-colors ${active ? 'ring-2 ring-primary-500' : 'hover:bg-gray-50 dark:hover:bg-dk-raised/40'}`}
       >
         {body}
       </button>
@@ -198,7 +198,7 @@ const AdminOrdersPage = () => {
 
       {/* KPI — THEO BỘ LỌC (khoảng ngày + tìm kiếm), nhãn kỳ ghi rõ ngay dưới */}
       <div className="space-y-2">
-        <p className="text-xs text-gray-500" data-testid="orders-kpi-period">
+        <p className="text-xs text-gray-500 dark:text-dk-text2" data-testid="orders-kpi-period">
           {t('adminOrders.kpi.caption', { period: periodLabel })}
         </p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -234,9 +234,9 @@ const AdminOrdersPage = () => {
       {/* Filter bar */}
       <form onSubmit={handleSearch} className="card p-4 flex flex-wrap items-end gap-3">
         <div className="flex-[2] min-w-[180px]">
-          <label className="block text-xs text-gray-500 mb-1">{t('adminOrders.search')}</label>
+          <label className="block text-xs text-gray-500 dark:text-dk-text2 mb-1">{t('adminOrders.search')}</label>
           <div className="relative">
-            <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-dk-muted" />
             <input
               type="text"
               className="input pl-9 w-full"
@@ -248,7 +248,7 @@ const AdminOrdersPage = () => {
         </div>
 
         <div className="flex-1 min-w-[130px]">
-          <label className="block text-xs text-gray-500 mb-1">{t('orders.status')}</label>
+          <label className="block text-xs text-gray-500 dark:text-dk-text2 mb-1">{t('orders.status')}</label>
           <select
             className="input w-full"
             value={draft.status}
@@ -264,7 +264,7 @@ const AdminOrdersPage = () => {
         </div>
 
         <div className="flex-1 min-w-[140px]">
-          <label className="block text-xs text-gray-500 mb-1">{t('adminOrders.fromDate')}</label>
+          <label className="block text-xs text-gray-500 dark:text-dk-text2 mb-1">{t('adminOrders.fromDate')}</label>
           <input
             type="date"
             className="input w-full"
@@ -274,7 +274,7 @@ const AdminOrdersPage = () => {
         </div>
 
         <div className="flex-1 min-w-[140px]">
-          <label className="block text-xs text-gray-500 mb-1">{t('adminOrders.toDate')}</label>
+          <label className="block text-xs text-gray-500 dark:text-dk-text2 mb-1">{t('adminOrders.toDate')}</label>
           <input
             type="date"
             className="input w-full"
@@ -290,9 +290,9 @@ const AdminOrdersPage = () => {
       </form>
 
       {filters.attention && (
-        <div className="flex items-center gap-3 rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800" data-testid="orders-attention-chip">
+        <div className="flex items-center gap-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-transparent dark:border-amber-900/40 px-4 py-2 text-sm text-amber-800 dark:text-amber-300" data-testid="orders-attention-chip">
           <span>{t(`adminOrders.attention.${filters.attention}`)}</span>
-          <button type="button" className="underline" onClick={() => setAttention('')}>
+          <button type="button" className="underline hover:text-amber-900 dark:hover:text-amber-200" onClick={() => setAttention('')}>
             {t('adminOrders.attention.clear')}
           </button>
         </div>
@@ -302,45 +302,45 @@ const AdminOrdersPage = () => {
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="bg-gray-50 dark:bg-dk-raised border-b border-gray-200 dark:border-dk-border">
               <tr>
                 {[t('adminOrders.orderCode'), t('adminOrders.servicePackage'), t('adminOrders.billingPeriod'), t('adminOrders.promotion'), t('adminOrders.customer'), t('adminOrders.amount'), t('adminOrders.createdAt'), t('adminOrders.status'), t('adminOrders.actions')].map((h) => (
-                  <th key={h} className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3">
+                  <th key={h} className="text-left text-xs font-semibold text-gray-500 dark:text-dk-text2 uppercase tracking-wide px-4 py-3">
                     {h}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100 dark:divide-dk-border/60">
               {isLoading ? (
                 [...Array(5)].map((_, i) => (
                   <tr key={i}>
                     {[...Array(9)].map((__, j) => (
                       <td key={j} className="px-4 py-3">
-                        <div className="h-4 bg-gray-100 rounded animate-pulse" />
+                        <div className="h-4 bg-gray-100 dark:bg-dk-raised rounded animate-pulse" />
                       </td>
                     ))}
                   </tr>
                 ))
               ) : orders.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-10 text-center text-gray-400">
+                  <td colSpan={9} className="px-4 py-10 text-center text-gray-400 dark:text-dk-muted">
                     {t('adminOrders.noOrders')}
                   </td>
                 </tr>
               ) : orders.map((o) => (
-                <tr key={o.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 font-mono text-xs text-gray-600">{o.orderCode}</td>
+                <tr key={o.id} className="hover:bg-gray-50 dark:hover:bg-dk-raised/40 transition-colors">
+                  <td className="px-4 py-3 font-mono text-xs text-gray-600 dark:text-dk-text2">{o.orderCode}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5">
-                      <span className="font-medium text-gray-800">{o.planName || '—'}</span>
+                      <span className="font-medium text-gray-800 dark:text-dk-text">{o.planName || '—'}</span>
                       {o.isCustom && (
-                        <span className="text-[10px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full font-medium">
+                        <span className="text-[10px] bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-300 px-1.5 py-0.5 rounded-full font-medium">
                           {t('adminOrders.custom')}
                         </span>
                       )}
                     </div>
-                    {o.planCode && <p className="text-xs text-gray-400">#{o.planCode}</p>}
+                    {o.planCode && <p className="text-xs text-gray-400 dark:text-dk-muted">#{o.planCode}</p>}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     <span className="badge badge-gray text-xs">
@@ -352,30 +352,30 @@ const AdminOrdersPage = () => {
                   <td className="px-4 py-3 min-w-[150px]">
                     {o.voucherCode ? (
                       <>
-                        <p className="font-mono text-xs font-semibold text-violet-700">{o.voucherCode}</p>
-                        {Number(o.discountAmount) > 0 && <p className="text-xs text-gray-500">-{fmtVnd(o.discountAmount)}</p>}
+                        <p className="font-mono text-xs font-semibold text-violet-700 dark:text-violet-400">{o.voucherCode}</p>
+                        {Number(o.discountAmount) > 0 && <p className="text-xs text-gray-500 dark:text-dk-text2">-{fmtVnd(o.discountAmount)}</p>}
                       </>
                     ) : o.discountLabel || o.discountSource === 'automatic' ? (
-                      <span className="text-xs text-violet-700">{o.discountLabel || t('adminOrders.automaticPromotion')}</span>
+                      <span className="text-xs text-violet-700 dark:text-violet-400">{o.discountLabel || t('adminOrders.automaticPromotion')}</span>
                     ) : (
-                      <span className="text-xs text-gray-400">{t('adminOrders.noVoucher')}</span>
+                      <span className="text-xs text-gray-400 dark:text-dk-muted">{t('adminOrders.noVoucher')}</span>
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <p className="text-gray-800">{o.userFullName || o.userEmail}</p>
-                    {o.userFullName && <p className="text-xs text-gray-400">{o.userEmail}</p>}
+                    <p className="text-gray-800 dark:text-dk-text">{o.userFullName || o.userEmail}</p>
+                    {o.userFullName && <p className="text-xs text-gray-400 dark:text-dk-text2">{o.userEmail}</p>}
                   </td>
-                  <td className="px-4 py-3 font-semibold text-gray-900 whitespace-nowrap">
+                  <td className="px-4 py-3 font-semibold text-gray-900 dark:text-dk-text whitespace-nowrap">
                     {fmtVnd(o.amount)}
-                    <p className="text-[11px] font-normal text-gray-400">{paymentLabel(o, t)}</p>
+                    <p className="text-[11px] font-normal text-gray-400 dark:text-dk-muted">{paymentLabel(o, t)}</p>
                   </td>
-                  <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">
+                  <td className="px-4 py-3 text-gray-500 dark:text-dk-text2 whitespace-nowrap text-xs">
                     {fmtDate(o.createdAt)}
                   </td>
                   <td className="px-4 py-3">
                     <StatusBadge status={o.status} />
                     {hasUnhandledPaidAfterCancelled(o) && (
-                      <span className="mt-1 block w-fit rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium uppercase text-rose-700">
+                      <span className="mt-1 block w-fit rounded bg-rose-50 dark:bg-rose-950/40 border border-transparent dark:border-rose-900/40 px-1.5 py-0.5 text-[10px] font-medium uppercase text-rose-700 dark:text-rose-300">
                         {t('adminOrders.paidAfterCancelledBadge')}
                       </span>
                     )}
@@ -395,7 +395,7 @@ const AdminOrdersPage = () => {
                             <button
                               type="button"
                               onClick={() => setCancellingCode(null)}
-                              className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
+                              className="text-xs px-2 py-1 bg-gray-100 dark:bg-dk-raised text-gray-600 dark:text-dk-text rounded-lg hover:bg-gray-200 dark:hover:bg-dk-strong transition-colors"
                             >
                               {t('adminOrders.cancel')}
                             </button>
@@ -405,7 +405,7 @@ const AdminOrdersPage = () => {
                             type="button"
                             onClick={() => setCancellingCode(o.orderCode)}
                             title={t('adminOrders.cancelOrderAndDisableQR')}
-                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            className="p-1.5 text-gray-400 dark:text-dk-text2 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors"
                           >
                             <HiOutlineBan className="w-4 h-4" />
                           </button>
@@ -424,7 +424,7 @@ const AdminOrdersPage = () => {
                         <button
                           type="button"
                           onClick={() => setRefundingCode(String(o.orderCode))}
-                          className="text-xs px-2 py-1 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+                          className="text-xs px-2 py-1 border border-red-200 dark:border-red-900/60 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
                         >
                           {t('adminOrders.refundButton')}
                         </button>
@@ -439,7 +439,7 @@ const AdminOrdersPage = () => {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between text-sm text-gray-500">
+          <div className="px-4 py-3 border-t border-gray-100 dark:border-dk-border flex items-center justify-between text-sm text-gray-500 dark:text-dk-text2">
             <span>
               {t('adminOrders.displaying', { from: (page - 1) * PAGE_SIZE + 1, to: Math.min(page * PAGE_SIZE, total), total })}
             </span>

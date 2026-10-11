@@ -304,14 +304,14 @@ export default function ContactAlertsPanel({
   const formatChannelBadge = (alert) => {
     if (alert.last_source === 'web') {
       return (
-        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">
+        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-900/50">
           Website
         </span>
       );
     }
     if (alert.last_source === 'zalo_personal') {
       return (
-        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-cyan-50 text-cyan-700 border border-cyan-100">
+        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-cyan-50 dark:bg-cyan-950/40 text-cyan-700 dark:text-cyan-300 border border-cyan-100 dark:border-cyan-900/50">
           {t('inbox.zaloPersonal') || 'Zalo cá nhân'}{alert.display_name ? ` (${alert.display_name})` : ''}
         </span>
       );
@@ -319,7 +319,7 @@ export default function ContactAlertsPanel({
     const ch = alert.channel || 'channel';
     const label = getExternalChannelName(ch);
     return (
-      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-100">
+      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-100 dark:border-purple-900/50">
         {label}{alert.display_name ? ` (${alert.display_name})` : ''}
       </span>
     );
@@ -328,7 +328,7 @@ export default function ContactAlertsPanel({
   const formatStatusBadge = (alert) => {
     if (alert.handled_at) {
       return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900/50">
           <HiOutlineCheck className="w-3.5 h-3.5" />
           {t('inbox.contactAlerts.statusHandled') || 'Đã liên hệ'}
         </span>
@@ -336,7 +336,7 @@ export default function ContactAlertsPanel({
     }
     if (alert.last_notified_at) {
       return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-sky-50 text-sky-700 border border-sky-100">
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border border-sky-100 dark:border-sky-900/50">
           <HiOutlineClock className="w-3.5 h-3.5" />
           {t('inbox.contactAlerts.statusNotified') || 'Đã báo qua email'}
         </span>
@@ -344,7 +344,7 @@ export default function ContactAlertsPanel({
     }
     if (alert.suppressed_reason === 'owner_opted_out') {
       return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-100" title={t('inbox.contactAlerts.titleOwnerOptedOut') || 'Chủ shop đã tắt nhận email'}>
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-100 dark:border-amber-900/50" title={t('inbox.contactAlerts.titleOwnerOptedOut') || 'Chủ shop đã tắt nhận email'}>
           <HiOutlineExclamationCircle className="w-3.5 h-3.5" />
           {t('inbox.contactAlerts.statusOptedOut') || 'Tắt thông báo'}
         </span>
@@ -352,14 +352,14 @@ export default function ContactAlertsPanel({
     }
     if (alert.suppressed_reason === 'human_active') {
       return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-200" title={t('inbox.contactAlerts.titleHumanActive') || 'Người thật đã trả lời trong 120 phút'}>
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-dk-raised text-gray-700 dark:text-dk-text border border-gray-200 dark:border-dk-border" title={t('inbox.contactAlerts.titleHumanActive') || 'Người thật đã trả lời trong 120 phút'}>
           <HiOutlineCheckCircle className="w-3.5 h-3.5" />
           {t('inbox.contactAlerts.statusHumanActive') || 'Đã có người rep'}
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-50 text-rose-700 border border-rose-100">
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-100 dark:border-rose-900/50">
         <HiOutlineClock className="w-3.5 h-3.5" />
         {t('inbox.contactAlerts.statusPending') || 'Chờ thông báo'}
       </span>
@@ -367,12 +367,12 @@ export default function ContactAlertsPanel({
   };
 
   return (
-    <div className={`flex flex-col h-full bg-white ${className}`}>
+    <div className={`flex flex-col h-full bg-white dark:bg-dk-bg ${className}`}>
       {/* Header */}
-      <div className="shrink-0 p-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-3 bg-white">
+      <div className="shrink-0 p-4 border-b border-gray-200 dark:border-dk-border flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-dk-surface">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-bold text-gray-900">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-dk-text">
               {t('inbox.contactAlerts.title') || 'Liên hệ khách để lại'}
             </h2>
             {openCount > 0 && (
@@ -381,7 +381,7 @@ export default function ContactAlertsPanel({
               </span>
             )}
           </div>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <p className="text-xs text-gray-500 dark:text-dk-text2 mt-0.5">
             {t('inbox.contactAlerts.subtitle') || 'SĐT và email khách hàng gửi trong hội thoại chatbot tự động'}
           </p>
         </div>
@@ -390,7 +390,7 @@ export default function ContactAlertsPanel({
           {/* Settings: Email Opt-in/out & Digest Frequency (Hidden for employees) */}
           {!isEmployeeContext && (
             <div className="flex flex-wrap items-center gap-2">
-              <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-medium text-gray-700 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-100 transition-all">
+              <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-medium text-gray-700 dark:text-dk-text bg-gray-50 dark:bg-dk-raised px-3 py-1.5 rounded-lg border border-gray-200 dark:border-dk-border hover:bg-gray-100 dark:hover:bg-dk-strong transition-all">
                 <span>{t('inbox.contactAlerts.emailNotification') || 'Nhận email khi khách để lại liên hệ'}</span>
                 <button
                   type="button"
@@ -399,7 +399,7 @@ export default function ContactAlertsPanel({
                   disabled={isLoadingSettings || isUpdatingSettings}
                   onClick={handleToggleEmailSetting}
                   className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                    emailEnabled ? 'bg-primary-600' : 'bg-gray-300'
+                    emailEnabled ? 'bg-primary-600' : 'bg-gray-300 dark:bg-dk-strong'
                   }`}
                 >
                   <span
@@ -411,8 +411,8 @@ export default function ContactAlertsPanel({
                 </button>
               </label>
 
-              <div className="flex items-center gap-1.5 bg-gray-50 px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs font-medium text-gray-700">
-                <label htmlFor="digest-frequency-select" className="text-gray-600 select-none">
+              <div className="flex items-center gap-1.5 bg-gray-50 dark:bg-dk-raised px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-dk-border text-xs font-medium text-gray-700 dark:text-dk-text">
+                <label htmlFor="digest-frequency-select" className="text-gray-600 dark:text-dk-text2 select-none">
                   {t('inbox.contactAlerts.digestFrequency') || 'Thư tổng hợp'}:
                 </label>
                 <select
@@ -421,11 +421,11 @@ export default function ContactAlertsPanel({
                   value={digestFrequency}
                   disabled={isLoadingSettings || isUpdatingSettings}
                   onChange={handleChangeDigestFrequency}
-                  className="bg-transparent text-xs font-semibold text-gray-800 focus:outline-none cursor-pointer"
+                  className="bg-transparent text-xs font-semibold text-gray-800 dark:text-dk-text focus:outline-none cursor-pointer"
                 >
-                  <option value="weekly">{t('inbox.contactAlerts.digestWeekly') || 'Hàng tuần'}</option>
-                  <option value="monthly">{t('inbox.contactAlerts.digestMonthly') || 'Hàng tháng'}</option>
-                  <option value="none">{t('inbox.contactAlerts.digestNone') || 'Không gửi'}</option>
+                  <option value="weekly" className="dark:bg-dk-raised dark:text-dk-text">{t('inbox.contactAlerts.digestWeekly') || 'Hàng tuần'}</option>
+                  <option value="monthly" className="dark:bg-dk-raised dark:text-dk-text">{t('inbox.contactAlerts.digestMonthly') || 'Hàng tháng'}</option>
+                  <option value="none" className="dark:bg-dk-raised dark:text-dk-text">{t('inbox.contactAlerts.digestNone') || 'Không gửi'}</option>
                 </select>
               </div>
             </div>
@@ -435,7 +435,7 @@ export default function ContactAlertsPanel({
             type="button"
             onClick={fetchAlerts}
             disabled={isLoading}
-            className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all"
+            className="p-2 text-gray-500 dark:text-dk-text2 hover:text-gray-900 dark:hover:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-raised rounded-lg transition-all"
             title={t('common.refresh') || 'Làm mới'}
           >
             <HiOutlineRefresh className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
@@ -444,16 +444,16 @@ export default function ContactAlertsPanel({
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="shrink-0 px-4 py-2.5 bg-gray-50/80 border-b border-gray-200 flex flex-wrap items-center justify-between gap-3">
+      <div className="shrink-0 px-4 py-2.5 bg-gray-50/80 dark:bg-dk-surface/90 border-b border-gray-200 dark:border-dk-border flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2.5">
-          <div className="flex items-center gap-1 bg-gray-200/80 p-1 rounded-lg text-xs font-semibold">
+          <div className="flex items-center gap-1 bg-gray-200/80 dark:bg-dk-raised p-1 rounded-lg text-xs font-semibold">
             <button
               type="button"
               onClick={() => setStatusFilter('open')}
               className={`px-3 py-1 rounded-md transition-all ${
                 statusFilter === 'open'
-                  ? 'bg-white text-primary-700 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-white dark:bg-dk-bg text-primary-700 dark:text-primary-400 shadow-sm'
+                  : 'text-gray-600 dark:text-dk-text2 hover:text-gray-900 dark:hover:text-dk-text'
               }`}
             >
               {t('inbox.contactAlerts.filterOpen') || 'Chưa xử lý'} ({openCount})
@@ -463,8 +463,8 @@ export default function ContactAlertsPanel({
               onClick={() => setStatusFilter('handled')}
               className={`px-3 py-1 rounded-md transition-all ${
                 statusFilter === 'handled'
-                  ? 'bg-white text-primary-700 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-white dark:bg-dk-bg text-primary-700 dark:text-primary-400 shadow-sm'
+                  : 'text-gray-600 dark:text-dk-text2 hover:text-gray-900 dark:hover:text-dk-text'
               }`}
             >
               {t('inbox.contactAlerts.filterHandled') || 'Đã xử lý'}
@@ -474,8 +474,8 @@ export default function ContactAlertsPanel({
               onClick={() => setStatusFilter('all')}
               className={`px-3 py-1 rounded-md transition-all ${
                 statusFilter === 'all'
-                  ? 'bg-white text-primary-700 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-white dark:bg-dk-bg text-primary-700 dark:text-primary-400 shadow-sm'
+                  : 'text-gray-600 dark:text-dk-text2 hover:text-gray-900 dark:hover:text-dk-text'
               }`}
             >
               {t('inbox.contactAlerts.filterAll') || 'Tất cả'} ({total})
@@ -483,8 +483,8 @@ export default function ContactAlertsPanel({
           </div>
 
           {/* Channel filter dropdown */}
-          <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs text-gray-700 shadow-sm">
-            <label htmlFor="channel-filter-select" className="text-gray-400 font-medium whitespace-nowrap">
+          <div className="flex items-center gap-1.5 bg-white dark:bg-dk-raised px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-dk-border text-xs text-gray-700 dark:text-dk-text shadow-sm">
+            <label htmlFor="channel-filter-select" className="text-gray-400 dark:text-dk-text2 font-medium whitespace-nowrap">
               {t('inbox.contactAlerts.filterChannel') || 'Kênh'}:
             </label>
             <select
@@ -492,26 +492,26 @@ export default function ContactAlertsPanel({
               aria-label={t('inbox.contactAlerts.filterChannel') || 'Kênh'}
               value={channelFilter}
               onChange={(e) => setChannelFilter(e.target.value)}
-              className="bg-transparent text-xs font-semibold text-gray-800 focus:outline-none cursor-pointer pr-1"
+              className="bg-transparent text-xs font-semibold text-gray-800 dark:text-dk-text focus:outline-none cursor-pointer pr-1"
             >
-              <option value="all">{t('inbox.contactAlerts.filterChannelAll') || 'Tất cả kênh'}</option>
-              <option value="zalo_personal">{t('inbox.contactAlerts.filterChannelZaloAll') || 'Zalo cá nhân (Tất cả)'}</option>
+              <option value="all" className="dark:bg-dk-raised dark:text-dk-text">{t('inbox.contactAlerts.filterChannelAll') || 'Tất cả kênh'}</option>
+              <option value="zalo_personal" className="dark:bg-dk-raised dark:text-dk-text">{t('inbox.contactAlerts.filterChannelZaloAll') || 'Zalo cá nhân (Tất cả)'}</option>
               {zaloAccounts.map((acc) => {
                 const val = `zalo_account:${acc.id || acc.displayName || acc.phone}`;
                 const label = acc.phone && acc.displayName
                   ? `Zalo: ${acc.displayName} (${acc.phone})`
                   : `Zalo: ${acc.displayName || acc.phone || acc.id}`;
                 return (
-                  <option key={val} value={val}>
+                  <option key={val} value={val} className="dark:bg-dk-raised dark:text-dk-text">
                     &nbsp;&nbsp;{label}
                   </option>
                 );
               })}
-              <option value="web">Website</option>
+              <option value="web" className="dark:bg-dk-raised dark:text-dk-text">Website</option>
               {otherChannels.map((ch) => {
                 const label = getExternalChannelName(ch);
                 return (
-                  <option key={ch} value={ch}>
+                  <option key={ch} value={ch} className="dark:bg-dk-raised dark:text-dk-text">
                     {label}
                   </option>
                 );
@@ -520,8 +520,8 @@ export default function ContactAlertsPanel({
           </div>
 
           {/* Contact type filter dropdown */}
-          <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs text-gray-700 shadow-sm">
-            <label htmlFor="contact-type-filter-select" className="text-gray-400 font-medium whitespace-nowrap">
+          <div className="flex items-center gap-1.5 bg-white dark:bg-dk-raised px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-dk-border text-xs text-gray-700 dark:text-dk-text shadow-sm">
+            <label htmlFor="contact-type-filter-select" className="text-gray-400 dark:text-dk-text2 font-medium whitespace-nowrap">
               {t('inbox.contactAlerts.filterContactType') || 'Loại'}:
             </label>
             <select
@@ -529,23 +529,23 @@ export default function ContactAlertsPanel({
               aria-label={t('inbox.contactAlerts.filterContactType') || 'Loại liên hệ'}
               value={contactTypeFilter}
               onChange={(e) => setContactTypeFilter(e.target.value)}
-              className="bg-transparent text-xs font-semibold text-gray-800 focus:outline-none cursor-pointer pr-1"
+              className="bg-transparent text-xs font-semibold text-gray-800 dark:text-dk-text focus:outline-none cursor-pointer pr-1"
             >
-              <option value="all">{t('inbox.contactAlerts.filterContactTypeAll') || 'Tất cả thông tin'}</option>
-              <option value="phone">📞 {t('inbox.contactAlerts.filterContactTypePhone') || 'Số điện thoại'}</option>
-              <option value="email">✉️ {t('inbox.contactAlerts.filterContactTypeEmail') || 'Email'}</option>
+              <option value="all" className="dark:bg-dk-raised dark:text-dk-text">{t('inbox.contactAlerts.filterContactTypeAll') || 'Tất cả thông tin'}</option>
+              <option value="phone" className="dark:bg-dk-raised dark:text-dk-text">📞 {t('inbox.contactAlerts.filterContactTypePhone') || 'Số điện thoại'}</option>
+              <option value="email" className="dark:bg-dk-raised dark:text-dk-text">✉️ {t('inbox.contactAlerts.filterContactTypeEmail') || 'Email'}</option>
             </select>
           </div>
         </div>
 
         <div className="relative w-64 max-w-full">
-          <HiOutlineSearch className="w-4 h-4 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+          <HiOutlineSearch className="w-4 h-4 text-gray-400 dark:text-dk-muted absolute left-2.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             placeholder={t('inbox.contactAlerts.searchPlaceholder') || 'Tìm theo SĐT, email, tên...'}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
+            className="w-full pl-8 pr-3 py-1.5 text-xs bg-white dark:bg-dk-inset border border-gray-300 dark:border-dk-border text-gray-900 dark:text-dk-text placeholder-gray-400 dark:placeholder-dk-muted rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
           />
         </div>
       </div>
@@ -553,25 +553,25 @@ export default function ContactAlertsPanel({
       {/* Table Content */}
       <div className="flex-1 overflow-auto">
         {isLoading && alerts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-gray-400">
+          <div className="flex flex-col items-center justify-center h-64 text-gray-400 dark:text-dk-muted">
             <HiOutlineRefresh className="w-8 h-8 animate-spin text-primary-500 mb-2" />
             <p className="text-xs">{t('common.loading') || 'Đang tải danh sách...'}</p>
           </div>
         ) : filteredAlerts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-gray-400 p-4 text-center">
-            <HiOutlineCheckCircle className="w-12 h-12 text-gray-300 mb-2" />
-            <p className="text-sm font-semibold text-gray-600">
+          <div className="flex flex-col items-center justify-center h-64 text-gray-400 dark:text-dk-muted p-4 text-center">
+            <HiOutlineCheckCircle className="w-12 h-12 text-gray-300 dark:text-dk-border mb-2" />
+            <p className="text-sm font-semibold text-gray-600 dark:text-dk-text">
               {t('inbox.contactAlerts.emptyTitle') || 'Không có thông tin liên hệ nào'}
             </p>
-            <p className="text-xs text-gray-400 mt-1 max-w-sm">
+            <p className="text-xs text-gray-400 dark:text-dk-muted mt-1 max-w-sm">
               {statusFilter === 'open'
                 ? (t('inbox.contactAlerts.emptyOpenDesc') || 'Tuyệt vời! Bạn đã liên hệ hết tất cả khách hàng để lại thông tin.')
                 : (t('inbox.contactAlerts.emptyDesc') || 'Khi khách hàng để lại số điện thoại hoặc email trong chat, hệ thống sẽ tự động lưu vào sổ này.')}
             </p>
           </div>
         ) : (
-          <table className="min-w-full divide-y divide-gray-200 text-left text-xs">
-            <thead className="bg-gray-50 text-gray-500 font-semibold sticky top-0 z-10 shadow-sm">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-dk-border text-left text-xs">
+            <thead className="bg-gray-50 dark:bg-dk-raised text-gray-500 dark:text-dk-text2 font-semibold sticky top-0 z-10 shadow-sm">
               <tr>
                 <th className="py-3 px-4">{t('inbox.contactAlerts.colChannel') || 'Kênh'}</th>
                 <th className="py-3 px-4">{t('inbox.contactAlerts.colVisitor') || 'Khách hàng'}</th>
@@ -582,12 +582,12 @@ export default function ContactAlertsPanel({
                 <th className="py-3 px-4 text-right">{t('inbox.contactAlerts.colActions') || 'Thao tác'}</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 bg-white">
+            <tbody className="divide-y divide-gray-100 dark:divide-dk-border/80 bg-white dark:bg-dk-bg">
               {filteredAlerts.map((alert) => (
                 <tr
                   key={alert.id}
-                  className={`hover:bg-gray-50/80 transition-colors ${
-                    alert.handled_at ? 'opacity-70 bg-gray-50/30' : ''
+                  className={`hover:bg-gray-50/80 dark:hover:bg-dk-raised/60 transition-colors ${
+                    alert.handled_at ? 'opacity-70 bg-gray-50/30 dark:bg-dk-raised/20' : ''
                   }`}
                 >
                   {/* Kênh */}
@@ -597,11 +597,11 @@ export default function ContactAlertsPanel({
 
                   {/* Khách hàng */}
                   <td className="py-3.5 px-4">
-                    <div className="font-semibold text-gray-900">
+                    <div className="font-semibold text-gray-900 dark:text-dk-text">
                       {alert.visitor_name || t('inbox.contactAlerts.defaultVisitorName') || 'Khách hàng'}
                     </div>
                     {alert.last_excerpt && (
-                      <p className="text-[11px] text-gray-500 line-clamp-1 max-w-xs mt-0.5 italic" title={alert.last_excerpt}>
+                      <p className="text-[11px] text-gray-500 dark:text-dk-text2 line-clamp-1 max-w-xs mt-0.5 italic" title={alert.last_excerpt}>
                         &ldquo;{alert.last_excerpt}&rdquo;
                       </p>
                     )}
@@ -615,17 +615,17 @@ export default function ContactAlertsPanel({
                       ) : (
                         <HiOutlineMail className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                       )}
-                      <span className="font-semibold text-gray-900 font-mono">
+                      <span className="font-semibold text-gray-900 dark:text-dk-text font-mono">
                         {alert.contact_value}
                       </span>
                       <button
                         type="button"
                         onClick={() => handleCopyContact(alert.id, alert.contact_value)}
-                        className="p-1 text-gray-400 hover:text-gray-700 rounded transition-colors"
+                        className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-dk-text rounded transition-colors"
                         title={t('inbox.contactAlerts.copy') || 'Sao chép'}
                       >
                         {copiedId === alert.id ? (
-                          <HiOutlineCheck className="w-3.5 h-3.5 text-emerald-600" />
+                          <HiOutlineCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                         ) : (
                           <HiOutlineClipboardCopy className="w-3.5 h-3.5" />
                         )}
@@ -634,13 +634,13 @@ export default function ContactAlertsPanel({
                   </td>
 
                   {/* Lần cuối */}
-                  <td className="py-3.5 px-4 whitespace-nowrap text-gray-500">
+                  <td className="py-3.5 px-4 whitespace-nowrap text-gray-500 dark:text-dk-text2">
                     {formatDateTime(alert.last_seen_at, locale)}
                   </td>
 
                   {/* Số lần */}
                   <td className="py-3.5 px-4 whitespace-nowrap text-center">
-                    <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded font-semibold text-[11px]">
+                    <span className="px-2 py-0.5 bg-gray-100 dark:bg-dk-raised text-gray-700 dark:text-dk-text rounded font-semibold text-[11px]">
                       {alert.seen_count || 1}
                     </span>
                   </td>
@@ -649,7 +649,7 @@ export default function ContactAlertsPanel({
                   <td className="py-3.5 px-4 whitespace-nowrap">
                     {formatStatusBadge(alert)}
                     {alert.handled_at && alert.handled_by_name && (
-                      <div className="text-[10px] text-gray-400 mt-0.5">
+                      <div className="text-[10px] text-gray-400 dark:text-dk-muted mt-0.5">
                         {t('inbox.contactAlerts.byUser', { name: alert.handled_by_name }) || `bởi ${alert.handled_by_name}`}
                       </div>
                     )}
@@ -661,7 +661,7 @@ export default function ContactAlertsPanel({
                       <button
                         type="button"
                         onClick={() => handleOpenConversation(alert)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-primary-600 bg-primary-50 hover:bg-primary-100 rounded-md transition-all"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-950/40 hover:bg-primary-100 dark:hover:bg-primary-900/50 rounded-md transition-all"
                         title={t('inbox.contactAlerts.openConversation') || 'Mở hội thoại'}
                       >
                         <HiOutlineExternalLink className="w-3.5 h-3.5" />
@@ -674,8 +674,8 @@ export default function ContactAlertsPanel({
                         onClick={() => handleToggleHandled(alert)}
                         className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${
                           alert.handled_at
-                            ? 'text-gray-600 bg-gray-100 hover:bg-gray-200'
-                            : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200'
+                            ? 'text-gray-600 dark:text-dk-text bg-gray-100 dark:bg-dk-raised hover:bg-gray-200 dark:hover:bg-dk-strong'
+                            : 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 border border-emerald-200 dark:border-emerald-800'
                         }`}
                       >
                         {alert.handled_at ? (

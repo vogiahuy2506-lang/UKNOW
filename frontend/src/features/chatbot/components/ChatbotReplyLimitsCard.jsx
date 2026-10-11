@@ -83,17 +83,17 @@ export default function ChatbotReplyLimitsCard({ value, onChange }) {
   };
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-4 space-y-4">
+    <section className="rounded-lg border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface p-4 space-y-4">
       <div className="flex items-start gap-3">
-        <HiOutlineChatAlt2 className="mt-0.5 h-5 w-5 shrink-0 text-primary-600" />
+        <HiOutlineChatAlt2 className="mt-0.5 h-5 w-5 shrink-0 text-primary-600 dark:text-primary-400" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-3">
-            <h3 className="text-sm font-semibold text-slate-900">{t('chatbot.studio.replyLimitsTitle')}</h3>
-            <span className="text-xs text-slate-500">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-dk-text">{t('chatbot.studio.replyLimitsTitle')}</h3>
+            <span className="text-xs text-slate-500 dark:text-dk-text2">
               {t('chatbot.studio.replyLimitsEnabled', { count: enabledCount })}
             </span>
           </div>
-          <p className="mt-1 text-xs leading-relaxed text-slate-500">
+          <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-dk-text2">
             {t('chatbot.studio.replyLimitsHelp')}
           </p>
         </div>
@@ -105,9 +105,9 @@ export default function ChatbotReplyLimitsCard({ value, onChange }) {
           const rule = config[id] || emptyRule();
           const enabled = rule.enabled;
           return (
-            <div key={id} className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 space-y-3">
+            <div key={id} className="rounded-lg border border-slate-200 dark:border-dk-border bg-slate-50/60 dark:bg-dk-raised/50 p-3 space-y-3">
               <div className="flex flex-wrap items-center gap-3">
-                <label className="inline-flex min-w-[7rem] items-center gap-2 text-sm font-medium text-slate-800">
+                <label className="inline-flex min-w-[7rem] items-center gap-2 text-sm font-medium text-slate-800 dark:text-dk-text">
                   <input
                     type="checkbox"
                     checked={enabled}
@@ -115,7 +115,7 @@ export default function ChatbotReplyLimitsCard({ value, onChange }) {
                       enabled: event.target.checked,
                       limit: event.target.checked && rule.limit === '' ? '1' : rule.limit
                     })}
-                    className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                    className="h-4 w-4 rounded border-slate-300 dark:border-dk-border-strong text-primary-600 focus:ring-primary-500"
                   />
                   {label}
                 </label>
@@ -125,9 +125,9 @@ export default function ChatbotReplyLimitsCard({ value, onChange }) {
                   value={rule.limit}
                   onChange={(v) => updateRule(id, { limit: String(v) })}
                   aria-label={t('chatbot.studio.replyLimitCountAria', { period: label.toLowerCase() })}
-                  className="h-9 w-28 rounded-md border border-slate-200 bg-white px-3 text-sm disabled:bg-slate-100 disabled:text-slate-400"
+                  className="h-9 w-28 rounded-md border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-bg px-3 text-sm text-slate-900 dark:text-dk-text disabled:bg-slate-100 dark:disabled:bg-dk-raised disabled:text-slate-400 dark:disabled:text-dk-muted"
                 />
-                <div className="inline-flex rounded-md border border-slate-200 bg-white p-0.5">
+                <div className="inline-flex rounded-md border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-bg p-0.5">
                   {[
                     ['silent', t('chatbot.studio.replyLimitSilent')],
                     ['notify', t('chatbot.studio.replyLimitNotify')],
@@ -139,8 +139,8 @@ export default function ChatbotReplyLimitsCard({ value, onChange }) {
                       onClick={() => updateRule(id, { action: value })}
                       className={`h-8 px-3 text-xs font-medium rounded ${
                         rule.action === value && enabled
-                          ? 'bg-slate-900 text-white'
-                          : 'text-slate-600 hover:bg-slate-50 disabled:text-slate-300'
+                          ? 'bg-slate-900 dark:bg-primary-600 text-white'
+                          : 'text-slate-600 dark:text-dk-text2 hover:bg-slate-50 dark:hover:bg-dk-raised disabled:text-slate-300 dark:disabled:text-dk-muted'
                       }`}
                     >
                       {text}
@@ -157,9 +157,9 @@ export default function ChatbotReplyLimitsCard({ value, onChange }) {
                     value={rule.message}
                     onChange={(event) => updateRule(id, { message: event.target.value })}
                     placeholder={t('chatbot.studio.replyLimitMessagePlaceholder')}
-                    className="w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800"
+                    className="w-full resize-y rounded-md border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-bg px-3 py-2 text-sm text-slate-800 dark:text-dk-text placeholder:text-slate-400 dark:placeholder:text-dk-muted"
                   />
-                  <p className="mt-1 text-right text-[11px] text-slate-400">{rule.message.length}/500</p>
+                  <p className="mt-1 text-right text-[11px] text-slate-400 dark:text-dk-muted">{rule.message.length}/500</p>
                 </div>
               )}
             </div>

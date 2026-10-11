@@ -9,11 +9,11 @@ import {
 import { formatDataPayloadBytes } from '../../features/campaigns/utils/dataColumnSelection';
 
 const statusStyles = {
-  success: 'bg-green-100 text-green-700',
-  skipped: 'bg-amber-100 text-amber-700',
-  failed: 'bg-red-100 text-red-700',
-  warning: 'bg-yellow-100 text-yellow-700',
-  info: 'bg-blue-100 text-blue-700',
+  success: 'bg-green-100 text-green-700 dark:bg-green-950/60 dark:text-green-300',
+  skipped: 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300',
+  failed: 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300',
+  warning: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950/60 dark:text-yellow-300',
+  info: 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300',
 };
 
 const dotStatusStyles = {
@@ -235,7 +235,9 @@ const CampaignExecutionLogWorkspace = ({
     <button
       onClick={() => setActiveTab(id)}
       className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-        activeTab === id ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100'
+        activeTab === id
+          ? 'bg-gray-900 text-white dark:bg-slate-200 dark:text-slate-900' // dark-ngoai-le: tab active sáng cố ý trên nền tối
+          : 'text-gray-700 dark:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-raised'
       }`}
     >
       {label}
@@ -245,14 +247,14 @@ const CampaignExecutionLogWorkspace = ({
   return (
     <div className="flex h-full min-h-0 min-w-full w-max">
       <div
-        className="border border-gray-200 rounded-lg overflow-hidden bg-white flex flex-col min-h-0 shrink-0"
+        className="border border-gray-200 dark:border-dk-border rounded-lg overflow-hidden bg-white dark:bg-dk-surface flex flex-col min-h-0 shrink-0"
         style={{
           width: `${listWidth}px`,
           minWidth: `${minListWidth}px`,
         }}
       >
-        <div className="px-2 py-1.5 bg-gray-50 border-b flex items-center justify-between">
-          <div className="text-sm font-medium text-gray-700">{t('campaignExecutionLog.logList')}</div>
+        <div className="px-2 py-1.5 bg-gray-50 dark:bg-dk-raised/60 border-b border-gray-200 dark:border-dk-border flex items-center justify-between">
+          <div className="text-sm font-medium text-gray-700 dark:text-dk-text">{t('campaignExecutionLog.logList')}</div>
           <div className="flex items-center gap-2">
             <button
               onClick={exportToExcel}
@@ -263,22 +265,22 @@ const CampaignExecutionLogWorkspace = ({
               <HiOutlineDocumentDownload className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Excel</span>
             </button>
-            <div className="text-xs text-gray-500">{normalizedLogs.length} {normalizedLogs.length === 1 ? 'log' : 'logs'}</div>
+            <div className="text-xs text-gray-500 dark:text-dk-text2">{normalizedLogs.length} {normalizedLogs.length === 1 ? 'log' : 'logs'}</div>
           </div>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
           {normalizedLogs.length === 0 ? (
-            <div className="p-2 text-sm text-gray-500">{emptyListText || t('campaignExecutionLog.noLogs')}</div>
+            <div className="p-2 text-sm text-gray-500 dark:text-dk-text2">{emptyListText || t('campaignExecutionLog.noLogs')}</div>
           ) : (
-            <div className="divide-y w-full">
+            <div className="divide-y divide-gray-100 dark:divide-dk-border/80 w-full">
               {normalizedLogs.map((log) => {
                 const statusKey = log.status || 'info';
                 return (
                   <button
                     key={log.id}
                     onClick={() => onSelectLogId?.(log.id)}
-                    className={`w-full text-left px-2 py-1.5 flex items-start gap-2 hover:bg-gray-50 min-w-0 ${
-                      selectedLogId === log.id ? 'bg-primary-50' : ''
+                    className={`w-full text-left px-2 py-1.5 flex items-start gap-2 hover:bg-gray-50 dark:hover:bg-dk-raised/50 min-w-0 transition-colors ${
+                      selectedLogId === log.id ? 'bg-primary-50 dark:bg-primary-950/40' : ''
                     }`}
                   >
                     <span
@@ -287,13 +289,13 @@ const CampaignExecutionLogWorkspace = ({
                       }`}
                     />
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm text-gray-900 truncate">
+                      <div className="text-sm text-gray-900 dark:text-dk-text truncate">
                         {log.nodeName ? <span className="font-medium">{log.nodeName}</span> : <span className="font-medium">{t('campaignExecutionLog.system')}</span>}
-                        <span className="text-gray-500"> — {log.message}</span>
+                        <span className="text-gray-500 dark:text-dk-text2"> — {log.message}</span>
                       </div>
-                      <div className="text-xs text-gray-400 flex items-center justify-between gap-1">
+                      <div className="text-xs text-gray-400 dark:text-dk-muted flex items-center justify-between gap-1">
                         <span className="truncate">{formatCampaignTime(log.timestamp, '')}</span>
-                        {log.result && <span className="text-primary-600 flex-shrink-0">{t('campaignExecutionLog.hasResult')}</span>}
+                        {log.result && <span className="text-primary-600 dark:text-primary-400 flex-shrink-0">{t('campaignExecutionLog.hasResult')}</span>}
                       </div>
                     </div>
                   </button>
@@ -307,25 +309,25 @@ const CampaignExecutionLogWorkspace = ({
       {showSplitter && (
         <div
           className={`mx-2 h-full w-2 cursor-col-resize transition-colors shrink-0 ${
-            isResizingSplit ? 'bg-primary-100' : 'hover:bg-primary-50'
+            isResizingSplit ? 'bg-primary-100 dark:bg-primary-950/60' : 'hover:bg-primary-50 dark:hover:bg-primary-950/30'
           }`}
           onMouseDown={onSplitResizeStart}
           role="separator"
           aria-orientation="vertical"
           title={t('campaignBuilder.dragToResize')}
         >
-          <div className="mx-auto h-full w-px bg-gray-200" />
+          <div className="mx-auto h-full w-px bg-gray-200 dark:bg-dk-raised" />
         </div>
       )}
 
       <div
-        className={`flex-1 min-w-0 border border-gray-200 rounded-lg bg-white min-h-0 overflow-hidden ${
+        className={`flex-1 min-w-0 border border-gray-200 dark:border-dk-border rounded-lg bg-white dark:bg-dk-surface min-h-0 overflow-hidden ${
           showSplitter ? 'p-2' : 'ml-3 p-2'
         }`}
         style={{ minWidth: `${minDetailWidth}px` }}
       >
         {!selectedLog ? (
-          <div className="h-full flex items-center justify-center text-sm text-gray-500">
+          <div className="h-full flex items-center justify-center text-sm text-gray-500 dark:text-dk-text2">
             {emptyDetailText || t('campaignExecutionLog.noLogSelected')}
           </div>
         ) : (
@@ -333,28 +335,32 @@ const CampaignExecutionLogWorkspace = ({
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2 text-sm">
-                  <span className="font-semibold text-gray-900">{selectedLog.nodeName || t('campaignExecutionLog.system')}</span>
-                  <span className="text-xs text-gray-500">{formatCampaignTime(selectedLog.timestamp, '')}</span>
+                  <span className="font-semibold text-gray-900 dark:text-dk-text">{selectedLog.nodeName || t('campaignExecutionLog.system')}</span>
+                  <span className="text-xs text-gray-500 dark:text-dk-text2">{formatCampaignTime(selectedLog.timestamp, '')}</span>
                   <span className={`inline-flex items-center justify-center text-[11px] px-2 py-0.5 rounded-full ${statusStyles[selectedLog.status] || statusStyles.info}`}>
                     {selectedLog.status || 'info'}
                   </span>
                 </div>
-                <div className="text-xs text-gray-500 line-clamp-1">{selectedLog.message}</div>
+                <div className="text-xs text-gray-500 dark:text-dk-text2 line-clamp-1">{selectedLog.message}</div>
               </div>
 
               <div className="flex items-center gap-2 flex-shrink-0">
                 <button
                   onClick={() => setActiveSide('input')}
-                  className={`px-3 py-1.5 text-sm rounded-lg ${
-                    activeSide === 'input' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-100'
+                  className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                    activeSide === 'input'
+                      ? 'bg-primary-50 dark:bg-primary-950/40 text-primary-700 dark:text-primary-300'
+                      : 'text-gray-600 dark:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-raised'
                   }`}
                 >
                   {t('campaignExecutionLog.input').toUpperCase()}
                 </button>
                 <button
                   onClick={() => setActiveSide('output')}
-                  className={`px-3 py-1.5 text-sm rounded-lg ${
-                    activeSide === 'output' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-100'
+                  className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                    activeSide === 'output'
+                      ? 'bg-primary-50 dark:bg-primary-950/40 text-primary-700 dark:text-primary-300'
+                      : 'text-gray-600 dark:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-raised'
                   }`}
                   disabled={!hasResult}
                 >
@@ -363,13 +369,13 @@ const CampaignExecutionLogWorkspace = ({
               </div>
             </div>
 
-            <div className="mt-2 flex-1 min-h-0 min-w-0 bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <div className="mt-2 flex-1 min-h-0 min-w-0 bg-white dark:bg-dk-bg border border-gray-200 dark:border-dk-border rounded-lg overflow-hidden">
               {activeSide === 'input' && (
                 <div className="h-full min-h-0 min-w-0 flex flex-col">
-                  <div className="px-2 py-1.5 border-b bg-gray-50 text-sm font-medium text-gray-700">
+                  <div className="px-2 py-1.5 border-b border-gray-200 dark:border-dk-border bg-gray-50 dark:bg-dk-raised/60 text-sm font-medium text-gray-700 dark:text-dk-text">
                     {t('campaignExecutionLog.input')}
                   </div>
-                  <pre className="flex-1 min-h-0 min-w-0 w-full overflow-auto p-2 text-xs bg-white">
+                  <pre className="flex-1 min-h-0 min-w-0 w-full overflow-auto p-2 text-xs bg-white dark:bg-dk-bg text-gray-800 dark:text-dk-text">
                     {JSON.stringify(inputData ?? {}, null, 2)}
                   </pre>
                 </div>
@@ -377,7 +383,7 @@ const CampaignExecutionLogWorkspace = ({
 
               {activeSide === 'output' && (
                 <div className="h-full min-h-0 min-w-0 flex flex-col overflow-hidden">
-                  <div className="px-2 py-1.5 border-b bg-gray-50 flex items-center justify-between">
+                  <div className="px-2 py-1.5 border-b border-gray-200 dark:border-dk-border bg-gray-50 dark:bg-dk-raised/60 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <TabButton id="schema" label={t('campaignExecutionLog.schema')} />
                       <TabButton id="table" label={t('campaignExecutionLog.table')} />
@@ -386,21 +392,21 @@ const CampaignExecutionLogWorkspace = ({
                     <div className="flex items-center gap-2">
                       {sendSummary && (
                         <>
-                          <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                          <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
                             {t('campaignExecutionLog.totalSent')}: {sendSummary.sentCount}
                           </span>
-                          <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+                          <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-300">
                             {t('campaignExecutionLog.sentFailed')}: {sendSummary.failedCount}
                           </span>
                         </>
                       )}
-                      <div className="flex flex-wrap items-center justify-end gap-1.5 text-xs text-gray-500">
+                      <div className="flex flex-wrap items-center justify-end gap-1.5 text-xs text-gray-500 dark:text-dk-text2">
                         <span>
                           {outputData?.meta?.totalItems ? `${outputData.meta.totalItems} ${t('campaignExecutionLog.items')}` : `${items.length} ${t('campaignExecutionLog.items')}`}
                         </span>
                         {dataPayloadMeta?.hasAcc ? (
                           <span
-                            className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700"
+                            className="rounded-full bg-slate-100 dark:bg-dk-raised px-2 py-0.5 text-[11px] text-slate-700 dark:text-dk-text"
                             title={t('mappingData.estimateJsonSize')}
                           >
                             {t('campaignExecutionLog.payloadSize', { size: formatDataPayloadBytes(dataPayloadMeta.acc) })}
@@ -408,7 +414,7 @@ const CampaignExecutionLogWorkspace = ({
                         ) : null}
                         {dataPayloadMeta?.hasSavings ? (
                           <span
-                            className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-800"
+                            className="rounded-full bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 text-[11px] text-emerald-800 dark:text-emerald-300"
                             title={t('mappingData.compareBatchSize')}
                           >
                             {t('campaignExecutionLog.batchSavings', { size: formatDataPayloadBytes(dataPayloadMeta.savings) })}
@@ -421,13 +427,13 @@ const CampaignExecutionLogWorkspace = ({
                   {activeTab === 'schema' && (
                     <div className="flex-1 min-h-0 overflow-auto p-2">
                       {schema.length === 0 ? (
-                        <div className="text-sm text-gray-500">{t('campaignExecutionLog.noSchema')}</div>
+                        <div className="text-sm text-gray-500 dark:text-dk-text2">{t('campaignExecutionLog.noSchema')}</div>
                       ) : (
                         <div className="space-y-2">
                           {schema.map((f) => (
                             <div key={f.key} className="flex items-center justify-between text-sm">
-                              <span className="font-mono text-gray-800">{f.key}</span>
-                              <span className="text-gray-500">{f.type}</span>
+                              <span className="font-mono text-gray-800 dark:text-dk-text">{f.key}</span>
+                              <span className="text-gray-500 dark:text-dk-text2">{f.type}</span>
                             </div>
                           ))}
                         </div>
@@ -436,7 +442,7 @@ const CampaignExecutionLogWorkspace = ({
                   )}
 
                   {activeTab === 'json' && (
-                    <pre className="flex-1 min-h-0 min-w-0 w-full overflow-auto p-2 text-xs bg-white">
+                    <pre className="flex-1 min-h-0 min-w-0 w-full overflow-auto p-2 text-xs bg-white dark:bg-dk-bg text-gray-800 dark:text-dk-text">
                       {JSON.stringify(outputData ?? {}, null, 2)}
                     </pre>
                   )}
@@ -446,13 +452,13 @@ const CampaignExecutionLogWorkspace = ({
                       <div className="flex-1 min-h-0 min-w-0 w-full max-w-full overflow-auto">
                         <div className="w-full max-w-full overflow-x-auto">
                           {items.length === 0 ? (
-                            <div className="p-2 text-sm text-gray-500">{t('campaignExecutionLog.noData')}</div>
+                            <div className="p-2 text-sm text-gray-500 dark:text-dk-text2">{t('campaignExecutionLog.noData')}</div>
                           ) : (
                             <table className="w-max min-w-full text-xs border-collapse">
-                              <thead className="sticky top-0 bg-gray-50 border-b">
+                              <thead className="sticky top-0 bg-gray-50 dark:bg-dk-raised border-b border-gray-200 dark:border-dk-border">
                                 <tr>
                                   {columns.map((c) => (
-                                    <th key={c} className="text-left px-3 py-1.5 font-semibold text-gray-700 whitespace-nowrap">
+                                    <th key={c} className="text-left px-3 py-1.5 font-semibold text-gray-700 dark:text-dk-text whitespace-nowrap">
                                       {c}
                                     </th>
                                   ))}
@@ -460,7 +466,7 @@ const CampaignExecutionLogWorkspace = ({
                               </thead>
                               <tbody>
                                 {pageItems.map((row, idx) => (
-                                  <tr key={idx} className="border-b last:border-b-0 hover:bg-gray-50">
+                                  <tr key={idx} className="border-b border-gray-100 dark:border-dk-border/60 last:border-b-0 hover:bg-gray-50 dark:hover:bg-dk-raised/50 transition-colors">
                                     {columns.map((c) => {
                                       const rawValue = formatLogCellValue(c, row?.[c]);
                                       const cellKey = `${idx}-${c}`;
@@ -468,7 +474,7 @@ const CampaignExecutionLogWorkspace = ({
                                       const isMessageIdCol = /message_?id/i.test(c);
                                       const isCopied = copiedCell === cellKey;
                                       return (
-                                        <td key={c} className="px-3 py-1.5 text-gray-800 whitespace-nowrap">
+                                        <td key={c} className="px-3 py-1.5 text-gray-800 dark:text-dk-text whitespace-nowrap">
                                           <div className="flex items-center gap-1.5">
                                             <button
                                               type="button"
@@ -492,10 +498,10 @@ const CampaignExecutionLogWorkspace = ({
                                                   setTimeout(() => setCopiedCell(null), 1500);
                                                 }}
                                                 title={isCopied ? 'Đã sao chép!' : 'Sao chép Message ID'}
-                                                className="p-0.5 text-gray-400 hover:text-gray-700 rounded transition-colors"
+                                                className="p-0.5 text-gray-400 dark:text-dk-muted hover:text-gray-700 dark:hover:text-dk-text rounded transition-colors"
                                               >
                                                 {isCopied ? (
-                                                  <HiCheck className="w-3.5 h-3.5 text-green-600" />
+                                                  <HiCheck className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
                                                 ) : (
                                                   <HiOutlineClipboardCopy className="w-3.5 h-3.5" />
                                                 )}
@@ -513,44 +519,44 @@ const CampaignExecutionLogWorkspace = ({
                         </div>
                       </div>
 
-                      <div className="flex-none border-t bg-white px-3 py-2 flex items-center justify-between text-xs">
+                      <div className="flex-none border-t border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface px-3 py-2 flex items-center justify-between text-xs">
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => setPage(1)}
-                            className="px-2 py-1 rounded hover:bg-gray-100"
+                            className="px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-dk-raised text-gray-700 dark:text-dk-text disabled:opacity-40"
                             disabled={safePage === 1}
                           >
                             «
                           </button>
                           <button
                             onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-                            className="px-2 py-1 rounded hover:bg-gray-100"
+                            className="px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-dk-raised text-gray-700 dark:text-dk-text disabled:opacity-40"
                             disabled={safePage === 1}
                           >
                             ‹
                           </button>
-                          <span>
+                          <span className="text-gray-700 dark:text-dk-text">
                             {safePage} / {totalPages}
                           </span>
                           <button
                             onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-                            className="px-2 py-1 rounded hover:bg-gray-100"
+                            className="px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-dk-raised text-gray-700 dark:text-dk-text disabled:opacity-40"
                             disabled={safePage === totalPages}
                           >
                             ›
                           </button>
                           <button
                             onClick={() => setPage(totalPages)}
-                            className="px-2 py-1 rounded hover:bg-gray-100"
+                            className="px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-dk-raised text-gray-700 dark:text-dk-text disabled:opacity-40"
                             disabled={safePage === totalPages}
                           >
                             »
                           </button>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-gray-500">{t('campaignExecutionLog.pageSize')}</span>
+                          <span className="text-gray-500 dark:text-dk-text2">{t('campaignExecutionLog.pageSize')}</span>
                           <select
-                            className="border border-gray-200 rounded px-2 py-1 text-xs"
+                            className="border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-raised text-gray-900 dark:text-dk-text rounded px-2 py-1 text-xs"
                             value={pageSize}
                             onChange={(event) => {
                               setPageSize(parseInt(event.target.value, 10));

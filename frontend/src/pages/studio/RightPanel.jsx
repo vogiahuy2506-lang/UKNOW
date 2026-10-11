@@ -14,14 +14,14 @@ export default function RightPanel({
   // Guard: không render gì khi không có chatbot
   if (!chatbot) {
     return (
-      <div className="h-full bg-white flex items-center justify-center">
+      <div className="h-full bg-white dark:bg-dk-surface flex items-center justify-center">
         <p className="text-sm text-slate-400">{t('chatbot.studio.selectBotForDeploy')}</p>
       </div>
     );
   }
 
   return (
-    <div className="h-full bg-white flex flex-col">
+    <div className="h-full bg-white dark:bg-dk-surface flex flex-col">
       <div className="flex-1 min-h-0 overflow-hidden">
         <DeployTab
           chatbot={chatbot}

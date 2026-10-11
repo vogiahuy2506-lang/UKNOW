@@ -281,8 +281,8 @@ export default function CustomPlanBuilder({
   if (!open) return null;
 
   const cardClass = glass
-    ? 'bg-white/90 backdrop-blur-md border border-white/80'
-    : 'bg-white border border-slate-200';
+    ? 'bg-white/90 dark:bg-dk-surface/90 backdrop-blur-md border border-white/80 dark:border-dk-border'
+    : 'bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border';
 
   return (
     <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -293,15 +293,15 @@ export default function CustomPlanBuilder({
         onClick={onClose}
       />
       <div className={`relative w-full max-w-4xl max-h-[92vh] overflow-hidden rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col ${cardClass}`}>
-        <div className="px-5 py-4 border-b border-slate-100 flex items-start justify-between gap-3">
+        <div className="px-5 py-4 border-b border-slate-100 dark:border-dk-border flex items-start justify-between gap-3">
           <div>
-            <h3 className="text-xl font-black text-slate-900">{t('customPlan.title')}</h3>
-            <p className="text-sm text-slate-500 mt-1">{t('customPlan.subtitle')}</p>
+            <h3 className="text-xl font-black text-slate-900 dark:text-dk-text">{t('customPlan.title')}</h3>
+            <p className="text-sm text-slate-500 dark:text-dk-text2 mt-1">{t('customPlan.subtitle')}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-700 text-sm font-semibold px-2 py-1"
+            className="text-slate-400 dark:text-dk-muted hover:text-slate-700 dark:hover:text-dk-text text-sm font-semibold px-2 py-1"
           >
             {t('common.close')}
           </button>
@@ -315,12 +315,12 @@ export default function CustomPlanBuilder({
           ) : (
             <>
               <div className="flex justify-center">
-                <div className="inline-flex items-center rounded-full p-1 gap-1 bg-slate-100 border border-slate-200">
+                <div className="inline-flex items-center rounded-full p-1 gap-1 bg-slate-100 dark:bg-dk-raised border border-slate-200 dark:border-dk-border">
                   <button
                     type="button"
                     onClick={() => setBillingPeriod('monthly')}
-                    className={`px-4 py-1.5 rounded-full text-sm font-semibold ${
-                      billingPeriod === 'monthly' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
+                    className={`px-4 py-1.5 rounded-full text-sm font-semibold transition ${
+                      billingPeriod === 'monthly' ? 'bg-white dark:bg-dk-inset text-slate-900 dark:text-dk-text shadow-sm' : 'text-slate-500 dark:text-dk-text2'
                     }`}
                   >
                     {t('pricing.billingMonthly')}
@@ -328,8 +328,8 @@ export default function CustomPlanBuilder({
                   <button
                     type="button"
                     onClick={() => setBillingPeriod('yearly')}
-                    className={`px-4 py-1.5 rounded-full text-sm font-semibold flex items-center gap-2 ${
-                      billingPeriod === 'yearly' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
+                    className={`px-4 py-1.5 rounded-full text-sm font-semibold flex items-center gap-2 transition ${
+                      billingPeriod === 'yearly' ? 'bg-white dark:bg-dk-inset text-slate-900 dark:text-dk-text shadow-sm' : 'text-slate-500 dark:text-dk-text2'
                     }`}
                   >
                     {t('pricing.billingYearly')}
@@ -342,24 +342,24 @@ export default function CustomPlanBuilder({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {editableItems.map((item) => (
-                  <div key={item.itemKey} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
+                  <div key={item.itemKey} className="rounded-2xl border border-slate-200 dark:border-dk-border bg-slate-50/70 dark:bg-dk-raised/40 p-3">
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div>
-                        <p className="text-sm font-bold text-slate-800">
+                        <p className="text-sm font-bold text-slate-800 dark:text-dk-text">
                           {t(ITEM_LABEL_KEYS[item.itemKey] || item.itemKey)}
                         </p>
-                        <p className="text-[11px] text-slate-500">
+                        <p className="text-[11px] text-slate-500 dark:text-dk-text2">
                           {fmtVnd(item.unitPrice)} / {formatUnit(item, t)}
                         </p>
                         {Number(item.includedQty || 0) > 0 && (
-                          <p className="text-[11px] text-emerald-700 mt-0.5">
+                          <p className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-0.5">
                             {t('customPlan.includedInBase', {
                               n: formatQtyWithUnit(item.itemKey, item.includedQty, t),
                             })}
                           </p>
                         )}
                         {item.itemKey === 'storage_gb' && (
-                          <p className="text-[11px] text-indigo-600 font-medium mt-0.5">
+                          <p className="text-[11px] text-indigo-600 dark:text-indigo-400 font-medium mt-0.5">
                             {t('customPlan.storageKbHint', {
                               docs: Math.max(25, (Number(quantities[item.itemKey]) || item.minQty || 1) * 50).toLocaleString('vi-VN'),
                               chars: `${(Math.max(1500000, (Number(quantities[item.itemKey]) || item.minQty || 1) * 5000000) / 1000000).toLocaleString('vi-VN')}M`,
@@ -372,7 +372,7 @@ export default function CustomPlanBuilder({
                       <button
                         type="button"
                         onClick={() => adjustQty(item, -1)}
-                        className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100"
+                        className="w-8 h-8 rounded-lg bg-white dark:bg-dk-raised border border-slate-200 dark:border-dk-border flex items-center justify-center text-slate-600 dark:text-dk-text hover:bg-slate-100 dark:hover:bg-dk-strong transition"
                       >
                         <HiMinus className="w-4 h-4" />
                       </button>
@@ -380,10 +380,10 @@ export default function CustomPlanBuilder({
                         type="text"
                         inputMode="numeric"
                         aria-invalid={Boolean(quantityIssues[item.itemKey])}
-                        className={`flex-1 text-center font-bold bg-white border rounded-lg py-1.5 ${
+                        className={`flex-1 text-center font-bold bg-white dark:bg-dk-inset border rounded-lg py-1.5 ${
                           quantityIssues[item.itemKey]
-                            ? 'border-red-300 text-red-600'
-                            : 'border-slate-200 text-slate-900'
+                            ? 'border-red-300 dark:border-red-800 text-red-600 dark:text-red-400'
+                            : 'border-slate-200 dark:border-dk-border text-slate-900 dark:text-dk-text'
                         }`}
                         value={formatQtyInput(quantities[item.itemKey])}
                         onChange={(e) => setQty(item, e.target.value)}
@@ -391,13 +391,13 @@ export default function CustomPlanBuilder({
                       <button
                         type="button"
                         onClick={() => adjustQty(item, 1)}
-                        className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100"
+                        className="w-8 h-8 rounded-lg bg-white dark:bg-dk-raised border border-slate-200 dark:border-dk-border flex items-center justify-center text-slate-600 dark:text-dk-text hover:bg-slate-100 dark:hover:bg-dk-strong transition"
                       >
                         <HiPlus className="w-4 h-4" />
                       </button>
                     </div>
                     {quantityIssues[item.itemKey] && (
-                      <p className="mt-1.5 text-[11px] font-medium text-red-600 leading-snug">
+                      <p className="mt-1.5 text-[11px] font-medium text-red-600 dark:text-red-400 leading-snug">
                         {quantityIssues[item.itemKey]}
                       </p>
                     )}
@@ -508,8 +508,8 @@ export default function CustomPlanBuilder({
           )}
         </div>
 
-        <div className="px-5 py-4 border-t border-slate-100 flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between bg-white">
-          <p className="text-xs text-slate-500">
+        <div className="px-5 py-4 border-t border-slate-100 dark:border-dk-border flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between bg-white dark:bg-dk-surface">
+          <p className="text-xs text-slate-500 dark:text-dk-text2">
             {t('customPlan.capacityHint', {
               n: Number(config.zaloMonthlyCapacityPerAccount || 16000).toLocaleString('vi-VN'),
             })}

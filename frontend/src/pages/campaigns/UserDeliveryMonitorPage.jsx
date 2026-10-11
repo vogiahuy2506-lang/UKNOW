@@ -73,18 +73,18 @@ const runStatusBadgeClass = (run) => {
 };
 
 const toneMap = {
-  green: 'bg-emerald-50 text-emerald-600',
-  red: 'bg-red-50 text-red-600',
-  neutral: 'bg-gray-100 text-gray-600',
+  green: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400',
+  red: 'bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400',
+  neutral: 'bg-gray-100 dark:bg-dk-raised text-gray-600 dark:text-dk-text',
 };
 
 const SummaryCard = ({ testId, icon: Icon, label, value, tone = 'green', children }) => (
   <div className="card p-5" data-testid={testId}>
     <div className="flex items-start justify-between gap-4">
       <div className="min-w-0">
-        <p className="truncate text-sm text-gray-500">{label}</p>
-        <p className="mt-1 text-2xl font-bold text-gray-900">{value}</p>
-        <div className="mt-1 space-y-1 text-xs text-gray-500">{children}</div>
+        <p className="truncate text-sm text-gray-500 dark:text-dk-text2">{label}</p>
+        <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-dk-text">{value}</p>
+        <div className="mt-1 space-y-1 text-xs text-gray-500 dark:text-dk-text2">{children}</div>
       </div>
       <div className={`rounded-xl p-3 ${toneMap[tone] || toneMap.green}`}>
         <Icon className="h-6 w-6" />
@@ -97,10 +97,10 @@ const HourlyTooltip = ({ active, payload, label, t }) => {
   if (!active || !payload?.length) return null;
   const rows = payload.filter((item) => Number(item.value) > 0);
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-3 text-sm shadow-lg">
-      <p className="mb-1 font-semibold text-gray-700">{label}</p>
+    <div className="rounded-xl border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface p-3 text-sm shadow-lg text-slate-800 dark:text-dk-text">
+      <p className="mb-1 font-semibold text-gray-700 dark:text-dk-text">{label}</p>
       {rows.length === 0 ? (
-        <p className="text-gray-400">{t('userDeliveryMonitor.hourlyNone')}</p>
+        <p className="text-gray-400 dark:text-dk-muted">{t('userDeliveryMonitor.hourlyNone')}</p>
       ) : rows.map((item) => (
         <p key={item.dataKey} style={{ color: item.color }}>
           {t(`userDeliveryMonitor.channel.${item.dataKey}`)}: <strong>{fmt(item.value)}</strong>
@@ -111,8 +111,8 @@ const HourlyTooltip = ({ active, payload, label, t }) => {
 };
 
 const severityClass = {
-  critical: 'border-red-100 bg-red-50 text-red-700',
-  warning: 'border-amber-100 bg-amber-50 text-amber-700',
+  critical: 'border-red-100 dark:border-red-900/40 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300',
+  warning: 'border-amber-100 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300',
 };
 
 const SignalsBanner = ({ signals, t }) => {
@@ -171,14 +171,14 @@ const recipientLabel = (item) => (
 const FailuresDetail = ({ state, failedCount, t }) => {
   if (state?.loading) {
     return (
-      <div className="flex items-center justify-center gap-2 py-4 text-xs text-gray-500" data-testid="failures-loading">
-        <HiOutlineRefresh className="h-4 w-4 animate-spin text-gray-400" />
+      <div className="flex items-center justify-center gap-2 py-4 text-xs text-gray-500 dark:text-dk-text2" data-testid="failures-loading">
+        <HiOutlineRefresh className="h-4 w-4 animate-spin text-gray-400 dark:text-dk-muted" />
         <span>{t('userDeliveryMonitor.failures.loading')}</span>
       </div>
     );
   }
   if (!state?.data) {
-    return <p className="py-2 text-xs text-red-500">{state?.error || t('userDeliveryMonitor.failures.loadError')}</p>;
+    return <p className="py-2 text-xs text-red-500 dark:text-red-400">{state?.error || t('userDeliveryMonitor.failures.loadError')}</p>;
   }
 
   const items = state.data.failures || [];
@@ -188,21 +188,21 @@ const FailuresDetail = ({ state, failedCount, t }) => {
     <div className="space-y-3">
       {auditText && (
         <div
-          className="flex items-center gap-2 rounded-lg border border-amber-200/60 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900"
+          className="flex items-center gap-2 rounded-lg border border-amber-200/60 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs font-medium text-amber-900 dark:text-amber-200"
           data-testid="recipient-audit-explanation"
         >
-          <HiOutlineExclamationCircle className="h-4 w-4 shrink-0 text-amber-600" />
+          <HiOutlineExclamationCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
           <span>{auditText}</span>
         </div>
       )}
 
       {items.length === 0 ? (
-        <p className="py-2 text-xs text-gray-500">{t('userDeliveryMonitor.failures.noFailures')}</p>
+        <p className="py-2 text-xs text-gray-500 dark:text-dk-text2">{t('userDeliveryMonitor.failures.noFailures')}</p>
       ) : (
         <>
-          <div className="overflow-x-auto rounded-lg border border-gray-200/80 bg-white shadow-xs">
+          <div className="overflow-x-auto rounded-lg border border-gray-200/80 dark:border-dk-border bg-white dark:bg-dk-surface shadow-xs">
             <table className="min-w-full text-xs">
-              <thead className="border-b border-gray-100 bg-gray-50 text-left font-medium text-gray-500">
+              <thead className="border-b border-gray-100 dark:border-dk-border bg-gray-50 dark:bg-dk-raised/60 text-left font-medium text-gray-500 dark:text-dk-text2">
                 <tr>
                   <th className="px-4 py-2">{t('userDeliveryMonitor.failures.recipient')}</th>
                   <th className="px-4 py-2">{t('userDeliveryMonitor.failures.reason')}</th>
@@ -210,12 +210,12 @@ const FailuresDetail = ({ state, failedCount, t }) => {
                   <th className="px-4 py-2">{t('userDeliveryMonitor.failures.lastAt')}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 text-gray-700" data-testid="failures-table-body">
+              <tbody className="divide-y divide-gray-100 dark:divide-dk-border text-gray-700 dark:text-dk-text" data-testid="failures-table-body">
                 {items.map((item, idx) => {
                   const reasonText = item.reason || t('userDeliveryMonitor.failures.reasonUnknown');
                   return (
-                    <tr key={`${item.channel}-${item.recipient}-${idx}`} className="hover:bg-gray-50/60" data-testid="failure-item-row">
-                      <td className="px-4 py-2 font-mono font-medium text-gray-900">
+                    <tr key={`${item.channel}-${item.recipient}-${idx}`} className="hover:bg-gray-50/60 dark:hover:bg-dk-raised/40" data-testid="failure-item-row">
+                      <td className="px-4 py-2 font-mono font-medium text-gray-900 dark:text-dk-text">
                         <span className="inline-flex items-center gap-1.5">
                           <span
                             className="inline-block h-1.5 w-1.5 rounded-full"
@@ -225,7 +225,7 @@ const FailuresDetail = ({ state, failedCount, t }) => {
                           {item.channel !== 'email' && (
                             <span
                               data-testid="failure-channel-label"
-                              className="rounded bg-gray-100 px-1.5 py-0.5 font-sans text-[10px] font-medium text-gray-600"
+                              className="rounded bg-gray-100 dark:bg-dk-raised px-1.5 py-0.5 font-sans text-[10px] font-medium text-gray-600 dark:text-dk-text"
                             >
                               {t(`userDeliveryMonitor.channel.${item.channel}`)}
                             </span>
@@ -235,15 +235,15 @@ const FailuresDetail = ({ state, failedCount, t }) => {
                       <td className="px-4 py-2">
                         <span
                           title={reasonText}
-                          className="inline-flex max-w-[28rem] items-center rounded-md border border-red-200/60 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700"
+                          className="inline-flex max-w-[28rem] items-center rounded-md border border-red-200/60 dark:border-red-800/40 bg-red-50 dark:bg-red-950/30 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-300"
                         >
                           <span className="truncate">{reasonText}</span>
                         </span>
                       </td>
-                      <td className="px-4 py-2 font-medium text-gray-800">
+                      <td className="px-4 py-2 font-medium text-gray-800 dark:text-dk-text">
                         {t('userDeliveryMonitor.failures.countText', { count: item.attempts || 1 })}
                       </td>
-                      <td className="px-4 py-2 text-gray-500">{formatVnDayMonthTime(item.lastAt)}</td>
+                      <td className="px-4 py-2 text-gray-500 dark:text-dk-text2">{formatVnDayMonthTime(item.lastAt)}</td>
                     </tr>
                   );
                 })}
@@ -251,7 +251,7 @@ const FailuresDetail = ({ state, failedCount, t }) => {
             </table>
           </div>
           {failedCount > items.length && (
-            <p className="text-xs text-gray-400">{t('userDeliveryMonitor.failures.truncated', { shown: fmt(items.length), total: fmt(failedCount) })}</p>
+            <p className="text-xs text-gray-400 dark:text-dk-muted">{t('userDeliveryMonitor.failures.truncated', { shown: fmt(items.length), total: fmt(failedCount) })}</p>
           )}
         </>
       )}
@@ -292,14 +292,14 @@ const RunEstimateLine = ({ runId, refreshKey, t }) => {
   }, [runId, refreshKey]);
 
   if (state.continuous) {
-    return <p className="mt-0.5 text-xs text-gray-500" data-testid="run-estimate-continuous">{t('userDeliveryMonitor.estimate.continuous')}</p>;
+    return <p className="mt-0.5 text-xs text-gray-500 dark:text-dk-text2" data-testid="run-estimate-continuous">{t('userDeliveryMonitor.estimate.continuous')}</p>;
   }
   const { view } = state;
   if (!view || !view.finishAtLatest) return null;
   const duration = describeEstimateDuration(new Date(), view.finishAtLatest);
   const mayBeLonger = view.warnings.some((w) => MAY_BE_LONGER_CODES.includes(w.code));
   return (
-    <p className="mt-0.5 flex items-center gap-1 text-xs text-gray-500" data-testid="run-estimate">
+    <p className="mt-0.5 flex items-center gap-1 text-xs text-gray-500 dark:text-dk-text2" data-testid="run-estimate">
       <span>
         {t('userDeliveryMonitor.estimate.finish', {
           time: formatEstimateDateTime(view.finishAtLatest),
@@ -308,7 +308,7 @@ const RunEstimateLine = ({ runId, refreshKey, t }) => {
       </span>
       {mayBeLonger && (
         <span title={t('userDeliveryMonitor.estimate.mayBeLonger')} aria-label={t('userDeliveryMonitor.estimate.mayBeLonger')} data-testid="run-estimate-longer">
-          <HiOutlineInformationCircle className="h-3.5 w-3.5 text-amber-500" />
+          <HiOutlineInformationCircle className="h-3.5 w-3.5 text-amber-500 dark:text-amber-400" />
         </span>
       )}
     </p>
@@ -352,13 +352,13 @@ const RunsTable = ({ runs, now, generatedAt, t }) => {
 
   return (
     <div className="card overflow-hidden">
-      <div className="border-b border-gray-100 px-5 py-4">
-        <h2 className="text-sm font-semibold text-gray-700">{t('userDeliveryMonitor.runsTitle')}</h2>
-        <p className="mt-0.5 text-xs text-gray-400">{t('userDeliveryMonitor.runsDesc')}</p>
+      <div className="border-b border-gray-100 dark:border-dk-border px-5 py-4">
+        <h2 className="text-sm font-semibold text-gray-700 dark:text-dk-text">{t('userDeliveryMonitor.runsTitle')}</h2>
+        <p className="mt-0.5 text-xs text-gray-400 dark:text-dk-muted">{t('userDeliveryMonitor.runsDesc')}</p>
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+          <thead className="bg-gray-50 dark:bg-dk-raised/60 text-left text-xs uppercase tracking-wide text-gray-500 dark:text-dk-text2">
             <tr>
               <th className="px-5 py-3">{t('userDeliveryMonitor.col.campaign')}</th>
               <th className="px-5 py-3">{t('userDeliveryMonitor.col.startedAt')}</th>
@@ -367,9 +367,9 @@ const RunsTable = ({ runs, now, generatedAt, t }) => {
               <th className="px-5 py-3">{t('userDeliveryMonitor.col.failed')}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-gray-100 dark:divide-dk-border">
             {runs.length === 0 ? (
-              <tr><td colSpan={5} className="px-5 py-8 text-center text-gray-400">{t('userDeliveryMonitor.runsEmpty')}</td></tr>
+              <tr><td colSpan={5} className="px-5 py-8 text-center text-gray-400 dark:text-dk-muted">{t('userDeliveryMonitor.runsEmpty')}</td></tr>
             ) : runs.map((run) => {
               const isExpanded = expandedRunId === run.runId;
               const typeMeta = getCampaignTypeMeta(run.campaignType);
@@ -377,19 +377,19 @@ const RunsTable = ({ runs, now, generatedAt, t }) => {
                 <Fragment key={run.runId}>
                   <tr data-testid={`run-row-${run.runId}`}>
                     <td className="px-5 py-3">
-                      <p className="font-semibold text-gray-900">{run.campaignName || `#${run.runId}`}</p>
+                      <p className="font-semibold text-gray-900 dark:text-dk-text">{run.campaignName || `#${run.runId}`}</p>
                       <span className={`mt-1 inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${typeMeta.className}`}>
                         {typeMeta.label}
                       </span>
                     </td>
-                    <td className="whitespace-nowrap px-5 py-3 text-gray-700">{formatVnDayMonthTime(run.startedAt)}</td>
+                    <td className="whitespace-nowrap px-5 py-3 text-gray-700 dark:text-dk-text">{formatVnDayMonthTime(run.startedAt)}</td>
                     <td className="px-5 py-3">
                       <span className={`badge text-xs ${runStatusBadgeClass(run)}`} data-testid="run-status">
                         {statusLabel(run)}
                       </span>
                     </td>
                     <td className="whitespace-nowrap px-5 py-3">
-                      <span className="font-medium text-gray-900" data-testid="run-sent">
+                      <span className="font-medium text-gray-900 dark:text-dk-text" data-testid="run-sent">
                         {run.planned != null ? `${fmt(run.sent)} / ${fmt(run.planned)}` : fmt(run.sent)}
                       </span>
                       {String(run.status || '').toLowerCase() === 'running' && (
@@ -401,7 +401,7 @@ const RunsTable = ({ runs, now, generatedAt, t }) => {
                         <button
                           type="button"
                           onClick={() => toggleRunFailures(run.runId)}
-                          className="inline-flex cursor-pointer items-center gap-1 font-medium text-red-600 hover:text-red-800 hover:underline focus:outline-none"
+                          className="inline-flex cursor-pointer items-center gap-1 font-medium text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 hover:underline focus:outline-none"
                           title={isExpanded ? t('userDeliveryMonitor.failures.hideDetails') : t('userDeliveryMonitor.failures.viewDetails')}
                           aria-label={isExpanded
                             ? t('userDeliveryMonitor.failures.hideLabel', { count: fmt(run.failed) })
@@ -412,12 +412,12 @@ const RunsTable = ({ runs, now, generatedAt, t }) => {
                           <HiChevronDown className={`inline-block h-3.5 w-3.5 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
                         </button>
                       ) : (
-                        <span className="text-gray-400">0</span>
+                        <span className="text-gray-400 dark:text-dk-muted">0</span>
                       )}
                     </td>
                   </tr>
                   {isExpanded && (
-                    <tr className="border-b border-gray-100 bg-slate-50/75" data-testid={`run-failures-row-${run.runId}`}>
+                    <tr className="border-b border-gray-100 dark:border-dk-border bg-slate-50/75 dark:bg-dk-raised/40" data-testid={`run-failures-row-${run.runId}`}>
                       <td colSpan={5} className="px-5 py-4">
                         <FailuresDetail state={failuresMap[run.runId]} failedCount={run.failed} t={t} />
                       </td>
@@ -480,11 +480,11 @@ export default function UserDeliveryMonitorPage() {
   if (loading && !data) {
     return (
       <div className="space-y-6">
-        <div className="h-10 w-72 animate-pulse rounded-xl bg-gray-100" />
+        <div className="h-10 w-72 animate-pulse rounded-xl bg-gray-100 dark:bg-dk-raised" />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          {[0, 1, 2].map((item) => <div key={item} className="h-32 animate-pulse rounded-2xl bg-gray-100" />)}
+          {[0, 1, 2].map((item) => <div key={item} className="h-32 animate-pulse rounded-2xl bg-gray-100 dark:bg-dk-raised" />)}
         </div>
-        <div className="h-80 animate-pulse rounded-2xl bg-gray-100" />
+        <div className="h-80 animate-pulse rounded-2xl bg-gray-100 dark:bg-dk-raised" />
       </div>
     );
   }
@@ -498,7 +498,7 @@ export default function UserDeliveryMonitorPage() {
         actions={(
           <>
             {data?.generatedAt && (
-              <span className="text-xs text-gray-400" data-testid="updated-at">
+              <span className="text-xs text-gray-400 dark:text-dk-muted" data-testid="updated-at">
                 {t('userDeliveryMonitor.updatedAt', { time: formatVnTime(data.generatedAt) })}
               </span>
             )}
@@ -511,7 +511,7 @@ export default function UserDeliveryMonitorPage() {
       />
 
       {error && (
-        <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+        <div className="rounded-xl border border-red-100 dark:border-red-900/40 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-sm text-red-700 dark:text-red-300">{error}</div>
       )}
 
       {data && (
@@ -532,7 +532,7 @@ export default function UserDeliveryMonitorPage() {
                     <span
                       key={row.channel}
                       data-testid="sent-channel-chip"
-                      className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600"
+                      className="inline-flex items-center gap-1 rounded-full bg-gray-100 dark:bg-dk-raised px-2 py-0.5 text-[11px] font-medium text-gray-600 dark:text-dk-text"
                     >
                       <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: channelColor[row.channel] }} />
                       {t(`userDeliveryMonitor.channel.${row.channel}`)} {fmt(row.sent)}
@@ -583,7 +583,7 @@ export default function UserDeliveryMonitorPage() {
           </div>
 
           <div className="card p-5">
-            <h2 className="mb-4 text-sm font-semibold text-gray-700">{t('userDeliveryMonitor.hourlyTitle')}</h2>
+            <h2 className="mb-4 text-sm font-semibold text-gray-700 dark:text-dk-text">{t('userDeliveryMonitor.hourlyTitle')}</h2>
             {hasHourlyData ? (
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={hourlySlots} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>

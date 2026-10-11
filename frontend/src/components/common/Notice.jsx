@@ -14,24 +14,24 @@ import { HiOutlineExclamation, HiOutlineInformationCircle, HiOutlineExclamationC
  */
 const VARIANT_STYLES = {
   info: {
-    wrap: 'bg-blue-50 border-blue-200',
-    iconWrap: 'bg-blue-100 text-blue-700',
-    title: 'text-blue-900',
-    body: 'text-blue-800',
+    wrap: 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900/60',
+    iconWrap: 'bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300',
+    title: 'text-blue-900 dark:text-blue-200',
+    body: 'text-blue-800 dark:text-blue-300/90',
     Icon: HiOutlineInformationCircle,
   },
   warning: {
-    wrap: 'bg-amber-50 border-amber-200',
-    iconWrap: 'bg-amber-100 text-amber-700',
-    title: 'text-amber-900',
-    body: 'text-amber-800',
+    wrap: 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900/60',
+    iconWrap: 'bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300',
+    title: 'text-amber-900 dark:text-amber-200',
+    body: 'text-amber-800 dark:text-amber-300/90',
     Icon: HiOutlineExclamation,
   },
   danger: {
-    wrap: 'bg-red-50 border-red-200',
-    iconWrap: 'bg-red-100 text-red-700',
-    title: 'text-red-900',
-    body: 'text-red-800',
+    wrap: 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-900/60',
+    iconWrap: 'bg-red-100 dark:bg-red-900/60 text-red-700 dark:text-red-300',
+    title: 'text-red-900 dark:text-red-200',
+    body: 'text-red-800 dark:text-red-300/90',
     Icon: HiOutlineExclamationCircle,
   },
 };

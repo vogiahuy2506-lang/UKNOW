@@ -11,7 +11,7 @@ import CustomPricingPanel from '../../features/admin/plans/CustomPricingPanel';
 
 const SkeletonGrid = () => (
   <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-    {[...Array(3)].map((_, i) => <div key={i} className="card p-5 h-52 animate-pulse bg-gray-50" />)}
+    {[...Array(3)].map((_, i) => <div key={i} className="card p-5 h-52 animate-pulse bg-gray-50 dark:bg-dk-raised/40" />)}
   </div>
 );
 
@@ -171,7 +171,7 @@ const AdminPlansPage = () => {
     >
 
       {/* Toggle tabs */}
-      <div className="flex bg-gray-100 rounded-lg p-1 w-fit">
+      <div className="flex bg-gray-100 dark:bg-dk-raised rounded-lg p-1 w-fit">
         {[
           { key: 'public', label: t('adminPlans.tabPublicPlans') },
           { key: 'custom', label: t('adminPlans.tabCustomPlans'), count: customPlans.length },
@@ -181,11 +181,11 @@ const AdminPlansPage = () => {
             key={key}
             type="button"
             onClick={() => setTab(key)}
-            className={`px-5 py-2 rounded-md text-sm font-medium transition-all ${tab === key ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+            className={`px-5 py-2 rounded-md text-sm font-medium transition-all ${tab === key ? 'bg-white dark:bg-dk-raised shadow text-gray-900 dark:text-dk-text' : 'text-gray-500 dark:text-dk-text2 hover:text-gray-700 dark:hover:text-dk-text'}`}
           >
             {label}
             {count > 0 && (
-              <span className="ml-2 text-xs bg-primary-100 text-primary-700 px-1.5 py-0.5 rounded-full">
+              <span className="ml-2 text-xs bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300 px-1.5 py-0.5 rounded-full">
                 {count}
               </span>
             )}
@@ -197,7 +197,7 @@ const AdminPlansPage = () => {
       {tab === 'public' && (
         isLoading ? <SkeletonGrid /> :
         plans.length === 0 ? (
-          <div className="card p-10 text-center text-gray-400">{t('adminPlans.noPlans')}</div>
+          <div className="card p-10 text-center text-gray-400 dark:text-dk-muted">{t('adminPlans.noPlans')}</div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {plans.map((plan) => (
@@ -222,11 +222,11 @@ const AdminPlansPage = () => {
               checked={showHidden}
               onChange={(e) => setShowHidden(e.target.checked)}
             />
-            <span className="text-sm text-gray-500">{t('adminPlans.showHiddenPlans')}</span>
+            <span className="text-sm text-gray-500 dark:text-dk-text2">{t('adminPlans.showHiddenPlans')}</span>
           </label>
           {isLoading ? <SkeletonGrid /> :
           customPlans.length === 0 ? (
-            <div className="card p-10 text-center text-gray-400">
+            <div className="card p-10 text-center text-gray-400 dark:text-dk-muted">
               <p>{t('adminPlans.noCustomPlans')}</p>
               <button type="button" onClick={() => setShowCustomModal(true)} className="btn btn-primary mt-4">
                 <HiOutlineSparkles className="w-4 h-4 mr-2" />
@@ -273,29 +273,29 @@ const AdminPlansPage = () => {
           const hasUsers = (deletePlan.user_count > 0) || !!deletePlan.assignedEmail;
           return (
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">{t('adminPlans.confirmDelete')}</h2>
-              <p className="text-sm text-gray-600 mt-2">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-dk-text">{t('adminPlans.confirmDelete')}</h2>
+              <p className="text-sm text-gray-600 dark:text-dk-text mt-2">
                 {t('adminPlans.deletePlanConfirm')} <strong>{deletePlan.name}</strong>?
               </p>
 
               {isCustom && hasUsers && (
-                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm">
-                  <p className="font-medium text-red-700">{t('adminPlans.customPlanWarning')}</p>
-                  <p className="text-red-600 mt-1">
+                <div className="mt-3 p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 rounded-lg text-sm">
+                  <p className="font-medium text-red-700 dark:text-red-400">{t('adminPlans.customPlanWarning')}</p>
+                  <p className="text-red-600 dark:text-red-300 mt-1">
                     {deletePlan.assignedEmail
                       ? <>{t('adminPlans.customPlanUserImpact', { email: deletePlan.assignedEmail })}</>
                       : <>{deletePlan.user_count} {t('adminPlans.customPlanCountImpact')}</>}
                   </p>
-                  <p className="text-gray-500 italic text-xs mt-2">
+                  <p className="text-gray-500 dark:text-dk-text2 italic text-xs mt-2">
                     {t('adminPlans.orderHistoryPreserved')}
                   </p>
                 </div>
               )}
 
               {!isCustom && hasUsers && (
-                <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm">
-                  <p className="font-medium text-amber-700">{t('adminPlans.standardPlanWarning')}</p>
-                  <p className="text-amber-600 mt-1">
+                <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 rounded-lg text-sm">
+                  <p className="font-medium text-amber-700 dark:text-amber-400">{t('adminPlans.standardPlanWarning')}</p>
+                  <p className="text-amber-600 dark:text-amber-300 mt-1">
                     {deletePlan.user_count > 0 && <>{deletePlan.user_count} {t('adminPlans.standardPlanUserImpact')}</>}
                     {' '}{t('adminPlans.newCustomersCannotSee')}
                   </p>
@@ -303,7 +303,7 @@ const AdminPlansPage = () => {
               )}
 
               {!hasUsers && (
-                <p className="text-xs text-gray-400 italic mt-2">
+                <p className="text-xs text-gray-400 dark:text-dk-muted italic mt-2">
                   {t('adminPlans.noUsersWarning')}
                 </p>
               )}

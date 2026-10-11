@@ -132,7 +132,7 @@ export const CustomPlanModal = ({ onClose, onSaved }) => {
         description={t('adminPlans.sendLimitsDescription')}
       >
         <SendLimitsFields form={form} set={set} hint={t('planInputs.hintEmailLimitsBackendBlocked')} />
-        <div className="mt-5 border-t border-slate-100 pt-5">
+        <div className="mt-5 border-t border-slate-100 dark:border-dk-border pt-5">
           <PeriodMessagesField form={form} set={set} />
         </div>
       </FormSection>

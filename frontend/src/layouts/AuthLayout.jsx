@@ -67,18 +67,18 @@ const AuthLayout = ({ children }) => {
 
       {/* Main container */}
       <div className="relative z-10 min-h-screen flex items-center justify-center px-4 py-8">
-        <div className="flex w-full max-w-[1000px] items-stretch">
+        <div className="flex w-full max-w-[1000px] items-stretch shadow-2xl rounded-2xl overflow-hidden border border-white/10">
 
           {/* Left panel: Branding (desktop only) */}
           <div
-            className="hidden lg:flex flex-1 flex-col justify-between rounded-l-2xl p-10 xl:p-12"
+            className="hidden lg:flex flex-1 flex-col justify-between p-10 xl:p-12"
             style={{
-              background: 'linear-gradient(180deg, rgba(15,23,42,0.7) 0%, rgba(15,23,42,0.8) 100%)',
+              background: 'linear-gradient(180deg, rgba(15,23,42,0.75) 0%, rgba(15,23,42,0.85) 100%)',
               backdropFilter: 'blur(20px)',
               borderRight: '1px solid rgba(255,255,255,0.08)'
             }}
           >
-            {/* Logo + language toggle */}
+            {/* Logo + language + theme toggle */}
             <div className="flex items-center justify-between">
               <Link 
                 to="/" 
@@ -91,7 +91,9 @@ const AuthLayout = ({ children }) => {
                 />
                 <span className="text-white font-bold text-xl tracking-tight">Founder AI</span>
               </Link>
-              <LanguageSwitcher variant="dark" />
+              <div className="flex items-center gap-2">
+                <LanguageSwitcher variant="dark" />
+              </div>
             </div>
 
             {/* Headline & features */}
@@ -156,10 +158,8 @@ const AuthLayout = ({ children }) => {
 
           {/* Right panel: Form */}
           <div
-            className="flex-1 rounded-r-2xl lg:rounded-l-none rounded-l-2xl p-8 sm:p-10 xl:p-12 flex flex-col justify-center overflow-y-auto max-h-[calc(100vh-3rem)]"
+            className="flex-1 p-8 sm:p-10 xl:p-12 flex flex-col justify-center overflow-y-auto max-h-[calc(100vh-3rem)] bg-white/95 text-slate-900 backdrop-blur-2xl transition-colors duration-200"
             style={{
-              background: 'rgba(255,255,255,0.98)',
-              backdropFilter: 'blur(20px)',
               scrollbarWidth: 'none',
               msOverflowStyle: 'none'
             }}
@@ -176,7 +176,9 @@ const AuthLayout = ({ children }) => {
                 />
                 <span className="text-slate-800 font-extrabold text-[18px] tracking-tight">Founder AI</span>
               </Link>
-              <LanguageSwitcher />
+              <div className="flex items-center gap-2">
+                <LanguageSwitcher />
+              </div>
             </div>
 
             {children}

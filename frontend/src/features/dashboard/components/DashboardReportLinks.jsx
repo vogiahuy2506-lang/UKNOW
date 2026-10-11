@@ -16,7 +16,7 @@ const DashboardReportLinks = ({ showDeliveryMonitor = true, showLanding = true }
   const linkClass = 'inline-flex items-center gap-1 text-sm font-medium text-primary-600 hover:text-primary-700 hover:underline';
 
   return (
-    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-1" data-testid="dashboard-report-links">
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-1 pb-1" data-testid="dashboard-report-links">
       {showDeliveryMonitor && (
         <Link to="/app/delivery-monitor" className={linkClass}>
           {t('dashboardReport.links.deliveryMonitor')} →

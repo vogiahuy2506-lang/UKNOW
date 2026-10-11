@@ -61,9 +61,9 @@ const PERMISSION_FIELDS = (t) => [
 const ALL_PERMISSION_KEYS = PERMISSION_FIELDS((key) => key).flatMap((field) => field.keys);
 
 const MODAL_OVERLAY ='fixed inset-0 z-[9999] flex items-center justify-center p-4 md:p-6';
-const MODAL_SM = 'relative z-10 w-full max-w-md  max-h-[85vh] rounded-xl bg-white shadow-xl p-6 overflow-y-auto';
-const MODAL_MD = 'relative z-10 w-full max-w-2xl max-h-[85vh] rounded-xl bg-white shadow-xl overflow-hidden flex flex-col';
-const MODAL_CREATE = 'relative z-10 w-full max-w-2xl max-h-[85vh] rounded-xl bg-white shadow-xl p-6 overflow-y-auto';
+const MODAL_SM = 'relative z-10 w-full max-w-md max-h-[85vh] rounded-xl bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border shadow-xl p-6 overflow-y-auto text-slate-900 dark:text-dk-text';
+const MODAL_MD = 'relative z-10 w-full max-w-2xl max-h-[85vh] rounded-xl bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border shadow-xl overflow-hidden flex flex-col text-slate-900 dark:text-dk-text';
+const MODAL_CREATE = 'relative z-10 w-full max-w-2xl max-h-[85vh] rounded-xl bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border shadow-xl p-6 overflow-y-auto text-slate-900 dark:text-dk-text';
 
 const limitLabel = (val) => (val === null || val === undefined ? '∞' : formatIntVi(val));
 
@@ -105,7 +105,7 @@ const LimitField = ({ label, value, onChange, max, t }) => {
 
   return (
     <div className="space-y-2">
-      <p className="text-sm font-medium text-gray-700">{label}</p>
+      <p className="text-sm font-medium text-gray-700 dark:text-dk-text">{label}</p>
       <label className="flex items-center gap-2 cursor-pointer select-none">
         <input
           type="checkbox"
@@ -113,7 +113,7 @@ const LimitField = ({ label, value, onChange, max, t }) => {
           checked={isUnlimited}
           onChange={handleCheck}
         />
-        <span className="text-sm text-gray-600">{t('employee.unlimited')}</span>
+        <span className="text-sm text-gray-600 dark:text-dk-text2">{t('employee.unlimited')}</span>
       </label>
       <NumberInput
         className={`input w-full ${exceedsMax ? 'border-red-400 focus:ring-red-400' : ''}`}
@@ -490,12 +490,12 @@ const EmployeeManagement = () => {
         // Vượt trần NHƯNG đang bán slot — cho lối ra ngay, không chỉ báo lỗi trơn.
         toast.custom(
           (tst) => (
-            <div className="flex flex-col gap-1.5 rounded-lg bg-white px-4 py-3 shadow-lg" style={{ opacity: tst.visible ? 1 : 0 }}>
-              <p className="text-sm text-gray-800 m-0">{message}</p>
+            <div className="flex flex-col gap-1.5 rounded-lg bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border px-4 py-3 shadow-lg" style={{ opacity: tst.visible ? 1 : 0 }}>
+              <p className="text-sm text-gray-800 dark:text-dk-text m-0">{message}</p>
               <button
                 type="button"
                 onClick={() => { toast.dismiss(tst.id); setShowCreateModal(false); navigate('/app/topup'); }}
-                className="self-start text-xs font-semibold text-primary-600 hover:text-primary-700"
+                className="self-start text-xs font-semibold text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
               >
                 {t('employee.buySlotCta')} →
               </button>
@@ -667,10 +667,10 @@ const EmployeeManagement = () => {
             <button
               type="button"
               onClick={() => fetchEmployees(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-colors shadow-2xs disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised hover:bg-slate-50 dark:hover:bg-dk-strong text-xs font-semibold text-slate-700 dark:text-dk-text transition-colors shadow-2xs disabled:opacity-50"
               disabled={isRefreshing}
             >
-              <HiOutlineRefresh className={`w-4 h-4 text-slate-500 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <HiOutlineRefresh className={`w-4 h-4 text-slate-500 dark:text-dk-text2 ${isRefreshing ? 'animate-spin' : ''}`} />
               {t('employee.refresh')}
             </button>
             <button
@@ -686,59 +686,59 @@ const EmployeeManagement = () => {
       />
 
       {/* Bảng nhân viên */}
-      <div className="rounded-2xl border border-slate-200/90 bg-white shadow-2xs overflow-hidden">
+      <div className="rounded-2xl border border-slate-200/90 dark:border-dk-border bg-white dark:bg-dk-surface shadow-2xs overflow-hidden">
         {isLoading ? (
           <div className="h-56 flex items-center justify-center">
-            <div className="w-6 h-6 border-2 border-slate-200 border-t-orange-500 rounded-full animate-spin" />
+            <div className="w-6 h-6 border-2 border-slate-200 dark:border-dk-border border-t-orange-500 rounded-full animate-spin" />
           </div>
         ) : employees.length === 0 ? (
-          <div className="py-16 text-center text-slate-500 text-sm">{t('employee.noEmployees')}</div>
+          <div className="py-16 text-center text-slate-500 dark:text-dk-text2 text-sm">{t('employee.noEmployees')}</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-100">
-              <thead className="bg-slate-50/80">
+            <table className="min-w-full divide-y divide-slate-100 dark:divide-dk-border">
+              <thead className="bg-slate-50/80 dark:bg-dk-raised/60">
                 <tr>
-                  <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('employee.teamColEmployee')}</th>
-                  <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('employee.status')}</th>
-                  <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('employee.permissionsColumn')}</th>
-                  <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('employee.sendLimitsColumn')}</th>
-                  <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('employee.dateAdded')}</th>
+                  <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">{t('employee.teamColEmployee')}</th>
+                  <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">{t('employee.status')}</th>
+                  <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">{t('employee.permissionsColumn')}</th>
+                  <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">{t('employee.sendLimitsColumn')}</th>
+                  <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">{t('employee.dateAdded')}</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-slate-100">
+              <tbody className="bg-white dark:bg-dk-surface divide-y divide-slate-100 dark:divide-dk-border">
                 {employees.map((emp) => {
                   const isActive = emp.memberStatus === 'active';
                   const grantedCount = countGrantedPermissions(emp.permissions);
                   return (
                     <tr
                       key={emp.id}
-                      className="cursor-pointer hover:bg-slate-50/70 transition-colors"
+                      className="cursor-pointer hover:bg-slate-50/70 dark:hover:bg-dk-raised/50 transition-colors"
                       onClick={() => openEmployeeModal(emp)}
                     >
                       {/* Gộp tên đăng nhập + họ tên + email vào một cột */}
                       <td className="px-6 py-4 min-w-0">
-                        <div className="text-xs sm:text-sm font-semibold text-slate-900">{emp.fullName || emp.username}</div>
-                        <div className="text-xs text-slate-500 mt-0.5">
-                          <span className="font-medium text-orange-600">{emp.username}</span>
-                          {emp.email && <span className="ml-1.5 break-all text-slate-400">{emp.email}</span>}
+                        <div className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-dk-text">{emp.fullName || emp.username}</div>
+                        <div className="text-xs text-slate-500 dark:text-dk-text2 mt-0.5">
+                          <span className="font-medium text-orange-600 dark:text-orange-400">{emp.username}</span>
+                          {emp.email && <span className="ml-1.5 break-all text-slate-400 dark:text-dk-muted">{emp.email}</span>}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {emp.acceptedAt === null ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200/80 shadow-2xs">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800 shadow-2xs">
                             <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
                             {t('employee.pendingAcceptance')}
                           </span>
                         ) : emp.status === 'pending_activation' ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200/80 shadow-2xs">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800 shadow-2xs">
                             <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
                             {t('employee.pendingActivation')}
                           </span>
                         ) : (
                           <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border shadow-2xs ${
                             isActive
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200/80'
-                              : 'bg-slate-100 text-slate-600 border-slate-200'
+                              ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200/80 dark:border-emerald-800'
+                              : 'bg-slate-100 dark:bg-dk-raised text-slate-600 dark:text-dk-text border-slate-200 dark:border-dk-border'
                           }`}>
                             <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-slate-400'}`} />
                             {isActive ? t('employee.statusActive') : t('employee.statusLocked')}
@@ -749,31 +749,31 @@ const EmployeeManagement = () => {
                         {grantedCount === 0 ? (
                           <button
                             type="button"
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200/80 shadow-2xs cursor-pointer hover:bg-amber-100/70 transition-colors"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800 shadow-2xs cursor-pointer hover:bg-amber-100/70 dark:hover:bg-amber-900/40 transition-colors"
                             onClick={(e) => { e.stopPropagation(); openEmployeeModal(emp, 'permissions'); }}
                           >
                             <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
                             {t('employee.noPermissionsBadge')}
                           </button>
                         ) : (
-                          <span className="text-xs sm:text-sm font-medium text-slate-700">{t('employee.permissionsCount', { count: grantedCount })}</span>
+                          <span className="text-xs sm:text-sm font-medium text-slate-700 dark:text-dk-text">{t('employee.permissionsCount', { count: grantedCount })}</span>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-xs sm:text-sm text-slate-600 whitespace-nowrap">
+                      <td className="px-6 py-4 text-xs sm:text-sm text-slate-600 dark:text-dk-text whitespace-nowrap">
                         <div>
-                          <span className="font-medium text-slate-800">{t('employee.emailLabel')}:</span>{' '}
+                          <span className="font-medium text-slate-800 dark:text-dk-text">{t('employee.emailLabel')}:</span>{' '}
                           {limitLabel(emp.dailyEmailLimit)}{t('employee.perDay')}
-                          <span className="mx-1 text-slate-300">·</span>
+                          <span className="mx-1 text-slate-300 dark:text-dk-muted">·</span>
                           {limitLabel(emp.monthlyEmailLimit)}{t('employee.perMonth')}
                         </div>
                         <div className="mt-0.5">
-                          <span className="font-medium text-slate-800">{t('employee.zaloLabel')}:</span>{' '}
+                          <span className="font-medium text-slate-800 dark:text-dk-text">{t('employee.zaloLabel')}:</span>{' '}
                           {limitLabel(emp.dailyZaloLimit)}{t('employee.perDay')}
-                          <span className="mx-1 text-slate-300">·</span>
+                          <span className="mx-1 text-slate-300 dark:text-dk-muted">·</span>
                           {limitLabel(emp.monthlyZaloLimit)}{t('employee.perMonth')}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-xs sm:text-sm text-slate-500 whitespace-nowrap">
+                      <td className="px-6 py-4 text-xs sm:text-sm text-slate-500 dark:text-dk-text2 whitespace-nowrap">
                         {emp.joinedAt ? new Date(emp.joinedAt).toLocaleDateString('vi-VN') : '—'}
                       </td>
                     </tr>
@@ -786,13 +786,13 @@ const EmployeeManagement = () => {
       </div>
 
       {/* ── Thiết lập duyệt chiến dịch lớn (Workspace Level) ── */}
-      <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-2xs">
+      <div className="rounded-2xl border border-slate-200/90 dark:border-dk-border bg-white dark:bg-dk-surface p-5 shadow-2xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
-            <h2 className="text-sm sm:text-base font-bold text-slate-900">
+            <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-dk-text">
               {t('employee.approvalThreshold.title')}
             </h2>
-            <p className="text-xs sm:text-sm text-slate-500 max-w-2xl">
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-dk-text2 max-w-2xl">
               {t('employee.approvalThreshold.description')}
             </p>
           </div>
@@ -803,7 +803,7 @@ const EmployeeManagement = () => {
                 onChange={(v) => setApprovalThreshold(String(v))}
                 placeholder={t('employee.approvalThreshold.inputPlaceholder')}
                 disabled={thresholdLoading || isSavingThreshold}
-                className="w-40 px-3 py-2 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 font-semibold text-slate-800 transition-all"
+                className="w-40 px-3 py-2 text-xs sm:text-sm bg-slate-50 dark:bg-dk-inset hover:bg-slate-100/70 dark:hover:bg-dk-raised focus:bg-white dark:focus:bg-dk-inset border border-slate-200 dark:border-dk-border rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 font-semibold text-slate-800 dark:text-dk-text transition-all"
               />
             </div>
             <button
@@ -815,7 +815,7 @@ const EmployeeManagement = () => {
             </button>
           </form>
         </div>
-        <div className="mt-2.5 text-xs text-slate-400">
+        <div className="mt-2.5 text-xs text-slate-400 dark:text-dk-muted">
           {approvalThreshold && Number(approvalThreshold) > 0
             ? t('employee.approvalThreshold.enabledTip', { count: Number(approvalThreshold).toLocaleString('vi-VN') })
             : t('employee.approvalThreshold.disabledTip')}
@@ -833,10 +833,10 @@ const EmployeeManagement = () => {
         // trước sửa scrollHeight = clientHeight (không cuộn), sau sửa cuộn được và thấy nút.
         <div className="flex flex-col min-h-0 flex-1">
           {/* Modal header */}
-          <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-4 border-b border-gray-100">
+          <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-4 border-b border-gray-100 dark:border-dk-border">
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">{selectedEmployee.fullName || selectedEmployee.username}</h2>
-              <p className="text-sm text-gray-500 mt-0.5">@{selectedEmployee.username} · {selectedEmployee.email}</p>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-dk-text">{selectedEmployee.fullName || selectedEmployee.username}</h2>
+              <p className="text-sm text-gray-500 dark:text-dk-text2 mt-0.5">@{selectedEmployee.username} · {selectedEmployee.email}</p>
             </div>
             <button
               type="button"
@@ -846,7 +846,7 @@ const EmployeeManagement = () => {
               {t('common.close')}
             </button>
           </div>
-          <div className="flex border-b border-gray-200 px-6">
+          <div className="flex border-b border-gray-200 dark:border-dk-border px-6">
             {TABS.map(({ key, label }) => (
               <button
                 key={key}
@@ -854,8 +854,8 @@ const EmployeeManagement = () => {
                 onClick={() => setActiveTab(key)}
                 className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors -mb-px ${
                   activeTab === key
-                    ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                    ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+                    : 'border-transparent text-gray-500 dark:text-dk-text2 hover:text-gray-700 dark:hover:text-dk-text'
                 }`}
               >
                 {label}
@@ -872,18 +872,18 @@ const EmployeeManagement = () => {
                 {/* Form thông tin — tài khoản origin='linked' (người đó tự đăng ký, chủ chỉ liên kết) chỉ đọc:
                     email đăng nhập là của họ, không phải chủ tạo ra (RA_SOAT_NHAN_VIEN_PHAN_QUYEN mục 1). */}
                 {selectedEmployee.origin === 'linked' && (
-                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
                     {t('employee.linkedAccountInfoHint')}
                   </p>
                 )}
                 <form onSubmit={editForm.handleSubmit(onSubmitInfo)} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('auth.username')}</label>
-                    <input type="text" className="input w-full bg-gray-50" value={selectedEmployee.username} disabled />
-                    <p className="text-xs text-gray-400 mt-1">{t('employee.usernameCannotChange')}</p>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{t('auth.username')}</label>
+                    <input type="text" className="input w-full bg-gray-50 dark:bg-dk-raised" value={selectedEmployee.username} disabled />
+                    <p className="text-xs text-gray-400 dark:text-dk-muted mt-1">{t('employee.usernameCannotChange')}</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('employee.fullName')}</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{t('employee.fullName')}</label>
                     <input
                       type="text"
                       className="input w-full"
@@ -892,7 +892,7 @@ const EmployeeManagement = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('employee.email')} *</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{t('employee.email')} *</label>
                     <input
                       type="email"
                       className="input w-full"
@@ -913,8 +913,8 @@ const EmployeeManagement = () => {
                 </form>
 
                 {/* Quản lý tài khoản */}
-                <div className="border-t border-gray-100 pt-5 space-y-3">
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t('employee.accountManagement')}</p>
+                <div className="border-t border-gray-100 dark:border-dk-border pt-5 space-y-3">
+                  <p className="text-xs font-semibold text-gray-400 dark:text-dk-muted uppercase tracking-wide">{t('employee.accountManagement')}</p>
                   <div className="flex flex-wrap gap-2">
                     {/* Trạng thái chờ kích hoạt nằm ở users.status (`status`), KHÔNG phải user_members.status
                         (`memberStatus`: active/inactive) — so nhầm khiến nút "Gửi lại lời mời" không bao giờ hiện.
@@ -924,7 +924,7 @@ const EmployeeManagement = () => {
                         type="button"
                         onClick={() => handleToggleStatus(selectedEmployee)}
                         disabled={statusUpdatingId === selectedEmployee.id}
-                        className={`btn ${selectedEmployee.memberStatus === 'active' ? 'btn-secondary text-yellow-600' : 'btn-secondary text-green-600'}`}
+                        className={`btn ${selectedEmployee.memberStatus === 'active' ? 'btn-secondary text-yellow-600 dark:text-yellow-400' : 'btn-secondary text-green-600 dark:text-green-400'}`}
                       >
                         {statusUpdatingId === selectedEmployee.id ? (
                           <div className="spinner w-4 h-4 mr-2" />
@@ -961,7 +961,7 @@ const EmployeeManagement = () => {
                     <button
                       type="button"
                       onClick={() => setDeleteConfirmEmp(selectedEmployee)}
-                      className="btn btn-secondary text-red-600 hover:bg-red-50"
+                      className="btn btn-secondary text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"
                     >
                       <HiOutlineTrash className="w-4 h-4 mr-2" />
                       {t('employee.removeFromTeam')}
@@ -975,12 +975,12 @@ const EmployeeManagement = () => {
             {activeTab === 'permissions' && (
               <div className="space-y-4">
                 {countGrantedPermissions(selectedEmployee.permissions) === 0 && (
-                  <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  <div role="status" className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
                     {t('employee.noPermissionsBanner', { name: selectedEmployee.fullName || selectedEmployee.username })}
                   </div>
                 )}
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-medium text-gray-600">{t('employee.presetsLabel')}</span>
+                  <span className="text-sm font-medium text-gray-600 dark:text-dk-text2">{t('employee.presetsLabel')}</span>
                   {[
                     { key: 'viewOnly', label: t('employee.presetViewOnly') },
                     { key: 'marketing', label: t('employee.presetMarketing') },
@@ -993,13 +993,13 @@ const EmployeeManagement = () => {
                   ))}
                 </div>
                 {isPermDirty && (
-                  <p className="text-xs text-amber-700">{t('employee.presetTickedHint')}</p>
+                  <p className="text-xs text-amber-700 dark:text-amber-400">{t('employee.presetTickedHint')}</p>
                 )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {PERMISSION_FIELDS(t).map(({ keys, label }) => {
                     const isChecked = keys.some((k) => permState[k] === true);
                     return (
-                      <label key={keys[0]} className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+                      <label key={keys[0]} className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-dk-border hover:bg-gray-50 dark:hover:bg-dk-raised cursor-pointer">
                         <input
                           type="checkbox"
                           className="w-4 h-4 text-primary-600 rounded"
@@ -1010,7 +1010,7 @@ const EmployeeManagement = () => {
                             return next;
                           })}
                         />
-                        <span className="text-sm text-gray-700">{label}</span>
+                        <span className="text-sm text-gray-700 dark:text-dk-text">{label}</span>
                       </label>
                     );
                   })}
@@ -1024,7 +1024,7 @@ const EmployeeManagement = () => {
                 <div>
                   <div className="flex items-center gap-2 mb-4">
                     <HiOutlineMail className="w-5 h-5 text-blue-500" />
-                    <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">{t('employee.emailLabel')}</h3>
+                    <h3 className="text-sm font-semibold text-gray-800 dark:text-dk-text uppercase tracking-wide">{t('employee.emailLabel')}</h3>
                   </div>
                   <div className="grid grid-cols-2 gap-6">
                     <LimitField
@@ -1043,11 +1043,11 @@ const EmployeeManagement = () => {
                     />
                   </div>
                 </div>
-                <div className="border-t border-gray-100" />
+                <div className="border-t border-gray-100 dark:border-dk-border" />
                 <div>
                   <div className="flex items-center gap-2 mb-4">
                     <HiOutlineChat className="w-5 h-5 text-green-500" />
-                    <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">{t('employee.zaloLabel')}</h3>
+                    <h3 className="text-sm font-semibold text-gray-800 dark:text-dk-text uppercase tracking-wide">{t('employee.zaloLabel')}</h3>
                   </div>
                   <div className="grid grid-cols-2 gap-6">
                     <LimitField
@@ -1066,11 +1066,11 @@ const EmployeeManagement = () => {
                     />
                   </div>
                 </div>
-                <div className="border-t border-gray-100" />
+                <div className="border-t border-gray-100 dark:border-dk-border" />
                 <div>
                   <div className="flex items-center gap-2 mb-4">
                     <HiOutlineKey className="w-5 h-5 text-purple-500" />
-                    <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">{t('employee.aiCreditsLabel')}</h3>
+                    <h3 className="text-sm font-semibold text-gray-800 dark:text-dk-text uppercase tracking-wide">{t('employee.aiCreditsLabel')}</h3>
                   </div>
                   <div className="grid grid-cols-2 gap-6">
                     <LimitField
@@ -1093,13 +1093,13 @@ const EmployeeManagement = () => {
             {/* ── Tab Tài khoản Zalo ── */}
             {activeTab === 'channels' && (
               <div className="space-y-4">
-                <p className="text-sm text-gray-600">{t('employee.zaloAccountsHint')}</p>
+                <p className="text-sm text-gray-600 dark:text-dk-text">{t('employee.zaloAccountsHint')}</p>
                 {channelAccounts !== null && (
-                  <h3 className="text-sm font-semibold text-gray-800">{t('employee.channelGroupZalo')}</h3>
+                  <h3 className="text-sm font-semibold text-gray-800 dark:text-dk-text">{t('employee.channelGroupZalo')}</h3>
                 )}
-                {channelLoading && <p className="text-sm text-gray-500">{t('employee.zaloAccountsLoading')}</p>}
+                {channelLoading && <p className="text-sm text-gray-500 dark:text-dk-text2">{t('employee.zaloAccountsLoading')}</p>}
                 {channelLoadFailed && (
-                  <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 flex items-center justify-between gap-3">
+                  <div role="alert" className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-700 dark:text-red-300 flex items-center justify-between gap-3">
                     <span>{t('employee.zaloAccountsLoadFailed')}</span>
                     <button
                       type="button"
@@ -1111,12 +1111,12 @@ const EmployeeManagement = () => {
                   </div>
                 )}
                 {channelAccounts !== null && channelAccounts.length === 0 && (
-                  <p className="text-sm text-gray-500">{t('employee.zaloAccountsEmpty')}</p>
+                  <p className="text-sm text-gray-500 dark:text-dk-text2">{t('employee.zaloAccountsEmpty')}</p>
                 )}
                 {channelAccounts !== null && channelAccounts.length > 0 && (
                   <>
                     {channelSaved.length === 0 && (
-                      <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                      <div role="status" className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
                         {t('employee.zaloAccountsNoneAssignedBanner')}
                       </div>
                     )}
@@ -1131,7 +1131,7 @@ const EmployeeManagement = () => {
                       <button type="button" className="btn btn-secondary text-sm" onClick={() => setChannelSelected([])}>
                         {t('employee.zaloAccountsSelectNone')}
                       </button>
-                      <span className="text-sm text-gray-500 ml-auto">
+                      <span className="text-sm text-gray-500 dark:text-dk-text2 ml-auto">
                         {t('employee.zaloAccountsSelectedCount', { selected: channelSelected.length, total: channelAccounts.length })}
                       </span>
                     </div>
@@ -1143,7 +1143,7 @@ const EmployeeManagement = () => {
                         return (
                           <label
                             key={account.id}
-                            className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer"
+                            className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 dark:border-dk-border hover:bg-gray-50 dark:hover:bg-dk-raised cursor-pointer"
                           >
                             <input
                               type="checkbox"
@@ -1153,22 +1153,22 @@ const EmployeeManagement = () => {
                             />
                             <span className="min-w-0 flex-1">
                               <span className="flex flex-wrap items-center gap-2">
-                                <span className="text-sm font-medium text-gray-800 break-all">{title}</span>
+                                <span className="text-sm font-medium text-gray-800 dark:text-dk-text break-all">{title}</span>
                                 {account.isDefault && (
-                                  <span className="text-xs px-2 py-0.5 rounded-full bg-primary-100 text-primary-700">{t('employee.zaloAccountDefault')}</span>
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-primary-100 dark:bg-primary-950/50 text-primary-700 dark:text-primary-300">{t('employee.zaloAccountDefault')}</span>
                                 )}
-                                <span className={`text-xs px-2 py-0.5 rounded-full ${isConnected ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${isConnected ? 'bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-300' : 'bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-300'}`}>
                                   {isConnected ? t('employee.zaloAccountConnected') : t('employee.zaloAccountDisconnected')}
                                 </span>
                                 {account.source === 'legacy' && (
-                                  <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">{t('employee.zaloAccountSourceLegacy')}</span>
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300">{t('employee.zaloAccountSourceLegacy')}</span>
                                 )}
                                 {account.source === 'self_login' && (
-                                  <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">{t('employee.zaloAccountSourceSelfLogin')}</span>
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300">{t('employee.zaloAccountSourceSelfLogin')}</span>
                                 )}
                               </span>
                               {(account.zaloPhone || account.zaloName) && (
-                                <span className="block text-xs text-gray-500 mt-0.5">
+                                <span className="block text-xs text-gray-500 dark:text-dk-text2 mt-0.5">
                                   {[account.zaloName, account.zaloPhone].filter(Boolean).join(' · ')}
                                 </span>
                               )}
@@ -1178,7 +1178,7 @@ const EmployeeManagement = () => {
                       })}
                     </div>
                     {channelAccounts.some((a) => a.source === 'legacy') && (
-                      <p className="text-xs text-gray-500">{t('employee.zaloAccountsLegacyHint')}</p>
+                      <p className="text-xs text-gray-500 dark:text-dk-text2">{t('employee.zaloAccountsLegacyHint')}</p>
                     )}
                   </>
                 )}
@@ -1207,9 +1207,9 @@ const EmployeeManagement = () => {
             )}
           </div>
           {activeTab !== 'info' && (
-            <div className="border-t border-gray-100 px-6 py-3 flex items-center justify-end gap-3">
+            <div className="border-t border-gray-100 dark:border-dk-border px-6 py-3 flex items-center justify-end gap-3">
               {isModalDirty && (
-                <span className="text-sm text-amber-600 mr-auto">{t('employee.unsavedHint')}</span>
+                <span className="text-sm text-amber-600 dark:text-amber-400 mr-auto">{t('employee.unsavedHint')}</span>
               )}
               {activeTab === 'permissions' && (
                 <button type="button" className="btn btn-primary" onClick={handleSavePermissions} disabled={isSavingPerm}>
@@ -1250,8 +1250,8 @@ const EmployeeManagement = () => {
       {/* ── Modal xác nhận: còn thay đổi chưa lưu khi đóng modal nhân viên ──────── */}
       {showUnsavedConfirm && renderModal(
         <div>
-          <h2 className="text-xl font-semibold text-gray-900">{t('employee.unsavedTitle')}</h2>
-          <p className="text-sm text-gray-500 mt-2">{t('employee.unsavedBody')}</p>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-dk-text">{t('employee.unsavedTitle')}</h2>
+          <p className="text-sm text-gray-500 dark:text-dk-text2 mt-2">{t('employee.unsavedBody')}</p>
           <div className="flex justify-end gap-2 mt-6">
             <button type="button" className="btn btn-secondary" onClick={() => setShowUnsavedConfirm(false)}>
               {t('employee.backToEditing')}
@@ -1291,12 +1291,12 @@ const EmployeeManagement = () => {
       {showCreateModal && renderModal(
         <div>
           <div className="flex items-start justify-between gap-4 mb-5">
-            <h2 className="text-xl font-semibold text-gray-900">{t('employee.addEmployeeTitle')}</h2>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-dk-text">{t('employee.addEmployeeTitle')}</h2>
             <button type="button" className="btn btn-secondary" onClick={() => setShowCreateModal(false)}>{t('employee.close')}</button>
           </div>
           <form onSubmit={inviteForm.handleSubmit(onSubmitInvite)} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('employee.email')} *</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{t('employee.email')} *</label>
               <input
                 type="email"
                 className="input w-full"
@@ -1306,11 +1306,11 @@ const EmployeeManagement = () => {
               {inviteForm.formState.errors.email && (
                 <p className="text-red-500 text-sm mt-1">{inviteForm.formState.errors.email.message}</p>
               )}
-              <p className="text-xs text-gray-500 mt-1">{t('employee.inviteEmailHint')}</p>
+              <p className="text-xs text-gray-500 dark:text-dk-text2 mt-1">{t('employee.inviteEmailHint')}</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {t('employee.fullName')} <span className="text-xs text-gray-400 font-normal">({t('employee.optional')})</span>
+              <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">
+                {t('employee.fullName')} <span className="text-xs text-gray-400 dark:text-dk-muted font-normal">({t('employee.optional')})</span>
               </label>
               <input type="text" className="input w-full" {...inviteForm.register('fullName')} />
             </div>
@@ -1330,9 +1330,9 @@ const EmployeeManagement = () => {
       {/* ── Modal confirm reset mật khẩu ─────────────────────────────────────── */}
       {resetConfirmEmp && renderModal(
         <div>
-          <h2 className="text-xl font-semibold text-gray-900">{t('employee.confirmResetTitle')}</h2>
-          <p className="text-sm text-gray-500 mt-2">{t('employee.confirmResetMessage')} <strong>{resetConfirmEmp.username}</strong>?</p>
-          <p className="text-sm text-gray-500 mt-1">{t('employee.resetTempPasswordNote')}</p>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-dk-text">{t('employee.confirmResetTitle')}</h2>
+          <p className="text-sm text-gray-500 dark:text-dk-text2 mt-2">{t('employee.confirmResetMessage')} <strong className="text-gray-800 dark:text-dk-text">{resetConfirmEmp.username}</strong>?</p>
+          <p className="text-sm text-gray-500 dark:text-dk-text2 mt-1">{t('employee.resetTempPasswordNote')}</p>
           <div className="flex justify-end gap-2 mt-6">
             <button type="button" className="btn btn-secondary" onClick={() => setResetConfirmEmp(null)} disabled={isResetting}>{t('common.cancel')}</button>
             <button type="button" className="btn btn-primary" onClick={handleConfirmReset} disabled={isResetting}>
@@ -1347,12 +1347,12 @@ const EmployeeManagement = () => {
       {/* ── Modal hiện mật khẩu tạm sau khi reset — chỉ hiện một lần ─────────── */}
       {tempPasswordInfo && renderModal(
         <div>
-          <h2 className="text-xl font-semibold text-gray-900">{t('employee.resetResultTitle', { username: tempPasswordInfo.username })}</h2>
-          <p className="text-sm text-gray-500 mt-2">{t('employee.resetResultOnce')}</p>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-dk-text">{t('employee.resetResultTitle', { username: tempPasswordInfo.username })}</h2>
+          <p className="text-sm text-gray-500 dark:text-dk-text2 mt-2">{t('employee.resetResultOnce')}</p>
           <div className="mt-4 flex items-center gap-2">
             <code
               data-testid="temp-password"
-              className="flex-1 select-all rounded-lg bg-gray-100 px-4 py-3 text-lg font-mono tracking-wider text-gray-900"
+              className="flex-1 select-all rounded-lg bg-gray-100 dark:bg-dk-raised border border-gray-200 dark:border-dk-border px-4 py-3 text-lg font-mono tracking-wider text-gray-900 dark:text-dk-text"
             >
               {tempPasswordInfo.password}
             </code>
@@ -1370,9 +1370,9 @@ const EmployeeManagement = () => {
       {/* ── Modal confirm xóa nhân viên ──────────────────────────────────────── */}
       {deleteConfirmEmp && renderModal(
         <div>
-          <h2 className="text-xl font-semibold text-gray-900">{t('employee.confirmDeleteTitle')}</h2>
-          <p className="text-sm text-gray-500 mt-2">
-            {t('employee.confirmDeleteMessage')} <strong>{deleteConfirmEmp.username}</strong>?
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-dk-text">{t('employee.confirmDeleteTitle')}</h2>
+          <p className="text-sm text-gray-500 dark:text-dk-text2 mt-2">
+            {t('employee.confirmDeleteMessage')} <strong className="text-gray-800 dark:text-dk-text">{deleteConfirmEmp.username}</strong>?
             {t('employee.deleteWarning')}
           </p>
           <div className="flex justify-end gap-2 mt-6">

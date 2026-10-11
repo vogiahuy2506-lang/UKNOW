@@ -21,7 +21,7 @@ const GoogleAuthButton = ({ onSuccess, onError, text, disabled }) => {
       type="button"
       onClick={() => login()}
       disabled={disabled}
-      className="w-full flex items-center justify-center gap-3 px-4 py-2.5 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 hover:border-slate-300 hover:shadow-sm active:scale-[0.99] transition-all duration-150 text-sm font-semibold text-slate-700 disabled:opacity-60 disabled:pointer-events-none"
+      className="w-full flex items-center justify-center gap-3 px-4 py-2.5 border border-slate-200 dark:border-dk-border rounded-xl bg-white dark:bg-dk-inset hover:bg-slate-50 dark:hover:bg-dk-raised/60 hover:border-slate-300 dark:hover:border-dk-border-strong hover:shadow-sm active:scale-[0.99] transition-all duration-150 text-sm font-semibold text-slate-700 dark:text-dk-text disabled:opacity-60 disabled:pointer-events-none"
     >
       <GoogleIcon />
       <span>{text}</span>

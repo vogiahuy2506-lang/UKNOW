@@ -9,6 +9,13 @@ vi.mock('../../../../i18n', () => ({
         if (key === 'title') return 'AI Assistant';
         if (key === 'send') return 'Gửi';
         if (key === 'placeholder') return 'Mô tả thay đổi bạn muốn…';
+        if (key === 'initialBadge') return 'Trợ lý AI Thiết kế Landing Page';
+        if (key === 'initialTitle') return 'Bạn muốn tạo Landing Page gì hôm nay?';
+        if (key === 'generatePage') return 'Tạo trang';
+        if (key === 'quickPicks.saas.name') return 'SaaS / Phần mềm';
+        if (key === 'quickPicks.course.name') return 'Khóa học online';
+        if (key === 'pasteHtml') return 'Dán mã HTML';
+        if (key === 'templateGallery') return 'Thư viện mẫu';
       }
       return namespace ? `${namespace}.${key}` : key;
     };

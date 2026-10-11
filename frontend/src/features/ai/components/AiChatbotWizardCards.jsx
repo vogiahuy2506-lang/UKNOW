@@ -41,16 +41,16 @@ export const AskSenderAccountCard = ({ data, onSelect, onOther, onDismiss, isAct
   const noUsableAccount = Boolean(data?.noUsableAccount);
 
   return (
-    <div className={`mt-4 rounded-2xl border border-orange-200 bg-orange-50 p-4 ${isActive ? '' : 'opacity-60 pointer-events-none'}`}>
+    <div className={`mt-4 rounded-2xl border border-orange-200 dark:border-dk-border bg-orange-50 dark:bg-dk-raised p-4 ${isActive ? '' : 'opacity-60 pointer-events-none'}`}>
       <div className="mb-3 flex items-center gap-2">
         {isEmail ? <HiOutlineMail className="h-5 w-5 text-orange-500" /> : <HiOutlineChat className="h-5 w-5 text-blue-500" />}
-        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-orange-600">
+        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-orange-600 dark:text-orange-400">
           {t('aiChatbot.wizardSenderTitle') || 'Tài khoản gửi'}
         </span>
       </div>
 
       {!isEmail && noUsableAccount && accounts.length > 0 && (
-        <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+        <p className="mb-3 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-900 dark:text-amber-300">
           {t('aiChatbot.wizardZaloAllDisconnected') || 'Tất cả tài khoản Zalo đang mất kết nối. Bạn quét mã QR để kết nối lại nhé.'}
         </p>
       )}
@@ -66,18 +66,18 @@ export const AskSenderAccountCard = ({ data, onSelect, onOther, onDismiss, isAct
               onClick={() => onSelect(account)}
               className={`w-full rounded-xl border px-3 py-2 text-left transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
                 disabled
-                  ? 'border-slate-200 bg-white text-slate-400'
-                  : 'border-white bg-white text-slate-700 hover:border-orange-300 hover:bg-white'
+                  ? 'border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface text-slate-400'
+                  : 'border-white dark:border-dk-border bg-white dark:bg-dk-strong text-slate-700 dark:text-dk-text hover:border-orange-300 dark:hover:border-orange-500 hover:bg-white dark:hover:bg-dk-border-strong'
               }`}
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-bold">{account.name}</p>
-                  {account.email && <p className="truncate text-xs text-slate-500">{account.email}</p>}
+                  <p className="truncate text-sm font-bold text-slate-800 dark:text-dk-text">{account.name}</p>
+                  {account.email && <p className="truncate text-xs text-slate-500 dark:text-dk-text2">{account.email}</p>}
                 </div>
                 <div className="flex shrink-0 gap-1">
-                  {account.isDefault && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">Default</span>}
-                  {!account.usable && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">{account.status}</span>}
+                  {account.isDefault && <span className="rounded-full bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-400">Default</span>}
+                  {!account.usable && <span className="rounded-full bg-slate-100 dark:bg-dk-raised px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:text-dk-text2">{account.status}</span>}
                 </div>
               </div>
             </button>
@@ -85,7 +85,7 @@ export const AskSenderAccountCard = ({ data, onSelect, onOther, onDismiss, isAct
         })}
 
         {accounts.length === 0 && (
-          <p className="rounded-xl bg-white px-3 py-3 text-xs text-slate-500">
+          <p className="rounded-xl bg-white dark:bg-dk-surface px-3 py-3 text-xs text-slate-500 dark:text-dk-text2 border border-transparent dark:border-dk-border">
             {isEmail ? (t('aiChatbot.wizardNoEmailSender') || 'Chưa có email sender active.') : (t('aiChatbot.wizardNoZaloAccount') || 'Chưa có tài khoản Zalo connected.')}
           </p>
         )}
@@ -98,8 +98,8 @@ export const AskSenderAccountCard = ({ data, onSelect, onOther, onDismiss, isAct
           onClick={onOther}
           className={`mt-3 w-full rounded-xl border px-3 py-2 text-xs font-black transition-all ${
             !isEmail && noUsableAccount
-              ? 'border-blue-300 bg-blue-600 text-white hover:bg-blue-700'
-              : 'border-orange-200 bg-white text-orange-700 hover:bg-orange-100'
+              ? 'border-blue-300 dark:border-blue-600 bg-blue-600 text-white hover:bg-blue-700'
+              : 'border-orange-200 dark:border-dk-border bg-white dark:bg-dk-strong text-orange-700 dark:text-orange-300 hover:bg-orange-100 dark:hover:bg-dk-border-strong'
           }`}
         >
           {!isEmail && noUsableAccount
@@ -112,7 +112,7 @@ export const AskSenderAccountCard = ({ data, onSelect, onOther, onDismiss, isAct
         <button
           type="button"
           onClick={onDismiss}
-          className="mt-2 w-full text-center text-xs text-slate-500 hover:text-slate-700 py-1 transition-colors"
+          className="mt-2 w-full text-center text-xs text-slate-500 hover:text-slate-700 dark:text-dk-text2 dark:hover:text-dk-text py-1 transition-colors"
         >
           {t('aiChatbot.wizardDismiss') || 'Không phải, tôi chỉ hỏi thôi'}
         </button>
@@ -209,21 +209,21 @@ export const EmailSetupGuideCard = ({ data, onSelectAccount, onAccountsFound, on
   };
 
   return (
-    <div className={`mt-4 rounded-2xl border border-orange-200 bg-orange-50 p-4 ${isActive ? '' : 'opacity-60 pointer-events-none'}`}>
+    <div className={`mt-4 rounded-2xl border border-orange-200 dark:border-dk-border bg-orange-50 dark:bg-dk-raised p-4 ${isActive ? '' : 'opacity-60 pointer-events-none'}`}>
       <div className="mb-3 flex items-center gap-2">
         <HiOutlineMail className="h-5 w-5 text-orange-500" />
-        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-orange-600">
+        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-orange-600 dark:text-orange-400">
           {t('aiChatbot.wizardEmailSetupTitle') || 'Thiết lập email'}
         </span>
       </div>
-      <p className="mb-3 text-xs text-slate-600">
+      <p className="mb-3 text-xs text-slate-600 dark:text-dk-text">
         {t('aiChatbot.wizardEmailSetupHint') || 'Bạn có thể tạo nhanh email gửi ngay tại đây, không cần vào Settings.'}
       </p>
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
           onClick={() => setQuickMode((prev) => !prev)}
-          className="inline-flex items-center gap-1 rounded-xl border border-orange-200 bg-white px-3 py-2 text-xs font-black text-orange-700 hover:bg-orange-100"
+          className="inline-flex items-center gap-1 rounded-xl border border-orange-200 dark:border-dk-border bg-white dark:bg-dk-strong px-3 py-2 text-xs font-black text-orange-700 dark:text-orange-300 hover:bg-orange-100 dark:hover:bg-dk-border-strong"
         >
           <HiOutlineCheck className="h-4 w-4" />
           {quickMode
@@ -241,7 +241,7 @@ export const EmailSetupGuideCard = ({ data, onSelectAccount, onAccountsFound, on
           type="button"
           onClick={handleCompleted}
           disabled={checking}
-          className="inline-flex items-center gap-1 rounded-xl border border-orange-200 bg-white px-3 py-2 text-xs font-black text-orange-700 hover:bg-orange-100 disabled:opacity-60"
+          className="inline-flex items-center gap-1 rounded-xl border border-orange-200 dark:border-dk-border bg-white dark:bg-dk-strong px-3 py-2 text-xs font-black text-orange-700 dark:text-orange-300 hover:bg-orange-100 dark:hover:bg-dk-border-strong disabled:opacity-60"
         >
           <HiOutlineCheck className="h-4 w-4" />
           {checking ? (t('common.loading') || 'Loading...') : (t('aiChatbot.wizardCompleted') || 'Đã hoàn thành')}
@@ -249,42 +249,42 @@ export const EmailSetupGuideCard = ({ data, onSelectAccount, onAccountsFound, on
       </div>
 
       {quickMode && (
-        <div className="mt-3 space-y-3 rounded-xl border border-orange-200 bg-white p-3">
+        <div className="mt-3 space-y-3 rounded-xl border border-orange-200 dark:border-dk-border bg-white dark:bg-dk-surface p-3">
           <div>
-            <p className="mb-1 text-[11px] font-semibold text-slate-600">{t('aiChatbot.wizardQuickSenderName') || 'Tên người gửi'}</p>
+            <p className="mb-1 text-[11px] font-semibold text-slate-600 dark:text-dk-text">{t('aiChatbot.wizardQuickSenderName') || 'Tên người gửi'}</p>
             <input
               type="text"
               value={quickForm.name}
               onChange={(event) => updateQuickForm('name', event.target.value)}
               placeholder={t('aiChatbot.wizardQuickSenderNamePlaceholder') || 'Ví dụ: Founder AI'}
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-orange-400"
+              className="w-full rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface px-3 py-2 text-sm text-slate-700 dark:text-dk-text outline-none focus:border-orange-400"
             />
           </div>
 
           <div>
-            <p className="mb-1 text-[11px] font-semibold text-slate-600">{t('aiChatbot.wizardQuickReplyTo') || 'Email Reply-To'}</p>
+            <p className="mb-1 text-[11px] font-semibold text-slate-600 dark:text-dk-text">{t('aiChatbot.wizardQuickReplyTo') || 'Email Reply-To'}</p>
             <input
               type="email"
               value={quickForm.replyTo}
               onChange={(event) => updateQuickForm('replyTo', event.target.value)}
               placeholder={t('aiChatbot.wizardQuickReplyToPlaceholder') || 'Ví dụ: hello@congty.com'}
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-orange-400"
+              className="w-full rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface px-3 py-2 text-sm text-slate-700 dark:text-dk-text outline-none focus:border-orange-400"
             />
           </div>
 
           <div>
-            <p className="mb-1 text-[11px] font-semibold text-slate-600">
+            <p className="mb-1 text-[11px] font-semibold text-slate-600 dark:text-dk-text">
               {t('aiChatbot.wizardQuickFromPrefix') || 'Địa chỉ gửi (prefix)'}
             </p>
-            <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+            <div className="flex items-center rounded-xl border border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-surface px-3 py-2">
               <input
                 type="text"
                 value={quickForm.platformPrefix}
                 onChange={(event) => updateQuickForm('platformPrefix', event.target.value.replace(/[^a-zA-Z0-9._-]/g, ''))}
                 placeholder={t('aiChatbot.wizardQuickFromPrefixPlaceholder') || 'no-reply'}
-                className="min-w-0 flex-1 bg-transparent text-sm text-slate-700 outline-none"
+                className="min-w-0 flex-1 bg-transparent text-sm text-slate-700 dark:text-dk-text outline-none"
               />
-              <span className="ml-2 shrink-0 text-xs text-slate-500">@{PLATFORM_DOMAIN}</span>
+              <span className="ml-2 shrink-0 text-xs text-slate-500 dark:text-dk-text2">@{PLATFORM_DOMAIN}</span>
             </div>
           </div>
 
@@ -305,7 +305,7 @@ export const EmailSetupGuideCard = ({ data, onSelectAccount, onAccountsFound, on
         <button
           type="button"
           onClick={onDismiss}
-          className="mt-2 w-full text-center text-xs text-slate-500 hover:text-slate-700 py-1 transition-colors"
+          className="mt-2 w-full text-center text-xs text-slate-500 hover:text-slate-700 dark:text-dk-text2 dark:hover:text-dk-text py-1 transition-colors"
         >
           {t('aiChatbot.wizardDismiss') || 'Không phải, tôi chỉ hỏi thôi'}
         </button>
@@ -406,22 +406,22 @@ export const ZaloQrLoginCard = ({ channel = 'zalo', onConnected, onBackToAccount
   }, [sessionKey]);
 
   return (
-    <div className={`mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4 ${isActive ? '' : 'opacity-60 pointer-events-none'}`}>
+    <div className={`mt-4 rounded-2xl border border-blue-200 dark:border-dk-border bg-blue-50 dark:bg-dk-raised p-4 ${isActive ? '' : 'opacity-60 pointer-events-none'}`}>
       <div className="mb-3 flex items-center gap-2">
         <HiOutlineChat className="h-5 w-5 text-blue-500" />
-        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-600">
+        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-600 dark:text-blue-400">
           {t('aiChatbot.wizardZaloQrTitle') || 'Đăng nhập Zalo'}
         </span>
       </div>
       {qr ? (
-        <img src={qr} alt="Zalo QR" className="mx-auto h-44 w-44 rounded-xl border border-white bg-white object-contain p-2" />
+        <img src={qr} alt="Zalo QR" className="mx-auto h-44 w-44 rounded-xl border border-white dark:border-dk-border bg-white object-contain p-2" />
       ) : (
-        <div className="mx-auto flex h-44 w-44 items-center justify-center rounded-xl border border-white bg-white text-xs text-slate-400">
+        <div className="mx-auto flex h-44 w-44 items-center justify-center rounded-xl border border-white dark:border-dk-border bg-white dark:bg-dk-surface text-xs text-slate-400">
           {loading ? (t('common.loading') || 'Loading...') : status}
         </div>
       )}
       <div className="mt-3 flex items-center justify-between gap-2">
-        <p className="text-xs text-slate-600">
+        <p className="text-xs text-slate-600 dark:text-dk-text">
           {status === 'expired'
             ? (t('aiChatbot.wizardQrExpired') || 'QR đã hết hạn.')
             : (t('aiChatbot.wizardQrHint') || 'Quét QR bằng điện thoại để kết nối.')}
@@ -430,7 +430,7 @@ export const ZaloQrLoginCard = ({ channel = 'zalo', onConnected, onBackToAccount
           type="button"
           onClick={createQr}
           disabled={loading}
-          className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-blue-200 bg-white px-3 py-2 text-xs font-black text-blue-700 hover:bg-blue-100 disabled:opacity-60"
+          className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-blue-200 dark:border-dk-border bg-white dark:bg-dk-strong px-3 py-2 text-xs font-black text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-dk-border-strong disabled:opacity-60"
         >
           <HiOutlineRefresh className="h-4 w-4" />
           {t('aiChatbot.wizardNewQr') || 'Tạo mã mới'}
@@ -440,7 +440,7 @@ export const ZaloQrLoginCard = ({ channel = 'zalo', onConnected, onBackToAccount
         <button
           type="button"
           onClick={() => onBackToAccounts(channel)}
-          className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-xs font-black text-blue-700 transition-all hover:bg-blue-100"
+          className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-blue-200 dark:border-dk-border bg-white dark:bg-dk-strong px-3 py-2.5 text-xs font-black text-blue-700 dark:text-blue-300 transition-all hover:bg-blue-100 dark:hover:bg-dk-border-strong"
         >
           <HiOutlineArrowLeft className="h-4 w-4" />
           {t('aiChatbot.wizardBackToZaloAccounts') || 'Chọn tài khoản có sẵn'}
@@ -450,7 +450,7 @@ export const ZaloQrLoginCard = ({ channel = 'zalo', onConnected, onBackToAccount
         <button
           type="button"
           onClick={onDismiss}
-          className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-600 transition-all hover:bg-slate-50"
+          className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-strong px-3 py-2.5 text-xs font-bold text-slate-600 dark:text-dk-text transition-all hover:bg-slate-50 dark:hover:bg-dk-border-strong"
         >
           {t('common.cancel') || 'Huỷ'}
         </button>
@@ -510,19 +510,19 @@ export const ZaloGroupPickerCard = ({ data, onSubmit, onDismiss, isActive = true
   ));
 
   return (
-    <div className={`mt-4 rounded-2xl border border-purple-200 bg-purple-50 p-4 ${isActive ? '' : 'opacity-60 pointer-events-none'}`}>
+    <div className={`mt-4 rounded-2xl border border-purple-200 dark:border-dk-border bg-purple-50 dark:bg-dk-raised p-4 ${isActive ? '' : 'opacity-60 pointer-events-none'}`}>
       <div className="mb-3 flex items-center gap-2">
         <HiOutlineUserGroup className="h-5 w-5 text-purple-500" />
-        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-purple-600">
+        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-purple-600 dark:text-purple-400">
           {t('aiChatbot.wizardGroupTitle') || 'Chọn nhóm Zalo'}
         </span>
       </div>
 
-      {loading && <p className="text-xs text-slate-500">{t('common.loading') || 'Loading...'}</p>}
+      {loading && <p className="text-xs text-slate-500 dark:text-dk-text2">{t('common.loading') || 'Loading...'}</p>}
       {error && (
-        <div className="rounded-xl bg-white p-3">
-          <p className="mb-2 text-xs text-red-600">{error}</p>
-          <button type="button" onClick={loadGroups} className="rounded-xl border border-purple-200 px-3 py-2 text-xs font-black text-purple-700">
+        <div className="rounded-xl bg-white dark:bg-dk-surface p-3 border border-red-200 dark:border-red-900/40">
+          <p className="mb-2 text-xs text-red-600 dark:text-red-400">{error}</p>
+          <button type="button" onClick={loadGroups} className="rounded-xl border border-purple-200 dark:border-dk-border bg-white dark:bg-dk-strong px-3 py-2 text-xs font-black text-purple-700 dark:text-purple-300">
             {t('common.retry') || 'Thử lại'}
           </button>
         </div>
@@ -536,19 +536,19 @@ export const ZaloGroupPickerCard = ({ data, onSubmit, onDismiss, isActive = true
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('aiChatbot.wizardGroupSearchPlaceholder') || 'Tìm nhóm...'}
-              className="w-full rounded-xl border border-purple-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-300"
+              className="w-full rounded-xl border border-purple-200 dark:border-dk-border bg-white dark:bg-dk-surface py-2 pl-9 pr-3 text-sm text-slate-700 dark:text-dk-text placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-300"
             />
           </div>
           <button
             type="button"
             onClick={toggleAllFiltered}
             disabled={filteredIds.length === 0}
-            className="mb-2 rounded-xl border border-purple-200 bg-white px-3 py-2 text-xs font-black text-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="mb-2 rounded-xl border border-purple-200 dark:border-dk-border bg-white dark:bg-dk-strong px-3 py-2 text-xs font-black text-purple-700 dark:text-purple-300 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {allSelected ? (t('aiChatbot.wizardClearAll') || 'Bỏ chọn tất cả') : (t('aiChatbot.wizardSelectAll') || 'Chọn tất cả')}
           </button>
           {filteredGroups.length === 0 ? (
-            <p className="rounded-xl bg-white px-3 py-2 text-xs text-slate-500">
+            <p className="rounded-xl bg-white dark:bg-dk-surface px-3 py-2 text-xs text-slate-500 dark:text-dk-text2">
               {t('aiChatbot.wizardGroupSearchEmpty') || 'Không tìm thấy nhóm phù hợp.'}
             </p>
           ) : (
@@ -557,10 +557,10 @@ export const ZaloGroupPickerCard = ({ data, onSubmit, onDismiss, isActive = true
                 const id = group.groupId || group.group_id || group.id;
                 const name = group.groupName || group.group_name || group.name || id;
                 return (
-                  <label key={id} className="flex cursor-pointer items-center gap-2 rounded-xl bg-white px-3 py-2 text-sm text-slate-700">
+                  <label key={id} className="flex cursor-pointer items-center gap-2 rounded-xl bg-white dark:bg-dk-strong px-3 py-2 text-sm text-slate-700 dark:text-dk-text hover:bg-slate-50 dark:hover:bg-dk-border-strong">
                     <input type="checkbox" checked={selected.includes(id)} onChange={() => toggle(id)} />
                     <span className="min-w-0 flex-1 truncate">{name}</span>
-                    {group.memberCount || group.member_count ? <span className="text-xs text-slate-400">{group.memberCount || group.member_count}</span> : null}
+                    {group.memberCount || group.member_count ? <span className="text-xs text-slate-400 dark:text-dk-text2">{group.memberCount || group.member_count}</span> : null}
                   </label>
                 );
               })}
@@ -580,7 +580,7 @@ export const ZaloGroupPickerCard = ({ data, onSubmit, onDismiss, isActive = true
         <button
           type="button"
           onClick={onDismiss}
-          className="mt-2 w-full text-center text-xs text-slate-500 hover:text-slate-700 py-1 transition-colors"
+          className="mt-2 w-full text-center text-xs text-slate-500 hover:text-slate-700 dark:text-dk-text2 dark:hover:text-dk-text py-1 transition-colors"
         >
           {t('aiChatbot.wizardDismiss') || 'Không phải, tôi chỉ hỏi thôi'}
         </button>
@@ -713,11 +713,11 @@ export const ZaloFriendPickerCard = ({ data, onSubmit, onDismiss, isActive = tru
   };
 
   return (
-    <div className={`mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4 ${isActive ? '' : 'opacity-60 pointer-events-none'}`}>
+    <div className={`mt-4 rounded-2xl border border-blue-200 dark:border-dk-border bg-blue-50 dark:bg-dk-raised p-4 ${isActive ? '' : 'opacity-60 pointer-events-none'}`}>
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <HiOutlineChat className="h-5 w-5 text-blue-500" />
-          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-600">
+          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-600 dark:text-blue-400">
             {t('aiChatbot.wizardFriendTitle') || 'Danh bạ Zalo'}
           </span>
         </div>
@@ -725,7 +725,7 @@ export const ZaloFriendPickerCard = ({ data, onSubmit, onDismiss, isActive = tru
           type="button"
           onClick={handleSyncContacts}
           disabled={syncing}
-          className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-800 disabled:opacity-50"
+          className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 disabled:opacity-50"
         >
           <HiOutlineRefresh className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
           {syncing ? (t('common.syncing') || 'Đang đồng bộ...') : (t('aiChatbot.wizardReSync') || 'Đồng bộ lại')}
@@ -733,15 +733,15 @@ export const ZaloFriendPickerCard = ({ data, onSubmit, onDismiss, isActive = tru
       </div>
 
       {lastSyncedAt && (
-        <p className="mb-2 text-[11px] text-slate-500">
+        <p className="mb-2 text-[11px] text-slate-500 dark:text-dk-text2">
           {t('aiChatbot.wizardLastSynced') || 'Đồng bộ gần nhất'}: {new Date(lastSyncedAt).toLocaleString('vi-VN')}
         </p>
       )}
 
       {error && (
-        <div className="rounded-xl bg-white p-3">
-          <p className="mb-2 text-xs text-red-600">{error}</p>
-          <button type="button" onClick={() => loadFriends(1, search)} className="rounded-xl border border-blue-200 px-3 py-2 text-xs font-black text-blue-700">
+        <div className="rounded-xl bg-white dark:bg-dk-surface p-3 border border-red-200 dark:border-red-900/40">
+          <p className="mb-2 text-xs text-red-600 dark:text-red-400">{error}</p>
+          <button type="button" onClick={() => loadFriends(1, search)} className="rounded-xl border border-blue-200 dark:border-dk-border bg-white dark:bg-dk-strong px-3 py-2 text-xs font-black text-blue-700 dark:text-blue-300">
             {t('common.retry') || 'Thử lại'}
           </button>
         </div>
@@ -764,17 +764,17 @@ export const ZaloFriendPickerCard = ({ data, onSubmit, onDismiss, isActive = tru
             value={search}
             onChange={handleSearchChange}
             placeholder={t('aiChatbot.wizardFriendSearchPlaceholder') || 'Tìm bạn bè theo tên hoặc SĐT...'}
-            className="w-full rounded-xl border border-blue-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-300"
+            className="w-full rounded-xl border border-blue-200 dark:border-dk-border bg-white dark:bg-dk-surface py-2 pl-9 pr-3 text-sm text-slate-700 dark:text-dk-text placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-300"
           />
         </div>
       )}
 
-      {loading && <p className="text-xs text-slate-500">{t('common.loading') || 'Loading...'}</p>}
+      {loading && <p className="text-xs text-slate-500 dark:text-dk-text2">{t('common.loading') || 'Loading...'}</p>}
 
       {/* Danh bạ trống thật — khác hẳn "tìm không ra", nên nút Đồng bộ mới có nghĩa ở đây. */}
       {!loading && !error && totalCount === 0 && !search && (
-        <div className="rounded-xl bg-white p-4 text-center">
-          <p className="text-xs text-slate-600 mb-2">
+        <div className="rounded-xl bg-white dark:bg-dk-surface p-4 text-center border border-slate-100 dark:border-dk-border">
+          <p className="text-xs text-slate-600 dark:text-dk-text mb-2">
             {t('aiChatbot.wizardNoFriendsFound') || 'Chưa có bạn bè nào trong danh bạ đã đồng bộ.'}
           </p>
           <button
@@ -790,15 +790,15 @@ export const ZaloFriendPickerCard = ({ data, onSubmit, onDismiss, isActive = tru
 
       {/* Có danh bạ nhưng từ khoá không khớp ai — đừng bảo người ta đi đồng bộ lại. */}
       {!loading && !error && totalCount === 0 && search && (
-        <div className="rounded-xl bg-white p-4 text-center">
-          <p className="text-xs text-slate-600 mb-2">
+        <div className="rounded-xl bg-white dark:bg-dk-surface p-4 text-center border border-slate-100 dark:border-dk-border">
+          <p className="text-xs text-slate-600 dark:text-dk-text mb-2">
             {t('aiChatbot.wizardFriendSearchEmpty', { keyword: search })
               || `Không tìm thấy bạn bè nào khớp "${search}".`}
           </p>
           <button
             type="button"
             onClick={() => { setSearch(''); loadFriends(1, ''); }}
-            className="rounded-xl border border-blue-200 px-3 py-2 text-xs font-black text-blue-700"
+            className="rounded-xl border border-blue-200 dark:border-dk-border bg-white dark:bg-dk-strong px-3 py-2 text-xs font-black text-blue-700 dark:text-blue-300"
           >
             {t('aiChatbot.wizardClearSearch') || 'Xoá từ khoá'}
           </button>
@@ -812,17 +812,17 @@ export const ZaloFriendPickerCard = ({ data, onSubmit, onDismiss, isActive = tru
               type="button"
               onClick={toggleAllCurrent}
               disabled={currentFriendIds.length === 0}
-              className="rounded-xl border border-blue-200 bg-white px-3 py-1.5 text-xs font-black text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl border border-blue-200 dark:border-dk-border bg-white dark:bg-dk-strong px-3 py-1.5 text-xs font-black text-blue-700 dark:text-blue-300 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {allCurrentSelected ? (t('aiChatbot.wizardClearAll') || 'Bỏ chọn') : (t('aiChatbot.wizardSelectAll') || 'Chọn tất cả')}
             </button>
-            <span className="text-xs font-bold text-slate-600">
+            <span className="text-xs font-bold text-slate-600 dark:text-dk-text">
               {t('aiChatbot.wizardSelectedCount', { count: selected.length, max: maxRecipients }) || `Đã chọn: ${selected.length} / ${maxRecipients}`}
             </span>
           </div>
 
           {friends.length === 0 ? (
-            <p className="rounded-xl bg-white px-3 py-2 text-xs text-slate-500">
+            <p className="rounded-xl bg-white dark:bg-dk-surface px-3 py-2 text-xs text-slate-500 dark:text-dk-text2">
               {t('aiChatbot.wizardFriendSearchEmpty', { keyword: search })
                 || 'Không tìm thấy bạn bè phù hợp.'}
             </p>
@@ -836,18 +836,18 @@ export const ZaloFriendPickerCard = ({ data, onSubmit, onDismiss, isActive = tru
                 const isChecked = selected.includes(id);
 
                 return (
-                  <label key={id} className="flex cursor-pointer items-center gap-2.5 rounded-xl bg-white px-3 py-2 text-sm text-slate-700 hover:bg-blue-50 transition-colors">
-                    <input type="checkbox" checked={isChecked} onChange={() => toggle(id)} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                  <label key={id} className="flex cursor-pointer items-center gap-2.5 rounded-xl bg-white dark:bg-dk-strong px-3 py-2 text-sm text-slate-700 dark:text-dk-text hover:bg-blue-50 dark:hover:bg-dk-border-strong transition-colors">
+                    <input type="checkbox" checked={isChecked} onChange={() => toggle(id)} className="rounded border-slate-300 dark:border-dk-border-strong text-blue-600 focus:ring-blue-500" />
                     {avatar ? (
-                      <img src={avatar} alt={name} className="h-8 w-8 rounded-full object-cover border border-slate-200" />
+                      <img src={avatar} alt={name} className="h-8 w-8 rounded-full object-cover border border-slate-200 dark:border-dk-border" />
                     ) : (
-                      <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-xs font-bold text-blue-600">
+                      <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-xs font-bold text-blue-600 dark:text-blue-300">
                         {name.charAt(0).toUpperCase()}
                       </div>
                     )}
                     <div className="min-w-0 flex-1 truncate">
-                      <p className="truncate font-semibold text-slate-800 text-xs">{name}</p>
-                      {phone && <p className="text-[11px] text-slate-400 truncate">{phone}</p>}
+                      <p className="truncate font-semibold text-slate-800 dark:text-dk-text text-xs">{name}</p>
+                      {phone && <p className="text-[11px] text-slate-400 dark:text-dk-text2 truncate">{phone}</p>}
                     </div>
                   </label>
                 );
@@ -856,12 +856,12 @@ export const ZaloFriendPickerCard = ({ data, onSubmit, onDismiss, isActive = tru
           )}
 
           {totalPages > 1 && (
-            <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
+            <div className="mt-2 flex items-center justify-between text-xs text-slate-500 dark:text-dk-text2">
               <button
                 type="button"
                 disabled={page <= 1}
                 onClick={() => loadFriends(page - 1, search)}
-                className="rounded-lg border border-blue-200 bg-white px-2.5 py-1 font-bold text-blue-600 disabled:opacity-40"
+                className="rounded-lg border border-blue-200 dark:border-dk-border bg-white dark:bg-dk-strong px-2.5 py-1 font-bold text-blue-600 dark:text-blue-300 disabled:opacity-40"
               >
                 {t('common.previous') || 'Trước'}
               </button>
@@ -870,7 +870,7 @@ export const ZaloFriendPickerCard = ({ data, onSubmit, onDismiss, isActive = tru
                 type="button"
                 disabled={page >= totalPages}
                 onClick={() => loadFriends(page + 1, search)}
-                className="rounded-lg border border-blue-200 bg-white px-2.5 py-1 font-bold text-blue-600 disabled:opacity-40"
+                className="rounded-lg border border-blue-200 dark:border-dk-border bg-white dark:bg-dk-strong px-2.5 py-1 font-bold text-blue-600 dark:text-blue-300 disabled:opacity-40"
               >
                 {t('common.next') || 'Sau'}
               </button>
@@ -891,7 +891,7 @@ export const ZaloFriendPickerCard = ({ data, onSubmit, onDismiss, isActive = tru
         <button
           type="button"
           onClick={onDismiss}
-          className="mt-2 w-full text-center text-xs text-slate-500 hover:text-slate-700 py-1 transition-colors"
+          className="mt-2 w-full text-center text-xs text-slate-500 hover:text-slate-700 dark:text-dk-text2 dark:hover:text-dk-text py-1 transition-colors"
         >
           {t('aiChatbot.wizardDismiss') || 'Không phải, tôi chỉ hỏi thôi'}
         </button>
@@ -929,10 +929,10 @@ export const LandingLeadsPickerCard = ({ data, onSubmit, onDismiss, isActive = t
   });
 
   return (
-    <div className={`mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 ${isActive ? '' : 'opacity-60 pointer-events-none'}`}>
+    <div className={`mt-4 rounded-2xl border border-emerald-200 dark:border-dk-border bg-emerald-50 dark:bg-dk-raised p-4 ${isActive ? '' : 'opacity-60 pointer-events-none'}`}>
       <div className="mb-3 flex items-center gap-2">
-        <HiOutlineExternalLink className="h-5 w-5 text-emerald-600" />
-        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700">
+        <HiOutlineExternalLink className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-400">
           {t('aiChatbot.wizardLandingTitle')}
         </span>
       </div>
@@ -945,13 +945,13 @@ export const LandingLeadsPickerCard = ({ data, onSubmit, onDismiss, isActive = t
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t('aiChatbot.wizardLandingSearchPlaceholder')}
-            className="w-full rounded-xl border border-emerald-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+            className="w-full rounded-xl border border-emerald-200 dark:border-dk-border bg-white dark:bg-dk-surface py-2 pl-9 pr-3 text-sm text-slate-700 dark:text-dk-text placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-300"
           />
         </div>
       )}
 
       {filteredLandings.length === 0 ? (
-        <p className="rounded-xl bg-white px-3 py-2 text-xs text-slate-500">{t('aiChatbot.wizardLandingSearchEmpty')}</p>
+        <p className="rounded-xl bg-white dark:bg-dk-surface px-3 py-2 text-xs text-slate-500 dark:text-dk-text2">{t('aiChatbot.wizardLandingSearchEmpty')}</p>
       ) : (
         <div className="max-h-56 space-y-2 overflow-y-auto">
           {filteredLandings.map((landing) => {
@@ -959,22 +959,22 @@ export const LandingLeadsPickerCard = ({ data, onSubmit, onDismiss, isActive = t
               ? t('aiChatbot.wizardLandingFormCount', { count: Number(landing.formConsentedCount) || 0 })
               : t('aiChatbot.wizardLandingLeadCount', { count: Number(landing.leadCount) || 0 });
             return (
-              <label key={landing.slug} className="flex cursor-pointer items-center gap-2 rounded-xl bg-white px-3 py-2 text-sm text-slate-700">
+              <label key={landing.slug} className="flex cursor-pointer items-center gap-2 rounded-xl bg-white dark:bg-dk-strong px-3 py-2 text-sm text-slate-700 dark:text-dk-text hover:bg-slate-50 dark:hover:bg-dk-border-strong">
                 <input type="checkbox" checked={selected.includes(landing.slug)} onChange={() => toggle(landing.slug)} />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate font-semibold text-slate-800 text-xs">{landing.title || landing.slug}</span>
-                  <span className="block truncate text-[11px] text-slate-400">
+                  <span className="block truncate font-semibold text-slate-800 dark:text-dk-text text-xs">{landing.title || landing.slug}</span>
+                  <span className="block truncate text-[11px] text-slate-400 dark:text-dk-text2">
                     {landing.slug}{landing.isPublished === false ? ` · ${t('aiChatbot.wizardLandingUnpublished')}` : ''}
                   </span>
                 </span>
-                <span className="shrink-0 text-xs text-slate-500">{countLabel}</span>
+                <span className="shrink-0 text-xs text-slate-500 dark:text-dk-text2">{countLabel}</span>
               </label>
             );
           })}
         </div>
       )}
 
-      <p className="mt-2 text-right text-xs font-bold text-slate-600">
+      <p className="mt-2 text-right text-xs font-bold text-slate-600 dark:text-dk-text">
         {t('aiChatbot.wizardLandingSelectedCount', { count: selected.length, max: maxSelect })}
       </p>
       <button
@@ -986,22 +986,22 @@ export const LandingLeadsPickerCard = ({ data, onSubmit, onDismiss, isActive = t
         {t('aiChatbot.wizardLandingUseSelected', { count: selected.length })}
       </button>
 
-      <div className="mt-3 border-t border-emerald-200 pt-3">
+      <div className="mt-3 border-t border-emerald-200 dark:border-dk-border pt-3">
         <button
           type="button"
           onClick={() => onSubmit({ all: true })}
-          className="w-full rounded-xl border border-amber-300 bg-white px-3 py-2 text-xs font-black text-amber-800 hover:bg-amber-50 transition-colors"
+          className="w-full rounded-xl border border-amber-300 dark:border-dk-border bg-white dark:bg-dk-strong px-3 py-2 text-xs font-black text-amber-800 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-dk-border-strong transition-colors"
         >
           {t('aiChatbot.wizardLandingSelectAll', { count: totalLeads })}
         </button>
-        <p className="mt-1 text-[11px] text-slate-500">{t('aiChatbot.wizardLandingSelectAllHint')}</p>
+        <p className="mt-1 text-[11px] text-slate-500 dark:text-dk-text2">{t('aiChatbot.wizardLandingSelectAllHint')}</p>
       </div>
 
       {onDismiss && (
         <button
           type="button"
           onClick={onDismiss}
-          className="mt-2 w-full text-center text-xs text-slate-500 hover:text-slate-700 py-1 transition-colors"
+          className="mt-2 w-full text-center text-xs text-slate-500 hover:text-slate-700 dark:text-dk-text2 dark:hover:text-dk-text py-1 transition-colors"
         >
           {t('aiChatbot.wizardDismiss')}
         </button>

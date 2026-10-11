@@ -29,18 +29,18 @@ export default function FormTemplatePicker({ onSelect, onBack, isEmployee = fals
 
   return (
     <div className="space-y-6" data-testid="form-template-picker">
-      <div className="flex items-center gap-3 py-3.5 border-b border-gray-100">
+      <div className="flex items-center gap-3 py-3.5 border-b border-gray-100 dark:border-dk-border">
         <button
           type="button"
           onClick={onBack}
-          className="p-2.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 hover:text-gray-900 shadow-2xs transition-all"
+          className="p-2.5 rounded-xl border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-raised hover:bg-gray-50 dark:hover:bg-dk-strong text-gray-600 dark:text-dk-text hover:text-gray-900 dark:hover:text-dk-text shadow-2xs transition-all"
           title={t('forms.submissionsPage.backToForms')}
         >
           <HiOutlineArrowLeft className="w-5 h-5" />
         </button>
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{t('forms.createNew')}</h1>
-          <p className="text-xs sm:text-sm text-gray-500 mt-0.5">{t('forms.editorPage.templates.subtitle')}</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-dk-text">{t('forms.createNew')}</h1>
+          <p className="text-xs sm:text-sm text-gray-500 dark:text-dk-text2 mt-0.5">{t('forms.editorPage.templates.subtitle')}</p>
         </div>
       </div>
 
@@ -55,16 +55,16 @@ export default function FormTemplatePicker({ onSelect, onBack, isEmployee = fals
               disabled={locked}
               onClick={() => onSelect(template.id)}
               data-testid={`form-template-${template.id}`}
-              className="text-left p-5 rounded-2xl border border-gray-200/90 bg-white shadow-xs hover:border-orange-300 hover:shadow-sm active:scale-[0.99] transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:border-gray-200/90 disabled:hover:shadow-xs space-y-3"
+              className="text-left p-5 rounded-2xl border border-gray-200/90 dark:border-dk-border bg-white dark:bg-dk-surface shadow-xs hover:border-orange-300 dark:hover:border-orange-500/50 hover:shadow-sm active:scale-[0.99] transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:border-gray-200/90 dark:disabled:hover:border-dk-border disabled:hover:shadow-xs space-y-3"
             >
-              <div className="inline-flex p-2.5 rounded-xl bg-orange-50 text-orange-600">
+              <div className="inline-flex p-2.5 rounded-xl bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400">
                 <Icon className="w-6 h-6" />
               </div>
               <div>
-                <div className="text-base font-bold text-gray-900">{t(template.nameKey)}</div>
-                <p className="text-xs text-gray-500 mt-1 leading-relaxed">{t(template.descKey)}</p>
+                <div className="text-base font-bold text-gray-900 dark:text-dk-text">{t(template.nameKey)}</div>
+                <p className="text-xs text-gray-500 dark:text-dk-text2 mt-1 leading-relaxed">{t(template.descKey)}</p>
                 {locked && (
-                  <p className="text-xs text-amber-700 mt-2">{t('forms.editorPage.payment.employeeReadOnlyNotice')}</p>
+                  <p className="text-xs text-amber-700 dark:text-amber-400 mt-2">{t('forms.editorPage.payment.employeeReadOnlyNotice')}</p>
                 )}
               </div>
             </button>

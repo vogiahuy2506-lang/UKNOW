@@ -94,7 +94,7 @@ const ResetPasswordPage = () => {
             </div>
             <input
               type={showPassword ? 'text' : 'password'}
-              className={`w-full pl-12 pr-12 py-4 border rounded-xl outline-none transition-all duration-200 text-sm bg-white ${
+              className={`w-full pl-12 pr-12 py-4 border rounded-xl outline-none transition-all duration-200 text-sm text-slate-900 bg-white placeholder:text-slate-400 ${
                 errors.password 
                   ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' 
                   : focusedField === 'password'
@@ -145,7 +145,7 @@ const ResetPasswordPage = () => {
             </div>
             <input
               type={showConfirmPassword ? 'text' : 'password'}
-              className={`w-full pl-12 pr-12 py-4 border rounded-xl outline-none transition-all duration-200 text-sm bg-white ${
+              className={`w-full pl-12 pr-12 py-4 border rounded-xl outline-none transition-all duration-200 text-sm text-slate-900 bg-white placeholder:text-slate-400 ${
                 errors.confirmPassword 
                   ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' 
                   : focusedField === 'confirmPassword'

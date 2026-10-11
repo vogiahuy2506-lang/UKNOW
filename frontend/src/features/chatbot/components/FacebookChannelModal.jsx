@@ -81,23 +81,23 @@ export default function FacebookChannelModal({ open, onClose, chatbotId }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden">
-        <div className="px-5 py-4 flex items-center gap-3 border-b border-slate-100">
-          <div className="w-10 h-10 rounded-lg flex items-center justify-center font-bold text-base shrink-0 bg-blue-50 text-blue-600">
+      <div className="bg-white dark:bg-dk-surface rounded-xl shadow-xl w-full max-w-lg overflow-hidden border border-transparent dark:border-dk-border">
+        <div className="px-5 py-4 flex items-center gap-3 border-b border-slate-100 dark:border-dk-border">
+          <div className="w-10 h-10 rounded-lg flex items-center justify-center font-bold text-base shrink-0 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400">
             f
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-semibold text-slate-900 truncate">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-dk-text truncate">
               {t('chatbot.studio.fbModalTitle')}
             </h3>
-            <p className="text-xs text-slate-500 mt-0.5 truncate">
+            <p className="text-xs text-slate-500 dark:text-dk-text2 mt-0.5 truncate">
               {t('chatbot.studio.fbModalSubtitle')}
             </p>
           </div>
           <button
             type="button"
             onClick={loadPages}
-            className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 shrink-0"
+            className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-dk-text dark:hover:bg-dk-raised shrink-0"
             title={t('chatbot.studio.fbReloadTitle')}
           >
             <HiOutlineRefresh className="w-4 h-4" />
@@ -105,7 +105,7 @@ export default function FacebookChannelModal({ open, onClose, chatbotId }) {
           <button
             type="button"
             onClick={onClose}
-            className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 shrink-0"
+            className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-dk-text dark:hover:bg-dk-raised shrink-0"
           >
             <HiOutlineX className="w-4 h-4" />
           </button>
@@ -113,24 +113,24 @@ export default function FacebookChannelModal({ open, onClose, chatbotId }) {
 
         <div className="px-5 py-5 space-y-4 max-h-[60vh] overflow-y-auto">
           {result?.webhook_url && (
-            <div className="bg-emerald-50/60 border border-emerald-100 rounded-lg p-3 space-y-3">
-              <p className="text-xs font-medium text-emerald-900">
+            <div className="bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-lg p-3 space-y-3">
+              <p className="text-xs font-medium text-emerald-900 dark:text-emerald-300">
                 {t('chatbot.studio.fbWebhookReadyTitle')}
               </p>
 
               <div className="space-y-2">
-                <div className="bg-white border border-emerald-100 rounded-lg px-3 py-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700 mb-1">
+                <div className="bg-white dark:bg-dk-raised border border-emerald-100 dark:border-emerald-900/40 rounded-lg px-3 py-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 mb-1">
                     {t('chatbot.studio.fbCallbackUrlLabel')}
                   </p>
                   <div className="flex items-center gap-2">
-                    <p className="flex-1 min-w-0 text-[11px] font-mono text-slate-700 break-all">
+                    <p className="flex-1 min-w-0 text-[11px] font-mono text-slate-700 dark:text-dk-text break-all">
                       {result.webhook_url}
                     </p>
                     <button
                       type="button"
                       onClick={() => handleCopy('url', result.webhook_url)}
-                      className="shrink-0 p-1.5 rounded-md text-emerald-700 hover:bg-emerald-100 transition-colors"
+                      className="shrink-0 p-1.5 rounded-md text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-950/40 transition-colors"
                       title={t('chatbot.studio.fbCopyTitle')}
                     >
                       {copied === 'url'
@@ -140,18 +140,18 @@ export default function FacebookChannelModal({ open, onClose, chatbotId }) {
                   </div>
                 </div>
 
-                <div className="bg-white border border-emerald-100 rounded-lg px-3 py-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700 mb-1">
+                <div className="bg-white dark:bg-dk-raised border border-emerald-100 dark:border-emerald-900/40 rounded-lg px-3 py-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 mb-1">
                     {t('chatbot.studio.fbVerifyTokenLabel')}
                   </p>
                   <div className="flex items-center gap-2">
-                    <p className="flex-1 min-w-0 text-[11px] font-mono text-slate-700 break-all">
+                    <p className="flex-1 min-w-0 text-[11px] font-mono text-slate-700 dark:text-dk-text break-all">
                       {result.verify_token}
                     </p>
                     <button
                       type="button"
                       onClick={() => handleCopy('token', result.verify_token)}
-                      className="shrink-0 p-1.5 rounded-md text-emerald-700 hover:bg-emerald-100 transition-colors"
+                      className="shrink-0 p-1.5 rounded-md text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-950/40 transition-colors"
                       title={t('chatbot.studio.fbCopyTitle')}
                     >
                       {copied === 'token'
@@ -162,14 +162,14 @@ export default function FacebookChannelModal({ open, onClose, chatbotId }) {
                 </div>
               </div>
 
-              <p className="text-[11px] text-emerald-800/90 leading-relaxed">
+              <p className="text-[11px] text-emerald-800/90 dark:text-emerald-300 leading-relaxed">
                 {t('chatbot.studio.fbMetaSteps')}
               </p>
             </div>
           )}
 
-          <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-3">
-            <p className="text-xs text-slate-600">{t('chatbot.studio.fbIntro')}</p>
+          <div className="bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30 rounded-lg p-3">
+            <p className="text-xs text-slate-600 dark:text-dk-text">{t('chatbot.studio.fbIntro')}</p>
           </div>
 
           {/* Page list */}
@@ -180,8 +180,8 @@ export default function FacebookChannelModal({ open, onClose, chatbotId }) {
                 {t('chatbot.studio.fbLoadingPages')}
               </div>
             ) : pages.length === 0 ? (
-              <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                <p className="text-sm font-medium text-slate-700">
+              <div className="text-center py-8 bg-slate-50 dark:bg-dk-raised/40 rounded-xl border border-dashed border-slate-200 dark:border-dk-border">
+                <p className="text-sm font-medium text-slate-700 dark:text-dk-text">
                   {t('chatbot.studio.fbNoPagesTitle')}
                 </p>
                 <p className="text-xs text-slate-400 mt-1 px-6">
@@ -190,7 +190,7 @@ export default function FacebookChannelModal({ open, onClose, chatbotId }) {
                     href="/app/settings/channels"
                     target="_blank"
                     rel="noreferrer"
-                    className="text-primary-600 hover:text-primary-700 font-medium underline underline-offset-2"
+                    className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium underline underline-offset-2"
                   >
                     {t('chatbot.studio.fbSettingsLinkLabel')}
                   </a>{' '}
@@ -204,13 +204,13 @@ export default function FacebookChannelModal({ open, onClose, chatbotId }) {
                 return (
                   <div
                     key={page.id}
-                    className="flex items-center gap-3 px-3 py-2.5 bg-white border border-slate-200 rounded-lg hover:border-slate-300 transition-colors"
+                    className="flex items-center gap-3 px-3 py-2.5 bg-white dark:bg-dk-raised border border-slate-200 dark:border-dk-border rounded-lg hover:border-slate-300 dark:hover:border-dk-border-strong transition-colors"
                   >
-                    <div className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 font-bold">
+                    <div className="w-9 h-9 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 font-bold">
                       f
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-900 truncate">
+                      <p className="text-sm font-medium text-slate-900 dark:text-dk-text truncate">
                         {page.fb_page_name || page.display_name || t('chatbot.studio.fbPageFallbackName')}
                       </p>
                       <p className="text-[11px] text-slate-400 truncate font-mono">
@@ -218,7 +218,7 @@ export default function FacebookChannelModal({ open, onClose, chatbotId }) {
                       </p>
                     </div>
                     {active ? (
-                      <span className="shrink-0 text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-1 rounded">
+                      <span className="shrink-0 text-[10px] font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-800 px-2 py-1 rounded">
                         {t('chatbot.studio.fbActiveBadge')}
                       </span>
                     ) : (
@@ -242,17 +242,17 @@ export default function FacebookChannelModal({ open, onClose, chatbotId }) {
           </div>
 
           {pages.length > 0 && (
-            <p className="text-[11px] text-amber-700 bg-amber-50/70 border border-amber-100 rounded-lg px-3 py-2 leading-relaxed">
+            <p className="text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50/70 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-800 rounded-lg px-3 py-2 leading-relaxed">
               {t('chatbot.studio.fbRotateTokenWarning')}
             </p>
           )}
         </div>
 
-        <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex justify-end">
+        <div className="px-5 py-3 bg-slate-50 dark:bg-dk-raised border-t border-slate-100 dark:border-dk-border flex justify-end">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 rounded-lg transition-colors"
+            className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-dk-text hover:bg-slate-200 dark:hover:bg-dk-raised rounded-lg transition-colors"
           >
             Đóng
           </button>

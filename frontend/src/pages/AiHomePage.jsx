@@ -15,7 +15,7 @@ const AiHomePage = () => {
 
   if (isEmployeeWithoutPermissions(activeContext)) {
     return (
-      <div className="h-full min-h-0 flex flex-col bg-gray-50">
+      <div className="h-full min-h-0 flex flex-col bg-gray-50 dark:bg-dk-surface">
         <WorkspaceNoPermissionsCard />
       </div>
     );
@@ -23,14 +23,14 @@ const AiHomePage = () => {
 
   if (isEmployeeWithoutAiAssistant(activeContext)) {
     return (
-      <div className="h-full min-h-0 flex flex-col bg-gray-50">
+      <div className="h-full min-h-0 flex flex-col bg-gray-50 dark:bg-dk-surface">
         <WorkspaceNoAiAssistantCard />
       </div>
     );
   }
 
   return (
-    <div className="h-full min-h-0 flex flex-col bg-gray-50">
+    <div className="h-full min-h-0 flex flex-col bg-gray-50 dark:bg-dk-surface">
       <AiChatbot variant="fullscreen" isOpen />
     </div>
   );

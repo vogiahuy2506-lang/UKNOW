@@ -476,7 +476,7 @@ const CheckoutPage = () => {
     if (!isCustomPlan && !plan) return null;
 
     return (
-        <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-orange-50 via-slate-50 to-slate-100 py-4 md:py-6 px-4 flex flex-col justify-center">
+        <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-orange-50 via-slate-50 to-slate-100 dark:from-dk-raised/90 dark:via-dk-surface dark:to-dk-inset py-4 md:py-6 px-4 flex flex-col justify-center">
             <div className="max-w-5xl mx-auto w-full">
 
                 {/* Top header navigation */}
@@ -484,7 +484,7 @@ const CheckoutPage = () => {
                     {currentStep === 'info' ? (
                         <Link
                             to="/pricing"
-                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-orange-600 transition-colors"
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-dk-text2 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
                         >
                             <HiArrowLeft className="w-4 h-4" />
                             {t('checkout.changePlan')}
@@ -493,7 +493,7 @@ const CheckoutPage = () => {
                         <button
                             type="button"
                             onClick={() => setCurrentStep('info')}
-                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-orange-600 transition-colors"
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-dk-text2 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
                         >
                             <HiArrowLeft className="w-4 h-4" />
                             {t('checkout.backToEdit')}
@@ -502,7 +502,7 @@ const CheckoutPage = () => {
 
                     <div className="flex items-center gap-2">
                         <span className={`w-2 h-2 rounded-full ${currentStep === 'info' ? 'bg-orange-500' : 'bg-emerald-500'}`} />
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-dk-text2">
                             {currentStep === 'info' ? t('checkout.step1Title') : t('checkout.step2Title')}
                         </span>
                     </div>
@@ -510,7 +510,7 @@ const CheckoutPage = () => {
 
                 {/* Main Card */}
                 {currentStep === 'info' ? (
-                    <div className="bg-white/80 border border-white/90 backdrop-blur-xl rounded-3xl shadow-xl shadow-slate-200/50 p-4 md:p-6">
+                    <div className="bg-white/80 dark:bg-dk-surface/90 border border-white/90 dark:border-dk-border backdrop-blur-xl rounded-3xl shadow-xl shadow-slate-200/50 dark:shadow-none p-4 md:p-6">
                         <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-stretch">
 
                             {/* Cột Trái (7/12): Form VAT + lý do an tâm thanh toán */}
@@ -527,16 +527,16 @@ const CheckoutPage = () => {
 
                                 <div className="flex-1" />
 
-                                <div className="rounded-2xl border border-slate-200/70 bg-slate-50/80 p-3.5 space-y-2">
-                                    <div className="flex items-center gap-2 text-xs text-slate-600">
+                                <div className="rounded-2xl border border-slate-200/70 dark:border-dk-border bg-slate-50/80 dark:bg-dk-raised/60 p-3.5 space-y-2">
+                                    <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-dk-text">
                                         <HiOutlineShieldCheck className="w-4 h-4 text-orange-500 shrink-0" />
                                         <span>{t('checkout.trustBadge1')}</span>
                                     </div>
-                                    <div className="flex items-center gap-2 text-xs text-slate-600">
+                                    <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-dk-text">
                                         <HiOutlineLightningBolt className="w-4 h-4 text-orange-500 shrink-0" />
                                         <span>{t('checkout.trustBadge2')}</span>
                                     </div>
-                                    <div className="flex items-center gap-2 text-xs text-slate-600">
+                                    <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-dk-text">
                                         <HiOutlineChatAlt2 className="w-4 h-4 text-orange-500 shrink-0" />
                                         <span>{t('checkout.trustBadge3')}</span>
                                     </div>
@@ -546,29 +546,29 @@ const CheckoutPage = () => {
                             {/* Cột Phải (5/12): Tóm tắt đơn hàng & Voucher & Chi tiết giá */}
                             <div className="md:col-span-5 space-y-3">
                                 {/* Card Gói dịch vụ */}
-                                <div className="bg-gradient-to-br from-orange-500/10 via-orange-500/5 to-transparent border border-orange-200/70 rounded-2xl p-4">
+                                <div className="bg-gradient-to-br from-orange-500/10 via-orange-500/5 to-transparent dark:from-orange-500/15 dark:via-orange-500/5 dark:to-transparent border border-orange-200/70 dark:border-orange-500/20 rounded-2xl p-4">
                                     <div className="flex items-start justify-between gap-2 mb-1">
                                         <div>
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-orange-600">
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-orange-600 dark:text-orange-400">
                                                 {t('checkout.membershipPlan')}
                                             </span>
-                                            <h2 className="text-lg font-black text-slate-900 leading-tight mt-0.5">{planName}</h2>
+                                            <h2 className="text-lg font-black text-slate-900 dark:text-dk-text leading-tight mt-0.5">{planName}</h2>
                                         </div>
-                                        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 border border-orange-200 shrink-0">
+                                        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-950/50 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800/60 shrink-0">
                                             {isYearly ? t('checkout.yearlyBilling') : t('checkout.monthlyBilling')}
                                         </span>
                                     </div>
 
                                     {/* Breakdown gói custom nếu có */}
                                     {isCustomPlan && customQuantities && (
-                                        <div className="mt-2 pt-2 border-t border-orange-200/50 grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-slate-600">
+                                        <div className="mt-2 pt-2 border-t border-orange-200/50 dark:border-orange-500/20 grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-slate-600 dark:text-dk-text">
                                             {Object.entries(customQuantities)
                                                 .filter(([k, v]) => k !== 'base_fee' && Number(v) > 0)
                                                 .slice(0, 6)
                                                 .map(([key, qty]) => (
                                                     <div key={key} className="flex justify-between">
-                                                        <span className="text-slate-500 truncate">{t(`customPlan.items.${camelItemKey(key)}`)}:</span>
-                                                        <span className="font-bold text-slate-800 ml-1">{Number(qty).toLocaleString('vi-VN')}</span>
+                                                        <span className="text-slate-500 dark:text-dk-text2 truncate">{t(`customPlan.items.${camelItemKey(key)}`)}:</span>
+                                                        <span className="font-bold text-slate-800 dark:text-dk-text ml-1">{Number(qty).toLocaleString('vi-VN')}</span>
                                                     </div>
                                                 ))}
                                         </div>
@@ -576,7 +576,7 @@ const CheckoutPage = () => {
                                 </div>
 
                                 {/* Mã giảm giá & Ưu đãi */}
-                                <div className="bg-slate-50/80 border border-slate-200/70 rounded-2xl p-3">
+                                <div className="bg-slate-50/80 dark:bg-dk-raised/60 border border-slate-200/70 dark:border-dk-border rounded-2xl p-3">
                                     <div className="flex gap-2">
                                         <input
                                             type="text"
@@ -595,7 +595,7 @@ const CheckoutPage = () => {
                                             }}
                                             placeholder={t('checkout.voucherPlaceholder')}
                                             disabled={busy}
-                                            className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-300 font-mono uppercase disabled:opacity-50"
+                                            className="flex-1 bg-white dark:bg-dk-inset border border-slate-200 dark:border-dk-border rounded-xl px-3 py-1.5 text-xs text-slate-800 dark:text-dk-text placeholder:text-slate-400 dark:placeholder:text-dk-muted focus:outline-none focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-900/50 focus:border-orange-300 dark:focus:border-orange-600 font-mono uppercase disabled:opacity-50"
                                         />
                                         {manualVoucher ? (
                                             <button
@@ -633,7 +633,7 @@ const CheckoutPage = () => {
                                                     type="button"
                                                     onClick={() => applyVoucherCode(v.code)}
                                                     disabled={busy}
-                                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-orange-100/70 hover:bg-orange-200/80 border border-orange-200 text-[10px] font-bold text-orange-700 transition-colors disabled:opacity-50"
+                                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-orange-100/70 dark:bg-orange-950/50 hover:bg-orange-200/80 dark:hover:bg-orange-900/50 border border-orange-200 dark:border-orange-800 text-[10px] font-bold text-orange-700 dark:text-orange-300 transition-colors disabled:opacity-50"
                                                 >
                                                     <span>🏷️ {v.code}</span>
                                                     <span className="opacity-75">(-{fmtVnd(v.discountAmount)})</span>
@@ -643,43 +643,43 @@ const CheckoutPage = () => {
                                     )}
 
                                     {appliedVoucher && !hasUnappliedDraft && (
-                                        <p className="text-[10px] text-slate-500 mt-2">
+                                        <p className="text-[10px] text-slate-500 dark:text-dk-text2 mt-2">
                                             {t('checkout.voucherAppliedHint')}
                                         </p>
                                     )}
                                     {hasUnappliedDraft && (
-                                        <p className="text-[10px] text-amber-600 mt-2 font-medium">
+                                        <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-2 font-medium">
                                             {t('checkout.voucherDraftUnappliedHint')}
                                         </p>
                                     )}
                                 </div>
 
                                 {/* Chi tiết giá tiền */}
-                                <div className="bg-slate-50/80 border border-slate-200/70 rounded-2xl p-3.5 space-y-2 text-xs">
-                                    <div className="flex justify-between text-slate-600">
+                                <div className="bg-slate-50/80 dark:bg-dk-raised/60 border border-slate-200/70 dark:border-dk-border rounded-2xl p-3.5 space-y-2 text-xs">
+                                    <div className="flex justify-between text-slate-600 dark:text-dk-text">
                                         <span>{t('checkout.serviceFee')}</span>
-                                        <span className="font-semibold text-slate-800">{fmtVnd(effectiveOriginalAmount)}</span>
+                                        <span className="font-semibold text-slate-800 dark:text-dk-text">{fmtVnd(effectiveOriginalAmount)}</span>
                                     </div>
 
                                     {discountAmount > 0 && (
-                                        <div className="flex justify-between text-emerald-600 font-semibold">
+                                        <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-semibold">
                                             <span>{t('checkout.discount')} ({appliedVoucher?.code || 'Ưu đãi'})</span>
                                             <span>-{fmtVnd(discountAmount)}</span>
                                         </div>
                                     )}
 
-                                    <div className="text-slate-500 text-[11px] pt-1 border-t border-slate-200/60">
+                                    <div className="text-slate-500 dark:text-dk-text2 text-[11px] pt-1 border-t border-slate-200/60 dark:border-dk-border">
                                         {t('checkout.finalPriceKct')}
                                     </div>
 
-                                    <div className="flex justify-between items-baseline pt-2 border-t border-slate-200 font-bold text-slate-900">
+                                    <div className="flex justify-between items-baseline pt-2 border-t border-slate-200 dark:border-dk-border font-bold text-slate-900 dark:text-dk-text">
                                         <span className="text-sm">{t('checkout.total')}</span>
-                                        <span className="text-xl font-black text-orange-600">{fmtVnd(payableAmount)}</span>
+                                        <span className="text-xl font-black text-orange-600 dark:text-orange-400">{fmtVnd(payableAmount)}</span>
                                     </div>
                                 </div>
 
                                 {error && (
-                                    <p className="text-red-600 text-xs text-center font-medium bg-red-50 p-2 rounded-xl border border-red-200">
+                                    <p className="text-red-600 dark:text-red-400 text-xs text-center font-medium bg-red-50 dark:bg-red-950/30 p-2 rounded-xl border border-red-200 dark:border-red-900/50">
                                         {error}
                                     </p>
                                 )}
@@ -709,32 +709,32 @@ const CheckoutPage = () => {
                                     )}
                                 </button>
 
-                                <p className="text-[10px] text-center text-slate-400 font-medium">
+                                <p className="text-[10px] text-center text-slate-400 dark:text-dk-muted font-medium">
                                     🔒 {t('checkout.securityBadge')}
                                 </p>
 
                                 {/* Checkbox đồng ý điều khoản trước thanh toán (theo quy định Bộ Công Thương) */}
-                                <label className="flex items-start gap-2 cursor-pointer p-3 bg-slate-50/50 rounded-xl border border-slate-200/50">
+                                <label className="flex items-start gap-2 cursor-pointer p-3 bg-slate-50/50 dark:bg-dk-raised/40 rounded-xl border border-slate-200/50 dark:border-dk-border">
                                     <input
                                         type="checkbox"
                                         checked={termsConsent}
                                         onChange={(e) => setTermsConsent(e.target.checked)}
-                                        className="mt-0.5 w-4 h-4 text-orange-500 border-slate-300 rounded focus:ring-orange-500"
+                                        className="mt-0.5 w-4 h-4 text-orange-500 border-slate-300 dark:border-dk-border dark:bg-dk-inset rounded focus:ring-orange-500"
                                     />
-                                    <span className="text-[11px] text-slate-600 leading-relaxed">
+                                    <span className="text-[11px] text-slate-600 dark:text-dk-text leading-relaxed">
                                         {t('checkout.termsConsentLabel') || 'Tôi đã đọc và đồng ý với'}
                                         {' '}
-                                        <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline font-medium">{t('checkout.termsLink') || 'Điều khoản sử dụng'}</a>
+                                        <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-orange-600 dark:text-orange-400 hover:underline font-medium">{t('checkout.termsLink') || 'Điều khoản sử dụng'}</a>
                                         {', '}
-                                        <a href="/pricing-policy" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline font-medium">{t('checkout.pricingPolicyLink') || 'Chính sách giá'}</a>
+                                        <a href="/pricing-policy" target="_blank" rel="noopener noreferrer" className="text-orange-600 dark:text-orange-400 hover:underline font-medium">{t('checkout.pricingPolicyLink') || 'Chính sách giá'}</a>
                                         {', '}
-                                        <a href="/payment-policy" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline font-medium">{t('checkout.paymentPolicyLink') || 'Chính sách thanh toán'}</a>
+                                        <a href="/payment-policy" target="_blank" rel="noopener noreferrer" className="text-orange-600 dark:text-orange-400 hover:underline font-medium">{t('checkout.paymentPolicyLink') || 'Chính sách thanh toán'}</a>
                                         {', '}
-                                        <a href="/refund-policy" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline font-medium">{t('checkout.refundPolicyLink') || 'Chính sách hoàn tiền'}</a>
+                                        <a href="/refund-policy" target="_blank" rel="noopener noreferrer" className="text-orange-600 dark:text-orange-400 hover:underline font-medium">{t('checkout.refundPolicyLink') || 'Chính sách hoàn tiền'}</a>
                                         {', '}
-                                        <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline font-medium">{t('checkout.privacyPolicyLink') || 'Chính sách bảo mật'}</a>
+                                        <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-orange-600 dark:text-orange-400 hover:underline font-medium">{t('checkout.privacyPolicyLink') || 'Chính sách bảo mật'}</a>
                                         {', '}
-                                        <a href="/public-dpa" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline font-medium">{t('checkout.dpaLink') || 'Thoả thuận xử lý dữ liệu'}</a>
+                                        <a href="/public-dpa" target="_blank" rel="noopener noreferrer" className="text-orange-600 dark:text-orange-400 hover:underline font-medium">{t('checkout.dpaLink') || 'Thoả thuận xử lý dữ liệu'}</a>
                                     </span>
                                 </label>
                             </div>
@@ -742,24 +742,24 @@ const CheckoutPage = () => {
                     </div>
                 ) : (
                     /* Step 2: Màn hình QR + thông tin thanh toán */
-                    <div className="bg-white/85 border border-white/90 backdrop-blur-xl rounded-3xl shadow-xl shadow-slate-200/50 p-4 md:p-6">
+                    <div className="bg-white/85 dark:bg-dk-surface/90 border border-white/90 dark:border-dk-border backdrop-blur-xl rounded-3xl shadow-xl shadow-slate-200/50 dark:shadow-none p-4 md:p-6">
                         <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-start">
 
                             {/* Cột Trái (5/12): QR + countdown */}
                             <div className="md:col-span-5 flex flex-col items-center">
-                                <div className="bg-gradient-to-b from-orange-500/5 to-transparent border border-orange-200/50 rounded-2xl p-4 w-full flex flex-col items-center">
-                                    <div className="bg-white p-3 rounded-2xl shadow-md border border-slate-100 mb-3">
+                                <div className="bg-gradient-to-b from-orange-500/5 to-transparent dark:from-orange-500/10 dark:to-transparent border border-orange-200/50 dark:border-dk-border rounded-2xl p-4 w-full flex flex-col items-center">
+                                    <div className="bg-white p-3 rounded-2xl shadow-md border border-slate-100 dark:border-dk-border mb-3">
                                         {qrExpired ? (
-                                            <div className="w-52 h-52 flex flex-col items-center justify-center text-center text-slate-500 gap-2 px-2">
+                                            <div className="w-52 h-52 flex flex-col items-center justify-center text-center text-slate-500 dark:text-dk-text2 gap-2 px-2">
                                                 <HiOutlineExclamationCircle className="w-10 h-10 text-red-500" />
-                                                <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+                                                <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400 dark:text-dk-muted">
                                                     {t('checkout.qrExpired')}
                                                 </span>
                                                 <button
                                                     type="button"
                                                     onClick={() => createPayment({ regenerate: true })}
                                                     disabled={loading}
-                                                    className="mt-1 text-[10px] font-bold text-orange-600 hover:text-orange-700 underline disabled:opacity-50"
+                                                    className="mt-1 text-[10px] font-bold text-orange-600 dark:text-orange-400 hover:text-orange-700 underline disabled:opacity-50"
                                                 >
                                                     {loading ? t('checkout.qrRegenerating') : t('checkout.qrRegenerate')}
                                                 </button>
@@ -767,7 +767,7 @@ const CheckoutPage = () => {
                                         ) : qrImageUrl ? (
                                             <img src={qrImageUrl} alt="Mã QR thanh toán PayOS" className="w-52 h-52 object-contain rounded-lg" />
                                         ) : (
-                                            <div className="w-52 h-52 flex items-center justify-center text-slate-400 text-xs">
+                                            <div className="w-52 h-52 flex items-center justify-center text-slate-400 dark:text-dk-muted text-xs">
                                                 {t('checkout.checkingTransaction')}
                                             </div>
                                         )}
@@ -775,10 +775,10 @@ const CheckoutPage = () => {
 
                                     {/* Countdown */}
                                     {!qrExpired && secondsLeft !== null && (
-                                        <div className={`inline-flex items-center gap-1.5 text-[11px] font-bold bg-white/80 px-3 py-1.5 rounded-full border shadow-sm ${
+                                        <div className={`inline-flex items-center gap-1.5 text-[11px] font-bold bg-white/80 dark:bg-dk-raised px-3 py-1.5 rounded-full border shadow-sm ${
                                             secondsLeft <= 60
-                                                ? 'text-red-600 border-red-200 animate-pulse'
-                                                : 'text-slate-700 border-orange-200'
+                                                ? 'text-red-600 border-red-200 dark:border-red-800 animate-pulse'
+                                                : 'text-slate-700 dark:text-dk-text border-orange-200 dark:border-dk-border'
                                         }`}>
                                             <HiOutlineClock className="w-3.5 h-3.5" />
                                             <span>{t('checkout.qrExpiresIn')}</span>
@@ -787,7 +787,7 @@ const CheckoutPage = () => {
                                     )}
 
                                     {/* Auto redirect hint */}
-                                    <p className="text-[10px] text-slate-400 mt-3 text-center leading-tight">
+                                    <p className="text-[10px] text-slate-400 dark:text-dk-text2 mt-3 text-center leading-tight">
                                         {t('checkout.autoRedirect')}
                                     </p>
                                 </div>
@@ -809,12 +809,12 @@ const CheckoutPage = () => {
 
                                 {/* Box Mã đơn hàng */}
                                 {orderCode && (
-                                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center justify-between">
+                                    <div className="bg-slate-50 dark:bg-dk-raised/60 border border-slate-200 dark:border-dk-border rounded-xl p-3 flex items-center justify-between">
                                         <div>
-                                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-dk-muted">
                                                 {t('checkout.orderCode')}
                                             </span>
-                                            <p className="text-sm font-mono font-bold text-slate-800">#{orderCode}</p>
+                                            <p className="text-sm font-mono font-bold text-slate-800 dark:text-dk-text">#{orderCode}</p>
                                         </div>
                                         <button
                                             type="button"
@@ -853,17 +853,17 @@ const CheckoutPage = () => {
                                 />
 
                                 {/* Footer support */}
-                                <div className="pt-2 border-t border-slate-200/70 flex items-center justify-between text-xs text-slate-500">
+                                <div className="pt-2 border-t border-slate-200/70 dark:border-dk-border flex items-center justify-between text-xs text-slate-500 dark:text-dk-text2">
                                     <p>
                                         {t('checkout.needHelp')}{' '}
-                                        <Link to="/contact" className="text-orange-600 hover:text-orange-700 font-bold underline">
+                                        <Link to="/contact" className="text-orange-600 dark:text-orange-400 hover:text-orange-700 font-bold underline">
                                             {t('checkout.contactSupport')}
                                         </Link>
                                     </p>
                                     <button
                                         type="button"
                                         onClick={() => setCurrentStep('info')}
-                                        className="text-xs text-slate-500 hover:text-slate-800 font-medium underline"
+                                        className="text-xs text-slate-500 dark:text-dk-text2 hover:text-slate-800 dark:hover:text-dk-text font-medium underline"
                                     >
                                         {t('checkout.backToEdit')}
                                     </button>

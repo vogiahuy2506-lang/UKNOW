@@ -207,13 +207,13 @@ export default function AdminAffiliatePage() {
     >
 
       {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-gray-200">
+      <div className="flex items-center gap-2 border-b border-gray-200 dark:border-dk-border">
         <button
           onClick={() => setActiveTab('withdrawals')}
           className={`px-4 py-3 font-semibold text-sm border-b-2 transition-colors ${
             activeTab === 'withdrawals'
-              ? 'border-orange-500 text-orange-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
+              ? 'border-orange-500 text-orange-600 dark:text-orange-400'
+              : 'border-transparent text-gray-500 dark:text-dk-text2 hover:text-gray-700 dark:hover:text-dk-text'
           }`}
         >
           {t('affiliate.tabWithdrawals')}
@@ -222,8 +222,8 @@ export default function AdminAffiliatePage() {
           onClick={() => setActiveTab('periods')}
           className={`px-4 py-3 font-semibold text-sm border-b-2 transition-colors ${
             activeTab === 'periods'
-              ? 'border-orange-500 text-orange-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
+              ? 'border-orange-500 text-orange-600 dark:text-orange-400'
+              : 'border-transparent text-gray-500 dark:text-dk-text2 hover:text-gray-700 dark:hover:text-dk-text'
           }`}
         >
           {t('affiliate.tabPeriods')}
@@ -235,13 +235,13 @@ export default function AdminAffiliatePage() {
         <div className="space-y-4">
           {/* Filter status */}
           <div className="flex items-center gap-3">
-            <span className="text-xs font-semibold text-gray-500">
+            <span className="text-xs font-semibold text-gray-500 dark:text-dk-text2">
               {t('common.status')}:
             </span>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm text-gray-800"
+              className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-raised text-sm text-gray-800 dark:text-dk-text"
             >
               <option value="">{t('affiliate.filterStatusAll')}</option>
               <option value="pending">{t('affiliate.statusPending')}</option>
@@ -256,15 +256,15 @@ export default function AdminAffiliatePage() {
           )}
 
           {/* Table */}
-          <div className="bg-white rounded-2xl border border-gray-200/80 overflow-hidden shadow-sm">
+          <div className="bg-white dark:bg-dk-surface rounded-2xl border border-gray-200/80 dark:border-dk-border overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
               {loadingWithdrawals ? (
-                <div className="text-center py-12 text-sm text-gray-500">
+                <div className="text-center py-12 text-sm text-gray-500 dark:text-dk-text2">
                   {t('common.loading')}
                 </div>
               ) : withdrawals.length > 0 ? (
                 <table className="w-full text-left text-xs sm:text-sm">
-                  <thead className="bg-gray-50 text-xs text-gray-500 uppercase font-semibold">
+                  <thead className="bg-gray-50 dark:bg-dk-raised text-xs text-gray-500 dark:text-dk-text2 uppercase font-semibold">
                     <tr>
                       <th className="px-4 py-3">ID</th>
                       <th className="px-4 py-3">{t('affiliate.partnerName')}</th>
@@ -277,7 +277,7 @@ export default function AdminAffiliatePage() {
                       <th className="px-4 py-3 text-right">{t('common.actions')}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100 text-gray-700">
+                  <tbody className="divide-y divide-gray-100 dark:divide-dk-border/60 text-gray-700 dark:text-dk-text">
                     {withdrawals.map((w) => {
                       let statusTone = 'warning';
                       let statusLabel = t('affiliate.statusPending');
@@ -292,41 +292,41 @@ export default function AdminAffiliatePage() {
                       const urgency = getWithdrawalUrgency(w);
 
                       return (
-                        <tr key={w.id} className="hover:bg-gray-50/60">
-                          <td className="px-4 py-3 font-mono text-xs text-gray-500">#{w.id}</td>
+                        <tr key={w.id} className="hover:bg-gray-50/60 dark:hover:bg-dk-raised/40">
+                          <td className="px-4 py-3 font-mono text-xs text-gray-500 dark:text-dk-text2">#{w.id}</td>
                           <td className="px-4 py-3">
-                            <div className="font-bold text-gray-900">{w.full_name}</div>
-                            <div className="text-xs text-gray-500">{w.user_email}</div>
-                            <div className="text-[11px] text-gray-400">UID: {w.user_id}</div>
+                            <div className="font-bold text-gray-900 dark:text-dk-text">{w.full_name}</div>
+                            <div className="text-xs text-gray-500 dark:text-dk-text2">{w.user_email}</div>
+                            <div className="text-[11px] text-gray-400 dark:text-dk-muted">UID: {w.user_id}</div>
                           </td>
-                          <td className="px-4 py-3 font-semibold text-gray-900">
+                          <td className="px-4 py-3 font-semibold text-gray-900 dark:text-dk-text">
                             {formatVnd(w.amount_gross)}
                           </td>
-                          <td className="px-4 py-3 text-red-600 text-xs">
+                          <td className="px-4 py-3 text-red-600 dark:text-red-400 text-xs">
                             {formatVnd(w.tax_amount)}
                           </td>
-                          <td className="px-4 py-3 font-bold text-emerald-600">
+                          <td className="px-4 py-3 font-bold text-emerald-600 dark:text-emerald-400">
                             {formatVnd(w.amount_net)}
                           </td>
                           <td className="px-4 py-3 text-xs">
-                            <div className="font-medium text-gray-800">{w.bank_name}</div>
-                            <div className="font-mono text-gray-500">
+                            <div className="font-medium text-gray-800 dark:text-dk-text">{w.bank_name}</div>
+                            <div className="font-mono text-gray-500 dark:text-dk-text2">
                               {w.bank_account_number}
                             </div>
-                            <div className="text-[11px] text-gray-400 uppercase">
+                            <div className="text-[11px] text-gray-400 dark:text-dk-muted uppercase">
                               {w.bank_account_name}
                             </div>
                           </td>
                           <td className="px-4 py-3">
                             <StatusChip tone={statusTone}>{statusLabel}</StatusChip>
                             {w.status === 'rejected' && w.note && (
-                              <div className="text-[11px] text-red-600 mt-1 max-w-xs">
+                              <div className="text-[11px] text-red-600 dark:text-red-400 mt-1 max-w-xs">
                                 {w.note}
                               </div>
                             )}
                           </td>
                           <td className="px-4 py-3 text-xs">
-                            <span className="text-gray-500">{formatDate(w.requested_at)}</span>
+                            <span className="text-gray-500 dark:text-dk-text2">{formatDate(w.requested_at)}</span>
                             {urgency && (
                               <div className="mt-1">
                                 <StatusChip tone={urgency.level === 'overdue' ? 'danger' : 'warning'}>
@@ -340,7 +340,7 @@ export default function AdminAffiliatePage() {
                               {/* Xem KYC */}
                               <button
                                 onClick={() => setSelectedKycItem(w)}
-                                className="px-2.5 py-1 rounded bg-gray-100 hover:bg-gray-200 text-xs font-medium text-gray-700 transition-colors"
+                                className="px-2.5 py-1 rounded bg-gray-100 dark:bg-dk-raised hover:bg-gray-200 dark:hover:bg-dk-strong text-xs font-medium text-gray-700 dark:text-dk-text transition-colors"
                               >
                                 {t('affiliate.actionViewKyc')}
                               </button>
@@ -373,7 +373,7 @@ export default function AdminAffiliatePage() {
                                   setIsAdjModalOpen(true);
                                 }}
                                 title="Ghi bút toán điều chỉnh cho user này"
-                                className="p-1 rounded text-purple-600 hover:bg-purple-50"
+                                className="p-1 rounded text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/30"
                               >
                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -387,7 +387,7 @@ export default function AdminAffiliatePage() {
                   </tbody>
                 </table>
               ) : (
-                <div className="text-center py-12 text-sm text-gray-500">
+                <div className="text-center py-12 text-sm text-gray-500 dark:text-dk-text2">
                   {t('affiliate.noWithdrawalHistory')}
                 </div>
               )}
@@ -401,13 +401,13 @@ export default function AdminAffiliatePage() {
         <div className="space-y-4">
           {/* Dropdown chọn tháng */}
           <div className="flex items-center gap-3">
-            <span className="text-xs font-semibold text-gray-500">
+            <span className="text-xs font-semibold text-gray-500 dark:text-dk-text2">
               {t('affiliate.filterMonth')}:
             </span>
             <select
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
-              className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm font-semibold text-gray-800"
+              className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-raised text-sm font-semibold text-gray-800 dark:text-dk-text"
             >
               <option value="">{t('affiliate.allMonths')}</option>
               {availableMonths.map((m) => (
@@ -419,15 +419,15 @@ export default function AdminAffiliatePage() {
           </div>
 
           {/* Table */}
-          <div className="bg-white rounded-2xl border border-gray-200/80 overflow-hidden shadow-sm">
+          <div className="bg-white dark:bg-dk-surface rounded-2xl border border-gray-200/80 dark:border-dk-border overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
               {loadingPeriods ? (
-                <div className="text-center py-12 text-sm text-gray-500">
+                <div className="text-center py-12 text-sm text-gray-500 dark:text-dk-text2">
                   {t('common.loading')}
                 </div>
               ) : periods.length > 0 ? (
                 <table className="w-full text-left text-xs sm:text-sm">
-                  <thead className="bg-gray-50 text-xs text-gray-500 uppercase font-semibold">
+                  <thead className="bg-gray-50 dark:bg-dk-raised text-xs text-gray-500 dark:text-dk-text2 uppercase font-semibold">
                     <tr>
                       <th className="px-4 py-3">{t('affiliate.month')}</th>
                       <th className="px-4 py-3">{t('affiliate.partnerName')}</th>
@@ -439,26 +439,26 @@ export default function AdminAffiliatePage() {
                       <th className="px-4 py-3 text-right">{t('common.actions')}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100 text-gray-700">
+                  <tbody className="divide-y divide-gray-100 dark:divide-dk-border/60 text-gray-700 dark:text-dk-text">
                     {periods.map((p) => (
-                      <tr key={p.id} className="hover:bg-gray-50/60">
-                        <td className="px-4 py-3 font-bold text-gray-900">
+                      <tr key={p.id} className="hover:bg-gray-50/60 dark:hover:bg-dk-raised/40">
+                        <td className="px-4 py-3 font-bold text-gray-900 dark:text-dk-text">
                           {p.monthKey}
                         </td>
                         <td className="px-4 py-3">
-                          <div className="font-bold text-gray-900">
+                          <div className="font-bold text-gray-900 dark:text-dk-text">
                             {p.userFullName || '—'}
                           </div>
-                          <div className="text-xs text-gray-500">{p.userEmail}</div>
-                          <div className="text-[11px] text-gray-400">
+                          <div className="text-xs text-gray-500 dark:text-dk-text2">{p.userEmail}</div>
+                          <div className="text-[11px] text-gray-400 dark:text-dk-muted">
                             UID: {p.referrerUserId} {p.referralCode ? `• Ref: ${p.referralCode}` : ''}
                           </div>
                         </td>
-                        <td className="px-4 py-3 font-semibold text-gray-900">
+                        <td className="px-4 py-3 font-semibold text-gray-900 dark:text-dk-text">
                           {formatVnd(p.grossRevenue)}
                           {p.manualRevenue > 0 && (
                             <div
-                              className="mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 text-gray-600"
+                              className="mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 dark:bg-dk-raised text-gray-600 dark:text-dk-text"
                               title="Đơn super admin gán gói tay (payment_method=manual) — kế toán tự đối chiếu trước khi duyệt rút, không tự chặn."
                             >
                               gồm {Number(p.manualRevenue).toLocaleString('vi-VN')}đ đơn gán tay
@@ -466,15 +466,15 @@ export default function AdminAffiliatePage() {
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300">
                             {t('affiliate.tierLevel', { level: p.tierLevel })}
                           </span>
                         </td>
                         <td className="px-4 py-3">{p.ratePercent}%</td>
-                        <td className="px-4 py-3 font-bold text-emerald-600">
+                        <td className="px-4 py-3 font-bold text-emerald-600 dark:text-emerald-400">
                           {formatVnd(p.commissionAmount)}
                         </td>
-                        <td className="px-4 py-3 text-xs text-gray-500">
+                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-dk-text2">
                           {formatDateTime(p.closedAt)}
                         </td>
                         <td className="px-4 py-3 text-right">
@@ -483,7 +483,7 @@ export default function AdminAffiliatePage() {
                               setAdjUserId(String(p.referrerUserId));
                               setIsAdjModalOpen(true);
                             }}
-                            className="px-2.5 py-1 rounded bg-purple-50 text-purple-600 hover:bg-purple-100 text-xs font-semibold"
+                            className="px-2.5 py-1 rounded bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/40 text-xs font-semibold"
                           >
                             {t('affiliate.actionAdjustment')}
                           </button>
@@ -493,7 +493,7 @@ export default function AdminAffiliatePage() {
                   </tbody>
                 </table>
               ) : (
-                <div className="text-center py-12 text-sm text-gray-500">
+                <div className="text-center py-12 text-sm text-gray-500 dark:text-dk-text2">
                   {t('affiliate.noMonthlyHistory')}
                 </div>
               )}
@@ -505,14 +505,14 @@ export default function AdminAffiliatePage() {
       {/* MODAL 1: XEM CHI TIẾT KYC (CCCD GIẢI MÃ) */}
       {selectedKycItem && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full border border-gray-200 shadow-2xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-              <h3 className="font-bold text-gray-900">
+          <div className="bg-white dark:bg-dk-surface rounded-2xl max-w-lg w-full border border-gray-200 dark:border-dk-border shadow-2xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 dark:border-dk-border flex justify-between items-center bg-gray-50 dark:bg-dk-raised">
+              <h3 className="font-bold text-gray-900 dark:text-dk-text">
                 {t('affiliate.modalKycTitle')} (#{selectedKycItem.id})
               </h3>
               <button
                 onClick={() => setSelectedKycItem(null)}
-                className="text-gray-400 hover:text-gray-600 p-1"
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-dk-text p-1"
               >
                 ✕
               </button>
@@ -520,67 +520,67 @@ export default function AdminAffiliatePage() {
             <div className="p-6 space-y-4 text-sm">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <span className="text-xs text-gray-500">{t('affiliate.fullNameLabel')}</span>
-                  <div className="font-semibold text-gray-900">
+                  <span className="text-xs text-gray-500 dark:text-dk-text2">{t('affiliate.fullNameLabel')}</span>
+                  <div className="font-semibold text-gray-900 dark:text-dk-text">
                     {selectedKycItem.full_name}
                   </div>
                 </div>
                 <div>
-                  <span className="text-xs text-gray-500">Email</span>
-                  <div className="font-semibold text-gray-900">
+                  <span className="text-xs text-gray-500 dark:text-dk-text2">Email</span>
+                  <div className="font-semibold text-gray-900 dark:text-dk-text">
                     {selectedKycItem.user_email || '—'}
                   </div>
                 </div>
               </div>
 
-              <div className="p-3.5 bg-blue-50/50 rounded-xl border border-blue-100 space-y-2">
+              <div className="p-3.5 bg-blue-50/50 dark:bg-blue-950/30 rounded-xl border border-blue-100 dark:border-blue-900/40 space-y-2">
                 <div>
-                  <span className="text-xs font-bold text-blue-900">
+                  <span className="text-xs font-bold text-blue-900 dark:text-blue-200">
                     {t('affiliate.kycIdNumber')}
                   </span>
-                  <div className="text-base font-mono font-bold text-blue-900">
+                  <div className="text-base font-mono font-bold text-blue-900 dark:text-blue-200">
                     {selectedKycItem.id_card_number || '—'}
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div>
-                    <span className="text-gray-500">{t('affiliate.kycIssuedDate')}:</span>{' '}
-                    <span className="font-medium text-gray-800">
+                    <span className="text-gray-500 dark:text-dk-text2">{t('affiliate.kycIssuedDate')}:</span>{' '}
+                    <span className="font-medium text-gray-800 dark:text-dk-text">
                       {formatDate(selectedKycItem.id_card_issued_date)}
                     </span>
                   </div>
                   <div>
-                    <span className="text-gray-500">MST:</span>{' '}
-                    <span className="font-medium text-gray-800">
+                    <span className="text-gray-500 dark:text-dk-text2">MST:</span>{' '}
+                    <span className="font-medium text-gray-800 dark:text-dk-text">
                       {selectedKycItem.tax_code || '—'}
                     </span>
                   </div>
                 </div>
                 <div className="text-xs">
-                  <span className="text-gray-500">{t('affiliate.kycIssuedPlace')}:</span>{' '}
-                  <span className="font-medium text-gray-800">
+                  <span className="text-gray-500 dark:text-dk-text2">{t('affiliate.kycIssuedPlace')}:</span>{' '}
+                  <span className="font-medium text-gray-800 dark:text-dk-text">
                     {selectedKycItem.id_card_issued_place || '—'}
                   </span>
                 </div>
               </div>
 
-              <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-200 space-y-1 text-xs">
-                <div className="font-bold text-gray-700 uppercase">
+              <div className="p-3.5 bg-gray-50 dark:bg-dk-raised rounded-xl border border-gray-200 dark:border-dk-border space-y-1 text-xs">
+                <div className="font-bold text-gray-700 dark:text-dk-text uppercase">
                   {t('affiliate.bankTitle')}
                 </div>
-                <div>{t('affiliate.kycBank')}: <strong className="text-gray-900">{selectedKycItem.bank_name}</strong></div>
-                <div>{t('affiliate.kycAccountNumber')}: <strong className="font-mono text-gray-900">{selectedKycItem.bank_account_number}</strong></div>
-                <div>{t('affiliate.kycAccountName')}: <strong className="text-gray-900 uppercase">{selectedKycItem.bank_account_name}</strong></div>
+                <div>{t('affiliate.kycBank')}: <strong className="text-gray-900 dark:text-dk-text">{selectedKycItem.bank_name}</strong></div>
+                <div>{t('affiliate.kycAccountNumber')}: <strong className="font-mono text-gray-900 dark:text-dk-text">{selectedKycItem.bank_account_number}</strong></div>
+                <div>{t('affiliate.kycAccountName')}: <strong className="text-gray-900 dark:text-dk-text uppercase">{selectedKycItem.bank_account_name}</strong></div>
               </div>
 
-              <p className="text-[11px] text-gray-500 italic">
+              <p className="text-[11px] text-gray-500 dark:text-dk-text2 italic">
                 {t('affiliate.kycNotice')}
               </p>
             </div>
-            <div className="px-6 py-3 bg-gray-50 border-t border-gray-100 flex justify-end">
+            <div className="px-6 py-3 bg-gray-50 dark:bg-dk-raised border-t border-gray-100 dark:border-dk-border flex justify-end">
               <button
                 onClick={() => setSelectedKycItem(null)}
-                className="px-4 py-1.5 rounded-lg bg-gray-200 text-gray-800 font-medium text-xs"
+                className="px-4 py-1.5 rounded-lg bg-gray-200 dark:bg-dk-strong hover:bg-gray-300 dark:hover:bg-dk-border-strong text-gray-800 dark:text-dk-text font-medium text-xs transition-colors"
               >
                 {t('common.close')}
               </button>
@@ -592,11 +592,11 @@ export default function AdminAffiliatePage() {
       {/* MODAL 2: XÁC NHẬN ĐÃ CHUYỂN KHOẢN */}
       {approveItem && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full border border-gray-200 shadow-2xl p-6 space-y-4">
-            <h3 className="font-bold text-base text-gray-900">
+          <div className="bg-white dark:bg-dk-surface rounded-2xl max-w-md w-full border border-gray-200 dark:border-dk-border shadow-2xl p-6 space-y-4">
+            <h3 className="font-bold text-base text-gray-900 dark:text-dk-text">
               {t('affiliate.modalApproveTitle', { id: approveItem.id })}
             </h3>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-600 dark:text-dk-text">
               {t('affiliate.confirmApproveDesc', {
                 amount: formatVnd(approveItem.amount_net),
                 name: approveItem.full_name,
@@ -607,7 +607,7 @@ export default function AdminAffiliatePage() {
             <div className="flex justify-end gap-2.5 pt-2">
               <button
                 onClick={() => setApproveItem(null)}
-                className="px-4 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-700"
+                className="px-4 py-2 rounded-xl border border-gray-200 dark:border-dk-border hover:bg-gray-50 dark:hover:bg-dk-raised text-sm font-medium text-gray-700 dark:text-dk-text transition-colors"
               >
                 {t('common.cancel')}
               </button>
@@ -625,15 +625,15 @@ export default function AdminAffiliatePage() {
       {/* MODAL 3: TỪ CHỐI YÊU CẦU RÚT (BẮT BUỘC NHẬP LÝ DO) */}
       {rejectItem && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full border border-gray-200 shadow-2xl p-6 space-y-4">
-            <h3 className="font-bold text-base text-gray-900 text-red-600">
+          <div className="bg-white dark:bg-dk-surface rounded-2xl max-w-md w-full border border-gray-200 dark:border-dk-border shadow-2xl p-6 space-y-4">
+            <h3 className="font-bold text-base text-red-600 dark:text-red-400">
               {t('affiliate.modalRejectTitle', { id: rejectItem.id })}
             </h3>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-gray-500 dark:text-dk-text2">
               Khoản tiền <strong>{formatVnd(rejectItem.amount_gross)}</strong> sẽ được hoàn lại số dư ví đối tác.
             </p>
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
+              <label className="block text-xs font-semibold text-gray-700 dark:text-dk-text mb-1">
                 {t('affiliate.rejectReasonLabel')} <span className="text-red-500">*</span>
               </label>
               <textarea
@@ -641,13 +641,13 @@ export default function AdminAffiliatePage() {
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
                 placeholder={t('affiliate.rejectReasonPlaceholder')}
-                className="w-full px-3.5 py-2 text-sm rounded-xl border border-gray-200 bg-white text-gray-900"
+                className="w-full px-3.5 py-2 text-sm rounded-xl border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-raised text-gray-900 dark:text-dk-text"
               />
             </div>
             <div className="flex justify-end gap-2.5 pt-2">
               <button
                 onClick={() => setRejectItem(null)}
-                className="px-4 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-700"
+                className="px-4 py-2 rounded-xl border border-gray-200 dark:border-dk-border hover:bg-gray-50 dark:hover:bg-dk-raised text-sm font-medium text-gray-700 dark:text-dk-text transition-colors"
               >
                 {t('common.cancel')}
               </button>
@@ -665,14 +665,14 @@ export default function AdminAffiliatePage() {
       {/* 🔴 MODAL 4: ĐIỀU CHỈNH SỐ DƯ VÍ (LEDGER ADJUSTMENT) */}
       {isAdjModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full border border-gray-200 shadow-2xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-purple-50">
-              <h3 className="font-bold text-gray-900 text-base">
+          <div className="bg-white dark:bg-dk-surface rounded-2xl max-w-lg w-full border border-gray-200 dark:border-dk-border shadow-2xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 dark:border-dk-border flex justify-between items-center bg-purple-50 dark:bg-purple-950/40">
+              <h3 className="font-bold text-gray-900 dark:text-dk-text text-base">
                 {t('affiliate.modalAdjustmentTitle')}
               </h3>
               <button
                 onClick={() => setIsAdjModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600 p-1"
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-dk-text p-1"
               >
                 ✕
               </button>
@@ -680,7 +680,7 @@ export default function AdminAffiliatePage() {
 
             <form onSubmit={handleAdjustmentSubmit} className="p-6 space-y-4 text-sm">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                <label className="block text-xs font-semibold text-gray-700 dark:text-dk-text mb-1">
                   {t('affiliate.adjUserIdLabel')} <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -689,12 +689,12 @@ export default function AdminAffiliatePage() {
                   placeholder="Ví dụ: 12"
                   value={adjUserId}
                   onChange={(e) => setAdjUserId(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl border border-gray-200 bg-white text-gray-900 font-mono"
+                  className="w-full px-3.5 py-2 rounded-xl border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-raised text-gray-900 dark:text-dk-text font-mono"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                <label className="block text-xs font-semibold text-gray-700 dark:text-dk-text mb-1">
                   {t('affiliate.adjAmountLabel')} <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -704,15 +704,15 @@ export default function AdminAffiliatePage() {
                   placeholder="ÂM để thu hồi (-500000), DƯƠNG để bù (300000)"
                   value={adjAmount}
                   onChange={(e) => setAdjAmount(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl border border-gray-200 bg-white text-gray-900 font-bold"
+                  className="w-full px-3.5 py-2 rounded-xl border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-raised text-gray-900 dark:text-dk-text font-bold"
                 />
-                <p className="text-[11px] text-gray-500 mt-1">
+                <p className="text-[11px] text-gray-500 dark:text-dk-text2 mt-1">
                   {t('affiliate.adjAmountHint')}
                 </p>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                <label className="block text-xs font-semibold text-gray-700 dark:text-dk-text mb-1">
                   {t('affiliate.adjNoteLabel')} <span className="text-red-500">*</span>
                 </label>
                 <textarea
@@ -721,7 +721,7 @@ export default function AdminAffiliatePage() {
                   value={adjNote}
                   onChange={(e) => setAdjNote(e.target.value)}
                   placeholder={t('affiliate.adjNotePlaceholder')}
-                  className="w-full px-3.5 py-2 rounded-xl border border-gray-200 bg-white text-gray-900"
+                  className="w-full px-3.5 py-2 rounded-xl border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-raised text-gray-900 dark:text-dk-text"
                 />
               </div>
 
@@ -730,7 +730,7 @@ export default function AdminAffiliatePage() {
                   type="button"
                   onClick={() => setIsAdjModalOpen(false)}
                   disabled={submittingAdj}
-                  className="px-4 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-700"
+                  className="px-4 py-2 rounded-xl border border-gray-200 dark:border-dk-border hover:bg-gray-50 dark:hover:bg-dk-raised text-sm font-medium text-gray-700 dark:text-dk-text transition-colors"
                 >
                   {t('common.cancel')}
                 </button>

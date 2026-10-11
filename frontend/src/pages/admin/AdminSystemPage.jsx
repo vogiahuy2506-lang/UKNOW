@@ -40,22 +40,22 @@ const metricTone = (value, warning, critical) => {
 
 const toneClass = {
   green: {
-    text: 'text-emerald-700',
-    bg: 'bg-emerald-50',
+    text: 'text-emerald-700 dark:text-emerald-400',
+    bg: 'bg-emerald-50 dark:bg-emerald-950/40',
     bar: 'bg-emerald-500',
-    border: 'border-emerald-100',
+    border: 'border-emerald-100 dark:border-emerald-800/60',
   },
   yellow: {
-    text: 'text-amber-700',
-    bg: 'bg-amber-50',
+    text: 'text-amber-700 dark:text-amber-400',
+    bg: 'bg-amber-50 dark:bg-amber-950/40',
     bar: 'bg-amber-500',
-    border: 'border-amber-100',
+    border: 'border-amber-100 dark:border-amber-800/60',
   },
   red: {
-    text: 'text-red-700',
-    bg: 'bg-red-50',
+    text: 'text-red-700 dark:text-red-400',
+    bg: 'bg-red-50 dark:bg-red-950/40',
     bar: 'bg-red-500',
-    border: 'border-red-100',
+    border: 'border-red-100 dark:border-red-800/60',
   },
 };
 
@@ -65,19 +65,19 @@ const MetricCard = ({ icon: Icon, title, value, detail, percent, tone = 'green' 
     <div className="card p-5">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm text-gray-500">{title}</p>
-          <p className="mt-1 text-2xl font-bold text-gray-900">{value}</p>
+          <p className="text-sm text-gray-500 dark:text-dk-text2">{title}</p>
+          <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-dk-text">{value}</p>
         </div>
         <div className={`${cls.bg} ${cls.border} rounded-xl border p-3`}>
           <Icon className={`h-6 w-6 ${cls.text}`} />
         </div>
       </div>
       {typeof percent === 'number' && (
-        <div className="mt-4 h-2 rounded-full bg-gray-100 overflow-hidden">
+        <div className="mt-4 h-2 rounded-full bg-gray-100 dark:bg-dk-raised overflow-hidden">
           <div className={`h-full ${cls.bar}`} style={{ width: `${Math.min(100, Math.max(0, percent))}%` }} />
         </div>
       )}
-      {detail && <p className="mt-3 text-xs text-gray-500">{detail}</p>}
+      {detail && <p className="mt-3 text-xs text-gray-500 dark:text-dk-text2">{detail}</p>}
     </div>
   );
 };
@@ -85,22 +85,22 @@ const MetricCard = ({ icon: Icon, title, value, detail, percent, tone = 'green' 
 const AlertList = ({ alerts, t }) => {
   if (!alerts?.length) {
     return (
-      <div className="card p-5 border-emerald-100 bg-emerald-50/50">
-        <p className="text-sm font-semibold text-emerald-700">{t('adminSystem.noAlerts')}</p>
+      <div className="card p-5 border-emerald-100 bg-emerald-50/50 dark:border-emerald-900/50 dark:bg-emerald-950/20">
+        <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">{t('adminSystem.noAlerts')}</p>
       </div>
     );
   }
 
   return (
     <div className="card p-5">
-      <h2 className="text-sm font-semibold text-gray-700 mb-3">{t('adminSystem.alerts')}</h2>
+      <h2 className="text-sm font-semibold text-gray-700 dark:text-dk-text mb-3">{t('adminSystem.alerts')}</h2>
       <div className="space-y-2">
         {alerts.map((alert, index) => (
           <div
             key={`${alert.code}-${index}`}
             className={`rounded-xl border px-3 py-2 text-sm ${alert.level === 'critical'
-              ? 'border-red-100 bg-red-50 text-red-700'
-              : 'border-amber-100 bg-amber-50 text-amber-700'
+              ? 'border-red-100 bg-red-50 text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300'
+              : 'border-amber-100 bg-amber-50 text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300'
               }`}
           >
             <div className="flex items-center gap-2 font-semibold">
@@ -117,30 +117,30 @@ const AlertList = ({ alerts, t }) => {
 const DockerPanel = ({ docker, t }) => (
   <div className="card p-5">
     <div className="mb-4 flex items-center justify-between gap-3">
-      <h2 className="text-sm font-semibold text-gray-700">{t('adminSystem.containers')}</h2>
+      <h2 className="text-sm font-semibold text-gray-700 dark:text-dk-text">{t('adminSystem.containers')}</h2>
       <span className={`badge text-xs ${docker?.available ? 'badge-success' : 'badge-gray'}`}>
         {docker?.available ? t('adminSystem.dockerConnected') : t('adminSystem.dockerNotConnected')}
       </span>
     </div>
 
     {!docker?.available ? (
-      <p className="text-sm text-gray-500">{t('adminSystem.dockerSocketHint')}</p>
+      <p className="text-sm text-gray-500 dark:text-dk-text2">{t('adminSystem.dockerSocketHint')}</p>
     ) : docker.containers.length === 0 ? (
-      <p className="text-sm text-gray-500">{t('adminSystem.noContainers')}</p>
+      <p className="text-sm text-gray-500 dark:text-dk-text2">{t('adminSystem.noContainers')}</p>
     ) : (
       <div className="space-y-3">
         {docker.containers.map((container) => (
-          <div key={container.id} className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+          <div key={container.id} className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 dark:border-dk-border dark:bg-dk-raised">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="font-semibold text-gray-900">{container.name}</p>
-                <p className="text-xs text-gray-500 truncate">{container.image}</p>
+                <p className="font-semibold text-gray-900 dark:text-dk-text">{container.name}</p>
+                <p className="text-xs text-gray-500 dark:text-dk-text2 truncate">{container.image}</p>
               </div>
               <span className={`badge text-xs ${container.state === 'running' ? 'badge-success' : 'badge-error'}`}>
                 {container.state}
               </span>
             </div>
-            <p className="mt-2 text-xs text-gray-500">{container.status}</p>
+            <p className="mt-2 text-xs text-gray-500 dark:text-dk-text2">{container.status}</p>
           </div>
         ))}
       </div>
@@ -154,17 +154,17 @@ const RedisPanel = ({ redis, t }) => {
   return (
     <div className="card p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-gray-700">{t('adminSystem.redis')}</h2>
+        <h2 className="text-sm font-semibold text-gray-700 dark:text-dk-text">{t('adminSystem.redis')}</h2>
         <span className={`badge text-xs ${redis?.available ? 'badge-success' : 'badge-gray'}`}>
           {redis?.available ? t('adminSystem.redisConnected') : t('adminSystem.redisNotConnected')}
         </span>
       </div>
       {!redis?.available ? (
-        <p className="text-sm text-gray-500">{t('adminSystem.bullmqNotAvailable')}</p>
+        <p className="text-sm text-gray-500 dark:text-dk-text2">{t('adminSystem.bullmqNotAvailable')}</p>
       ) : (
         <div className="space-y-3">
           <div>
-            <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+            <div className="flex items-center justify-between text-xs text-gray-500 dark:text-dk-text2 mb-1">
               <span>{t('adminSystem.redisMemory')}</span>
               <span>
                 {fmtBytes(redis.usedMemory)}
@@ -172,17 +172,19 @@ const RedisPanel = ({ redis, t }) => {
               </span>
             </div>
             {memPercent !== null && (
-              <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+              <div className="h-2 rounded-full bg-gray-100 dark:bg-dk-raised overflow-hidden">
                 <div className="h-full bg-blue-500" style={{ width: `${memPercent}%` }} />
               </div>
             )}
           </div>
-          <div className={`flex items-center justify-between rounded-xl border px-3 py-2 text-xs ${evictionBad ? 'border-amber-100 bg-amber-50' : 'border-emerald-100 bg-emerald-50'
+          <div className={`flex items-center justify-between rounded-xl border px-3 py-2 text-xs ${evictionBad
+            ? 'border-amber-100 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30'
+            : 'border-emerald-100 bg-emerald-50 dark:border-emerald-900/50 dark:bg-emerald-950/30'
             }`}>
-            <span className={evictionBad ? 'text-amber-700' : 'text-emerald-700'}>
+            <span className={evictionBad ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300'}>
               {t('adminSystem.redisEviction')}
             </span>
-            <span className={`font-semibold ${evictionBad ? 'text-amber-700' : 'text-emerald-700'}`}>
+            <span className={`font-semibold ${evictionBad ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300'}`}>
               {evictionBad ? `${redis.evictionPolicy} — ${t('adminSystem.redisEvictionBad')}` : t('adminSystem.redisEvictionOk')}
             </span>
           </div>
@@ -196,17 +198,17 @@ const BullMQPanel = ({ bullmq, t }) => {
   const available = bullmq?.available !== false && bullmq !== null;
   const stats = available ? bullmq : null;
   const items = [
-    { key: 'waiting', label: t('adminSystem.bullmqWaiting'), color: 'text-amber-600 bg-amber-50' },
-    { key: 'active', label: t('adminSystem.bullmqActive'), color: 'text-blue-600 bg-blue-50' },
-    { key: 'delayed', label: t('adminSystem.bullmqDelayed'), color: 'text-purple-600 bg-purple-50' },
-    { key: 'failed', label: t('adminSystem.bullmqFailed'), color: 'text-red-600 bg-red-50' },
-    { key: 'completed', label: t('adminSystem.bullmqCompleted'), color: 'text-emerald-600 bg-emerald-50' },
+    { key: 'waiting', label: t('adminSystem.bullmqWaiting'), color: 'text-amber-600 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-300' },
+    { key: 'active', label: t('adminSystem.bullmqActive'), color: 'text-blue-600 bg-blue-50 dark:bg-blue-950/40 dark:text-blue-300' },
+    { key: 'delayed', label: t('adminSystem.bullmqDelayed'), color: 'text-purple-600 bg-purple-50 dark:bg-purple-950/40 dark:text-purple-300' },
+    { key: 'failed', label: t('adminSystem.bullmqFailed'), color: 'text-red-600 bg-red-50 dark:bg-red-950/40 dark:text-red-300' },
+    { key: 'completed', label: t('adminSystem.bullmqCompleted'), color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300' },
   ];
   return (
     <div className="card p-5">
-      <h2 className="mb-4 text-sm font-semibold text-gray-700">{t('adminSystem.bullmq')}</h2>
+      <h2 className="mb-4 text-sm font-semibold text-gray-700 dark:text-dk-text">{t('adminSystem.bullmq')}</h2>
       {!stats ? (
-        <p className="text-sm text-gray-500">{t('adminSystem.bullmqNotAvailable')}</p>
+        <p className="text-sm text-gray-500 dark:text-dk-text2">{t('adminSystem.bullmqNotAvailable')}</p>
       ) : (
         <div className="grid grid-cols-5 gap-2">
           {items.map(({ key, label, color }) => (
@@ -227,15 +229,15 @@ const DbPoolPanel = ({ dbPool, t }) => {
   return (
     <div className="card p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-gray-700">{t('adminSystem.dbPool')}</h2>
-        <span className="text-xs font-semibold text-gray-600">
+        <h2 className="text-sm font-semibold text-gray-700 dark:text-dk-text">{t('adminSystem.dbPool')}</h2>
+        <span className="text-xs font-semibold text-gray-600 dark:text-dk-text">
           {t('adminSystem.dbPoolConnections', { total: dbPool?.total ?? 0, max: dbPool?.max ?? 0 })}
         </span>
       </div>
-      <div className="mt-1 h-2 rounded-full bg-gray-100 overflow-hidden">
+      <div className="mt-1 h-2 rounded-full bg-gray-100 dark:bg-dk-raised overflow-hidden">
         <div className={`h-full ${cls.bar}`} style={{ width: `${Math.min(100, dbPool?.percent ?? 0)}%` }} />
       </div>
-      <div className="mt-2 flex gap-4 text-xs text-gray-500">
+      <div className="mt-2 flex gap-4 text-xs text-gray-500 dark:text-dk-text2">
         <span>{t('adminSystem.dbPoolIdle', { idle: dbPool?.idle ?? 0 })}</span>
         <span>{t('adminSystem.dbPoolWaiting', { waiting: dbPool?.waiting ?? 0 })}</span>
       </div>
@@ -245,10 +247,10 @@ const DbPoolPanel = ({ dbPool, t }) => {
 
 const LogsPanel = ({ activeLogService, setActiveLogService, logs, logsLoading, onRefreshLogs, t }) => (
   <div className="card overflow-hidden">
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 dark:border-dk-border px-5 py-4">
       <div>
-        <h2 className="text-sm font-semibold text-gray-700">{t('adminSystem.logs')}</h2>
-        <p className="mt-0.5 text-xs text-gray-400">{t('adminSystem.logsDescription')}</p>
+        <h2 className="text-sm font-semibold text-gray-700 dark:text-dk-text">{t('adminSystem.logs')}</h2>
+        <p className="mt-0.5 text-xs text-gray-400 dark:text-dk-muted">{t('adminSystem.logsDescription')}</p>
       </div>
       <div className="flex items-center gap-2">
         {['backend', 'frontend'].map((service) => (
@@ -257,8 +259,8 @@ const LogsPanel = ({ activeLogService, setActiveLogService, logs, logsLoading, o
             type="button"
             onClick={() => setActiveLogService(service)}
             className={`rounded-lg px-3 py-2 text-sm font-semibold ${activeLogService === service
-              ? 'bg-orange-50 text-orange-700'
-              : 'text-gray-500 hover:bg-gray-50'
+              ? 'bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300'
+              : 'text-gray-500 hover:bg-gray-50 dark:text-dk-text2 dark:hover:bg-dk-raised dark:hover:text-dk-text'
               }`}
           >
             {t(`adminSystem.${service}`)}
@@ -272,13 +274,13 @@ const LogsPanel = ({ activeLogService, setActiveLogService, logs, logsLoading, o
     </div>
     <div className="p-5">
       {!logs?.available ? (
-        <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+        <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
           {t('adminSystem.logsUnavailable')}
         </div>
       ) : logs.lines.length === 0 ? (
-        <p className="text-sm text-gray-400">{t('adminSystem.noLogs')}</p>
+        <p className="text-sm text-gray-400 dark:text-dk-muted">{t('adminSystem.noLogs')}</p>
       ) : (
-        <pre className="max-h-[460px] overflow-auto rounded-xl bg-slate-950 p-4 text-xs leading-relaxed text-slate-100">
+        <pre className="max-h-[460px] overflow-auto rounded-xl bg-slate-950 dark:bg-dk-inset p-4 text-xs leading-relaxed text-slate-100 dark:text-dk-text">
           {logs.lines.join('\n')}
         </pre>
       )}
@@ -357,9 +359,9 @@ export default function AdminSystemPage() {
   if (loading && !overview) {
     return (
       <div className="space-y-6">
-        <div className="h-10 w-64 rounded-xl bg-gray-100 animate-pulse" />
+        <div className="h-10 w-64 rounded-xl bg-gray-100 dark:bg-dk-raised animate-pulse" />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-          {[0, 1, 2, 3].map((i) => <div key={i} className="h-40 rounded-2xl bg-gray-100 animate-pulse" />)}
+          {[0, 1, 2, 3].map((i) => <div key={i} className="h-40 rounded-2xl bg-gray-100 dark:bg-dk-raised animate-pulse" />)}
         </div>
       </div>
     );

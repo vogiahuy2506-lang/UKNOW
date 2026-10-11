@@ -151,9 +151,9 @@ export default function HtmlFullPageEditor() {
   const htmlField = langTab === 'en' ? 'htmlContentEn' : 'htmlContentVi';
 
   return (
-    <div className="h-full flex flex-col bg-slate-100">
-      <div className="px-4 py-3 bg-white border-b border-slate-200 flex flex-wrap items-center gap-3">
-        <div className="flex bg-slate-100 rounded-lg p-0.5">
+    <div className="h-full flex flex-col bg-slate-100 dark:bg-dk-bg">
+      <div className="px-4 py-3 bg-white dark:bg-dk-surface border-b border-slate-200 dark:border-dk-border flex flex-wrap items-center gap-3">
+        <div className="flex bg-slate-100 dark:bg-dk-inset rounded-lg p-0.5">
           {PAGES.map((page) => (
             <button
               key={page.id}
@@ -162,7 +162,7 @@ export default function HtmlFullPageEditor() {
               className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
                 selectedPage === page.id
                   ? 'bg-orange-500 text-white shadow-sm'
-                  : 'text-slate-600 hover:bg-white'
+                  : 'text-slate-600 dark:text-dk-text2 hover:bg-white dark:hover:bg-dk-surface'
               }`}
             >
               {page.label}
@@ -170,14 +170,14 @@ export default function HtmlFullPageEditor() {
           ))}
         </div>
 
-        <div className="h-6 w-px bg-slate-200 hidden sm:block" />
+        <div className="h-6 w-px bg-slate-200 dark:bg-dk-border hidden sm:block" />
 
         <div className="flex items-center gap-2 text-sm">
-          <span className="text-slate-500">Hiển thị:</span>
+          <span className="text-slate-500 dark:text-dk-muted">Hiển thị:</span>
           <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
             form.displayMode === 'html'
-              ? 'bg-orange-100 text-orange-700'
-              : 'bg-emerald-100 text-emerald-700'
+              ? 'bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300'
+              : 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
           }`}
           >
             {form.displayMode === 'html' ? 'HTML tùy chỉnh' : 'Mặc định (React)'}
@@ -190,7 +190,7 @@ export default function HtmlFullPageEditor() {
           type="button"
           onClick={() => loadPage(selectedPage)}
           disabled={loading || saving}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-600 dark:text-dk-text2 hover:bg-slate-100 dark:hover:bg-dk-raised rounded-lg"
         >
           <HiOutlineRefresh className="w-4 h-4" />
           Tải lại
@@ -199,7 +199,7 @@ export default function HtmlFullPageEditor() {
           type="button"
           onClick={handleUseDefault}
           disabled={loading || saving}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-700 dark:text-dk-text bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border rounded-lg hover:bg-slate-50 dark:hover:bg-dk-raised"
         >
           <HiOutlineViewGrid className="w-4 h-4" />
           Hiển thị mặc định
@@ -208,7 +208,7 @@ export default function HtmlFullPageEditor() {
           type="button"
           onClick={handleSave}
           disabled={loading || saving}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-white bg-slate-700 rounded-lg hover:bg-slate-800 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-white bg-slate-700 dark:bg-dk-strong rounded-lg hover:bg-slate-800 dark:hover:bg-dk-border-strong disabled:opacity-50"
         >
           <HiOutlineSave className="w-4 h-4" />
           Lưu
@@ -225,25 +225,25 @@ export default function HtmlFullPageEditor() {
       </div>
 
       <div className="flex-1 flex min-h-0">
-        <section className="w-full lg:w-[42%] xl:w-[38%] flex flex-col border-r border-slate-200 bg-white min-h-0">
-          <div className="px-4 py-3 border-b border-slate-100">
-            <p className="text-sm font-medium text-slate-800">Dán HTML full page</p>
-            <p className="text-xs text-slate-500 mt-1">
+        <section className="w-full lg:w-[42%] xl:w-[38%] flex flex-col border-r border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface min-h-0">
+          <div className="px-4 py-3 border-b border-slate-100 dark:border-dk-border">
+            <p className="text-sm font-medium text-slate-800 dark:text-dk-text">Dán HTML full page</p>
+            <p className="text-xs text-slate-500 dark:text-dk-muted mt-1">
               Dán file HTML vào đây. Khi bật HTML, trang
               {' '}
-              <code className="text-orange-600">{currentPageMeta.path}</code>
+              <code className="text-orange-600 dark:text-orange-400">{currentPageMeta.path}</code>
               {' '}
               sẽ hiển thị theo HTML. Bấm &quot;Hiển thị mặc định&quot; để quay lại React editor (nội dung cũ vẫn được giữ).
             </p>
           </div>
 
-          <div className="px-4 py-2 border-b border-slate-100 flex items-center justify-between gap-2 flex-wrap">
-            <div className="flex bg-slate-100 rounded-lg p-0.5">
+          <div className="px-4 py-2 border-b border-slate-100 dark:border-dk-border flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex bg-slate-100 dark:bg-dk-inset rounded-lg p-0.5">
               <button
                 type="button"
                 onClick={() => setLangTab('vi')}
                 className={`px-3 py-1 text-xs font-medium rounded-md ${
-                  langTab === 'vi' ? 'bg-white shadow text-slate-800' : 'text-slate-500'
+                  langTab === 'vi' ? 'bg-white dark:bg-dk-raised shadow text-slate-800 dark:text-dk-text' : 'text-slate-500 dark:text-dk-muted'
                 }`}
               >
                 Tiếng Việt
@@ -252,7 +252,7 @@ export default function HtmlFullPageEditor() {
                 type="button"
                 onClick={() => setLangTab('en')}
                 className={`px-3 py-1 text-xs font-medium rounded-md ${
-                  langTab === 'en' ? 'bg-white shadow text-slate-800' : 'text-slate-500'
+                  langTab === 'en' ? 'bg-white dark:bg-dk-raised shadow text-slate-800 dark:text-dk-text' : 'text-slate-500 dark:text-dk-muted'
                 }`}
               >
                 English
@@ -262,7 +262,7 @@ export default function HtmlFullPageEditor() {
               type="button"
               onClick={() => setAiOpen(true)}
               disabled={loading || saving || aiBusy}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded-lg hover:bg-orange-100 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-900/60 rounded-lg hover:bg-orange-100 dark:hover:bg-orange-900/60 disabled:opacity-50"
             >
               <HiOutlineSparkles className="w-4 h-4" />
               Tạo bằng AI (−1 credit)
@@ -271,7 +271,7 @@ export default function HtmlFullPageEditor() {
 
           <div className="flex-1 p-4 flex flex-col gap-3 min-h-0">
             <textarea
-              className="flex-1 min-h-[240px] w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-mono resize-none focus:border-orange-400 focus:ring-1 focus:ring-orange-300"
+              className="flex-1 min-h-[240px] w-full rounded-lg border border-slate-200 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text dark:placeholder:text-dk-muted px-3 py-2 text-xs font-mono resize-none focus:border-orange-400 focus:ring-1 focus:ring-orange-300"
               value={form[htmlField]}
               onChange={(e) => setForm((prev) => ({ ...prev, [htmlField]: e.target.value }))}
               placeholder={langTab === 'vi'
@@ -282,9 +282,9 @@ export default function HtmlFullPageEditor() {
             />
 
             <details className="shrink-0">
-              <summary className="text-xs font-medium text-slate-600 cursor-pointer">CSS bổ sung (tuỳ chọn)</summary>
+              <summary className="text-xs font-medium text-slate-600 dark:text-dk-text2 cursor-pointer">CSS bổ sung (tuỳ chọn)</summary>
               <textarea
-                className="mt-2 w-full h-24 rounded-lg border border-slate-200 px-3 py-2 text-xs font-mono resize-none focus:border-orange-400 focus:ring-1 focus:ring-orange-300"
+                className="mt-2 w-full h-24 rounded-lg border border-slate-200 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text dark:placeholder:text-dk-muted px-3 py-2 text-xs font-mono resize-none focus:border-orange-400 focus:ring-1 focus:ring-orange-300"
                 value={form.cssContent}
                 onChange={(e) => setForm((prev) => ({ ...prev, cssContent: e.target.value }))}
                 placeholder="/* Custom CSS injected into page */"
@@ -295,8 +295,8 @@ export default function HtmlFullPageEditor() {
           </div>
         </section>
 
-        <section className="hidden lg:flex flex-1 flex-col min-h-0 bg-slate-900">
-          <div className="px-4 py-2 border-b border-slate-700 text-xs text-slate-400 flex items-center justify-between">
+        <section className="hidden lg:flex flex-1 flex-col min-h-0 bg-slate-900 dark:bg-dk-inset">
+          <div className="px-4 py-2 border-b border-slate-700 dark:border-dk-border text-xs text-slate-400 dark:text-dk-muted flex items-center justify-between">
             <span>Preview ({langTab === 'en' ? 'English' : 'Tiếng Việt'})</span>
             <a
               href={`${currentPageMeta.path}${currentPageMeta.path === '/' ? '' : ''}`}
@@ -307,9 +307,9 @@ export default function HtmlFullPageEditor() {
               Mở trang public
             </a>
           </div>
-          <div className="flex-1 min-h-0 bg-white">
+          <div className="flex-1 min-h-0 bg-white dark:bg-dk-inset">
             {loading ? (
-              <div className="h-full flex items-center justify-center text-sm text-slate-500">Đang tải…</div>
+              <div className="h-full flex items-center justify-center text-sm text-slate-500 dark:text-dk-muted">Đang tải…</div>
             ) : previewSrcDoc ? (
               <iframe
                 title="HTML preview"
@@ -318,7 +318,7 @@ export default function HtmlFullPageEditor() {
                 srcDoc={previewSrcDoc}
               />
             ) : (
-              <div className="h-full flex items-center justify-center text-sm text-slate-400 px-6 text-center">
+              <div className="h-full flex items-center justify-center text-sm text-slate-400 dark:text-dk-muted px-6 text-center">
                 Nhập HTML bên trái để xem preview
               </div>
             )}
@@ -334,17 +334,17 @@ export default function HtmlFullPageEditor() {
           onClick={() => !aiBusy && setAiOpen(false)}
         >
           <div
-            className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden"
+            className="bg-white dark:bg-dk-raised dark:border dark:border-dk-border rounded-xl shadow-2xl w-full max-w-lg overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-dk-border">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 bg-orange-100 rounded-lg flex items-center justify-center">
-                  <HiOutlineSparkles className="w-5 h-5 text-orange-600" />
+                <div className="w-9 h-9 bg-orange-100 dark:bg-orange-950/40 rounded-lg flex items-center justify-center">
+                  <HiOutlineSparkles className="w-5 h-5 text-orange-600 dark:text-orange-400" />
                 </div>
                 <div>
-                  <h3 className="text-base font-semibold text-slate-900">Tạo HTML bằng AI</h3>
-                  <p className="text-xs text-slate-500">
+                  <h3 className="text-base font-semibold text-slate-900 dark:text-dk-text">Tạo HTML bằng AI</h3>
+                  <p className="text-xs text-slate-500 dark:text-dk-muted">
                     {currentPageMeta.label}
                     {' · '}
                     {langTab === 'en' ? 'English' : 'Tiếng Việt'}
@@ -356,18 +356,18 @@ export default function HtmlFullPageEditor() {
               <button
                 type="button"
                 onClick={() => !aiBusy && setAiOpen(false)}
-                className="p-2 hover:bg-slate-100 rounded-lg"
+                className="p-2 hover:bg-slate-100 dark:hover:bg-dk-strong rounded-lg"
               >
-                <HiOutlineX className="w-5 h-5 text-slate-500" />
+                <HiOutlineX className="w-5 h-5 text-slate-500 dark:text-dk-muted" />
               </button>
             </div>
 
             <div className="p-5">
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label className="block text-sm font-medium text-slate-700 dark:text-dk-text mb-2">
                 Mô tả trang bạn muốn
               </label>
               <textarea
-                className="w-full h-32 rounded-lg border border-slate-200 px-3 py-2 text-sm resize-none focus:border-orange-400 focus:ring-1 focus:ring-orange-300"
+                className="w-full h-32 rounded-lg border border-slate-200 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text dark:placeholder:text-dk-muted px-3 py-2 text-sm resize-none focus:border-orange-400 focus:ring-1 focus:ring-orange-300"
                 value={aiPrompt}
                 onChange={(e) => setAiPrompt(e.target.value)}
                 maxLength={LANDING_AI_PROMPT_MAX_CHARS}
@@ -375,17 +375,17 @@ export default function HtmlFullPageEditor() {
                 disabled={aiBusy}
                 spellCheck={false}
               />
-              <p className="mt-2 text-xs text-slate-500">
+              <p className="mt-2 text-xs text-slate-500 dark:text-dk-muted">
                 HTML sẽ điền vào tab ngôn ngữ đang chọn. Bạn vẫn cần bấm Lưu sau khi chỉnh.
               </p>
             </div>
 
-            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-slate-100 bg-slate-50">
+            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-slate-100 dark:border-dk-border bg-slate-50 dark:bg-dk-surface">
               <button
                 type="button"
                 onClick={() => !aiBusy && setAiOpen(false)}
                 disabled={aiBusy}
-                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-200 rounded-lg disabled:opacity-50"
+                className="px-4 py-2 text-sm text-slate-600 dark:text-dk-text2 hover:bg-slate-200 dark:hover:bg-dk-strong rounded-lg disabled:opacity-50"
               >
                 Huỷ
               </button>

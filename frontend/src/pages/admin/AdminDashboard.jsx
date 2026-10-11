@@ -21,7 +21,7 @@ const fmtDate = (d) => d ? new Date(d).toLocaleDateString('vi-VN') : '—';
 const fmtMillions = (v) => `${(Number(v || 0) / 1_000_000).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}M`;
 
 // ── Skeleton ──────────────────────────────────────────────────────────────────
-const Sk = ({ className = '' }) => <div className={`bg-gray-100 rounded-xl animate-pulse ${className}`} />;
+const Sk = ({ className = '' }) => <div className={`bg-gray-100 dark:bg-dk-raised rounded-xl animate-pulse ${className}`} />;
 const DashboardSkeleton = () => (
   <div className="space-y-6">
     <div className="flex items-center justify-between">
@@ -39,20 +39,20 @@ const DashboardSkeleton = () => (
 );
 
 // ── KPI Card ──────────────────────────────────────────────────────────────────
-const KpiCard = ({ icon: Icon, label, value, sub, delta, deltaLabel, color = 'text-primary-600', bg = 'bg-primary-50', testId }) => (
+const KpiCard = ({ icon: Icon, label, value, sub, delta, deltaLabel, color = 'text-primary-600 dark:text-primary-400', bg = 'bg-primary-50 dark:bg-primary-950/40', testId }) => (
   <div className="card p-5 flex items-start gap-4" data-testid={testId}>
     <div className={`${bg} rounded-xl p-3 shrink-0`}>
       <Icon className={`w-6 h-6 ${color}`} />
     </div>
     <div className="min-w-0">
-      <p className="text-sm text-gray-500">{label}</p>
-      <p className="text-2xl font-bold text-gray-900 mt-0.5">{value}</p>
+      <p className="text-sm text-gray-500 dark:text-dk-text2">{label}</p>
+      <p className="text-2xl font-bold text-gray-900 dark:text-dk-text mt-0.5">{value}</p>
       {delta != null && (
-        <p className={`text-xs mt-0.5 font-medium ${delta >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+        <p className={`text-xs mt-0.5 font-medium ${delta >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
           {delta >= 0 ? '+' : ''}{delta}% {deltaLabel}
         </p>
       )}
-      {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
+      {sub && <p className="text-xs text-gray-400 dark:text-dk-muted mt-0.5">{sub}</p>}
     </div>
   </div>
 );
@@ -86,22 +86,22 @@ const AttentionCard = ({ attention, t }) => {
   const hasWork = open.length > 0;
   return (
     <div className="card p-5 flex items-start gap-4" data-testid="kpi-attention">
-      <div className={`${hasWork ? 'bg-red-50' : 'bg-emerald-50'} rounded-xl p-3 shrink-0`}>
-        <HiOutlineExclamationCircle className={`w-6 h-6 ${hasWork ? 'text-red-600' : 'text-emerald-600'}`} />
+      <div className={`${hasWork ? 'bg-red-50 dark:bg-red-950/40' : 'bg-emerald-50 dark:bg-emerald-950/40'} rounded-xl p-3 shrink-0`}>
+        <HiOutlineExclamationCircle className={`w-6 h-6 ${hasWork ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`} />
       </div>
       <div className="min-w-0">
-        <p className="text-sm text-gray-500">{t('adminDashboard.attentionTitle')}</p>
-        <p className="text-2xl font-bold text-gray-900 mt-0.5">{fmt(attention.total)}</p>
+        <p className="text-sm text-gray-500 dark:text-dk-text2">{t('adminDashboard.attentionTitle')}</p>
+        <p className="text-2xl font-bold text-gray-900 dark:text-dk-text mt-0.5">{fmt(attention.total)}</p>
         {hasWork ? (
           <ul className="mt-1 space-y-0.5">
             {open.map((r) => (
               <li key={r.key} className="text-xs">
-                <Link to={r.to} className="text-red-600 hover:underline">{r.text}</Link>
+                <Link to={r.to} className="text-red-600 dark:text-red-400 hover:underline">{r.text}</Link>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-xs text-gray-400 mt-0.5">{t('adminDashboard.attentionNone')}</p>
+          <p className="text-xs text-gray-400 dark:text-dk-muted mt-0.5">{t('adminDashboard.attentionNone')}</p>
         )}
       </div>
     </div>
@@ -112,10 +112,10 @@ const AttentionCard = ({ attention, t }) => {
 const RevenueTooltip = ({ active, payload, label, t }) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-sm">
-      <p className="font-medium text-gray-700 mb-1">{label}</p>
-      <p className="text-primary-600">{t('adminDashboard.revenue')}: <strong>{fmtVnd(payload[0]?.value)}</strong></p>
-      <p className="text-gray-500">{t('adminDashboard.paidOrders')}: <strong>{payload[0]?.payload?.orders ?? 0}</strong></p>
+    <div className="bg-white dark:bg-dk-surface border border-gray-200 dark:border-dk-border rounded-lg shadow-lg p-3 text-sm">
+      <p className="font-medium text-gray-700 dark:text-dk-text mb-1">{label}</p>
+      <p className="text-primary-600 dark:text-primary-400">{t('adminDashboard.revenue')}: <strong>{fmtVnd(payload[0]?.value)}</strong></p>
+      <p className="text-gray-500 dark:text-dk-text2">{t('adminDashboard.paidOrders')}: <strong>{payload[0]?.payload?.orders ?? 0}</strong></p>
     </div>
   );
 };
@@ -209,7 +209,7 @@ const AdminDashboard = () => {
           delta={kpi.revenueMomPct}
           deltaLabel={t('adminDashboard.vsSamePeriod', { day: kpi.todayLabel })}
           sub={revenueSub}
-          color="text-green-600" bg="bg-green-50"
+          color="text-green-600 dark:text-green-400" bg="bg-green-50 dark:bg-green-950/40"
         />
         <KpiCard
           testId="kpi-paid-orders"
@@ -217,7 +217,7 @@ const AdminDashboard = () => {
           label={t('adminDashboard.paidOrders')}
           value={fmt(kpi.paidOrdersThisMonth)}
           sub={t('adminDashboard.paidOrdersHint')}
-          color="text-teal-600" bg="bg-teal-50"
+          color="text-teal-600 dark:text-teal-400" bg="bg-teal-50 dark:bg-teal-950/40"
         />
         <KpiCard
           testId="kpi-paying"
@@ -225,7 +225,7 @@ const AdminDashboard = () => {
           label={t('adminDashboard.payingCustomers')}
           value={fmt(kpi.payingCustomers)}
           sub={t('adminDashboard.trialLine', { trial: fmt(kpi.trialCustomers), total: fmt(kpi.totalCustomers) })}
-          color="text-blue-600" bg="bg-blue-50"
+          color="text-blue-600 dark:text-blue-400" bg="bg-blue-50 dark:bg-blue-950/40"
         />
         <KpiCard
           testId="kpi-new"
@@ -235,7 +235,7 @@ const AdminDashboard = () => {
           delta={kpi.newCustomersMomPct}
           deltaLabel={t('adminDashboard.vsSamePeriod', { day: kpi.todayLabel })}
           sub={t('adminDashboard.newCustomersHint')}
-          color="text-orange-600" bg="bg-orange-50"
+          color="text-orange-600 dark:text-orange-400" bg="bg-orange-50 dark:bg-orange-950/40"
         />
         <KpiCard
           testId="kpi-expiring"
@@ -243,17 +243,17 @@ const AdminDashboard = () => {
           label={t('adminDashboard.expiringPaid')}
           value={fmt(kpi.expiringPaid7d)}
           sub={t('adminDashboard.expiringPaidHint')}
-          color="text-purple-600" bg="bg-purple-50"
+          color="text-purple-600 dark:text-purple-400" bg="bg-purple-50 dark:bg-purple-950/40"
         />
         <AttentionCard attention={kpi.attention} t={t} />
       </div>
 
       {/* Doanh thu 6 tháng dương lịch */}
       <div className="card p-5">
-        <h2 className="text-sm font-semibold text-gray-700 mb-4">{t('adminDashboard.last6MonthsRevenue')}</h2>
+        <h2 className="text-sm font-semibold text-gray-700 dark:text-dk-text mb-4">{t('adminDashboard.last6MonthsRevenue')}</h2>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={chartRevenue} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" className="dark:stroke-slate-800" />
             <XAxis dataKey="month" tick={{ fontSize: 12 }} />
             <YAxis tick={{ fontSize: 11 }} tickFormatter={fmtMillions} width={48} />
             <Tooltip content={<RevenueTooltip t={t} />} />
@@ -266,22 +266,22 @@ const AdminDashboard = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Đơn hàng gần nhất */}
         <div className="card">
-          <div className="px-5 py-4 border-b border-gray-100">
-            <h2 className="text-sm font-semibold text-gray-700">{t('adminDashboard.recentOrders')}</h2>
+          <div className="px-5 py-4 border-b border-gray-100 dark:border-dk-border">
+            <h2 className="text-sm font-semibold text-gray-700 dark:text-dk-text">{t('adminDashboard.recentOrders')}</h2>
           </div>
-          <div className="divide-y divide-gray-50">
+          <div className="divide-y divide-gray-50 dark:divide-dk-border/60">
             {recentOrders.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-8">{t('adminDashboard.noOrders')}</p>
+              <p className="text-sm text-gray-400 dark:text-dk-muted text-center py-8">{t('adminDashboard.noOrders')}</p>
             ) : recentOrders.map((o) => {
               const badge = orderStatusBadge(o.status, t);
               return (
                 <div key={o.id} className="px-5 py-3 flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-800 truncate">{o.userEmail}</p>
-                    <p className="text-xs text-gray-400">{o.planName || '—'} · {fmtDate(o.createdAt)}</p>
+                    <p className="text-sm font-medium text-gray-800 dark:text-dk-text truncate">{o.userEmail}</p>
+                    <p className="text-xs text-gray-400 dark:text-dk-text2">{o.planName || '—'} · {fmtDate(o.createdAt)}</p>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-sm font-semibold text-gray-900">{fmtVnd(o.amount)}</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-dk-text">{fmtVnd(o.amount)}</p>
                     <span className={`badge text-xs ${badge.className}`}>{badge.label}</span>
                   </div>
                 </div>
@@ -292,23 +292,23 @@ const AdminDashboard = () => {
 
         {/* Khách mới */}
         <div className="card">
-          <div className="px-5 py-4 border-b border-gray-100">
-            <h2 className="text-sm font-semibold text-gray-700">{t('adminDashboard.recentMembers')}</h2>
+          <div className="px-5 py-4 border-b border-gray-100 dark:border-dk-border">
+            <h2 className="text-sm font-semibold text-gray-700 dark:text-dk-text">{t('adminDashboard.recentMembers')}</h2>
           </div>
-          <div className="divide-y divide-gray-50">
+          <div className="divide-y divide-gray-50 dark:divide-dk-border/60">
             {recentMembers.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-8">{t('adminDashboard.noMembers')}</p>
+              <p className="text-sm text-gray-400 dark:text-dk-muted text-center py-8">{t('adminDashboard.noMembers')}</p>
             ) : recentMembers.map((m) => (
               <div key={m.id} className="px-5 py-3 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center shrink-0">
-                    <span className="text-primary-600 text-sm font-semibold">
+                  <div className="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-950/60 flex items-center justify-center shrink-0">
+                    <span className="text-primary-600 dark:text-primary-400 text-sm font-semibold">
                       {(m.fullName || m.username || '?')[0].toUpperCase()}
                     </span>
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-800 truncate">{m.fullName || m.username}</p>
-                    <p className="text-xs text-gray-400 truncate">{m.email}</p>
+                    <p className="text-sm font-medium text-gray-800 dark:text-dk-text truncate">{m.fullName || m.username}</p>
+                    <p className="text-xs text-gray-400 dark:text-dk-text2 truncate">{m.email}</p>
                   </div>
                 </div>
                 <div className="text-right shrink-0">
@@ -316,7 +316,7 @@ const AdminDashboard = () => {
                     ? <span className="badge badge-success text-xs">{m.planName}</span>
                     : <span className="badge badge-gray text-xs">{t('adminDashboard.noPlan')}</span>
                   }
-                  <p className="text-xs text-gray-400 mt-0.5">{fmtDate(m.createdAt)}</p>
+                  <p className="text-xs text-gray-400 dark:text-dk-text2 mt-0.5">{fmtDate(m.createdAt)}</p>
                 </div>
               </div>
             ))}

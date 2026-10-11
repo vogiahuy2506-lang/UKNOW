@@ -102,24 +102,24 @@ function EmployeeContextTab({ activeContext, t }) {
         {!hasAnyLimit ? (
           <p className="text-sm text-gray-400 italic">{t('accountProfileModal.noSendLimits')}</p>
         ) : (
-          <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-2">
+          <div className="rounded-xl border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface p-4 space-y-2">
             {hasEmailLimit && (
               <>
                 <div className="flex items-center justify-between py-1">
-                  <span className="flex items-center gap-1.5 text-sm text-gray-600">
-                    <HiOutlineMail className="w-3.5 h-3.5 text-gray-400" />
+                  <span className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-dk-text">
+                    <HiOutlineMail className="w-3.5 h-3.5 text-gray-400 dark:text-dk-text2" />
                     {t('accountProfileModal.emailPerDayShort')}
                   </span>
-                  <span className="text-sm font-semibold text-gray-800 tabular-nums">
+                  <span className="text-sm font-semibold text-gray-800 dark:text-dk-text tabular-nums">
                     {activeContext?.dailyEmailLimit === null ? t('accountProfileModal.unlimited') : activeContext.dailyEmailLimit.toLocaleString()}
                   </span>
                 </div>
                 <div className="flex items-center justify-between py-1">
-                  <span className="flex items-center gap-1.5 text-sm text-gray-600">
-                    <HiOutlineMail className="w-3.5 h-3.5 text-gray-400" />
+                  <span className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-dk-text">
+                    <HiOutlineMail className="w-3.5 h-3.5 text-gray-400 dark:text-dk-text2" />
                     {t('accountProfileModal.emailPerMonthShort')}
                   </span>
-                  <span className="text-sm font-semibold text-gray-800 tabular-nums">
+                  <span className="text-sm font-semibold text-gray-800 dark:text-dk-text tabular-nums">
                     {activeContext?.monthlyEmailLimit === null ? t('accountProfileModal.unlimited') : activeContext.monthlyEmailLimit.toLocaleString()}
                   </span>
                 </div>
@@ -128,20 +128,20 @@ function EmployeeContextTab({ activeContext, t }) {
             {hasZaloLimit && (
               <>
                 <div className="flex items-center justify-between py-1">
-                  <span className="flex items-center gap-1.5 text-sm text-gray-600">
-                    <HiOutlineChatAlt2 className="w-3.5 h-3.5 text-gray-400" />
+                  <span className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-dk-text">
+                    <HiOutlineChatAlt2 className="w-3.5 h-3.5 text-gray-400 dark:text-dk-text2" />
                     {t('accountProfileModal.zaloPerDayShort')}
                   </span>
-                  <span className="text-sm font-semibold text-gray-800 tabular-nums">
+                  <span className="text-sm font-semibold text-gray-800 dark:text-dk-text tabular-nums">
                     {activeContext?.dailyZaloLimit === null ? t('accountProfileModal.unlimited') : activeContext.dailyZaloLimit.toLocaleString()}
                   </span>
                 </div>
                 <div className="flex items-center justify-between py-1">
-                  <span className="flex items-center gap-1.5 text-sm text-gray-600">
-                    <HiOutlineChatAlt2 className="w-3.5 h-3.5 text-gray-400" />
+                  <span className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-dk-text">
+                    <HiOutlineChatAlt2 className="w-3.5 h-3.5 text-gray-400 dark:text-dk-text2" />
                     {t('accountProfileModal.zaloPerMonthShort')}
                   </span>
-                  <span className="text-sm font-semibold text-gray-800 tabular-nums">
+                  <span className="text-sm font-semibold text-gray-800 dark:text-dk-text tabular-nums">
                     {activeContext?.monthlyZaloLimit === null ? t('accountProfileModal.unlimited') : activeContext.monthlyZaloLimit.toLocaleString()}
                   </span>
                 </div>
@@ -157,15 +157,15 @@ function EmployeeContextTab({ activeContext, t }) {
 /** Khối hiển thị lịch sử đồng ý điều khoản & xử lý dữ liệu (Nghị định 330/2026/NĐ-CP) */
 function ConsentHistorySection({ consentHistory = [], t }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
+    <div className="rounded-xl border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface p-4 space-y-3">
       <div className="flex items-center gap-2">
-        <HiOutlineShieldCheck className="w-4 h-4 text-primary-600" />
-        <span className="text-xs font-bold uppercase tracking-wider text-gray-700">
+        <HiOutlineShieldCheck className="w-4 h-4 text-primary-600 dark:text-orange-500" />
+        <span className="text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-dk-text">
           {t('accountProfileModal.consentHistoryTitle')}
         </span>
       </div>
 
-      <div className="divide-y divide-gray-100">
+      <div className="divide-y divide-gray-100 dark:divide-dk-border">
         {[
           {
             purpose: 'terms',
@@ -195,25 +195,25 @@ function ConsentHistorySection({ consentHistory = [], t }) {
             <div key={doc.purpose} className="py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-gray-900">{doc.title}</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-dk-text">{doc.title}</span>
                   <a
                     href={doc.href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-xs text-primary-600 hover:underline font-medium inline-flex items-center gap-0.5"
+                    className="text-xs text-primary-600 dark:text-orange-400 hover:underline font-medium inline-flex items-center gap-0.5"
                   >
                     {t('accountProfileModal.viewDocLink')}
                   </a>
                 </div>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs text-gray-500 mt-1">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs text-gray-500 dark:text-dk-text2 mt-1">
                   {version && (
                     <span>
-                      {t('accountProfileModal.consentDocVersion')}: <strong className="font-semibold text-gray-700">{version}</strong>
+                      {t('accountProfileModal.consentDocVersion')}: <strong className="font-semibold text-gray-700 dark:text-dk-text">{version}</strong>
                     </span>
                   )}
                   {formattedDate && (
                     <span>
-                      {t('accountProfileModal.consentDocDate')}: <strong className="font-semibold text-gray-700">{formattedDate}</strong>
+                      {t('accountProfileModal.consentDocDate')}: <strong className="font-semibold text-gray-700 dark:text-dk-text">{formattedDate}</strong>
                     </span>
                   )}
                 </div>
@@ -434,18 +434,18 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
         <div className="shrink-0">
           <div className="flex items-center justify-between px-6 py-4">
             <div className="flex items-center gap-2">
-              <HiOutlineUserCircle className="w-6 h-6 text-primary-600" />
-              <h2 className="text-base font-semibold text-gray-900">{t('accountProfileModal.tabProfile')}</h2>
+              <HiOutlineUserCircle className="w-6 h-6 text-primary-600 dark:text-orange-500" />
+              <h2 className="text-base font-semibold text-gray-900 dark:text-dk-text">{t('accountProfileModal.tabProfile')}</h2>
             </div>
             <button
               type="button"
               onClick={handleClose}
-              className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:text-dk-text2 dark:hover:text-dk-text dark:hover:bg-dk-raised transition-colors"
             >
               <HiOutlineX className="w-5 h-5" />
             </button>
           </div>
-          <div className="flex border-b border-gray-100 px-6 gap-1">
+          <div className="flex border-b border-gray-100 dark:border-dk-border px-6 gap-1">
             {TABS.map((tab) => (
               <button
                 key={tab.key}
@@ -453,8 +453,8 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
                 onClick={() => setActiveTab(tab.key)}
                 className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
                   activeTab === tab.key
-                    ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                    ? 'border-primary-500 text-primary-600 dark:text-orange-400 dark:border-orange-500'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-dk-text2 dark:hover:text-dk-text'
                 }`}
               >
                 {tab.label}
@@ -470,7 +470,7 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
         ) : activeTab === 'security' ? (
           <div className="overflow-y-auto px-6 py-5 space-y-6">
             <TwoFactorSecurityTab />
-            <div className="pt-2 border-t border-gray-100">
+            <div className="pt-2 border-t border-gray-100 dark:border-dk-border">
               <ConsentHistorySection consentHistory={consentHistory} t={t} />
             </div>
           </div>
@@ -485,31 +485,31 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
         ) : (
           <form onSubmit={handleSubmit} className="overflow-y-auto px-6 py-5 space-y-5">
             <div>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t('accountProfileModal.personalInfo')}</p>
+              <p className="text-xs font-semibold text-gray-400 dark:text-dk-text2 uppercase tracking-wide mb-3">{t('accountProfileModal.personalInfo')}</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('accountProfileModal.username')}</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{t('accountProfileModal.username')}</label>
                   <input
                     type="text"
-                    className="input w-full bg-gray-50 text-gray-500"
+                    className="input w-full bg-gray-50 text-gray-500 dark:bg-dk-raised/60 dark:text-dk-text2 dark:border-dk-border"
                     value={profileData?.username || user?.username || ''}
                     disabled
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('accountProfileModal.role')}</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{t('accountProfileModal.role')}</label>
                   <input
                     type="text"
-                    className="input w-full bg-gray-50 text-gray-500"
+                    className="input w-full bg-gray-50 text-gray-500 dark:bg-dk-raised/60 dark:text-dk-text2 dark:border-dk-border"
                     value={getRoleLabel(user?.role)}
                     disabled
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('accountProfileModal.fullName')}</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{t('accountProfileModal.fullName')}</label>
                   <input
                     type="text"
-                    className="input w-full"
+                    className="input w-full dark:bg-dk-surface dark:border-dk-border dark:text-dk-text"
                     value={formValues.fullName}
                     onChange={handleInputChange('fullName')}
                     placeholder={t('accountProfileModal.placeholderFullName')}
@@ -517,20 +517,20 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('accountProfileModal.email')}</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{t('accountProfileModal.email')}</label>
                   <input
                     type="email"
-                    className="input w-full"
+                    className="input w-full dark:bg-dk-surface dark:border-dk-border dark:text-dk-text"
                     value={formValues.email}
                     onChange={handleInputChange('email')}
                     placeholder={t('accountProfileModal.placeholderEmail')}
                   />
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('accountProfileModal.phone')}</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{t('accountProfileModal.phone')}</label>
                   <input
                     type="text"
-                    className="input w-full"
+                    className="input w-full dark:bg-dk-surface dark:border-dk-border dark:text-dk-text"
                     value={formValues.phone}
                     onChange={handleInputChange('phone')}
                     placeholder={t('accountProfileModal.placeholderPhone')}
@@ -540,19 +540,19 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
                   {phoneOtpEnabled && user?.phone && (
                     <div className="mt-2 flex items-center gap-2 text-xs">
                       {user?.phoneVerifiedAt ? (
-                        <span className="inline-flex items-center gap-1 text-green-700">
+                        <span className="inline-flex items-center gap-1 text-green-700 dark:text-green-400">
                           <HiOutlineCheckCircle className="w-4 h-4" />
                           {t('accountProfileModal.phoneVerified', { date: formatDate(user.phoneVerifiedAt) })}
                         </span>
                       ) : (
                         <>
-                          <span className="inline-flex items-center gap-1 text-amber-700">
+                          <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400">
                             <HiOutlineBan className="w-4 h-4" />
                             {t('accountProfileModal.phoneNotVerified')}
                           </span>
                           <button
                             type="button"
-                            className="text-primary-600 hover:text-primary-700 font-medium underline"
+                            className="text-primary-600 dark:text-orange-400 hover:text-primary-700 font-medium underline"
                             onClick={() => setShowPhoneVerify(true)}
                           >
                             {t('accountProfileModal.phoneVerifyCta')}
@@ -568,27 +568,27 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
             {(isUserAdmin || isEmployeeCtx) && (
               <div>
                 {isEmployeeCtx && profileData?.activePlanId && (
-                  <p className="text-xs text-blue-600 mb-2">
+                  <p className="text-xs text-blue-600 dark:text-blue-400 mb-2">
                     {t('accountProfileModal.ownerPlanCreditsHint', {
                       name: activeContext?.ownerName || t('accountProfileModal.businessOwner'),
                     })}
                   </p>
                 )}
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t('accountProfileModal.currentPlan')}</p>
+                <p className="text-xs font-semibold text-gray-400 dark:text-dk-text2 uppercase tracking-wide mb-3">{t('accountProfileModal.currentPlan')}</p>
                 <PlanSection data={profileData} t={t} />
               </div>
             )}
 
             {profileData && (profileData.createdAt || profileData.lastLoginAt) && (
-              <div className="flex flex-wrap gap-x-5 gap-y-1 pt-1 border-t border-gray-100">
+              <div className="flex flex-wrap gap-x-5 gap-y-1 pt-1 border-t border-gray-100 dark:border-dk-border">
                 {profileData.createdAt && (
-                  <span className="flex items-center gap-1.5 text-xs text-gray-400">
+                  <span className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-dk-text2">
                     <HiOutlineCalendar className="w-3.5 h-3.5" />
                     {t('accountProfileModal.createdAt', { date: formatDate(profileData.createdAt, t) })}
                   </span>
                 )}
                 {profileData.lastLoginAt && (
-                  <span className="flex items-center gap-1.5 text-xs text-gray-400">
+                  <span className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-dk-text2">
                     <HiOutlineClock className="w-3.5 h-3.5" />
                     {t('accountProfileModal.lastLogin', { date: formatDate(profileData.lastLoginAt, t) })}
                   </span>

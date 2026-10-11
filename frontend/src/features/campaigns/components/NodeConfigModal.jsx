@@ -822,16 +822,16 @@ const NodeConfigModal = ({
         return (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('campaignBuilder.nodeName')}</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{t('campaignBuilder.nodeName')}</label>
               <input
                 type="text"
                 value={formData.label}
                 onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-raised text-gray-900 dark:text-dk-text rounded-lg focus:ring-2 focus:ring-primary-500"
                 maxLength={255}
               />
             </div>
-            <div className="text-sm text-gray-500">
+            <div className="text-sm text-gray-500 dark:text-dk-text2">
               {t('campaignBuilder.pendingConfig', { name: config?.name || nodeType })}
             </div>
           </div>
@@ -841,8 +841,8 @@ const NodeConfigModal = ({
 
   return (
     <FullScreenOverlay isOpen={isOpen} className="overflow-y-auto py-8">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl mx-4 my-auto">
-        <div className="flex items-center gap-3 p-4 border-b">
+      <div className="bg-white dark:bg-dk-surface rounded-xl shadow-xl w-full max-w-4xl mx-4 my-auto border border-transparent dark:border-dk-border text-gray-900 dark:text-dk-text">
+        <div className="flex items-center gap-3 p-4 border-b border-gray-200 dark:border-dk-border">
           <div
             className="w-8 h-8 rounded-lg flex items-center justify-center"
             style={{ backgroundColor: config?.bgColor || '#E8EAF6' }}
@@ -850,18 +850,18 @@ const NodeConfigModal = ({
             <Icon className="w-5 h-5" style={{ color: config?.iconColor || '#5C6BC0' }} />
           </div>
           <div>
-            <span className="text-sm text-gray-500">{t('campaignBuilder.configuring')}</span>
-            <span className="text-primary-600 font-medium ml-1">{config?.name || t('campaignBuilder.nodeName')}</span>
+            <span className="text-sm text-gray-500 dark:text-dk-text2">{t('campaignBuilder.configuring')}</span>
+            <span className="text-primary-600 dark:text-primary-400 font-medium ml-1">{config?.name || t('campaignBuilder.nodeName')}</span>
           </div>
-          <button onClick={onClose} className="ml-auto p-1 hover:bg-gray-100 rounded-lg">
+          <button onClick={onClose} className="ml-auto p-1 hover:bg-gray-100 dark:hover:bg-dk-raised text-gray-500 dark:text-dk-text2 rounded-lg">
             <HiOutlineX className="w-5 h-5" />
           </button>
         </div>
 
         <div className="p-4 max-h-[70vh] overflow-y-auto">{renderContent()}</div>
 
-        <div className="flex justify-end gap-3 p-4 border-t bg-gray-50 rounded-b-xl">
-          <button onClick={onClose} className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
+        <div className="flex justify-end gap-3 p-4 border-t border-gray-200 dark:border-dk-border bg-gray-50 dark:bg-dk-bg rounded-b-xl">
+          <button onClick={onClose} className="px-4 py-2 text-gray-700 dark:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-raised rounded-lg transition-colors">
             Hủy
           </button>
           <button

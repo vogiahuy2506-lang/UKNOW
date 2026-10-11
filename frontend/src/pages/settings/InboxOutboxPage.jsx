@@ -1039,26 +1039,26 @@ const InboxPage = () => {
   };
 
   return (
-    <div className="h-full min-h-0 flex overflow-hidden overscroll-none bg-gray-100">
+    <div className="h-full min-h-0 flex overflow-hidden overscroll-none bg-gray-100 dark:bg-dk-bg">
       {/* Left Sidebar */}
       <div
-        className={`h-full min-h-0 bg-white flex flex-col flex-shrink-0 overflow-hidden border-r border-gray-200 ${
+        className={`h-full min-h-0 bg-white dark:bg-dk-surface flex flex-col flex-shrink-0 overflow-hidden border-r border-gray-200 dark:border-dk-border ${
           !isResizing && 'transition-all duration-200'
         } ${(selectedConversation || activeView !== 'chat') ? 'hidden lg:flex' : 'flex w-full lg:w-auto'}`}
         style={{ width: isMobile && !selectedConversation && activeView === 'chat' ? '100%' : `${sidebarWidth}px` }}
       >
         {/* Sidebar toolbar — compact so list gets most of the height */}
-        <div className="shrink-0 border-b border-gray-100">
+        <div className="shrink-0 border-b border-gray-100 dark:border-dk-border">
           {/* View Toggle Tabs: Chat vs AI Report vs Contact Alerts */}
-          <div className="flex items-center gap-1 p-1 bg-gray-100/90 rounded-xl mx-3 my-2 text-xs font-semibold">
+          <div className="flex items-center gap-1 p-1 bg-gray-100/90 dark:bg-dk-raised rounded-xl mx-3 my-2 text-xs font-semibold">
             <button
               type="button"
               onClick={() => setActiveView('chat')}
               title={unreadCount > 0 ? t('inbox.unreadConversationsTooltip', { n: unreadCount }) : undefined}
               className={`flex-1 py-1.5 px-2 rounded-lg flex items-center justify-center gap-1 transition-all ${
                 activeView === 'chat'
-                  ? 'bg-white text-primary-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-white dark:bg-dk-surface text-primary-600 dark:text-primary-400 shadow-sm'
+                  : 'text-gray-600 dark:text-dk-text2 hover:text-gray-900 dark:hover:text-dk-text'
               }`}
             >
               <HiOutlineInbox className="w-4 h-4 shrink-0" />
@@ -1074,8 +1074,8 @@ const InboxPage = () => {
               onClick={() => setActiveView('ai_report')}
               className={`flex-1 py-1.5 px-2 rounded-lg flex items-center justify-center gap-1 transition-all ${
                 activeView === 'ai_report'
-                  ? 'bg-white text-indigo-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-white dark:bg-dk-surface text-indigo-600 dark:text-indigo-400 shadow-sm'
+                  : 'text-gray-600 dark:text-dk-text2 hover:text-gray-900 dark:hover:text-dk-text'
               }`}
             >
               <HiOutlineSparkles className="w-4 h-4 text-indigo-500 shrink-0" />
@@ -1086,8 +1086,8 @@ const InboxPage = () => {
               onClick={() => setActiveView('contact_alerts')}
               className={`flex-1 py-1.5 px-2 rounded-lg flex items-center justify-center gap-1 transition-all ${
                 activeView === 'contact_alerts'
-                  ? 'bg-white text-rose-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-white dark:bg-dk-surface text-rose-600 dark:text-rose-400 shadow-sm'
+                  : 'text-gray-600 dark:text-dk-text2 hover:text-gray-900 dark:hover:text-dk-text'
               }`}
             >
               <HiOutlinePhone className="w-4 h-4 text-rose-500 shrink-0" />
@@ -1103,8 +1103,8 @@ const InboxPage = () => {
               onClick={toggleNotifications}
               className={`shrink-0 p-1.5 rounded-lg transition-colors ${
                 notificationsEnabled
-                  ? 'text-primary-600 bg-white shadow-sm'
-                  : 'text-gray-400 hover:text-gray-600 hover:bg-white/70'
+                  ? 'text-primary-600 dark:text-primary-400 bg-white dark:bg-dk-surface shadow-sm'
+                  : 'text-gray-400 dark:text-dk-muted hover:text-gray-600 dark:hover:text-dk-text hover:bg-white/70 dark:hover:bg-dk-raised'
               }`}
               title={notificationsEnabled ? t('inbox.notificationsOff') : t('inbox.notificationsOn')}
               aria-label={notificationsEnabled ? t('inbox.notificationsOff') : t('inbox.notificationsOn')}
@@ -1114,9 +1114,9 @@ const InboxPage = () => {
           </div>
 
           {!sessionStatus.connected && sessionStatus.accounts?.length > 0 && (
-            <div className="mx-3 mb-2 px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg flex items-center gap-2">
+            <div className="mx-3 mb-2 px-2.5 py-1.5 bg-gray-50 dark:bg-dk-raised/60 border border-gray-200 dark:border-dk-border rounded-lg flex items-center gap-2">
               <HiOutlineInformationCircle className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-              <p className="text-[11px] text-gray-600 leading-snug flex-1 min-w-0">
+              <p className="text-[11px] text-gray-600 dark:text-dk-text leading-snug flex-1 min-w-0">
                 {sessionStatus.accounts.length === 1
                   ? t('inbox.zaloReloginBanner', { name: sessionStatus.accounts[0].displayName || t('inbox.zaloPersonalShort') })
                   : t('inbox.zaloReloginBannerMany', { n: sessionStatus.accounts.length })}
@@ -1125,7 +1125,7 @@ const InboxPage = () => {
                 <button
                   type="button"
                   onClick={() => navigate('/app/settings/channels')}
-                  className="shrink-0 text-[11px] font-semibold text-primary-600 hover:underline"
+                  className="shrink-0 text-[11px] font-semibold text-primary-600 dark:text-primary-400 hover:underline"
                 >
                   {t('inbox.openChannelSettings')}
                 </button>
@@ -1158,7 +1158,7 @@ const InboxPage = () => {
                 placeholder={t('inbox.searchConversations')}
                 value={searchInput}
                 onChange={(e) => handleSearch(e.target.value)}
-                className="w-full pl-8 pr-8 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                className="w-full pl-8 pr-8 py-1.5 bg-gray-50 dark:bg-dk-inset border border-gray-200 dark:border-dk-border dark:text-dk-text dark:placeholder-dk-muted rounded-lg text-xs focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
               />
               {searchInput && (
                 <button
@@ -1201,11 +1201,11 @@ const InboxPage = () => {
         </div>
 
         {conversations.some((c) => c.unreadCount > 0) && (
-          <div className="shrink-0 border-b border-gray-100 px-3 py-1 flex justify-end bg-white">
+          <div className="shrink-0 border-b border-gray-100 dark:border-dk-border px-3 py-1 flex justify-end bg-white dark:bg-dk-surface">
             <button
               type="button"
               onClick={() => setConfirmMarkAllRead(true)}
-              className="text-[11px] font-semibold text-primary-600 hover:underline"
+              className="text-[11px] font-semibold text-primary-600 dark:text-primary-400 hover:underline"
             >
               {t('inbox.markAllRead')}
             </button>
@@ -1213,7 +1213,7 @@ const InboxPage = () => {
         )}
 
         {/* Conversation list */}
-        <div className="flex-1 min-h-0 overflow-hidden bg-white">
+        <div className="flex-1 min-h-0 overflow-hidden bg-white dark:bg-dk-surface">
           <ConversationList
             conversations={conversations}
             isLoading={isLoadingConversations}
@@ -1239,18 +1239,18 @@ const InboxPage = () => {
 
       {/* Right panel */}
       <div
-        className={`h-full min-h-0 flex-1 min-w-0 overflow-hidden bg-gray-50 ${
+        className={`h-full min-h-0 flex-1 min-w-0 overflow-hidden bg-gray-50 dark:bg-dk-bg ${
           (selectedConversation || activeView === 'ai_report' || activeView === 'contact_alerts')
             ? (activeView === 'ai_report' || activeView === 'contact_alerts' ? 'flex flex-col' : 'grid grid-rows-[auto,minmax(0,1fr),auto]')
             : 'hidden lg:flex lg:flex-col'
         }`}
       >
         {activeView !== 'chat' && isMobile && (
-          <div className="shrink-0 px-3 py-2 bg-white border-b border-gray-200">
+          <div className="shrink-0 px-3 py-2 bg-white dark:bg-dk-surface border-b border-gray-200 dark:border-dk-border">
             <button
               type="button"
               onClick={() => setActiveView('chat')}
-              className="flex items-center gap-1.5 text-sm font-semibold text-primary-600"
+              className="flex items-center gap-1.5 text-sm font-semibold text-primary-600 dark:text-primary-400"
             >
               <HiArrowLeft className="w-4 h-4" />
               {t('inbox.backToInbox')}
@@ -1273,27 +1273,27 @@ const InboxPage = () => {
         ) : selectedConversation ? (
           <>
             {/* Message header */}
-            <div className="shrink-0 px-5 py-4 bg-white border-b border-gray-200 flex items-center gap-4 shadow-sm">
+            <div className="shrink-0 px-5 py-4 bg-white dark:bg-dk-surface border-b border-gray-200 dark:border-dk-border flex items-center gap-4 shadow-sm">
               <button
                 onClick={handleBack}
-                className="lg:hidden p-2 -ml-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all"
+                className="lg:hidden p-2 -ml-2 text-gray-500 dark:text-dk-text2 hover:text-gray-700 dark:hover:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-raised rounded-xl transition-all"
               >
                 <HiArrowLeft className="w-5 h-5" />
               </button>
 
-              <div className="w-11 h-11 rounded-full bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center text-primary-600 font-bold text-lg shadow-sm">
+              <div className="w-11 h-11 rounded-full bg-gradient-to-br from-primary-100 to-primary-200 dark:from-primary-950/60 dark:to-primary-900/40 flex items-center justify-center text-primary-600 dark:text-primary-400 font-bold text-lg shadow-sm">
                 {selectedConversation.visitorName?.[0]?.toUpperCase() || '?'}
               </div>
 
               <div className="flex-1 min-w-0">
-                <h2 className="font-bold text-gray-900 truncate text-lg">
+                <h2 className="font-bold text-gray-900 dark:text-dk-text truncate text-lg">
                   {selectedConversation.visitorName || t('inbox.anonymousCustomer')}
                 </h2>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-gray-500 dark:text-dk-text2">
                   {getChannelLabel(selectedConversation.channel, selectedConversation)}
                   <AiPauseStatusText conversation={selectedConversation} t={t} />
                   {selectedConversation.channelDisplayName && (
-                    <span className="block text-xs text-gray-400 mt-0.5">
+                    <span className="block text-xs text-gray-400 dark:text-dk-muted mt-0.5">
                       {selectedConversation.channelDisplayName}
                     </span>
                   )}
@@ -1304,8 +1304,8 @@ const InboxPage = () => {
                 <div className="flex items-center gap-2">
                   <span className={`text-sm text-right leading-tight ${
                     selectedConversation.chatbotEnabled === false || isGroupConversation(selectedConversation)
-                      ? 'text-gray-400'
-                      : 'text-gray-700'
+                      ? 'text-gray-400 dark:text-dk-muted'
+                      : 'text-gray-700 dark:text-dk-text'
                   }`}>
                     {t('inbox.aiToggleLabel')}
                   </span>
@@ -1337,7 +1337,7 @@ const InboxPage = () => {
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-40 disabled:cursor-not-allowed ${
                       selectedConversation.chatbotEnabled !== false && !isGroupConversation(selectedConversation) && !selectedConversation.aiPaused
                         ? 'bg-primary-600'
-                        : 'bg-slate-200'
+                        : 'bg-slate-200 dark:bg-dk-strong'
                     }`}
                   >
                     <span
@@ -1351,7 +1351,7 @@ const InboxPage = () => {
                 </div>
                   {selectedConversation.chatbotEnabled === false ? (
                     <div className="flex flex-col items-end gap-1">
-                      <p className="text-[11px] text-amber-700 text-right leading-snug max-w-[220px]">
+                      <p className="text-[11px] text-amber-700 dark:text-amber-400 text-right leading-snug max-w-[220px]">
                         {selectedConversation.chatbotDisabledReason === 'account_disconnected'
                           ? t('inbox.aiDisabledAccountDisconnected', { name: selectedConversation.channelDisplayName || '' })
                           : selectedConversation.chatbotDisabledReason === 'chatbot_off'
@@ -1361,7 +1361,7 @@ const InboxPage = () => {
                       {selectedConversation.chatbotDisabledReason === 'account_disconnected' ? (
                         <button
                           type="button"
-                          className="text-[11px] text-amber-700 underline font-medium"
+                          className="text-[11px] text-amber-700 dark:text-amber-400 underline font-medium"
                           onClick={() => window.open('/app/settings/channels', '_blank')}
                         >
                           {t('inbox.btnReconnect')}
@@ -1369,7 +1369,7 @@ const InboxPage = () => {
                       ) : selectedConversation.chatbotDisabledReason === 'chatbot_off' ? (
                         <button
                           type="button"
-                          className="text-[11px] text-amber-700 underline font-medium"
+                          className="text-[11px] text-amber-700 dark:text-amber-400 underline font-medium"
                           onClick={() => window.open('/app/chatbot-studio', '_blank')}
                         >
                           {t('inbox.openDeployModal')}
@@ -1378,12 +1378,12 @@ const InboxPage = () => {
                     </div>
                   ) : isGroupConversation(selectedConversation) ? (
                     <div className="flex flex-col items-end gap-1">
-                      <p className="text-[11px] text-amber-700 text-right leading-snug max-w-[220px]">
+                      <p className="text-[11px] text-amber-700 dark:text-amber-400 text-right leading-snug max-w-[220px]">
                         {t('inbox.aiGroupUnsupported')}
                       </p>
                     </div>
                   ) : selectedConversation.aiPaused ? (
-                    <p className="text-[11px] text-gray-500 text-right leading-snug max-w-[220px]">
+                    <p className="text-[11px] text-gray-500 dark:text-dk-text2 text-right leading-snug max-w-[220px]">
                       {!selectedConversation.aiPausedAt
                         ? t('inbox.aiManualOff')
                         : selectedConversation.aiResumeAt === null
@@ -1443,7 +1443,7 @@ const InboxPage = () => {
                   await fetchMessages(conv);
                   fetchConversations(true);
                 }}
-                className="p-2.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all disabled:opacity-50"
+                className="p-2.5 text-gray-400 hover:text-gray-600 dark:hover:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-raised rounded-xl transition-all disabled:opacity-50"
                 title={t('inbox.syncNow')}
               >
                 <HiOutlineRefresh className={`w-5 h-5 ${isSyncingThread ? 'animate-spin' : ''}`} />
@@ -1453,8 +1453,8 @@ const InboxPage = () => {
                 onClick={() => setShowDetails(!showDetails)}
                 className={`p-2.5 rounded-xl transition-all ${
                   showDetails 
-                    ? 'text-primary-600 bg-primary-50 shadow-sm' 
-                    : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                    ? 'text-primary-600 bg-primary-50 dark:bg-primary-950/40 shadow-sm' 
+                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-raised'
                 }`}
                 title={t('common.details')}
               >
@@ -1494,24 +1494,24 @@ const InboxPage = () => {
             )}
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
+          <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-dk-bg dark:to-dk-surface">
             <div className="text-center max-w-sm px-8">
-              <div className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center shadow-lg shadow-primary-500/10">
-                <HiOutlineMail className="w-12 h-12 text-primary-500" />
+              <div className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-primary-100 to-primary-200 dark:from-primary-950/60 dark:to-primary-900/40 flex items-center justify-center shadow-lg shadow-primary-500/10">
+                <HiOutlineMail className="w-12 h-12 text-primary-500 dark:text-primary-400" />
               </div>
-              <h2 className="text-xl font-bold text-gray-800 mb-2">
+              <h2 className="text-xl font-bold text-gray-800 dark:text-dk-text mb-2">
                 {t('inbox.selectConversation')}
               </h2>
-              <p className="text-gray-500 leading-relaxed">
+              <p className="text-gray-500 dark:text-dk-text2 leading-relaxed">
                 {t('inbox.selectConversationHint')}
               </p>
               {filters.channel === 'zalo_personal' && !sessionStatus.connected && (
-                <div className="mt-6 p-4 bg-amber-50 rounded-2xl border border-amber-200">
+                <div className="mt-6 p-4 bg-amber-50 dark:bg-amber-950/20 rounded-2xl border border-amber-200 dark:border-amber-900/40">
                   <div className="flex items-start gap-3 text-left">
                     <HiOutlineExclamation className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-sm font-semibold text-amber-800">{t('inbox.zaloNotConnected')}</p>
-                      <p className="text-sm text-amber-600 mt-1">{t('inbox.connectZaloFirst')}</p>
+                      <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">{t('inbox.zaloNotConnected')}</p>
+                      <p className="text-sm text-amber-600 dark:text-amber-400 mt-1">{t('inbox.connectZaloFirst')}</p>
                     </div>
                   </div>
                 </div>

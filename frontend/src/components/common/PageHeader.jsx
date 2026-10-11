@@ -22,7 +22,7 @@ export default function PageHeader({ icon: Icon, title, subtitle, actions, onBac
           <button
             type="button"
             onClick={onBack}
-            className="p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors shrink-0"
+            className="p-2 rounded-xl text-slate-500 dark:text-dk-text2 hover:text-slate-800 dark:hover:text-dk-text hover:bg-slate-100 dark:hover:bg-dk-raised transition-colors shrink-0"
             aria-label={backLabel}
           >
             <HiOutlineArrowLeft className="w-5 h-5" />
@@ -34,14 +34,14 @@ export default function PageHeader({ icon: Icon, title, subtitle, actions, onBac
           </div>
         )}
         <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-dk-text">
             {title}
           </h1>
           {subtitle && (
             typeof subtitle === 'string' ? (
-              <p className="text-xs sm:text-sm text-slate-500 mt-0.5">{subtitle}</p>
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-dk-text2 mt-0.5">{subtitle}</p>
             ) : (
-              <div className="text-xs sm:text-sm text-slate-500 mt-0.5">{subtitle}</div>
+              <div className="text-xs sm:text-sm text-slate-500 dark:text-dk-text2 mt-0.5">{subtitle}</div>
             )
           )}
         </div>

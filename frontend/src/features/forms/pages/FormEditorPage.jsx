@@ -25,6 +25,8 @@ import {
   HiOutlineLightningBolt,
   HiOutlineChevronDown,
   HiOutlineColorSwatch,
+  HiOutlineShoppingCart,
+  HiOutlineCreditCard,
 } from 'react-icons/hi';
 import QRCode from 'qrcode';
 import { buildVietQrString, decodeQrFromImageFile, parseAndValidateMoMoQr } from '../../../utils/vietqrParser';
@@ -77,6 +79,9 @@ const FIELD_TYPES = [
 // `common: true` = hiện sẵn ở hàng "Thêm nhanh"; các loại còn lại nằm sau nút "Loại khác…" (không bỏ loại nào).
 const QUICK_FIELD_PRESETS = [
   {
+    id: 'name',
+    titleKey: 'forms.editorPage.quickAdd.fullName',
+    descKey: 'forms.editorPage.quickAdd.fullNameDesc',
     title: 'Họ và tên',
     common: true,
     desc: 'Định danh tên khách hàng',
@@ -87,6 +92,9 @@ const QUICK_FIELD_PRESETS = [
     colorClass: 'text-blue-600 bg-blue-50 border-blue-200/80 hover:bg-blue-100 hover:border-blue-300',
   },
   {
+    id: 'email',
+    titleKey: 'forms.editorPage.quickAdd.email',
+    descKey: 'forms.editorPage.quickAdd.emailDesc',
     title: 'Địa chỉ Email',
     common: true,
     desc: 'Gửi thư xác nhận tự động',
@@ -97,6 +105,9 @@ const QUICK_FIELD_PRESETS = [
     colorClass: 'text-purple-600 bg-purple-50 border-purple-200/80 hover:bg-purple-100 hover:border-purple-300',
   },
   {
+    id: 'phone',
+    titleKey: 'forms.editorPage.quickAdd.phone',
+    descKey: 'forms.editorPage.quickAdd.phoneDesc',
     title: 'Số điện thoại',
     common: true,
     desc: 'Liên hệ tư vấn / Zalo',
@@ -107,6 +118,9 @@ const QUICK_FIELD_PRESETS = [
     colorClass: 'text-emerald-600 bg-emerald-50 border-emerald-200/80 hover:bg-emerald-100 hover:border-emerald-300',
   },
   {
+    id: 'short_text',
+    titleKey: 'forms.editorPage.quickAdd.shortText',
+    descKey: 'forms.editorPage.quickAdd.shortTextDesc',
     title: 'Văn bản ngắn',
     common: true,
     desc: 'Câu trả lời 1 dòng',
@@ -117,6 +131,9 @@ const QUICK_FIELD_PRESETS = [
     colorClass: 'text-amber-600 bg-amber-50 border-amber-200/80 hover:bg-amber-100 hover:border-amber-300',
   },
   {
+    id: 'long_text',
+    titleKey: 'forms.editorPage.quickAdd.longText',
+    descKey: 'forms.editorPage.quickAdd.longTextDesc',
     title: 'Đoạn văn dài',
     desc: 'Góp ý hoặc mô tả chi tiết',
     type: 'long_text',
@@ -126,36 +143,51 @@ const QUICK_FIELD_PRESETS = [
     colorClass: 'text-indigo-600 bg-indigo-50 border-indigo-200/80 hover:bg-indigo-100 hover:border-indigo-300',
   },
   {
+    id: 'radio',
+    titleKey: 'forms.editorPage.quickAdd.radio',
+    descKey: 'forms.editorPage.quickAdd.radioDesc',
     title: 'Trắc nghiệm đơn',
     desc: 'Chọn 1 trong nhiều lựa chọn',
     type: 'radio',
     role: '',
     required: false,
+    optionsKey: 'options',
     options: ['Lựa chọn 1', 'Lựa chọn 2'],
     icon: HiOutlineCheckCircle,
     colorClass: 'text-rose-600 bg-rose-50 border-rose-200/80 hover:bg-rose-100 hover:border-rose-300',
   },
   {
+    id: 'checkbox',
+    titleKey: 'forms.editorPage.quickAdd.checkbox',
+    descKey: 'forms.editorPage.quickAdd.checkboxDesc',
     title: 'Hộp kiểm',
     desc: 'Cho phép tích chọn nhiều mục',
     type: 'checkbox',
     role: '',
     required: false,
+    optionsKey: 'items',
     options: ['Mục 1', 'Mục 2'],
     icon: HiOutlineClipboardCheck,
     colorClass: 'text-teal-600 bg-teal-50 border-teal-200/80 hover:bg-teal-100 hover:border-teal-300',
   },
   {
+    id: 'select',
+    titleKey: 'forms.editorPage.quickAdd.select',
+    descKey: 'forms.editorPage.quickAdd.selectDesc',
     title: 'Menu thả xuống',
     desc: 'Danh sách lựa chọn gọn gàng',
     type: 'select',
     role: '',
     required: false,
+    optionsKey: 'options',
     options: ['Lựa chọn 1', 'Lựa chọn 2'],
     icon: HiOutlineViewList,
     colorClass: 'text-sky-600 bg-sky-50 border-sky-200/80 hover:bg-sky-100 hover:border-sky-300',
   },
   {
+    id: 'date',
+    titleKey: 'forms.editorPage.quickAdd.date',
+    descKey: 'forms.editorPage.quickAdd.dateDesc',
     title: 'Ngày / Thời gian',
     desc: 'Chọn ngày hẹn hoặc ngày sinh',
     type: 'date',
@@ -384,7 +416,7 @@ export default function FormEditorPage() {
       momoQrMode: savedPreset.momoQrMode || prev.momoQrMode,
       momoQrAccount: savedPreset.momoQrAccount || prev.momoQrAccount,
     }));
-    toast.success('Đã áp dụng thông tin tài khoản đã lưu');
+    toast.success(t('forms.editorPage.payment.appliedSavedPresetSuccess'));
   };
 
   useEffect(() => {
@@ -692,18 +724,28 @@ export default function FormEditorPage() {
       toast.error(t('forms.editorPage.maxFields'));
       return;
     }
+    const localizedTitle = preset.titleKey ? t(preset.titleKey) : preset.title;
+    let localizedOptions = [];
+    if (preset.optionsKey === 'items') {
+      localizedOptions = [t('forms.editorPage.quickAdd.defaultItem1'), t('forms.editorPage.quickAdd.defaultItem2')];
+    } else if (preset.optionsKey === 'options') {
+      localizedOptions = [t('forms.editorPage.defaultOption1'), t('forms.editorPage.defaultOption2')];
+    } else if (preset.options) {
+      localizedOptions = [...preset.options];
+    }
+
     setFields((prev) => [
       ...prev,
       {
         key: '',
-        label: preset.title,
+        label: localizedTitle,
         type: preset.type,
         required: Boolean(preset.required),
         role: preset.role || '',
-        options: preset.options ? [...preset.options] : [],
+        options: localizedOptions,
       },
     ]);
-    toast.success(`Đã thêm trường "${preset.title}"!`);
+    toast.success(t('forms.editorPage.quickAdd.addedToast', { title: localizedTitle }));
   };
 
   // Xoá trường
@@ -1409,33 +1451,33 @@ export default function FormEditorPage() {
   return (
     <div className="space-y-6">
       {/* Thanh thao tác dính (PR-1) */}
-      <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-md py-3.5 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 transition-all">
+      <div className="sticky top-0 z-20 bg-white/95 dark:bg-dk-inset/95 backdrop-blur-md py-3.5 border-b border-gray-100 dark:border-dk-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 transition-all">
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate('/app/forms')}
-            className="p-2.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 hover:text-gray-900 shadow-2xs transition-all"
+            className="p-2.5 rounded-xl border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-raised hover:bg-gray-50 dark:hover:bg-dk-strong text-gray-600 dark:text-dk-text hover:text-gray-900 dark:hover:text-dk-text shadow-2xs transition-all"
             title={t('forms.submissionsPage.backToForms')}
           >
             <HiOutlineArrowLeft className="w-5 h-5" />
           </button>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-dk-text">
                 {isEditMode ? t('forms.editForm') : t('forms.createNew')}
               </h1>
               {isEditMode && (
                 <span
                   className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                     isPublished
-                      ? 'bg-green-50 text-green-700 border border-green-200'
-                      : 'bg-gray-100 text-gray-600 border border-gray-200'
+                      ? 'bg-green-50 dark:bg-emerald-950/40 text-green-700 dark:text-emerald-400 border border-green-200 dark:border-emerald-800'
+                      : 'bg-gray-100 dark:bg-dk-raised text-gray-600 dark:text-dk-text2 border border-gray-200 dark:border-dk-border'
                   }`}
                 >
                   {isPublished ? t('forms.isPublished') : t('forms.isDraft')}
                 </span>
               )}
             </div>
-            <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
+            <p className="text-xs sm:text-sm text-gray-500 dark:text-dk-text2 mt-0.5">
               {isEditMode ? t('forms.editorPage.editSubtitle') : t('forms.editorPage.createSubtitle')}
             </p>
           </div>
@@ -1462,13 +1504,13 @@ export default function FormEditorPage() {
             title={!isEditMode ? t('forms.editorPage.saveAndPublishTooltip') : undefined}
             className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold rounded-xl border shadow-2xs transition-all disabled:opacity-50 ${
               isPublished
-                ? 'border-gray-200 text-gray-700 bg-white hover:bg-gray-50'
-                : 'border-emerald-600 text-emerald-700 bg-emerald-50/80 hover:bg-emerald-100'
+                ? 'border-gray-200 dark:border-dk-border text-gray-700 dark:text-dk-text bg-white dark:bg-dk-raised hover:bg-gray-50 dark:hover:bg-dk-strong'
+                : 'border-emerald-600 text-emerald-700 dark:text-emerald-300 bg-emerald-50/80 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
             }`}
           >
             {isPublished ? (
               <>
-                <HiOutlineEyeOff className="w-4 h-4 text-gray-500" />
+                <HiOutlineEyeOff className="w-4 h-4 text-gray-500 dark:text-dk-text2" />
                 <span>{t('forms.unpublish')}</span>
               </>
             ) : (
@@ -1487,9 +1529,9 @@ export default function FormEditorPage() {
               <button
                 type="button"
                 onClick={() => setIsShareModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium rounded-xl border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 shadow-2xs transition-all"
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium rounded-xl border border-gray-200 dark:border-dk-border text-gray-700 dark:text-dk-text bg-white dark:bg-dk-raised hover:bg-gray-50 dark:hover:bg-dk-strong shadow-2xs transition-all"
               >
-                <HiOutlineShare className="w-4 h-4 text-gray-500" />
+                <HiOutlineShare className="w-4 h-4 text-gray-500 dark:text-dk-text2" />
                 <span>{t('forms.share')}</span>
               </button>
 
@@ -1497,9 +1539,9 @@ export default function FormEditorPage() {
               <button
                 type="button"
                 onClick={() => navigate(`/app/forms/${id}/submissions`)}
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium rounded-xl border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 shadow-2xs transition-all"
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium rounded-xl border border-gray-200 dark:border-dk-border text-gray-700 dark:text-dk-text bg-white dark:bg-dk-raised hover:bg-gray-50 dark:hover:bg-dk-strong shadow-2xs transition-all"
               >
-                <HiOutlineInbox className="w-4 h-4 text-gray-500" />
+                <HiOutlineInbox className="w-4 h-4 text-gray-500 dark:text-dk-text2" />
                 <span>
                   {submissionCount !== null && submissionCount !== undefined
                     ? `${t('forms.editorPage.submissions')} (${submissionCount})`
@@ -1511,20 +1553,28 @@ export default function FormEditorPage() {
         </div>
       </div>
 
-      {/* Khối 1: Thông tin chung */}
-          <div id="section-general" className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-6 sm:p-7 space-y-5 hover:border-gray-300/80 transition-all">
-          <div className="flex items-center gap-2.5 pb-2 border-b border-gray-100">
-            <div className="p-2 rounded-xl bg-orange-50 text-orange-600">
-              <HiOutlineDocumentText className="w-5 h-5" />
+      {/* Hàng 1 trên màn hình rộng: Thông tin chung & Sau khi gửi */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        {/* Khối 1: Thông tin chung */}
+        <div id="section-general" className="bg-white dark:bg-dk-raised rounded-2xl shadow-sm border border-slate-200/90 dark:border-dk-border hover:border-slate-300 dark:hover:border-dk-border hover:shadow-md p-6 sm:p-7 space-y-5 transition-all duration-200 relative overflow-hidden group">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 to-orange-500" />
+          <div className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-dk-border">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-md shadow-orange-500/25 flex items-center justify-center shrink-0">
+              <HiOutlineDocumentText className="w-5 h-5 text-white" />
             </div>
-            <div>
-              <h2 className="text-base font-bold text-gray-900">{t('forms.editorPage.generalInfo')}</h2>
-              <p className="text-xs text-gray-500">Tên biểu mẫu và lời chào / hướng dẫn dành cho người điền</p>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-slate-900 dark:text-dk-text">{t('forms.editorPage.generalInfo')}</h2>
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-400 border border-orange-200/80 dark:border-orange-900/60">
+                  {t('forms.editorPage.badges.basic')}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-dk-text2 mt-0.5">{t('forms.editorPage.generalInfoSubtitle')}</p>
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+            <label className="block text-sm font-semibold text-slate-700 dark:text-dk-text mb-1.5">
               {t('forms.formTitle')} <span className="text-red-500">*</span>
             </label>
             <input
@@ -1533,18 +1583,18 @@ export default function FormEditorPage() {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder={t('forms.editorPage.titlePlaceholder')}
-              className={`w-full px-4 py-2.5 rounded-xl border text-sm font-medium text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-4 transition shadow-2xs ${
+              className={`w-full px-4 py-2.5 rounded-xl border text-sm font-medium text-slate-900 dark:text-dk-text placeholder:text-slate-400 dark:placeholder:text-dk-muted bg-white dark:bg-dk-bg focus:outline-none focus:ring-4 transition shadow-2xs ${
                 errors.title
-                  ? 'border-red-300 focus:ring-red-100'
-                  : 'border-gray-200 focus:border-orange-500 focus:ring-orange-500/10'
+                  ? 'border-red-300 dark:border-red-500/60 focus:ring-red-100 dark:focus:ring-red-950/30'
+                  : 'border-slate-200 dark:border-dk-border hover:border-slate-300 dark:hover:border-dk-border-strong focus:border-orange-500 focus:ring-orange-500/10'
               }`}
             />
-            {errors.title && <p className="text-xs text-red-600 mt-1">{errors.title}</p>}
-            <p className="text-xs text-gray-400 mt-1.5 text-right">{title.length}/200</p>
+            {errors.title && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{errors.title}</p>}
+            <p className="text-xs text-slate-400 dark:text-dk-muted mt-1.5 text-right">{title.length}/200</p>
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+            <label className="block text-sm font-semibold text-slate-700 dark:text-dk-text mb-1.5">
               {t('forms.formDescription')}
             </label>
             <textarea
@@ -1553,80 +1603,241 @@ export default function FormEditorPage() {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder={t('forms.editorPage.descPlaceholder')}
-              className={`w-full px-4 py-2.5 rounded-xl border text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-4 transition shadow-2xs resize-y ${
+              className={`w-full px-4 py-2.5 rounded-xl border text-sm text-slate-800 dark:text-dk-text placeholder:text-slate-400 dark:placeholder:text-dk-muted bg-white dark:bg-dk-bg focus:outline-none focus:ring-4 transition shadow-2xs resize-y ${
                 errors.description
-                  ? 'border-red-300 focus:ring-red-100'
-                  : 'border-gray-200 focus:border-orange-500 focus:ring-orange-500/10'
+                  ? 'border-red-300 dark:border-red-500/60 focus:ring-red-100 dark:focus:ring-red-950/30'
+                  : 'border-slate-200 dark:border-dk-border hover:border-slate-300 dark:hover:border-dk-border-strong focus:border-orange-500 focus:ring-orange-500/10'
               }`}
             />
             {errors.description && (
-              <p className="text-xs text-red-600 mt-1">{errors.description}</p>
+              <p className="text-xs text-red-600 dark:text-red-400 mt-1">{errors.description}</p>
             )}
-            <p className="text-xs text-gray-400 mt-1.5 text-right">{description.length}/5000</p>
+            <p className="text-xs text-slate-400 dark:text-dk-muted mt-1.5 text-right">{description.length}/5000</p>
           </div>
         </div>
 
-        {/* Khối 2: Danh sách trường */}
-        <div id="section-fields" className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-6 sm:p-7 space-y-6 hover:border-gray-300/80 transition-all">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600">
-                <HiOutlineViewList className="w-5 h-5" />
+        {/* Khối 3: Sau khi gửi (Cài đặt & phản hồi) — thu gọn mặc định, kèm dòng tóm tắt */}
+        <div id="section-settings" className="bg-white dark:bg-dk-raised rounded-2xl shadow-sm border border-slate-200/90 dark:border-dk-border hover:border-slate-300 dark:hover:border-dk-border hover:shadow-md p-6 sm:p-7 space-y-5 transition-all duration-200 relative overflow-hidden group">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-teal-500 to-emerald-600" />
+          <div className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-dk-border">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-600 text-white shadow-md shadow-teal-500/25 flex items-center justify-center shrink-0">
+              <HiOutlineClipboardCheck className="w-5 h-5 text-white" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-slate-900 dark:text-dk-text">
+                  <button
+                    type="button"
+                    aria-expanded={openBlocks.afterSubmit}
+                    aria-controls="section-settings-body"
+                    onClick={() => setOpenBlocks((prev) => ({ ...prev, afterSubmit: !prev.afterSubmit }))}
+                    className="inline-flex items-center gap-2 text-left hover:text-teal-700 dark:hover:text-teal-400 transition"
+                  >
+                    <span>{t('forms.editorPage.afterSubmit.title')}</span>
+                    <HiOutlineChevronDown
+                      className={`w-4 h-4 text-slate-400 dark:text-dk-muted transition-transform ${openBlocks.afterSubmit ? 'rotate-180' : ''}`}
+                    />
+                  </button>
+                </h2>
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-400 border border-teal-200/80 dark:border-teal-900/60">
+                  {t('forms.editorPage.badges.postSubmit')}
+                </span>
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-base font-bold text-gray-900">{t('forms.fields')}</h2>
-                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-700">
-                    {fields.length}/30
-                  </span>
+              {!openBlocks.afterSubmit && (
+                <p className="text-xs text-slate-500 dark:text-dk-text2 mt-1" data-testid="after-submit-summary">
+                  {afterSubmitSummary}
+                </p>
+              )}
+              {openBlocks.afterSubmit && (
+                <p className="text-xs text-slate-500 dark:text-dk-text2 mt-0.5">{t('forms.editorPage.afterSubmitSubtitle')}</p>
+              )}
+            </div>
+          </div>
+
+          {openBlocks.afterSubmit && (
+            <div id="section-settings-body" className="space-y-4 divide-y divide-slate-100 dark:divide-dk-border">
+              {/* notifyOwner */}
+              <div className="flex items-start justify-between gap-4 pt-4 first:pt-0">
+                <div>
+                  <div className="text-sm font-semibold text-slate-800 dark:text-dk-text">
+                    {t('forms.notifyOwner')}
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-dk-text2 mt-0.5">
+                    {t('forms.editorPage.notifyOwnerHelp')}
+                  </p>
                 </div>
-                <p className="text-xs text-gray-500">{t('forms.editorPage.maxFieldsHelp')}</p>
+                <input
+                  type="checkbox"
+                  checked={settings.notifyOwner}
+                  onChange={(e) =>
+                    setSettings((prev) => ({ ...prev, notifyOwner: e.target.checked }))
+                  }
+                  className="mt-1 h-4 w-4 rounded text-teal-600 focus:ring-teal-500 border-slate-300 dark:border-dk-border-strong"
+                />
+              </div>
+
+              {/* consentEnabled */}
+              <div className="flex items-start justify-between gap-4 pt-4">
+                <div>
+                  <div className="text-sm font-semibold text-slate-800 dark:text-dk-text">
+                    {t('forms.consentEnabled')}
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-dk-text2 mt-0.5">
+                    {t('forms.editorPage.consentEnabledHelp')}
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={settings.consentEnabled}
+                  onChange={(e) =>
+                    setSettings((prev) => ({ ...prev, consentEnabled: e.target.checked }))
+                  }
+                  className="mt-1 h-4 w-4 rounded text-teal-600 focus:ring-teal-500 border-slate-300 dark:border-dk-border-strong"
+                />
+              </div>
+
+              {/* sendConfirmation */}
+              <div className="flex items-start justify-between gap-4 pt-4">
+                <div>
+                  <div className="text-sm font-semibold text-slate-800 dark:text-dk-text">
+                    {t('forms.sendConfirmation')}
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-dk-text2 mt-0.5">
+                    {t('forms.editorPage.sendConfirmationHelp')}
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={settings.sendConfirmation}
+                  onChange={(e) =>
+                    setSettings((prev) => ({ ...prev, sendConfirmation: e.target.checked }))
+                  }
+                  className="mt-1 h-4 w-4 rounded text-teal-600 focus:ring-teal-500 border-slate-300 dark:border-dk-border-strong"
+                />
+              </div>
+
+              {/* submitButtonText */}
+              <div className="pt-4 space-y-1">
+                <label className="block text-sm font-semibold text-slate-700 dark:text-dk-text">
+                  {t('forms.submitButtonText')}
+                </label>
+                <input
+                  type="text"
+                  maxLength={50}
+                  value={settings.submitButtonText}
+                  onChange={(e) =>
+                    setSettings((prev) => ({ ...prev, submitButtonText: e.target.value }))
+                  }
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-bg text-sm text-slate-800 dark:text-dk-text focus:outline-none focus:ring-2 focus:ring-teal-100 dark:focus:ring-teal-950/40 focus:border-teal-500 shadow-2xs"
+                />
+              </div>
+
+              {/* successMessage */}
+              <div className="pt-4 space-y-1">
+                <label className="block text-sm font-semibold text-slate-700 dark:text-dk-text">
+                  {t('forms.successMessage')}
+                </label>
+                <textarea
+                  rows={2}
+                  maxLength={500}
+                  value={settings.successMessage}
+                  onChange={(e) =>
+                    setSettings((prev) => ({ ...prev, successMessage: e.target.value }))
+                  }
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-bg text-sm text-slate-800 dark:text-dk-text focus:outline-none focus:ring-2 focus:ring-teal-100 dark:focus:ring-teal-950/40 focus:border-teal-500 shadow-2xs resize-y"
+                />
+              </div>
+
+              {/* redirectUrl */}
+              <div className="pt-4 space-y-1">
+                <label className="block text-sm font-semibold text-slate-700 dark:text-dk-text">
+                  {t('forms.redirectUrl')}
+                </label>
+                <input
+                  type="url"
+                  maxLength={2000}
+                  value={settings.redirectUrl}
+                  onChange={(e) =>
+                    setSettings((prev) => ({ ...prev, redirectUrl: e.target.value }))
+                  }
+                  placeholder="https://example.com/cam-on"
+                  className={`w-full px-4 py-2.5 rounded-xl border text-sm bg-white dark:bg-dk-bg text-slate-800 dark:text-dk-text placeholder:text-slate-400 dark:placeholder:text-dk-muted focus:outline-none focus:ring-2 shadow-2xs ${
+                    errors.redirectUrl
+                      ? 'border-red-300 dark:border-red-500/60 focus:ring-red-200 dark:focus:ring-red-950/30'
+                      : 'border-slate-200 dark:border-dk-border focus:ring-teal-100 dark:focus:ring-teal-950/40 focus:border-teal-500'
+                  }`}
+                />
+                {errors.redirectUrl && (
+                  <p className="text-xs text-red-600 dark:text-red-400 mt-1">{errors.redirectUrl}</p>
+                )}
               </div>
             </div>
+          )}
+        </div>
+      </div>
+
+      {/* Khối 2: Danh sách trường */}
+      <div id="section-fields" className="bg-white dark:bg-dk-raised rounded-2xl shadow-sm border border-slate-200/90 dark:border-dk-border hover:border-slate-300 dark:hover:border-dk-border hover:shadow-md p-6 sm:p-7 space-y-6 transition-all duration-200 relative overflow-hidden group">
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 to-purple-600" />
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-dk-border">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-md shadow-indigo-500/25 flex items-center justify-center shrink-0">
+              <HiOutlineViewList className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-slate-900 dark:text-dk-text">{t('forms.fields')}</h2>
+                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 border border-indigo-200/80 dark:border-indigo-900/60">
+                  {fields.length}/30
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-dk-text2 mt-0.5">{t('forms.editorPage.maxFieldsHelp')}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleAddField}
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 active:scale-[0.98] text-white rounded-xl text-xs font-bold shadow-xs hover:shadow transition self-start sm:self-auto"
+          >
+            <HiOutlinePlus className="w-4 h-4" />
+            <span>{t('forms.addField')}</span>
+          </button>
+        </div>
+
+        {/* Dải nút thêm nhanh 1-chạm tích hợp trong khối */}
+        <div className="bg-gradient-to-r from-orange-50/80 via-amber-50/50 to-orange-50/30 dark:from-orange-950/20 dark:via-amber-950/10 dark:to-orange-950/20 p-4 rounded-2xl border border-dashed border-orange-200/90 dark:border-orange-800/60 shadow-2xs">
+          <div className="text-[11px] font-bold text-orange-950 dark:text-orange-200 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+            <HiOutlineLightningBolt className="w-3.5 h-3.5 text-orange-600 dark:text-orange-400" />
+            <span>{t('forms.editorPage.quickAdd.title')}</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {QUICK_FIELD_PRESETS.filter((preset) => preset.common || showMoreFieldTypes).map((preset) => {
+              const Icon = preset.icon;
+              return (
+                <button
+                  key={preset.id || preset.title}
+                  type="button"
+                  onClick={() => handleAddQuickField(preset)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-dk-raised hover:bg-orange-50 dark:hover:bg-orange-950/40 text-slate-700 dark:text-dk-text hover:text-orange-700 dark:hover:text-orange-400 border border-slate-200 dark:border-dk-border hover:border-orange-300 dark:hover:border-orange-500/50 rounded-xl text-xs font-semibold transition-all shadow-2xs hover:shadow-xs active:scale-95 group"
+                >
+                  <Icon className="w-3.5 h-3.5 text-slate-500 dark:text-dk-text2 group-hover:text-orange-600 dark:group-hover:text-orange-400 transition" />
+                  <span>{preset.titleKey ? t(preset.titleKey) : preset.title}</span>
+                </button>
+              );
+            })}
             <button
               type="button"
-              onClick={handleAddField}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-xl text-xs font-bold shadow-2xs hover:shadow-xs transition active:scale-[0.98] self-start sm:self-auto"
+              aria-expanded={showMoreFieldTypes}
+              onClick={() => setShowMoreFieldTypes((prev) => !prev)}
+              className="inline-flex items-center gap-1 px-3 py-2 text-orange-700 dark:text-orange-400 hover:bg-orange-100/70 dark:hover:bg-orange-950/40 rounded-xl text-xs font-bold transition"
             >
-              <HiOutlinePlus className="w-4 h-4" />
-              <span>{t('forms.addField')}</span>
+              {showMoreFieldTypes ? t('forms.editorPage.quickAdd.fewerTypes') : t('forms.editorPage.quickAdd.moreTypes')}
             </button>
           </div>
-
-          {/* Dải nút thêm nhanh 1-chạm tích hợp trong khối */}
-          <div className="bg-gradient-to-r from-orange-50/60 via-amber-50/40 to-transparent p-3.5 rounded-xl border border-dashed border-orange-200/80">
-            <div className="text-[11px] font-bold text-orange-950 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-              <HiOutlineLightningBolt className="w-3.5 h-3.5 text-orange-600" />
-              <span>Thêm nhanh loại trường thông dụng:</span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {QUICK_FIELD_PRESETS.filter((preset) => preset.common || showMoreFieldTypes).map((preset) => {
-                const Icon = preset.icon;
-                return (
-                  <button
-                    key={preset.title}
-                    type="button"
-                    onClick={() => handleAddQuickField(preset)}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white hover:bg-orange-50 text-gray-700 hover:text-orange-700 border border-gray-200 hover:border-orange-300 rounded-lg text-xs font-medium transition shadow-2xs hover:shadow-xs active:scale-95 group"
-                  >
-                    <Icon className="w-3.5 h-3.5 text-gray-500 group-hover:text-orange-600 transition" />
-                    <span>{preset.title}</span>
-                  </button>
-                );
-              })}
-              <button
-                type="button"
-                aria-expanded={showMoreFieldTypes}
-                onClick={() => setShowMoreFieldTypes((prev) => !prev)}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-orange-700 hover:bg-orange-100/70 rounded-lg text-xs font-semibold transition"
-              >
-                {showMoreFieldTypes ? t('forms.editorPage.quickAdd.fewerTypes') : t('forms.editorPage.quickAdd.moreTypes')}
-              </button>
-            </div>
-          </div>
+        </div>
 
           {errors.fields && (
-            <p className="text-xs text-red-600 p-3 bg-red-50 rounded-xl">{errors.fields}</p>
+            <p className="text-xs text-red-600 dark:text-red-400 p-3 bg-red-50 dark:bg-red-950/40 rounded-xl">{errors.fields}</p>
           )}
 
           <div className="space-y-4">
@@ -1638,18 +1849,18 @@ export default function FormEditorPage() {
               return (
                 <div
                   key={field.key || idx}
-                  className="p-5 rounded-2xl border border-gray-200/90 bg-gradient-to-b from-white to-gray-50/40 space-y-4 relative shadow-2xs hover:border-gray-300 transition-all"
+                  className="p-5 rounded-2xl border border-slate-200/90 dark:border-dk-border bg-gradient-to-b from-white to-slate-50/40 dark:from-dk-raised dark:to-dk-surface space-y-4 relative shadow-2xs hover:border-slate-300 dark:hover:border-dk-border hover:shadow-xs transition-all"
                 >
-                  <div className="flex items-center justify-between border-b border-gray-200/80 pb-3">
+                  <div className="flex items-center justify-between border-b border-slate-100 dark:border-dk-border pb-3">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider bg-gray-100 text-gray-700 border border-gray-200/70">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider bg-slate-100 dark:bg-dk-raised text-slate-700 dark:text-dk-text border border-slate-200/80 dark:border-dk-border">
                         {t('forms.editorPage.fieldIndex', { index: idx + 1 })}
                       </span>
-                      <span className="text-xs font-medium px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100">
+                      <span className="text-xs font-semibold px-2.5 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/60">
                         {t(FIELD_TYPES.find((ft) => ft.value === field.type)?.labelKey || 'forms.types.short_text')}
                       </span>
                       {field.required && (
-                        <span className="text-[11px] font-semibold text-rose-600 bg-rose-50 border border-rose-200/70 px-1.5 py-0.5 rounded">
+                        <span className="text-[11px] font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 border border-rose-200/80 dark:border-rose-900/60 px-2 py-0.5 rounded-md">
                           {t('forms.required')}
                         </span>
                       )}
@@ -1659,7 +1870,7 @@ export default function FormEditorPage() {
                         type="button"
                         disabled={idx === 0}
                         onClick={() => handleMoveField(idx, -1)}
-                        className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-30 rounded-lg transition"
+                        className="p-1.5 text-slate-400 dark:text-dk-muted hover:text-slate-700 dark:hover:text-dk-text hover:bg-slate-100 dark:hover:bg-dk-raised disabled:opacity-30 rounded-lg transition"
                         title={t('forms.editorPage.moveUp')}
                       >
                         <HiOutlineArrowUp className="w-4 h-4" />
@@ -1668,7 +1879,7 @@ export default function FormEditorPage() {
                         type="button"
                         disabled={idx === fields.length - 1}
                         onClick={() => handleMoveField(idx, 1)}
-                        className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-30 rounded-lg transition"
+                        className="p-1.5 text-slate-400 dark:text-dk-muted hover:text-slate-700 dark:hover:text-dk-text hover:bg-slate-100 dark:hover:bg-dk-raised disabled:opacity-30 rounded-lg transition"
                         title={t('forms.editorPage.moveDown')}
                       >
                         <HiOutlineArrowDown className="w-4 h-4" />
@@ -1676,7 +1887,7 @@ export default function FormEditorPage() {
                       <button
                         type="button"
                         onClick={() => handleRemoveField(idx)}
-                        className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition ml-1"
+                        className="p-1.5 text-slate-400 dark:text-dk-muted hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition ml-1"
                         title={t('forms.editorPage.removeField')}
                       >
                         <HiOutlineTrash className="w-4 h-4" />
@@ -1687,7 +1898,7 @@ export default function FormEditorPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {/* Nhãn trường */}
                     <div>
-                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      <label className="block text-xs font-semibold text-gray-700 dark:text-dk-text mb-1">
                         {t('forms.fieldLabel')} <span className="text-red-500">*</span>
                       </label>
                       <input
@@ -1696,24 +1907,24 @@ export default function FormEditorPage() {
                         value={field.label}
                         onChange={(e) => handleUpdateField(idx, 'label', e.target.value)}
                         placeholder={t('forms.editorPage.fieldLabelPlaceholder')}
-                        className={`w-full px-3.5 py-2.5 bg-white rounded-xl border text-sm font-medium focus:outline-none focus:ring-4 transition shadow-2xs ${
+                        className={`w-full px-3.5 py-2.5 bg-white dark:bg-dk-bg rounded-xl border text-sm font-medium text-slate-900 dark:text-dk-text placeholder:text-slate-400 dark:placeholder:text-dk-muted focus:outline-none focus:ring-4 transition shadow-2xs ${
                           labelError
-                            ? 'border-red-300 focus:ring-red-100'
-                            : 'border-gray-200 focus:border-orange-500 focus:ring-orange-500/10'
+                            ? 'border-red-300 dark:border-red-500/60 focus:ring-red-100 dark:focus:ring-red-950/30'
+                            : 'border-gray-200 dark:border-dk-border focus:border-orange-500 focus:ring-orange-500/10'
                         }`}
                       />
-                      {labelError && <p className="text-xs text-red-600 mt-1">{labelError}</p>}
+                      {labelError && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{labelError}</p>}
                     </div>
 
                     {/* Kiểu dữ liệu */}
                     <div>
-                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      <label className="block text-xs font-semibold text-gray-700 dark:text-dk-text mb-1">
                         {t('forms.fieldType')}
                       </label>
                       <select
                         value={field.type}
                         onChange={(e) => handleUpdateField(idx, 'type', e.target.value)}
-                        className="w-full px-3.5 py-2.5 bg-white rounded-xl border border-gray-200 text-sm font-medium focus:outline-none focus:ring-4 focus:border-orange-500 focus:ring-orange-500/10 shadow-2xs"
+                        className="w-full px-3.5 py-2.5 bg-white dark:bg-dk-bg rounded-xl border border-gray-200 dark:border-dk-border text-sm font-medium text-slate-900 dark:text-dk-text focus:outline-none focus:ring-4 focus:border-orange-500 focus:ring-orange-500/10 shadow-2xs"
                       >
                         {FIELD_TYPES.map((ft) => (
                           <option key={ft.value} value={ft.value}>
@@ -1725,13 +1936,13 @@ export default function FormEditorPage() {
 
                     {/* Vai trò role */}
                     <div>
-                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      <label className="block text-xs font-semibold text-gray-700 dark:text-dk-text mb-1">
                         {t('forms.role')}
                       </label>
                       <select
                         value={field.role || ''}
                         onChange={(e) => handleUpdateField(idx, 'role', e.target.value)}
-                        className="w-full px-3.5 py-2.5 bg-white rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-4 focus:border-orange-500 focus:ring-orange-500/10 shadow-2xs"
+                        className="w-full px-3.5 py-2.5 bg-white dark:bg-dk-bg rounded-xl border border-gray-200 dark:border-dk-border text-sm text-slate-900 dark:text-dk-text focus:outline-none focus:ring-4 focus:border-orange-500 focus:ring-orange-500/10 shadow-2xs"
                       >
                         <option value="">{t('forms.roleNone')}</option>
                         <option value="name">{t('forms.roleName')}</option>
@@ -1742,12 +1953,12 @@ export default function FormEditorPage() {
 
                     {/* Bắt buộc check */}
                     <div className="flex items-center pt-5">
-                      <label className="inline-flex items-center gap-2 cursor-pointer select-none text-sm text-gray-700 px-3 py-2 rounded-xl hover:bg-gray-100/80 transition">
+                      <label className="inline-flex items-center gap-2 cursor-pointer select-none text-sm text-gray-700 dark:text-dk-text px-3 py-2 rounded-xl hover:bg-gray-100/80 dark:hover:bg-dk-raised transition">
                         <input
                           type="checkbox"
                           checked={field.required}
                           onChange={(e) => handleUpdateField(idx, 'required', e.target.checked)}
-                          className="h-4 w-4 rounded text-orange-600 focus:ring-orange-500 border-gray-300"
+                          className="h-4 w-4 rounded text-orange-600 focus:ring-orange-500 border-gray-300 dark:border-dk-border-strong"
                         />
                         <span className="font-medium">{t('forms.required')}</span>
                       </label>
@@ -1756,28 +1967,28 @@ export default function FormEditorPage() {
 
                   {/* Danh sách lựa chọn options (nếu là select, radio, checkbox) */}
                   {hasOptions && (
-                    <div className="pt-3 border-t border-gray-200/80 space-y-3">
+                    <div className="pt-3 border-t border-gray-200/80 dark:border-dk-border space-y-3">
                       <div className="flex items-center justify-between">
-                        <label className="text-xs font-semibold text-gray-700">
+                        <label className="text-xs font-semibold text-gray-700 dark:text-dk-text">
                           {t('forms.options')}
                         </label>
                         <button
                           type="button"
                           onClick={() => handleAddOption(idx)}
-                          className="inline-flex items-center gap-1 text-xs text-orange-600 hover:text-orange-700 font-semibold px-2 py-1 rounded-md hover:bg-orange-50 transition"
+                          className="inline-flex items-center gap-1 text-xs text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 font-semibold px-2 py-1 rounded-md hover:bg-orange-50 dark:hover:bg-orange-950/40 transition"
                         >
                           + {t('forms.addOption')}
                         </button>
                       </div>
 
                       {optionsError && (
-                        <p className="text-xs text-red-600 bg-red-50 p-2.5 rounded-xl">{optionsError}</p>
+                        <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 p-2.5 rounded-xl">{optionsError}</p>
                       )}
 
                       <div className="space-y-2">
                         {field.options.map((opt, optIdx) => (
                           <div key={optIdx} className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-gray-400 w-4 text-center shrink-0">
+                            <span className="text-xs font-bold text-gray-400 dark:text-dk-muted w-4 text-center shrink-0">
                               {optIdx + 1}.
                             </span>
                             <input
@@ -1786,12 +1997,12 @@ export default function FormEditorPage() {
                               value={opt}
                               onChange={(e) => handleUpdateOption(idx, optIdx, e.target.value)}
                               placeholder={t('forms.optionPlaceholder')}
-                              className="w-full px-3 py-2 bg-white rounded-xl border border-gray-200 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 shadow-2xs"
+                              className="w-full px-3 py-2 bg-white dark:bg-dk-bg rounded-xl border border-gray-200 dark:border-dk-border text-xs font-medium text-slate-900 dark:text-dk-text placeholder:text-slate-400 dark:placeholder:text-dk-muted focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 shadow-2xs"
                             />
                             <button
                               type="button"
                               onClick={() => handleRemoveOption(idx, optIdx)}
-                              className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                              className="p-1.5 text-gray-400 dark:text-dk-muted hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition"
                               title={t('forms.editorPage.removeOption')}
                             >
                               <HiOutlineTrash className="w-3.5 h-3.5" />
@@ -1807,190 +2018,114 @@ export default function FormEditorPage() {
           </div>
         </div>
 
-        {/* Khối 3: Sau khi gửi (trước đây "Cài đặt") — thu gọn mặc định, kèm dòng tóm tắt */}
-        <div id="section-settings" className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-6 sm:p-7 space-y-6 hover:border-gray-300/80 transition-all">
-          <div>
-            <h2 className="text-base font-bold text-gray-900">
-              <button
-                type="button"
-                aria-expanded={openBlocks.afterSubmit}
-                aria-controls="section-settings-body"
-                onClick={() => setOpenBlocks((prev) => ({ ...prev, afterSubmit: !prev.afterSubmit }))}
-                className="w-full flex items-center justify-between gap-3 text-left"
-              >
-                <span>{t('forms.editorPage.afterSubmit.title')}</span>
-                <HiOutlineChevronDown
-                  className={`w-5 h-5 text-gray-400 shrink-0 transition-transform ${openBlocks.afterSubmit ? 'rotate-180' : ''}`}
-                />
-              </button>
-            </h2>
-            {!openBlocks.afterSubmit && (
-              <p className="text-xs text-gray-500 mt-0.5" data-testid="after-submit-summary">
-                {afterSubmitSummary}
-              </p>
+
+      {/* Hàng 2 trên màn hình rộng: Gắn sản phẩm & Đặt lịch hẹn */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        {/* Khối "Dành cho sản phẩm": gắn biểu mẫu với sản phẩm để trang Sản phẩm đếm Đăng ký / Đã trả / Doanh thu */}
+        <div id="section-product" className="bg-white dark:bg-dk-raised rounded-2xl shadow-sm border border-slate-200/90 dark:border-dk-border hover:border-slate-300 dark:hover:border-dk-border hover:shadow-md p-6 sm:p-7 space-y-4 transition-all duration-200 relative overflow-hidden group">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-violet-500 to-purple-600" />
+          <div className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-dk-border">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-md shadow-violet-500/25 flex items-center justify-center shrink-0">
+              <HiOutlineShoppingCart className="w-5 h-5 text-white" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-slate-900 dark:text-dk-text">{t('forms.editorPage.product.title')}</h2>
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-400 border border-violet-200/80 dark:border-violet-900/60">
+                  {t('forms.editorPage.badges.product')}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-dk-text2 mt-0.5">{t('forms.editorPage.product.help')}</p>
+            </div>
+          </div>
+          <select
+            data-testid="form-product-select"
+            aria-label={t('forms.editorPage.product.title')}
+            value={productId}
+            onChange={handleProductChange}
+            className="w-full rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-bg px-4 py-2.5 text-sm font-medium text-slate-900 dark:text-dk-text focus:outline-none focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10 shadow-2xs transition"
+          >
+            <option value="">{t('forms.editorPage.product.none')}</option>
+            {productId !== '' && !productOptions.some((p) => String(p.id) === productId) && (
+              <option value={productId}>{t('forms.editorPage.product.currentOption', { id: productId })}</option>
             )}
-          </div>
-
-          {openBlocks.afterSubmit && (
-          <div id="section-settings-body" className="space-y-4 divide-y divide-gray-100">
-            {/* notifyOwner */}
-            <div className="flex items-start justify-between gap-4 pt-4 first:pt-0">
-              <div>
-                <div className="text-sm font-medium text-gray-800">
-                  {t('forms.notifyOwner')}
-                </div>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {t('forms.editorPage.notifyOwnerHelp')}
-                </p>
-              </div>
-              <input
-                type="checkbox"
-                checked={settings.notifyOwner}
-                onChange={(e) =>
-                  setSettings((prev) => ({ ...prev, notifyOwner: e.target.checked }))
-                }
-                className="mt-1 h-4 w-4 rounded text-primary-600 focus:ring-primary-500 border-gray-300"
-              />
-            </div>
-
-            {/* consentEnabled */}
-            <div className="flex items-start justify-between gap-4 pt-4">
-              <div>
-                <div className="text-sm font-medium text-gray-800">
-                  {t('forms.consentEnabled')}
-                </div>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {t('forms.editorPage.consentEnabledHelp')}
-                </p>
-              </div>
-              <input
-                type="checkbox"
-                checked={settings.consentEnabled}
-                onChange={(e) =>
-                  setSettings((prev) => ({ ...prev, consentEnabled: e.target.checked }))
-                }
-                className="mt-1 h-4 w-4 rounded text-primary-600 focus:ring-primary-500 border-gray-300"
-              />
-            </div>
-
-            {/* sendConfirmation */}
-            <div className="flex items-start justify-between gap-4 pt-4">
-              <div>
-                <div className="text-sm font-medium text-gray-800">
-                  {t('forms.sendConfirmation')}
-                </div>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {t('forms.editorPage.sendConfirmationHelp')}
-                </p>
-              </div>
-              <input
-                type="checkbox"
-                checked={settings.sendConfirmation}
-                onChange={(e) =>
-                  setSettings((prev) => ({ ...prev, sendConfirmation: e.target.checked }))
-                }
-                className="mt-1 h-4 w-4 rounded text-primary-600 focus:ring-primary-500 border-gray-300"
-              />
-            </div>
-
-            {/* submitButtonText */}
-            <div className="pt-4 space-y-1">
-              <label className="block text-sm font-medium text-gray-700">
-                {t('forms.submitButtonText')}
-              </label>
-              <input
-                type="text"
-                maxLength={50}
-                value={settings.submitButtonText}
-                onChange={(e) =>
-                  setSettings((prev) => ({ ...prev, submitButtonText: e.target.value }))
-                }
-                className="w-full px-3.5 py-2 rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 focus:border-primary-500"
-              />
-            </div>
-
-            {/* successMessage */}
-            <div className="pt-4 space-y-1">
-              <label className="block text-sm font-medium text-gray-700">
-                {t('forms.successMessage')}
-              </label>
-              <textarea
-                rows={2}
-                maxLength={500}
-                value={settings.successMessage}
-                onChange={(e) =>
-                  setSettings((prev) => ({ ...prev, successMessage: e.target.value }))
-                }
-                className="w-full px-3.5 py-2 rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 focus:border-primary-500"
-              />
-            </div>
-
-            {/* redirectUrl */}
-            <div className="pt-4 space-y-1">
-              <label className="block text-sm font-medium text-gray-700">
-                {t('forms.redirectUrl')}
-              </label>
-              <input
-                type="url"
-                maxLength={2000}
-                value={settings.redirectUrl}
-                onChange={(e) =>
-                  setSettings((prev) => ({ ...prev, redirectUrl: e.target.value }))
-                }
-                placeholder="https://example.com/cam-on"
-                className={`w-full px-3.5 py-2 rounded-xl border text-sm focus:outline-none focus:ring-2 ${
-                  errors.redirectUrl
-                    ? 'border-red-300 focus:ring-red-200'
-                    : 'border-gray-300 focus:ring-primary-100 focus:border-primary-500'
-                }`}
-              />
-              {errors.redirectUrl && (
-                <p className="text-xs text-red-600 mt-1">{errors.redirectUrl}</p>
-              )}
-            </div>
-          </div>
-          )}
+            {productOptions.map((p) => (
+              <option key={p.id} value={String(p.id)}>
+                {p.productName}
+              </option>
+            ))}
+          </select>
+          {payment.enabled && selectedProductAmount !== null ? (
+            <p data-testid="form-product-price-hint" className="text-xs text-slate-600 dark:text-dk-text bg-violet-50/60 dark:bg-violet-950/30 p-2.5 rounded-xl border border-violet-100 dark:border-violet-900/50">
+              {t('forms.editorPage.product.priceHintAmount', { price: `${selectedProductAmount.toLocaleString('vi-VN')} đ` })}{' '}
+              {!isEmployee && payment.amount && Number(payment.amount) !== selectedProductAmount ? (
+                <button
+                  type="button"
+                  data-testid="form-product-use-price"
+                  className="text-violet-600 dark:text-violet-400 font-semibold hover:underline ml-1"
+                  onClick={() => setPayment((prev) => ({ ...prev, amount: String(selectedProductAmount) }))}
+                >
+                  {t('forms.editorPage.product.usePrice', { price: `${selectedProductAmount.toLocaleString('vi-VN')} đ` })}
+                </button>
+              ) : null}
+            </p>
+          ) : payment.enabled && selectedProduct?.price ? (
+            <p data-testid="form-product-price-hint" className="text-xs text-slate-600 dark:text-dk-text bg-violet-50/60 dark:bg-violet-950/30 p-2.5 rounded-xl border border-violet-100 dark:border-violet-900/50">
+              {t('forms.editorPage.product.priceHint', { price: selectedProduct.price })}
+            </p>
+          ) : null}
         </div>
 
         {/* Khối 4: Đặt lịch hẹn — thẻ thu gọn "Thêm đặt lịch hẹn" cho tới khi có dữ liệu / người dùng bấm mở */}
         {openBlocks.booking ? (
-        <div id="section-booking" className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-6 sm:p-7 space-y-6 hover:border-gray-300/80 transition-all">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="text-base font-bold text-gray-900">
-                {t('forms.editorPage.booking.title')}
-              </h2>
-              <p className="text-xs text-gray-500 mt-0.5">
-                {t('forms.editorPage.booking.enableHelp')}
-              </p>
+        <div id="section-booking" className="bg-white dark:bg-dk-raised rounded-2xl shadow-sm border border-slate-200/90 dark:border-dk-border hover:border-slate-300 dark:hover:border-dk-border hover:shadow-md p-6 sm:p-7 space-y-6 transition-all duration-200 relative overflow-hidden group">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-cyan-600" />
+          <div className="flex items-start justify-between gap-4 pb-3 border-b border-slate-100 dark:border-dk-border">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-600 text-white shadow-md shadow-blue-500/25 flex items-center justify-center shrink-0">
+                <HiOutlineCalendar className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-bold text-slate-900 dark:text-dk-text">
+                    {t('forms.editorPage.booking.title')}
+                  </h2>
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border border-blue-200/80 dark:border-blue-900/60">
+                    {t('forms.editorPage.badges.booking')}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-dk-text2 mt-0.5">
+                  {t('forms.editorPage.booking.enableHelp')}
+                </p>
+              </div>
             </div>
-            <label className="flex items-center gap-2 cursor-pointer select-none shrink-0">
-              <span className="text-sm font-medium text-gray-800">
+            <label className="flex items-center gap-2 cursor-pointer select-none shrink-0 pt-1">
+              <span className="text-xs font-semibold text-slate-700 dark:text-dk-text">
                 {t('forms.editorPage.booking.enableLabel')}
               </span>
               <input
                 type="checkbox"
                 checked={booking.enabled}
                 onChange={(e) => handleToggleBookingEnabled(e.target.checked)}
-                className="h-4 w-4 rounded text-primary-600 focus:ring-primary-500 border-gray-300"
+                className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 dark:border-dk-border-strong"
               />
             </label>
           </div>
 
           {!booking.enabled && initialBookingHadConfig && (
-            <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs space-y-2">
+            <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 text-amber-800 dark:text-amber-300 text-xs space-y-2">
               <p className="font-medium">{t('forms.editorPage.booking.disableWarning')}</p>
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={confirmDisableBooking}
                   onChange={(e) => setConfirmDisableBooking(e.target.checked)}
-                  className="h-4 w-4 rounded text-amber-600 focus:ring-amber-500 border-amber-300"
+                  className="h-4 w-4 rounded text-amber-600 focus:ring-amber-500 border-amber-300 dark:border-amber-700"
                 />
                 <span>{t('forms.editorPage.booking.disableConfirmCheckbox')}</span>
               </label>
               {errors.bookingDisableConfirm && (
-                <p className="text-red-700 font-medium">{errors.bookingDisableConfirm}</p>
+                <p className="text-red-700 dark:text-red-400 font-medium">{errors.bookingDisableConfirm}</p>
               )}
             </div>
           )}
@@ -1998,33 +2133,33 @@ export default function FormEditorPage() {
           {booking.enabled && (
             <div className="space-y-5">
               {(fields.every((f) => f.role !== 'email') || !settings.sendConfirmation) && (
-                <p className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 text-xs">
+                <p className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 text-blue-700 dark:text-blue-300 text-xs">
                   {t('forms.editorPage.booking.emailHint')}
                 </p>
               )}
 
               {errors.bookingSlots && (
-                <p className="text-xs text-red-600 p-3 bg-red-50 rounded-xl">{errors.bookingSlots}</p>
+                <p className="text-xs text-red-600 dark:text-red-400 p-3 bg-red-50 dark:bg-red-950/40 rounded-xl">{errors.bookingSlots}</p>
               )}
 
               {/* Khung giờ theo tuần */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium text-gray-700">
+                  <label className="text-sm font-medium text-gray-700 dark:text-dk-text">
                     {t('forms.editorPage.booking.weeklySlotsLabel')}
                   </label>
                   <button
                     type="button"
                     onClick={handleApplyMondayToAll}
-                    className="text-xs text-primary-600 hover:text-primary-700 font-medium"
+                    className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium"
                   >
                     {t('forms.editorPage.booking.applyMondayToAll')}
                   </button>
                 </div>
                 <div className="space-y-2">
                   {WEEKDAY_UI_ORDER.map((day) => (
-                    <div key={day.key} className="p-3 rounded-xl border border-gray-200 bg-gray-50/50">
-                      <div className="text-xs font-semibold text-gray-700 mb-2">{t(day.labelKey)}</div>
+                    <div key={day.key} className="p-3 rounded-xl border border-gray-200 dark:border-dk-border bg-gray-50/50 dark:bg-dk-bg/50">
+                      <div className="text-xs font-semibold text-gray-700 dark:text-dk-text mb-2">{t(day.labelKey)}</div>
                       <div className="flex flex-wrap items-center gap-2">
                         {(booking.weeklySlots[day.key] || []).map((time, idx) => (
                           <div key={idx} className="flex items-center gap-1">
@@ -2032,12 +2167,12 @@ export default function FormEditorPage() {
                               type="time"
                               value={time}
                               onChange={(e) => handleUpdateTimeSlot(day.key, idx, e.target.value)}
-                              className="px-2 py-1.5 bg-white rounded-lg border border-gray-300 text-xs focus:outline-none focus:ring-1 focus:ring-primary-500"
+                              className="px-2 py-1.5 bg-white dark:bg-dk-bg rounded-lg border border-gray-300 dark:border-dk-border text-slate-900 dark:text-dk-text text-xs focus:outline-none focus:ring-1 focus:ring-primary-500"
                             />
                             <button
                               type="button"
                               onClick={() => handleRemoveTimeSlot(day.key, idx)}
-                              className="p-1 text-gray-400 hover:text-red-500 rounded"
+                              className="p-1 text-gray-400 dark:text-dk-muted hover:text-red-500 dark:hover:text-red-400 rounded"
                               title={t('forms.editorPage.booking.removeSlot')}
                             >
                               <HiOutlineTrash className="w-3.5 h-3.5" />
@@ -2047,7 +2182,7 @@ export default function FormEditorPage() {
                         <button
                           type="button"
                           onClick={() => handleAddTimeSlot(day.key)}
-                          className="px-2.5 py-1.5 rounded-lg border border-dashed border-gray-300 text-xs text-primary-600 hover:bg-primary-50"
+                          className="px-2.5 py-1.5 rounded-lg border border-dashed border-gray-300 dark:border-dk-border text-xs text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-950/30"
                         >
                           + {t('forms.editorPage.booking.addSlot')}
                         </button>
@@ -2060,7 +2195,7 @@ export default function FormEditorPage() {
               {/* Sức chứa / số ngày cho phép / báo trước tối thiểu */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                  <label className="block text-xs font-medium text-gray-700 dark:text-dk-text mb-1">
                     {t('forms.editorPage.booking.capacityLabel')}
                   </label>
                   <input
@@ -2070,18 +2205,18 @@ export default function FormEditorPage() {
                     value={booking.slotCapacity}
                     onChange={(e) => setBooking((prev) => ({ ...prev, slotCapacity: e.target.value }))}
                     placeholder={t('forms.editorPage.booking.capacityPlaceholder')}
-                    className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 ${
+                    className={`w-full px-3 py-2 bg-white dark:bg-dk-bg rounded-xl border text-sm text-slate-900 dark:text-dk-text focus:outline-none focus:ring-2 ${
                       errors.bookingCapacity
-                        ? 'border-red-300 focus:ring-red-200'
-                        : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
+                        ? 'border-red-300 dark:border-red-500/60 focus:ring-red-200 dark:focus:ring-red-950/40'
+                        : 'border-gray-300 dark:border-dk-border focus:border-primary-500 focus:ring-primary-100 dark:focus:ring-primary-950/40'
                     }`}
                   />
                   {errors.bookingCapacity && (
-                    <p className="text-xs text-red-600 mt-1">{errors.bookingCapacity}</p>
+                    <p className="text-xs text-red-600 dark:text-red-400 mt-1">{errors.bookingCapacity}</p>
                   )}
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                  <label className="block text-xs font-medium text-gray-700 dark:text-dk-text mb-1">
                     {t('forms.editorPage.booking.daysAheadLabel')}
                   </label>
                   <input
@@ -2090,18 +2225,18 @@ export default function FormEditorPage() {
                     max={MAX_DAYS_AHEAD}
                     value={booking.daysAhead}
                     onChange={(e) => setBooking((prev) => ({ ...prev, daysAhead: e.target.value }))}
-                    className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 ${
+                    className={`w-full px-3 py-2 bg-white dark:bg-dk-bg rounded-xl border text-sm text-slate-900 dark:text-dk-text focus:outline-none focus:ring-2 ${
                       errors.bookingDaysAhead
-                        ? 'border-red-300 focus:ring-red-200'
-                        : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
+                        ? 'border-red-300 dark:border-red-500/60 focus:ring-red-200 dark:focus:ring-red-950/40'
+                        : 'border-gray-300 dark:border-dk-border focus:border-primary-500 focus:ring-primary-100 dark:focus:ring-primary-950/40'
                     }`}
                   />
                   {errors.bookingDaysAhead && (
-                    <p className="text-xs text-red-600 mt-1">{errors.bookingDaysAhead}</p>
+                    <p className="text-xs text-red-600 dark:text-red-400 mt-1">{errors.bookingDaysAhead}</p>
                   )}
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                  <label className="block text-xs font-medium text-gray-700 dark:text-dk-text mb-1">
                     {t('forms.editorPage.booking.minNoticeLabel')}
                   </label>
                   <input
@@ -2110,14 +2245,14 @@ export default function FormEditorPage() {
                     max={MIN_NOTICE_MINUTES_MAX}
                     value={booking.minNoticeMinutes}
                     onChange={(e) => setBooking((prev) => ({ ...prev, minNoticeMinutes: e.target.value }))}
-                    className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 ${
+                    className={`w-full px-3 py-2 bg-white dark:bg-dk-bg rounded-xl border text-sm text-slate-900 dark:text-dk-text focus:outline-none focus:ring-2 ${
                       errors.bookingMinNotice
-                        ? 'border-red-300 focus:ring-red-200'
-                        : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
+                        ? 'border-red-300 dark:border-red-500/60 focus:ring-red-200 dark:focus:ring-red-950/40'
+                        : 'border-gray-300 dark:border-dk-border focus:border-primary-500 focus:ring-primary-100 dark:focus:ring-primary-950/40'
                     }`}
                   />
                   {errors.bookingMinNotice && (
-                    <p className="text-xs text-red-600 mt-1">{errors.bookingMinNotice}</p>
+                    <p className="text-xs text-red-600 dark:text-red-400 mt-1">{errors.bookingMinNotice}</p>
                   )}
                 </div>
               </div>
@@ -2125,19 +2260,19 @@ export default function FormEditorPage() {
               {/* Ngày nghỉ */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium text-gray-700">
+                  <label className="text-sm font-medium text-gray-700 dark:text-dk-text">
                     {t('forms.editorPage.booking.closedDatesLabel')}
                   </label>
                   <button
                     type="button"
                     onClick={handleAddClosedDate}
-                    className="text-xs text-primary-600 hover:text-primary-700 font-medium"
+                    className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium"
                   >
                     + {t('forms.editorPage.booking.addClosedDate')}
                   </button>
                 </div>
                 {errors.bookingClosedDates && (
-                  <p className="text-xs text-red-600">{errors.bookingClosedDates}</p>
+                  <p className="text-xs text-red-600 dark:text-red-400">{errors.bookingClosedDates}</p>
                 )}
                 <div className="space-y-2">
                   {booking.closedDates.map((d, idx) => (
@@ -2146,12 +2281,12 @@ export default function FormEditorPage() {
                         type="date"
                         value={d}
                         onChange={(e) => handleUpdateClosedDate(idx, e.target.value)}
-                        className="px-3 py-1.5 bg-white rounded-lg border border-gray-300 text-xs focus:outline-none focus:ring-1 focus:ring-primary-500"
+                        className="px-3 py-1.5 bg-white dark:bg-dk-bg rounded-lg border border-gray-300 dark:border-dk-border text-slate-900 dark:text-dk-text text-xs focus:outline-none focus:ring-1 focus:ring-primary-500"
                       />
                       <button
                         type="button"
                         onClick={() => handleRemoveClosedDate(idx)}
-                        className="p-1.5 text-gray-400 hover:text-red-500 rounded"
+                        className="p-1.5 text-gray-400 dark:text-dk-muted hover:text-red-500 dark:hover:text-red-400 rounded"
                       >
                         <HiOutlineTrash className="w-3.5 h-3.5" />
                       </button>
@@ -2165,71 +2300,41 @@ export default function FormEditorPage() {
         ) : (
           <AddSectionCard
             id="section-booking"
-            icon={HiOutlinePlus}
+            icon={HiOutlineCalendar}
             title={t('forms.editorPage.addBlock.booking')}
             hint={t('forms.editorPage.booking.enableHelp')}
             onOpen={() => openBlock('booking')}
           />
         )}
+      </div>
 
-        {/* Khối "Dành cho sản phẩm": gắn biểu mẫu với sản phẩm để trang Sản phẩm đếm Đăng ký / Đã trả / Doanh thu */}
-        <div id="section-product" className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-6 sm:p-7 space-y-3">
-          <div>
-            <h2 className="text-base font-bold text-gray-900">{t('forms.editorPage.product.title')}</h2>
-            <p className="text-xs text-gray-500 mt-0.5">{t('forms.editorPage.product.help')}</p>
-          </div>
-          <select
-            data-testid="form-product-select"
-            aria-label={t('forms.editorPage.product.title')}
-            value={productId}
-            onChange={handleProductChange}
-            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
-          >
-            <option value="">{t('forms.editorPage.product.none')}</option>
-            {productId !== '' && !productOptions.some((p) => String(p.id) === productId) && (
-              <option value={productId}>{t('forms.editorPage.product.currentOption', { id: productId })}</option>
-            )}
-            {productOptions.map((p) => (
-              <option key={p.id} value={String(p.id)}>
-                {p.productName}
-              </option>
-            ))}
-          </select>
-          {payment.enabled && selectedProductAmount !== null ? (
-            <p data-testid="form-product-price-hint" className="text-xs text-gray-600">
-              {t('forms.editorPage.product.priceHintAmount', { price: `${selectedProductAmount.toLocaleString('vi-VN')} đ` })}{' '}
-              {!isEmployee && payment.amount && Number(payment.amount) !== selectedProductAmount ? (
-                <button
-                  type="button"
-                  data-testid="form-product-use-price"
-                  className="text-primary-600 hover:underline"
-                  onClick={() => setPayment((prev) => ({ ...prev, amount: String(selectedProductAmount) }))}
-                >
-                  {t('forms.editorPage.product.usePrice', { price: `${selectedProductAmount.toLocaleString('vi-VN')} đ` })}
-                </button>
-              ) : null}
-            </p>
-          ) : payment.enabled && selectedProduct?.price ? (
-            <p data-testid="form-product-price-hint" className="text-xs text-gray-600">
-              {t('forms.editorPage.product.priceHint', { price: selectedProduct.price })}
-            </p>
-          ) : null}
-        </div>
-
+      {/* Hàng 3 trên màn hình rộng: Thanh toán giữ chỗ & Giao diện */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         {/* Khối 5: Thanh toán giữ chỗ — thẻ thu gọn "Thu tiền khi gửi" cho tới khi có dữ liệu / người dùng bấm mở */}
         {openBlocks.payment ? (
-        <div id="section-payment" className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-6 sm:p-7 space-y-6 hover:border-gray-300/80 transition-all">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="text-base font-bold text-gray-900">
-                {t('forms.editorPage.payment.title')}
-              </h2>
-              <p className="text-xs text-gray-500 mt-0.5">
-                {t('forms.editorPage.payment.enableHelp')}
-              </p>
+        <div id="section-payment" className="bg-white dark:bg-dk-raised rounded-2xl shadow-sm border border-slate-200/90 dark:border-dk-border hover:border-slate-300 dark:hover:border-dk-border hover:shadow-md p-6 sm:p-7 space-y-6 transition-all duration-200 relative overflow-hidden group">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-600" />
+          <div className="flex items-start justify-between gap-4 pb-3 border-b border-slate-100 dark:border-dk-border">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/25 flex items-center justify-center shrink-0">
+                <HiOutlineCreditCard className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-bold text-slate-900 dark:text-dk-text">
+                    {t('forms.editorPage.payment.title')}
+                  </h2>
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-900/60">
+                    {t('forms.editorPage.badges.payment')}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-dk-text2 mt-0.5">
+                  {t('forms.editorPage.payment.enableHelp')}
+                </p>
+              </div>
             </div>
-            <label className="flex items-center gap-2 cursor-pointer select-none shrink-0">
-              <span className="text-sm font-medium text-gray-800">
+            <label className="flex items-center gap-2 cursor-pointer select-none shrink-0 pt-1">
+              <span className="text-xs font-semibold text-slate-700 dark:text-dk-text">
                 {t('forms.editorPage.payment.enableLabel')}
               </span>
               <input
@@ -2245,13 +2350,13 @@ export default function FormEditorPage() {
                     amount: enabled && !prev.amount && selectedProductAmount !== null ? String(selectedProductAmount) : prev.amount,
                   }));
                 }}
-                className="h-4 w-4 rounded text-primary-600 focus:ring-primary-500 border-gray-300 disabled:opacity-50"
+                className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 dark:border-dk-border-strong dark:bg-dk-bg disabled:opacity-50"
               />
             </label>
           </div>
 
           {isEmployee && (
-            <p className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+            <p className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 text-amber-800 dark:text-amber-300 text-xs">
               {t('forms.editorPage.payment.employeeReadOnlyNotice')}
             </p>
           )}
@@ -2260,20 +2365,20 @@ export default function FormEditorPage() {
             <div className="space-y-5">
               {!isEmployee && (
                 <div className="space-y-3">
-                  <p className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 text-xs">
+                  <p className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 text-blue-700 dark:text-blue-300 text-xs">
                     {t('forms.editorPage.payment.ownerWarning')}
                   </p>
                   {hasSavedPreset && (
-                    <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
-                      <span className="text-slate-600">
-                        Có thông tin tài khoản bạn đã lưu từ trước.
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-dk-raised/50 border border-slate-200 dark:border-dk-border text-xs">
+                      <span className="text-slate-600 dark:text-dk-text">
+                        {t('forms.editorPage.payment.savedPresetNotice')}
                       </span>
                       <button
                         type="button"
                         onClick={handleApplySavedPreset}
-                        className="font-medium text-primary-600 hover:text-primary-700 underline"
+                        className="font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 underline"
                       >
-                        Áp dụng tài khoản đã lưu
+                        {t('forms.editorPage.payment.applySavedPreset')}
                       </button>
                     </div>
                   )}
@@ -2281,11 +2386,11 @@ export default function FormEditorPage() {
               )}
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-2">
+                <label className="block text-xs font-medium text-gray-700 dark:text-dk-text mb-2">
                   {t('forms.editorPage.payment.methodLabel')}
                 </label>
                 <div className="flex items-center gap-6">
-                  <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                  <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-dk-text cursor-pointer">
                     <input
                       type="checkbox"
                       name="paymentMethodBank"
@@ -2305,11 +2410,11 @@ export default function FormEditorPage() {
                           };
                         });
                       }}
-                      className="rounded text-primary-600 focus:ring-primary-500"
+                      className="rounded text-primary-600 focus:ring-primary-500 border-slate-300 dark:border-dk-border-strong dark:bg-dk-bg"
                     />
                     {t('forms.editorPage.payment.methodBank')}
                   </label>
-                  <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                  <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-dk-text cursor-pointer">
                     <input
                       type="checkbox"
                       name="paymentMethodMomo"
@@ -2329,18 +2434,18 @@ export default function FormEditorPage() {
                           };
                         });
                       }}
-                      className="rounded text-primary-600 focus:ring-primary-500"
+                      className="rounded text-primary-600 focus:ring-primary-500 border-slate-300 dark:border-dk-border-strong dark:bg-dk-bg"
                     />
                     {t('forms.editorPage.payment.methodMomo')}
                   </label>
                 </div>
                 {errors.paymentMethods && (
-                  <p className="text-xs text-red-600 mt-1">{errors.paymentMethods}</p>
+                  <p className="text-xs text-red-600 dark:text-red-400 mt-1">{errors.paymentMethods}</p>
                 )}
               </div>
 
               <div>
-                <label htmlFor="form-payment-purpose" className="block text-xs font-medium text-gray-700 mb-1">
+                <label htmlFor="form-payment-purpose" className="block text-xs font-medium text-gray-700 dark:text-dk-text mb-1">
                   {t('forms.editorPage.payment.purposeLabel')}
                 </label>
                 <select
@@ -2348,7 +2453,7 @@ export default function FormEditorPage() {
                   disabled={isEmployee}
                   value={resolvePaymentPurpose(payment.purpose)}
                   onChange={(e) => setPayment((prev) => ({ ...prev, purpose: e.target.value }))}
-                  className="w-full px-3 py-2 bg-white rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-dk-bg rounded-xl border border-gray-300 dark:border-dk-border text-sm text-slate-900 dark:text-dk-text focus:outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-100 dark:focus:ring-primary-950/40 disabled:bg-gray-50 dark:disabled:bg-dk-raised disabled:text-gray-500 dark:disabled:text-dk-muted"
                 >
                   {PAYMENT_PURPOSES.map((p) => (
                     <option key={p} value={p}>
@@ -2356,12 +2461,12 @@ export default function FormEditorPage() {
                     </option>
                   ))}
                 </select>
-                <p className="text-xs text-gray-500 mt-1">{t('forms.editorPage.payment.purposeHelp')}</p>
+                <p className="text-xs text-gray-500 dark:text-dk-text2 mt-1">{t('forms.editorPage.payment.purposeHelp')}</p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                  <label className="block text-xs font-medium text-gray-700 dark:text-dk-text mb-1">
                     {t('forms.editorPage.payment.amountLabel')}
                   </label>
                   <input
@@ -2373,19 +2478,19 @@ export default function FormEditorPage() {
                       setPayment((prev) => ({ ...prev, amount: e.target.value.replace(/\D/g, '') }))
                     }
                     placeholder={t('forms.editorPage.payment.amountPlaceholder')}
-                    className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:text-gray-500 ${
+                    className={`w-full px-3 py-2 bg-white dark:bg-dk-bg rounded-xl border text-sm text-slate-900 dark:text-dk-text placeholder:text-slate-400 dark:placeholder:text-dk-muted focus:outline-none focus:ring-2 disabled:bg-gray-50 dark:disabled:bg-dk-raised disabled:text-gray-500 dark:disabled:text-dk-muted ${
                       errors.paymentAmount
-                        ? 'border-red-300 focus:ring-red-200'
-                        : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
+                        ? 'border-red-300 dark:border-red-800 focus:ring-red-200 dark:focus:ring-red-950/40'
+                        : 'border-gray-300 dark:border-dk-border focus:border-primary-500 focus:ring-primary-100 dark:focus:ring-primary-950/40'
                     }`}
                   />
                   {errors.paymentAmount && (
-                    <p className="text-xs text-red-600 mt-1">{errors.paymentAmount}</p>
+                    <p className="text-xs text-red-600 dark:text-red-400 mt-1">{errors.paymentAmount}</p>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                  <label className="block text-xs font-medium text-gray-700 dark:text-dk-text mb-1">
                     {t(editorPaymentPurposeKeys(payment.purpose).holdMinutesLabel)}
                   </label>
                   <input
@@ -2395,26 +2500,26 @@ export default function FormEditorPage() {
                     disabled={isEmployee}
                     value={payment.holdMinutes}
                     onChange={(e) => setPayment((prev) => ({ ...prev, holdMinutes: e.target.value }))}
-                    className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:text-gray-500 ${
+                    className={`w-full px-3 py-2 bg-white dark:bg-dk-bg rounded-xl border text-sm text-slate-900 dark:text-dk-text focus:outline-none focus:ring-2 disabled:bg-gray-50 dark:disabled:bg-dk-raised disabled:text-gray-500 dark:disabled:text-dk-muted ${
                       errors.paymentHoldMinutes
-                        ? 'border-red-300 focus:ring-red-200'
-                        : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
+                        ? 'border-red-300 dark:border-red-800 focus:ring-red-200 dark:focus:ring-red-950/40'
+                        : 'border-gray-300 dark:border-dk-border focus:border-primary-500 focus:ring-primary-100 dark:focus:ring-primary-950/40'
                     }`}
                   />
                   {errors.paymentHoldMinutes && (
-                    <p className="text-xs text-red-600 mt-1">{errors.paymentHoldMinutes}</p>
+                    <p className="text-xs text-red-600 dark:text-red-400 mt-1">{errors.paymentHoldMinutes}</p>
                   )}
                 </div>
               </div>
 
               {(payment.methods || []).includes('bank') && (
-                <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 space-y-4">
-                  <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                <div className="p-4 bg-gray-50 dark:bg-dk-raised/40 rounded-xl border border-gray-200 dark:border-dk-border space-y-4">
+                  <h4 className="text-xs font-semibold text-gray-700 dark:text-dk-text uppercase tracking-wider">
                     {t('forms.editorPage.payment.methodBank')}
                   </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                      <label className="block text-xs font-medium text-gray-700 dark:text-dk-text mb-1">
                         {t('forms.editorPage.payment.bankLabel')}
                       </label>
                       <BankSearchSelect
@@ -2425,12 +2530,12 @@ export default function FormEditorPage() {
                         placeholder={t('forms.editorPage.payment.bankPlaceholder')}
                       />
                       {errors.paymentBank && (
-                        <p className="text-xs text-red-600 mt-1">{errors.paymentBank}</p>
+                        <p className="text-xs text-red-600 dark:text-red-400 mt-1">{errors.paymentBank}</p>
                       )}
                     </div>
 
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                      <label className="block text-xs font-medium text-gray-700 dark:text-dk-text mb-1">
                         {t('forms.editorPage.payment.accountNumberLabel')}
                       </label>
                       <input
@@ -2441,19 +2546,19 @@ export default function FormEditorPage() {
                         onChange={(e) =>
                           setPayment((prev) => ({ ...prev, accountNumber: e.target.value.replace(/\D/g, '') }))
                         }
-                        className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:text-gray-500 ${
+                        className={`w-full px-3 py-2 bg-white dark:bg-dk-bg rounded-xl border text-sm text-slate-900 dark:text-dk-text focus:outline-none focus:ring-2 disabled:bg-gray-50 dark:disabled:bg-dk-raised disabled:text-gray-500 dark:disabled:text-dk-muted ${
                           errors.paymentAccountNumber
-                            ? 'border-red-300 focus:ring-red-200'
-                            : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
+                            ? 'border-red-300 dark:border-red-800 focus:ring-red-200 dark:focus:ring-red-950/40'
+                            : 'border-gray-300 dark:border-dk-border focus:border-primary-500 focus:ring-primary-100 dark:focus:ring-primary-950/40'
                         }`}
                       />
                       {errors.paymentAccountNumber && (
-                        <p className="text-xs text-red-600 mt-1">{errors.paymentAccountNumber}</p>
+                        <p className="text-xs text-red-600 dark:text-red-400 mt-1">{errors.paymentAccountNumber}</p>
                       )}
                     </div>
 
                     <div className="sm:col-span-2">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                      <label className="block text-xs font-medium text-gray-700 dark:text-dk-text mb-1">
                         {t('forms.editorPage.payment.accountNameLabel')}
                       </label>
                       <input
@@ -2462,17 +2567,17 @@ export default function FormEditorPage() {
                         value={payment.accountName}
                         onChange={(e) => setPayment((prev) => ({ ...prev, accountName: e.target.value }))}
                         placeholder={t('forms.editorPage.payment.accountNamePlaceholder')}
-                        className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:text-gray-500 ${
+                        className={`w-full px-3 py-2 bg-white dark:bg-dk-bg rounded-xl border text-sm text-slate-900 dark:text-dk-text placeholder:text-slate-400 dark:placeholder:text-dk-muted focus:outline-none focus:ring-2 disabled:bg-gray-50 dark:disabled:bg-dk-raised disabled:text-gray-500 dark:disabled:text-dk-muted ${
                           errors.paymentAccountName
-                            ? 'border-red-300 focus:ring-red-200'
-                            : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
+                            ? 'border-red-300 dark:border-red-800 focus:ring-red-200 dark:focus:ring-red-950/40'
+                            : 'border-gray-300 dark:border-dk-border focus:border-primary-500 focus:ring-primary-100 dark:focus:ring-primary-950/40'
                         }`}
                       />
-                      <p className="text-[11px] text-gray-400 mt-1">
+                      <p className="text-[11px] text-gray-400 dark:text-dk-muted mt-1">
                         {t('forms.editorPage.payment.accountNameHint')}
                       </p>
                       {errors.paymentAccountName && (
-                        <p className="text-xs text-red-600 mt-1">{errors.paymentAccountName}</p>
+                        <p className="text-xs text-red-600 dark:text-red-400 mt-1">{errors.paymentAccountName}</p>
                       )}
                     </div>
                   </div>
@@ -2480,13 +2585,13 @@ export default function FormEditorPage() {
               )}
 
               {(payment.methods || []).includes('momo') && (
-                <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 space-y-4">
-                  <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                <div className="p-4 bg-gray-50 dark:bg-dk-raised/40 rounded-xl border border-gray-200 dark:border-dk-border space-y-4">
+                  <h4 className="text-xs font-semibold text-gray-700 dark:text-dk-text uppercase tracking-wider">
                     {t('forms.editorPage.payment.methodMomo')}
                   </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                      <label className="block text-xs font-medium text-gray-700 dark:text-dk-text mb-1">
                         {t('forms.editorPage.payment.momoPhoneLabel')}
                       </label>
                       <input
@@ -2497,20 +2602,20 @@ export default function FormEditorPage() {
                         onChange={(e) =>
                           setPayment((prev) => ({ ...prev, momoPhone: e.target.value.replace(/\D/g, '') }))
                         }
-                        placeholder="Vd: 0912345678"
-                        className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:text-gray-500 ${
+                        placeholder={t('forms.editorPage.payment.phonePlaceholder')}
+                        className={`w-full px-3 py-2 bg-white dark:bg-dk-bg rounded-xl border text-sm text-slate-900 dark:text-dk-text placeholder:text-slate-400 dark:placeholder:text-dk-muted focus:outline-none focus:ring-2 disabled:bg-gray-50 dark:disabled:bg-dk-raised disabled:text-gray-500 dark:disabled:text-dk-muted ${
                           errors.paymentMomoPhone
-                            ? 'border-red-300 focus:ring-red-200'
-                            : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
+                            ? 'border-red-300 dark:border-red-800 focus:ring-red-200 dark:focus:ring-red-950/40'
+                            : 'border-gray-300 dark:border-dk-border focus:border-primary-500 focus:ring-primary-100 dark:focus:ring-primary-950/40'
                         }`}
                       />
                       {errors.paymentMomoPhone && (
-                        <p className="text-xs text-red-600 mt-1">{errors.paymentMomoPhone}</p>
+                        <p className="text-xs text-red-600 dark:text-red-400 mt-1">{errors.paymentMomoPhone}</p>
                       )}
                     </div>
 
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                      <label className="block text-xs font-medium text-gray-700 dark:text-dk-text mb-1">
                         {t('forms.editorPage.payment.momoNameLabel')}
                       </label>
                       <input
@@ -2519,27 +2624,27 @@ export default function FormEditorPage() {
                         value={payment.momoName}
                         onChange={(e) => setPayment((prev) => ({ ...prev, momoName: e.target.value }))}
                         placeholder={t('forms.editorPage.payment.accountNamePlaceholder')}
-                        className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:text-gray-500 ${
+                        className={`w-full px-3 py-2 bg-white dark:bg-dk-bg rounded-xl border text-sm text-slate-900 dark:text-dk-text placeholder:text-slate-400 dark:placeholder:text-dk-muted focus:outline-none focus:ring-2 disabled:bg-gray-50 dark:disabled:bg-dk-raised disabled:text-gray-500 dark:disabled:text-dk-muted ${
                           errors.paymentMomoName
-                            ? 'border-red-300 focus:ring-red-200'
-                            : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
+                            ? 'border-red-300 dark:border-red-800 focus:ring-red-200 dark:focus:ring-red-950/40'
+                            : 'border-gray-300 dark:border-dk-border focus:border-primary-500 focus:ring-primary-100 dark:focus:ring-primary-950/40'
                         }`}
                       />
-                      <p className="text-[11px] text-gray-400 mt-1">
+                      <p className="text-[11px] text-gray-400 dark:text-dk-muted mt-1">
                         {t('forms.editorPage.payment.accountNameHint')}
                       </p>
                       {errors.paymentMomoName && (
-                        <p className="text-xs text-red-600 mt-1">{errors.paymentMomoName}</p>
+                        <p className="text-xs text-red-600 dark:text-red-400 mt-1">{errors.paymentMomoName}</p>
                       )}
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <label className="block text-xs font-medium text-gray-700">
+                    <label className="block text-xs font-medium text-gray-700 dark:text-dk-text">
                       {t('forms.editorPage.payment.momoQrModeLabel')}
                     </label>
                     <div className="space-y-1.5">
-                      <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+                      <label className="flex items-center gap-2 text-xs text-gray-700 dark:text-dk-text cursor-pointer">
                         <input
                           type="radio"
                           name="momoQrMode"
@@ -2547,17 +2652,17 @@ export default function FormEditorPage() {
                           disabled={isEmployee}
                           checked={payment.momoQrMode === 'phone'}
                           onChange={() => setPayment((prev) => ({ ...prev, momoQrMode: 'phone' }))}
-                          className="text-primary-600 focus:ring-primary-500"
+                          className="text-primary-600 focus:ring-primary-500 border-slate-300 dark:border-dk-border-strong dark:bg-dk-bg"
                         />
                         <span>{t('forms.editorPage.payment.momoQrModePhone')}</span>
                       </label>
                       {payment.momoQrMode === 'phone' && (
-                        <p className="ml-6 text-[11px] text-gray-400">
+                        <p className="ml-6 text-[11px] text-gray-400 dark:text-dk-muted">
                           {t('forms.editorPage.payment.momoQrPhoneHint')}
                         </p>
                       )}
 
-                      <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+                      <label className="flex items-center gap-2 text-xs text-gray-700 dark:text-dk-text cursor-pointer">
                         <input
                           type="radio"
                           name="momoQrMode"
@@ -2565,12 +2670,12 @@ export default function FormEditorPage() {
                           disabled={isEmployee}
                           checked={payment.momoQrMode === 'account'}
                           onChange={() => setPayment((prev) => ({ ...prev, momoQrMode: 'account' }))}
-                          className="text-primary-600 focus:ring-primary-500"
+                          className="text-primary-600 focus:ring-primary-500 border-slate-300 dark:border-dk-border-strong dark:bg-dk-bg"
                         />
                         <span>{t('forms.editorPage.payment.momoQrModeAccount')}</span>
                       </label>
 
-                      <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+                      <label className="flex items-center gap-2 text-xs text-gray-700 dark:text-dk-text cursor-pointer">
                         <input
                           type="radio"
                           name="momoQrMode"
@@ -2578,7 +2683,7 @@ export default function FormEditorPage() {
                           disabled={isEmployee}
                           checked={payment.momoQrMode === 'none'}
                           onChange={() => setPayment((prev) => ({ ...prev, momoQrMode: 'none' }))}
-                          className="text-primary-600 focus:ring-primary-500"
+                          className="text-primary-600 focus:ring-primary-500 border-slate-300 dark:border-dk-border-strong dark:bg-dk-bg"
                         />
                         <span>{t('forms.editorPage.payment.momoQrModeNone')}</span>
                       </label>
@@ -2586,9 +2691,9 @@ export default function FormEditorPage() {
                   </div>
 
                   {payment.momoQrMode === 'account' && (
-                    <div className="space-y-3 p-3 bg-white rounded-xl border border-gray-200">
+                    <div className="space-y-3 p-3 bg-white dark:bg-dk-raised/60 rounded-xl border border-gray-200 dark:border-dk-border">
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                        <label className="block text-xs font-medium text-gray-700 dark:text-dk-text mb-1">
                           {t('forms.editorPage.payment.momoQrAccountLabel')}
                         </label>
                         <input
@@ -2599,18 +2704,18 @@ export default function FormEditorPage() {
                             const cleanVal = e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
                             setPayment((prev) => ({ ...prev, momoQrAccount: cleanVal }));
                           }}
-                          placeholder="Vd: PSP2604014200000493"
-                          className={`w-full px-3 py-2 bg-white rounded-xl border text-sm font-mono focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:text-gray-500 ${
+                          placeholder={t('forms.editorPage.payment.momoQrAccountPlaceholder')}
+                          className={`w-full px-3 py-2 bg-white dark:bg-dk-bg rounded-xl border text-sm font-mono text-slate-900 dark:text-dk-text placeholder:text-slate-400 dark:placeholder:text-dk-muted focus:outline-none focus:ring-2 disabled:bg-gray-50 dark:disabled:bg-dk-raised disabled:text-gray-500 dark:disabled:text-dk-muted ${
                             errors.paymentMomoQrAccount
-                              ? 'border-red-300 focus:ring-red-200'
-                              : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
+                              ? 'border-red-300 dark:border-red-800 focus:ring-red-200 dark:focus:ring-red-950/40'
+                              : 'border-gray-300 dark:border-dk-border focus:border-primary-500 focus:ring-primary-100 dark:focus:ring-primary-950/40'
                           }`}
                         />
-                        <p className="text-[11px] text-gray-500 mt-1">
+                        <p className="text-[11px] text-gray-500 dark:text-dk-text2 mt-1">
                           {t('forms.editorPage.payment.momoQrAccountHint')}
                         </p>
                         {errors.paymentMomoQrAccount && (
-                          <p className="text-xs text-red-600 mt-1">{errors.paymentMomoQrAccount}</p>
+                          <p className="text-xs text-red-600 dark:text-red-400 mt-1">{errors.paymentMomoQrAccount}</p>
                         )}
                       </div>
 
@@ -2627,9 +2732,9 @@ export default function FormEditorPage() {
                           type="button"
                           disabled={isEmployee || isDecodingMomoQr}
                           onClick={() => momoQrFileInputRef.current?.click()}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-xs font-medium text-gray-700 shadow-sm transition-colors disabled:opacity-50"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-raised hover:bg-gray-50 dark:hover:bg-dk-strong text-xs font-medium text-gray-700 dark:text-dk-text shadow-sm transition-colors disabled:opacity-50"
                         >
-                          <HiOutlineQrcode className="w-4 h-4 text-gray-500" />
+                          <HiOutlineQrcode className="w-4 h-4 text-gray-500 dark:text-dk-text2" />
                           {isDecodingMomoQr
                             ? t('forms.editorPage.payment.momoQrDecoding')
                             : t('forms.editorPage.payment.momoQrAutoFillBtn')}
@@ -2639,17 +2744,17 @@ export default function FormEditorPage() {
                   )}
 
                   {momoPreviewQrDataUrl && (
-                    <div className="p-3 bg-white rounded-xl border border-gray-200 text-center space-y-2">
-                      <p className="text-xs font-semibold text-gray-700">
+                    <div className="p-3 bg-white dark:bg-dk-raised/60 rounded-xl border border-gray-200 dark:border-dk-border text-center space-y-2">
+                      <p className="text-xs font-semibold text-gray-700 dark:text-dk-text">
                         {t('forms.editorPage.payment.momoPreviewQrTitle')}
                       </p>
                       <img
                         src={momoPreviewQrDataUrl}
                         alt="QR MoMo Preview"
                         data-testid="momo-preview-qr"
-                        className="w-36 h-36 mx-auto rounded-lg border border-gray-100 bg-white"
+                        className="w-36 h-36 mx-auto rounded-lg border border-gray-100 dark:border-slate-700 bg-white dark:bg-white p-1" // dark-ngoai-le: khung QR code phải nền trắng cố ý
                       />
-                      <p className="text-[11px] text-gray-600 leading-relaxed">
+                      <p className="text-[11px] text-gray-600 dark:text-dk-text2 leading-relaxed">
                         {t('forms.editorPage.payment.momoPreviewQrInstruction', {
                           name: (payment.momoName || '').trim().toUpperCase(),
                         })}
@@ -2664,7 +2769,7 @@ export default function FormEditorPage() {
         ) : (
           <AddSectionCard
             id="section-payment"
-            icon={HiOutlinePlus}
+            icon={HiOutlineCreditCard}
             title={t('forms.editorPage.addBlock.payment')}
             hint={t('forms.editorPage.payment.enableHelp')}
             onOpen={() => openBlock('payment')}
@@ -2673,19 +2778,30 @@ export default function FormEditorPage() {
 
         {/* Khối 6: Giao diện (PR-4b) — thẻ thu gọn "Giao diện" cho tới khi đã tuỳ chỉnh / người dùng bấm mở */}
         {openBlocks.theme ? (
-        <div id="section-theme" className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-6 sm:p-7 space-y-6 hover:border-gray-300/80 transition-all">
-          <div>
-            <h2 className="text-base font-bold text-gray-900">
-              {t('forms.editorPage.theme.title')}
-            </h2>
-            <p className="text-xs text-gray-500 mt-0.5">
-              {t('forms.editorPage.theme.subtitle')}
-            </p>
+        <div id="section-theme" className="bg-white dark:bg-dk-raised rounded-2xl shadow-sm border border-slate-200/90 dark:border-dk-border hover:border-slate-300 dark:hover:border-dk-border hover:shadow-md p-6 sm:p-7 space-y-6 transition-all duration-200 relative overflow-hidden group">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-rose-500 to-pink-600" />
+          <div className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-dk-border">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-rose-500 to-pink-600 text-white shadow-md shadow-rose-500/25 flex items-center justify-center shrink-0">
+              <HiOutlineColorSwatch className="w-5 h-5 text-white" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-slate-900 dark:text-dk-text">
+                  {t('forms.editorPage.theme.title')}
+                </h2>
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border border-rose-200/80 dark:border-rose-900/60">
+                  {t('forms.editorPage.badges.theme')}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-dk-text2 mt-0.5">
+                {t('forms.editorPage.theme.subtitle')}
+              </p>
+            </div>
           </div>
 
           {/* Mẫu dựng sẵn */}
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-2">
+            <label className="block text-xs font-medium text-gray-700 dark:text-dk-text mb-2">
               {t('forms.editorPage.theme.presetLabel')}
             </label>
             <div className="flex flex-wrap gap-2">
@@ -2696,8 +2812,8 @@ export default function FormEditorPage() {
                   onClick={() => handleSelectThemePreset(preset.id)}
                   className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-medium transition-colors ${
                     theme.preset === preset.id
-                      ? 'border-primary-500 ring-2 ring-primary-100 text-gray-900'
-                      : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                      ? 'border-primary-500 ring-2 ring-primary-100 dark:ring-primary-950/40 text-gray-900 dark:text-dk-text bg-orange-50/50 dark:bg-orange-950/30'
+                      : 'border-gray-300 dark:border-dk-border text-gray-700 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised'
                   }`}
                 >
                   <span
@@ -2712,7 +2828,7 @@ export default function FormEditorPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-medium text-gray-700 dark:text-dk-text mb-1">
                 {t('forms.editorPage.theme.primaryColorLabel')}
               </label>
               <div className="flex items-center gap-2">
@@ -2720,7 +2836,7 @@ export default function FormEditorPage() {
                   type="color"
                   value={HEX_COLOR_RE.test(theme.primaryColor) ? theme.primaryColor : '#df5c0e'}
                   onChange={(e) => handleThemeColorChange('primaryColor', e.target.value)}
-                  className="h-9 w-11 rounded-lg border border-gray-300 cursor-pointer shrink-0"
+                  className="h-9 w-11 rounded-lg border border-gray-300 dark:border-dk-border cursor-pointer shrink-0"
                   aria-label={t('forms.editorPage.theme.primaryColorLabel')}
                 />
                 <input
@@ -2729,13 +2845,13 @@ export default function FormEditorPage() {
                   onChange={(e) => handleThemeColorChange('primaryColor', e.target.value)}
                   placeholder="#DF5C0E"
                   maxLength={7}
-                  className="w-full px-3 py-2 bg-white rounded-xl border border-gray-300 text-sm font-mono focus:outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-100"
+                  className="w-full px-3 py-2 bg-white dark:bg-dk-bg rounded-xl border border-gray-300 dark:border-dk-border text-sm font-mono text-slate-900 dark:text-dk-text placeholder:text-slate-400 dark:placeholder:text-dk-muted focus:outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-100 dark:focus:ring-primary-950/40"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-medium text-gray-700 dark:text-dk-text mb-1">
                 {t('forms.editorPage.theme.backgroundColorLabel')}
               </label>
               <div className="flex items-center gap-2">
@@ -2743,7 +2859,7 @@ export default function FormEditorPage() {
                   type="color"
                   value={HEX_COLOR_RE.test(theme.backgroundColor) ? theme.backgroundColor : '#f9fafb'}
                   onChange={(e) => handleThemeColorChange('backgroundColor', e.target.value)}
-                  className="h-9 w-11 rounded-lg border border-gray-300 cursor-pointer shrink-0"
+                  className="h-9 w-11 rounded-lg border border-gray-300 dark:border-dk-border cursor-pointer shrink-0"
                   aria-label={t('forms.editorPage.theme.backgroundColorLabel')}
                 />
                 <input
@@ -2752,19 +2868,19 @@ export default function FormEditorPage() {
                   onChange={(e) => handleThemeColorChange('backgroundColor', e.target.value)}
                   placeholder="#F9FAFB"
                   maxLength={7}
-                  className="w-full px-3 py-2 bg-white rounded-xl border border-gray-300 text-sm font-mono focus:outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-100"
+                  className="w-full px-3 py-2 bg-white dark:bg-dk-bg rounded-xl border border-gray-300 dark:border-dk-border text-sm font-mono text-slate-900 dark:text-dk-text placeholder:text-slate-400 dark:placeholder:text-dk-muted focus:outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-100 dark:focus:ring-primary-950/40"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-medium text-gray-700 dark:text-dk-text mb-1">
                 {t('forms.editorPage.theme.fontLabel')}
               </label>
               <select
                 value={theme.fontFamily}
                 onChange={(e) => handleThemeFontChange(e.target.value)}
-                className="w-full px-3 py-2 bg-white rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-100"
+                className="w-full px-3 py-2 bg-white dark:bg-dk-bg rounded-xl border border-gray-300 dark:border-dk-border text-sm text-slate-900 dark:text-dk-text focus:outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-100 dark:focus:ring-primary-950/40"
               >
                 <option value="">{t('forms.editorPage.theme.fontDefault')}</option>
                 {ALLOWED_FORM_FONTS.map((font) => (
@@ -2776,13 +2892,13 @@ export default function FormEditorPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-medium text-gray-700 dark:text-dk-text mb-1">
                 {t('forms.editorPage.theme.layoutLabel')}
               </label>
               <select
                 value={theme.layout}
                 onChange={(e) => handleThemeLayoutChange(e.target.value)}
-                className="w-full px-3 py-2 bg-white rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-100"
+                className="w-full px-3 py-2 bg-white dark:bg-dk-bg rounded-xl border border-gray-300 dark:border-dk-border text-sm text-slate-900 dark:text-dk-text focus:outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-100 dark:focus:ring-primary-950/40"
               >
                 <option value="">{t('forms.editorPage.theme.layoutDefault')}</option>
                 {ALLOWED_FORM_LAYOUTS.map((l) => (
@@ -2794,13 +2910,13 @@ export default function FormEditorPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-medium text-gray-700 dark:text-dk-text mb-1">
                 {t('forms.editorPage.theme.bannerHeightLabel')}
               </label>
               <select
                 value={theme.bannerHeight}
                 onChange={(e) => handleThemeBannerHeightChange(e.target.value)}
-                className="w-full px-3 py-2 bg-white rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-100"
+                className="w-full px-3 py-2 bg-white dark:bg-dk-bg rounded-xl border border-gray-300 dark:border-dk-border text-sm text-slate-900 dark:text-dk-text focus:outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-100 dark:focus:ring-primary-950/40"
               >
                 <option value="">{t('forms.editorPage.theme.bannerHeightDefault')}</option>
                 {ALLOWED_FORM_BANNER_HEIGHTS.map((h) => (
@@ -2815,17 +2931,17 @@ export default function FormEditorPage() {
           {/* Banner + Logo */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-medium text-gray-700 dark:text-dk-text mb-1">
                 {t('forms.editorPage.theme.bannerLabel')}
               </label>
               {theme.bannerUrl ? (
                 <img
                   src={theme.bannerUrl}
                   alt=""
-                  className="w-full h-24 object-cover rounded-xl border border-gray-200 mb-2"
+                  className="w-full h-24 object-cover rounded-xl border border-gray-200 dark:border-dk-border mb-2"
                 />
               ) : (
-                <div className="w-full h-24 rounded-xl border border-dashed border-gray-300 bg-gray-50 mb-2" />
+                <div className="w-full h-24 rounded-xl border border-dashed border-gray-300 dark:border-dk-border bg-gray-50 dark:bg-dk-raised/40 mb-2" />
               )}
               <input
                 ref={bannerInputRef}
@@ -2843,7 +2959,7 @@ export default function FormEditorPage() {
                   type="button"
                   disabled={isUploadingBanner}
                   onClick={() => bannerInputRef.current?.click()}
-                  className="px-3 py-1.5 rounded-lg border border-gray-300 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  className="px-3 py-1.5 rounded-lg border border-gray-300 dark:border-dk-border text-xs font-medium text-gray-700 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised disabled:opacity-50"
                 >
                   {isUploadingBanner ? t('forms.editorPage.theme.uploading') : t('forms.editorPage.theme.uploadButton')}
                 </button>
@@ -2851,7 +2967,7 @@ export default function FormEditorPage() {
                   <button
                     type="button"
                     onClick={() => handleRemoveThemeImage('banner')}
-                    className="px-3 py-1.5 rounded-lg border border-red-200 text-xs font-medium text-red-600 hover:bg-red-50"
+                    className="px-3 py-1.5 rounded-lg border border-red-200 dark:border-red-900/60 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40"
                   >
                     {t('forms.editorPage.theme.removeImage')}
                   </button>
@@ -2860,17 +2976,17 @@ export default function FormEditorPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-medium text-gray-700 dark:text-dk-text mb-1">
                 {t('forms.editorPage.theme.logoLabel')}
               </label>
               {theme.logoUrl ? (
                 <img
                   src={theme.logoUrl}
                   alt=""
-                  className="h-24 max-w-full object-contain rounded-xl border border-gray-200 mb-2 bg-white"
+                  className="h-24 max-w-full object-contain rounded-xl border border-gray-200 dark:border-dk-border mb-2 bg-white dark:bg-dk-bg"
                 />
               ) : (
-                <div className="w-full h-24 rounded-xl border border-dashed border-gray-300 bg-gray-50 mb-2" />
+                <div className="w-full h-24 rounded-xl border border-dashed border-gray-300 dark:border-dk-border bg-gray-50 dark:bg-dk-raised/40 mb-2" />
               )}
               <input
                 ref={logoInputRef}
@@ -2888,7 +3004,7 @@ export default function FormEditorPage() {
                   type="button"
                   disabled={isUploadingLogo}
                   onClick={() => logoInputRef.current?.click()}
-                  className="px-3 py-1.5 rounded-lg border border-gray-300 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  className="px-3 py-1.5 rounded-lg border border-gray-300 dark:border-dk-border text-xs font-medium text-gray-700 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised disabled:opacity-50"
                 >
                   {isUploadingLogo ? t('forms.editorPage.theme.uploading') : t('forms.editorPage.theme.uploadButton')}
                 </button>
@@ -2896,7 +3012,7 @@ export default function FormEditorPage() {
                   <button
                     type="button"
                     onClick={() => handleRemoveThemeImage('logo')}
-                    className="px-3 py-1.5 rounded-lg border border-red-200 text-xs font-medium text-red-600 hover:bg-red-50"
+                    className="px-3 py-1.5 rounded-lg border border-red-200 dark:border-red-900/60 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40"
                   >
                     {t('forms.editorPage.theme.removeImage')}
                   </button>
@@ -2907,11 +3023,11 @@ export default function FormEditorPage() {
 
           {/* Xem trước */}
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-2">
+            <label className="block text-xs font-medium text-gray-700 dark:text-dk-text mb-2">
               {t('forms.editorPage.theme.previewLabel')}
             </label>
             <div
-              className="rounded-xl border border-gray-200 p-4 sm:p-6 flex justify-center overflow-x-hidden box-border"
+              className="rounded-xl border border-gray-200 dark:border-dk-border p-4 sm:p-6 flex justify-center overflow-x-hidden box-border"
               style={HEX_COLOR_RE.test(theme.backgroundColor) ? { backgroundColor: theme.backgroundColor } : undefined}
             >
               <FormRenderer form={previewForm} onSubmit={() => {}} previewMode />
@@ -2927,6 +3043,7 @@ export default function FormEditorPage() {
             onOpen={() => openBlock('theme')}
           />
         )}
+      </div>
 
       {/* Modal chia sẻ (PR-1) */}
       {isEditMode && (

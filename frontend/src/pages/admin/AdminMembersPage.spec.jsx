@@ -352,3 +352,58 @@ describe('AdminMembersPage — đặt lại 2FA', () => {
     await waitFor(() => expect(mockResetTwoFactor).toHaveBeenCalledWith(20, 'tf@test.local'));
   });
 });
+
+describe('AdminMembersPage — MemberDetailModal (chi tiết người dùng)', () => {
+  const sampleMember = {
+    id: 99,
+    username: 'nguyenvana',
+    fullName: 'Nguyễn Văn A',
+    email: 'nva@company.vn',
+    phone: '0901234567',
+    status: 'active',
+    segment: 'customer',
+    planName: 'Doanh nghiệp',
+    planState: 'paying',
+    activePlanId: 10,
+    employeeCount: 5,
+    twoFactorEnabled: true,
+    churnRisk: false,
+    churnRiskReason: null,
+    createdAt: '2026-01-15T08:30:00.000Z',
+    lastActivityAt: '2026-09-01T12:00:00.000Z',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetPlans.mockResolvedValue({ data: { data: [] } });
+    mockGetSummary.mockResolvedValue({ data: { data: null } });
+    mockGetMembers.mockResolvedValue(membersResponse([sampleMember]));
+  });
+
+  it('bấm nút xem chi tiết (con mắt) hoặc bấm dòng → mở modal chi tiết người dùng đầy đủ 4 nhóm thông tin', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByText('nva@company.vn')).toBeInTheDocument());
+
+    const row = screen.getByText('nva@company.vn').closest('tr');
+    // Nút xem chi tiết là nút thứ 2 trong cột thao tác (sau nút gán gói)
+    const viewButton = within(row).getAllByRole('button')[1];
+    fireEvent.click(viewButton);
+
+    await waitFor(() => expect(screen.getByText('Chi tiết người dùng')).toBeInTheDocument());
+    expect(screen.getByRole('heading', { name: 'Nguyễn Văn A' })).toBeInTheDocument();
+
+    // Kiểm tra các thông tin chi tiết hiển thị trong modal
+    expect(screen.getByText('Thông tin tài khoản')).toBeInTheDocument();
+    expect(screen.getByText('Gói dịch vụ & Thời hạn')).toBeInTheDocument();
+    expect(screen.getByText('Đội ngũ & Nhân viên')).toBeInTheDocument();
+    expect(screen.getByText('Bảo mật & Cảnh báo')).toBeInTheDocument();
+    expect(screen.getByText('#99')).toBeInTheDocument();
+    expect(screen.getAllByText('0901234567').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('5')).toBeInTheDocument(); // employeeCount
+
+    // Đóng modal (có cả nút X góc phải và nút Đóng ở footer)
+    const closeBtns = screen.getAllByRole('button', { name: 'Đóng' });
+    fireEvent.click(closeBtns[0]);
+    await waitFor(() => expect(screen.queryByText('Chi tiết người dùng')).not.toBeInTheDocument());
+  });
+});

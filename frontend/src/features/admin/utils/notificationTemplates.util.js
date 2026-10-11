@@ -44,7 +44,27 @@ function buildHeader(subtitle) {
 `.trim();
 }
 
-function buildFooter() {
+function buildFooter(locale = 'vi') {
+  if (locale === 'en') {
+    return `
+<table width="100%" cellpadding="0" cellspacing="0">
+  <tr>
+    <td style="padding:24px 16px 12px;text-align:center;border-top:1px solid #fed7aa">
+      <p style="margin:0 0 6px;font-size:12px;font-weight:700;color:#1f2937">Digiso Digital Solutions Co., Ltd.</p>
+      <p style="margin:0 0 4px;font-size:11px;color:#4b5563;line-height:1.5">
+        Room I.101B, Building A, VNU-HCM Software Park, Linh Trung Ward, Thu Duc City, Vietnam
+      </p>
+      <p style="margin:0 0 4px;font-size:11px;color:#4b5563">
+        Hotline: (+84) 877 909 606 · Email: <a href="mailto:info@digiso.vn" style="color:#ea580c;text-decoration:none;font-weight:600">info@digiso.vn</a>
+      </p>
+      <p style="margin:8px 0 0;font-size:10px;color:#9ca3af">
+        You are receiving this email because you are using services from ${SENDER_NAME}.
+      </p>
+    </td>
+  </tr>
+</table>
+`.trim();
+  }
   return `
 <table width="100%" cellpadding="0" cellspacing="0">
   <tr>
@@ -572,6 +592,284 @@ ${ctaButton('{{dashboard_url}}', 'Xác nhận là tôi →', 'red')}
 };
 
 // ---------------------------------------------------------------------------
+// English Templates
+// ---------------------------------------------------------------------------
+
+const MAINTENANCE_TEMPLATE_EN = {
+  key: 'maintenance',
+  label: 'Maintenance',
+  subject: '[Founder AI] Scheduled System Maintenance Notice',
+  headerSubtitle: 'Maintenance Notice',
+  bodyHtml: `
+<h1 style="${TXT_H1}">🔧 Scheduled System Maintenance</h1>
+<p style="${TXT_LEAD}">
+  Hello <strong style="color:#ea580c">{{user_name}}</strong>,
+</p>
+<p style="${TXT_BODY}">
+  To upgrade service quality and enhance reliability, we will perform scheduled maintenance according to the timeline below.
+  During maintenance, some services may be temporarily unavailable.
+</p>
+
+<!-- Timeline table -->
+<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px">
+  <tr>
+    <td width="50%" style="padding-right:8px;vertical-align:top">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:14px;text-align:center">
+            <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px">Start Time</p>
+            <p style="margin:0;font-size:15px;font-weight:800;color:#9a3412">{{current_date}}</p>
+          </td>
+        </tr>
+      </table>
+    </td>
+    <td width="50%" style="padding-left:8px;vertical-align:top">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px;text-align:center">
+            <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px">Estimated Duration</p>
+            <p style="margin:0;font-size:15px;font-weight:800;color:#991b1b">~30 mins</p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+
+<!-- Warning callout -->
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#fef2f2;border-left:4px solid #dc2626;border-radius:0 8px 8px 0;margin-bottom:24px">
+  <tr>
+    <td style="padding:14px 16px">
+      <p style="margin:0;font-size:13px;color:#991b1b;line-height:1.6;font-weight:500">
+        ⚠️ <strong style="color:#7f1d1d">Affected features:</strong> Email sending, Zalo OA delivery, and reporting dashboard.
+        Your campaign data and contact lists remain safe and intact.
+      </p>
+    </td>
+  </tr>
+</table>
+
+<p style="${TXT_LABEL}">Action Required</p>
+<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px">
+  <tr>
+    <td style="padding:6px 0 6px 24px;font-size:14px;color:#1f2937;line-height:1.7">
+      <span style="color:#ea580c;font-weight:700">▸</span> Save any in-progress campaign drafts before maintenance begins.
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:6px 0 6px 24px;font-size:14px;color:#1f2937;line-height:1.7">
+      <span style="color:#ea580c;font-weight:700">▸</span> Avoid scheduling new sends during the maintenance window.
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:6px 0 6px 24px;font-size:14px;color:#1f2937;line-height:1.7">
+      <span style="color:#ea580c;font-weight:700">▸</span> Once maintenance is complete, scheduled campaigns will resume automatically.
+    </td>
+  </tr>
+</table>
+
+${ctaButton('{{dashboard_url}}', 'Open Dashboard →')}
+
+<p style="${TXT_FOOTER_NOTE}">
+  Need urgent assistance during maintenance? Please contact
+  <a href="mailto:{{support_email}}" style="color:#ea580c;text-decoration:none;font-weight:600">{{support_email}}</a>.
+</p>
+`.trim(),
+};
+
+const ANNOUNCEMENT_TEMPLATE_EN = {
+  key: 'announcement',
+  label: 'Announcement',
+  subject: '[Founder AI] Important announcement from the team',
+  headerSubtitle: 'Official Announcement',
+  bodyHtml: `
+<h1 style="${TXT_H1}">📢 New update from Founder AI</h1>
+<p style="${TXT_LEAD}">
+  Hello <strong style="color:#ea580c">{{user_name}}</strong>,
+</p>
+<p style="${TXT_BODY}">
+  We have several exciting new updates to share with you on <strong style="color:#1f2937">{{current_date}}</strong>.
+</p>
+
+<!-- Badge -->
+<table width="100%" cellpadding="0" cellspacing="0" style="margin:14px 0 20px">
+  <tr>
+    <td>
+      <span style="display:inline-block;background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px;text-transform:uppercase;letter-spacing:.5px">
+        Official Announcement
+      </span>
+    </td>
+  </tr>
+</table>
+
+<p style="${TXT_LABEL}">Key Highlights</p>
+<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px">
+  <tr>
+    <td style="padding:8px 0;font-size:14px;color:#1f2937;line-height:1.6">
+      <strong style="color:#ea580c">1. AI Studio Upgrade:</strong> Enhanced speed, improved responsiveness, and higher context retention.
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:8px 0;font-size:14px;color:#1f2937;line-height:1.6">
+      <strong style="color:#ea580c">2. Campaign Builder:</strong> New drag-and-drop elements and instant live preview.
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:8px 0;font-size:14px;color:#1f2937;line-height:1.6">
+      <strong style="color:#ea580c">3. Multi-channel Automation:</strong> Seamless sync across Email, Zalo, and Telegram channels.
+    </td>
+  </tr>
+</table>
+
+${ctaButton('{{dashboard_url}}', 'Explore New Features →')}
+
+<p style="${TXT_FOOTER_NOTE}">
+  Questions or feedback? Reply directly to this email or reach us at
+  <a href="mailto:{{support_email}}" style="color:#ea580c;text-decoration:none;font-weight:600">{{support_email}}</a>.
+</p>
+`.trim(),
+};
+
+const PROMOTION_TEMPLATE_EN = {
+  key: 'promotion',
+  label: 'Promotion',
+  subject: '[Founder AI] Special Offer Just For You!',
+  headerSubtitle: 'Special Offer',
+  bodyHtml: `
+<h1 style="${TXT_H1}">🎁 Special Offer Just For You</h1>
+<p style="${TXT_LEAD}">
+  Hello <strong style="color:#ea580c">{{user_name}}</strong>,
+</p>
+<p style="${TXT_BODY}">
+  Thank you for being a valued member of <strong style="color:#1f2937">{{product_name}}</strong>.
+  We are delighted to offer you a special upgrade discount valid until <strong style="color:#ea580c">{{current_date}}</strong>.
+</p>
+
+<!-- Promo Box -->
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#fff7ed;border:2px dashed #f97316;border-radius:12px;margin-bottom:24px">
+  <tr>
+    <td style="padding:24px;text-align:center">
+      <p style="margin:0 0 6px;font-size:12px;font-weight:700;color:#9a3412;text-transform:uppercase;letter-spacing:1px">Your Promo Code</p>
+      <p style="margin:0 0 8px;font-size:28px;font-weight:900;color:#ea580c;letter-spacing:2px">FOUNDER30</p>
+      <p style="margin:0;font-size:13px;color:#7c2d12">30% OFF all Pro and Enterprise annual plans</p>
+    </td>
+  </tr>
+</table>
+
+${ctaButton('{{dashboard_url}}', 'Claim Your Offer Now →')}
+
+<p style="${TXT_FOOTER_NOTE}">
+  Need assistance choosing the right plan? Reach us at
+  <a href="mailto:{{support_email}}" style="color:#ea580c;text-decoration:none;font-weight:600">{{support_email}}</a>.
+</p>
+`.trim(),
+};
+
+const WARNING_TEMPLATE_EN = {
+  key: 'warning',
+  label: 'Warning',
+  subject: '[Founder AI] Important quota / service notice',
+  headerSubtitle: 'Important Notice',
+  bodyHtml: `
+<h1 style="${TXT_H1}">⚠️ Important Quota Notice</h1>
+<p style="${TXT_LEAD}">
+  Hello <strong style="color:#ea580c">{{user_name}}</strong>,
+</p>
+<p style="${TXT_BODY}">
+  Your account on <strong style="color:#1f2937">{{product_name}}</strong> (Plan: <strong>{{user_plan}}</strong>)
+  is approaching its monthly message sending limit.
+</p>
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#fffbeb;border-left:4px solid #f59e0b;border-radius:0 8px 8px 0;margin-bottom:24px">
+  <tr>
+    <td style="padding:14px 16px">
+      <p style="margin:0;font-size:13px;color:#92400e;line-height:1.6;font-weight:500">
+        You have used over <strong>85%</strong> of your monthly sending capacity as of {{current_date}}.
+        To prevent campaign delivery interruptions, please consider upgrading your plan.
+      </p>
+    </td>
+  </tr>
+</table>
+
+${ctaButton('{{dashboard_url}}', 'Upgrade Plan →', 'amber')}
+
+<p style="${TXT_FOOTER_NOTE}">
+  Questions regarding your usage? Contact
+  <a href="mailto:{{support_email}}" style="color:#ea580c;text-decoration:none;font-weight:600">{{support_email}}</a>.
+</p>
+`.trim(),
+};
+
+const REMINDER_TEMPLATE_EN = {
+  key: 'reminder',
+  label: 'Reminder',
+  subject: '[Founder AI] Reminder: [Topic]',
+  headerSubtitle: 'Friendly Reminder',
+  bodyHtml: `
+<h1 style="${TXT_H1}">⏰ Friendly Reminder from Founder AI</h1>
+<p style="${TXT_LEAD}">
+  Hello <strong style="color:#ea580c">{{user_name}}</strong>,
+</p>
+<p style="${TXT_BODY}">
+  This is a friendly reminder regarding your active account on <strong style="color:#1f2937">{{product_name}}</strong>.
+  You currently have automated campaigns scheduled to run in the coming days.
+</p>
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;margin-bottom:24px">
+  <tr>
+    <td style="padding:16px 20px">
+      <p style="margin:0 0 6px;font-size:14px;font-weight:700;color:#166534">Check your campaign schedules</p>
+      <p style="margin:0;font-size:13px;color:#15803d;line-height:1.6">
+        Please review your contact lists and message templates before the next delivery window.
+      </p>
+    </td>
+  </tr>
+</table>
+
+${ctaButton('{{dashboard_url}}', 'Review Campaigns →', 'green')}
+
+<p style="${TXT_FOOTER_NOTE}">
+  Need any assistance? We are here to help at
+  <a href="mailto:{{support_email}}" style="color:#ea580c;text-decoration:none;font-weight:600">{{support_email}}</a>.
+</p>
+`.trim(),
+};
+
+const SECURITY_TEMPLATE_EN = {
+  key: 'security',
+  label: 'Security',
+  subject: '[Founder AI] Security notification for your account',
+  headerSubtitle: 'Security Notice',
+  bodyHtml: `
+<h1 style="${TXT_H1}">🔒 Account Security Notification</h1>
+<p style="${TXT_LEAD}">
+  Hello <strong style="color:#ea580c">{{user_name}}</strong>,
+</p>
+<p style="${TXT_BODY}">
+  We detected a new sign-in to your <strong style="color:#1f2937">{{product_name}}</strong> account
+  ({{user_email}}) on <strong style="color:#1f2937">{{current_date}}</strong>.
+</p>
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;margin-bottom:24px">
+  <tr>
+    <td style="padding:16px 20px">
+      <p style="margin:0 0 6px;font-size:14px;font-weight:700;color:#991b1b">Was this you?</p>
+      <p style="margin:0;font-size:13px;color:#b91c1c;line-height:1.6">
+        If you initiated this sign-in, no action is needed. If you do not recognize this activity, please secure your account immediately.
+      </p>
+    </td>
+  </tr>
+</table>
+
+${ctaButton('{{dashboard_url}}', 'Secure Account →', 'red')}
+
+<p style="${TXT_FOOTER_NOTE}">
+  If you suspect unauthorized access, contact us immediately at
+  <a href="mailto:{{support_email}}" style="color:#dc2626;text-decoration:none;font-weight:600">{{support_email}}</a>.
+</p>
+`.trim(),
+};
+
+// ---------------------------------------------------------------------------
 // Registry + helpers
 // ---------------------------------------------------------------------------
 
@@ -584,6 +882,24 @@ export const TYPE_TEMPLATES = {
   security: SECURITY_TEMPLATE,
 };
 
+export const TYPE_TEMPLATES_EN = {
+  maintenance: MAINTENANCE_TEMPLATE_EN,
+  announcement: ANNOUNCEMENT_TEMPLATE_EN,
+  promotion: PROMOTION_TEMPLATE_EN,
+  warning: WARNING_TEMPLATE_EN,
+  reminder: REMINDER_TEMPLATE_EN,
+  security: SECURITY_TEMPLATE_EN,
+};
+
+export function getTypeTemplates(locale = 'vi') {
+  return locale === 'en' ? TYPE_TEMPLATES_EN : TYPE_TEMPLATES;
+}
+
+export function getTypeTemplate(key, locale = 'vi') {
+  const map = getTypeTemplates(locale);
+  return map[key] || TYPE_TEMPLATES[key];
+}
+
 export const TYPE_LABEL_BY_KEY = Object.fromEntries(
   Object.entries(TYPE_TEMPLATES).map(([key, tpl]) => [key, tpl.label]),
 );
@@ -592,14 +908,16 @@ export const TYPE_LABEL_BY_KEY = Object.fromEntries(
 // Variable substitution + full-page wrapper
 // ---------------------------------------------------------------------------
 
-function replaceVariables(content) {
+function replaceVariables(content, locale = 'vi') {
   if (!content) return '';
+  const dateStr = new Date().toLocaleDateString(locale === 'en' ? 'en-US' : 'vi-VN');
+  const userName = locale === 'en' ? 'John Doe' : 'Nguyễn Văn Test';
   return content
-    .replace(/\{\{user_name\}\}/g, 'Nguyễn Văn Test')
+    .replace(/\{\{user_name\}\}/g, userName)
     .replace(/\{\{user_email\}\}/g, 'test@example.com')
     .replace(/\{\{user_plan\}\}/g, 'Pro')
     .replace(/\{\{product_name\}\}/g, SENDER_NAME)
-    .replace(/\{\{current_date\}\}/g, new Date().toLocaleDateString('vi-VN'))
+    .replace(/\{\{current_date\}\}/g, dateStr)
     .replace(/\{\{dashboard_url\}\}/g, 'https://founderai.vn')
     .replace(/\{\{support_email\}\}/g, 'info@digiso.vn');
 }
@@ -608,18 +926,22 @@ function replaceVariables(content) {
  * Render một mẫu thành trang HTML hoàn chỉnh để hiển thị preview iframe.
  * Pattern giống buildBaseTemplate() backend: <table> card trắng + header cam + body + footer info.
  *
- * @param {{ templateKey?: keyof TYPE_TEMPLATES, bodyHtml?: string, subject?: string }} input
+ * @param {{ templateKey?: keyof TYPE_TEMPLATES, bodyHtml?: string, subject?: string, locale?: string }} input
  */
-export function renderFreeformPreview({ templateKey, bodyHtml, subject }) {
+export function renderFreeformPreview({ templateKey, bodyHtml, subject, locale = 'vi' }) {
   // Nếu có templateKey → dùng bodyHtml mặc định + subtitle từ template
-  const tpl = templateKey ? TYPE_TEMPLATES[templateKey] : null;
+  const tpl = templateKey ? getTypeTemplate(templateKey, locale) : null;
+  const isEn = locale === 'en';
   const filled = replaceVariables(
     String(bodyHtml ?? tpl?.bodyHtml ?? '').trim(),
+    locale,
   );
-  const headerSubtitle = tpl?.headerSubtitle || 'Thông báo từ Founder AI';
+  const headerSubtitle = isEn
+    ? (tpl?.headerSubtitle || 'Notification from Founder AI')
+    : (tpl?.headerSubtitle || 'Thông báo từ Founder AI');
 
   return `<!DOCTYPE html>
-<html lang="vi">
+<html lang="${isEn ? 'en' : 'vi'}">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -644,7 +966,7 @@ export function renderFreeformPreview({ templateKey, bodyHtml, subject }) {
           </tr>
           <tr>
             <td style="padding:0">
-              ${buildFooter()}
+              ${buildFooter(locale)}
             </td>
           </tr>
         </table>

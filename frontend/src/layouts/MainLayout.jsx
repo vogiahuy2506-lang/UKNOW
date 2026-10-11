@@ -238,7 +238,7 @@ const MainLayout = ({ children = null }) => {
       : 'overflow-auto';
 
     return (
-      <div className="h-screen overflow-hidden bg-gray-50 flex flex-col" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <div className="h-screen overflow-hidden bg-gray-50 dark:bg-dk-inset flex flex-col transition-colors" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <Header onToggleSidebar={() => setMobileDrawerOpen(true)} />
 
         {mobileDrawerOpen && (
@@ -298,11 +298,11 @@ const MainLayout = ({ children = null }) => {
 
   // Desktop layout
   return (
-    <div className="h-screen overflow-hidden bg-[#f9fafb] flex flex-col" style={{ zoom: 1 }}>
+    <div className="h-screen overflow-hidden bg-[#f9fafb] dark:bg-dk-inset flex flex-col transition-colors" style={{ zoom: 1 }}>
       {/* Topbar: full-width, fixed top (ẩn khi ở Studio Landing Canvas để giải phóng không gian dọc) */}
       {!isLandingCanvas && (
         <div
-          className="fixed top-0 left-0 right-0 z-40 bg-white flex items-center transition-all duration-300"
+          className="fixed top-0 left-0 right-0 z-40 bg-white dark:bg-dk-bg flex items-center border-b border-gray-200/80 dark:border-dk-border/80 transition-all duration-300"
           style={{
             height: HEADER_HEIGHT,
             paddingRight: showAiSidePanel && !isMobile ? aiPanelWidth : 0,
@@ -335,8 +335,8 @@ const MainLayout = ({ children = null }) => {
 
         <main
           ref={mainContentRef}
-          className={`flex-1 min-w-0 overflow-auto bg-white ${
-            isLandingCanvas ? 'rounded-none border-0 shadow-none' : 'rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_12px_rgba(15,23,42,0.04)] border border-gray-200/70'
+          className={`flex-1 min-w-0 overflow-auto bg-white dark:bg-dk-inset ${
+            isLandingCanvas ? 'rounded-none border-0 shadow-none' : 'rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_12px_rgba(15,23,42,0.04)] border border-gray-200/70 dark:border-dk-border/80 text-slate-900 dark:text-dk-text'
           } relative ${isSpecialPage ? '' : 'p-2 md:p-3'}`}
         >
           <div className="relative h-full flex flex-col min-h-0">
@@ -363,7 +363,7 @@ const MainLayout = ({ children = null }) => {
           onClick={() => setAiPanelOpen(true)}
           title={t('mainLayout.openAIAssistant')}
         >
-          <div className="absolute top-1/2 -translate-y-1/2 right-0 w-8 h-24 bg-white border border-slate-200 border-r-0 rounded-l-2xl shadow-xl flex flex-col items-center justify-center gap-2 text-slate-400 group-hover:text-orange-500 group-hover:w-10 group-hover:border-orange-200 transition-all overflow-hidden">
+          <div className="absolute top-1/2 -translate-y-1/2 right-0 w-8 h-24 bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border border-r-0 rounded-l-2xl shadow-xl flex flex-col items-center justify-center gap-2 text-slate-400 dark:text-dk-muted group-hover:text-orange-500 group-hover:w-10 group-hover:border-orange-200 dark:group-hover:border-orange-500/40 transition-all overflow-hidden">
             <HiOutlineSparkles className="w-5 h-5" />
             <div className="w-1 h-1 bg-orange-500 rounded-full"></div>
           </div>

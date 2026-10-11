@@ -108,13 +108,13 @@ const ChatComposer = forwardRef(function ChatComposer({
   const showLimitHint = value.length >= maxLength * LANDING_AI_HINT_RATIO;
 
   return (
-    <div className="border-t border-gray-200 p-4 shrink-0 bg-white">
+    <div className="border-t border-gray-200 dark:border-dk-border p-4 shrink-0 bg-white dark:bg-dk-surface">
       {uploadedFiles.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-2.5">
           {uploadedFiles.map((f, i) => (
             <div
               key={f.tempId || i}
-              className="flex items-center gap-1.5 bg-orange-50 border border-orange-200 rounded-lg px-2.5 py-1 text-xs text-slate-700"
+              className="flex items-center gap-1.5 bg-orange-50 dark:bg-orange-500/15 border border-orange-200 dark:border-orange-500/30 rounded-lg px-2.5 py-1 text-xs text-slate-700 dark:text-dk-text"
             >
               {f.previewUrl ? (
                 <img src={f.previewUrl} alt="" className="w-5 h-5 object-cover rounded shrink-0" />
@@ -125,7 +125,7 @@ const ChatComposer = forwardRef(function ChatComposer({
               <button
                 type="button"
                 onClick={() => removeFile(i)}
-                className="p-0.5 text-slate-400 hover:text-red-500 transition-colors shrink-0"
+                className="p-0.5 text-slate-400 dark:text-dk-muted hover:text-red-500 dark:hover:text-red-400 transition-colors shrink-0"
                 title={tc('removeFile')}
               >
                 <HiOutlineX className="w-3.5 h-3.5" />
@@ -145,7 +145,7 @@ const ChatComposer = forwardRef(function ChatComposer({
           maxLength={maxLength}
           placeholder={isCentered ? (tc('placeholder') || 'Mô tả ý tưởng trang bạn muốn tạo (sản phẩm, đối tượng, phong cách thiết kế, các khối nội dung mong muốn...)') : tc('placeholder')}
           disabled={disabled || isUploading}
-          className="flex-1 resize-none bg-gray-50/60 hover:bg-white focus:bg-white border border-gray-200 focus:border-orange-500 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/15 disabled:bg-gray-50 disabled:cursor-not-allowed transition-all"
+          className="flex-1 resize-none bg-gray-50/60 dark:bg-dk-inset hover:bg-white dark:hover:bg-dk-surface focus:bg-white dark:focus:bg-dk-inset border border-gray-200 dark:border-dk-border focus:border-orange-500 dark:focus:border-orange-500 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-gray-900 dark:text-dk-text placeholder:text-gray-400 dark:placeholder:text-dk-muted focus:outline-none focus:ring-2 focus:ring-orange-500/15 disabled:bg-gray-50 dark:disabled:bg-dk-bg disabled:cursor-not-allowed transition-all"
           style={{ maxHeight: isCentered ? 180 : 140 }}
         />
 
@@ -162,7 +162,7 @@ const ChatComposer = forwardRef(function ChatComposer({
           type="button"
           onClick={() => fileInputRef.current?.click()}
           disabled={disabled || isUploading}
-          className="inline-flex items-center justify-center w-10 h-10 rounded-xl border border-gray-200 bg-gray-50/60 hover:bg-white text-gray-500 hover:text-orange-600 hover:border-orange-300 disabled:opacity-40 disabled:cursor-not-allowed transition-all shrink-0 shadow-2xs"
+          className="inline-flex items-center justify-center w-10 h-10 rounded-xl border border-gray-200 dark:border-dk-border bg-gray-50/60 dark:bg-dk-raised hover:bg-white dark:hover:bg-dk-strong text-gray-500 dark:text-dk-text2 hover:text-orange-600 dark:hover:text-orange-400 hover:border-orange-300 dark:hover:border-dk-border-strong disabled:opacity-40 disabled:cursor-not-allowed transition-all shrink-0 shadow-2xs"
           title={tc('attachHint') || tc('attach')}
         >
           {isUploading ? (
@@ -181,7 +181,7 @@ const ChatComposer = forwardRef(function ChatComposer({
           }`}
           title={tc('send')}
         >
-          {isCentered && <span>Tạo trang</span>}
+          {isCentered && <span>{tc('generatePage', 'Tạo trang')}</span>}
           <HiOutlinePaperAirplane className="w-4.5 h-4.5 -rotate-45" />
         </button>
       </div>
@@ -193,9 +193,9 @@ const ChatComposer = forwardRef(function ChatComposer({
       )}
 
       {isCentered && (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] text-gray-400 mt-2 px-1 select-none">
-          <span>💡 Nhấn <strong>Enter</strong> để gửi lệnh • <strong>Shift + Enter</strong> để xuống dòng</span>
-          <span>Đính kèm hình ảnh hoặc file văn bản tham khảo nếu có</span>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] text-gray-400 dark:text-dk-muted mt-2 px-1 select-none">
+          <span>{tc('shortcutHint', '💡 Nhấn Enter để gửi lệnh • Shift + Enter để xuống dòng')}</span>
+          <span>{tc('attachHintShort', 'Đính kèm hình ảnh hoặc file văn bản tham khảo nếu có')}</span>
         </div>
       )}
     </div>

@@ -205,7 +205,7 @@ export default function ZaloPersonalChannelModal({ open, onClose, onOpenConnect,
 
   const modal = (
     <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-md p-0 sm:p-4 animate-[fadeIn_0.2s_ease-out]">
-      <div className="relative bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl shadow-indigo-500/20 w-full max-w-2xl mx-0 sm:mx-4 h-[92dvh] sm:h-auto sm:max-h-[85vh] overflow-hidden flex flex-col animate-[modalIn_0.28s_cubic-bezier(0.16,1,0.3,1)]">
+      <div className="relative bg-white dark:bg-dk-surface rounded-t-3xl sm:rounded-3xl shadow-2xl shadow-indigo-500/20 border border-transparent dark:border-dk-border w-full max-w-2xl mx-0 sm:mx-4 h-[92dvh] sm:h-auto sm:max-h-[85vh] overflow-hidden flex flex-col animate-[modalIn_0.28s_cubic-bezier(0.16,1,0.3,1)]">
 
         {/* Header */}
         <div className="relative overflow-hidden bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 px-5 pt-5 pb-4 shrink-0">
@@ -251,7 +251,7 @@ export default function ZaloPersonalChannelModal({ open, onClose, onOpenConnect,
         </div>
 
         {/* Mobile Tab Switcher — copy pattern từ ChatbotStudioPage */}
-        <div className="lg:hidden sticky top-0 z-10 bg-white border-b border-slate-100 shrink-0">
+        <div className="lg:hidden sticky top-0 z-10 bg-white dark:bg-dk-surface border-b border-slate-100 dark:border-dk-border shrink-0">
           <div className="flex">
             {TABS.map((tab) => {
               const Icon = tab.icon;
@@ -264,7 +264,7 @@ export default function ZaloPersonalChannelModal({ open, onClose, onOpenConnect,
                   onClick={() => !disabled && setActiveTab(tab.id)}
                   disabled={disabled}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-3 transition-colors relative ${
-                    isActive ? 'text-blue-600' : 'text-slate-500 hover:text-slate-700'
+                    isActive ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-dk-text2 hover:text-slate-700 dark:hover:text-dk-text'
                   } ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
                 >
                   <Icon className="w-4 h-4" />
@@ -279,15 +279,15 @@ export default function ZaloPersonalChannelModal({ open, onClose, onOpenConnect,
         </div>
 
         {/* Desktop sub-header — chỉ hiện trên lg */}
-        <div className="hidden lg:flex items-center justify-between px-5 py-3 border-b border-slate-100 bg-slate-50/60 shrink-0">
+        <div className="hidden lg:flex items-center justify-between px-5 py-3 border-b border-slate-100 dark:border-dk-border bg-slate-50/60 dark:bg-dk-raised/50 shrink-0">
           <div className="flex items-center gap-2">
-            <HiOutlineUserGroup className="w-4 h-4 text-slate-500" />
-            <span className="text-sm font-medium text-slate-700">Tài khoản Zalo cá nhân</span>
+            <HiOutlineUserGroup className="w-4 h-4 text-slate-500 dark:text-dk-text2" />
+            <span className="text-sm font-medium text-slate-700 dark:text-dk-text">Tài khoản Zalo cá nhân</span>
           </div>
           <button
             type="button"
             onClick={() => onOpenConnect?.()}
-            className="text-xs font-semibold text-blue-600 hover:text-blue-700 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg hover:bg-blue-50 transition-colors"
+            className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors"
           >
             <HiOutlinePlus className="w-3.5 h-3.5" />
             Đăng nhập thêm
@@ -295,7 +295,7 @@ export default function ZaloPersonalChannelModal({ open, onClose, onOpenConnect,
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto overscroll-contain bg-slate-50/30">
+        <div className="flex-1 overflow-y-auto overscroll-contain bg-slate-50/30 dark:bg-dk-bg">
           {/* ── Tab: Accounts (default + mobile) ─────────────────────────── */}
           <div className={`${activeTab === 'accounts' ? 'block' : 'hidden'} lg:block h-full`}>
             {loading ? (
@@ -328,14 +328,14 @@ export default function ZaloPersonalChannelModal({ open, onClose, onOpenConnect,
         </div>
 
         {/* Footer — desktop only (mobile dùng nút trong panel) */}
-        <div className="hidden lg:flex px-5 py-4 border-t border-slate-100 items-center justify-between gap-3 shrink-0">
-          <p className="text-xs text-slate-500">
+        <div className="hidden lg:flex px-5 py-4 border-t border-slate-100 dark:border-dk-border bg-white dark:bg-dk-surface items-center justify-between gap-3 shrink-0">
+          <p className="text-xs text-slate-500 dark:text-dk-text2">
             Bật chatbot cho từng tài khoản để tự động trả lời tin nhắn.
           </p>
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-xl transition-colors"
+            className="px-5 py-2 bg-slate-100 dark:bg-dk-raised hover:bg-slate-200 dark:hover:bg-dk-strong text-slate-700 dark:text-dk-text text-sm font-medium rounded-xl transition-colors"
           >
             {t('common.close') || 'Đóng'}
           </button>
@@ -352,14 +352,18 @@ function AccountRow({ account, isEnabled, onToggle }) {
   return (
     <div
       className={`rounded-xl border transition-all ${
-        isEnabled ? 'bg-emerald-50/50 border-emerald-200' : 'bg-white border-slate-200'
+        isEnabled
+          ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/60'
+          : 'bg-white dark:bg-dk-raised border-slate-200 dark:border-dk-border'
       }`}
     >
       <div className="flex items-center justify-between gap-3 px-3.5 py-3 sm:px-4">
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <div
             className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center shrink-0 ${
-              isEnabled ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'
+              isEnabled
+                ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400'
+                : 'bg-slate-100 dark:bg-dk-raised text-slate-400 dark:text-dk-muted'
             }`}
           >
             {account.avatar ? (
@@ -371,10 +375,10 @@ function AccountRow({ account, isEnabled, onToggle }) {
             )}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-slate-800 truncate">{account.displayName}</p>
+            <p className="text-sm font-semibold text-slate-800 dark:text-dk-text truncate">{account.displayName}</p>
             <div className="flex items-center gap-1.5 mt-0.5">
-              <span className={`inline-flex w-1.5 h-1.5 rounded-full ${account.isConnected ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-              <p className="text-xs text-slate-500 truncate">
+              <span className={`inline-flex w-1.5 h-1.5 rounded-full ${account.isConnected ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-dk-strong'}`} />
+              <p className="text-xs text-slate-500 dark:text-dk-text2 truncate">
                 {account.isConnected
                   ? (isEnabled ? 'Đang bật chatbot' : 'Đã kết nối')
                   : 'Mất kết nối'}
@@ -390,7 +394,7 @@ function AccountRow({ account, isEnabled, onToggle }) {
           aria-label={isEnabled ? 'Tắt chatbot' : 'Bật chatbot'}
           onClick={() => onToggle(account, !isEnabled)}
           className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 ${
-            isEnabled ? 'bg-emerald-500' : 'bg-slate-200'
+            isEnabled ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-dk-strong'
           }`}
         >
           <span
@@ -408,28 +412,28 @@ function AccountRow({ account, isEnabled, onToggle }) {
 function EmptyState({ onOpenConnect }) {
   return (
     <div className="flex flex-col items-center justify-center text-center px-6 py-12 sm:py-16">
-      <div className="relative w-20 h-20 rounded-3xl bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center mb-5">
-        <HiOutlineQrcode className="w-10 h-10 text-blue-500" />
-        <span className="absolute -top-1 -right-1 w-7 h-7 rounded-full bg-amber-400 ring-4 ring-white flex items-center justify-center text-white text-xs font-bold">
+      <div className="relative w-20 h-20 rounded-3xl bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-950/60 dark:to-indigo-950/60 flex items-center justify-center mb-5">
+        <HiOutlineQrcode className="w-10 h-10 text-blue-500 dark:text-blue-400" />
+        <span className="absolute -top-1 -right-1 w-7 h-7 rounded-full bg-amber-400 ring-4 ring-white dark:ring-dk-bg flex items-center justify-center text-white text-xs font-bold">
           !
         </span>
       </div>
-      <h4 className="text-base font-semibold text-slate-900 mb-1">
+      <h4 className="text-base font-semibold text-slate-900 dark:text-dk-text mb-1">
         Chưa có tài khoản Zalo nào
       </h4>
-      <p className="text-sm text-slate-500 max-w-sm mb-6 leading-relaxed">
+      <p className="text-sm text-slate-500 dark:text-dk-text2 max-w-sm mb-6 leading-relaxed">
         Đăng nhập tài khoản Zalo cá nhân của bạn bằng mã QR để bắt đầu kích hoạt chatbot tự động trả lời.
       </p>
 
       <ol className="w-full max-w-sm space-y-2 mb-6 text-left">
         {GUIDE_STEPS.map((s, i) => (
-          <li key={i} className="flex gap-3 p-3 rounded-xl bg-white border border-slate-100">
-            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-600 text-xs font-bold shrink-0">
+          <li key={i} className="flex gap-3 p-3 rounded-xl bg-white dark:bg-dk-raised border border-slate-100 dark:border-dk-border">
+            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 text-xs font-bold shrink-0">
               {i + 1}
             </span>
             <div className="min-w-0">
-              <p className="text-sm font-medium text-slate-800">{s.title}</p>
-              <p className="text-xs text-slate-500 mt-0.5">{s.desc}</p>
+              <p className="text-sm font-medium text-slate-800 dark:text-dk-text">{s.title}</p>
+              <p className="text-xs text-slate-500 dark:text-dk-text2 mt-0.5">{s.desc}</p>
             </div>
           </li>
         ))}
@@ -454,11 +458,11 @@ function EmptyState({ onOpenConnect }) {
 function GuidePanel({ onOpenConnect }) {
   return (
     <div className="p-4 space-y-4">
-      <div className="flex items-start gap-3 p-4 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100">
-        <HiOutlineSparkles className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+      <div className="flex items-start gap-3 p-4 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/40 border border-blue-100 dark:border-blue-900/50">
+        <HiOutlineSparkles className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
         <div>
-          <p className="text-sm font-semibold text-slate-900">Kết nối Zalo cá nhân trong 3 bước</p>
-          <p className="text-xs text-slate-600 mt-1">
+          <p className="text-sm font-semibold text-slate-900 dark:text-dk-text">Kết nối Zalo cá nhân trong 3 bước</p>
+          <p className="text-xs text-slate-600 dark:text-dk-text mt-1">
             Đăng nhập 1 lần, dùng được cho nhiều chatbot. Tài khoản chỉ lưu trên thiết bị của bạn.
           </p>
         </div>
@@ -468,13 +472,13 @@ function GuidePanel({ onOpenConnect }) {
         {GUIDE_STEPS.map((s, i) => {
           const Icon = s.icon;
           return (
-            <div key={i} className="flex gap-3 p-3.5 rounded-xl bg-white border border-slate-100">
-              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-blue-50 text-blue-600 shrink-0">
+            <div key={i} className="flex gap-3 p-3.5 rounded-xl bg-white dark:bg-dk-raised border border-slate-100 dark:border-dk-border">
+              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 shrink-0">
                 <Icon className="w-5 h-5" />
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-900">{s.title}</p>
-                <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{s.desc}</p>
+                <p className="text-sm font-semibold text-slate-900 dark:text-dk-text">{s.title}</p>
+                <p className="text-xs text-slate-500 dark:text-dk-text2 mt-0.5 leading-relaxed">{s.desc}</p>
               </div>
             </div>
           );
@@ -506,20 +510,20 @@ function SettingsPanel({ accounts, chatbotSettings }) {
         <StatCard label="Đang bật chatbot" value={totalEnabled} color="emerald" />
       </div>
 
-      <div className="p-4 rounded-xl bg-white border border-slate-100">
+      <div className="p-4 rounded-xl bg-white dark:bg-dk-raised border border-slate-100 dark:border-dk-border">
         <div className="flex items-center gap-2 mb-3">
-          <HiOutlineCog className="w-4 h-4 text-slate-500" />
-          <p className="text-sm font-semibold text-slate-900">Cấu hình chung</p>
+          <HiOutlineCog className="w-4 h-4 text-slate-500 dark:text-dk-text2" />
+          <p className="text-sm font-semibold text-slate-900 dark:text-dk-text">Cấu hình chung</p>
         </div>
-        <p className="text-xs text-slate-500 leading-relaxed">
+        <p className="text-xs text-slate-500 dark:text-dk-text2 leading-relaxed">
           AI config (system prompt, nhiệt độ, max tokens) được chia sẻ với cài đặt chatbot chính ở panel bên phải (desktop) hoặc tab cấu hình khi dùng màn rộng.
         </p>
       </div>
 
-      <div className="p-3 rounded-xl bg-amber-50 border border-amber-100">
+      <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900/50">
         <div className="flex gap-2">
-          <HiOutlineExclamationCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-          <p className="text-xs text-amber-800 leading-relaxed">
+          <HiOutlineExclamationCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
             Bật chatbot chỉ áp dụng cho từng tài khoản. Có thể bật nhiều tài khoản cùng lúc.
           </p>
         </div>
@@ -530,8 +534,8 @@ function SettingsPanel({ accounts, chatbotSettings }) {
 
 function StatCard({ label, value, color }) {
   const palette = {
-    blue:   'from-blue-50 to-indigo-50 text-blue-700 border-blue-100',
-    emerald:'from-emerald-50 to-teal-50 text-emerald-700 border-emerald-100',
+    blue:   'from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/40 text-blue-700 dark:text-blue-300 border-blue-100 dark:border-blue-900/50',
+    emerald:'from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-100 dark:border-emerald-900/50',
   };
   return (
     <div className={`p-3.5 rounded-xl bg-gradient-to-br border ${palette[color] || palette.blue}`}>

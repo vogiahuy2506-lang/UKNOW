@@ -390,11 +390,10 @@ export default function PricingSection({ embedded = false, compact = false, glas
   return (
     <section
       id="pricing"
-      className={`${sectionPadding} bg-white relative overflow-hidden`}
+      className={`${sectionPadding} bg-white relative overflow-hidden transition-colors`}
     >
       {/* Dot grid background — match ContactPage / HeroPage */}
-      <div className="absolute inset-0 opacity-[0.3]" style={{
-        backgroundColor: '#f8fafc',
+      <div className="absolute inset-0 opacity-[0.3] pointer-events-none" style={{
         backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)',
         backgroundSize: '24px 24px'
       }} />
@@ -403,7 +402,7 @@ export default function PricingSection({ embedded = false, compact = false, glas
         {!embedded && (
           <AnimatedSection className="text-center mb-8">
             {/* Badge — match HeroPage style */}
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 text-slate-700 text-sm font-medium mb-5">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 text-slate-700 text-sm font-medium mb-5 border border-transparent">
               <span className="w-2 h-2 rounded-full bg-orange-500" />
               <span>{t('pricing.heroBadge')}</span>
             </div>
@@ -769,7 +768,7 @@ export default function PricingSection({ embedded = false, compact = false, glas
       {/* Day Loss Warning Modal */}
       {dayLossWarningPlan && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+          <div className="bg-white border border-transparent rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <div className="flex items-center gap-3 text-amber-600">
               <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
                 <FaExclamationTriangle className="w-5 h-5 text-amber-600" />

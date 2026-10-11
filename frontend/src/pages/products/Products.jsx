@@ -822,10 +822,10 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
             <HiOutlineCube className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-dk-text">
               {t('products.productManagement')}
             </h1>
-            <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-dk-text2 mt-0.5">
               {t('products.productDescription')}
             </p>
           </div>
@@ -842,7 +842,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
       </div>
 
       {/* ── Filter & Search Toolbar ── */}
-      <div className="rounded-2xl border border-slate-200/90 bg-white p-3.5 shadow-2xs">
+      <div className="rounded-2xl border border-slate-200/90 dark:border-dk-border bg-white dark:bg-dk-surface p-3.5 shadow-2xs">
         <form onSubmit={handleSearch} className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           <div className="relative flex-1">
             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
@@ -853,7 +853,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
               value={pendingSearch}
               onChange={(e) => setPendingSearch(e.target.value)}
               placeholder={t('products.searchPlaceholder')}
-              className="w-full pl-9 pr-8 py-2 text-xs bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 text-slate-800"
+              className="w-full pl-9 pr-8 py-2 text-xs bg-slate-50 dark:bg-dk-surface hover:bg-slate-100/70 dark:hover:bg-dk-raised focus:bg-white dark:focus:bg-dk-raised border border-slate-200 dark:border-dk-border rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 dark:placeholder:text-dk-muted text-slate-800 dark:text-dk-text"
             />
             {pendingSearch && (
               <button
@@ -873,22 +873,22 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
           <div className="flex items-center gap-2 shrink-0">
             <button
               type="submit"
-              className="inline-flex items-center justify-center px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-colors shadow-2xs"
+              className="inline-flex items-center justify-center px-3.5 py-2 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised hover:bg-slate-50 dark:hover:bg-dk-strong text-xs font-semibold text-slate-700 dark:text-dk-text transition-colors shadow-2xs"
             >
               {t('common.search')}
             </button>
 
             {/* View Mode Toggle: Bảng gọn vs Đầy đủ phễu */}
             {canViewFunnel && (
-              <div className="inline-flex rounded-xl bg-slate-100 p-0.5 border border-slate-200/80">
+              <div className="inline-flex rounded-xl bg-slate-100 dark:bg-dk-raised p-0.5 border border-slate-200/80 dark:border-dk-border">
                 <button
                   type="button"
                   data-testid="view-mode-compact"
                   onClick={() => setViewMode('compact')}
                   className={`px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-all ${
                     viewMode === 'compact'
-                      ? 'bg-white text-slate-900 shadow-xs'
-                      : 'text-slate-500 hover:text-slate-800'
+                      ? 'bg-white dark:bg-dk-surface text-slate-900 dark:text-dk-text shadow-xs'
+                      : 'text-slate-500 dark:text-dk-text2 hover:text-slate-800 dark:hover:text-dk-text'
                   }`}
                   title="Chế độ xem gọn gàng"
                 >
@@ -900,8 +900,8 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                   onClick={() => setViewMode('full')}
                   className={`px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-all ${
                     viewMode === 'full'
-                      ? 'bg-white text-slate-900 shadow-xs'
-                      : 'text-slate-500 hover:text-slate-800'
+                      ? 'bg-white dark:bg-dk-surface text-slate-900 dark:text-dk-text shadow-xs'
+                      : 'text-slate-500 dark:text-dk-text2 hover:text-slate-800 dark:hover:text-dk-text'
                   }`}
                   title="Hiển thị đầy đủ 6 cột phễu"
                 >
@@ -916,7 +916,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                 aria-label={t('products.funnel.periodLabel')}
                 value={funnelPeriod}
                 onChange={(e) => setFunnelPeriod(e.target.value)}
-                className="rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold text-slate-700 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 shadow-2xs cursor-pointer"
+                className="rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised px-2.5 py-2 text-xs font-semibold text-slate-700 dark:text-dk-text focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 shadow-2xs cursor-pointer"
               >
                 {FUNNEL_PERIODS.map((p) => (
                   <option key={p} value={p}>
@@ -927,7 +927,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
             )}
 
             {pagination.total > 0 && (
-              <span className="hidden lg:inline-flex items-center px-2.5 py-1.5 rounded-lg bg-slate-100 text-[11px] font-semibold text-slate-600 border border-slate-200/60">
+              <span className="hidden lg:inline-flex items-center px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-dk-raised text-[11px] font-semibold text-slate-600 dark:text-dk-text border border-slate-200/60 dark:border-dk-border">
                 {t('products.totalProducts', { total: pagination.total })}
               </span>
             )}
@@ -936,27 +936,27 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
       </div>
 
       {/* ── Table Card ── */}
-      <div className="rounded-2xl border border-slate-200/90 bg-white shadow-xs overflow-hidden">
+      <div className="rounded-2xl border border-slate-200/90 dark:border-dk-border bg-white dark:bg-dk-surface shadow-xs overflow-hidden">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
             <div className="w-7 h-7 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-xs text-slate-500 font-medium">Đang tải danh sách sản phẩm…</p>
+            <p className="text-xs text-slate-500 dark:text-dk-text2 font-medium">Đang tải danh sách sản phẩm…</p>
           </div>
         ) : products.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center px-4">
-            <div className="w-14 h-14 rounded-2xl bg-orange-50 border border-orange-200/60 flex items-center justify-center text-orange-400 mb-3 shadow-xs">
+            <div className="w-14 h-14 rounded-2xl bg-orange-50 dark:bg-orange-950/40 border border-orange-200/60 dark:border-orange-800/60 flex items-center justify-center text-orange-400 mb-3 shadow-xs">
               <HiOutlineCube className="w-7 h-7" />
             </div>
-            <p className="text-sm font-semibold text-slate-700">{t('products.noProducts')}</p>
-            <p className="text-xs text-slate-400 mt-1 max-w-sm leading-relaxed">
+            <p className="text-sm font-semibold text-slate-700 dark:text-dk-text">{t('products.noProducts')}</p>
+            <p className="text-xs text-slate-400 dark:text-dk-text2 mt-1 max-w-sm leading-relaxed">
               Bấm "+ Thêm sản phẩm" ở trên để đưa các sản phẩm hoặc dịch vụ vào hệ thống.
             </p>
           </div>
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-slate-100">
-                <thead className="bg-slate-50/80">
+              <table className="min-w-full divide-y divide-slate-100 dark:divide-dk-border">
+                <thead className="bg-slate-50/80 dark:bg-dk-raised/50">
                   <tr>
                     {/* Bảng không có phễu: hiện mã sản phẩm cột riêng */}
                     {!canViewFunnel && (
@@ -1246,18 +1246,18 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
               aria-hidden="true"
               tabIndex={-1}
             />
-            <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-200/80 z-10 animate-in fade-in zoom-in-95 duration-150">
+            <div className="relative bg-white dark:bg-dk-raised rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-200/80 dark:border-dk-border/80 z-10 animate-in fade-in zoom-in-95 duration-150">
               {/* Header */}
-              <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-50/80 via-white to-orange-50/20 shrink-0">
+              <div className="px-6 py-5 border-b border-slate-100 dark:border-dk-border flex items-center justify-between bg-gradient-to-r from-slate-50/80 via-white to-orange-50/20 dark:from-dk-raised dark:via-dk-raised dark:to-orange-950/20 shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="flex items-center justify-center w-10 h-10 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20">
                     <HiOutlineCube className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-slate-900 text-base">
+                    <h3 className="font-bold text-slate-900 dark:text-dk-text text-base">
                       {formModal.mode === 'create' ? t('products.addProduct') : t('products.editProduct')}
                     </h3>
-                    <p className="text-xs text-slate-400 mt-0.5">
+                    <p className="text-xs text-slate-400 dark:text-dk-text mt-0.5">
                       {formModal.mode === 'create' ? 'Tạo mới sản phẩm hoặc dịch vụ' : 'Chỉnh sửa thông tin sản phẩm'}
                     </p>
                   </div>
@@ -1265,7 +1265,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                 <button
                   type="button"
                   onClick={closeFormModal}
-                  className="rounded-xl p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                  className="rounded-xl p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:text-dk-text2 dark:hover:text-dk-text dark:hover:bg-dk-raised transition-colors"
                   aria-label={t('common.close')}
                 >
                   <HiOutlineX className="w-5 h-5" />
@@ -1275,12 +1275,12 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
               {/* Form Content - 2 cột cuộn mượt mà */}
               <form id="product-form" onSubmit={handleFormSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
                 {/* Chọn loại sản phẩm */}
-                <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-200/80 space-y-2">
+                <div className="p-3.5 rounded-2xl bg-slate-50/70 dark:bg-dk-surface border border-slate-200/80 dark:border-dk-border space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    <span className="text-xs font-bold text-slate-700 dark:text-dk-text uppercase tracking-wider">
                       {t('products.kindLabel')}
                     </span>
-                    <span className="text-[11px] text-slate-500 font-medium">Chọn phân loại phù hợp</span>
+                    <span className="text-[11px] text-slate-500 dark:text-dk-text2 font-medium">Chọn phân loại phù hợp</span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     {PRODUCT_KIND_OPTIONS.map((k) => {
@@ -1290,8 +1290,8 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                           key={k}
                           className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all duration-150 ${
                             isSelected
-                              ? 'border-orange-500 bg-orange-50/30 ring-2 ring-orange-500/10 shadow-2xs'
-                              : 'border-slate-200 bg-white hover:bg-slate-50'
+                              ? 'border-orange-500 bg-orange-50/30 dark:bg-orange-950/30 ring-2 ring-orange-500/10 shadow-2xs'
+                              : 'border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised hover:bg-slate-50 dark:hover:bg-dk-strong'
                           }`}
                         >
                           <input
@@ -1303,10 +1303,10 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                             className="mt-0.5 text-orange-600 focus:ring-orange-500"
                           />
                           <div className="min-w-0">
-                            <span className="text-xs font-bold text-slate-800 block">
+                            <span className="text-xs font-bold text-slate-800 dark:text-dk-text block">
                               {k === 'sale' ? t('products.kindSale') : t('products.kindEvent')}
                             </span>
-                            <span className="text-[11px] text-slate-500 mt-0.5 block leading-relaxed">
+                            <span className="text-[11px] text-slate-500 dark:text-dk-text2 mt-0.5 block leading-relaxed">
                               {k === 'sale' ? 'Có giá bán hoặc thu phí giao dịch' : 'Sự kiện, hội thảo, buổi họp miễn phí'}
                             </span>
                           </div>
@@ -1335,15 +1335,15 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Cột trái: Thông tin cơ bản & Giá bán */}
                   <div className="space-y-4">
-                    <div className="flex items-center gap-2 pb-1 border-b border-slate-100">
+                    <div className="flex items-center gap-2 pb-1 border-b border-slate-100 dark:border-dk-border">
                       <HiOutlineTag className="w-4 h-4 text-orange-500" />
-                      <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                      <span className="text-xs font-bold text-slate-800 dark:text-dk-text uppercase tracking-wider">
                         Thông tin cơ bản
                       </span>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-dk-text mb-1.5">
                         {t('products.productName')} <span className="text-rose-500">*</span>
                       </label>
                       <input
@@ -1352,13 +1352,13 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                         value={formData.productName}
                         onChange={(e) => setField('productName', e.target.value)}
                         placeholder="VD: Khóa học AI Marketing Thực Chiến"
-                        className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 text-slate-800 font-medium"
+                        className="w-full px-3.5 py-2 text-sm bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 placeholder:dark:text-dk-muted text-slate-800 dark:text-dk-text font-medium"
                       />
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-dk-text mb-1.5">
                           {t('products.productCode')}
                         </label>
                         <input
@@ -1366,21 +1366,21 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                           value={formData.productCode}
                           onChange={(e) => setField('productCode', e.target.value)}
                           placeholder="VD: AI-01"
-                          className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 text-slate-800 font-mono"
+                          className="w-full px-3.5 py-2 text-sm bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 placeholder:dark:text-dk-muted text-slate-800 dark:text-dk-text font-mono"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-dk-text mb-1.5">
                           {t('common.status')}
                         </label>
                         <select
                           value={formData.status}
                           onChange={(e) => setField('status', e.target.value)}
-                          className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all text-slate-800 font-medium cursor-pointer"
+                          className="w-full px-3 py-2 text-sm bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all text-slate-800 dark:text-dk-text font-medium cursor-pointer"
                         >
                           {PRODUCT_STATUS_OPTIONS.map((st) => (
-                            <option key={st} value={st}>
+                            <option key={st} value={st} className="dark:bg-dk-raised">
                               {t(STATUS_KEYS[formData.kind === 'event' ? 'event' : 'sale'][st])}
                             </option>
                           ))}
@@ -1389,7 +1389,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-dk-text mb-1.5">
                         {t('products.category')}
                       </label>
                       <input
@@ -1398,7 +1398,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                         onChange={(e) => setField('category', e.target.value)}
                         placeholder={t('products.categoryPlaceholder')}
                         list="categories-list"
-                        className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 text-slate-800"
+                        className="w-full px-3.5 py-2 text-sm bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 placeholder:dark:text-dk-muted text-slate-800 dark:text-dk-text"
                       />
                       <datalist id="categories-list">
                         {categories.map((c) => (
@@ -1408,17 +1408,17 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                     </div>
 
                     {/* Khối Cấu hình giá */}
-                    <div className="p-3.5 rounded-2xl bg-amber-50/30 border border-amber-200/60 space-y-3">
+                    <div className="p-3.5 rounded-2xl bg-amber-50/30 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/40 space-y-3">
                       <div className="flex items-center gap-1.5">
-                        <HiOutlineCurrencyDollar className="w-4 h-4 text-amber-600" />
-                        <span className="text-xs font-bold text-amber-800 uppercase tracking-wider">
+                        <HiOutlineCurrencyDollar className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                        <span className="text-xs font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wider">
                           Giá bán & Thanh toán
                         </span>
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          <label className="block text-xs font-semibold text-slate-700 dark:text-dk-text mb-1">
                             {t('products.price')}
                           </label>
                           <input
@@ -1426,11 +1426,11 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                             value={formData.price}
                             onChange={(e) => handlePriceTextChange(e.target.value)}
                             placeholder={formData.kind === 'event' ? t('products.priceFreePlaceholder') : t('products.pricePlaceholder')}
-                            className="w-full px-3 py-1.5 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 text-slate-800"
+                            className="w-full px-3 py-1.5 text-sm bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 placeholder:dark:text-dk-muted text-slate-800 dark:text-dk-text"
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          <label className="block text-xs font-semibold text-slate-700 dark:text-dk-text mb-1">
                             {t('products.originalPrice')}
                           </label>
                           <input
@@ -1438,13 +1438,13 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                             value={formData.originalPrice}
                             onChange={(e) => setField('originalPrice', e.target.value)}
                             placeholder="VD: 5.000.000"
-                            className="w-full px-3 py-1.5 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 text-slate-800"
+                            className="w-full px-3 py-1.5 text-sm bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 placeholder:dark:text-dk-muted text-slate-800 dark:text-dk-text"
                           />
                         </div>
                       </div>
 
                       <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-dk-text mb-1">
                           {t('products.priceAmount')}
                         </label>
                         <input
@@ -1457,24 +1457,24 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                             setField('priceAmount', raw);
                           }}
                           placeholder={t('products.priceAmountPlaceholder')}
-                          className="w-full px-3 py-1.5 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 text-slate-800 font-mono font-semibold"
+                          className="w-full px-3 py-1.5 text-sm bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 placeholder:dark:text-dk-muted text-slate-800 dark:text-dk-text font-mono font-semibold"
                         />
                         {showSuggest && (
                           <div
                             data-testid="product-price-amount-suggest"
-                            className="mt-1.5 flex items-center justify-between text-xs bg-white/80 p-2 rounded-lg border border-amber-200/80 text-amber-800"
+                            className="mt-1.5 flex items-center justify-between text-xs bg-white/80 dark:bg-dk-raised p-2 rounded-lg border border-amber-200/80 dark:border-amber-900/50 text-amber-800 dark:text-amber-300"
                           >
                             <span>{t('products.priceAmountSuggest', { amount: `${suggestedPriceAmount.toLocaleString('vi-VN')} đ` })}</span>
                             <button
                               type="button"
                               onClick={() => setField('priceAmount', String(suggestedPriceAmount))}
-                              className="font-bold text-orange-600 hover:text-orange-700 underline text-xs ml-2 cursor-pointer shrink-0"
+                              className="font-bold text-orange-600 dark:text-orange-400 hover:text-orange-700 underline text-xs ml-2 cursor-pointer shrink-0"
                             >
                               {t('products.priceAmountUse')}
                             </button>
                           </div>
                         )}
-                        <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                        <p className="text-[11px] text-slate-500 dark:text-dk-text2 mt-1 leading-relaxed">
                           {t('products.priceAmountHint')}
                         </p>
                       </div>
@@ -1483,15 +1483,15 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
 
                   {/* Cột phải: Thông tin tiếp thị & AI */}
                   <div className="space-y-4">
-                    <div className="flex items-center gap-2 pb-1 border-b border-slate-100">
+                    <div className="flex items-center gap-2 pb-1 border-b border-slate-100 dark:border-dk-border">
                       <HiOutlineSparkles className="w-4 h-4 text-orange-500" />
-                      <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                      <span className="text-xs font-bold text-slate-800 dark:text-dk-text uppercase tracking-wider">
                         Tiếp thị & Trợ lý AI
                       </span>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-dk-text mb-1.5">
                         {t('products.description')}
                       </label>
                       <textarea
@@ -1499,12 +1499,12 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                         value={formData.description}
                         onChange={(e) => setField('description', e.target.value)}
                         placeholder="Mô tả tóm tắt giá trị, nội dung chính của sản phẩm/dịch vụ..."
-                        className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 text-slate-800 resize-none leading-relaxed"
+                        className="w-full px-3.5 py-2 text-sm bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 placeholder:dark:text-dk-muted text-slate-800 dark:text-dk-text resize-none leading-relaxed"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-dk-text mb-1.5">
                         {t('products.usp')}
                       </label>
                       <textarea
@@ -1512,12 +1512,12 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                         value={formData.usp}
                         onChange={(e) => setField('usp', e.target.value)}
                         placeholder={t('products.uspPlaceholder')}
-                        className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 text-slate-800 resize-none"
+                        className="w-full px-3.5 py-2 text-sm bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 placeholder:dark:text-dk-muted text-slate-800 dark:text-dk-text resize-none"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-dk-text mb-1.5">
                         {t('products.targetAudience')}
                       </label>
                       <input
@@ -1525,14 +1525,14 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                         value={formData.targetAudience}
                         onChange={(e) => setField('targetAudience', e.target.value)}
                         placeholder={t('products.targetAudiencePlaceholder')}
-                        className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 text-slate-800"
+                        className="w-full px-3.5 py-2 text-sm bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 placeholder:dark:text-dk-muted text-slate-800 dark:text-dk-text"
                       />
                     </div>
 
                     <div className="space-y-3.5">
                       {/* Link sản phẩm */}
                       <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-dk-text mb-1.5">
                           {t('products.productUrl')}
                         </label>
                         <div className="relative">
@@ -1544,7 +1544,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                             value={formData.productUrl}
                             onChange={(e) => setField('productUrl', e.target.value)}
                             placeholder={t('products.productUrlPlaceholder')}
-                            className="w-full pl-9 pr-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 text-slate-800"
+                            className="w-full pl-9 pr-3.5 py-2 text-sm bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 placeholder:dark:text-dk-muted text-slate-800 dark:text-dk-text"
                           />
                         </div>
                         {formData.productUrl && (
@@ -1552,7 +1552,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                             href={formData.productUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[11px] text-orange-600 hover:text-orange-700 hover:underline mt-1"
+                            className="inline-flex items-center gap-1 text-[11px] text-orange-600 dark:text-orange-400 hover:text-orange-700 underline mt-1"
                           >
                             <HiOutlineExternalLink className="w-3.5 h-3.5" />
                             <span>{t('products.openProductUrl') || 'Thử mở liên kết'}</span>
@@ -1562,7 +1562,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
 
                       {/* Ảnh sản phẩm */}
                       <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-dk-text mb-1.5">
                           {t('products.thumbnailUrl')}
                         </label>
                         <div className="flex gap-2.5">
@@ -1571,10 +1571,10 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                             value={formData.thumbnailUrl}
                             onChange={(e) => setField('thumbnailUrl', e.target.value)}
                             placeholder="https://... hoặc tải ảnh lên"
-                            className="flex-1 min-w-0 px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 text-slate-800"
+                            className="flex-1 min-w-0 px-3.5 py-2 text-sm bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 placeholder:dark:text-dk-muted text-slate-800 dark:text-dk-text"
                           />
-                          <label className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 cursor-pointer transition-colors shadow-2xs shrink-0">
-                            <HiOutlinePhotograph className="w-4 h-4 text-slate-500" />
+                          <label className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised hover:bg-slate-50 dark:hover:bg-dk-strong text-xs font-semibold text-slate-700 dark:text-dk-text cursor-pointer transition-colors shadow-2xs shrink-0">
+                            <HiOutlinePhotograph className="w-4 h-4 text-slate-500 dark:text-dk-text2" />
                             <span>{isUploadingThumbnail ? t('products.uploading') : t('products.uploadImage')}</span>
                             <input
                               type="file"
@@ -1587,18 +1587,18 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                         </div>
 
                         {formData.thumbnailUrl && (
-                          <div className="mt-2.5 flex items-center gap-3 p-2.5 rounded-xl border border-slate-100 bg-slate-50/70">
+                          <div className="mt-2.5 flex items-center gap-3 p-2.5 rounded-xl border border-slate-100 dark:border-dk-border bg-slate-50/70 dark:bg-dk-surface">
                             <img
                               src={formData.thumbnailUrl}
                               alt={t('products.thumbnailPreview')}
-                              className="h-16 w-16 rounded-lg border border-slate-200 object-cover shadow-2xs"
+                              className="h-16 w-16 rounded-lg border border-slate-200 dark:border-dk-border object-cover shadow-2xs"
                             />
                             <div className="flex-1 min-w-0">
-                              <p className="text-xs font-medium text-slate-700 truncate">{formData.thumbnailUrl}</p>
+                              <p className="text-xs font-medium text-slate-700 dark:text-dk-text truncate">{formData.thumbnailUrl}</p>
                               <button
                                 type="button"
                                 onClick={() => setField('thumbnailUrl', '')}
-                                className="text-xs text-rose-600 hover:text-rose-700 hover:underline mt-1 inline-flex items-center gap-1"
+                                className="text-xs text-rose-600 dark:text-rose-400 hover:text-rose-700 hover:underline mt-1 inline-flex items-center gap-1"
                               >
                                 <HiOutlineTrash className="w-3.5 h-3.5" />
                                 <span>Gỡ ảnh</span>
@@ -1613,12 +1613,12 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
               </form>
 
               {/* ── Sticky Modal Footer ── */}
-              <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/80 flex items-center justify-end gap-3 shrink-0">
+              <div className="px-6 py-4 border-t border-slate-100 dark:border-dk-border bg-slate-50/80 dark:bg-dk-surface flex items-center justify-end gap-3 shrink-0">
                 <button
                   type="button"
                   onClick={closeFormModal}
                   disabled={isSaving}
-                  className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors disabled:opacity-50 shadow-2xs"
+                  className="px-4 py-2 text-xs font-semibold text-slate-700 dark:text-dk-text bg-white dark:bg-dk-raised border border-slate-200 dark:border-dk-border hover:bg-slate-50 dark:hover:bg-dk-strong rounded-xl transition-colors disabled:opacity-50 shadow-2xs"
                 >
                   {t('common.cancel')}
                 </button>

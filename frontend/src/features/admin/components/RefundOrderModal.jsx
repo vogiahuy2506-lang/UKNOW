@@ -98,30 +98,30 @@ const RefundOrderModal = ({ orderCode, onClose, onRefunded }) => {
   return (
     <Modal isOpen onClose={onClose} title={t('adminOrders.refundTitle', { orderCode })} size="lg">
       <form onSubmit={handleSubmit} className="space-y-4">
-        <p className="text-sm text-gray-600">{t('adminOrders.refundIntro')}</p>
+        <p className="text-sm text-gray-600 dark:text-dk-text">{t('adminOrders.refundIntro')}</p>
 
-        {loadError && <p className="text-sm text-red-600">{loadError}</p>}
-        {!preview && !loadError && <p className="text-sm text-gray-400">{t('adminOrders.refundLoading')}</p>}
+        {loadError && <p className="text-sm text-red-600 dark:text-red-400">{loadError}</p>}
+        {!preview && !loadError && <p className="text-sm text-gray-400 dark:text-dk-muted">{t('adminOrders.refundLoading')}</p>}
 
         {preview && !preview.eligible && (
-          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          <p className="rounded-lg bg-red-50 dark:bg-red-950/40 border border-transparent dark:border-red-900/40 px-3 py-2 text-sm text-red-700 dark:text-red-300">
             {t('adminOrders.refundNotEligible', { reason: preview.reason })}
           </p>
         )}
 
         {preview?.eligible && (
           <>
-            <p className="text-sm font-semibold text-gray-900">
+            <p className="text-sm font-semibold text-gray-900 dark:text-dk-text">
               {t('adminOrders.refundAmount', { amount: fmtVnd(preview.amount) })}
             </p>
-            <ul className="space-y-1.5 rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-700" data-testid="refund-consequences">
+            <ul className="space-y-1.5 rounded-lg bg-gray-50 dark:bg-dk-raised/60 border border-transparent dark:border-dk-border px-4 py-3 text-sm text-gray-700 dark:text-dk-text" data-testid="refund-consequences">
               <li>{t(PLAN_KEYS[preview.plan] || PLAN_KEYS.untouched)}</li>
               <li>{t(EINVOICE_KEYS[preview.einvoice] || EINVOICE_KEYS.untouched, { status: preview.einvoiceStatusBefore || '—' })}</li>
               {describeAffiliate(affiliate, t).map((line) => <li key={line}>{line}</li>)}
             </ul>
 
             {needsAcknowledge && (
-              <label className="flex items-start gap-2 text-sm text-amber-800">
+              <label className="flex items-start gap-2 text-sm text-amber-800 dark:text-amber-300">
                 <input
                   type="checkbox"
                   className="mt-0.5"
@@ -133,7 +133,7 @@ const RefundOrderModal = ({ orderCode, onClose, onRefunded }) => {
             )}
 
             <div>
-              <label htmlFor="refund-reason" className="block text-xs text-gray-500 mb-1">{t('adminOrders.refundReasonLabel')}</label>
+              <label htmlFor="refund-reason" className="block text-xs text-gray-500 dark:text-dk-text2 mb-1">{t('adminOrders.refundReasonLabel')}</label>
               <textarea
                 id="refund-reason"
                 className="input w-full"
@@ -144,7 +144,7 @@ const RefundOrderModal = ({ orderCode, onClose, onRefunded }) => {
               />
             </div>
             <div>
-              <label htmlFor="refund-transfer-ref" className="block text-xs text-gray-500 mb-1">{t('adminOrders.refundTransferRefLabel')}</label>
+              <label htmlFor="refund-transfer-ref" className="block text-xs text-gray-500 dark:text-dk-text2 mb-1">{t('adminOrders.refundTransferRefLabel')}</label>
               <input
                 id="refund-transfer-ref"
                 type="text"

@@ -70,9 +70,9 @@ export const normalizeMoneyValue = (value) => {
 };
 
 export const MODAL_OVERLAY = 'fixed inset-0 z-[9999] flex items-center justify-center p-4';
-export const MODAL_PANEL   = 'relative z-10 w-full max-w-lg max-h-[90vh] rounded-xl bg-white shadow-xl p-6 overflow-y-auto';
-export const MODAL_SM      = 'relative z-10 w-full max-w-md  max-h-[90vh] rounded-xl bg-white shadow-xl p-6 overflow-y-auto';
-export const MODAL_FORM    = 'relative z-10 w-full max-w-5xl max-h-[92vh] rounded-2xl bg-white shadow-2xl overflow-hidden';
+export const MODAL_PANEL   = 'relative z-10 w-full max-w-lg max-h-[90vh] rounded-xl bg-white dark:bg-dk-surface text-gray-900 dark:text-dk-text shadow-xl p-6 overflow-y-auto border border-transparent dark:border-dk-border';
+export const MODAL_SM      = 'relative z-10 w-full max-w-md  max-h-[90vh] rounded-xl bg-white dark:bg-dk-surface text-gray-900 dark:text-dk-text shadow-xl p-6 overflow-y-auto border border-transparent dark:border-dk-border';
+export const MODAL_FORM    = 'relative z-10 w-full max-w-5xl max-h-[92vh] rounded-2xl bg-white dark:bg-dk-surface text-gray-900 dark:text-dk-text shadow-2xl overflow-hidden border border-transparent dark:border-dk-border';
 
 export const renderModal = (content, onClose, cls = MODAL_PANEL) =>
   createPortal(

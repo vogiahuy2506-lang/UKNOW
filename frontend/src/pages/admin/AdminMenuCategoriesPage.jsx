@@ -102,21 +102,21 @@ function AddLinkForm({ categoryId, onAdd, t }) {
         onChange={(event) => setNameVi(event.target.value)}
         placeholder={t('adminMenu.linkNameViPlaceholder')}
         maxLength={100}
-        className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+        className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text"
       />
       <input
         value={nameEn}
         onChange={(event) => setNameEn(event.target.value)}
         placeholder={t('adminMenu.linkNameEnPlaceholder')}
         maxLength={100}
-        className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+        className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text"
       />
       <input
         value={url}
         onChange={(event) => setUrl(event.target.value)}
         placeholder={t('adminMenu.linkUrlPlaceholder')}
         maxLength={2000}
-        className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+        className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text"
       />
       <button type="button" className="btn btn-secondary inline-flex items-center justify-center gap-1 text-sm" onClick={handleAdd}>
         <HiOutlinePlus className="h-4 w-4" />
@@ -359,7 +359,7 @@ export default function AdminMenuCategoriesPage() {
   };
 
   if (isLoading) {
-    return <div className="py-16 text-center text-sm text-gray-400">{t('common.loading')}</div>;
+    return <div className="py-16 text-center text-sm text-gray-400 dark:text-dk-muted">{t('common.loading')}</div>;
   }
 
   return (
@@ -386,14 +386,14 @@ export default function AdminMenuCategoriesPage() {
       }
     >
 
-      <div className="flex border-b border-gray-200 gap-2">
+      <div className="flex border-b border-gray-200 dark:border-dk-border gap-2">
         <button
           type="button"
           onClick={() => handleTabChange(SCOPE_SUPER_ADMIN)}
           className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
             activeScope === SCOPE_SUPER_ADMIN
-              ? 'border-orange-500 text-orange-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              ? 'border-orange-500 text-orange-600 dark:text-orange-400'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-dk-text2 dark:hover:text-dk-text dark:hover:border-dk-border'
           }`}
         >
           {t('adminMenu.scopeSuperAdmin')}
@@ -403,8 +403,8 @@ export default function AdminMenuCategoriesPage() {
           onClick={() => handleTabChange(SCOPE_APP_USER)}
           className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
             activeScope === SCOPE_APP_USER
-              ? 'border-orange-500 text-orange-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              ? 'border-orange-500 text-orange-600 dark:text-orange-400'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-dk-text2 dark:hover:text-dk-text dark:hover:border-dk-border'
           }`}
         >
           {t('adminMenu.scopeAppUser')}
@@ -412,28 +412,28 @@ export default function AdminMenuCategoriesPage() {
       </div>
 
       {isAppScope && (
-        <div className="flex items-start gap-2 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700">
+        <div className="flex items-start gap-2 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700 dark:border dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-300">
           <HiOutlineInformationCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{t('adminMenu.appScopeHint')}</span>
         </div>
       )}
 
-      <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-        <h2 className="font-semibold text-gray-900">{t('adminMenu.addCategory')}</h2>
+      <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-dk-border dark:bg-dk-surface">
+        <h2 className="font-semibold text-gray-900 dark:text-dk-text">{t('adminMenu.addCategory')}</h2>
         <div className="mt-3 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
           <input
             value={newNameVi}
             onChange={(event) => setNewNameVi(event.target.value)}
             placeholder={t('adminMenu.nameViPlaceholder')}
             maxLength={100}
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+            className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text"
           />
           <input
             value={newNameEn}
             onChange={(event) => setNewNameEn(event.target.value)}
             placeholder={t('adminMenu.nameEnPlaceholder')}
             maxLength={100}
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+            className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text"
           />
           <button type="button" className="btn btn-secondary inline-flex items-center justify-center gap-2" onClick={addCategory}>
             <HiOutlinePlus className="h-4 w-4" />
@@ -444,12 +444,12 @@ export default function AdminMenuCategoriesPage() {
 
       <div className="space-y-4">
         {categories.map((category, categoryIndex) => (
-          <section key={category.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-            <div className="flex flex-col gap-3 border-b border-gray-100 bg-gray-50/80 p-4 lg:flex-row lg:items-center">
+          <section key={category.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-dk-border dark:bg-dk-surface">
+            <div className="flex flex-col gap-3 border-b border-gray-100 bg-gray-50/80 p-4 lg:flex-row lg:items-center dark:border-dk-border dark:bg-dk-raised">
               {isMainCategory(category) ? (
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-gray-900">{t('adminMenu.mainCategoryTitle')}</p>
-                  <p className="mt-0.5 text-xs text-gray-500">{t('adminMenu.mainCategoryHint')}</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-dk-text">{t('adminMenu.mainCategoryTitle')}</p>
+                  <p className="mt-0.5 text-xs text-gray-500 dark:text-dk-text2">{t('adminMenu.mainCategoryHint')}</p>
                 </div>
               ) : (
               <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
@@ -458,22 +458,22 @@ export default function AdminMenuCategoriesPage() {
                   onChange={(event) => updateCategoryName(category.id, 'nameVi', event.target.value)}
                   aria-label={t('adminMenu.nameVi')}
                   maxLength={100}
-                  className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                  className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text"
                 />
                 <input
                   value={category.nameEn}
                   onChange={(event) => updateCategoryName(category.id, 'nameEn', event.target.value)}
                   aria-label={t('adminMenu.nameEn')}
                   maxLength={100}
-                  className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                  className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text"
                 />
               </div>
               )}
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-gray-400 dark:text-dk-muted">
                 {t('adminMenu.itemCount', { count: category.itemKeys.length })}
               </span>
               {category.itemKeys.length === 0 && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700">
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700 dark:border dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-300">
                   <HiOutlineExclamation className="h-3.5 w-3.5" />
                   {t('adminMenu.emptyCategoryBadge')}
                 </span>
@@ -485,7 +485,7 @@ export default function AdminMenuCategoriesPage() {
                   disabled={categoryIndex === 0}
                   title={t('adminMenu.moveCategoryUp')}
                   aria-label={t('adminMenu.moveCategoryUp')}
-                  className="rounded-lg p-2 text-gray-500 hover:bg-white hover:text-gray-900 disabled:opacity-30"
+                  className="rounded-lg p-2 text-gray-500 hover:bg-white hover:text-gray-900 disabled:opacity-30 dark:text-dk-text2 dark:hover:bg-dk-surface dark:hover:text-dk-text"
                 >
                   <HiOutlineArrowUp className="h-4 w-4" />
                 </button>
@@ -495,7 +495,7 @@ export default function AdminMenuCategoriesPage() {
                   disabled={categoryIndex === categories.length - 1}
                   title={t('adminMenu.moveCategoryDown')}
                   aria-label={t('adminMenu.moveCategoryDown')}
-                  className="rounded-lg p-2 text-gray-500 hover:bg-white hover:text-gray-900 disabled:opacity-30"
+                  className="rounded-lg p-2 text-gray-500 hover:bg-white hover:text-gray-900 disabled:opacity-30 dark:text-dk-text2 dark:hover:bg-dk-surface dark:hover:text-dk-text"
                 >
                   <HiOutlineArrowDown className="h-4 w-4" />
                 </button>
@@ -505,7 +505,7 @@ export default function AdminMenuCategoriesPage() {
                     onClick={() => removeCategory(category)}
                     title={t('common.delete')}
                     aria-label={t('common.delete')}
-                    className="rounded-lg p-2 text-gray-500 hover:bg-red-50 hover:text-red-600"
+                    className="rounded-lg p-2 text-gray-500 hover:bg-red-50 hover:text-red-600 dark:text-dk-text2 dark:hover:bg-red-950/40 dark:hover:text-red-400"
                   >
                     <HiOutlineTrash className="h-4 w-4" />
                   </button>
@@ -513,17 +513,17 @@ export default function AdminMenuCategoriesPage() {
               </div>
             </div>
 
-            <div className="divide-y divide-gray-100">
+            <div className="divide-y divide-gray-100 dark:divide-dk-border">
               {category.itemKeys.length === 0 ? (
-                <p className="p-5 text-center text-sm text-gray-400">{t('adminMenu.emptyCategory')}</p>
+                <p className="p-5 text-center text-sm text-gray-400 dark:text-dk-muted">{t('adminMenu.emptyCategory')}</p>
               ) : category.itemKeys.map((itemKey, itemIndex) => {
                 const item = itemByKey.get(itemKey);
                 if (!item) return null;
                 const ItemIcon = item.icon;
                 return (
-                  <div key={itemKey} className={`flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center ${item.isLink ? 'bg-blue-50/40' : ''}`}>
+                  <div key={itemKey} className={`flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center ${item.isLink ? 'bg-blue-50/40 dark:bg-blue-950/20' : ''}`}>
                     <div className="flex min-w-0 flex-1 items-center gap-3">
-                      <ItemIcon className={`h-5 w-5 shrink-0 ${item.isLink ? 'text-blue-500' : 'text-gray-400'}`} />
+                      <ItemIcon className={`h-5 w-5 shrink-0 ${item.isLink ? 'text-blue-500 dark:text-blue-400' : 'text-gray-400 dark:text-dk-muted'}`} />
                       {item.isLink ? (
                         <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-3">
                           <input
@@ -531,27 +531,27 @@ export default function AdminMenuCategoriesPage() {
                             onChange={(event) => updateLinkField(itemKey, 'nameVi', event.target.value)}
                             aria-label={t('adminMenu.nameVi')}
                             maxLength={100}
-                            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text"
                           />
                           <input
                             value={item.nameEn}
                             onChange={(event) => updateLinkField(itemKey, 'nameEn', event.target.value)}
                             aria-label={t('adminMenu.nameEn')}
                             maxLength={100}
-                            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text"
                           />
                           <input
                             value={item.url}
                             onChange={(event) => updateLinkField(itemKey, 'url', event.target.value)}
                             aria-label="URL"
                             maxLength={2000}
-                            className="truncate rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-600 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                            className="truncate rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-600 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text"
                           />
                         </div>
                       ) : (
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-gray-800">{item.name}</p>
-                          <p className="truncate text-xs text-gray-400">{item.path}</p>
+                          <p className="truncate text-sm font-medium text-gray-800 dark:text-dk-text">{item.name}</p>
+                          <p className="truncate text-xs text-gray-400 dark:text-dk-muted">{item.path}</p>
                         </div>
                       )}
                     </div>
@@ -559,7 +559,7 @@ export default function AdminMenuCategoriesPage() {
                       value={category.id}
                       onChange={(event) => moveItemToCategory(itemKey, event.target.value)}
                       aria-label={t('adminMenu.categoryForItem', { item: item.name })}
-                      className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-600"
+                      className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-600 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text"
                     >
                       {categories.map((target) => (
                         <option key={target.id} value={target.id}>{isMainCategory(target) ? t('adminMenu.mainCategoryTitle') : target.nameVi}</option>
@@ -572,7 +572,7 @@ export default function AdminMenuCategoriesPage() {
                         disabled={itemIndex === 0}
                         title={t('adminMenu.moveItemUp')}
                         aria-label={t('adminMenu.moveItemUp')}
-                        className="rounded-lg p-2 text-gray-500 hover:bg-gray-50 hover:text-gray-900 disabled:opacity-30"
+                        className="rounded-lg p-2 text-gray-500 hover:bg-gray-50 hover:text-gray-900 disabled:opacity-30 dark:text-dk-text2 dark:hover:bg-dk-raised dark:hover:text-dk-text"
                       >
                         <HiOutlineArrowUp className="h-4 w-4" />
                       </button>
@@ -582,7 +582,7 @@ export default function AdminMenuCategoriesPage() {
                         disabled={itemIndex === category.itemKeys.length - 1}
                         title={t('adminMenu.moveItemDown')}
                         aria-label={t('adminMenu.moveItemDown')}
-                        className="rounded-lg p-2 text-gray-500 hover:bg-gray-50 hover:text-gray-900 disabled:opacity-30"
+                        className="rounded-lg p-2 text-gray-500 hover:bg-gray-50 hover:text-gray-900 disabled:opacity-30 dark:text-dk-text2 dark:hover:bg-dk-raised dark:hover:text-dk-text"
                       >
                         <HiOutlineArrowDown className="h-4 w-4" />
                       </button>
@@ -592,7 +592,7 @@ export default function AdminMenuCategoriesPage() {
                           onClick={() => removeLink(itemKey)}
                           title={t('adminMenu.removeLink')}
                           aria-label={t('adminMenu.removeLink')}
-                          className="rounded-lg p-2 text-gray-500 hover:bg-red-50 hover:text-red-600"
+                          className="rounded-lg p-2 text-gray-500 hover:bg-red-50 hover:text-red-600 dark:text-dk-text2 dark:hover:bg-red-950/40 dark:hover:text-red-400"
                         >
                           <HiOutlineTrash className="h-4 w-4" />
                         </button>
@@ -604,8 +604,8 @@ export default function AdminMenuCategoriesPage() {
             </div>
 
             {isAppScope && (
-              <div className="border-t border-gray-100 bg-gray-50/60 p-4">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400">
+              <div className="border-t border-gray-100 bg-gray-50/60 p-4 dark:border-dk-border dark:bg-dk-raised/50">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-dk-muted">
                   {t('adminMenu.linkSectionTitle')}
                 </p>
                 <AddLinkForm categoryId={category.id} onAdd={addLink} t={t} />

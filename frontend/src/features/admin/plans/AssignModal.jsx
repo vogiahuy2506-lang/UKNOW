@@ -39,8 +39,8 @@ export const AssignModal = ({ plan, onClose, onAssigned }) => {
   return renderModal(
     <form onSubmit={handleAssign} className="space-y-4">
       <div>
-        <h2 className="text-xl font-semibold text-gray-900">{t('adminMembers.assignPlan')}</h2>
-        <p className="text-sm text-gray-500 mt-1">
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-dk-text">{t('adminMembers.assignPlan')}</h2>
+        <p className="text-sm text-gray-500 dark:text-dk-text2 mt-1">
           Gói: <strong>{plan.name}</strong> ·{' '}
           {billingPeriod === 'yearly' && plan.priceYearly
             ? `${fmtVnd(plan.priceYearly)}/năm`
@@ -50,14 +50,14 @@ export const AssignModal = ({ plan, onClose, onAssigned }) => {
         </p>
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{t('adminMembers.billingPeriod')}</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{t('adminMembers.billingPeriod')}</label>
         <select className="input w-full" value={billingPeriod} onChange={(e) => setBillingPeriod(e.target.value)}>
           <option value="monthly">{t('adminMembers.billingMonthly')}</option>
           <option value="yearly">{t('adminMembers.billingYearly')}</option>
         </select>
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{t('adminMembers.quantityLabel')}</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{t('adminMembers.quantityLabel')}</label>
         <input
           type="number"
           className="input w-full"
@@ -73,24 +73,24 @@ export const AssignModal = ({ plan, onClose, onAssigned }) => {
             }
           }}
         />
-        <p className="text-xs text-gray-500 mt-1">{t('adminMembers.quantityHint')}</p>
+        <p className="text-xs text-gray-500 dark:text-dk-text2 mt-1">{t('adminMembers.quantityHint')}</p>
       </div>
-      <p className="text-sm text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
+      <p className="text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/40 rounded-lg px-3 py-2">
         Thao tác này sẽ gán gói trực tiếp, bỏ qua quy trình thanh toán.
       </p>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{t('adminMembers.emailLabel')} *</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{t('adminMembers.emailLabel')} *</label>
         <EmailAutocomplete value={email} onChange={setEmail} />
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{t('adminMembers.paymentMethod')}</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{t('adminMembers.paymentMethod')}</label>
         <select className="input w-full" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
           <option value="free">{t('adminMembers.freeDemo')}</option>
           <option value="manual">{t('adminMembers.manualPayment')}</option>
         </select>
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{t('adminMembers.note')}</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{t('adminMembers.note')}</label>
         <input
           className="input w-full"
           placeholder={t('adminMembers.placeholderNote')}

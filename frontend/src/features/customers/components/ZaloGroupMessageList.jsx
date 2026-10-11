@@ -50,7 +50,7 @@ const AttachmentLink = ({ file, t }) => {
 
   return (
     <div className="flex items-center justify-between gap-2">
-      <span className="text-sm text-gray-700 truncate">
+      <span className="text-sm text-gray-700 dark:text-dk-text truncate">
         {file?.displayName || t('zaloGroupMessages.attachment')}
       </span>
       {hasLink && (
@@ -82,19 +82,19 @@ const ZaloGroupMessageItem = ({ message, t }) => {
   const runLabel = buildRunDisplay(message?.runId, message?.runName, message?.runDisplayName);
 
   return (
-    <div className="rounded-xl border border-gray-200 overflow-hidden">
-      <div className="px-5 py-4 bg-gray-50 border-b border-gray-100">
-        <p className="font-semibold text-gray-900 text-sm leading-snug">
+    <div className="rounded-xl border border-gray-200 dark:border-dk-border overflow-hidden">
+      <div className="px-5 py-4 bg-gray-50 dark:bg-dk-raised border-b border-gray-100 dark:border-dk-border">
+        <p className="font-semibold text-gray-900 dark:text-dk-text text-sm leading-snug">
           {groupTitle}
         </p>
-        <p className="text-xs text-gray-400 mt-0.5">
+        <p className="text-xs text-gray-400 dark:text-dk-text2 mt-0.5">
           {formatDateTime(message?.sentAt || message?.createdAt)}
           {message?.id != null ? ` · ID: ${message.id}` : ''}
           {runLabel ? ` · ${runLabel}` : ''}
           {message?.accountName ? ` · TK: ${message.accountName}` : ''}
         </p>
         {message?.groupId && message?.groupName && (
-          <p className="text-xs text-gray-400 mt-0.5">{t('zaloGroupJourney.sent')} ID: {message.groupId}</p>
+          <p className="text-xs text-gray-400 dark:text-dk-text2 mt-0.5">{t('zaloGroupJourney.sent')} ID: {message.groupId}</p>
         )}
         <div className="mt-2 flex items-center gap-1 flex-wrap">
           <span className="badge badge-info">{t('zaloGroupJourney.sent')}</span>
@@ -116,22 +116,22 @@ const ZaloGroupMessageItem = ({ message, t }) => {
         </div>
       </div>
 
-      <div className="px-5 py-4 space-y-3">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 text-sm text-gray-700">
+      <div className="px-5 py-4 space-y-3 bg-white dark:bg-dk-surface">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 text-sm text-gray-700 dark:text-dk-text">
           <div>
-            <span className="text-xs text-gray-400">{t('zaloGroupJourney.clickCount')}</span>
+            <span className="text-xs text-gray-400 dark:text-dk-text2">{t('zaloGroupJourney.clickCount')}</span>
             <p>{Number(message?.clickCount || 0)}</p>
           </div>
           <div>
-            <span className="text-xs text-gray-400">{t('zaloGroupJourney.orderEvents')}</span>
+            <span className="text-xs text-gray-400 dark:text-dk-text2">{t('zaloGroupJourney.orderEvents')}</span>
             <p>{Number(message?.orderedCustomerCount || 0)}</p>
           </div>
           <div>
-            <span className="text-xs text-gray-400">{t('zaloGroupJourney.pendingOrder')}</span>
+            <span className="text-xs text-gray-400 dark:text-dk-text2">{t('zaloGroupJourney.pendingOrder')}</span>
             <p>{Number(message?.pendingOrderCount || 0)}</p>
           </div>
           <div>
-            <span className="text-xs text-gray-400">{t('zaloGroupJourney.completedOrder')}</span>
+            <span className="text-xs text-gray-400 dark:text-dk-text2">{t('zaloGroupJourney.completedOrder')}</span>
             <p>{Number(message?.completedOrderCount || 0)}</p>
           </div>
         </div>
@@ -139,7 +139,7 @@ const ZaloGroupMessageItem = ({ message, t }) => {
         <button
           type="button"
           onClick={() => setShowContent((prev) => !prev)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-300 transition-colors"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-dk-border text-gray-600 dark:text-dk-text bg-white dark:bg-dk-raised hover:bg-gray-50 dark:hover:bg-dk-strong hover:border-gray-300 transition-colors"
         >
           <HiOutlineEye className="w-3.5 h-3.5" />
           {showContent ? t('zaloGroupJourney.hideMessageContent') : t('zaloGroupJourney.showMessageContent')}
@@ -147,12 +147,12 @@ const ZaloGroupMessageItem = ({ message, t }) => {
 
         {showContent && (
           <div className="space-y-2">
-            <p className="text-sm text-gray-700 whitespace-pre-wrap rounded-lg bg-white border border-gray-200 p-3">
+            <p className="text-sm text-gray-700 dark:text-dk-text whitespace-pre-wrap rounded-lg bg-white dark:bg-dk-inset border border-gray-200 dark:border-dk-border p-3">
               {message?.messageText || t('zaloGroupJourney.noMessageContent')}
             </p>
             {attachments.length > 0 && (
-              <div className="rounded-lg bg-white border border-gray-200 p-3">
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+              <div className="rounded-lg bg-white dark:bg-dk-inset border border-gray-200 dark:border-dk-border p-3">
+                <p className="text-xs font-medium text-gray-500 dark:text-dk-text2 uppercase tracking-wide mb-2">
                   {t('zaloGroupMessages.attachment')} ({attachments.length})
                 </p>
                 <div className="space-y-1.5">

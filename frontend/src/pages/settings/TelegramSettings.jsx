@@ -84,19 +84,19 @@ function QrModal({ open, onClose, qrPayload, qrStatus, qrError, onCancel, onNewQ
       onClick={onClose}
     >
       <div
-        className="relative bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-md mx-auto overflow-hidden flex flex-col"
+        className="relative bg-white dark:bg-dk-surface border border-transparent dark:border-dk-border rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-md mx-auto overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header trắng — đồng bộ với WhatsApp */}
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100">
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100 dark:border-dk-border">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-500 text-white shrink-0">
             <FaTelegramPlane className="w-5 h-5" />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="text-base font-semibold text-slate-900">
+            <h3 className="text-base font-semibold text-slate-900 dark:text-dk-text">
               {isSuccess ? t('telegramSettings.modalTitleSuccess') : t('telegramSettings.modalTitleScan')}
             </h3>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-500 dark:text-dk-text2">
               {isSuccess
                 ? t('telegramSettings.modalSubtitleSuccess')
                 : t('telegramSettings.modalSubtitleScan')}
@@ -106,7 +106,7 @@ function QrModal({ open, onClose, qrPayload, qrStatus, qrError, onCancel, onNewQ
             type="button"
             onClick={onClose}
             aria-label={t('telegramSettings.close')}
-            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+            className="rounded-lg p-1.5 text-slate-400 dark:text-dk-muted transition hover:bg-slate-100 dark:hover:bg-dk-raised hover:text-slate-700 dark:hover:text-dk-text"
           >
             <HiOutlineX className="w-4 h-4" />
           </button>
@@ -116,12 +116,12 @@ function QrModal({ open, onClose, qrPayload, qrStatus, qrError, onCancel, onNewQ
         <div className="flex flex-col items-center px-5 py-5 gap-4">
           {isSuccess ? (
             <div className="flex flex-col items-center gap-3 py-6 text-center">
-              <div className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center">
+              <div className="w-16 h-16 rounded-full bg-green-50 dark:bg-green-950/40 flex items-center justify-center">
                 <HiOutlineCheckCircle className="w-9 h-9 text-green-500" />
               </div>
               <div>
-                <p className="text-base font-semibold text-slate-900">{t('telegramSettings.modalTitleSuccess')}</p>
-                <p className="text-sm text-slate-500 mt-1">
+                <p className="text-base font-semibold text-slate-900 dark:text-dk-text">{t('telegramSettings.modalTitleSuccess')}</p>
+                <p className="text-sm text-slate-500 dark:text-dk-text2 mt-1">
                   {t('telegramSettings.modalSubtitleSuccess')}
                 </p>
               </div>
@@ -137,7 +137,7 @@ function QrModal({ open, onClose, qrPayload, qrStatus, qrError, onCancel, onNewQ
             <>
               {/* QR Code */}
               <div className="relative">
-                <div className="w-56 h-56 rounded-2xl border-4 border-orange-100 bg-white p-2 shadow-lg overflow-hidden">
+                <div className="w-56 h-56 rounded-2xl border-4 border-orange-100 dark:border-orange-950/50 bg-white dark:bg-dk-inset p-2 shadow-lg overflow-hidden">
                   {qrPayload?.qrImageBase64 ? (
                     <img
                       src={`data:image/png;base64,${qrPayload.qrImageBase64}`}
@@ -151,7 +151,7 @@ function QrModal({ open, onClose, qrPayload, qrStatus, qrError, onCancel, onNewQ
                   )}
                 </div>
                 {isWaiting && (
-                  <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-orange-500 border-2 border-white flex items-center justify-center">
+                  <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-orange-500 border-2 border-white dark:border-dk-border flex items-center justify-center">
                     <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
                   </span>
                 )}
@@ -159,10 +159,10 @@ function QrModal({ open, onClose, qrPayload, qrStatus, qrError, onCancel, onNewQ
 
               {/* Status bar */}
               <div className={`w-full rounded-xl px-4 py-3 text-sm text-center font-medium ${isError
-                  ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                  ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900/50'
                   : isWaiting
-                    ? 'bg-orange-50 text-orange-700 border border-orange-200'
-                    : 'bg-slate-50 text-slate-600 border border-slate-200'
+                    ? 'bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800/50'
+                    : 'bg-slate-50 dark:bg-dk-raised text-slate-600 dark:text-dk-text border border-slate-200 dark:border-dk-border'
                 }`}>
                 {isError ? (
                   <span className="flex items-center justify-center gap-1.5">
@@ -184,23 +184,23 @@ function QrModal({ open, onClose, qrPayload, qrStatus, qrError, onCancel, onNewQ
 
               {/* Countdown */}
               {countdown && !isSuccess && (
-                <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-dk-text2">
                   <span>{t('telegramSettings.expiresIn')}</span>
-                  <span className="font-mono font-semibold text-orange-600">{countdown}</span>
+                  <span className="font-mono font-semibold text-orange-600 dark:text-orange-400">{countdown}</span>
                 </div>
               )}
 
               {/* Guide steps */}
               <div className="w-full space-y-2">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{t('telegramSettings.guideHeading')}</p>
+                <p className="text-xs font-semibold text-slate-500 dark:text-dk-text2 uppercase tracking-wide">{t('telegramSettings.guideHeading')}</p>
                 {guideSteps.map((step, i) => (
-                  <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
-                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-orange-100 text-orange-600 text-xs font-bold shrink-0 mt-0.5">
+                  <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 dark:bg-dk-raised/40 border border-slate-100 dark:border-dk-border">
+                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-orange-100 dark:bg-orange-950/50 text-orange-600 dark:text-orange-400 text-xs font-bold shrink-0 mt-0.5">
                       {i + 1}
                     </span>
                     <div>
-                      <p className="text-sm font-medium text-slate-800">{step.title}</p>
-                      <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{step.desc}</p>
+                      <p className="text-sm font-medium text-slate-800 dark:text-dk-text">{step.title}</p>
+                      <p className="text-xs text-slate-500 dark:text-dk-text2 mt-0.5 leading-relaxed">{step.desc}</p>
                     </div>
                   </div>
                 ))}
@@ -211,7 +211,7 @@ function QrModal({ open, onClose, qrPayload, qrStatus, qrError, onCancel, onNewQ
                 <button
                   type="button"
                   onClick={onNewQr}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised text-sm font-medium text-slate-700 dark:text-dk-text hover:bg-slate-50 dark:hover:bg-dk-strong transition-colors"
                 >
                   <HiOutlineRefresh className="w-4 h-4" />
                   {t('telegramSettings.newQr')}
@@ -219,7 +219,7 @@ function QrModal({ open, onClose, qrPayload, qrStatus, qrError, onCancel, onNewQ
                 <button
                   type="button"
                   onClick={onCancel}
-                  className="px-5 py-2.5 rounded-xl border border-rose-200 bg-white text-sm font-medium text-rose-600 hover:bg-rose-50 transition-colors"
+                  className="px-5 py-2.5 rounded-xl border border-rose-200 dark:border-rose-900/60 bg-white dark:bg-dk-raised text-sm font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
                 >
                   {t('telegramSettings.cancel')}
                 </button>
@@ -248,27 +248,27 @@ function StatusPill({ loaded, active, sessionOk, t }) {
   const metaMap = {
     needsRelogin: {
       label: t('telegramSettings.statusNeedsRelogin'),
-      cls: 'bg-amber-50 text-amber-700 border-amber-200',
+      cls: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
       dot: 'bg-amber-500',
     },
     loaded: {
       label: t('telegramSettings.statusConnected'),
-      cls: 'bg-green-50 text-green-700 border-green-200',
+      cls: 'bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800',
       dot: 'bg-green-500',
     },
     active: {
       label: t('telegramSettings.statusActive'),
-      cls: 'bg-green-50 text-green-700 border-green-200',
+      cls: 'bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800',
       dot: 'bg-green-500',
     },
     connecting: {
       label: t('telegramSettings.statusConnecting'),
-      cls: 'bg-primary-50 text-primary-700 border-primary-200',
+      cls: 'bg-primary-50 dark:bg-primary-950/40 text-primary-700 dark:text-primary-300 border-primary-200 dark:border-primary-800',
       dot: 'bg-primary-500 animate-pulse',
     },
     inactive: {
       label: t('telegramSettings.statusInactive'),
-      cls: 'bg-slate-50 text-slate-500 border-slate-200',
+      cls: 'bg-slate-50 dark:bg-dk-raised text-slate-500 dark:text-dk-text2 border-slate-200 dark:border-dk-border',
       dot: 'bg-slate-400',
     },
   };
@@ -288,42 +288,42 @@ function AccountCard({ account, onLogout, onDelete, onRelogin, canRelogin, readO
   const avatarChar = (displayName || 'T').trim().charAt(0).toUpperCase();
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 hover:border-slate-300 hover:shadow-sm transition-all duration-200">
+    <div className="rounded-2xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised/40 p-4 sm:p-5 hover:border-slate-300 dark:hover:border-dk-border hover:shadow-sm transition-all duration-200">
       <div className="flex items-start gap-3 sm:gap-4">
         {/* Avatar */}
-        <div className="w-12 h-12 shrink-0 rounded-full bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center text-white font-bold text-lg shadow-sm shadow-orange-200">
+        <div className="w-12 h-12 shrink-0 rounded-full bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center text-white font-bold text-lg shadow-sm shadow-orange-200 dark:shadow-none">
           {avatarChar}
         </div>
 
         {/* Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-sm font-semibold text-slate-900 truncate">{displayName}</p>
+            <p className="text-sm font-semibold text-slate-900 dark:text-dk-text truncate">{displayName}</p>
             <StatusPill loaded={account.is_loaded} active={account.is_active} sessionOk={account.session_ok} t={t} />
             {account.is_locked && <ChannelAccountLockBadge />}
           </div>
           {account.is_locked && <ChannelAccountLockNotice />}
 
           {needsRelogin && (
-            <p className="mt-2 text-xs text-amber-700">{t('telegramSettings.needsReloginHint')}</p>
+            <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">{t('telegramSettings.needsReloginHint')}</p>
           )}
 
           <div className="mt-2.5 space-y-1.5">
             {account.username && (
-              <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                <HiOutlineUserCircle className="w-3.5 h-3.5 shrink-0 text-slate-400" />
-                <span className="font-medium text-slate-600">@{account.username}</span>
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-dk-text2">
+                <HiOutlineUserCircle className="w-3.5 h-3.5 shrink-0 text-slate-400 dark:text-dk-muted" />
+                <span className="font-medium text-slate-600 dark:text-dk-text">@{account.username}</span>
               </div>
             )}
             {account.phone && (
-              <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                <HiOutlineDeviceMobile className="w-3.5 h-3.5 shrink-0 text-slate-400" />
-                <span className="font-mono font-medium text-slate-600">{account.phone}</span>
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-dk-text2">
+                <HiOutlineDeviceMobile className="w-3.5 h-3.5 shrink-0 text-slate-400 dark:text-dk-muted" />
+                <span className="font-mono font-medium text-slate-600 dark:text-dk-text">{account.phone}</span>
               </div>
             )}
-            <div className="flex items-center gap-1.5 text-xs text-slate-500">
-              <HiOutlineIdentification className="w-3.5 h-3.5 shrink-0 text-slate-400" />
-              <span className="font-mono text-slate-600">ID {account.telegram_user_id}</span>
+            <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-dk-text2">
+              <HiOutlineIdentification className="w-3.5 h-3.5 shrink-0 text-slate-400 dark:text-dk-muted" />
+              <span className="font-mono text-slate-600 dark:text-dk-text">ID {account.telegram_user_id}</span>
             </div>
           </div>
         </div>
@@ -335,7 +335,7 @@ function AccountCard({ account, onLogout, onDelete, onRelogin, canRelogin, readO
               type="button"
               onClick={onRelogin}
               disabled={!canRelogin}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/50 px-3 py-1.5 text-xs font-semibold text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors disabled:opacity-50"
             >
               {t('telegramSettings.relogin')}
             </button>
@@ -345,7 +345,7 @@ function AccountCard({ account, onLogout, onDelete, onRelogin, canRelogin, readO
               type="button"
               onClick={() => onLogout(account.id)}
               disabled={loggingOut === account.id}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-dk-text hover:bg-slate-50 dark:hover:bg-dk-strong transition-colors disabled:opacity-50"
             >
               <HiOutlineLogout className="w-3.5 h-3.5" />
               {loggingOut === account.id ? t('telegramSettings.loggingOut') : t('telegramSettings.logout')}
@@ -355,7 +355,7 @@ function AccountCard({ account, onLogout, onDelete, onRelogin, canRelogin, readO
             type="button"
             onClick={() => onDelete(account)}
             disabled={deleting === account.id}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 dark:border-rose-900/60 bg-white dark:bg-dk-raised px-3 py-1.5 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors disabled:opacity-50"
           >
             <HiOutlineTrash className="w-3.5 h-3.5" />
             {deleting === account.id ? t('telegramSettings.deleting') : t('telegramSettings.delete')}
@@ -625,7 +625,7 @@ export default function TelegramSettings({ readOnly = false } = {}) {
             type="button"
             onClick={handleRefresh}
             disabled={refreshing}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised px-3.5 py-2 text-xs font-semibold text-slate-600 dark:text-dk-text hover:bg-slate-50 dark:hover:bg-dk-strong hover:border-slate-300 dark:hover:border-dk-border-strong transition-all disabled:opacity-50"
           >
             <HiOutlineRefresh className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
             {refreshing ? t('telegramSettings.loading') : t('telegramSettings.refresh')}
@@ -654,15 +654,15 @@ export default function TelegramSettings({ readOnly = false } = {}) {
 
       {/* ── Gateway warning banner ── */}
       {gatewayStatus && !gatewayStatus.canStartLogin && (
-        <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm">
-          <HiOutlineExclamation className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+        <div className="flex items-start gap-3 rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 text-sm">
+          <HiOutlineExclamation className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
           <div className="flex-1">
-            <p className="font-semibold text-amber-800">
+            <p className="font-semibold text-amber-800 dark:text-amber-300">
               {gatewayStatus.stubOnly
                 ? t('telegramSettings.gatewayStubWarning')
                 : t('telegramSettings.gatewayNotConfigured')}
             </p>
-            <p className="mt-0.5 text-xs text-amber-700 flex items-center gap-1">
+            <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400 flex items-center gap-1">
               {gatewayStatus.stubOnly
                 ? t('telegramSettings.gatewayStubAdminAction')
                 : t('telegramSettings.gatewaySecretAdminAction')}
@@ -675,19 +675,19 @@ export default function TelegramSettings({ readOnly = false } = {}) {
       )}
 
       {/* ── Account list ── */}
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      <div className="rounded-2xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface shadow-sm overflow-hidden">
         {/* List header */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 bg-slate-50/50">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 dark:border-dk-border bg-slate-50/50 dark:bg-dk-raised/40">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-slate-800">{t('telegramSettings.linkedAccounts')}</span>
+            <span className="text-sm font-semibold text-slate-800 dark:text-dk-text">{t('telegramSettings.linkedAccounts')}</span>
             {safeAccounts.length > 0 && (
-              <span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full bg-slate-200 text-[11px] font-bold text-slate-600">
+              <span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full bg-slate-200 dark:bg-dk-raised text-[11px] font-bold text-slate-600 dark:text-dk-text">
                 {safeAccounts.length}
               </span>
             )}
           </div>
           {totalActive > 0 && (
-            <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-600">
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-600 dark:text-green-400">
               <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
               {t('telegramSettings.activeCount', { count: totalActive })}
             </span>
@@ -705,12 +705,12 @@ export default function TelegramSettings({ readOnly = false } = {}) {
         ) : safeAccounts.length === 0 ? (
           /* Empty state */
           <div className="flex flex-col items-center justify-center text-center px-6 py-16 gap-3">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-50 flex items-center justify-center">
-              <FaTelegramPlane className="w-8 h-8 text-slate-300" />
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-50 dark:from-dk-raised dark:to-dk-bg flex items-center justify-center">
+              <FaTelegramPlane className="w-8 h-8 text-slate-300 dark:text-dk-muted" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-slate-700">{t('telegramSettings.emptyTitle')}</p>
-              <p className="text-xs text-slate-500 mt-1 max-w-xs leading-relaxed">
+              <p className="text-sm font-semibold text-slate-700 dark:text-dk-text">{t('telegramSettings.emptyTitle')}</p>
+              <p className="text-xs text-slate-500 dark:text-dk-text2 mt-1 max-w-xs leading-relaxed">
                 {t('telegramSettings.emptySubtitle', { action: t('telegramSettings.scanQr') })}
               </p>
             </div>
@@ -748,9 +748,9 @@ export default function TelegramSettings({ readOnly = false } = {}) {
       </div>
 
       {/* ── Footer tip ── */}
-      <div className="flex items-start gap-2.5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-        <HiOutlineInformationCircle className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
-        <p className="text-xs text-slate-600 leading-relaxed">
+      <div className="flex items-start gap-2.5 rounded-2xl border border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-raised/40 px-4 py-3">
+        <HiOutlineInformationCircle className="w-4 h-4 text-slate-400 dark:text-dk-muted shrink-0 mt-0.5" />
+        <p className="text-xs text-slate-600 dark:text-dk-text leading-relaxed">
           {t('telegramSettings.footerTip')}
         </p>
       </div>

@@ -208,16 +208,16 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
   // ── COLLAPSED MODE: chỉ icon vertical strip ──────────────────────────────
   if (collapsed) {
     return (
-      <div className="h-full w-full flex flex-col bg-white">
+      <div className="h-full w-full flex flex-col bg-white dark:bg-dk-surface">
         <div className="flex flex-col items-center py-4 gap-1">
           <button
             onClick={onToggleCollapse}
-            className="w-10 h-10 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            className="w-10 h-10 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-dk-text hover:bg-slate-100 dark:hover:bg-dk-raised transition-colors"
             title={t('chatbot.studio.expand')}
           >
             <HiOutlineChevronDoubleRight className="w-4 h-4" />
           </button>
-          <div className="w-8 h-px bg-slate-200 my-1" />
+          <div className="w-8 h-px bg-slate-200 dark:bg-dk-raised my-1" />
           <button
             onClick={() => setShowCreate(true)}
             className="w-10 h-10 rounded-lg flex items-center justify-center bg-primary-500 text-white hover:bg-primary-600 transition-colors shadow-sm shadow-primary-500/30"
@@ -232,7 +232,7 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
 
   // ── EXPANDED MODE ─────────────────────────────────────────────────────────
   return (
-    <div className="h-full flex flex-col bg-white">
+    <div className="h-full flex flex-col bg-white dark:bg-dk-surface">
       {/* Header */}
       <div className="px-5 pt-5 pb-4 shrink-0">
         <div className="flex items-center justify-between">
@@ -240,11 +240,11 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
             <div className="w-7 h-7 rounded-lg bg-primary-500 flex items-center justify-center">
               <HiOutlineSparkles className="w-3.5 h-3.5 text-white" />
             </div>
-            <h2 className="text-sm font-semibold text-slate-900 tracking-tight">Chatbots</h2>
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-dk-text tracking-tight">Chatbots</h2>
           </div>
           <button
             onClick={onToggleCollapse}
-            className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-dk-text hover:bg-slate-100 dark:hover:bg-dk-raised transition-colors"
             title={t('chatbot.studio.collapse')}
           >
             <HiOutlineChevronDoubleLeft className="w-3.5 h-3.5" />
@@ -260,7 +260,7 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
             value={internalSearch}
             onChange={(e) => handleSearchChange(e.target.value)}
             placeholder={t('chatbot.studio.searchBotPlaceholder')}
-            className="w-full pl-3 pr-3 py-2 text-sm bg-slate-50 border border-slate-200/60 rounded-lg outline-none focus:bg-white focus:border-primary-400 focus:ring-2 focus:ring-primary-500/10 transition-all placeholder:text-slate-400"
+            className="w-full pl-3 pr-3 py-2 text-sm bg-slate-50 dark:bg-dk-inset border border-slate-200/60 dark:border-dk-border rounded-lg outline-none text-slate-900 dark:text-dk-text focus:bg-white dark:focus:bg-dk-inset focus:border-primary-400 focus:ring-2 focus:ring-primary-500/10 transition-all placeholder:text-slate-400 dark:placeholder-dk-muted"
           />
         </div>
       </div>
@@ -269,7 +269,7 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
       <div className="flex-1 overflow-y-auto px-3 pb-3">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-16">
-            <div className="w-6 h-6 border-2 border-slate-200 border-t-primary-500 rounded-full animate-spin" />
+            <div className="w-6 h-6 border-2 border-slate-200 dark:border-dk-border border-t-primary-500 rounded-full animate-spin" />
           </div>
         ) : filteredBots.length === 0 ? (
           <EmptyState
@@ -297,7 +297,7 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
       </div>
 
       {/* Footer */}
-      <div className="px-5 py-3 border-t border-slate-100 shrink-0">
+      <div className="px-5 py-3 border-t border-slate-100 dark:border-dk-border shrink-0">
         <button
           onClick={() => setShowCreate(true)}
           className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold text-white bg-primary-500 hover:bg-primary-600 rounded-lg transition-colors shadow-sm shadow-primary-500/20"
@@ -312,7 +312,7 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
         <>
           <div className="fixed inset-0 z-40" onClick={() => setContextMenu(null)} />
           <div
-            className="fixed z-50 w-44 bg-white rounded-lg shadow-lg shadow-slate-900/10 border border-slate-200/80 py-1"
+            className="fixed z-50 w-44 bg-white dark:bg-dk-raised rounded-lg shadow-lg shadow-slate-900/10 border border-slate-200/80 dark:border-dk-border py-1"
             style={{ top: contextMenu.y, left: contextMenu.x }}
           >
             <button
@@ -321,7 +321,7 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
                 const bot = chatbots.find(b => b.id === contextMenu.botId);
                 if (bot) handleDelete(bot, e);
               }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 transition-colors"
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-slate-700 dark:text-dk-text hover:bg-slate-50 dark:hover:bg-dk-raised transition-colors"
             >
               <HiOutlineTrash className="w-3.5 h-3.5 text-red-500" />
               {t('chatbot.studio.deleteBot')}
@@ -333,16 +333,16 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
       {/* Create Modal */}
       {showCreate && (
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-900/40 backdrop-blur-sm">
-          <div className="bg-white rounded-t-2xl md:rounded-xl shadow-xl w-full md:max-w-md md:mx-4 max-h-[92dvh] md:max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="px-6 pt-6 pb-5 border-b border-slate-100 shrink-0">
+          <div className="bg-white dark:bg-dk-surface rounded-t-2xl md:rounded-xl shadow-xl w-full md:max-w-md md:mx-4 max-h-[92dvh] md:max-h-[90vh] overflow-hidden flex flex-col border border-slate-200 dark:border-dk-border">
+            <div className="px-6 pt-6 pb-5 border-b border-slate-100 dark:border-dk-border shrink-0">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-base font-semibold text-slate-900">{t('chatbot.studio.createModalTitle')}</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">{t('chatbot.studio.createModalSubtitle')}</p>
+                  <h3 className="text-base font-semibold text-slate-900 dark:text-dk-text">{t('chatbot.studio.createModalTitle')}</h3>
+                  <p className="text-xs text-slate-500 dark:text-dk-text2 mt-0.5">{t('chatbot.studio.createModalSubtitle')}</p>
                 </div>
                 <button
                   onClick={() => { setShowCreate(false); setNewName(''); }}
-                  className="w-8 h-8 flex items-center justify-center rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                  className="w-8 h-8 flex items-center justify-center rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-dk-text hover:bg-slate-100 dark:hover:bg-dk-raised transition-colors"
                 >
                   <HiOutlineX className="w-4 h-4" />
                 </button>
@@ -353,7 +353,7 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
               {/* Bản cũ có "Mẫu nhanh" chỉ điền TÊN (không điền hướng dẫn AI hay câu hỏi gợi ý): 23/63 bot mang đúng tên mẫu,
                   6 bot tên "Tùy chỉnh", khách tưởng đã chọn mẫu dựng sẵn mà bot vẫn rỗng (S-07). Bỏ hẳn. */}
               <div>
-                <label className="text-xs font-medium text-slate-700 mb-1.5 block">
+                <label className="text-xs font-medium text-slate-700 dark:text-dk-text mb-1.5 block">
                   {t('chatbot.studio.botNameLabel')}
                 </label>
                 <input
@@ -362,7 +362,7 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
                   onChange={(e) => setNewName(e.target.value)}
                   placeholder={t('chatbot.studio.botNameExample')}
                   autoFocus
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10 transition-all"
+                  className="w-full border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset rounded-lg px-3 py-2.5 text-sm text-slate-900 dark:text-dk-text placeholder-slate-400 dark:placeholder-dk-muted outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10 transition-all"
                 />
               </div>
 
@@ -370,7 +370,7 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
                 <button
                   type="button"
                   onClick={() => { setShowCreate(false); setNewName(''); }}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+                  className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-dk-text hover:text-slate-900 dark:hover:text-dk-text hover:bg-slate-100 dark:hover:bg-dk-raised rounded-lg transition-colors"
                 >
                   {t('chatbot.studio.cancel')}
                 </button>
@@ -404,10 +404,10 @@ function EmptyState({ isSearch = false, onCreate }) {
 
   return (
     <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-      <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3">
+      <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-dk-raised flex items-center justify-center mb-3">
         <HiOutlineSparkles className="w-5 h-5 text-slate-400" />
       </div>
-      <p className="text-sm font-medium text-slate-700 mb-1">{config.title}</p>
+      <p className="text-sm font-medium text-slate-700 dark:text-dk-text mb-1">{config.title}</p>
       <p className="text-xs text-slate-400 mb-4">{config.desc}</p>
       {!isSearch && (
         <button
@@ -430,7 +430,7 @@ const ORIGIN_LABEL_KEYS = {
 
 const DOT_STATES = {
   on: { dot: 'bg-emerald-500', labelKey: 'chatbot.studio.statusOn' },
-  off: { dot: 'bg-slate-300', labelKey: 'chatbot.studio.statusOff' },
+  off: { dot: 'bg-slate-300 dark:bg-dk-strong', labelKey: 'chatbot.studio.statusOff' },
   locked: { dot: 'bg-amber-500', labelKey: 'chatbot.studio.statusLocked' },
 };
 
@@ -448,7 +448,7 @@ function BotCard({ bot, isSelected, onSelect, onDelete: _onDelete, onContextMenu
       onClick={onSelect}
       onContextMenu={onContextMenu}
       className={`group relative px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${
-        isSelected ? 'bg-primary-50/60' : 'hover:bg-slate-50'
+        isSelected ? 'bg-primary-50/60 dark:bg-primary-950/40' : 'hover:bg-slate-50 dark:hover:bg-dk-raised/60'
       }`}
     >
       <div className="flex items-start gap-2.5">
@@ -456,7 +456,7 @@ function BotCard({ bot, isSelected, onSelect, onDelete: _onDelete, onContextMenu
         <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-xs font-semibold transition-colors ${
           isSelected
             ? 'bg-primary-500 text-white'
-            : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200'
+            : 'bg-slate-100 dark:bg-dk-raised text-slate-600 dark:text-dk-text group-hover:bg-slate-200 dark:group-hover:bg-dk-strong'
         }`}>
           {bot.avatar_url ? (
             <img src={bot.avatar_url} alt="" className="w-full h-full rounded-lg object-cover" />
@@ -467,11 +467,11 @@ function BotCard({ bot, isSelected, onSelect, onDelete: _onDelete, onContextMenu
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
-            <p className={`text-sm font-medium truncate ${isSelected ? 'text-slate-900' : 'text-slate-700'}`}>
+            <p className={`text-sm font-medium truncate ${isSelected ? 'text-slate-900 dark:text-dk-text' : 'text-slate-700 dark:text-dk-text'}`}>
               {bot.name}
             </p>
             {originLabelKey && (
-              <span className="text-[10px] font-medium text-primary-600 bg-primary-50 px-1.5 rounded whitespace-nowrap shrink-0">
+              <span className="text-[10px] font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-950/50 px-1.5 rounded whitespace-nowrap shrink-0">
                 {t(originLabelKey)}
               </span>
             )}
@@ -492,7 +492,7 @@ function BotCard({ bot, isSelected, onSelect, onDelete: _onDelete, onContextMenu
         <button
           onClick={(e) => { e.stopPropagation(); onContextMenu(e); }}
           className={`w-6 h-6 rounded flex items-center justify-center transition-all ${
-            isSelected ? 'text-slate-500 hover:bg-slate-200/60' : 'text-slate-300 opacity-0 group-hover:opacity-100 hover:bg-slate-200/60 hover:text-slate-600'
+            isSelected ? 'text-slate-500 dark:text-dk-text2 hover:bg-slate-200/60 dark:hover:bg-dk-raised' : 'text-slate-300 dark:text-dk-muted opacity-0 group-hover:opacity-100 hover:bg-slate-200/60 dark:hover:bg-dk-raised hover:text-slate-600 dark:hover:text-dk-text'
           }`}
         >
           <HiOutlineDotsHorizontal className="w-3.5 h-3.5" />

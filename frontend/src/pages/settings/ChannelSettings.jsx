@@ -45,7 +45,7 @@ const ChannelSettings = () => {
   return (
     <div className="space-y-6">
       {/* Tab switcher */}
-      <div className="flex flex-wrap gap-1.5 p-1.5 bg-gray-100/90 rounded-xl w-fit border border-gray-200/60">
+      <div className="flex flex-wrap gap-1.5 p-1.5 bg-gray-100/90 dark:bg-dk-inset rounded-xl w-fit border border-gray-200/60 dark:border-dk-border">
         {TABS.map(({ key, label, icon: Icon, color, bg }) => {
           const isActive = active === key;
           return (
@@ -61,7 +61,7 @@ const ChannelSettings = () => {
               className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-sm font-semibold transition-all ${
                 isActive
                   ? 'bg-orange-500 text-white shadow-sm ring-1 ring-orange-500/20'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-white/80'
+                  : 'text-gray-600 dark:text-dk-text2 hover:text-gray-900 dark:hover:text-dk-text hover:bg-white/80 dark:hover:bg-dk-raised'
               }`}
             >
               <span

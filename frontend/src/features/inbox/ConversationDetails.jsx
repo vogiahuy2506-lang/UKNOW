@@ -61,14 +61,14 @@ const ConversationDetails = ({ conversation, onClose }) => {
   const channel = getChannelInfo();
 
   return (
-    <div className="w-80 bg-white border-l border-gray-200 flex flex-col h-full">
+    <div className="w-80 bg-white dark:bg-dk-surface border-l border-gray-200 dark:border-dk-border flex flex-col h-full">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-        <h3 className="font-semibold text-gray-900">{t('inbox.conversationDetails')}</h3>
+      <div className="px-4 py-3 border-b border-gray-200 dark:border-dk-border flex items-center justify-between">
+        <h3 className="font-semibold text-gray-900 dark:text-dk-text">{t('inbox.conversationDetails')}</h3>
         <button
           onClick={onClose}
           aria-label={t('common.close')}
-          className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+          className="p-1 text-gray-400 dark:text-dk-text2 hover:text-gray-600 dark:hover:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-raised rounded transition-colors"
         >
           <HiX className="w-5 h-5" />
         </button>
@@ -77,16 +77,16 @@ const ConversationDetails = ({ conversation, onClose }) => {
       <div className="flex-1 overflow-y-auto p-4">
         <div className="space-y-4">
           {/* Visitor Info */}
-          <div className="bg-gray-50 rounded-lg p-3">
+          <div className="bg-gray-50 dark:bg-dk-raised rounded-lg p-3">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-12 h-12 rounded-full bg-primary-500 flex items-center justify-center text-white text-lg font-medium">
                 {visitorName?.[0]?.toUpperCase() || '?'}
               </div>
               <div className="min-w-0">
-                <h4 className="font-medium text-gray-900 truncate">
+                <h4 className="font-medium text-gray-900 dark:text-dk-text truncate">
                   {visitorName || t('inbox.anonymousCustomer')}
                 </h4>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-gray-500 dark:text-dk-text2">
                   {channel.icon} {channel.label}
                 </p>
               </div>
@@ -96,20 +96,20 @@ const ConversationDetails = ({ conversation, onClose }) => {
             <div className="space-y-2">
               {visitorInfo.phone && (
                 <div className="flex items-center gap-2 text-sm">
-                  <HiPhone className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-600">{visitorInfo.phone}</span>
+                  <HiPhone className="w-4 h-4 text-gray-400 dark:text-dk-muted" />
+                  <span className="text-gray-600 dark:text-dk-text">{visitorInfo.phone}</span>
                 </div>
               )}
               {visitorInfo.email && (
                 <div className="flex items-center gap-2 text-sm">
-                  <HiMail className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-600">{visitorInfo.email}</span>
+                  <HiMail className="w-4 h-4 text-gray-400 dark:text-dk-muted" />
+                  <span className="text-gray-600 dark:text-dk-text">{visitorInfo.email}</span>
                 </div>
               )}
               {visitorInfo.location && (
                 <div className="flex items-center gap-2 text-sm">
-                  <HiLocationMarker className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-600">{visitorInfo.location}</span>
+                  <HiLocationMarker className="w-4 h-4 text-gray-400 dark:text-dk-muted" />
+                  <span className="text-gray-600 dark:text-dk-text">{visitorInfo.location}</span>
                 </div>
               )}
             </div>
@@ -117,23 +117,23 @@ const ConversationDetails = ({ conversation, onClose }) => {
 
           {/* Timeline */}
           <div>
-            <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
-              <HiClock className="w-4 h-4" />
+            <h4 className="text-sm font-medium text-gray-700 dark:text-dk-text mb-2 flex items-center gap-1">
+              <HiClock className="w-4 h-4 text-gray-400 dark:text-dk-muted" />
               {t('inbox.timeline')}
             </h4>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-500">{t('inbox.startedAt')}</span>
-                <span className="text-gray-700">{formatDate(startedAt)}</span>
+                <span className="text-gray-500 dark:text-dk-text2">{t('inbox.startedAt')}</span>
+                <span className="text-gray-700 dark:text-dk-text">{formatDate(startedAt)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">{t('inbox.lastMessage')}</span>
-                <span className="text-gray-700">{formatDate(lastMessageAt)}</span>
+                <span className="text-gray-500 dark:text-dk-text2">{t('inbox.lastMessage')}</span>
+                <span className="text-gray-700 dark:text-dk-text">{formatDate(lastMessageAt)}</span>
               </div>
               {conversation.unreadCount > 0 && (
                 <div className="flex justify-between">
-                  <span className="text-gray-500">{t('inbox.unread')}</span>
-                  <span className="text-red-600 font-medium">{conversation.unreadCount}</span>
+                  <span className="text-gray-500 dark:text-dk-text2">{t('inbox.unread')}</span>
+                  <span className="text-red-600 dark:text-red-400 font-medium">{conversation.unreadCount}</span>
                 </div>
               )}
             </div>
@@ -141,21 +141,21 @@ const ConversationDetails = ({ conversation, onClose }) => {
 
           {/* Group info */}
           {isGroup && (
-            <div className="bg-purple-50 rounded-lg p-3">
-              <h4 className="text-sm font-medium text-purple-700 mb-2">
+            <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-100 dark:border-purple-900/40 rounded-lg p-3">
+              <h4 className="text-sm font-medium text-purple-700 dark:text-purple-300 mb-2">
                 👥 {t('inbox.groupInfo')}
               </h4>
               <div className="space-y-2 text-sm">
                 {groupName && (
                   <div className="flex justify-between gap-2">
-                    <span className="text-purple-600">{t('inbox.groupName')}</span>
-                    <span className="text-purple-800 font-medium text-right">{groupName}</span>
+                    <span className="text-purple-600 dark:text-purple-400">{t('inbox.groupName')}</span>
+                    <span className="text-purple-800 dark:text-purple-200 font-medium text-right">{groupName}</span>
                   </div>
                 )}
                 {visitorInfo.sender_name && (
                   <div className="flex justify-between gap-2">
-                    <span className="text-purple-600">{t('inbox.sender')}</span>
-                    <span className="text-purple-800 font-medium text-right">{visitorInfo.sender_name}</span>
+                    <span className="text-purple-600 dark:text-purple-400">{t('inbox.sender')}</span>
+                    <span className="text-purple-800 dark:text-purple-200 font-medium text-right">{visitorInfo.sender_name}</span>
                   </div>
                 )}
               </div>

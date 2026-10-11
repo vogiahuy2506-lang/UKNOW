@@ -104,16 +104,16 @@ export default function CustomPricingPanel() {
   };
 
   if (loading) {
-    return <div className="card p-8 animate-pulse bg-gray-50 h-40" />;
+    return <div className="card p-8 animate-pulse bg-gray-50 dark:bg-dk-raised/40 h-40" />;
   }
 
   return (
-    <div className="card overflow-x-auto">
-      <p className="px-4 pt-4 text-xs text-gray-500">
+    <div className="card overflow-x-auto dark:bg-dk-surface dark:border-dk-border">
+      <p className="px-4 pt-4 text-xs text-gray-500 dark:text-dk-text2">
         {t('adminPlans.customPricingIncludedHint')}
       </p>
       <table className="min-w-full text-sm">
-        <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+        <thead className="bg-gray-50 dark:bg-dk-raised text-left text-xs uppercase tracking-wide text-gray-500 dark:text-dk-text2">
           <tr>
             <th className="px-4 py-3">{t('adminPlans.customPricingColItem')}</th>
             <th className="px-4 py-3">{t('adminPlans.customPricingColUnitPrice')}</th>
@@ -128,15 +128,15 @@ export default function CustomPricingPanel() {
             <th className="px-4 py-3" />
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-gray-100 dark:divide-dk-border/60">
           {rows.map((row) => {
             const draft = drafts[row.itemKey] || {};
             const isConfig = CONFIG_KEYS.has(row.itemKey);
             return (
-              <tr key={row.itemKey} className="hover:bg-gray-50/80">
+              <tr key={row.itemKey} className="hover:bg-gray-50/80 dark:hover:bg-dk-raised/40">
                 <td className="px-4 py-3">
-                  <div className="font-semibold text-gray-900">{LABEL_MAP[row.itemKey] || row.itemKey}</div>
-                  <div className="text-xs text-gray-400">{row.itemKey}{row.planColumn ? ` → ${row.planColumn}` : ''}</div>
+                  <div className="font-semibold text-gray-900 dark:text-dk-text">{LABEL_MAP[row.itemKey] || row.itemKey}</div>
+                  <div className="text-xs text-gray-400 dark:text-dk-muted">{row.itemKey}{row.planColumn ? ` → ${row.planColumn}` : ''}</div>
                 </td>
                 <td className="px-4 py-3">
                   {isConfig ? (

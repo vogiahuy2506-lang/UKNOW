@@ -63,22 +63,22 @@ export const NodeConfigConditionSection = ({ formData, setFormData }) => {
     <div className="space-y-4">
       {/* Node name */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{tr('nodeName', 'Tên node')}</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{tr('nodeName', 'Tên node')}</label>
         <input
           type="text"
           value={formData.label}
           onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+          className="w-full px-3 py-2 border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-raised text-gray-900 dark:text-dk-text rounded-lg focus:ring-2 focus:ring-primary-500 placeholder:text-gray-400 dark:placeholder:text-dk-muted"
           placeholder={tr('nodeNamePlaceholder', 'Điều kiện')}
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{tr('description', 'Mô tả')}</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{tr('description', 'Mô tả')}</label>
         <textarea
           value={formData.description || ''}
           onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+          className="w-full px-3 py-2 border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-raised text-gray-900 dark:text-dk-text rounded-lg focus:ring-2 focus:ring-primary-500 placeholder:text-gray-400 dark:placeholder:text-dk-muted"
           rows={2}
           placeholder={tr('descriptionPlaceholder', 'Mô tả điều kiện...')}
         />
@@ -86,17 +86,17 @@ export const NodeConfigConditionSection = ({ formData, setFormData }) => {
 
       {/* Match mode */}
       <div className="flex items-center gap-3">
-        <span className="text-sm font-medium text-gray-700">{tr('matchMode', 'Kết hợp')}</span>
-        <div className="flex rounded-lg border border-gray-300 overflow-hidden text-sm">
+        <span className="text-sm font-medium text-gray-700 dark:text-dk-text">{tr('matchMode', 'Kết hợp')}</span>
+        <div className="flex rounded-lg border border-gray-300 dark:border-dk-border overflow-hidden text-sm">
           {['all', 'any'].map((mode) => (
             <button
               key={mode}
               type="button"
               onClick={() => setFormData((prev) => ({ ...prev, matchMode: mode }))}
-              className={`px-3 py-1.5 ${
+              className={`px-3 py-1.5 transition-colors ${
                 (formData.matchMode || 'all') === mode
                   ? 'bg-primary-500 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-50'
+                  : 'bg-white dark:bg-dk-raised text-gray-700 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-strong'
               }`}
             >
               {mode === 'all' ? tr('matchAll', 'Tất cả (AND)') : tr('matchAny', 'Bất kỳ (OR)')}
@@ -108,11 +108,11 @@ export const NodeConfigConditionSection = ({ formData, setFormData }) => {
       {/* Rules */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <label className="block text-sm font-medium text-gray-700">{tr('rules', 'Điều kiện')}</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-dk-text">{tr('rules', 'Điều kiện')}</label>
           <button
             type="button"
             onClick={addRule}
-            className="text-xs px-2 py-1 rounded bg-primary-50 text-primary-600 hover:bg-primary-100"
+            className="text-xs px-2 py-1 rounded bg-primary-50 dark:bg-primary-950/40 text-primary-600 dark:text-primary-400 hover:bg-primary-100 dark:hover:bg-primary-900/50 transition-colors"
           >
             + {tr('addRule', 'Thêm điều kiện')}
           </button>
@@ -120,14 +120,14 @@ export const NodeConfigConditionSection = ({ formData, setFormData }) => {
 
         <div className="space-y-2">
           {rules.map((rule, idx) => (
-            <div key={idx} className="grid grid-cols-12 gap-2 items-start p-2.5 rounded-lg border border-gray-200 bg-gray-50">
+            <div key={idx} className="grid grid-cols-12 gap-2 items-start p-2.5 rounded-lg border border-gray-200 dark:border-dk-border bg-gray-50 dark:bg-dk-raised/40">
               {/* Field */}
               <div className="col-span-12 sm:col-span-4">
                 <input
                   type="text"
                   value={rule.field || ''}
                   onChange={(e) => updateRule(idx, { field: e.target.value })}
-                  className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-primary-500 bg-white"
+                  className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-dk-border rounded focus:ring-2 focus:ring-primary-500 bg-white dark:bg-dk-raised text-gray-900 dark:text-dk-text placeholder:text-gray-400 dark:placeholder:text-dk-muted"
                   placeholder={tr('fieldPlaceholder', 'Trường (vd: email, tag)')}
                 />
               </div>
@@ -137,7 +137,7 @@ export const NodeConfigConditionSection = ({ formData, setFormData }) => {
                 <select
                   value={rule.operator || 'equals'}
                   onChange={(e) => updateRule(idx, { operator: e.target.value })}
-                  className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-primary-500 bg-white"
+                  className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-dk-border rounded focus:ring-2 focus:ring-primary-500 bg-white dark:bg-dk-raised text-gray-900 dark:text-dk-text"
                 >
                   {OPERATORS.map((op) => (
                     <option key={op.value} value={op.value}>
@@ -153,7 +153,7 @@ export const NodeConfigConditionSection = ({ formData, setFormData }) => {
                   type="text"
                   value={rule.value ?? ''}
                   onChange={(e) => updateRule(idx, { value: e.target.value })}
-                  className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-primary-500 bg-white"
+                  className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-dk-border rounded focus:ring-2 focus:ring-primary-500 bg-white dark:bg-dk-raised text-gray-900 dark:text-dk-text placeholder:text-gray-400 dark:placeholder:text-dk-muted disabled:opacity-50"
                   placeholder={tr('valuePlaceholder', 'Giá trị')}
                   disabled={rule.operator === 'exists' || rule.operator === 'empty'}
                 />
@@ -164,7 +164,7 @@ export const NodeConfigConditionSection = ({ formData, setFormData }) => {
                 <button
                   type="button"
                   onClick={() => removeRule(idx)}
-                  className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded p-1"
+                  className="text-red-500 hover:text-red-700 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded p-1 transition-colors"
                   title="Xóa"
                 >
                   ×
@@ -175,8 +175,8 @@ export const NodeConfigConditionSection = ({ formData, setFormData }) => {
         </div>
       </div>
 
-      <div className="bg-blue-50 p-3 rounded-lg">
-        <p className="text-sm text-blue-700">
+      <div className="bg-blue-50 dark:bg-blue-950/30 border border-transparent dark:border-blue-900/40 p-3 rounded-lg">
+        <p className="text-sm text-blue-700 dark:text-blue-300">
           <strong>{tr('note', 'Ghi chú')}:</strong> {tr('noteHelp', 'Các điều kiện được đánh giá theo thứ tự; node tiếp theo sẽ chạy nếu tổ hợp khớp (theo chế độ AND/OR).')}
         </p>
       </div>
@@ -200,22 +200,22 @@ export const NodeConfigTagContactSection = ({ formData, setFormData, upstreamNod
   return (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{tr('nodeName', 'Tên node')}</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{tr('nodeName', 'Tên node')}</label>
         <input
           type="text"
           value={formData.label}
           onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+          className="w-full px-3 py-2 border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-raised text-gray-900 dark:text-dk-text rounded-lg focus:ring-2 focus:ring-primary-500 placeholder:text-gray-400 dark:placeholder:text-dk-muted"
           placeholder={tr('nodeNamePlaceholder', 'Gắn tag')}
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{tr('description', 'Mô tả')}</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{tr('description', 'Mô tả')}</label>
         <textarea
           value={formData.description || ''}
           onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+          className="w-full px-3 py-2 border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-raised text-gray-900 dark:text-dk-text rounded-lg focus:ring-2 focus:ring-primary-500 placeholder:text-gray-400 dark:placeholder:text-dk-muted"
           rows={2}
           placeholder={tr('descriptionPlaceholder', 'Mô tả gắn tag...')}
         />
@@ -223,11 +223,11 @@ export const NodeConfigTagContactSection = ({ formData, setFormData, upstreamNod
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">{tr('action', 'Hành động')}</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{tr('action', 'Hành động')}</label>
           <select
             value={formData.tagAction || 'add'}
             onChange={(e) => setFormData((prev) => ({ ...prev, tagAction: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-raised text-gray-900 dark:text-dk-text rounded-lg focus:ring-2 focus:ring-primary-500"
           >
             <option value="add">{tr('actionAdd', 'Thêm tag')}</option>
             <option value="remove">{tr('actionRemove', 'Xóa tag')}</option>
@@ -235,23 +235,23 @@ export const NodeConfigTagContactSection = ({ formData, setFormData, upstreamNod
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">{tr('tagName', 'Tên tag')}</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{tr('tagName', 'Tên tag')}</label>
           <input
             type="text"
             value={formData.tagName || ''}
             onChange={(e) => setFormData((prev) => ({ ...prev, tagName: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-raised text-gray-900 dark:text-dk-text rounded-lg focus:ring-2 focus:ring-primary-500 placeholder:text-gray-400 dark:placeholder:text-dk-muted"
             placeholder={tr('tagNamePlaceholder', 'vd: lead-hot, vip, contacted')}
           />
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{tr('sourceNode', 'Nguồn danh sách liên hệ')}</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{tr('sourceNode', 'Nguồn danh sách liên hệ')}</label>
         <select
           value={formData.tagSourceNodeId || ''}
           onChange={(e) => setFormData((prev) => ({ ...prev, tagSourceNodeId: e.target.value }))}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+          className="w-full px-3 py-2 border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-raised text-gray-900 dark:text-dk-text rounded-lg focus:ring-2 focus:ring-primary-500"
         >
           <option value="">{tr('sourceNodePlaceholder', '— Chọn node cung cấp danh sách —')}</option>
           {upstreamNodes.map((n) => (
@@ -262,8 +262,8 @@ export const NodeConfigTagContactSection = ({ formData, setFormData, upstreamNod
         </select>
       </div>
 
-      <div className="bg-blue-50 p-3 rounded-lg">
-        <p className="text-sm text-blue-700">
+      <div className="bg-blue-50 dark:bg-blue-950/30 border border-transparent dark:border-blue-900/40 p-3 rounded-lg">
+        <p className="text-sm text-blue-700 dark:text-blue-300">
           <strong>{tr('note', 'Ghi chú')}:</strong> {tr('noteHelp', 'Hành động gắn/xóa tag sẽ áp dụng cho tất cả liên hệ lấy từ node nguồn đã chọn.')}
         </p>
       </div>
@@ -287,22 +287,22 @@ export const NodeConfigUpdateAttributeSection = ({ formData, setFormData, upstre
   return (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{tr('nodeName', 'Tên node')}</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{tr('nodeName', 'Tên node')}</label>
         <input
           type="text"
           value={formData.label}
           onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+          className="w-full px-3 py-2 border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-raised text-gray-900 dark:text-dk-text rounded-lg focus:ring-2 focus:ring-primary-500 placeholder:text-gray-400 dark:placeholder:text-dk-muted"
           placeholder={tr('nodeNamePlaceholder', 'Cập nhật thuộc tính')}
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{tr('description', 'Mô tả')}</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{tr('description', 'Mô tả')}</label>
         <textarea
           value={formData.description || ''}
           onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+          className="w-full px-3 py-2 border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-raised text-gray-900 dark:text-dk-text rounded-lg focus:ring-2 focus:ring-primary-500 placeholder:text-gray-400 dark:placeholder:text-dk-muted"
           rows={2}
           placeholder={tr('descriptionPlaceholder', 'Mô tả cập nhật thuộc tính...')}
         />
@@ -310,33 +310,33 @@ export const NodeConfigUpdateAttributeSection = ({ formData, setFormData, upstre
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">{tr('field', 'Trường cần cập nhật')}</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{tr('field', 'Trường cần cập nhật')}</label>
           <input
             type="text"
             value={formData.attributeField || ''}
             onChange={(e) => setFormData((prev) => ({ ...prev, attributeField: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-raised text-gray-900 dark:text-dk-text rounded-lg focus:ring-2 focus:ring-primary-500 placeholder:text-gray-400 dark:placeholder:text-dk-muted"
             placeholder={tr('fieldPlaceholder', 'vd: status, score, lastContactAt')}
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">{tr('value', 'Giá trị mới')}</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{tr('value', 'Giá trị mới')}</label>
           <input
             type="text"
             value={formData.attributeValue ?? ''}
             onChange={(e) => setFormData((prev) => ({ ...prev, attributeValue: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-raised text-gray-900 dark:text-dk-text rounded-lg focus:ring-2 focus:ring-primary-500 placeholder:text-gray-400 dark:placeholder:text-dk-muted"
             placeholder={tr('valuePlaceholder', 'Giá trị (text/số)')}
           />
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{tr('sourceNode', 'Nguồn danh sách liên hệ')}</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{tr('sourceNode', 'Nguồn danh sách liên hệ')}</label>
         <select
           value={formData.attributeSourceNodeId || ''}
           onChange={(e) => setFormData((prev) => ({ ...prev, attributeSourceNodeId: e.target.value }))}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+          className="w-full px-3 py-2 border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-raised text-gray-900 dark:text-dk-text rounded-lg focus:ring-2 focus:ring-primary-500"
         >
           <option value="">{tr('sourceNodePlaceholder', '— Chọn node cung cấp danh sách —')}</option>
           {upstreamNodes.map((n) => (
@@ -347,8 +347,8 @@ export const NodeConfigUpdateAttributeSection = ({ formData, setFormData, upstre
         </select>
       </div>
 
-      <div className="bg-blue-50 p-3 rounded-lg">
-        <p className="text-sm text-blue-700">
+      <div className="bg-blue-50 dark:bg-blue-950/30 border border-transparent dark:border-blue-900/40 p-3 rounded-lg">
+        <p className="text-sm text-blue-700 dark:text-blue-300">
           <strong>{tr('note', 'Ghi chú')}:</strong> {tr('noteHelp', 'Trường được cập nhật cho tất cả liên hệ lấy từ node nguồn. Nếu cần cập nhật khác nhau theo từng dòng, dùng node Data + ánh xạ trước.')}
         </p>
       </div>

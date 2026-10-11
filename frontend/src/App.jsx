@@ -1,6 +1,7 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from './stores/authStore';
+import { useThemeStore, applyThemeToDocument } from './stores/themeStore';
 import { Suspense, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -214,6 +215,15 @@ const MarketplaceModalRoot = () => {
   );
 };
 
+function ThemeScopeHandler() {
+  const { pathname } = useLocation();
+  const theme = useThemeStore((s) => s.theme);
+  useEffect(() => {
+    applyThemeToDocument(theme, pathname);
+  }, [theme, pathname]);
+  return null;
+}
+
 function AppContent() {
   const { t } = useI18n();
   const toaster = (
@@ -248,6 +258,7 @@ function AppContent() {
     <>
       <MarketplaceModalProvider>
         <Router>
+          <ThemeScopeHandler />
           <RouteAnalytics />
           <ReferralCapture />
           <PostAuthGateModals />

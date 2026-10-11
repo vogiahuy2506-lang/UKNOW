@@ -14,8 +14,9 @@ import diagnosticApiService from '../../features/admin/diagnostic/services/diagn
 import PageHeader from '../../components/common/PageHeader';
 import zaloSettingsApiService from '../../features/settings/services/zaloSettingsApi.service';
 import emailSettingsApiService from '../../features/settings/services/emailSettingsApi.service';
+import { useI18n } from '../../i18n';
 
-const fmtTime = (v) => (v ? new Date(v).toLocaleTimeString('vi-VN') : '—');
+const fmtTime = (v, locale) => (v ? new Date(v).toLocaleTimeString(locale === 'en' ? 'en-US' : 'vi-VN') : '—');
 const fmtDelay = (ms) => {
   if (ms == null || ms === '') return '—';
   const n = Number(ms);
@@ -23,14 +24,16 @@ const fmtDelay = (ms) => {
   if (n >= 1000) return `${(n / 1000).toFixed(1)}s`;
   return `${n}ms`;
 };
-const fmtDuration = (ms) => {
+const fmtDuration = (ms, t) => {
   const n = Number(ms);
-  if (!Number.isFinite(n) || n <= 0) return '0 phút';
+  if (!Number.isFinite(n) || n <= 0) return t ? t('diagnostic.durationZero', '0 phút') : '0 phút';
   const totalMinutes = Math.ceil(n / 60000);
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
-  if (hours > 0) return `${hours} giờ ${minutes} phút`;
-  return `${minutes} phút`;
+  if (hours > 0) {
+    return t ? t('diagnostic.durationHoursMinutes', { hours, minutes }, `${hours} giờ ${minutes} phút`) : `${hours} giờ ${minutes} phút`;
+  }
+  return t ? t('diagnostic.durationMinutesOnly', { minutes }, `${minutes} phút`) : `${minutes} phút`;
 };
 
 const STATUS_ICON = {
@@ -95,8 +98,15 @@ const RECIPIENT_CONFIG = {
   },
 };
 
-function getRecipientConfig(channel) {
-  return RECIPIENT_CONFIG[channel] || RECIPIENT_CONFIG.zalo_personal;
+function getRecipientConfig(channel, t) {
+  const base = RECIPIENT_CONFIG[channel] || RECIPIENT_CONFIG.zalo_personal;
+  if (!t) return base;
+  return {
+    label: t(`diagnostic.recipientConfig.${channel}.label`, base.label),
+    shortLabel: t(`diagnostic.recipientConfig.${channel}.shortLabel`, base.shortLabel),
+    placeholder: t(`diagnostic.recipientConfig.${channel}.placeholder`, base.placeholder),
+    note: t(`diagnostic.recipientConfig.${channel}.note`, base.note),
+  };
 }
 
 function avg(values) {
@@ -111,18 +121,20 @@ function percentile(values, p) {
   return sorted[Math.max(0, idx)];
 }
 
-function formatPolicySummary(policy, quietHours) {
+function formatPolicySummary(policy, quietHours, t) {
   if (!policy) return null;
   const minSec = Math.round((policy.minDelayMs || 0) / 1000);
   const maxSec = Math.round((policy.maxDelayMs || 0) / 1000);
   const limit = policy.limitPerWindow || 100;
   const qh = quietHours
-    ? ` · im lặng ${quietHours.start}h–${quietHours.end}h`
+    ? (t ? t('diagnostic.quietHoursInfo', { start: quietHours.start, end: quietHours.end }, ` · im lặng ${quietHours.start}h–${quietHours.end}h`) : ` · im lặng ${quietHours.start}h–${quietHours.end}h`)
     : '';
-  return `khoảng cách ngẫu nhiên ${minSec}–${maxSec} giây · ${limit} tin/giờ${qh}`;
+  return t
+    ? t('diagnostic.policySummaryText', { minSec, maxSec, limit, qh }, `khoảng cách ngẫu nhiên ${minSec}–${maxSec} giây · ${limit} tin/giờ${qh}`)
+    : `khoảng cách ngẫu nhiên ${minSec}–${maxSec} giây · ${limit} tin/giờ${qh}`;
 }
 
-function buildAnalysis(messages) {
+function buildAnalysis(messages, t) {
   const waitVals = messages.map((m) => m.wait_ms).filter((v) => v != null && v > 0);
   const lookupVals = messages.map((m) => m.lookup_ms).filter((v) => v != null && v >= 0);
   const sendVals = messages.map((m) => m.send_ms).filter((v) => v != null && v >= 0);
@@ -138,26 +150,27 @@ function buildAnalysis(messages) {
   const avgWait = avg(waitVals);
   const p95Lookup = percentile(lookupVals, 95);
 
-  let conclusion = 'Chưa đủ dữ liệu thời gian để kết luận.';
+  let conclusion = t ? t('diagnostic.analysis.insufficientData', 'Chưa đủ dữ liệu thời gian để kết luận.') : 'Chưa đủ dữ liệu thời gian để kết luận.';
   const parts = [];
-  if (avgLookup != null) parts.push(`Tra số TB ${fmtDelay(avgLookup)}`);
-  if (avgSend != null) parts.push(`Gửi TB ${fmtDelay(avgSend)}`);
-  if (avgWait != null) parts.push(`Chờ TB ${fmtDelay(avgWait)}`);
+  if (avgLookup != null) parts.push(t ? t('diagnostic.analysis.lookupAvgPart', { delay: fmtDelay(avgLookup) }, `Tra số TB ${fmtDelay(avgLookup)}`) : `Tra số TB ${fmtDelay(avgLookup)}`);
+  if (avgSend != null) parts.push(t ? t('diagnostic.analysis.sendAvgPart', { delay: fmtDelay(avgSend) }, `Gửi TB ${fmtDelay(avgSend)}`) : `Gửi TB ${fmtDelay(avgSend)}`);
+  if (avgWait != null) parts.push(t ? t('diagnostic.analysis.waitAvgPart', { delay: fmtDelay(avgWait) }, `Chờ TB ${fmtDelay(avgWait)}`) : `Chờ TB ${fmtDelay(avgWait)}`);
 
   if (parts.length) {
     const slowest = [
-      { label: 'Tra số', value: avgLookup || 0 },
-      { label: 'Gửi', value: avgSend || 0 },
-      { label: 'Chờ', value: avgWait || 0 },
+      { label: t ? t('diagnostic.analysis.lookupStage', 'Tra số') : 'Tra số', value: avgLookup || 0 },
+      { label: t ? t('diagnostic.analysis.sendStage', 'Gửi') : 'Gửi', value: avgSend || 0 },
+      { label: t ? t('diagnostic.analysis.waitStage', 'Chờ') : 'Chờ', value: avgWait || 0 },
     ].sort((a, b) => b.value - a.value)[0];
-    conclusion = `${parts.join(' · ')} — chặng chậm nhất: ${slowest.label}.`;
+    const stageText = t ? t('diagnostic.analysis.slowestStage', { stage: slowest.label }, `— chặng chậm nhất: ${slowest.label}.`) : `— chặng chậm nhất: ${slowest.label}.`;
+    conclusion = `${parts.join(' · ')} ${stageText}`;
   }
 
   const errorEntries = Object.entries(errorCounts);
   if (errorEntries.length) {
     const top = errorEntries.sort((a, b) => b[1] - a[1])[0];
-    const label = ERROR_CATEGORY_LABELS[top[0]] || top[0];
-    conclusion += ` ${top[1]} tin lỗi "${label}".`;
+    const label = t ? t(`diagnostic.errorCategories.${top[0]}`, ERROR_CATEGORY_LABELS[top[0]] || top[0]) : (ERROR_CATEGORY_LABELS[top[0]] || top[0]);
+    conclusion += t ? t('diagnostic.analysis.errorSummary', { count: top[1], error: label }, ` ${top[1]} tin lỗi "${label}".`) : ` ${top[1]} tin lỗi "${label}".`;
   }
 
   return {
@@ -170,96 +183,97 @@ function buildAnalysis(messages) {
   };
 }
 
-function TimingStackedBar({ waitMs, lookupMs, sendMs }) {
+function TimingStackedBar({ waitMs, lookupMs, sendMs, t }) {
   const wait = Math.max(0, Number(waitMs) || 0);
   const lookup = Math.max(0, Number(lookupMs) || 0);
   const send = Math.max(0, Number(sendMs) || 0);
   const total = wait + lookup + send;
-  if (total <= 0) return <span className="text-gray-300 text-xs">—</span>;
+  if (total <= 0) return <span className="text-gray-300 dark:text-dk-muted text-xs">—</span>;
 
   const pct = (v) => `${Math.max(2, (v / total) * 100)}%`;
+  const totalSuffix = t ? ` ${t('diagnostic.analysis.timingTotal', 'tổng')}` : ' tổng';
   return (
     <div className="space-y-1 min-w-[120px]">
-      <div className="flex h-2 rounded-full overflow-hidden bg-gray-100">
+      <div className="flex h-2 rounded-full overflow-hidden bg-gray-100 dark:bg-dk-raised">
         {wait > 0 && <div className="bg-amber-400" style={{ width: pct(wait) }} title={`Chờ ${fmtDelay(wait)}`} />}
         {lookup > 0 && <div className="bg-sky-500" style={{ width: pct(lookup) }} title={`Tra số ${fmtDelay(lookup)}`} />}
         {send > 0 && <div className="bg-emerald-500" style={{ width: pct(send) }} title={`Gửi ${fmtDelay(send)}`} />}
       </div>
-      <div className="text-[10px] text-gray-400 tabular-nums">
-        {fmtDelay(total)} tổng
+      <div className="text-[10px] text-gray-400 dark:text-dk-muted tabular-nums">
+        {fmtDelay(total)}{totalSuffix}
       </div>
     </div>
   );
 }
 
-function RunStatusBadge({ status }) {
+function RunStatusBadge({ status, t }) {
   if (status === 'running') {
     return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 dark:border dark:border-amber-900/50">
         <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-        Đang chạy
+        {t ? t('diagnostic.statusBadge.running', 'Đang chạy') : 'Đang chạy'}
       </span>
     );
   }
   if (status === 'completed') {
     return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300 dark:border dark:border-green-900/50">
         <HiOutlineCheckCircle className="w-3.5 h-3.5" />
-        Hoàn tất
+        {t ? t('diagnostic.statusBadge.completed', 'Hoàn tất') : 'Hoàn tất'}
       </span>
     );
   }
   if (status === 'failed') {
     return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 dark:border dark:border-red-900/50">
         <HiOutlineX className="w-3.5 h-3.5" />
-        Thất bại
+        {t ? t('diagnostic.statusBadge.failed', 'Thất bại') : 'Thất bại'}
       </span>
     );
   }
   return null;
 }
 
-function AnalysisPanel({ messages }) {
-  const analysis = useMemo(() => buildAnalysis(messages), [messages]);
+function AnalysisPanel({ messages, t }) {
+  const analysis = useMemo(() => buildAnalysis(messages, t), [messages, t]);
   const errorEntries = Object.entries(analysis.errorCounts);
 
   return (
-    <div className="rounded-xl border border-gray-100 bg-gray-50/80 p-4 space-y-3">
-      <h3 className="text-sm font-semibold text-gray-800">Phân tích</h3>
+    <div className="rounded-xl border border-gray-100 bg-gray-50/80 p-4 space-y-3 dark:border-dk-border dark:bg-dk-raised">
+      <h3 className="text-sm font-semibold text-gray-800 dark:text-dk-text">{t ? t('diagnostic.analysis.title', 'Phân tích') : 'Phân tích'}</h3>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
         <div>
-          <div className="text-xs text-gray-500">Tra số TB / P95</div>
-          <div className="font-medium tabular-nums">{fmtDelay(analysis.avgLookup)} / {fmtDelay(analysis.p95Lookup)}</div>
+          <div className="text-xs text-gray-500 dark:text-dk-text2">{t ? t('diagnostic.analysis.lookupP95', 'Tra số TB / P95') : 'Tra số TB / P95'}</div>
+          <div className="font-medium tabular-nums dark:text-dk-text">{fmtDelay(analysis.avgLookup)} / {fmtDelay(analysis.p95Lookup)}</div>
         </div>
         <div>
-          <div className="text-xs text-gray-500">Gửi TB</div>
-          <div className="font-medium tabular-nums">{fmtDelay(analysis.avgSend)}</div>
+          <div className="text-xs text-gray-500 dark:text-dk-text2">{t ? t('diagnostic.analysis.sendAvg', 'Gửi TB') : 'Gửi TB'}</div>
+          <div className="font-medium tabular-nums dark:text-dk-text">{fmtDelay(analysis.avgSend)}</div>
         </div>
         <div>
-          <div className="text-xs text-gray-500">Chờ TB</div>
-          <div className="font-medium tabular-nums">{fmtDelay(analysis.avgWait)}</div>
+          <div className="text-xs text-gray-500 dark:text-dk-text2">{t ? t('diagnostic.analysis.waitAvg', 'Chờ TB') : 'Chờ TB'}</div>
+          <div className="font-medium tabular-nums dark:text-dk-text">{fmtDelay(analysis.avgWait)}</div>
         </div>
         <div>
-          <div className="text-xs text-gray-500">Lỗi theo nhóm</div>
-          <div className="font-medium">{errorEntries.length ? `${errorEntries.length} nhóm` : '—'}</div>
+          <div className="text-xs text-gray-500 dark:text-dk-text2">{t ? t('diagnostic.analysis.errorCategories', 'Lỗi theo nhóm') : 'Lỗi theo nhóm'}</div>
+          <div className="font-medium dark:text-dk-text">{errorEntries.length ? (t ? t('diagnostic.analysis.categoriesCount', { count: errorEntries.length }, `${errorEntries.length} nhóm`) : `${errorEntries.length} nhóm`) : '—'}</div>
         </div>
       </div>
       {errorEntries.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {errorEntries.map(([cat, count]) => (
             <span key={cat} className="badge badge-gray text-xs">
-              {ERROR_CATEGORY_LABELS[cat] || cat}: {count}
+              {(t ? t(`diagnostic.errorCategories.${cat}`, ERROR_CATEGORY_LABELS[cat] || cat) : (ERROR_CATEGORY_LABELS[cat] || cat))}: {count}
             </span>
           ))}
         </div>
       )}
-      <p className="text-sm text-gray-700 leading-relaxed">{analysis.conclusion}</p>
+      <p className="text-sm text-gray-700 leading-relaxed dark:text-dk-text">{analysis.conclusion}</p>
     </div>
   );
 }
 
-function AccountLiveStatusPanel({ status, loading, error, onRefresh }) {
+function AccountLiveStatusPanel({ status, loading, error, onRefresh, t }) {
   const quota = status?.quota;
   const policy = status?.policy;
   const cooldown = status?.phoneLookupCooldown;
@@ -268,49 +282,53 @@ function AccountLiveStatusPanel({ status, loading, error, onRefresh }) {
     ? `${quota.attemptCount ?? quota.successCount}/${quota.limitPerWindow}`
     : '—';
   const resetText = quota?.windowResetInMs == null
-    ? 'chưa có khung giờ'
-    : `làm mới sau ${fmtDuration(quota.windowResetInMs)}`;
+    ? (t ? t('diagnostic.noWindow', 'chưa có khung giờ') : 'chưa có khung giờ')
+    : (t ? t('diagnostic.resetsIn', { duration: fmtDuration(quota.windowResetInMs, t) }, `làm mới sau ${fmtDuration(quota.windowResetInMs, t)}`) : `làm mới sau ${fmtDuration(quota.windowResetInMs, t)}`);
   const cooldownText = cooldown?.remainingMs > 0
-    ? `còn ${fmtDuration(cooldown.remainingMs)}`
-    : 'không';
+    ? (t ? t('diagnostic.cooldownRemaining', { duration: fmtDuration(cooldown.remainingMs, t) }, `còn ${fmtDuration(cooldown.remainingMs, t)}`) : `còn ${fmtDuration(cooldown.remainingMs, t)}`)
+    : (t ? t('diagnostic.none', 'không') : 'không');
   const quietText = quiet?.inQuietHours
-    ? `đang tắt · mở lại sau ${fmtDuration(quiet.remainingMs)}`
-    : `đang gửi (tắt lúc ${quiet?.start ?? 23}:00)`;
+    ? (t ? t('diagnostic.quietPaused', { duration: fmtDuration(quiet.remainingMs, t) }, `đang tắt · mở lại sau ${fmtDuration(quiet.remainingMs, t)}`) : `đang tắt · mở lại sau ${fmtDuration(quiet.remainingMs, t)}`)
+    : (t ? t('diagnostic.quietActive', { start: quiet?.start ?? 23 }, `đang gửi (tắt lúc ${quiet?.start ?? 23}:00)`) : `đang gửi (tắt lúc ${quiet?.start ?? 23}:00)`);
 
   return (
-    <div className="rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3">
+    <div className="rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3 dark:border-blue-900/50 dark:bg-blue-950/30">
       <div className="mb-2 flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-blue-900">Trạng thái tài khoản trực tiếp</p>
-          <p className="text-xs text-blue-700/80">{status?.accountName || 'Đọc từ worker chiến dịch hiện tại'}</p>
+          <p className="text-sm font-semibold text-blue-900 dark:text-blue-300">
+            {t ? t('diagnostic.liveStatusTitle', 'Trạng thái tài khoản trực tiếp') : 'Trạng thái tài khoản trực tiếp'}
+          </p>
+          <p className="text-xs text-blue-700/80 dark:text-blue-400">
+            {status?.accountName || (t ? t('diagnostic.liveStatusSource', 'Đọc từ worker chiến dịch hiện tại') : 'Đọc từ worker chiến dịch hiện tại')}
+          </p>
         </div>
         <button
           type="button"
           onClick={onRefresh}
-          className="rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50"
+          className="rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:bg-dk-surface dark:text-blue-300 dark:hover:bg-blue-950/40"
           disabled={loading}
         >
-          <HiOutlineRefresh className={`inline h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> Làm mới
+          <HiOutlineRefresh className={`inline h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> {t ? t('diagnostic.refresh', 'Làm mới') : 'Làm mới'}
         </button>
       </div>
       {error ? (
-        <p className="text-xs text-red-600">{error}</p>
+        <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
       ) : (
-        <div className="grid grid-cols-1 gap-2 text-xs text-blue-900 md:grid-cols-4">
+        <div className="grid grid-cols-1 gap-2 text-xs text-blue-900 dark:text-blue-200 md:grid-cols-4">
           <div>
-            <p className="text-blue-500">Hạn mức giờ này</p>
+            <p className="text-blue-500 dark:text-blue-400">{t ? t('diagnostic.quotaHour', 'Hạn mức giờ này') : 'Hạn mức giờ này'}</p>
             <p className="font-semibold">{quotaText} · {resetText}</p>
           </div>
           <div>
-            <p className="text-blue-500">Tạm khoá tra số</p>
+            <p className="text-blue-500 dark:text-blue-400">{t ? t('diagnostic.phoneLookupCooldown', 'Tạm khoá tra số') : 'Tạm khoá tra số'}</p>
             <p className="font-semibold">{cooldownText}</p>
           </div>
           <div>
-            <p className="text-blue-500">Giờ im lặng</p>
+            <p className="text-blue-500 dark:text-blue-400">{t ? t('diagnostic.quietHours', 'Giờ im lặng') : 'Giờ im lặng'}</p>
             <p className="font-semibold">{quietText}</p>
           </div>
           <div>
-            <p className="text-blue-500">Chính sách khoảng cách</p>
+            <p className="text-blue-500 dark:text-blue-400">{t ? t('diagnostic.delayPolicy', 'Chính sách khoảng cách') : 'Chính sách khoảng cách'}</p>
             <p className="font-semibold">{fmtDelay(policy?.minDelayMs)}–{fmtDelay(policy?.maxDelayMs)}</p>
           </div>
         </div>
@@ -319,24 +337,24 @@ function AccountLiveStatusPanel({ status, loading, error, onRefresh }) {
   );
 }
 
-function RunLog({ run, messages }) {
+function RunLog({ run, messages, t, locale }) {
   const sent = run.sent_count ?? 0;
   const failed = run.failed_count ?? 0;
   const skipped = run.skipped_count ?? 0;
   const total = run.total_count ?? 0;
   const done = sent + failed + skipped;
   const isProduction = run.mode === 'production';
-  const recipientConfig = getRecipientConfig(run.channel);
+  const recipientConfig = getRecipientConfig(run.channel, t);
 
   return (
     <div className="space-y-5">
       {run.status === 'running' && total > 0 && (
         <div>
-          <div className="flex justify-between text-xs text-gray-500 mb-1.5">
-            <span>Tiến độ</span>
+          <div className="flex justify-between text-xs text-gray-500 dark:text-dk-text2 mb-1.5">
+            <span>{t ? t('diagnostic.progress', 'Tiến độ') : 'Tiến độ'}</span>
             <span className="tabular-nums">{done} / {total}</span>
           </div>
-          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+          <div className="h-1.5 bg-gray-100 dark:bg-dk-raised rounded-full overflow-hidden">
             <div
               className="h-full bg-primary-500 rounded-full transition-all duration-500"
               style={{ width: `${(done / total) * 100}%` }}
@@ -347,96 +365,102 @@ function RunLog({ run, messages }) {
 
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className={`badge ${isProduction ? 'badge-warning' : 'badge-gray'}`}>
-          {isProduction ? 'Theo chính sách thật' : 'Chế độ nhanh'}
+          {isProduction ? (t ? t('diagnostic.perRealPolicy', 'Theo chính sách thật') : 'Theo chính sách thật') : (t ? t('diagnostic.fastMode', 'Chế độ nhanh') : 'Chế độ nhanh')}
         </span>
         {!isProduction && run.inter_message_delay_ms != null && (
-          <span className="text-gray-500">Khoảng cách đã cấu hình: {fmtDelay(run.inter_message_delay_ms)}</span>
+          <span className="text-gray-500 dark:text-dk-text2">
+            {t ? t('diagnostic.configuredDelay', { delay: fmtDelay(run.inter_message_delay_ms) }, `Khoảng cách đã cấu hình: ${fmtDelay(run.inter_message_delay_ms)}`) : `Khoảng cách đã cấu hình: ${fmtDelay(run.inter_message_delay_ms)}`}
+          </span>
         )}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <div className="bg-gray-50 rounded-xl p-3 text-center">
-          <div className="text-xl font-bold text-gray-800">{total}</div>
-          <div className="text-xs text-gray-500 mt-0.5">Tổng</div>
+        <div className="bg-gray-50 dark:bg-dk-raised rounded-xl p-3 text-center">
+          <div className="text-xl font-bold text-gray-800 dark:text-dk-text">{total}</div>
+          <div className="text-xs text-gray-500 dark:text-dk-text2 mt-0.5">{t ? t('diagnostic.stats.total', 'Tổng') : 'Tổng'}</div>
         </div>
-        <div className="bg-green-50 rounded-xl p-3 text-center">
-          <div className="text-xl font-bold text-green-700">{sent}</div>
-          <div className="text-xs text-green-600 mt-0.5">Đã gửi</div>
+        <div className="bg-green-50 dark:bg-green-950/40 rounded-xl p-3 text-center">
+          <div className="text-xl font-bold text-green-700 dark:text-green-300">{sent}</div>
+          <div className="text-xs text-green-600 dark:text-green-400 mt-0.5">{t ? t('diagnostic.stats.sent', 'Đã gửi') : 'Đã gửi'}</div>
         </div>
-        <div className={`${failed > 0 ? 'bg-red-50' : 'bg-gray-50'} rounded-xl p-3 text-center`}>
-          <div className={`text-xl font-bold ${failed > 0 ? 'text-red-700' : 'text-gray-800'}`}>{failed}</div>
-          <div className={`text-xs mt-0.5 ${failed > 0 ? 'text-red-600' : 'text-gray-500'}`}>Thất bại</div>
+        <div className={`${failed > 0 ? 'bg-red-50 dark:bg-red-950/40' : 'bg-gray-50 dark:bg-dk-raised'} rounded-xl p-3 text-center`}>
+          <div className={`text-xl font-bold ${failed > 0 ? 'text-red-700 dark:text-red-300' : 'text-gray-800 dark:text-dk-text'}`}>{failed}</div>
+          <div className={`text-xs mt-0.5 ${failed > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-dk-text2'}`}>{t ? t('diagnostic.stats.failed', 'Thất bại') : 'Thất bại'}</div>
         </div>
-        <div className={`${skipped > 0 ? 'bg-amber-50' : 'bg-gray-50'} rounded-xl p-3 text-center`}>
-          <div className={`text-xl font-bold ${skipped > 0 ? 'text-amber-700' : 'text-gray-800'}`}>{skipped}</div>
-          <div className={`text-xs mt-0.5 ${skipped > 0 ? 'text-amber-600' : 'text-gray-500'}`}>Bỏ qua</div>
+        <div className={`${skipped > 0 ? 'bg-amber-50 dark:bg-amber-950/40' : 'bg-gray-50 dark:bg-dk-raised'} rounded-xl p-3 text-center`}>
+          <div className={`text-xl font-bold ${skipped > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-gray-800 dark:text-dk-text'}`}>{skipped}</div>
+          <div className={`text-xs mt-0.5 ${skipped > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-500 dark:text-dk-text2'}`}>{t ? t('diagnostic.stats.skipped', 'Bỏ qua') : 'Bỏ qua'}</div>
         </div>
-        <div className="bg-blue-50 rounded-xl p-3 text-center">
-          <div className="text-xl font-bold text-blue-700">{fmtDelay(avg(messages.map((m) => m.delay_ms).filter((v) => v != null)))}</div>
-          <div className="text-xs text-blue-600 mt-0.5">Khoảng cách TB</div>
+        <div className="bg-blue-50 dark:bg-blue-950/40 rounded-xl p-3 text-center">
+          <div className="text-xl font-bold text-blue-700 dark:text-blue-300">{fmtDelay(avg(messages.map((m) => m.delay_ms).filter((v) => v != null)))}</div>
+          <div className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">{t ? t('diagnostic.stats.avgDelay', 'Khoảng cách TB') : 'Khoảng cách TB'}</div>
         </div>
       </div>
 
-      <AnalysisPanel messages={messages} />
+      <AnalysisPanel messages={messages} t={t} />
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-100">
-              <th className="pb-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide w-8">#</th>
-              <th className="pb-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">{recipientConfig.label}</th>
-              <th className="pb-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Trạng thái</th>
-              <th className="pb-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Chờ</th>
-              <th className="pb-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Tra số</th>
-              <th className="pb-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Gửi</th>
-              <th className="pb-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Tổng</th>
-              <th className="pb-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Lỗi</th>
+            <tr className="border-b border-gray-100 dark:border-dk-border">
+              <th className="pb-2.5 text-left text-xs font-semibold text-gray-400 dark:text-dk-muted uppercase tracking-wide w-8">#</th>
+              <th className="pb-2.5 text-left text-xs font-semibold text-gray-400 dark:text-dk-muted uppercase tracking-wide">{recipientConfig.label}</th>
+              <th className="pb-2.5 text-left text-xs font-semibold text-gray-400 dark:text-dk-muted uppercase tracking-wide">{t ? t('diagnostic.tableCols.status', 'Trạng thái') : 'Trạng thái'}</th>
+              <th className="pb-2.5 text-left text-xs font-semibold text-gray-400 dark:text-dk-muted uppercase tracking-wide">{t ? t('diagnostic.tableCols.wait', 'Chờ') : 'Chờ'}</th>
+              <th className="pb-2.5 text-left text-xs font-semibold text-gray-400 dark:text-dk-muted uppercase tracking-wide">{t ? t('diagnostic.tableCols.lookup', 'Tra số') : 'Tra số'}</th>
+              <th className="pb-2.5 text-left text-xs font-semibold text-gray-400 dark:text-dk-muted uppercase tracking-wide">{t ? t('diagnostic.tableCols.send', 'Gửi') : 'Gửi'}</th>
+              <th className="pb-2.5 text-left text-xs font-semibold text-gray-400 dark:text-dk-muted uppercase tracking-wide">{t ? t('diagnostic.tableCols.total', 'Tổng') : 'Tổng'}</th>
+              <th className="pb-2.5 text-left text-xs font-semibold text-gray-400 dark:text-dk-muted uppercase tracking-wide">{t ? t('diagnostic.tableCols.error', 'Lỗi') : 'Lỗi'}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-50">
+          <tbody className="divide-y divide-gray-50 dark:divide-dk-border">
             {messages.map((m) => {
               const errorLabel = m.error_category
-                ? (ERROR_CATEGORY_LABELS[m.error_category] || m.error_category)
+                ? (t ? t(`diagnostic.errorCategories.${m.error_category}`, ERROR_CATEGORY_LABELS[m.error_category] || m.error_category) : (ERROR_CATEGORY_LABELS[m.error_category] || m.error_category))
                 : null;
               return (
-                <tr key={m.seq} className="hover:bg-gray-50/60 transition-colors align-top">
-                  <td className="py-2.5 pr-3 text-gray-300 text-xs tabular-nums">{m.seq}</td>
+                <tr key={m.seq} className="hover:bg-gray-50/60 dark:hover:bg-dk-raised/60 transition-colors align-top">
+                  <td className="py-2.5 pr-3 text-gray-300 dark:text-dk-muted text-xs tabular-nums">{m.seq}</td>
                   <td className="py-2.5 pr-3">
-                    <div className="font-mono font-medium text-gray-900">{m.recipient}</div>
-                    {m.zalo_name && <div className="text-xs text-gray-400 mt-0.5">{m.zalo_name}</div>}
+                    <div className="font-mono font-medium text-gray-900 dark:text-dk-text">{m.recipient}</div>
+                    {m.zalo_name && <div className="text-xs text-gray-400 dark:text-dk-muted mt-0.5">{m.zalo_name}</div>}
                   </td>
                   <td className="py-2.5 pr-3">
                     <span className="flex items-center gap-1.5">
                       {STATUS_ICON[m.status] ?? STATUS_ICON.pending}
-                      <span className="text-gray-700">
-                        {m.dry_run && m.status === 'sent' ? 'Đã tra số' : (STATUS_LABEL[m.status] ?? m.status)}
+                      <span className="text-gray-700 dark:text-dk-text">
+                        {m.dry_run && m.status === 'sent'
+                          ? (t ? t('diagnostic.statusBadge.dryRunSent', 'Đã tra số') : 'Đã tra số')
+                          : (t ? t(`diagnostic.statusBadge.${m.status}`, STATUS_LABEL[m.status] ?? m.status) : (STATUS_LABEL[m.status] ?? m.status))}
                       </span>
                     </span>
                     {m.dry_run && (
-                      <div className="text-[11px] text-sky-600 mt-0.5">Chưa gửi tin thật</div>
+                      <div className="text-[11px] text-sky-600 dark:text-sky-400 mt-0.5">{t ? t('diagnostic.statusBadge.dryRunNote', 'Chưa gửi tin thật') : 'Chưa gửi tin thật'}</div>
                     )}
-                    <div className="text-[11px] text-gray-400 mt-0.5">{fmtTime(m.sent_at)}</div>
+                    <div className="text-[11px] text-gray-400 dark:text-dk-muted mt-0.5">{fmtTime(m.sent_at, locale)}</div>
                   </td>
                   <td className="py-2.5 pr-3 text-xs">
                     {m.wait_ms != null ? (
                       <div className="space-y-1">
-                        <span className="font-mono text-gray-700">{fmtDelay(m.wait_ms)}</span>
+                        <span className="font-mono text-gray-700 dark:text-dk-text">{fmtDelay(m.wait_ms)}</span>
                         {m.wait_reason && (
-                          <span className="badge badge-gray text-[10px]">{WAIT_REASON_LABELS[m.wait_reason] || m.wait_reason}</span>
+                          <span className="badge badge-gray text-[10px]">
+                            {t ? t(`diagnostic.waitReasons.${m.wait_reason}`, WAIT_REASON_LABELS[m.wait_reason] || m.wait_reason) : (WAIT_REASON_LABELS[m.wait_reason] || m.wait_reason)}
+                          </span>
                         )}
                       </div>
                     ) : '—'}
                   </td>
-                  <td className="py-2.5 pr-3 font-mono text-xs text-gray-600">{fmtDelay(m.lookup_ms)}</td>
-                  <td className="py-2.5 pr-3 font-mono text-xs text-gray-600">{fmtDelay(m.send_ms)}</td>
+                  <td className="py-2.5 pr-3 font-mono text-xs text-gray-600 dark:text-dk-text2">{fmtDelay(m.lookup_ms)}</td>
+                  <td className="py-2.5 pr-3 font-mono text-xs text-gray-600 dark:text-dk-text2">{fmtDelay(m.send_ms)}</td>
                   <td className="py-2.5 pr-3">
-                    <TimingStackedBar waitMs={m.wait_ms} lookupMs={m.lookup_ms} sendMs={m.send_ms} />
+                    <TimingStackedBar waitMs={m.wait_ms} lookupMs={m.lookup_ms} sendMs={m.send_ms} t={t} />
                   </td>
                   <td className="py-2.5 text-xs max-w-[200px]">
                     {errorLabel ? (
                       <div className="space-y-1">
-                        <span className="text-red-600 font-medium" title={m.error_message || ''}>{errorLabel}</span>
-                        {m.attempts > 0 && <div className="text-gray-400">Thử lại: {m.attempts}</div>}
+                        <span className="text-red-600 dark:text-red-400 font-medium" title={m.error_message || ''}>{errorLabel}</span>
+                        {m.attempts > 0 && <div className="text-gray-400 dark:text-dk-muted">{t ? t('diagnostic.statusBadge.retries', { count: m.attempts }, `Thử lại: ${m.attempts}`) : `Thử lại: ${m.attempts}`}</div>}
                       </div>
                     ) : '—'}
                   </td>
@@ -451,6 +475,7 @@ function RunLog({ run, messages }) {
 }
 
 export default function DiagnosticPage() {
+  const { t, locale } = useI18n();
   const [accountOptions, setAccountOptions] = useState([]);
   const [channel, setChannel] = useState('zalo_personal');
   const [accountId, setAccountId] = useState('');
@@ -490,13 +515,13 @@ export default function DiagnosticPage() {
         accountId: accountId ? Number(accountId) : null,
       });
       const { policy, quietHours } = res.data?.data ?? {};
-      setPolicySummary(formatPolicySummary(policy, quietHours) || '');
+      setPolicySummary(formatPolicySummary(policy, quietHours, t) || '');
       setPolicyData({ policy, quietHours });
     } catch {
       setPolicySummary('');
       setPolicyData(null);
     }
-  }, [runMode, channel, accountId]);
+  }, [runMode, channel, accountId, t]);
 
   useEffect(() => {
     diagnosticApiService.getConfig()
@@ -572,11 +597,11 @@ export default function DiagnosticPage() {
       setAccountStatus(res.data?.data ?? null);
     } catch (err) {
       setAccountStatus(null);
-      setAccountStatusError(err.response?.data?.message || 'Không đọc được trạng thái trực tiếp');
+      setAccountStatusError(err.response?.data?.message || t('diagnostic.validation.statusError', 'Không đọc được trạng thái trực tiếp'));
     } finally {
       setAccountStatusLoading(false);
     }
-  }, [accountId, channel]);
+  }, [accountId, channel, t]);
 
   useEffect(() => {
     loadAccountStatus();
@@ -615,13 +640,13 @@ export default function DiagnosticPage() {
     e.preventDefault();
     setFormError('');
     const recipients = recipientsRaw.split('\n').map((s) => s.trim()).filter(Boolean);
-    const recipientConfig = getRecipientConfig(channel);
+    const recipientConfig = getRecipientConfig(channel, t);
     const effectiveMaxRecipients = runMode === 'production' ? productionMaxRecipients : maxRecipients;
-    if (!messageText.trim()) return setFormError('Vui lòng nhập nội dung tin nhắn');
-    if (needsAccount && !accountId) return setFormError('Vui lòng chọn tài khoản/cấu hình gửi');
-    if (recipients.length === 0) return setFormError(`Vui lòng nhập ít nhất 1 ${recipientConfig.shortLabel}`);
+    if (!messageText.trim()) return setFormError(t('diagnostic.validation.messageRequired', 'Vui lòng nhập nội dung tin nhắn'));
+    if (needsAccount && !accountId) return setFormError(t('diagnostic.validation.accountRequired', 'Vui lòng chọn tài khoản/cấu hình gửi'));
+    if (recipients.length === 0) return setFormError(t('diagnostic.validation.recipientRequired', { shortLabel: recipientConfig.shortLabel }, `Vui lòng nhập ít nhất 1 ${recipientConfig.shortLabel}`));
     if (recipients.length > effectiveMaxRecipients) {
-      return setFormError(`Tối đa ${effectiveMaxRecipients} ${recipientConfig.shortLabel} mỗi lần test`);
+      return setFormError(t('diagnostic.validation.recipientMax', { max: effectiveMaxRecipients, shortLabel: recipientConfig.shortLabel }, `Tối đa ${effectiveMaxRecipients} ${recipientConfig.shortLabel} mỗi lần test`));
     }
     try {
       setSubmitting(true);
@@ -639,7 +664,7 @@ export default function DiagnosticPage() {
       setActiveRun(null);
       setActiveMessages([]);
     } catch (err) {
-      setFormError(err.response?.data?.message ?? 'Lỗi khi tạo lần kiểm tra');
+      setFormError(err.response?.data?.message ?? t('diagnostic.validation.createFailed', 'Lỗi khi tạo lần kiểm tra'));
     } finally {
       setSubmitting(false);
     }
@@ -671,8 +696,8 @@ export default function DiagnosticPage() {
 
   const needsAccount = channel === 'zalo_personal' || channel === 'zalo_group' || channel === 'email';
   const needsLiveStatus = channel === 'zalo_personal' || channel === 'zalo_group';
-  const recipientConfig = getRecipientConfig(channel);
-  const inputCls = 'w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white';
+  const recipientConfig = getRecipientConfig(channel, t);
+  const inputCls = 'w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:border-dk-border dark:bg-dk-inset dark:text-dk-text';
   const recipientCount = recipientsRaw.split('\n').filter((s) => s.trim()).length;
   const effectiveMaxRecipients = runMode === 'production' ? productionMaxRecipients : maxRecipients;
   const avgProductionDelayMs = policyData?.policy
@@ -686,20 +711,20 @@ export default function DiagnosticPage() {
     <div className="space-y-6">
       <PageHeader
         icon={HiOutlineBeaker}
-        title="Kiểm tra hiệu năng gửi tin"
-        subtitle="Gửi thực tế với số lượng nhỏ — quan sát thời gian từng chặng và lỗi dễ hiểu"
+        title={t('diagnostic.title')}
+        subtitle={t('diagnostic.subtitle')}
       />
 
-      <form onSubmit={handleSubmit} className="card overflow-hidden divide-y divide-gray-100">
+      <form onSubmit={handleSubmit} className="card overflow-hidden divide-y divide-gray-100 dark:divide-dk-border">
         <div className="px-5 py-4 flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold text-gray-800">Cấu hình test</h2>
-          <div className="inline-flex rounded-xl border border-gray-200 p-0.5 bg-gray-50 text-xs">
+          <h2 className="text-sm font-semibold text-gray-800 dark:text-dk-text">{t('diagnostic.configTitle')}</h2>
+          <div className="inline-flex rounded-xl border border-gray-200 p-0.5 bg-gray-50 text-xs dark:border-dk-border dark:bg-dk-raised">
             <button
               type="button"
               onClick={() => setRunMode('fast')}
-              className={`px-3 py-1.5 rounded-lg transition-colors ${runMode === 'fast' ? 'bg-white shadow-sm text-gray-900 font-medium' : 'text-gray-500'}`}
+              className={`px-3 py-1.5 rounded-lg transition-colors ${runMode === 'fast' ? 'bg-white shadow-sm text-gray-900 font-medium dark:bg-dk-inset dark:text-dk-text' : 'text-gray-500 dark:text-dk-text2'}`}
             >
-              Nhanh
+              {t('diagnostic.modeFast')}
             </button>
             <button
               type="button"
@@ -707,25 +732,25 @@ export default function DiagnosticPage() {
               disabled={channel === 'email'}
               className={`px-3 py-1.5 rounded-lg transition-colors ${
                 channel === 'email'
-                  ? 'text-gray-300 cursor-not-allowed'
+                  ? 'text-gray-300 dark:text-dk-muted cursor-not-allowed'
                   : runMode === 'production'
-                    ? 'bg-white shadow-sm text-gray-900 font-medium'
-                    : 'text-gray-500'
+                    ? 'bg-white shadow-sm text-gray-900 font-medium dark:bg-dk-inset dark:text-dk-text'
+                    : 'text-gray-500 dark:text-dk-text2'
               }`}
             >
-              Theo thật
+              {t('diagnostic.modeProduction')}
             </button>
           </div>
         </div>
 
         {campaigns.length > 0 && (
-          <div className="px-5 py-3 bg-orange-50/40">
+          <div className="px-5 py-3 bg-orange-50/40 dark:bg-orange-950/20">
             <div className="flex items-center gap-3">
-              <span className="text-xs font-medium text-orange-700 flex items-center gap-1.5 shrink-0">
+              <span className="text-xs font-medium text-orange-700 dark:text-orange-400 flex items-center gap-1.5 shrink-0">
                 {prefillLoading
                   ? <HiOutlineRefresh className="w-3.5 h-3.5 animate-spin" />
                   : <HiOutlineDownload className="w-3.5 h-3.5" />}
-                Tải từ chiến dịch
+                {t('diagnostic.loadFromCampaign')}
               </span>
               <select
                 value={selectedCampaignId}
@@ -734,9 +759,9 @@ export default function DiagnosticPage() {
                   setSelectedCampaignId(id);
                   handlePrefill(id);
                 }}
-                className="flex-1 border border-orange-200 rounded-xl px-3 py-1.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
+                className="flex-1 border border-orange-200 rounded-xl px-3 py-1.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:border-orange-900/50 dark:bg-dk-inset dark:text-dk-text"
               >
-                <option value="">— Chọn chiến dịch để tự động điền —</option>
+                <option value="">{t('diagnostic.selectCampaignPlaceholder')}</option>
                 {campaigns.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.campaign_name} ({c.owner_name || c.owner_email})
@@ -749,21 +774,20 @@ export default function DiagnosticPage() {
 
         <div className="px-5 py-5 space-y-4">
           {runMode === 'production' && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 flex gap-2">
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200 flex gap-2">
               <HiOutlineShieldCheck className="w-5 h-5 shrink-0 mt-0.5" />
               <div>
-                <p className="font-medium">Chế độ theo thật — áp chính sách gửi thật</p>
+                <p className="font-medium">{t('diagnostic.realPolicyNoticeTitle')}</p>
                 {policySummary
-                  ? <p className="text-xs mt-1 text-amber-800">{policySummary}</p>
-                  : <p className="text-xs mt-1 text-amber-700">Đang tải chính sách…</p>}
+                  ? <p className="text-xs mt-1 text-amber-800 dark:text-amber-300">{policySummary}</p>
+                  : <p className="text-xs mt-1 text-amber-700 dark:text-amber-400">{t('diagnostic.loadingPolicy')}</p>}
                 {estimatedProductionMs != null && recipientCount > 0 && (
-                  <p className="text-xs mt-1 text-amber-800">
-                    Ước tính tối thiểu khoảng {fmtDuration(estimatedProductionMs)} cho {recipientCount} người nhận.
+                  <p className="text-xs mt-1 text-amber-800 dark:text-amber-300">
+                    {t('diagnostic.estimatedTime', { duration: fmtDuration(estimatedProductionMs, t), count: recipientCount })}
                   </p>
                 )}
-                <p className="text-xs mt-1 text-amber-700/80">
-                  Chế độ theo thật sẽ chờ thời gian thật giữa mỗi tin — đừng đóng tab.
-                  Dùng tài khoản rảnh — không chạy song song với chiến dịch thật trên cùng tài khoản.
+                <p className="text-xs mt-1 text-amber-700/80 dark:text-amber-400/80">
+                  {t('diagnostic.realPolicyWarning')}
                 </p>
               </div>
             </div>
@@ -775,30 +799,31 @@ export default function DiagnosticPage() {
               loading={accountStatusLoading}
               error={accountStatusError}
               onRefresh={loadAccountStatus}
+              t={t}
             />
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">Kênh gửi</label>
+              <label className="block text-xs font-medium text-gray-600 dark:text-dk-text mb-1.5">{t('diagnostic.channel')}</label>
               <select value={channel} onChange={(e) => setChannel(e.target.value)} className={inputCls}>
-                <option value="zalo_personal">Zalo Cá nhân</option>
-                <option value="zalo_group">Zalo Nhóm</option>
-                <option value="email">Email</option>
+                <option value="zalo_personal">{t('diagnostic.channels.zalo_personal')}</option>
+                <option value="zalo_group">{t('diagnostic.channels.zalo_group')}</option>
+                <option value="email">{t('diagnostic.channels.email')}</option>
               </select>
             </div>
 
             <div>
               {needsAccount && (
                 <>
-                  <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                    {channel === 'email' ? 'Cấu hình Email' : 'Tài khoản Zalo'}
+                  <label className="block text-xs font-medium text-gray-600 dark:text-dk-text mb-1.5">
+                    {channel === 'email' ? t('diagnostic.emailConfig') : t('diagnostic.zaloAccount')}
                   </label>
                   {accountOptions.length === 0 ? (
-                    <p className="text-xs text-red-500 mt-2">
+                    <p className="text-xs text-red-500 dark:text-red-400 mt-2">
                       {channel === 'email'
-                        ? 'Không tìm thấy cấu hình email nào'
-                        : 'Không tìm thấy tài khoản Zalo nào đang kết nối'}
+                        ? t('diagnostic.noEmailConfig')
+                        : t('diagnostic.noZaloConnected')}
                     </p>
                   ) : (
                     <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className={inputCls}>
@@ -806,7 +831,7 @@ export default function DiagnosticPage() {
                         <option key={a.id} value={a.id}>
                           {channel === 'email'
                             ? `${a.name || a.email}${a.email ? ` · ${a.email}` : ''}`
-                            : `${a.displayName}${a.status !== 'connected' ? ' (chưa kết nối)' : ''}`}
+                            : `${a.displayName}${a.status !== 'connected' ? ` ${t('diagnostic.disconnected')}` : ''}`}
                         </option>
                       ))}
                     </select>
@@ -819,10 +844,10 @@ export default function DiagnosticPage() {
               {runMode === 'fast' ? (
                 <>
                   <div className="flex items-baseline justify-between mb-1.5">
-                    <label className="text-xs font-medium text-gray-600">Khoảng cách giữa tin</label>
+                    <label className="text-xs font-medium text-gray-600 dark:text-dk-text">{t('diagnostic.interMessageDelay')}</label>
                     <div className="flex items-baseline gap-1">
-                      <span className="text-sm font-semibold text-primary-600">{delaySeconds}s</span>
-                      <span className="text-xs text-gray-400">(theo thật: theo chính sách)</span>
+                      <span className="text-sm font-semibold text-primary-600 dark:text-primary-400">{delaySeconds}s</span>
+                      <span className="text-xs text-gray-400 dark:text-dk-muted">{t('diagnostic.perPolicyHint')}</span>
                     </div>
                   </div>
                   <input
@@ -834,14 +859,14 @@ export default function DiagnosticPage() {
                     onChange={(e) => setDelaySeconds(Number(e.target.value))}
                     className="w-full accent-primary-500 mt-1"
                   />
-                  <div className="flex justify-between text-xs text-gray-400 mt-1">
+                  <div className="flex justify-between text-xs text-gray-400 dark:text-dk-muted mt-1">
                     <span>1s</span>
                     <span>60s</span>
                   </div>
                 </>
               ) : (
-                <div className="h-full flex flex-col justify-center rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-500">
-                  Khoảng cách do chính sách gửi thật quyết định (không chỉnh tay).
+                <div className="h-full flex flex-col justify-center rounded-xl bg-gray-50 dark:bg-dk-raised px-3 py-2 text-xs text-gray-500 dark:text-dk-text2">
+                  {t('diagnostic.delayPolicyDetermined')}
                 </div>
               )}
             </div>
@@ -850,8 +875,8 @@ export default function DiagnosticPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <div className="flex items-baseline justify-between mb-1.5">
-                <label className="text-xs font-medium text-gray-600">{recipientConfig.label}</label>
-                <span className={`text-xs tabular-nums ${recipientCount > 0 ? 'text-primary-600 font-medium' : 'text-gray-400'}`}>
+                <label className="text-xs font-medium text-gray-600 dark:text-dk-text">{recipientConfig.label}</label>
+                <span className={`text-xs tabular-nums ${recipientCount > 0 ? 'text-primary-600 dark:text-primary-400 font-medium' : 'text-gray-400 dark:text-dk-muted'}`}>
                   {recipientCount} / {effectiveMaxRecipients} · {recipientConfig.note}
                 </span>
               </div>
@@ -860,10 +885,10 @@ export default function DiagnosticPage() {
                 onChange={(e) => setRecipientsRaw(e.target.value)}
                 rows={5}
                 placeholder={recipientConfig.placeholder}
-                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm font-mono focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none bg-white"
+                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm font-mono focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none bg-white dark:border-dk-border dark:bg-dk-inset dark:text-dk-text"
               />
               {channel === 'zalo_personal' && (
-                <label className="mt-3 flex items-start gap-2 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+                <label className="mt-3 flex items-start gap-2 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-xs text-sky-800 dark:border-sky-900/50 dark:bg-sky-950/30 dark:text-sky-300">
                   <input
                     type="checkbox"
                     checked={dryRun}
@@ -871,9 +896,9 @@ export default function DiagnosticPage() {
                     className="mt-0.5 h-4 w-4 rounded border-sky-300 text-sky-600 focus:ring-sky-500"
                   />
                   <span>
-                    <span className="font-medium">Chỉ tra số, không gửi tin thật.</span>
-                    <span className="block text-sky-700/80">
-                      Vẫn tốn quota tra số thật, nhưng không gửi tin đến người nhận.
+                    <span className="font-medium">{t('diagnostic.dryRunTitle')}</span>
+                    <span className="block text-sky-700/80 dark:text-sky-400/80">
+                      {t('diagnostic.dryRunDesc')}
                     </span>
                   </span>
                 </label>
@@ -881,30 +906,30 @@ export default function DiagnosticPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">Nội dung tin nhắn</label>
+              <label className="block text-xs font-medium text-gray-600 dark:text-dk-text mb-1.5">{t('diagnostic.messageContent')}</label>
               <textarea
                 value={messageText}
                 onChange={(e) => setMessageText(e.target.value)}
                 rows={5}
-                placeholder="Xin chào! Đây là tin nhắn test từ hệ thống..."
-                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none bg-white"
+                placeholder={t('diagnostic.messagePlaceholder')}
+                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none bg-white dark:border-dk-border dark:bg-dk-inset dark:text-dk-text"
               />
             </div>
           </div>
         </div>
 
-        <div className="px-5 py-4 bg-gray-50/60 flex items-center justify-between gap-4">
+        <div className="px-5 py-4 bg-gray-50/60 dark:bg-dk-raised/40 flex items-center justify-between gap-4">
           <div>
             {formError && (
-              <p className="text-sm text-red-500 flex items-center gap-1.5">
+              <p className="text-sm text-red-500 dark:text-red-400 flex items-center gap-1.5">
                 <HiOutlineX className="w-4 h-4 shrink-0" /> {formError}
               </p>
             )}
           </div>
           <button type="submit" disabled={submitting} className="btn btn-primary shrink-0">
             {submitting
-              ? <><HiOutlineRefresh className="mr-2 w-4 h-4 animate-spin" /> Đang khởi tạo...</>
-              : <><HiOutlineLightningBolt className="mr-2 w-4 h-4" /> Chạy test</>}
+              ? <><HiOutlineRefresh className="mr-2 w-4 h-4 animate-spin" /> {t('diagnostic.initializing')}</>
+              : <><HiOutlineLightningBolt className="mr-2 w-4 h-4" /> {t('diagnostic.runTest')}</>}
           </button>
         </div>
       </form>
@@ -912,77 +937,77 @@ export default function DiagnosticPage() {
       <div className="space-y-4">
         {activeRun && (
           <div className="card overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
+            <div className="px-5 py-4 border-b border-gray-100 dark:border-dk-border flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5 min-w-0">
-                <span className="font-semibold text-gray-900 shrink-0">Lần chạy #{activeRun.id}</span>
-                <span className="text-gray-200">|</span>
-                <span className="text-sm text-gray-500 truncate">{CHANNEL_LABELS[activeRun.channel] ?? activeRun.channel}</span>
-                <RunStatusBadge status={activeRun.status} />
+                <span className="font-semibold text-gray-900 dark:text-dk-text shrink-0">{t('diagnostic.runTitle', { id: activeRun.id })}</span>
+                <span className="text-gray-200 dark:text-dk-border">|</span>
+                <span className="text-sm text-gray-500 dark:text-dk-text2 truncate">{t(`diagnostic.channels.${activeRun.channel}`, CHANNEL_LABELS[activeRun.channel] ?? activeRun.channel)}</span>
+                <RunStatusBadge status={activeRun.status} t={t} />
               </div>
-              <span className="text-xs text-gray-400 shrink-0">{fmtTime(activeRun.created_at)}</span>
+              <span className="text-xs text-gray-400 dark:text-dk-muted shrink-0">{fmtTime(activeRun.created_at, locale)}</span>
             </div>
             <div className="p-5">
-              <RunLog run={activeRun} messages={activeMessages} />
+              <RunLog run={activeRun} messages={activeMessages} t={t} locale={locale} />
             </div>
           </div>
         )}
 
         {!activeRun && recentRuns.length === 0 && (
           <div className="card flex flex-col items-center justify-center text-center gap-4 py-14">
-            <div className="p-4 rounded-2xl bg-gray-50">
-              <HiOutlineBeaker className="w-8 h-8 text-gray-300" />
+            <div className="p-4 rounded-2xl bg-gray-50 dark:bg-dk-raised">
+              <HiOutlineBeaker className="w-8 h-8 text-gray-300 dark:text-dk-muted" />
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-500">Kết quả test sẽ hiển thị ở đây</p>
-              <p className="text-xs text-gray-400 mt-1">Nhập người nhận, nội dung rồi bấm &quot;Chạy test&quot;</p>
+              <p className="text-sm font-medium text-gray-500 dark:text-dk-text2">{t('diagnostic.emptyTitle')}</p>
+              <p className="text-xs text-gray-400 dark:text-dk-muted mt-1">{t('diagnostic.emptySubtitle')}</p>
             </div>
           </div>
         )}
 
         {recentRuns.length > 0 && (
           <div className="card overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-100">
-              <h2 className="text-sm font-semibold text-gray-700">Các lần test gần đây</h2>
+            <div className="px-5 py-4 border-b border-gray-100 dark:border-dk-border">
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-dk-text">{t('diagnostic.recentRunsTitle')}</h2>
             </div>
-            <div className="divide-y divide-gray-50">
+            <div className="divide-y divide-gray-50 dark:divide-dk-border">
               {recentRuns.map((r) => (
                 <button
                   key={r.id}
                   type="button"
                   onClick={() => handleSelectRun(r.id)}
                   className={`w-full text-left px-5 py-3.5 transition-colors ${
-                    activeRunId === r.id ? 'bg-primary-50' : 'hover:bg-gray-50/60'
+                    activeRunId === r.id ? 'bg-primary-50 dark:bg-primary-950/40' : 'hover:bg-gray-50/60 dark:hover:bg-dk-raised'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 text-sm">
-                        <span className="text-gray-400 text-xs tabular-nums">#{r.id}</span>
-                        <span className="font-medium text-gray-900">
-                          {CHANNEL_LABELS[r.channel] ?? r.channel}
+                        <span className="text-gray-400 dark:text-dk-muted text-xs tabular-nums">#{r.id}</span>
+                        <span className="font-medium text-gray-900 dark:text-dk-text">
+                          {t(`diagnostic.channels.${r.channel}`, CHANNEL_LABELS[r.channel] ?? r.channel)}
                         </span>
                         {r.mode === 'production' && (
-                          <span className="badge badge-warning text-[10px]">Theo thật</span>
+                          <span className="badge badge-warning text-[10px]">{t('diagnostic.modeProduction')}</span>
                         )}
                         {r.account_display_name && (
-                          <span className="text-gray-400 font-normal">· {r.account_display_name}</span>
+                          <span className="text-gray-400 dark:text-dk-muted font-normal">· {r.account_display_name}</span>
                         )}
                       </div>
-                      <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-2.5 flex-wrap">
-                        <span className="tabular-nums">{r.sent_count}/{r.total_count} đã gửi</span>
+                      <div className="text-xs text-gray-400 dark:text-dk-muted mt-0.5 flex items-center gap-2.5 flex-wrap">
+                        <span className="tabular-nums">{t('diagnostic.stats.sentCount', { count: r.sent_count, total: r.total_count })}</span>
                         {r.failed_count > 0 && (
-                          <span className="text-red-400">{r.failed_count} thất bại</span>
+                          <span className="text-red-400">{t('diagnostic.stats.failedCount', { count: r.failed_count })}</span>
                         )}
                         {r.skipped_count > 0 && (
-                          <span className="text-amber-600">{r.skipped_count} bỏ qua</span>
+                          <span className="text-amber-600 dark:text-amber-400">{t('diagnostic.stats.skippedCount', { count: r.skipped_count })}</span>
                         )}
                         {r.mode !== 'production' && r.inter_message_delay_ms != null && (
-                          <span>khoảng cách {r.inter_message_delay_ms / 1000}s</span>
+                          <span>{t('diagnostic.stats.delayValue', { delay: r.inter_message_delay_ms / 1000 })}</span>
                         )}
-                        <span>{fmtTime(r.created_at)}</span>
+                        <span>{fmtTime(r.created_at, locale)}</span>
                       </div>
                     </div>
-                    <RunStatusBadge status={r.status} />
+                    <RunStatusBadge status={r.status} t={t} />
                   </div>
                 </button>
               ))}

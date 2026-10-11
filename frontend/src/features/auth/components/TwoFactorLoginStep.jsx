@@ -69,18 +69,18 @@ const TwoFactorLoginStep = ({ challengeToken, rememberMe = true, onSuccess, onBa
   return (
     <div>
       <div className="mb-8 text-center lg:text-left">
-        <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center mb-4 mx-auto lg:mx-0">
-          <HiOutlineShieldCheck className="w-6 h-6 text-orange-600" />
+        <div className="w-12 h-12 rounded-full bg-orange-100 dark:bg-orange-950/60 flex items-center justify-center mb-4 mx-auto lg:mx-0">
+          <HiOutlineShieldCheck className="w-6 h-6 text-orange-600 dark:text-orange-400" />
         </div>
-        <h1 className="text-3xl font-bold text-slate-900 tracking-tight">{t('twoFactor.loginTitle')}</h1>
-        <p className="text-slate-500 mt-2 text-sm leading-relaxed">
+        <h1 className="text-3xl font-bold text-slate-900 dark:text-dk-text tracking-tight">{t('twoFactor.loginTitle')}</h1>
+        <p className="text-slate-500 dark:text-dk-text2 mt-2 text-sm leading-relaxed">
           {useRecovery ? t('twoFactor.loginSubtitleRecovery') : t('twoFactor.loginSubtitle')}
         </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
         <div>
-          <label htmlFor="two-factor-code" className="block text-sm font-semibold text-slate-700 mb-2">
+          <label htmlFor="two-factor-code" className="block text-sm font-semibold text-slate-700 dark:text-dk-text mb-2">
             {useRecovery ? t('twoFactor.recoveryCodeLabel') : t('twoFactor.codeLabel')}
           </label>
           <input
@@ -93,7 +93,7 @@ const TwoFactorLoginStep = ({ challengeToken, rememberMe = true, onSuccess, onBa
             autoFocus
             maxLength={useRecovery ? 11 : 6}
             placeholder={useRecovery ? 'XXXXX-XXXXX' : '123456'}
-            className="w-full px-4 py-3.5 border border-slate-200 rounded-xl outline-none text-center text-xl tracking-widest font-mono focus:border-orange-500 focus:shadow-lg focus:shadow-orange-500/10"
+            className="w-full px-4 py-3.5 border border-slate-200 dark:border-dk-border/80 rounded-xl outline-none text-center text-xl tracking-widest font-mono text-slate-900 dark:text-dk-text bg-white dark:bg-dk-inset placeholder:text-slate-400 dark:placeholder:text-dk-muted hover:border-slate-300 dark:hover:border-dk-border-strong focus:border-orange-500 focus:shadow-lg focus:shadow-orange-500/10"
           />
           {error && (
             <p role="alert" className="text-xs text-red-500 mt-2">{error}</p>
@@ -114,14 +114,14 @@ const TwoFactorLoginStep = ({ challengeToken, rememberMe = true, onSuccess, onBa
         <button
           type="button"
           onClick={toggleMode}
-          className="text-orange-500 hover:text-orange-600 font-semibold hover:underline underline-offset-4"
+          className="text-orange-500 hover:text-orange-600 dark:text-orange-400 dark:hover:text-orange-300 font-semibold hover:underline underline-offset-4"
         >
           {useRecovery ? t('twoFactor.useAuthenticator') : t('twoFactor.useRecovery')}
         </button>
         <button
           type="button"
           onClick={onBack}
-          className="text-slate-500 hover:text-slate-700 hover:underline underline-offset-4"
+          className="text-slate-500 hover:text-slate-700 dark:text-dk-text2 dark:hover:text-dk-text hover:underline underline-offset-4"
         >
           {t('twoFactor.back')}
         </button>

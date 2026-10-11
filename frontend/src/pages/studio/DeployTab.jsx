@@ -91,18 +91,18 @@ function SquareTile({ onClick, iconBg, children, tooltip, label, sublabel, subla
       onClick={onClick}
       title={tooltip}
       disabled={disabled}
-      className={`group relative w-full min-h-[78px] bg-white rounded-xl border border-slate-200 transition-all flex flex-col items-center justify-center gap-1 px-1.5 py-2 ${
-        disabled ? 'opacity-70 cursor-default' : 'hover:border-primary-300 hover:bg-primary-50/30'
+      className={`group relative w-full min-h-[78px] bg-white dark:bg-dk-raised rounded-xl border border-slate-200 dark:border-dk-border transition-all flex flex-col items-center justify-center gap-1 px-1.5 py-2 ${
+        disabled ? 'opacity-70 cursor-default' : 'hover:border-primary-300 dark:hover:border-primary-500/50 hover:bg-primary-50/30 dark:hover:bg-primary-950/20'
       }`}
     >
       <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold transition-transform ${disabled ? '' : 'group-hover:scale-110'} ${iconBg}`}>
         {children}
       </div>
-      <span className="text-[11px] font-medium text-slate-600 group-hover:text-primary-700 text-center leading-tight px-1 truncate w-full">
+      <span className="text-[11px] font-medium text-slate-600 dark:text-dk-text group-hover:text-primary-700 dark:group-hover:text-primary-400 text-center leading-tight px-1 truncate w-full">
         {label}
       </span>
       {sublabel && (
-        <span className={`text-[10px] leading-tight text-center truncate w-full px-1 ${sublabelOn ? 'text-emerald-600' : 'text-slate-400'}`}>
+        <span className={`text-[10px] leading-tight text-center truncate w-full px-1 ${sublabelOn ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-dk-muted'}`}>
           {sublabel}
         </span>
       )}
@@ -165,13 +165,13 @@ export default function DeployTab({
     <div className="flex flex-col h-full">
       {/* Header: MỘT tiêu đề (bản cũ lặp chữ "Triển khai" hai lần + một biểu tượng bảng màu không nhãn — S-09) */}
       <div className="px-5 pt-5 pb-3 shrink-0">
-        <h3 className="text-sm font-semibold text-slate-900">{t('chatbot.studio.deployTitle')}</h3>
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-dk-text">{t('chatbot.studio.deployTitle')}</h3>
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 pb-5 space-y-5">
         {/* Trên website */}
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-1 mb-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-dk-muted px-1 mb-2">
             {t('chatbot.studio.deployWebTitle')}
           </p>
           <div className="grid grid-cols-3 gap-2">
@@ -194,7 +194,7 @@ export default function DeployTab({
           <button
             type="button"
             onClick={() => onOpenWidgetSettings?.()}
-            className="mt-2 w-full inline-flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-xs font-medium text-primary-700 bg-primary-50/60 hover:bg-primary-50 transition-colors"
+            className="mt-2 w-full inline-flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-xs font-medium text-primary-700 dark:text-primary-300 bg-primary-50/60 dark:bg-primary-950/30 hover:bg-primary-50 dark:hover:bg-primary-950/50 transition-colors"
           >
             <span className="inline-flex items-center gap-2">
               <HiOutlineColorSwatch className="w-4 h-4 shrink-0" />
@@ -388,33 +388,33 @@ function EmbedModal({ kind, chatbot, onClose, onOpenWidgetSettings }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden">
-        <div className="px-5 py-4 flex items-center justify-between border-b border-slate-100">
+      <div className="bg-white dark:bg-dk-surface rounded-xl shadow-xl w-full max-w-lg overflow-hidden border border-slate-200 dark:border-dk-border">
+        <div className="px-5 py-4 flex items-center justify-between border-b border-slate-100 dark:border-dk-border">
           <div className="min-w-0">
-            <h3 className="text-sm font-semibold text-slate-900 truncate">{titles[kind]}</h3>
-            <p className="text-xs text-slate-500 mt-0.5 truncate">{chatbot.name}</p>
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-dk-text truncate">{titles[kind]}</h3>
+            <p className="text-xs text-slate-500 dark:text-dk-text2 mt-0.5 truncate">{chatbot.name}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+            className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-dk-text hover:bg-slate-100 dark:hover:bg-dk-raised"
           >
             <HiOutlineX className="w-4 h-4" />
           </button>
         </div>
 
         <div className="px-5 py-5 space-y-4">
-          <p className="text-xs text-slate-600">{descs[kind]}</p>
+          <p className="text-xs text-slate-600 dark:text-dk-text">{descs[kind]}</p>
 
           {kind === 'public_link' ? (
             <div className="space-y-3">
-              <div className="flex items-center gap-2 px-3 py-2.5 bg-slate-50 rounded-lg border border-slate-200">
+              <div className="flex items-center gap-2 px-3 py-2.5 bg-slate-50 dark:bg-dk-raised rounded-lg border border-slate-200 dark:border-dk-border">
                 <HiOutlineLink className="w-4 h-4 text-slate-400 shrink-0" />
                 <input
                   type="text"
                   readOnly
                   value={publicUrl}
-                  className="flex-1 bg-transparent text-sm text-slate-700 outline-none font-mono"
+                  className="flex-1 bg-transparent text-sm text-slate-700 dark:text-dk-text outline-none font-mono"
                 />
               </div>
               <div className="flex items-center gap-2">
@@ -429,7 +429,7 @@ function EmbedModal({ kind, chatbot, onClose, onOpenWidgetSettings }) {
                 <button
                   type="button"
                   onClick={handleOpen}
-                  className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 border border-slate-200 text-slate-700 hover:bg-slate-50 text-sm font-semibold rounded-lg transition-colors"
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 border border-slate-200 dark:border-dk-border text-slate-700 dark:text-dk-text hover:bg-slate-50 dark:hover:bg-dk-raised text-sm font-semibold rounded-lg transition-colors"
                 >
                   <HiOutlineExternalLink className="w-4 h-4" />
                   {t('chatbot.studio.openLink')}
@@ -438,7 +438,7 @@ function EmbedModal({ kind, chatbot, onClose, onOpenWidgetSettings }) {
             </div>
           ) : (
             <div>
-              <label className="text-xs font-medium text-slate-700 block mb-1.5">
+              <label className="text-xs font-medium text-slate-700 dark:text-dk-text block mb-1.5">
                 {kind === 'script' ? t('chatbot.studio.scriptCodeLabel') : t('chatbot.studio.iframeCodeLabel')}
               </label>
               <pre className="bg-slate-900 text-slate-100 rounded-lg p-3 text-[11px] font-mono leading-relaxed overflow-x-auto max-h-48">
