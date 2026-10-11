@@ -24,15 +24,15 @@ const formatCurrency = (amount, currency = 'VND', locale = 'vi') => {
 // ─── Config maps ──────────────────────────────────────────────────────────────
 
 const ORDER_STATUS_CONFIG = {
-  pending: { cls: 'bg-amber-50 text-amber-700 border-amber-200/80', dot: 'bg-amber-500', label: 'Đơn chờ' },
-  completed: { cls: 'bg-emerald-50 text-emerald-700 border-emerald-200/80', dot: 'bg-emerald-500', label: 'Đã hoàn thành' },
-  other: { cls: 'bg-slate-100 text-slate-600 border-slate-200', dot: 'bg-slate-400', label: 'Khác' },
+  pending: { cls: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200/80 dark:border-amber-800', dot: 'bg-amber-500', label: 'Đơn chờ' },
+  completed: { cls: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200/80 dark:border-emerald-800', dot: 'bg-emerald-500', label: 'Đã hoàn thành' },
+  other: { cls: 'bg-slate-100 dark:bg-dk-raised text-slate-600 dark:text-dk-text2 border-slate-200 dark:border-dk-border', dot: 'bg-slate-400', label: 'Khác' },
 };
 
 const CHANNEL_CONFIG = {
-  email: { cls: 'bg-sky-100 text-sky-700', label: 'Email' },
-  zalo: { cls: 'bg-blue-100 text-blue-700', label: 'Zalo' },
-  zalo_group: { cls: 'bg-purple-100 text-purple-700', label: 'Zalo Group' },
+  email: { cls: 'bg-sky-100 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300', label: 'Email' },
+  zalo: { cls: 'bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300', label: 'Zalo' },
+  zalo_group: { cls: 'bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300', label: 'Zalo Group' },
 };
 
 const getOrderStatusCfg = (group) =>
@@ -56,7 +56,7 @@ const normalizeChannelKey = (value) => {
 };
 
 const getChannelCfg = (type) =>
-  CHANNEL_CONFIG[normalizeChannelKey(type)] || { cls: 'bg-gray-100 text-gray-700', label: type || '—' };
+  CHANNEL_CONFIG[normalizeChannelKey(type)] || { cls: 'bg-gray-100 dark:bg-dk-raised text-gray-700 dark:text-dk-text', label: type || '—' };
 
 // ─── Journey event icon ───────────────────────────────────────────────────────
 
@@ -107,13 +107,13 @@ const JourneyEventIcon = ({ eventType }) => {
 
 const journeyEventColor = (eventType) => {
   const type = String(eventType || '').toLowerCase();
-  if (type === 'email_sent' || type === 'zalo_sent') return 'bg-sky-100 text-sky-600';
-  if (type === 'email_opened') return 'bg-blue-100 text-blue-600';
-  if (type === 'email_clicked' || type === 'zalo_clicked') return 'bg-indigo-100 text-indigo-600';
-  if (type === 'attachment_downloaded') return 'bg-yellow-100 text-yellow-600';
-  if (type === 'course_interest' || type === 'order_pending') return 'bg-orange-100 text-orange-600';
-  if (type === 'course_purchase' || type === 'order_completed') return 'bg-green-100 text-green-600';
-  return 'bg-gray-100 text-gray-500';
+  if (type === 'email_sent' || type === 'zalo_sent') return 'bg-sky-100 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400';
+  if (type === 'email_opened') return 'bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400';
+  if (type === 'email_clicked' || type === 'zalo_clicked') return 'bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400';
+  if (type === 'attachment_downloaded') return 'bg-yellow-100 dark:bg-yellow-950/40 text-yellow-600 dark:text-yellow-400';
+  if (type === 'course_interest' || type === 'order_pending') return 'bg-orange-100 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400';
+  if (type === 'course_purchase' || type === 'order_completed') return 'bg-green-100 dark:bg-green-950/40 text-green-600 dark:text-green-400';
+  return 'bg-gray-100 dark:bg-dk-raised text-gray-500 dark:text-dk-text2';
 };
 
 const normalizeTextForMatch = (value) =>
@@ -676,9 +676,9 @@ const SortIcon = ({ column, sortConfig }) => {
   const isActive = sortConfig.key === column;
   return (
     <span className={`ml-1 inline-flex flex-col gap-[1px] ${isActive ? 'opacity-100' : 'opacity-30'}`}>
-      <svg className={`w-2.5 h-2.5 ${isActive && sortConfig.direction === 'asc' ? 'text-primary-500' : 'text-gray-400'}`}
+      <svg className={`w-2.5 h-2.5 ${isActive && sortConfig.direction === 'asc' ? 'text-primary-500 dark:text-primary-400' : 'text-gray-400 dark:text-dk-muted'}`}
         viewBox="0 0 10 6" fill="currentColor"><path d="M5 0L10 6H0L5 0z" /></svg>
-      <svg className={`w-2.5 h-2.5 ${isActive && sortConfig.direction === 'desc' ? 'text-primary-500' : 'text-gray-400'}`}
+      <svg className={`w-2.5 h-2.5 ${isActive && sortConfig.direction === 'desc' ? 'text-primary-500 dark:text-primary-400' : 'text-gray-400 dark:text-dk-muted'}`}
         viewBox="0 0 10 6" fill="currentColor"><path d="M5 6L0 0H10L5 6z" /></svg>
     </span>
   );
@@ -715,21 +715,21 @@ const DashboardOrdersListTable = ({
   const pagination = ordersData?.pagination || { page: 1, totalPages: 1, total: 0 };
 
   const _ORDER_STATUS_CONFIG = {
-    pending: { cls: 'bg-orange-100 text-orange-700', label: t('ordersTable.pending') },
-    completed: { cls: 'bg-green-100 text-green-700', label: t('ordersTable.completed') },
-    other: { cls: 'bg-gray-100 text-gray-500', label: t('ordersTable.all') },
+    pending: { cls: 'bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300', label: t('ordersTable.pending') },
+    completed: { cls: 'bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-300', label: t('ordersTable.completed') },
+    other: { cls: 'bg-gray-100 dark:bg-dk-raised text-gray-500 dark:text-dk-text2', label: t('ordersTable.all') },
   };
 
   const _CHANNEL_CONFIG = {
-    email: { cls: 'bg-sky-100 text-sky-700', label: t('channel.email') },
-    zalo: { cls: 'bg-blue-100 text-blue-700', label: t('channel.zalo') },
-    zalo_group: { cls: 'bg-purple-100 text-purple-700', label: t('channel.zaloGroup') },
+    email: { cls: 'bg-sky-100 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300', label: t('channel.email') },
+    zalo: { cls: 'bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300', label: t('channel.zalo') },
+    zalo_group: { cls: 'bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300', label: t('channel.zaloGroup') },
   };
 
   const STATUS_TABS = [
     { key: 'all', label: t('ordersTable.all') },
-    { key: 'pending', label: t('ordersTable.pending'), color: 'text-orange-600' },
-    { key: 'completed', label: t('ordersTable.completed'), color: 'text-green-600' },
+    { key: 'pending', label: t('ordersTable.pending'), color: 'text-orange-600 dark:text-orange-400' },
+    { key: 'completed', label: t('ordersTable.completed'), color: 'text-green-600 dark:text-green-400' },
   ];
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -828,9 +828,9 @@ const DashboardOrdersListTable = ({
 
   // Channel filter header
   const CHANNEL_OPTIONS = [
-    { value: 'email', label: t('channel.email'), badge: 'bg-sky-100 text-sky-700' },
-    { value: 'zalo', label: t('channel.zalo'), badge: 'bg-blue-100 text-blue-700' },
-    { value: 'zalo_group', label: t('channel.zaloGroup'), badge: 'bg-purple-100 text-purple-700' },
+    { value: 'email', label: t('channel.email'), badge: 'bg-sky-100 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300' },
+    { value: 'zalo', label: t('channel.zalo'), badge: 'bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300' },
+    { value: 'zalo_group', label: t('channel.zaloGroup'), badge: 'bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300' },
   ];
   const isChannelFiltered = channelFilters.length > 0;
   const allChannelSelected = channelFilters.length === 0;
@@ -843,8 +843,8 @@ const DashboardOrdersListTable = ({
 
   // Status filter header
   const STATUS_OPTIONS = [
-    { value: 'pending', label: t('ordersTable.pending'), badge: 'bg-orange-100 text-orange-700' },
-    { value: 'completed', label: t('ordersTable.completed'), badge: 'bg-green-100 text-green-700' },
+    { value: 'pending', label: t('ordersTable.pending'), badge: 'bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300' },
+    { value: 'completed', label: t('ordersTable.completed'), badge: 'bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-300' },
   ];
   const isStatusFiltered = statusFilters.length > 0;
 
@@ -873,21 +873,21 @@ const DashboardOrdersListTable = ({
 
           {/* Search */}
           <div className="relative w-full sm:w-64">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none"
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-dk-muted pointer-events-none"
               fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <input
               type="text"
-              className="w-full pl-9 pr-8 py-2 text-xs sm:text-sm bg-white hover:bg-slate-50/70 focus:bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 dark:bg-dk-inset dark:border-dk-border dark:text-dk-text dark:hover:bg-dk-surface dark:focus:bg-dk-inset"
+              className="w-full pl-9 pr-8 py-2 text-xs sm:text-sm bg-white hover:bg-slate-50/70 focus:bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 dark:placeholder:text-dk-muted dark:bg-dk-inset dark:border-dk-border dark:text-dk-text dark:hover:bg-dk-surface dark:focus:bg-dk-inset"
               placeholder={t('ordersTable.searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
             {searchQuery && (
               <button type="button"
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-dk-text"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-dk-muted hover:text-slate-600 dark:hover:text-dk-text"
                 onClick={() => setSearchQuery('')}>
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -939,7 +939,7 @@ const DashboardOrdersListTable = ({
                     title={t('ordersTable.filterByStatus')}
                   >
                     <svg
-                      className={`w-3 h-3 ml-0.5 shrink-0 ${isStatusFiltered ? 'text-primary-500 fill-primary-500' : 'text-gray-400 fill-none'}`}
+                      className={`w-3 h-3 ml-0.5 shrink-0 ${isStatusFiltered ? 'text-primary-500 dark:text-primary-400 fill-primary-500' : 'text-gray-400 dark:text-dk-muted fill-none'}`}
                       viewBox="0 0 20 20" stroke="currentColor" strokeWidth={1.5}
                     >
                       <path strokeLinecap="round" strokeLinejoin="round"
@@ -989,7 +989,7 @@ const DashboardOrdersListTable = ({
                       <div className="px-3 py-2 border-t border-gray-100 dark:border-dk-border/80 bg-gray-50/60 dark:bg-dk-surface/70">
                         <button
                           type="button"
-                          className="text-xs text-red-400 hover:text-red-600 transition-colors"
+                          className="text-xs text-red-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
                           onClick={() => { setStatusFilters([]); setStatusDropOpen(false); }}
                         >
                           {t('ordersTable.clearFilter')}
@@ -1018,7 +1018,7 @@ const DashboardOrdersListTable = ({
                     title={t('ordersTable.filterByChannel')}
                   >
                     <svg
-                      className={`w-3 h-3 ml-0.5 shrink-0 ${isChannelFiltered ? 'text-primary-500 fill-primary-500' : 'text-gray-400 fill-none'}`}
+                      className={`w-3 h-3 ml-0.5 shrink-0 ${isChannelFiltered ? 'text-primary-500 dark:text-primary-400 fill-primary-500' : 'text-gray-400 dark:text-dk-muted fill-none'}`}
                       viewBox="0 0 20 20" stroke="currentColor" strokeWidth={1.5}
                     >
                       <path strokeLinecap="round" strokeLinejoin="round"
@@ -1060,7 +1060,7 @@ const DashboardOrdersListTable = ({
                     {isChannelFiltered && (
                       <div className="px-3 py-2 border-t border-gray-100 dark:border-dk-border/80 bg-gray-50/60 dark:bg-dk-surface/70">
                         <button type="button"
-                          className="text-xs text-red-400 hover:text-red-600 transition-colors"
+                          className="text-xs text-red-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
                           onClick={() => { setChannelFilters([]); setChannelDropOpen(false); }}>
                           {t('ordersTable.clearFilter')}
                         </button>
@@ -1158,7 +1158,7 @@ const DashboardOrdersListTable = ({
         <div className="flex items-center gap-1.5 text-xs sm:text-sm">
           <span className="text-slate-500 dark:text-dk-text2 font-medium">{t('ordersTable.page')}</span>
           <span className="font-bold text-slate-900 dark:text-dk-text">{pagination.page}</span>
-          <span className="text-slate-400">/</span>
+          <span className="text-slate-400 dark:text-dk-muted">/</span>
           <span className="text-slate-500 dark:text-dk-text2 font-medium">{pagination.totalPages}</span>
         </div>
 

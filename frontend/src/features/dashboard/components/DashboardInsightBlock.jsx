@@ -14,7 +14,7 @@ const DashboardInsightBlock = ({ title, text, isLoading = false, error = '' }) =
 
   if (isLoading) {
     return (
-      <div className="mt-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-500 animate-pulse">
+      <div className="mt-3 rounded-xl border border-gray-100 dark:border-dk-border bg-gray-50 dark:bg-dk-raised px-4 py-3 text-sm text-gray-500 dark:text-dk-text2 animate-pulse">
         {t('dashboardInsightOverview.analyzingLoading')}
       </div>
     );
@@ -22,7 +22,7 @@ const DashboardInsightBlock = ({ title, text, isLoading = false, error = '' }) =
 
   if (error) {
     return (
-      <div className="mt-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+      <div className="mt-3 rounded-xl border border-red-100 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-600 dark:text-red-400">
         {error}
       </div>
     );
@@ -31,8 +31,8 @@ const DashboardInsightBlock = ({ title, text, isLoading = false, error = '' }) =
   if (!text) return null;
 
   return (
-    <div className="mt-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-      <p className="text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">{_title}</p>
+    <div className="mt-3 rounded-xl border border-gray-100 dark:border-dk-border bg-gray-50 dark:bg-dk-raised px-4 py-3">
+      <p className="text-xs font-semibold text-gray-500 dark:text-dk-text2 mb-1.5 uppercase tracking-wide">{_title}</p>
       <InsightMarkdownBody text={text} />
     </div>
   );

@@ -16,7 +16,7 @@ export function renderBoldSegments(line) {
     const m = part.match(/^\*\*\s*([\s\S]+?)\s*\*\*$/);
     if (m) {
       return (
-        <strong key={i} className="font-semibold text-gray-900">
+        <strong key={i} className="font-semibold text-gray-900 dark:text-dk-text">
           {m[1]}
         </strong>
       );
@@ -72,7 +72,7 @@ const InsightMarkdownBody = ({ text = '' }) => {
 
   if (blocks.length === 0) {
     return (
-      <div className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{raw}</div>
+      <div className="text-sm text-gray-700 dark:text-dk-text whitespace-pre-line leading-relaxed">{raw}</div>
     );
   }
 
@@ -82,14 +82,14 @@ const InsightMarkdownBody = ({ text = '' }) => {
         b.type === 'ul' ? (
           <ul
             key={idx}
-            className="list-disc pl-5 space-y-1.5 text-sm text-gray-700 leading-relaxed marker:text-gray-400"
+            className="list-disc pl-5 space-y-1.5 text-sm text-gray-700 dark:text-dk-text leading-relaxed marker:text-gray-400 dark:marker:text-dk-muted"
           >
             {(b.items || []).map((item, j) => (
               <li key={j}>{renderBoldSegments(item)}</li>
             ))}
           </ul>
         ) : (
-          <p key={idx} className="text-sm text-gray-700 leading-relaxed">
+          <p key={idx} className="text-sm text-gray-700 dark:text-dk-text leading-relaxed">
             {renderBoldSegments(b.text || '')}
           </p>
         )

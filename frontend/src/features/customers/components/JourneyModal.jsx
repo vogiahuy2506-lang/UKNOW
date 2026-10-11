@@ -137,7 +137,7 @@ const JourneyModal = ({ customer, campaignId, isOpen, onClose }) => {
             <div className="spinner w-8 h-8" />
           </div>
         ) : runGroups.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-3">
+          <div className="flex flex-col items-center justify-center py-16 text-gray-400 dark:text-dk-muted gap-3">
             <HiOutlineMail className="w-10 h-10" />
             <p>{t('campaignCustomerModals.noEmailsInCampaign')}</p>
           </div>
@@ -145,11 +145,11 @@ const JourneyModal = ({ customer, campaignId, isOpen, onClose }) => {
           <div className="space-y-5">
             {runGroups.map((group) => (
               <section key={String(group.runId || 'unknown')} className="space-y-3">
-                <div className="rounded-lg border border-primary-100 bg-primary-50 px-4 py-3">
-                  <p className="text-xs uppercase tracking-wide text-primary-700 font-semibold">
+                <div className="rounded-lg border border-primary-100 dark:border-primary-800 bg-primary-50 dark:bg-primary-950/40 px-4 py-3">
+                  <p className="text-xs uppercase tracking-wide text-primary-700 dark:text-primary-300 font-semibold">
                     {t('campaignCustomerModals.campaignRun')}
                   </p>
-                  <p className="text-sm text-gray-800 mt-0.5">
+                  <p className="text-sm text-gray-800 dark:text-dk-text mt-0.5">
                     <span className="font-semibold">#{group.runId || '--'}</span>
                     {' · '}
                     {buildRunDisplayName(group.runId, group.runName, t)}
@@ -168,14 +168,14 @@ const JourneyModal = ({ customer, campaignId, isOpen, onClose }) => {
                       />
                     ))
                   ) : (
-                    <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">
+                    <div className="rounded-lg border border-dashed border-gray-200 dark:border-dk-border bg-gray-50 dark:bg-dk-raised px-4 py-3 text-sm text-gray-500 dark:text-dk-text2">
                       {t('campaignCustomerModals.noEmailsInRun')}
                     </div>
                   )}
                 </div>
                 {hasAnyZaloJourneyData && (
                   <div className="space-y-3">
-                    <p className="text-xs uppercase tracking-wide font-semibold text-gray-500">
+                    <p className="text-xs uppercase tracking-wide font-semibold text-gray-500 dark:text-dk-text2">
                       {t('campaignCustomerModals.zaloJourney')}
                     </p>
                     {group.zaloMessages?.length ? (() => {
@@ -208,7 +208,7 @@ const JourneyModal = ({ customer, campaignId, isOpen, onClose }) => {
                         </div>
                       );
                     })() : (
-                      <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">
+                      <div className="rounded-lg border border-dashed border-gray-200 dark:border-dk-border bg-gray-50 dark:bg-dk-raised px-4 py-3 text-sm text-gray-500 dark:text-dk-text2">
                         {t('campaignCustomerModals.noZaloEvents')}
                       </div>
                     )}

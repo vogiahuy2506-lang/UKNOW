@@ -27,13 +27,13 @@ const DashboardAiInsightCard = ({ insights, isLoading = false, error = '', saved
   const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
 
-  const title = <h3 className="text-base font-semibold text-gray-900">{t('dashboardReport.ai.title')}</h3>;
+  const title = <h3 className="text-base font-semibold text-gray-900 dark:text-dk-text">{t('dashboardReport.ai.title')}</h3>;
 
   if (isLoading) {
     return (
       <div className="card p-5" data-testid="ai-insight-card">
         {title}
-        <div className="mt-3 h-12 rounded-xl bg-gray-100 animate-pulse" aria-busy="true" />
+        <div className="mt-3 h-12 rounded-xl bg-gray-100 dark:bg-dk-raised animate-pulse" aria-busy="true" />
       </div>
     );
   }
@@ -42,7 +42,7 @@ const DashboardAiInsightCard = ({ insights, isLoading = false, error = '', saved
     return (
       <div className="card p-5" data-testid="ai-insight-card">
         {title}
-        <div className="mt-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>
+        <div className="mt-3 rounded-xl border border-red-100 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-600 dark:text-red-400">{error}</div>
       </div>
     );
   }
@@ -53,7 +53,7 @@ const DashboardAiInsightCard = ({ insights, isLoading = false, error = '', saved
   if (!insights || (!overview && actions.length === 0 && !insights.key_metrics_analysis)) {
     return (
       <div className="card px-5 py-4" data-testid="ai-insight-card">
-        <p className="text-sm text-gray-500">{t('dashboardReport.ai.empty')}</p>
+        <p className="text-sm text-gray-500 dark:text-dk-text2">{t('dashboardReport.ai.empty')}</p>
       </div>
     );
   }
@@ -66,7 +66,7 @@ const DashboardAiInsightCard = ({ insights, isLoading = false, error = '', saved
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         {title}
         {savedAtLabel && (
-          <span className="text-xs text-gray-400" data-testid="ai-insight-saved-at">
+          <span className="text-xs text-gray-400 dark:text-dk-muted" data-testid="ai-insight-saved-at">
             {t('dashboardReport.ai.analyzedAt', { time: savedAtLabel })}
           </span>
         )}
@@ -74,11 +74,11 @@ const DashboardAiInsightCard = ({ insights, isLoading = false, error = '', saved
 
       {!expanded && (
         <div className="mt-3 space-y-3" data-testid="ai-insight-compact">
-          {overview && <p className="text-sm text-gray-700 leading-relaxed">{renderBoldSegments(overview)}</p>}
+          {overview && <p className="text-sm text-gray-700 dark:text-dk-text leading-relaxed">{renderBoldSegments(overview)}</p>}
           {actions.length > 0 && (
             <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t('dashboardReport.ai.todo')}</p>
-              <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
+              <p className="text-xs font-semibold text-gray-500 dark:text-dk-text2 uppercase tracking-wide mb-1.5">{t('dashboardReport.ai.todo')}</p>
+              <ul className="list-disc list-inside space-y-1 text-sm text-gray-700 dark:text-dk-text">
                 {actions.map((a, idx) => (
                   <li key={idx}>{renderBoldSegments(a)}</li>
                 ))}
@@ -98,7 +98,7 @@ const DashboardAiInsightCard = ({ insights, isLoading = false, error = '', saved
 
       <button
         type="button"
-        className="mt-3 text-sm font-medium text-primary-600 hover:text-primary-700 hover:underline"
+        className="mt-3 text-sm font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 hover:underline"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
       >

@@ -13,34 +13,34 @@ import { useI18n } from '../../../i18n';
  */
 
 const SectionTitle = ({ children }) => (
-  <h4 className="text-sm font-semibold text-gray-800 mt-4 first:mt-0">{children}</h4>
+  <h4 className="text-sm font-semibold text-gray-800 dark:text-dk-text mt-4 first:mt-0">{children}</h4>
 );
 
 const MetricCard = ({ label, data, t }) => {
   if (!data || typeof data !== 'object') return null;
   return (
-    <div className="rounded-lg border border-gray-100 bg-white px-3 py-2.5 text-xs">
-      <p className="font-medium text-gray-700 mb-1">{label}</p>
+    <div className="rounded-lg border border-gray-100 dark:border-dk-border bg-white dark:bg-dk-surface px-3 py-2.5 text-xs">
+      <p className="font-medium text-gray-700 dark:text-dk-text mb-1">{label}</p>
       {data.value != null && (
-        <p className="text-gray-600">
-          <span className="text-gray-400">{t('dashboardInsightOverview.value')}: </span>
+        <p className="text-gray-600 dark:text-dk-text2">
+          <span className="text-gray-400 dark:text-dk-muted">{t('dashboardInsightOverview.value')}: </span>
           {renderBoldSegments(String(data.value))}
         </p>
       )}
       {data.benchmark != null && (
-        <p className="text-gray-600 mt-0.5">
-          <span className="text-gray-400">{t('dashboardInsightOverview.reference')}: </span>
+        <p className="text-gray-600 dark:text-dk-text2 mt-0.5">
+          <span className="text-gray-400 dark:text-dk-muted">{t('dashboardInsightOverview.reference')}: </span>
           {renderBoldSegments(String(data.benchmark))}
         </p>
       )}
       {data.assessment != null && (
-        <p className="text-gray-600 mt-0.5">
-          <span className="text-gray-400">{t('dashboardInsightOverview.assessment')}: </span>
+        <p className="text-gray-600 dark:text-dk-text2 mt-0.5">
+          <span className="text-gray-400 dark:text-dk-muted">{t('dashboardInsightOverview.assessment')}: </span>
           {renderBoldSegments(String(data.assessment))}
         </p>
       )}
       {data.comment != null && (
-        <div className="text-gray-700 mt-1.5 leading-relaxed">
+        <div className="text-gray-700 dark:text-dk-text mt-1.5 leading-relaxed">
           <InsightMarkdownBody text={String(data.comment)} />
         </div>
       )}
@@ -53,7 +53,7 @@ const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) =
 
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-500 animate-pulse">
+      <div className="rounded-xl border border-gray-100 dark:border-dk-border bg-gray-50 dark:bg-dk-raised px-4 py-3 text-sm text-gray-500 dark:text-dk-text2 animate-pulse">
         {t('dashboardInsightOverview.analyzing')}
       </div>
     );
@@ -61,7 +61,7 @@ const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) =
 
   if (error) {
     return (
-      <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>
+      <div className="rounded-xl border border-red-100 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-600 dark:text-red-400">{error}</div>
     );
   }
 
@@ -77,9 +77,9 @@ const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) =
     const text = typeof insightsNorm.overview === 'string' ? insightsNorm.overview : '';
     if (!text) return null;
     return (
-      <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-        <p className="text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">{t('dashboardInsightOverview.summary')}</p>
-        <div className="text-sm text-gray-700 leading-relaxed">
+      <div className="rounded-xl border border-gray-100 dark:border-dk-border bg-gray-50 dark:bg-dk-raised px-4 py-3">
+        <p className="text-xs font-semibold text-gray-500 dark:text-dk-text2 mb-1.5 uppercase tracking-wide">{t('dashboardInsightOverview.summary')}</p>
+        <div className="text-sm text-gray-700 dark:text-dk-text leading-relaxed">
           <InsightMarkdownBody text={text} />
         </div>
       </div>
@@ -87,11 +87,11 @@ const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) =
   }
 
   return (
-    <div className="space-y-2 text-sm text-gray-700">
+    <div className="space-y-2 text-sm text-gray-700 dark:text-dk-text">
       {insightsNorm.overview && (
-        <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3">
-          <p className="text-xs font-semibold text-indigo-700 mb-1 uppercase tracking-wide">{t('dashboardInsightOverview.overviewSummary')}</p>
-          <div className="leading-relaxed text-gray-800">
+        <div className="rounded-xl border border-indigo-100 dark:border-indigo-800 bg-indigo-50/60 dark:bg-indigo-950/40 px-4 py-3">
+          <p className="text-xs font-semibold text-indigo-700 dark:text-indigo-300 mb-1 uppercase tracking-wide">{t('dashboardInsightOverview.overviewSummary')}</p>
+          <div className="leading-relaxed text-gray-800 dark:text-dk-text">
             <InsightMarkdownBody text={String(insightsNorm.overview)} />
           </div>
         </div>
@@ -111,27 +111,27 @@ const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) =
             {insightsNorm.insights.map((item, idx) => (
               <li
                 key={idx}
-                className="rounded-lg border border-gray-100 bg-white px-3 py-2.5 text-xs leading-relaxed"
+                className="rounded-lg border border-gray-100 dark:border-dk-border bg-white dark:bg-dk-surface px-3 py-2.5 text-xs leading-relaxed"
               >
                 <div className="flex flex-wrap items-center gap-2 mb-1">
-                  <span className="font-semibold text-gray-800">
+                  <span className="font-semibold text-gray-800 dark:text-dk-text">
                     {renderBoldSegments(item.title || `${t('dashboardInsightOverview.insightNumber')} ${idx + 1}`)}
                   </span>
                   {item.type && (
-                    <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">{item.type}</span>
+                    <span className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-dk-raised text-gray-600 dark:text-dk-text2">{item.type}</span>
                   )}
                   {item.priority && (
-                    <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800">{item.priority}</span>
+                    <span className="px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300">{item.priority}</span>
                   )}
                 </div>
                 {item.detail && (
-                  <div className="text-gray-700">
+                  <div className="text-gray-700 dark:text-dk-text">
                     <InsightMarkdownBody text={String(item.detail)} />
                   </div>
                 )}
                 {item.impact && (
-                  <div className="text-gray-500 mt-1">
-                    <span className="text-gray-400">{t('dashboardInsightOverview.impact')}: </span>
+                  <div className="text-gray-500 dark:text-dk-text2 mt-1">
+                    <span className="text-gray-400 dark:text-dk-muted">{t('dashboardInsightOverview.impact')}: </span>
                     {renderBoldSegments(String(item.impact))}
                   </div>
                 )}
@@ -144,21 +144,21 @@ const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) =
       {insightsNorm.channel_analysis && typeof insightsNorm.channel_analysis === 'object' && (
         <>
           <SectionTitle>{t('dashboardInsightOverview.channelAnalysis')}</SectionTitle>
-          <div className="rounded-lg border border-gray-100 bg-white px-3 py-2.5 text-xs space-y-1.5">
+          <div className="rounded-lg border border-gray-100 dark:border-dk-border bg-white dark:bg-dk-surface px-3 py-2.5 text-xs space-y-1.5">
             {insightsNorm.channel_analysis.best_channel && (
               <p>
-                <span className="text-gray-400">{t('dashboardInsightOverview.bestChannel')}: </span>
+                <span className="text-gray-400 dark:text-dk-muted">{t('dashboardInsightOverview.bestChannel')}: </span>
                 {renderBoldSegments(String(insightsNorm.channel_analysis.best_channel))}
               </p>
             )}
             {insightsNorm.channel_analysis.underperforming_channel && (
               <p>
-                <span className="text-gray-400">{t('dashboardInsightOverview.weakChannel')}: </span>
+                <span className="text-gray-400 dark:text-dk-muted">{t('dashboardInsightOverview.weakChannel')}: </span>
                 {renderBoldSegments(String(insightsNorm.channel_analysis.underperforming_channel))}
               </p>
             )}
             {insightsNorm.channel_analysis.recommendation && (
-              <div className="text-gray-700 leading-relaxed pt-1">
+              <div className="text-gray-700 dark:text-dk-text leading-relaxed pt-1">
                 <InsightMarkdownBody text={String(insightsNorm.channel_analysis.recommendation)} />
               </div>
             )}
@@ -169,21 +169,21 @@ const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) =
       {insightsNorm.funnel_analysis && typeof insightsNorm.funnel_analysis === 'object' && (
         <>
           <SectionTitle>{t('dashboardInsightOverview.funnel')}</SectionTitle>
-          <div className="rounded-lg border border-gray-100 bg-white px-3 py-2.5 text-xs space-y-1.5">
+          <div className="rounded-lg border border-gray-100 dark:border-dk-border bg-white dark:bg-dk-surface px-3 py-2.5 text-xs space-y-1.5">
             {insightsNorm.funnel_analysis.bottleneck && (
               <p>
-                <span className="text-gray-400">{t('dashboardInsightOverview.bottleneck')}: </span>
+                <span className="text-gray-400 dark:text-dk-muted">{t('dashboardInsightOverview.bottleneck')}: </span>
                 {renderBoldSegments(String(insightsNorm.funnel_analysis.bottleneck))}
               </p>
             )}
             {insightsNorm.funnel_analysis.drop_off_stage && (
               <p>
-                <span className="text-gray-400">{t('dashboardInsightOverview.dropOffAt')}: </span>
+                <span className="text-gray-400 dark:text-dk-muted">{t('dashboardInsightOverview.dropOffAt')}: </span>
                 {renderBoldSegments(String(insightsNorm.funnel_analysis.drop_off_stage))}
               </p>
             )}
             {insightsNorm.funnel_analysis.suggestion && (
-              <div className="text-gray-700 leading-relaxed pt-1">
+              <div className="text-gray-700 dark:text-dk-text leading-relaxed pt-1">
                 <InsightMarkdownBody text={String(insightsNorm.funnel_analysis.suggestion)} />
               </div>
             )}
@@ -194,15 +194,15 @@ const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) =
       {insightsNorm.top_product_insight && typeof insightsNorm.top_product_insight === 'object' && (
         <>
           <SectionTitle>{t('dashboardInsightOverview.productCourse')}</SectionTitle>
-          <div className="rounded-lg border border-gray-100 bg-white px-3 py-2.5 text-xs space-y-1.5">
+          <div className="rounded-lg border border-gray-100 dark:border-dk-border bg-white dark:bg-dk-surface px-3 py-2.5 text-xs space-y-1.5">
             {insightsNorm.top_product_insight.observation && (
-              <div className="text-gray-700 leading-relaxed">
+              <div className="text-gray-700 dark:text-dk-text leading-relaxed">
                 <InsightMarkdownBody text={String(insightsNorm.top_product_insight.observation)} />
               </div>
             )}
             {insightsNorm.top_product_insight.action && (
-              <div className="text-gray-600 flex flex-wrap items-baseline gap-x-1 gap-y-1">
-                <span className="text-gray-400 shrink-0">{t('dashboardInsightOverview.action')}:</span>
+              <div className="text-gray-600 dark:text-dk-text2 flex flex-wrap items-baseline gap-x-1 gap-y-1">
+                <span className="text-gray-400 dark:text-dk-muted shrink-0">{t('dashboardInsightOverview.action')}:</span>
                 <div className="min-w-0 flex-1">
                   <InsightMarkdownBody text={String(insightsNorm.top_product_insight.action)} />
                 </div>
@@ -217,21 +217,21 @@ const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) =
           <SectionTitle>{t('dashboardInsightOverview.actionPlan')}</SectionTitle>
           <ol className="list-decimal list-inside space-y-2 text-xs">
             {insightsNorm.action_plan.map((ap, idx) => (
-              <li key={idx} className="rounded-lg border border-gray-100 bg-white px-3 py-2">
-                <div className="font-medium text-gray-800">
+              <li key={idx} className="rounded-lg border border-gray-100 dark:border-dk-border bg-white dark:bg-dk-surface px-3 py-2">
+                <div className="font-medium text-gray-800 dark:text-dk-text">
                   <InsightMarkdownBody text={String(ap.action || t('dashboardInsightOverview.action'))} />
                 </div>
                 {ap.expected_result && (
-                  <div className="text-gray-600 mt-1 flex flex-wrap items-baseline gap-x-1 gap-y-1">
-                    <span className="text-gray-500 shrink-0">{t('dashboardInsightOverview.expectedResult')}:</span>
+                  <div className="text-gray-600 dark:text-dk-text2 mt-1 flex flex-wrap items-baseline gap-x-1 gap-y-1">
+                    <span className="text-gray-500 dark:text-dk-text2 shrink-0">{t('dashboardInsightOverview.expectedResult')}:</span>
                     <div className="min-w-0 flex-1">
                       <InsightMarkdownBody text={String(ap.expected_result)} />
                     </div>
                   </div>
                 )}
                 {ap.timeline && (
-                  <div className="text-gray-500 mt-0.5">
-                    <span className="text-gray-400">{t('dashboardInsightOverview.timeline')}: </span>
+                  <div className="text-gray-500 dark:text-dk-text2 mt-0.5">
+                    <span className="text-gray-400 dark:text-dk-muted">{t('dashboardInsightOverview.timeline')}: </span>
                     {renderBoldSegments(String(ap.timeline))}
                   </div>
                 )}
@@ -242,7 +242,7 @@ const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) =
       )}
 
       {insightsNorm.risk_warning && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900">
+        <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2.5 text-xs text-amber-900 dark:text-amber-300">
           <div className="flex flex-wrap items-baseline gap-x-1 gap-y-1">
             <span className="font-semibold shrink-0">{t('dashboardInsightOverview.warning')}:</span>
             <div className="min-w-0 flex-1">
@@ -253,10 +253,10 @@ const DashboardInsightOverview = ({ insights, isLoading = false, error = '' }) =
       )}
 
       {Array.isArray(insightsNorm.notes) && insightsNorm.notes.length > 0 && (
-        <div className="text-xs text-gray-500 space-y-1 pt-1">
+        <div className="text-xs text-gray-500 dark:text-dk-text2 space-y-1 pt-1">
           {insightsNorm.notes.map((n, idx) => (
             <div key={idx}>
-              <span className="text-gray-400">• </span>
+              <span className="text-gray-400 dark:text-dk-muted">• </span>
               {renderBoldSegments(String(n))}
             </div>
           ))}

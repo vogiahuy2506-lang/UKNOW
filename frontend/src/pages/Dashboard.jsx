@@ -101,7 +101,7 @@ const DashboardSkeleton = () => (
 
     {/* Table skeleton */}
     <div className="card">
-      <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+      <div className="p-5 border-b border-gray-100 dark:border-dk-border flex items-center justify-between">
         <div className="space-y-1.5">
           <Skeleton className="h-4 w-32" />
           <Skeleton className="h-3 w-24" />
@@ -352,7 +352,7 @@ const Dashboard = () => {
 
       {/* Error banner */}
       {errorMessage && (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-red-50 border border-red-100 text-sm text-red-600">
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-100 dark:border-red-800 text-sm text-red-600 dark:text-red-400">
           <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
               d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -405,6 +405,7 @@ const Dashboard = () => {
       Bản in ẩn: khung `fixed` cao 0 + overflow hidden nên KHÔNG nằm trong luồng bố cục (trước đây `absolute top-0`
       kéo dài vùng cuộn → khoảng trắng cuối trang). Nội dung vẫn được dựng đủ rộng 1180px; react-to-print chỉ
       clone node có `ref` (bỏ khung ngoài), nên bản in PDF vẫn đầy đủ.
+      giữ sáng: vùng in/xuất PDF luôn nền trắng (không thêm dark: cho khung này).
     */}
     <div
       data-testid="dashboard-print-frame"

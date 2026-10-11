@@ -27,19 +27,19 @@ export const EmailStateBadge = ({ journey, orderEvents = [], t }) => {
     <div className="flex items-center gap-1 flex-wrap justify-end">
       <span className="badge badge-info">{t('campaignCustomerModals.sent')}</span>
       {isOpened && (
-        <span className="badge" style={{ background: '#fffde7', color: '#f57f17' }}>{t('campaignCustomerModals.opened')}</span>
+        <span className="badge dark:!bg-yellow-950/40 dark:!text-yellow-300" style={{ background: '#fffde7', color: '#f57f17' }}>{t('campaignCustomerModals.opened')}</span>
       )}
       {journey.clicked && (
-        <span className="badge" style={{ background: '#fff3e0', color: '#e65100' }}>{t('campaignCustomerModals.clicked')}</span>
+        <span className="badge dark:!bg-orange-950/40 dark:!text-orange-300" style={{ background: '#fff3e0', color: '#e65100' }}>{t('campaignCustomerModals.clicked')}</span>
       )}
       {journey.attachmentDownloaded && (
-        <span className="badge" style={{ background: '#f3e8ff', color: '#7c3aed' }}>{t('campaignCustomerModals.downloaded')}</span>
+        <span className="badge dark:!bg-purple-950/40 dark:!text-purple-300" style={{ background: '#f3e8ff', color: '#7c3aed' }}>{t('campaignCustomerModals.downloaded')}</span>
       )}
       {hasPending && !hasCompleted && (
-        <span className="badge" style={{ background: '#fff8e1', color: '#b45309' }}>{t('campaignCustomerModals.pendingOrder')}</span>
+        <span className="badge dark:!bg-amber-950/40 dark:!text-amber-300" style={{ background: '#fff8e1', color: '#b45309' }}>{t('campaignCustomerModals.pendingOrder')}</span>
       )}
       {hasCompleted && (
-        <span className="badge" style={{ background: '#f0fdf4', color: '#15803d' }}>{t('campaignCustomerModals.ordered')}</span>
+        <span className="badge dark:!bg-green-950/40 dark:!text-green-300" style={{ background: '#f0fdf4', color: '#15803d' }}>{t('campaignCustomerModals.ordered')}</span>
       )}
     </div>
   );
@@ -141,23 +141,23 @@ export const Journey4States = ({ journey, emailSubject, orderEvents = [], t }) =
   });
 
   if (!allEvents.length) {
-    return <p className="text-sm text-gray-400">{t('campaignCustomerModals.noActivities')}</p>;
+    return <p className="text-sm text-gray-400 dark:text-dk-muted">{t('campaignCustomerModals.noActivities')}</p>;
   }
 
   return (
     <div className="relative">
-      <div className="absolute left-[6px] top-1 bottom-1 w-px bg-gray-100" />
+      <div className="absolute left-[6px] top-1 bottom-1 w-px bg-gray-100 dark:bg-dk-raised" />
       <div className="space-y-4 pl-6">
         {allEvents.map((s) => (
           <div key={s.key} className="relative">
-            <div className={`absolute -left-6 w-[14px] h-[14px] rounded-full border-2 border-white shadow-sm mt-0.5 ${s.color}`} />
+            <div className={`absolute -left-6 w-[14px] h-[14px] rounded-full border-2 border-white dark:border-dk-border shadow-sm mt-0.5 ${s.color}`} />
             {s.key === 'sent'
               ? (
                 <>
-                  <p className="text-sm font-medium text-gray-800 leading-snug">
-                    {t('campaignCustomerModals.sent')}:{s.sentSubject && <> <span className="text-blue-600">{s.sentSubject}</span></>}
+                  <p className="text-sm font-medium text-gray-800 dark:text-dk-text leading-snug">
+                    {t('campaignCustomerModals.sent')}:{s.sentSubject && <> <span className="text-blue-600 dark:text-blue-400">{s.sentSubject}</span></>}
                   </p>
-                  {s.at && <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(s.at)}</p>}
+                  {s.at && <p className="text-xs text-gray-400 dark:text-dk-muted mt-0.5">{formatDateTime(s.at)}</p>}
                 </>
               )
               : s.type === 'clicked'
@@ -167,15 +167,15 @@ export const Journey4States = ({ journey, emailSubject, orderEvents = [], t }) =
                   : s.type === 'order_pending' || s.type === 'order_completed'
                     ? (
                       <>
-                        <p className="text-sm font-medium text-gray-800 leading-snug">
-                          {s.label}{s.orderNumber && <> <span className="text-gray-500">#{s.orderNumber}</span></>}
+                        <p className="text-sm font-medium text-gray-800 dark:text-dk-text leading-snug">
+                          {s.label}{s.orderNumber && <> <span className="text-gray-500 dark:text-dk-text2">#{s.orderNumber}</span></>}
                         </p>
                         {s.products && s.products.length > 0 && (
                           <div className="mt-2 space-y-1">
                             {s.products.map((product, i) => (
-                              <div key={i} className="text-xs text-gray-600 bg-gray-50 rounded px-2 py-1.5">
+                              <div key={i} className="text-xs text-gray-600 dark:text-dk-text2 bg-gray-50 dark:bg-dk-raised rounded px-2 py-1.5">
                                 <div className="font-medium">{product.product_name}</div>
-                                <div className="flex items-center gap-2 mt-0.5 text-gray-500">
+                                <div className="flex items-center gap-2 mt-0.5 text-gray-500 dark:text-dk-text2">
                                   <span>{t('campaignCustomerModals.productCode')}: {product.product_id}</span>
                                   <span>•</span>
                                   <span>{t('campaignCustomerModals.quantity')}: {product.quantity}</span>
@@ -186,13 +186,13 @@ export const Journey4States = ({ journey, emailSubject, orderEvents = [], t }) =
                             ))}
                           </div>
                         )}
-                        {s.at && <p className="text-xs text-gray-400 mt-1.5">{formatDateTime(s.at)}</p>}
+                        {s.at && <p className="text-xs text-gray-400 dark:text-dk-muted mt-1.5">{formatDateTime(s.at)}</p>}
                       </>
                     )
                     : (
                       <>
-                        <p className="text-sm font-medium text-gray-800 leading-snug">{s.label}</p>
-                        {s.at && <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(s.at)}</p>}
+                        <p className="text-sm font-medium text-gray-800 dark:text-dk-text leading-snug">{s.label}</p>
+                        {s.at && <p className="text-xs text-gray-400 dark:text-dk-muted mt-0.5">{formatDateTime(s.at)}</p>}
                       </>
                     )
             }
@@ -225,25 +225,28 @@ export const EmailContentViewer = ({ email }) => {
   }
 
   return (
-    <div className="mt-3 rounded-xl border border-gray-200 overflow-hidden bg-white">
-      <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 space-y-1.5">
+    <div className="mt-3 rounded-xl border border-gray-200 dark:border-dk-border overflow-hidden bg-white dark:bg-dk-surface">
+      <div className="px-4 py-3 bg-gray-50 dark:bg-dk-raised border-b border-gray-100 dark:border-dk-border space-y-1.5">
         <div className="flex items-start gap-2">
-          <span className="text-xs text-gray-400 w-20 shrink-0 mt-0.5">{t('campaignCustomerModals.subject')}</span>
-          <p className="text-sm font-semibold text-gray-900 leading-snug">
+          <span className="text-xs text-gray-400 dark:text-dk-muted w-20 shrink-0 mt-0.5">{t('campaignCustomerModals.subject')}</span>
+          <p className="text-sm font-semibold text-gray-900 dark:text-dk-text leading-snug">
             {decodeHtmlEntities(email.subject || email.emailTemplateName || '--')}
           </p>
         </div>
         <div className="flex items-start gap-2">
-          <span className="text-xs text-gray-400 w-20 shrink-0 mt-0.5">{t('campaignCustomerModals.sender')}</span>
-          <p className="text-xs text-gray-600">{senderDisplay}</p>
+          <span className="text-xs text-gray-400 dark:text-dk-muted w-20 shrink-0 mt-0.5">{t('campaignCustomerModals.sender')}</span>
+          <p className="text-xs text-gray-600 dark:text-dk-text2">{senderDisplay}</p>
         </div>
         <div className="flex items-start gap-2">
-          <span className="text-xs text-gray-400 w-20 shrink-0 mt-0.5">{t('campaignCustomerModals.recipient')}</span>
-          <p className="text-xs text-gray-600">{recipientDisplay}</p>
+          <span className="text-xs text-gray-400 dark:text-dk-muted w-20 shrink-0 mt-0.5">{t('campaignCustomerModals.recipient')}</span>
+          <p className="text-xs text-gray-600 dark:text-dk-text2">{recipientDisplay}</p>
         </div>
       </div>
 
-      <div style={{ height: '50vh', overflow: 'hidden' }}>
+      <div
+        className="dark:bg-white" // dark-ngoai-le: giữ sáng — thân email xem trước là HTML của khách, nền trong suốt, chữ mặc định đen
+        style={{ height: '50vh', overflow: 'hidden' }}
+      >
         {rawHtml ? (
           <iframe
             srcDoc={safeHtml}
@@ -252,22 +255,22 @@ export const EmailContentViewer = ({ email }) => {
             sandbox="allow-same-origin"
           />
         ) : (
-          <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+          <div className="flex items-center justify-center h-full text-gray-400 dark:text-dk-muted text-sm">
             {t('campaignCustomerModals.noHtmlContent')}
           </div>
         )}
       </div>
 
       {attachments.length > 0 && (
-        <div className="px-4 py-3 border-t border-gray-100">
-          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+        <div className="px-4 py-3 border-t border-gray-100 dark:border-dk-border">
+          <p className="text-xs font-medium text-gray-500 dark:text-dk-text2 uppercase tracking-wide mb-2">
             {t('campaignCustomerModals.attachments')} ({attachments.length})
           </p>
           <div className="space-y-1.5">
             {attachments.map((att, i) => (
-              <div key={i} className="flex items-center gap-2.5 py-1.5 px-3 rounded-lg bg-gray-50 border border-gray-100">
+              <div key={i} className="flex items-center gap-2.5 py-1.5 px-3 rounded-lg bg-gray-50 dark:bg-dk-raised border border-gray-100 dark:border-dk-border">
                 <span className="text-base" role="img" aria-label="file">{getFileIcon(att.name)}</span>
-                <span className="text-sm text-gray-700 truncate flex-1">{att.name}</span>
+                <span className="text-sm text-gray-700 dark:text-dk-text truncate flex-1">{att.name}</span>
               </div>
             ))}
           </div>
@@ -305,15 +308,15 @@ export const EmailAccordionItem = ({ email, isExpanded, onToggle, orderEvents = 
   const hasContent = !!(email.bodyHtml || email.bodyText);
 
   return (
-    <div className="rounded-xl border border-gray-200 overflow-hidden">
+    <div className="rounded-xl border border-gray-200 dark:border-dk-border overflow-hidden">
       <button
         type="button"
         onClick={onToggle}
-        className="w-full flex items-center justify-between gap-3 px-5 py-4 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+        className="w-full flex items-center justify-between gap-3 px-5 py-4 bg-gray-50 dark:bg-dk-raised hover:bg-gray-100 dark:hover:bg-dk-strong transition-colors text-left"
       >
         <div className="min-w-0 flex-1">
-          <p className="font-semibold text-gray-900 text-sm leading-snug truncate">{headerLabel}</p>
-          <p className="text-xs text-gray-400 mt-0.5">
+          <p className="font-semibold text-gray-900 dark:text-dk-text text-sm leading-snug truncate">{headerLabel}</p>
+          <p className="text-xs text-gray-400 dark:text-dk-muted mt-0.5">
             {formatDateTime(email.sentAt)}
             {' · ID: '}{email.emailMessageId}
             {email.runId != null ? ` · Run #${email.runId}` : ''}
@@ -323,7 +326,7 @@ export const EmailAccordionItem = ({ email, isExpanded, onToggle, orderEvents = 
         <div className="flex items-center gap-2 shrink-0">
           <EmailStateBadge journey={journey} orderEvents={orderEvents} t={t} />
           <svg
-            className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+            className={`w-4 h-4 text-gray-400 dark:text-dk-muted transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
             fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
           >
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -332,7 +335,7 @@ export const EmailAccordionItem = ({ email, isExpanded, onToggle, orderEvents = 
       </button>
 
       {isExpanded && (
-        <div className="px-5 py-4 border-t border-gray-100 space-y-4">
+        <div className="px-5 py-4 border-t border-gray-100 dark:border-dk-border space-y-4">
           <Journey4States
             journey={journey}
             emailSubject={sentEventSubject}
@@ -344,7 +347,7 @@ export const EmailAccordionItem = ({ email, isExpanded, onToggle, orderEvents = 
               <button
                 type="button"
                 onClick={() => setShowContent((v) => !v)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-300 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-dk-border text-gray-600 dark:text-dk-text2 bg-white dark:bg-dk-surface hover:bg-gray-50 dark:hover:bg-dk-raised hover:border-gray-300 dark:hover:border-dk-border-strong transition-colors"
               >
                 <HiOutlineEye className="w-3.5 h-3.5" />
                 {showContent ? t('campaignCustomerModals.hideEmailContent') : t('campaignCustomerModals.viewEmailContent')}
@@ -420,46 +423,46 @@ export const ZaloJourneyItem = ({ message, orderEvents = [], clickedEvents = [],
   journeyStates.sort((a, b) => new Date(a?.at || 0) - new Date(b?.at || 0));
 
   return (
-    <div className="rounded-xl border border-gray-200 overflow-hidden">
-      <div className="w-full px-5 py-4 bg-gray-50 text-left">
-        <p className="font-semibold text-gray-900 text-sm leading-snug truncate">
+    <div className="rounded-xl border border-gray-200 dark:border-dk-border overflow-hidden">
+      <div className="w-full px-5 py-4 bg-gray-50 dark:bg-dk-raised text-left">
+        <p className="font-semibold text-gray-900 dark:text-dk-text text-sm leading-snug truncate">
           {zaloTitle}
         </p>
-        <p className="text-xs text-gray-400 mt-0.5">
+        <p className="text-xs text-gray-400 dark:text-dk-muted mt-0.5">
           {formatDateTime(message?.sentAt)}
           {message?.id != null ? ` · ID: ${message.id}` : ''}
           {runLabel ? ` · ${runLabel}` : ''}
         </p>
         {message?.channel === 'zalo_group' && message?.groupId && message?.groupName && (
-          <p className="text-xs text-gray-400 mt-0.5">{t('campaignCustomerModals.groupId')}: {message.groupId}</p>
+          <p className="text-xs text-gray-400 dark:text-dk-muted mt-0.5">{t('campaignCustomerModals.groupId')}: {message.groupId}</p>
         )}
         <div className="mt-2 flex items-center gap-1 flex-wrap">
           <span className="badge badge-info">{t('campaignCustomerModals.sent')}</span>
           {hasClicked && (
-            <span className="badge" style={{ background: '#fff3e0', color: '#e65100' }}>{t('campaignCustomerModals.clicked')}</span>
+            <span className="badge dark:!bg-orange-950/40 dark:!text-orange-300" style={{ background: '#fff3e0', color: '#e65100' }}>{t('campaignCustomerModals.clicked')}</span>
           )}
           {hasPending && !hasCompleted && (
-            <span className="badge" style={{ background: '#fff8e1', color: '#b45309' }}>{t('campaignCustomerModals.pendingOrder')}</span>
+            <span className="badge dark:!bg-amber-950/40 dark:!text-amber-300" style={{ background: '#fff8e1', color: '#b45309' }}>{t('campaignCustomerModals.pendingOrder')}</span>
           )}
           {hasCompleted && (
-            <span className="badge" style={{ background: '#f0fdf4', color: '#15803d' }}>{t('campaignCustomerModals.orderCompleted')}</span>
+            <span className="badge dark:!bg-green-950/40 dark:!text-green-300" style={{ background: '#f0fdf4', color: '#15803d' }}>{t('campaignCustomerModals.orderCompleted')}</span>
           )}
         </div>
       </div>
-      <div className="px-5 py-4 border-t border-gray-100 space-y-2">
+      <div className="px-5 py-4 border-t border-gray-100 dark:border-dk-border space-y-2">
         {journeyStates.length > 0 && (
           <div className="relative pb-1">
-            <div className="absolute left-[6px] top-1 bottom-1 w-px bg-gray-100" />
+            <div className="absolute left-[6px] top-1 bottom-1 w-px bg-gray-100 dark:bg-dk-raised" />
             <div className="space-y-3 pl-6">
               {journeyStates.map((state) => (
                 <div key={state.key} className="relative">
-                  <div className={`absolute -left-6 w-[14px] h-[14px] rounded-full border-2 border-white shadow-sm mt-0.5 ${state.color}`} />
-                  <p className="text-sm font-medium text-gray-800 leading-snug">{state.label}</p>
+                  <div className={`absolute -left-6 w-[14px] h-[14px] rounded-full border-2 border-white dark:border-dk-border shadow-sm mt-0.5 ${state.color}`} />
+                  <p className="text-sm font-medium text-gray-800 dark:text-dk-text leading-snug">{state.label}</p>
                   {state.clickedUrl && (
-                    <p className="text-xs text-gray-500 break-all mt-0.5">{state.clickedUrl}</p>
+                    <p className="text-xs text-gray-500 dark:text-dk-text2 break-all mt-0.5">{state.clickedUrl}</p>
                   )}
                   {state.at && (
-                    <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(state.at)}</p>
+                    <p className="text-xs text-gray-400 dark:text-dk-muted mt-0.5">{formatDateTime(state.at)}</p>
                   )}
                 </div>
               ))}
@@ -469,24 +472,24 @@ export const ZaloJourneyItem = ({ message, orderEvents = [], clickedEvents = [],
         <button
           type="button"
           onClick={() => setShowMessageContent((prev) => !prev)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-300 transition-colors"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-dk-border text-gray-600 dark:text-dk-text2 bg-white dark:bg-dk-surface hover:bg-gray-50 dark:hover:bg-dk-raised hover:border-gray-300 dark:hover:border-dk-border-strong transition-colors"
         >
           <HiOutlineEye className="w-3.5 h-3.5" />
           {showMessageContent ? t('campaignCustomerModals.hideZaloContent') : t('campaignCustomerModals.viewZaloContent')}
         </button>
         {showMessageContent && (
           <div className="space-y-2">
-            <p className="text-sm text-gray-700 whitespace-pre-wrap rounded-lg bg-white border border-gray-200 p-3">
+            <p className="text-sm text-gray-700 dark:text-dk-text whitespace-pre-wrap rounded-lg bg-white dark:bg-dk-surface border border-gray-200 dark:border-dk-border p-3">
               {message?.messageText || t('campaignCustomerModals.noZaloContent')}
             </p>
             {attachments.length > 0 && (
-              <div className="rounded-lg bg-white border border-gray-200 p-3">
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+              <div className="rounded-lg bg-white dark:bg-dk-surface border border-gray-200 dark:border-dk-border p-3">
+                <p className="text-xs font-medium text-gray-500 dark:text-dk-text2 uppercase tracking-wide mb-2">
                   {t('campaignCustomerModals.attachments')} ({attachments.length})
                 </p>
                 <div className="space-y-1.5">
                   {attachments.map((file, index) => (
-                    <p key={`${file?.displayName || 'file'}-${index}`} className="text-sm text-gray-700">
+                    <p key={`${file?.displayName || 'file'}-${index}`} className="text-sm text-gray-700 dark:text-dk-text">
                       - {file?.displayName || t('campaignCustomerModals.attachment')}
                     </p>
                   ))}

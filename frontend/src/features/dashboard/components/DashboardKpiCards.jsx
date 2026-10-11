@@ -131,7 +131,7 @@ const DashboardKpiCards = ({ overview }) => {
       testId: 'kpi-sent',
       label: t('dashboardReport.cards.sent'),
       gradient: 'from-indigo-500 to-indigo-600',
-      text: 'text-indigo-600',
+      text: 'text-indigo-600 dark:text-indigo-400',
       icon: ICONS.sent,
       values: [{ value: fn(sentTotal) }],
       isEmpty: sentTotal === 0 && friendRequests === 0,
@@ -150,7 +150,7 @@ const DashboardKpiCards = ({ overview }) => {
       testId: 'kpi-failed',
       label: t('dashboardReport.cards.failed'),
       gradient: 'from-rose-500 to-red-500',
-      text: 'text-rose-600',
+      text: 'text-rose-600 dark:text-rose-400',
       icon: ICONS.failed,
       values: [{ value: fn(failed.total) }],
       // 0 chưa gửi được là tin tốt, không phải "trạng thái trống".
@@ -163,7 +163,7 @@ const DashboardKpiCards = ({ overview }) => {
         testId: 'kpi-email',
         label: t('dashboardReport.cards.emailEngagement'),
         gradient: 'from-sky-500 to-cyan-500',
-        text: 'text-sky-600',
+        text: 'text-sky-600 dark:text-sky-400',
         icon: ICONS.email,
         values: [
           { caption: t('dashboardReport.cards.emailOpened'), value: formatPercent(email.openRate, locale) },
@@ -185,7 +185,7 @@ const DashboardKpiCards = ({ overview }) => {
       testId: 'kpi-customers',
       label: t('dashboardReport.cards.customers'),
       gradient: 'from-emerald-500 to-green-600',
-      text: 'text-emerald-600',
+      text: 'text-emerald-600 dark:text-emerald-400',
       icon: ICONS.customers,
       values: [
         { caption: t('dashboardReport.cards.leftInfo'), value: fn(orders.pending) },

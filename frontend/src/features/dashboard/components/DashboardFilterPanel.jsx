@@ -3,12 +3,12 @@ import { createPortal } from 'react-dom';
 import { useI18n } from '../../../i18n';
 
 const CHANNEL_BADGE = {
-  email: 'bg-sky-100 text-sky-700',
-  zalo: 'bg-blue-100 text-blue-700',
-  zalo_group: 'bg-purple-100 text-purple-700',
-  telegram: 'bg-cyan-100 text-cyan-700',
-  telegram_group: 'bg-cyan-100 text-cyan-700',
-  whatsapp: 'bg-green-100 text-green-700',
+  email: 'bg-sky-100 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300',
+  zalo: 'bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300',
+  zalo_group: 'bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300',
+  telegram: 'bg-cyan-100 dark:bg-cyan-950/40 text-cyan-700 dark:text-cyan-300',
+  telegram_group: 'bg-cyan-100 dark:bg-cyan-950/40 text-cyan-700 dark:text-cyan-300',
+  whatsapp: 'bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-300',
 };
 
 /**
@@ -86,7 +86,7 @@ const CampaignCheckboxDropdown = ({ options, selectedIds, onChange }) => {
         onClick={() => setIsOpen((prev) => !prev)}
       >
         <div className="flex items-center gap-2 min-w-0">
-          <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="w-4 h-4 text-gray-400 dark:text-dk-muted shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
               d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
           </svg>
@@ -101,7 +101,7 @@ const CampaignCheckboxDropdown = ({ options, selectedIds, onChange }) => {
             </span>
           )}
           <svg
-            className={`w-4 h-4 text-gray-400 transition-transform duration-150 ${isOpen ? 'rotate-180' : ''}`}
+            className={`w-4 h-4 text-gray-400 dark:text-dk-muted transition-transform duration-150 ${isOpen ? 'rotate-180' : ''}`}
             fill="none" viewBox="0 0 24 24" stroke="currentColor"
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -116,7 +116,7 @@ const CampaignCheckboxDropdown = ({ options, selectedIds, onChange }) => {
           <div className="p-2.5 border-b border-gray-100 dark:border-dk-border/80">
             <div className="relative">
               <svg
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400"
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 dark:text-dk-muted"
                 fill="none" viewBox="0 0 24 24" stroke="currentColor"
               >
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -139,7 +139,7 @@ const CampaignCheckboxDropdown = ({ options, selectedIds, onChange }) => {
               <label className="flex items-center gap-2.5 cursor-pointer group">
                 <input
                   type="checkbox"
-                  className="w-3.5 h-3.5 rounded border-gray-300 dark:border-dk-border text-primary-500 cursor-pointer accent-orange-500"
+                  className="w-3.5 h-3.5 rounded border-gray-300 dark:border-dk-border text-primary-500 dark:text-primary-400 cursor-pointer accent-orange-500"
                   checked={allFilteredSelected}
                   onChange={toggleAllFiltered}
                 />
@@ -153,13 +153,13 @@ const CampaignCheckboxDropdown = ({ options, selectedIds, onChange }) => {
           {/* List */}
           <div className="max-h-48 overflow-y-auto py-1">
             {filtered.length === 0 ? (
-              <div className="px-3 py-4 text-xs text-gray-400 text-center">
+              <div className="px-3 py-4 text-xs text-gray-400 dark:text-dk-muted text-center">
                 {t('dashboard.noMatchingCampaign')}
               </div>
             ) : (
               filtered.map((opt) => {
                 const checked = selectedIds.includes(opt.id);
-                const badgeCls = CHANNEL_BADGE[opt.campaignType] || 'bg-gray-100 text-gray-600';
+                const badgeCls = CHANNEL_BADGE[opt.campaignType] || 'bg-gray-100 dark:bg-dk-raised text-gray-600 dark:text-dk-text2';
                 return (
                   <label
                     key={opt.id}
@@ -169,7 +169,7 @@ const CampaignCheckboxDropdown = ({ options, selectedIds, onChange }) => {
                   >
                     <input
                       type="checkbox"
-                      className="w-3.5 h-3.5 rounded border-gray-300 cursor-pointer accent-orange-500 shrink-0"
+                      className="w-3.5 h-3.5 rounded border-gray-300 dark:border-dk-border-strong cursor-pointer accent-orange-500 shrink-0"
                       checked={checked}
                       onChange={() => toggleItem(opt.id)}
                     />
@@ -193,7 +193,7 @@ const CampaignCheckboxDropdown = ({ options, selectedIds, onChange }) => {
               </span>
               <button
                 type="button"
-                className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+                className="text-xs text-gray-400 dark:text-dk-muted hover:text-red-500 dark:hover:text-red-400 transition-colors"
                 onClick={() => onChange([])}
               >
                 {t('dashboard.clearAll')}
@@ -455,7 +455,7 @@ const DashboardFilterPanel = ({
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-base ${
                     draftFilters.campaignType === opt.value
                       ? 'bg-primary-500 text-white border-primary-500 shadow-sm'
-                      : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50 dark:bg-dk-surface dark:text-dk-text dark:border-dk-border dark:hover:bg-dk-raised'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 dark:hover:border-dk-border-strong hover:bg-gray-50 dark:bg-dk-surface dark:text-dk-text dark:border-dk-border dark:hover:bg-dk-raised'
                   }`}
                   onClick={() => setDraftFilters((prev) => ({ ...prev, campaignType: opt.value }))}
                 >

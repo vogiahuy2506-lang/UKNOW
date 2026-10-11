@@ -109,8 +109,8 @@ const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose }) => {
       <div className="p-6 space-y-8">
         <section>
           <div className="flex items-start gap-5">
-            <div className="w-16 h-16 rounded-full bg-primary-100 flex items-center justify-center shrink-0">
-              <span className="text-2xl font-bold text-primary-600">{getInitial(customer)}</span>
+            <div className="w-16 h-16 rounded-full bg-primary-100 dark:bg-primary-950/40 flex items-center justify-center shrink-0">
+              <span className="text-2xl font-bold text-primary-600 dark:text-primary-400">{getInitial(customer)}</span>
             </div>
             <div className="flex-1 min-w-0">
               <h3 className="text-xl font-bold text-gray-900 dark:text-dk-text mb-3">{displayName || '—'}</h3>
@@ -146,7 +146,7 @@ const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose }) => {
 
         <section>
           <h3 className="text-base font-semibold text-gray-900 dark:text-dk-text mb-4 flex items-center gap-2">
-            <HiOutlineInformationCircle className="w-5 h-5 text-primary-500" />
+            <HiOutlineInformationCircle className="w-5 h-5 text-primary-500 dark:text-primary-400" />
             {t('campaignCustomerModals.coursesFromCampaign')}
           </h3>
 
@@ -223,48 +223,48 @@ const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose }) => {
                     </button>
 
                     {isExpanded && (
-                      <div className="px-4 py-3 border-t border-gray-100 space-y-2 text-sm text-gray-700">
+                      <div className="px-4 py-3 border-t border-gray-100 dark:border-dk-border space-y-2 text-sm text-gray-700 dark:text-dk-text">
                         <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
                           <div>
-                            <span className="text-xs text-gray-400">{t('campaignCustomerModals.orderCode')}</span>
+                            <span className="text-xs text-gray-400 dark:text-dk-muted">{t('campaignCustomerModals.orderCode')}</span>
                             <p className="font-mono font-medium">{p.orderId ? `#${p.orderId}` : '--'}</p>
                           </div>
                           <div>
-                            <span className="text-xs text-gray-400">{t('campaignCustomerModals.productCode')}</span>
+                            <span className="text-xs text-gray-400 dark:text-dk-muted">{t('campaignCustomerModals.productCode')}</span>
                             <p className="font-mono">{p.courseCode || '--'}</p>
                           </div>
                           <div>
-                            <span className="text-xs text-gray-400">{t('campaignCustomerModals.leftInfo')}</span>
-                            <p>{interested ? <span className="badge badge-warning">{t('common.yes')}</span> : <span className="text-gray-400">{t('common.no')}</span>}</p>
+                            <span className="text-xs text-gray-400 dark:text-dk-muted">{t('campaignCustomerModals.leftInfo')}</span>
+                            <p>{interested ? <span className="badge badge-warning">{t('common.yes')}</span> : <span className="text-gray-400 dark:text-dk-muted">{t('common.no')}</span>}</p>
                           </div>
                           <div>
-                            <span className="text-xs text-gray-400">{t('campaignCustomerModals.purchased')}</span>
-                            <p>{purchased ? <span className="badge badge-success">{t('common.yes')}</span> : <span className="text-gray-400">{t('common.no')}</span>}</p>
+                            <span className="text-xs text-gray-400 dark:text-dk-muted">{t('campaignCustomerModals.purchased')}</span>
+                            <p>{purchased ? <span className="badge badge-success">{t('common.yes')}</span> : <span className="text-gray-400 dark:text-dk-muted">{t('common.no')}</span>}</p>
                           </div>
                           <div>
-                            <span className="text-xs text-gray-400">{t('campaignCustomerModals.lastActivity')}</span>
+                            <span className="text-xs text-gray-400 dark:text-dk-muted">{t('campaignCustomerModals.lastActivity')}</span>
                             <p>{formatDateTime(p.purchaseDate)}</p>
                           </div>
                           {p.idEmailMessage && (
                             <div>
-                              <span className="text-xs text-gray-400">{t('campaignCustomerModals.afterClick')}</span>
+                              <span className="text-xs text-gray-400 dark:text-dk-muted">{t('campaignCustomerModals.afterClick')}</span>
                               <p>
                                 {(p.attributedFromClick || linkedOrderEvents.length > 0)
                                   ? <span className="badge badge-info">{t('common.yes')}</span>
-                                  : <span className="text-gray-400">{t('common.unknown')}</span>}
+                                  : <span className="text-gray-400 dark:text-dk-muted">{t('common.unknown')}</span>}
                               </p>
                             </div>
                           )}
                         </div>
 
                         {(p.idEmailMessage || p.idZaloMessage) && (
-                          <div className="mt-1 pt-2 border-t border-gray-100 space-y-2">
+                          <div className="mt-1 pt-2 border-t border-gray-100 dark:border-dk-border space-y-2">
                             <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
                               {p.idEmailMessage && (
                                 <div>
-                                  <span className="text-xs text-gray-400">{t('campaignCustomerModals.emailId')}</span>
+                                  <span className="text-xs text-gray-400 dark:text-dk-muted">{t('campaignCustomerModals.emailId')}</span>
                                   <p>
-                                    <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-mono text-blue-700 border border-blue-100">
+                                    <span className="inline-flex items-center rounded-full bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 text-xs font-mono text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-800">
                                       #{p.idEmailMessage}
                                     </span>
                                   </p>
@@ -272,13 +272,13 @@ const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose }) => {
                               )}
                               {p.idZaloMessage && (
                                 <div>
-                                  <span className="text-xs text-gray-400">{t('campaignCustomerModals.zaloMessageId')}</span>
+                                  <span className="text-xs text-gray-400 dark:text-dk-muted">{t('campaignCustomerModals.zaloMessageId')}</span>
                                   <p className="flex flex-wrap items-center gap-1.5">
-                                    <span className="inline-flex items-center rounded-full bg-orange-50 px-2 py-0.5 text-xs font-mono text-orange-700 border border-orange-100">
+                                    <span className="inline-flex items-center rounded-full bg-orange-50 dark:bg-orange-950/40 px-2 py-0.5 text-xs font-mono text-orange-700 dark:text-orange-300 border border-orange-100 dark:border-orange-800">
                                       #{p.idZaloMessage}
                                     </span>
                                     {(linkedZaloMessage?.runId != null || linkedZaloMessage?.runName || linkedZaloMessage?.runDisplayName) && (
-                                      <span className="inline-flex items-center rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-700 border border-primary-100">
+                                      <span className="inline-flex items-center rounded-full bg-primary-50 dark:bg-primary-950/40 px-2 py-0.5 text-xs font-medium text-primary-700 dark:text-primary-300 border border-primary-100 dark:border-primary-800">
                                         {linkedZaloMessage.runDisplayName || (
                                           linkedZaloMessage.runName
                                             ? `Run #${linkedZaloMessage.runId || '--'} · ${linkedZaloMessage.runName}`
@@ -291,14 +291,14 @@ const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose }) => {
                               )}
                               {emailIndex != null && (
                                 <div>
-                                  <span className="text-xs text-gray-400">{t('campaignCustomerModals.emailOrder')}</span>
-                                  <p className="font-medium text-gray-800">{t('customerDetail.emailIndex', { index: emailIndex })}</p>
+                                  <span className="text-xs text-gray-400 dark:text-dk-muted">{t('campaignCustomerModals.emailOrder')}</span>
+                                  <p className="font-medium text-gray-800 dark:text-dk-text">{t('customerDetail.emailIndex', { index: emailIndex })}</p>
                                 </div>
                               )}
                               {(linkedEmail?.runId != null || linkedEmail?.runName) && (
                                 <div className="col-span-2">
-                                  <span className="text-xs text-gray-400">{t('campaignCustomerModals.campaignRun')}</span>
-                                  <p className="font-medium text-gray-800">
+                                  <span className="text-xs text-gray-400 dark:text-dk-muted">{t('campaignCustomerModals.campaignRun')}</span>
+                                  <p className="font-medium text-gray-800 dark:text-dk-text">
                                     #{linkedEmail?.runId || '--'} · {buildRunDisplayName(linkedEmail?.runId, linkedEmail?.runName, t)}
                                   </p>
                                 </div>
@@ -306,26 +306,26 @@ const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose }) => {
                             </div>
                             {emailSubject && (
                               <div>
-                                <span className="text-xs text-gray-400">{t('campaignCustomerModals.emailSubject')}</span>
-                                <p className="font-medium text-gray-800 leading-snug">{emailSubject}</p>
+                                <span className="text-xs text-gray-400 dark:text-dk-muted">{t('campaignCustomerModals.emailSubject')}</span>
+                                <p className="font-medium text-gray-800 dark:text-dk-text leading-snug">{emailSubject}</p>
                               </div>
                             )}
                               {linkedZaloMessage && (
                                 <div className="space-y-1">
-                                  <span className="text-xs text-gray-400">{t('campaignCustomerModals.zaloMessageLinked')}</span>
-                                  <p className="text-sm text-gray-700">
+                                  <span className="text-xs text-gray-400 dark:text-dk-muted">{t('campaignCustomerModals.zaloMessageLinked')}</span>
+                                  <p className="text-sm text-gray-700 dark:text-dk-text">
                                     {linkedZaloMessage.channel === 'zalo_group'
                                       ? `${linkedZaloMessage.groupName || linkedZaloMessage.groupId || '--'}`
                                       : (linkedZaloMessage.recipientValue || t('campaignCustomerModals.zaloPersonal'))}
                                   </p>
                                   {linkedZaloMessage.channel === 'zalo_group' && linkedZaloMessage.groupId && linkedZaloMessage.groupName && (
-                                    <p className="text-xs text-gray-500">{t('campaignCustomerModals.groupId')}: {linkedZaloMessage.groupId}</p>
+                                    <p className="text-xs text-gray-500 dark:text-dk-text2">{t('campaignCustomerModals.groupId')}: {linkedZaloMessage.groupId}</p>
                                   )}
                                 {zaloClickedLinks.length > 0 && (
                                   <div className="space-y-1">
-                                    <p className="text-xs text-gray-400">{t('campaignCustomerModals.clickedLinks')} ({zaloClickedLinks.length})</p>
+                                    <p className="text-xs text-gray-400 dark:text-dk-muted">{t('campaignCustomerModals.clickedLinks')} ({zaloClickedLinks.length})</p>
                                     {zaloClickedLinks.map((clickedLink) => (
-                                      <p key={clickedLink.linkKey} className="text-xs text-gray-500 break-all">
+                                      <p key={clickedLink.linkKey} className="text-xs text-gray-500 dark:text-dk-text2 break-all">
                                         - {clickedLink.targetUrl || clickedLink.label || t('campaignCustomerModals.clickedLink')}
                                       </p>
                                     ))}
@@ -333,10 +333,10 @@ const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose }) => {
                                 )}
                                 {linkedZaloAttachments.length > 0 && (
                                   <div className="pt-1">
-                                    <p className="text-xs text-gray-400">{t('campaignCustomerModals.attachments')} ({linkedZaloAttachments.length})</p>
+                                    <p className="text-xs text-gray-400 dark:text-dk-muted">{t('campaignCustomerModals.attachments')} ({linkedZaloAttachments.length})</p>
                                     <div className="space-y-1 mt-1">
                                       {linkedZaloAttachments.map((file, index) => (
-                                        <p key={`${file?.displayName || 'file'}-${index}`} className="text-xs text-gray-600">
+                                        <p key={`${file?.displayName || 'file'}-${index}`} className="text-xs text-gray-600 dark:text-dk-text2">
                                           - {file?.displayName || t('campaignCustomerModals.attachment')}
                                         </p>
                                       ))}
@@ -355,7 +355,7 @@ const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose }) => {
                                       [key]: !prev[key],
                                     }));
                                   }}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-300 transition-colors"
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-dk-border text-gray-600 dark:text-dk-text2 bg-white dark:bg-dk-surface hover:bg-gray-50 dark:hover:bg-dk-raised hover:border-gray-300 dark:hover:border-dk-border-strong transition-colors"
                                 >
                                   <HiOutlineEye className="w-3.5 h-3.5" />
                                   {isShowingEmailContent ? t('campaignCustomerModals.hideEmailContent') : t('campaignCustomerModals.viewEmailContent')}
@@ -373,24 +373,24 @@ const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose }) => {
                                       [key]: !prev[key],
                                     }));
                                   }}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-300 transition-colors"
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-dk-border text-gray-600 dark:text-dk-text2 bg-white dark:bg-dk-surface hover:bg-gray-50 dark:hover:bg-dk-raised hover:border-gray-300 dark:hover:border-dk-border-strong transition-colors"
                                 >
                                   <HiOutlineEye className="w-3.5 h-3.5" />
                                   {isShowingZaloContent ? t('campaignCustomerModals.hideZaloContent') : t('campaignCustomerModals.viewZaloContent')}
                                 </button>
                                 {isShowingZaloContent && (
                                   <div className="mt-2 space-y-2">
-                                    <p className="text-sm text-gray-700 whitespace-pre-wrap rounded-lg bg-white border border-gray-200 p-3">
+                                    <p className="text-sm text-gray-700 dark:text-dk-text whitespace-pre-wrap rounded-lg bg-white dark:bg-dk-surface border border-gray-200 dark:border-dk-border p-3">
                                       {linkedZaloMessage.messageText || t('campaignCustomerModals.noZaloContent')}
                                     </p>
                                     {linkedZaloAttachments.length > 0 && (
-                                      <div className="rounded-lg bg-white border border-gray-200 p-3">
-                                        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                                      <div className="rounded-lg bg-white dark:bg-dk-surface border border-gray-200 dark:border-dk-border p-3">
+                                        <p className="text-xs font-medium text-gray-500 dark:text-dk-text2 uppercase tracking-wide mb-2">
                                           {t('campaignCustomerModals.attachments')} ({linkedZaloAttachments.length})
                                         </p>
                                         <div className="space-y-1.5">
                                           {linkedZaloAttachments.map((file, index) => (
-                                            <p key={`${file?.displayName || 'file'}-${index}`} className="text-sm text-gray-700">
+                                            <p key={`${file?.displayName || 'file'}-${index}`} className="text-sm text-gray-700 dark:text-dk-text">
                                               - {file?.displayName || t('campaignCustomerModals.attachment')}
                                             </p>
                                           ))}
@@ -403,8 +403,8 @@ const CustomerDetailModal = ({ customer, campaignId, isOpen, onClose }) => {
                             )}
                             {(p.attributedFromClick || linkedOrderEvents.length > 0) && emailJourney && (
                               <div className="pt-1">
-                                <p className="text-xs text-gray-400 mb-2 uppercase tracking-wide font-medium">{t('campaignCustomerModals.emailJourneyLeadingOrder')}</p>
-                                <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
+                                <p className="text-xs text-gray-400 dark:text-dk-muted mb-2 uppercase tracking-wide font-medium">{t('campaignCustomerModals.emailJourneyLeadingOrder')}</p>
+                                <div className="bg-gray-50 dark:bg-dk-raised rounded-lg border border-gray-100 dark:border-dk-border p-3">
                                   <Journey4States
                                     journey={emailJourney}
                                     emailSubject={emailSubject}

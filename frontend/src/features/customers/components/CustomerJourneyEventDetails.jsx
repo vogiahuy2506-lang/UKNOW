@@ -36,22 +36,22 @@ export const ClickEventDetail = ({ label, url, at, formatDateTime }) => {
 
   return (
     <div>
-      <p className="text-sm font-medium text-gray-800 leading-snug">
-        {t('clicked')} <span className="text-orange-600">{displayLabel}</span>
+      <p className="text-sm font-medium text-gray-800 dark:text-dk-text leading-snug">
+        {t('clicked')} <span className="text-orange-600 dark:text-orange-400">{displayLabel}</span>
       </p>
       {originalUrl && (
         <div className="mt-1 flex items-center gap-1 max-w-full">
-          <span className="text-xs text-gray-400 truncate max-w-[260px]" title={originalUrl}>
+          <span className="text-xs text-gray-400 dark:text-dk-muted truncate max-w-[260px]" title={originalUrl}>
             {originalUrl}
           </span>
           <button
             type="button"
             onClick={handleCopy}
             title={copied ? t('copied') : t('copyLink')}
-            className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors shrink-0"
+            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-dk-strong text-gray-400 dark:text-dk-muted hover:text-gray-600 dark:hover:text-dk-text2 transition-colors shrink-0"
           >
             {copied
-              ? <HiCheck className="w-3.5 h-3.5 text-green-500" />
+              ? <HiCheck className="w-3.5 h-3.5 text-green-500 dark:text-green-400" />
               : <HiOutlineClipboard className="w-3.5 h-3.5" />}
           </button>
           <a
@@ -59,13 +59,13 @@ export const ClickEventDetail = ({ label, url, at, formatDateTime }) => {
             target="_blank"
             rel="noopener noreferrer"
             title={t('openLinkNewTab')}
-            className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-orange-500 transition-colors shrink-0"
+            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-dk-strong text-gray-400 dark:text-dk-muted hover:text-orange-500 dark:hover:text-orange-400 transition-colors shrink-0"
           >
             <HiOutlineExternalLink className="w-3.5 h-3.5" />
           </a>
         </div>
       )}
-      {at && <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(at)}</p>}
+      {at && <p className="text-xs text-gray-400 dark:text-dk-muted mt-0.5">{formatDateTime(at)}</p>}
     </div>
   );
 };
@@ -121,8 +121,8 @@ export const AttachmentEventDetail = ({
 
   return (
     <div>
-      <p className="text-sm font-medium text-gray-800 leading-snug">
-        {t('downloaded')} <span className="text-indigo-600">{displayLabel}</span>
+      <p className="text-sm font-medium text-gray-800 dark:text-dk-text leading-snug">
+        {t('downloaded')} <span className="text-indigo-600 dark:text-indigo-400">{displayLabel}</span>
       </p>
       <div className="mt-1 flex items-center gap-1">
         <button
@@ -131,8 +131,8 @@ export const AttachmentEventDetail = ({
           disabled={!canOpen || viewing}
           className={`text-xs font-medium px-2 py-1 rounded border transition-colors ${
             canOpen
-              ? 'border-indigo-200 text-indigo-600 hover:bg-indigo-50'
-              : 'border-gray-200 text-gray-400 cursor-not-allowed'
+              ? 'border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/60'
+              : 'border-gray-200 dark:border-dk-border text-gray-400 dark:text-dk-muted cursor-not-allowed'
           }`}
         >
           {viewing ? t('opening') : t('previewFile')}
@@ -144,16 +144,16 @@ export const AttachmentEventDetail = ({
           title={copied ? t('copied') : t('copyFileLink')}
           className={`p-1 rounded transition-colors ${
             canOpen
-              ? 'hover:bg-gray-100 text-gray-400 hover:text-gray-600'
-              : 'text-gray-300 cursor-not-allowed'
+              ? 'hover:bg-gray-100 dark:hover:bg-dk-strong text-gray-400 dark:text-dk-muted hover:text-gray-600 dark:hover:text-dk-text2'
+              : 'text-gray-300 dark:text-dk-muted cursor-not-allowed'
           }`}
         >
           {copied
-            ? <HiCheck className="w-3.5 h-3.5 text-green-500" />
+            ? <HiCheck className="w-3.5 h-3.5 text-green-500 dark:text-green-400" />
             : <HiOutlineClipboard className="w-3.5 h-3.5" />}
         </button>
       </div>
-      {at && <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(at)}</p>}
+      {at && <p className="text-xs text-gray-400 dark:text-dk-muted mt-0.5">{formatDateTime(at)}</p>}
     </div>
   );
 };
