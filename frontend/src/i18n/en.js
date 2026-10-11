@@ -8856,7 +8856,7 @@ export default {
     expiresOn: 'Expires on {date}',
     daysLeft: '— {days} days left',
     inGracePeriod: 'Expired — {days} grace days remaining, please renew',
-    fullyExpired: 'Plan expired — sending & AI paused until renewal',
+    fullyExpired: 'Plan expired — features are locked until renewal, your data is kept intact',
     suspended: 'Paused',
     // Status
     success: 'Success',

@@ -8863,7 +8863,7 @@ export default {
     expiresOn: 'Hết hạn ngày {date}',
     daysLeft: '— còn {days} ngày',
     inGracePeriod: 'Đã hết hạn — còn {days} ngày ân hạn, vui lòng gia hạn',
-    fullyExpired: 'Gói đã hết hạn — tạm ngưng gửi tin & AI cho tới khi gia hạn',
+    fullyExpired: 'Gói đã hết hạn — các tính năng tạm khoá cho tới khi gia hạn, dữ liệu vẫn được giữ nguyên',
     suspended: 'Tạm dừng',
     // Status
     success: 'Thành công',
