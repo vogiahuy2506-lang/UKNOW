@@ -15,6 +15,12 @@ const zaloSettingsApiService = {
     return api.delete(`/zalo/accounts/${accountId}`);
   },
 
+  // Đăng xuất Zalo (PLAN_DANG_XUAT_ZALO_AN_HOI_THOAI 11/10/2026): ẩn hội thoại của tài khoản khỏi Hộp thư cho tới khi quét QR lại
+  // đúng tài khoản Zalo đó. KHÁC deleteAccount — không xoá dữ liệu.
+  logoutAccount(accountId) {
+    return api.post(`/zalo/accounts/${accountId}/logout`);
+  },
+
   setDefaultAccount(accountId) {
     return api.patch(`/zalo/accounts/${accountId}/default`);
   },

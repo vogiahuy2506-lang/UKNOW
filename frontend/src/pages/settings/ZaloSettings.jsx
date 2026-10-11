@@ -11,6 +11,7 @@ import {
   HiOutlineCheckCircle,
   HiOutlineClipboardCopy,
   HiOutlineExclamationCircle,
+  HiOutlineLogout,
   HiOutlineQrcode,
   HiOutlineRefresh,
   HiOutlineTrash,
@@ -71,6 +72,9 @@ function normalizeAccount(account = {}) {
   };
 }
 
+// Trạng thái cho phép bấm "Đăng xuất" (tài khoản còn nối được hoặc phiên đã hết hạn). `logged_out` thì không còn gì để đăng xuất.
+const LOGOUT_ELIGIBLE_STATUSES = new Set(['connected', 'needs_reauth', 'disconnected']);
+
 // P12 — `readOnly`: gói không có kênh Zalo -> chỉ xem/đặt mặc định/xoá tài khoản cũ, KHÔNG có nút tạo QR/quét lại/khôi phục phiên.
 const ZaloSettings = ({ readOnly = false } = {}) => {
   const { t } = useI18n();
@@ -78,6 +82,8 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
   const isEmployeeContext = activeContext?.type === 'employee';
   const [accountToDelete, setAccountToDelete] = useState(null);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [accountToLogout, setAccountToLogout] = useState(null);
+  const [isLoggingOutAccount, setIsLoggingOutAccount] = useState(false);
   const [accounts, setAccounts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -200,6 +206,35 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
       toast.error(error.response?.data?.message || t('zaloSettings.deleteFailed'));
     } finally {
       setIsDeletingAccount(false);
+    }
+  };
+
+  const promptLogoutAccount = (account) => {
+    setAccountToLogout(account);
+  };
+
+  /**
+   * Đăng xuất Zalo: hội thoại + tin nhắn của tài khoản ẩn khỏi Hộp thư cho tới khi chính tài khoản Zalo này quét QR lại.
+   * Không xoá dữ liệu.
+   */
+  const handleConfirmLogout = async () => {
+    if (!accountToLogout) return;
+
+    if (!isBackendReady) {
+      toast.error(t('zaloSettings.backendNotReady'));
+      return;
+    }
+
+    setIsLoggingOutAccount(true);
+    try {
+      await zaloSettingsApiService.logoutAccount(accountToLogout.id);
+      await fetchAccounts();
+      toast.success(t('zaloSettings.logoutSuccess'));
+      setAccountToLogout(null);
+    } catch (error) {
+      toast.error(error.response?.data?.message || t('zaloSettings.logoutFailed'));
+    } finally {
+      setIsLoggingOutAccount(false);
     }
   };
 
@@ -545,7 +580,9 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
                             ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200/80 dark:border-emerald-800'
                             : account.status === 'needs_reauth'
                               ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-200/80 dark:border-amber-800'
-                              : 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200/80 dark:border-red-800'
+                              : account.status === 'logged_out'
+                                ? 'bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 border-slate-200/80 dark:border-slate-600'
+                                : 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200/80 dark:border-red-800'
                         }`}
                       >
                         <span className={`h-1.5 w-1.5 rounded-full ${
@@ -553,13 +590,17 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
                             ? 'bg-emerald-500'
                             : account.status === 'needs_reauth'
                               ? 'bg-amber-500'
-                              : 'bg-red-500'
+                              : account.status === 'logged_out'
+                                ? 'bg-slate-400 dark:bg-slate-400'
+                                : 'bg-red-500'
                         }`} />
                         {account.status === 'connected' && account.isActive
                           ? t('zaloSettings.connected')
                           : account.status === 'needs_reauth'
                             ? t('zaloSettings.needsReauth')
-                            : t('zaloSettings.disconnected')}
+                            : account.status === 'logged_out'
+                              ? t('zaloSettings.loggedOut')
+                              : t('zaloSettings.disconnected')}
                       </span>
                       {account.phoneLookupCooldownUntil && new Date(account.phoneLookupCooldownUntil).getTime() > Date.now() && (
                         <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
@@ -575,6 +616,11 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
                         {account.lastRestoreAttemptAt
                           ? ` ${t('zaloSettings.lastRestoreAttempt')}: ${formatCampaignDateTime(account.lastRestoreAttemptAt)}`
                           : ''}
+                      </p>
+                    )}
+                    {account.status === 'logged_out' && (
+                      <p className="text-sm text-slate-600 dark:text-slate-300 mt-2">
+                        {t('zaloSettings.loggedOutHint')}
                       </p>
                     )}
                     <p className="text-sm text-gray-600 dark:text-dk-text mt-1">
@@ -702,17 +748,19 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
                               : t('zaloSettings.retryRestore')}
                           </button>
                         )}
-                        <button
-                          type="button"
-                          className="btn btn-secondary text-xs"
-                          onClick={() => handleRestoreSession(account)}
-                          disabled={restoringAccountIds.includes(account.id)}
-                        >
-                          <HiOutlineRefresh className="w-4 h-4 mr-1" />
-                          {restoringAccountIds.includes(account.id)
-                            ? t('zaloSettings.restoring')
-                            : t('zaloSettings.restoreSession')}
-                        </button>
+                        {account.status !== 'logged_out' && (
+                          <button
+                            type="button"
+                            className="btn btn-secondary text-xs"
+                            onClick={() => handleRestoreSession(account)}
+                            disabled={restoringAccountIds.includes(account.id)}
+                          >
+                            <HiOutlineRefresh className="w-4 h-4 mr-1" />
+                            {restoringAccountIds.includes(account.id)
+                              ? t('zaloSettings.restoring')
+                              : t('zaloSettings.restoreSession')}
+                          </button>
+                        )}
                         <button
                           type="button"
                           className="btn btn-primary text-xs"
@@ -723,6 +771,17 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
                           {t('zaloSettings.reconnectQr')}
                         </button>
                       </>
+                    )}
+                    {!readOnly && LOGOUT_ELIGIBLE_STATUSES.has(account.status) && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary text-xs"
+                        onClick={() => promptLogoutAccount(account)}
+                        disabled={isLoggingOutAccount}
+                      >
+                        <HiOutlineLogout className="w-4 h-4 mr-1" />
+                        {t('zaloSettings.logout')}
+                      </button>
                     )}
                     {!account.isDefault && !isEmployeeContext && (
                       <button
@@ -967,6 +1026,25 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
           </div>
         </div>
       )}
+
+      {/* Xác nhận đăng xuất Zalo: ẩn hội thoại khỏi Hộp thư, KHÔNG xoá dữ liệu */}
+      <ConfirmModal
+        isOpen={Boolean(accountToLogout)}
+        title={
+          accountToLogout
+            ? t('zaloSettings.logoutConfirmTitle', {
+                name: accountToLogout.displayName || accountToLogout.zaloName || accountToLogout.id,
+              })
+            : ''
+        }
+        message={t('zaloSettings.logoutConfirmBody')}
+        confirmText={t('zaloSettings.logout')}
+        cancelText={t('common.cancel') || 'Hủy'}
+        variant="warning"
+        isLoading={isLoggingOutAccount}
+        onConfirm={handleConfirmLogout}
+        onCancel={() => !isLoggingOutAccount && setAccountToLogout(null)}
+      />
 
       {/* Modal xác nhận xóa tài khoản chuẩn hóa */}
       <ConfirmModal
