@@ -745,7 +745,7 @@ export default function DiagnosticPage() {
 
         {campaigns.length > 0 && (
           <div className="px-5 py-3 bg-orange-50/40 dark:bg-orange-950/20">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
               <span className="text-xs font-medium text-orange-700 dark:text-orange-400 flex items-center gap-1.5 shrink-0">
                 {prefillLoading
                   ? <HiOutlineRefresh className="w-3.5 h-3.5 animate-spin" />
@@ -759,7 +759,7 @@ export default function DiagnosticPage() {
                   setSelectedCampaignId(id);
                   handlePrefill(id);
                 }}
-                className="flex-1 border border-orange-200 rounded-xl px-3 py-1.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:border-orange-900/50 dark:bg-dk-inset dark:text-dk-text"
+                className="w-full min-w-0 sm:flex-1 border border-orange-200 rounded-xl px-3 py-1.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:border-orange-900/50 dark:bg-dk-inset dark:text-dk-text"
               >
                 <option value="">{t('diagnostic.selectCampaignPlaceholder')}</option>
                 {campaigns.map((c) => (
