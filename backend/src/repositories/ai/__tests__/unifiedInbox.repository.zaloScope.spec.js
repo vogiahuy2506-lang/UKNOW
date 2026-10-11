@@ -176,7 +176,8 @@ describe('getAvailableChannels — tab Zalo cá nhân chỉ khi nhân viên đư
     const channels = await repo.getAvailableChannels(1, { accessibleZaloAccountIds: [5], accessibleChannelRefs: OWNER_CHANNELS });
 
     const [sql, params] = db.query.mock.calls[0];
-    expect(sql).toMatch(/FROM zalo_settings WHERE id_user = \$1 AND is_active = true AND id = ANY\(\$2::bigint\[\]\)/);
+    // Tab chỉ hiện khi còn tài khoản CHƯA đăng xuất (logged_out) — điều kiện nằm giữa `is_active` và phạm vi ANY(...).
+    expect(sql).toMatch(/FROM zalo_settings WHERE id_user = \$1 AND is_active = true AND COALESCE\(zalo_settings\.status, ''\) <> 'logged_out' AND id = ANY\(\$2::bigint\[\]\)/);
     expect(sql).toMatch(/FROM zalo_personal_conversations WHERE id_user = \$1 AND id_zalo_setting = ANY\(\$2::bigint\[\]\)/);
     expect(params).toEqual([1, [5]]);
     expect(channels).toEqual(['zalo_personal']);

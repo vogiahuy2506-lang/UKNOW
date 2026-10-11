@@ -1,4 +1,5 @@
 import db from '../../config/database.js';
+import { zaloAccountVisibleSql } from '../../utils/zaloAccountStatus.util.js';
 import { normalizeZaloAccessScope } from '../../utils/zaloAccessScope.util.js';
 import { pushChannelAccessCondition } from '../../utils/channelAccessScope.util.js';
 
@@ -268,6 +269,7 @@ class ChatbotContactAlertRepository {
        LEFT JOIN zalo_personal_conversations zc ON a.last_source = 'zalo_personal' AND zc.id = a.last_conversation_id
        LEFT JOIN zalo_settings zs ON zs.id = zc.id_zalo_setting
        WHERE a.pending_notify = true AND u.status = 'active'
+         AND ${zaloAccountVisibleSql('zs')}
        ORDER BY a.id_user ASC, a.created_at ASC`
     );
     return rows;
@@ -382,6 +384,10 @@ class ChatbotContactAlertRepository {
       conditions.push(`(a.last_source <> 'channel' OR (conn.id IS NOT NULL AND ${channelCondition}))`);
       pIndex = params.length + 1;
     }
+
+    // Liên hệ khách để lại qua tài khoản Zalo người dùng đã "Đăng xuất" (status = 'logged_out') ẨN cùng hội thoại gốc. `zs` là LEFT JOIN
+    // ở cả ba câu bên dưới (danh sách, tổng, số chưa xử lý) nên một điều kiện phủ cả ba; nguồn không phải Zalo cá nhân có zs NULL → vẫn hiện.
+    conditions.push(zaloAccountVisibleSql('zs'));
 
     const whereClause = `WHERE ${conditions.join(' AND ')}`;
 

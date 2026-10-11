@@ -67,7 +67,7 @@ describe('findActiveConnectedAccountsByUser — ô chọn tài khoản + trạng
     await repo.findActiveConnectedAccountsByUser(100, [5]);
 
     const [sql, params] = db.query.mock.calls[0];
-    expect(sql).toMatch(/zs\.id_user = \$1 AND zs\.is_active = true AND zs\.id = ANY\(\$2::bigint\[\]\)/);
+    expect(sql).toMatch(/zs\.id_user = \$1 AND zs\.is_active = true AND COALESCE\(zs\.status, ''\) <> 'logged_out' AND zs\.id = ANY\(\$2::bigint\[\]\)/);
     expect(params).toEqual([100, [5]]);
   });
 

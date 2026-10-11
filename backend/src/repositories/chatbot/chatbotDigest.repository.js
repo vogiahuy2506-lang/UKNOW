@@ -1,5 +1,6 @@
 import db from '../../config/database.js';
 import { NOT_AI_REPLY_SOURCES, LEGACY_APOLOGY_PREFIX } from '../../utils/aiUnavailable.util.js';
+import { zaloConversationVisibleSql } from '../../utils/zaloAccountStatus.util.js';
 
 // Câu xin lỗi (hết credit / AI lỗi) KHÔNG phải "AI trả lời" (G3b, A P1-6). Loại theo nhãn `metadata.source = 'ai_unavailable'`
 // (tin mới) VÀ theo đầu câu cố định (tin cũ ghi trước khi có nhãn — vẫn nằm trong kỳ 7 ngày của bản tin đầu tiên).
@@ -51,6 +52,7 @@ class ChatbotDigestRepository {
            OR EXISTS (
              SELECT 1 FROM zalo_personal_messages zm
              WHERE zm.id_user = u.id AND zm.role = 'visitor' AND zm.created_at >= $2 AND zm.created_at < $3
+               AND ${zaloConversationVisibleSql('zm')}
            )
            OR EXISTS (
              SELECT 1 FROM channel_messages cm
@@ -140,7 +142,8 @@ class ChatbotDigestRepository {
          COUNT(CASE WHEN m.metadata->>'source' = 'ai_auto_reply' AND ${NOT_APOLOGY_SQL} THEN 1 END)::int AS ai_replies,
          COUNT(CASE WHEN m.role = 'agent' THEN 1 END)::int AS human_replies
        FROM zalo_personal_messages m
-       WHERE m.id_user = $1 AND m.created_at >= $2 AND m.created_at < $3`,
+       WHERE m.id_user = $1 AND m.created_at >= $2 AND m.created_at < $3
+         AND ${zaloConversationVisibleSql('m')}`,
       [idUser, startIso, endIso, NOT_AI_REPLY_SOURCES, APOLOGY_LIKE_PATTERN]
     );
 
@@ -187,6 +190,7 @@ class ChatbotDigestRepository {
          FROM zalo_personal_messages m
          JOIN zalo_personal_conversations c ON c.id = m.id_conversation
          WHERE m.id_user = $1 AND m.role = 'visitor' AND m.created_at >= $2 AND m.created_at < $3
+           AND ${zaloConversationVisibleSql('c')}
          GROUP BY m.id_conversation, c.visitor_name
 
          UNION ALL
@@ -215,7 +219,8 @@ class ChatbotDigestRepository {
       `SELECT (
          (SELECT COUNT(*)::int FROM zalo_personal_conversations
           WHERE id_user = $1 AND ai_paused = true AND ai_paused_at IS NOT NULL
-            AND ai_paused_at <= NOW() - interval '24 hours')
+            AND ai_paused_at <= NOW() - interval '24 hours'
+            AND ${zaloConversationVisibleSql('zalo_personal_conversations')})
          +
          (SELECT COUNT(*)::int FROM channel_conversations
           WHERE id_user = $1 AND ai_paused = true AND ai_paused_at IS NOT NULL
@@ -227,10 +232,12 @@ class ChatbotDigestRepository {
     // 6. Số liên hệ khách để lại trong kỳ và số chưa xử lý (contactsLeft, contactsOpen)
     const contactsPromise = queryable.query(
       `SELECT
-         COUNT(CASE WHEN first_seen_at >= $2 AND first_seen_at < $3 THEN 1 END)::int AS contacts_left,
-         COUNT(CASE WHEN handled_at IS NULL THEN 1 END)::int AS contacts_open
-       FROM chatbot_contact_alerts
-       WHERE id_user = $1`,
+         COUNT(CASE WHEN a.first_seen_at >= $2 AND a.first_seen_at < $3 THEN 1 END)::int AS contacts_left,
+         COUNT(CASE WHEN a.handled_at IS NULL THEN 1 END)::int AS contacts_open
+       FROM chatbot_contact_alerts a
+       LEFT JOIN zalo_personal_conversations zc ON a.last_source = 'zalo_personal' AND zc.id = a.last_conversation_id
+       WHERE a.id_user = $1
+         AND ${zaloConversationVisibleSql('zc')}`,
       [idUser, startIso, endIso]
     );
 

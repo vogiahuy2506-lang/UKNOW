@@ -5,6 +5,7 @@ import { getVietnamDayRange } from '../../utils/vnTimeFormat.util.js';
 import { buildFoldedLikePattern, sqlFoldVietnamese } from '../../utils/vietnameseSearchFold.util.js';
 import { normalizeZaloAccessScope, pushZaloAccessFilter } from '../../utils/zaloAccessScope.util.js';
 import { pushChannelAccessFilter } from '../../utils/channelAccessScope.util.js';
+import { zaloAccountVisibleSql, zaloConversationVisibleSql } from '../../utils/zaloAccountStatus.util.js';
 
 const VALID_STATUSES = new Set(['active', 'closed']);
 const VALID_DATE_RANGES = new Set(['today', 'week', 'month']);
@@ -281,10 +282,16 @@ function buildConversationFilterParts(filters, params, { branch = 'all' } = {}) 
   const sharedFilters = buildStatusDateFilters({ status, date, params, startIndex: paramIndex });
   const statusDate = `${sharedFilters.statusSql} ${sharedFilters.dateSql}`;
 
+  // Hội thoại của tài khoản Zalo người dùng đã "Đăng xuất" (status = 'logged_out') ẨN khỏi danh sách, đếm tổng và "Đánh dấu tất cả
+  // đã đọc" — phải nằm ở đây (một chỗ) để ba nơi không lệch nhau và để giai đoạn CHỌN TRANG đã loại chúng (lọc muộn hơn sẽ làm
+  // trang ngắn đi). Không phụ thuộc `branch`/tham số nên luôn có mặt.
+  const zaloVisibleFilter = `AND ${zaloConversationVisibleSql('zp')}`;
+
   return {
     channelFilter,
     channelAccessFilter,
     zaloAccountIdFilter,
+    zaloVisibleFilter,
     channelGate: gates.channelGate,
     zaloGate: gates.zaloGate,
     webGate: gates.webGate,
@@ -316,7 +323,7 @@ class UnifiedInboxRepository {
     const { limit = 20, offset = 0 } = filters;
     const params = [userId, limit, offset];
     const {
-      channelFilter, channelAccessFilter, zaloAccountIdFilter, channelGate, zaloGate, webGate,
+      channelFilter, channelAccessFilter, zaloAccountIdFilter, zaloVisibleFilter, channelGate, zaloGate, webGate,
       ccSearch, zpSearch, wcSearch, ccStatusDate, zpStatusDate, wcStatusDate,
       ccKindUnread, zpKindUnread, wcKindUnread,
     } = buildConversationFilterParts(filters, params);
@@ -353,7 +360,7 @@ class UnifiedInboxRepository {
           SELECT 'zalo_personal'::text, zp.id,
                  COALESCE(zp.last_message_at, zp.started_at)
           FROM zalo_personal_conversations zp
-          WHERE zp.id_user = $1 ${zaloAccountIdFilter} ${zpSearch}
+          WHERE zp.id_user = $1 ${zaloAccountIdFilter} ${zaloVisibleFilter} ${zpSearch}
           ${zpStatusDate} ${zaloGate} ${zpKindUnread}
           ORDER BY COALESCE(zp.last_message_at, zp.started_at) DESC NULLS LAST, zp.id DESC
           LIMIT ($2::int + $3::int)
@@ -605,7 +612,7 @@ class UnifiedInboxRepository {
   async getConversationsCount(userId, filters = {}) {
     const params = [userId];
     const {
-      channelFilter, channelAccessFilter, zaloAccountIdFilter, channelGate, zaloGate, webGate,
+      channelFilter, channelAccessFilter, zaloAccountIdFilter, zaloVisibleFilter, channelGate, zaloGate, webGate,
       ccSearch, zpSearch, wcSearch, ccStatusDate, zpStatusDate, wcStatusDate,
       ccKindUnread, zpKindUnread, wcKindUnread,
     } = buildConversationFilterParts(filters, params);
@@ -619,7 +626,7 @@ class UnifiedInboxRepository {
         UNION ALL
 
         SELECT zp.id FROM zalo_personal_conversations zp
-        WHERE zp.id_user = $1 ${zaloAccountIdFilter} ${zpStatusDate} ${zpSearch} ${zaloGate} ${zpKindUnread}
+        WHERE zp.id_user = $1 ${zaloAccountIdFilter} ${zaloVisibleFilter} ${zpStatusDate} ${zpSearch} ${zaloGate} ${zpKindUnread}
 
         UNION ALL
 
@@ -658,8 +665,8 @@ class UnifiedInboxRepository {
             OR EXISTS (SELECT 1 FROM webchat_conversations WHERE id_user = $1)
          UNION
          SELECT 'zalo_personal'
-         WHERE EXISTS (SELECT 1 FROM zalo_settings WHERE id_user = $1 AND is_active = true ${zaloAccountGate})
-            OR EXISTS (SELECT 1 FROM zalo_personal_conversations WHERE id_user = $1 ${zaloConversationGate})
+         WHERE EXISTS (SELECT 1 FROM zalo_settings WHERE id_user = $1 AND is_active = true AND ${zaloAccountVisibleSql('zalo_settings')} ${zaloAccountGate})
+            OR EXISTS (SELECT 1 FROM zalo_personal_conversations WHERE id_user = $1 ${zaloConversationGate} AND ${zaloConversationVisibleSql('zalo_personal_conversations')})
          UNION
          SELECT ch.channel FROM channel_connections ch
          WHERE ch.id_user = $1 AND ch.channel IN ('zalo_oa', 'whatsapp_baileys', 'telegram') ${channelAccess}
@@ -692,7 +699,7 @@ class UnifiedInboxRepository {
         `SELECT zp.*, 'zalo_personal' as channel, COALESCE(zs.display_name, 'Zalo Cá nhân') as channel_display_name, CASE WHEN zs.status = 'connected' THEN true ELSE false END as channel_is_active
          FROM zalo_personal_conversations zp
          LEFT JOIN zalo_settings zs ON zs.id = zp.id_zalo_setting
-         WHERE zp.id = $1 AND zp.id_user = $2`,
+         WHERE zp.id = $1 AND zp.id_user = $2 AND ${zaloAccountVisibleSql('zs')}`,
         [conversationId, userId]
       );
       if (rows[0]) {
@@ -831,7 +838,7 @@ class UnifiedInboxRepository {
         `UPDATE zalo_personal_messages zpm SET is_read = true, read_at = $2
          FROM zalo_personal_conversations zp
          WHERE zpm.id_conversation = zp.id AND zp.id_user = $1 AND zpm.role = 'visitor' AND zpm.is_read = false
-           ${zl.zaloAccountIdFilter} ${zl.zpSearch} ${zl.zpStatusDate} ${zl.zpKindUnread}`,
+           ${zl.zaloAccountIdFilter} ${zl.zaloVisibleFilter} ${zl.zpSearch} ${zl.zpStatusDate} ${zl.zpKindUnread}`,
         zaloParams
       );
       updatedMessages += r.rowCount || 0;
@@ -1231,7 +1238,7 @@ class UnifiedInboxRepository {
         FROM zalo_personal_messages zpm
         JOIN zalo_personal_conversations zpc ON zpc.id = zpm.id_conversation
         LEFT JOIN zalo_settings zs ON zs.id = zpc.id_zalo_setting
-        WHERE zpm.id_user = $1 AND zpm.role = 'agent' ${dateBuilt.zaloDate} ${zaloSearch} ${zaloChannelGate} ${zaloAccess}
+        WHERE zpm.id_user = $1 AND zpm.role = 'agent' AND ${zaloConversationVisibleSql('zpc')} ${dateBuilt.zaloDate} ${zaloSearch} ${zaloChannelGate} ${zaloAccess}
 
         UNION ALL
 
@@ -1312,7 +1319,7 @@ class UnifiedInboxRepository {
 
         SELECT zpm.id FROM zalo_personal_messages zpm
         JOIN zalo_personal_conversations zpc ON zpc.id = zpm.id_conversation
-        WHERE zpm.id_user = $1 AND zpm.role = 'agent' ${dateBuilt.zaloDate} ${zaloSearch} ${zaloChannelGate} ${zaloAccess}
+        WHERE zpm.id_user = $1 AND zpm.role = 'agent' AND ${zaloConversationVisibleSql('zpc')} ${dateBuilt.zaloDate} ${zaloSearch} ${zaloChannelGate} ${zaloAccess}
 
         UNION ALL
 
@@ -1353,12 +1360,12 @@ class UnifiedInboxRepository {
         (
           SELECT COUNT(*) FROM zalo_personal_messages zpm
           JOIN zalo_personal_conversations zpc ON zpc.id = zpm.id_conversation
-          WHERE zpc.id_user = $1 AND zpm.role = 'agent' ${zaloAccess}
+          WHERE zpc.id_user = $1 AND zpm.role = 'agent' AND ${zaloConversationVisibleSql('zpc')} ${zaloAccess}
         ) as total_sent,
         (
           SELECT COUNT(*) FROM zalo_personal_messages zpm
           JOIN zalo_personal_conversations zpc ON zpc.id = zpm.id_conversation
-          WHERE zpc.id_user = $1 AND zpm.role = 'agent' AND zpm.is_read = true ${zaloAccess}
+          WHERE zpc.id_user = $1 AND zpm.role = 'agent' AND zpm.is_read = true AND ${zaloConversationVisibleSql('zpc')} ${zaloAccess}
         ) as total_read
       UNION ALL
       SELECT
@@ -1420,7 +1427,7 @@ class UnifiedInboxRepository {
        FROM zalo_personal_messages zpm
        JOIN zalo_personal_conversations zpc ON zpc.id = zpm.id_conversation
        LEFT JOIN zalo_settings zs ON zs.id = zpc.id_zalo_setting
-       WHERE zpm.id = $1 AND zpm.id_user = $2 AND zpm.role = 'agent' ${zaloAccess}`,
+       WHERE zpm.id = $1 AND zpm.id_user = $2 AND zpm.role = 'agent' AND ${zaloConversationVisibleSql('zpc')} ${zaloAccess}`,
       zaloParams
     ));
 
@@ -1598,7 +1605,7 @@ class UnifiedInboxRepository {
                 'zalo_personal' AS channel
          FROM zalo_personal_messages zpm
          JOIN zalo_personal_conversations zp ON zp.id = zpm.id_conversation
-         WHERE zpm.id = $1 AND zp.id_user = $2 AND zpm.role = 'agent'`,
+         WHERE zpm.id = $1 AND zp.id_user = $2 AND zpm.role = 'agent' AND ${zaloConversationVisibleSql('zp')}`,
         [messageId, userId]
       );
       const row = rows[0];

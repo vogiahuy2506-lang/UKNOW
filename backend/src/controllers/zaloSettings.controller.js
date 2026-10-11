@@ -31,6 +31,7 @@ import zaloOneWorkspaceService from '../services/zalo/zaloOneWorkspace.service.j
 import { ZALO_LIVE_ELSEWHERE_CODE } from '../utils/zaloOneWorkspace.util.js';
 import { checkSendQuota, recordDirectSendUsage } from '../utils/userSendLimit.util.js';
 import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
+import { ZALO_ACCOUNT_LOGGED_OUT_CODE, ZALO_STATUS_LOGGED_OUT } from '../utils/zaloAccountStatus.util.js';
 import {
   assertZaloAccountAccess,
   getAccessibleZaloAccountIds,
@@ -224,6 +225,24 @@ class ZaloSettingsController {
       res.status(403).json({ success: false, message: error.message, code: error.code });
       return true;
     }
+  }
+
+  /**
+   * Chặn khôi phục / thử lại phiên của tài khoản người dùng đã chủ động đăng xuất: 409 `ZALO_ACCOUNT_LOGGED_OUT`.
+   * Đường duy nhất đưa nó về `connected` là quét QR đúng tài khoản Zalo đó (PLAN_DANG_XUAT_ZALO_AN_HOI_THOAI 11/10/2026).
+   *
+   * @param {import('express').Response} res
+   * @param {{ status?: string }|null} accountRow dòng zalo_settings (cần cột `status`)
+   * @returns {boolean} true = đã trả 409, handler phải dừng
+   */
+  rejectIfAccountLoggedOut(res, accountRow) {
+    if (String(accountRow?.status || '').trim() !== ZALO_STATUS_LOGGED_OUT) return false;
+    res.status(409).json({
+      success: false,
+      message: 'Tài khoản đã đăng xuất, hãy quét QR để kết nối lại',
+      code: ZALO_ACCOUNT_LOGGED_OUT_CODE,
+    });
+    return true;
   }
 
   mapRow(item) {
@@ -1891,6 +1910,70 @@ class ZaloSettingsController {
   }
 
   /**
+   * Đăng xuất tài khoản Zalo (PLAN_DANG_XUAT_ZALO_AN_HOI_THOAI 11/10/2026): `status = 'logged_out'`, xoá cookie, dừng phiên trong
+   * RAM — hội thoại + tin nhắn của tài khoản bị ẨN khỏi Hộp thư cho tới khi chính tài khoản Zalo đó quét QR lại. KHÁC "Xoá":
+   * không xoá dữ liệu, không đổi tài khoản mặc định, không gỡ việc giao nhân viên.
+   * Params: { id }.
+   * Response: { success, message, data: { id, status } }.
+   *
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
+   */
+  async logoutAccount(req, res) {
+    try {
+      const ctx = getWorkspaceContext(req.user);
+      const { workspaceOwnerId: userId } = ctx;
+      const isAdmin = isAdminRole(req.user?.role);
+      const accountId = parseInt(req.params.id, 10);
+      if (await this.rejectIfAccountNotAssigned(res, ctx, accountId)) return;
+
+      // Giữ tham chiếu phiên sống TRƯỚC khi dọn: sau clearAccountApi không còn cách nào với tới socket để dừng nó.
+      const liveApi = zaloAccountSessionService.getAccountApi(accountId);
+
+      const loggedOut = await zaloSettingRepository.markAccountLoggedOut(accountId, isAdmin, userId);
+      if (!loggedOut) {
+        return res.status(404).json({ success: false, message: 'Không tìm thấy tài khoản Zalo' });
+      }
+
+      // Dọn phiên trong bộ nhớ (bắt buộc): không dừng listener thì tin mới vẫn đổ vào DB dù đã "đăng xuất".
+      zaloAccountSessionService.clearAccountApi(loggedOut.id);
+      try {
+        liveApi?.listener?.stop?.();
+      } catch {
+        /* ignore */
+      }
+      try {
+        zaloPersonalAdapter.removeMessageHandler(loggedOut.id);
+      } catch {
+        /* ignore */
+      }
+      inboundReplyDebounceService.cancelByPrefix(`zalo_personal:${loggedOut.id}:`);
+      try {
+        unmarkAccountRegistered(loggedOut.id);
+      } catch {
+        /* ignore */
+      }
+      try {
+        zaloPersonalInboxService.forgetAccount(loggedOut.id_user, loggedOut.id);
+      } catch {
+        /* ignore */
+      }
+
+      return res.json({
+        success: true,
+        message: 'Đã đăng xuất tài khoản Zalo',
+        data: { id: loggedOut.id, status: ZALO_STATUS_LOGGED_OUT },
+      });
+    } catch (error) {
+      if (error?.code === '42P01') {
+        return this.buildMissingTableResponse(res);
+      }
+      console.error('Logout zalo setting error:', error);
+      return res.status(500).json({ success: false, message: 'Không thể đăng xuất tài khoản Zalo' });
+    }
+  }
+
+  /**
    * Đặt tài khoản mặc định dùng để gửi tin Zalo.
    * Params: { id }.
    * Response: { success, message }.
@@ -2103,6 +2186,7 @@ class ZaloSettingsController {
           message: 'Không tìm thấy tài khoản Zalo',
         });
       }
+      if (this.rejectIfAccountLoggedOut(res, accountRow)) return;
 
       const zaloUserId = String(accountRow.zalo_user_id || '').trim();
       try {
@@ -2190,6 +2274,7 @@ class ZaloSettingsController {
           message: 'Không tìm thấy tài khoản Zalo',
         });
       }
+      if (this.rejectIfAccountLoggedOut(res, accountRow)) return;
 
       // Check if account exists and has cookie to restore
       const cookieText = String(accountRow.cookie_text || '').trim();

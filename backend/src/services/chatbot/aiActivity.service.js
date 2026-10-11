@@ -56,6 +56,19 @@ function isFreshCache(existingCache, maxTinCuoi) {
     && existingCache.payload.length > 0;
 }
 
+/**
+ * Bản tóm tắt đã lưu cache có thể chứa hội thoại mà báo cáo hôm nay KHÔNG còn hiện (tài khoản Zalo đã "Đăng xuất" sau khi tóm tắt —
+ * PLAN_DANG_XUAT_ZALO_AN_HOI_THOAI 11/10/2026). Chỉ trả phần tóm tắt thuộc các hội thoại đang hiện trong `rows`.
+ *
+ * @param {unknown} payload mảng tóm tắt đã lưu (mỗi phần tử có `conversationId`)
+ * @param {Array<{ id: number|string }>} rows hội thoại của báo cáo hôm nay (đã lọc hội thoại đang ẩn)
+ */
+function onlyVisibleSummaries(payload, rows) {
+  if (!Array.isArray(payload)) return payload;
+  const visibleIds = new Set((rows || []).map((row) => String(row.id)));
+  return payload.filter((item) => visibleIds.has(String(item?.conversationId)));
+}
+
 class AiActivityService {
   /**
    * Lấy báo cáo hoạt động AI trong ngày (không dùng LLM)
@@ -175,7 +188,7 @@ class AiActivityService {
     return {
       date: dateStr,
       dayKey,
-      summaries: existingCache.payload,
+      summaries: onlyVisibleSummaries(existingCache.payload, rows),
       cached: true,
       updatedAt: existingCache.updated_at,
     };
@@ -245,7 +258,7 @@ class AiActivityService {
       return {
         date: dateStr,
         dayKey,
-        summaries: existingCache.payload,
+        summaries: onlyVisibleSummaries(existingCache.payload, rows),
         cached: true,
         updatedAt: existingCache.updated_at,
       };

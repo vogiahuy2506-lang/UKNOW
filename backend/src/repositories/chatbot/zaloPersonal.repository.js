@@ -5,6 +5,7 @@ import {
   normalizeZaloGroupId,
 } from '../../utils/zaloGroupName.util.js';
 import { pushZaloAccessFilter } from '../../utils/zaloAccessScope.util.js';
+import { zaloConversationVisibleSql } from '../../utils/zaloAccountStatus.util.js';
 
 class ZaloPersonalRepository {
   /**
@@ -419,6 +420,7 @@ class ZaloPersonalRepository {
        WHERE c.id_user = $1
          AND m.created_at >= $2 AND m.created_at < $3
          AND NOT COALESCE((c.visitor_info->>'is_group')::boolean, false)
+         AND ${zaloConversationVisibleSql('c')}
          ${accountFilter}
        GROUP BY c.id
        ORDER BY tin_cuoi DESC`,
@@ -505,6 +507,7 @@ class ZaloPersonalRepository {
          AND ai_paused = true
          AND ai_paused_at IS NOT NULL
          AND ai_paused_at <= NOW() - ($2::text || ' hours')::interval
+         AND ${zaloConversationVisibleSql('zalo_personal_conversations')}
          ${zaloAccess}`,
       params
     );

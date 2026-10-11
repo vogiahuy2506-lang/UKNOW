@@ -1,5 +1,13 @@
 import db from '../../config/database.js';
 import { decryptZaloCookieRow, decryptZaloCookieRows, encryptZaloCookie } from '../../utils/zaloCookieCrypto.util.js';
+import { zaloAccountVisibleSql } from '../../utils/zaloAccountStatus.util.js';
+
+// Mọi câu UPDATE "hệ thống tự đổi trạng thái" bên dưới (khôi phục thành công / thất bại / mất kết nối) PHẢI bỏ qua tài khoản
+// `logged_out` — đó là lựa chọn của NGƯỜI DÙNG (PLAN_DANG_XUAT_ZALO_AN_HOI_THOAI 11/10/2026). Đổi `logged_out` thành `connected` /
+// `disconnected` / `needs_reauth` là tự "mở lại" hội thoại đang ẩn mà chưa ai quét QR; tăng `restore_fail_count` còn làm cảnh báo
+// mất kết nối bắn email cho người đã chủ động đăng xuất. Chỉ `zaloSetting.repository.updateQrConnected*` (quét QR) mới đưa
+// `logged_out` về `connected`.
+const NOT_LOGGED_OUT = zaloAccountVisibleSql('zalo_settings');
 
 class CampaignZaloSenderRepository {
   /**
@@ -42,7 +50,7 @@ class CampaignZaloSenderRepository {
            restore_fail_count = 0,
            first_restore_fail_at = NULL,
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $4 AND id_user = $5`,
+       WHERE id = $4 AND id_user = $5 AND ${NOT_LOGGED_OUT}`,
       [displayName, encryptZaloCookie(cookieText), now, accountId, userId]
     );
   }
@@ -70,7 +78,7 @@ class CampaignZaloSenderRepository {
              ELSE status
            END,
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $1
+       WHERE id = $1 AND ${NOT_LOGGED_OUT}
        RETURNING status, restore_fail_count, first_restore_fail_at, last_restore_attempt_at`,
       [id]
     );
@@ -101,7 +109,7 @@ class CampaignZaloSenderRepository {
            restore_fail_count = 0,
            first_restore_fail_at = NULL,
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $1${ownerClause}
+       WHERE id = $1${ownerClause} AND ${NOT_LOGGED_OUT}
        RETURNING id, id_user, status, restore_fail_count, first_restore_fail_at,
                  last_restore_attempt_at, display_name, is_active`,
       params
@@ -121,7 +129,7 @@ class CampaignZaloSenderRepository {
       `UPDATE zalo_settings
        SET status = 'disconnected',
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $1 AND id_user = $2`,
+       WHERE id = $1 AND id_user = $2 AND ${NOT_LOGGED_OUT}`,
       [accountId, userId]
     );
   }
@@ -137,7 +145,7 @@ class CampaignZaloSenderRepository {
       `UPDATE zalo_settings
        SET status = 'disconnected',
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $1`,
+       WHERE id = $1 AND ${NOT_LOGGED_OUT}`,
       [accountId]
     );
   }

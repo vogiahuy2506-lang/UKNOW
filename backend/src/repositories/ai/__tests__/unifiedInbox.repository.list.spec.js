@@ -119,7 +119,10 @@ describe('getConversations — chip lọc phía server (H-13, C1)', () => {
     expect(total).toBe(7);
     const [sql] = db.query.mock.calls[0];
     expect(sql.match(/NOT \(COALESCE/g)).toHaveLength(3);
-    expect(sql.match(/EXISTS \(/g)).toHaveLength(3);
+    // `(?<!NOT )`: NOT EXISTS của bộ lọc "đã đăng xuất" (dưới đây) không phải là EXISTS tin chưa đọc.
+    expect(sql.match(/(?<!NOT )EXISTS \(/g)).toHaveLength(3);
+    // Đếm phải lọc y hệt danh sách: hội thoại của tài khoản đã đăng xuất (logged_out) không được tính vào tổng.
+    expect(sql.match(/NOT EXISTS \(\s*SELECT 1 FROM zalo_settings zs_lo\s+WHERE zs_lo\.id = zp\.id_zalo_setting AND zs_lo\.status = 'logged_out'/g)).toHaveLength(1);
   });
 });
 

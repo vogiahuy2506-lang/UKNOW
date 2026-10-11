@@ -1,6 +1,7 @@
 import db from '../../config/database.js';
 import { decryptZaloCookieRow, encryptZaloCookie } from '../../utils/zaloCookieCrypto.util.js';
 import { pushZaloAccessFilter } from '../../utils/zaloAccessScope.util.js';
+import { ZALO_STATUS_LOGGED_OUT, zaloAccountVisibleSql } from '../../utils/zaloAccountStatus.util.js';
 
 class ZaloSettingRepository {
   /**
@@ -80,6 +81,8 @@ class ZaloSettingRepository {
    * Find ALL active accounts for a user (both connected and disconnected).
    * Used by inbox to show all accounts with their session status.
    * G2: nhân viên chỉ thấy tài khoản được giao (null = chủ / super admin; thiếu / sai kiểu = không thấy gì).
+   * Tài khoản `logged_out` (người dùng chủ động đăng xuất) KHÔNG trả về — banner "cần đăng nhập lại" và ô chọn tài khoản của
+   * Hộp thư không nhắc tới nó; trang Cài đặt Zalo dùng `findAccountsList` nên vẫn thấy để quét QR lại.
    */
   async findActiveConnectedAccountsByUser(userId, accessibleZaloAccountIds) {
     const params = [userId];
@@ -88,7 +91,7 @@ class ZaloSettingRepository {
       `SELECT zs.id, zs.display_name, zs.status, zs.is_active,
               (SELECT COUNT(*) FROM zalo_personal_conversations WHERE id_zalo_setting = zs.id) as conversation_count
        FROM zalo_settings zs
-       WHERE zs.id_user = $1 AND zs.is_active = true ${zaloAccess}
+       WHERE zs.id_user = $1 AND zs.is_active = true AND ${zaloAccountVisibleSql('zs')} ${zaloAccess}
        ORDER BY zs.is_default DESC, zs.last_connected_at DESC`,
       params
     );
@@ -117,13 +120,41 @@ class ZaloSettingRepository {
   }
 
   async markAccountDisconnected(userId, accountId) {
+    // Không đè `logged_out`: người dùng đã chủ động đăng xuất thì hệ thống không được tự "mở lại" hội thoại bằng cách đổi thành disconnected.
     await db.query(
       `UPDATE zalo_settings
        SET status = 'disconnected',
            updated_at = CURRENT_TIMESTAMP
-       WHERE id_user = $1 AND id = $2`,
+       WHERE id_user = $1 AND id = $2 AND ${zaloAccountVisibleSql('zalo_settings')}`,
       [userId, accountId]
     );
+  }
+
+  /**
+   * Người dùng chủ động "Đăng xuất Zalo": đặt `status = 'logged_out'` và XOÁ cookie phiên (khởi động lại / cron không tự khôi phục
+   * được nữa). KHÔNG xoá hội thoại / tin nhắn, KHÔNG đổi `is_active` / `is_default` / `zalo_user_id`, KHÔNG gỡ việc giao nhân viên
+   * (`member_channel_accounts`) — hội thoại chỉ bị ẩn cho tới khi chính tài khoản Zalo đó quét QR lại (`updateQrConnectedById`).
+   *
+   * @param {number} accountId
+   * @param {boolean} isAdmin
+   * @param {number} userId chủ không gian
+   * @returns {Promise<{ id: number, id_user: number, display_name: string, is_default: boolean }|null>}
+   */
+  async markAccountLoggedOut(accountId, isAdmin, userId) {
+    const { rows } = await db.query(
+      `UPDATE zalo_settings
+       SET status = '${ZALO_STATUS_LOGGED_OUT}',
+           cookie_text = NULL,
+           restore_fail_count = 0,
+           first_restore_fail_at = NULL,
+           last_restore_attempt_at = NULL,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+         ${isAdmin ? '' : 'AND id_user = $2'}
+       RETURNING id, id_user, display_name, is_default`,
+      isAdmin ? [accountId] : [accountId, userId]
+    );
+    return rows[0] || null;
   }
 
   async findByZaloUserId(userId, zaloUserId) {
@@ -199,8 +230,12 @@ class ZaloSettingRepository {
   }
 
   async findByDisplayName(userId, displayName) {
+    // Bỏ qua tài khoản `logged_out`: khớp theo TÊN rồi ghi đè `zalo_user_id` sẽ gắn hội thoại đang ẩn của người này cho một tài
+    // khoản Zalo KHÁC chỉ vì trùng tên hiển thị. Muốn hiện lại thì phải quét QR đúng `zalo_user_id` (khớp ở `findByZaloUserId`).
     const { rows } = await db.query(
-      `SELECT id FROM zalo_settings WHERE id_user = $1 AND display_name = $2 LIMIT 1`,
+      `SELECT id FROM zalo_settings
+       WHERE id_user = $1 AND display_name = $2 AND ${zaloAccountVisibleSql('zalo_settings')}
+       LIMIT 1`,
       [userId, displayName]
     );
     return rows[0] || null;
@@ -430,7 +465,7 @@ class ZaloSettingRepository {
 
   async findAccountForRestore(accountId, isAdmin, userId) {
     const { rows } = await db.query(
-      `SELECT id, id_user, display_name, cookie_text, is_active, zalo_user_id
+      `SELECT id, id_user, display_name, cookie_text, is_active, zalo_user_id, status
        FROM zalo_settings
        WHERE id = $1
          ${isAdmin ? '' : 'AND id_user = $2'}

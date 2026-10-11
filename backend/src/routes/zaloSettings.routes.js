@@ -161,6 +161,16 @@ router.delete(
   zaloSettingsController.deleteAccount.bind(zaloSettingsController)
 );
 
+// Đăng xuất Zalo — ẩn hội thoại của tài khoản khỏi Hộp thư cho tới khi quét QR lại đúng tài khoản; KHÔNG xoá dữ liệu
+// (PLAN_DANG_XUAT_ZALO_AN_HOI_THOAI 11/10/2026). Cần quyền zalo_settings; nhân viên chỉ đăng xuất được tài khoản được giao.
+router.post(
+  '/accounts/:id/logout',
+  requirePermission('zalo_settings'),
+  [param('id').isInt({ min: 1 }).withMessage('ID tài khoản không hợp lệ')],
+  handleValidationErrors,
+  zaloSettingsController.logoutAccount.bind(zaloSettingsController)
+);
+
 // Set default — cần quyền zalo_settings
 router.patch(
   '/accounts/:id/default',
