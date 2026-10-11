@@ -1,6 +1,30 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import toast from 'react-hot-toast';
+import {
+  HiOutlineCode,
+  HiOutlineCursorClick,
+  HiOutlineExternalLink,
+  HiOutlineMinus,
+  HiOutlinePencilAlt,
+  HiOutlinePlus,
+  HiOutlineReply,
+} from 'react-icons/hi';
 import landingCustomizerApiService from '../services/landingCustomizerApi.service';
 import PropertiesPanel from './PropertiesPanel';
+import EditorModeSettings from './EditorModeSettings';
+import {
+  AdminEditorShell,
+  EditorSettingsModal,
+  EditorTopbar,
+  TopbarButton,
+  TopbarDivider,
+  TopbarSaveButton,
+  TopbarSegmented,
+  TopbarSettingsButton,
+  TopbarToolsMenu,
+} from '../../../components/editor/AdminEditorShell';
+import { DEVICES } from '../../landing-canvas/utils/deviceFrameConfig.js';
+import { useI18n } from '../../../i18n';
 
 const PAGES = [
   { id: 'hero', label: 'Hero Page', labelVi: 'Trang Hero', path: '/' },
@@ -196,9 +220,19 @@ const INJECT_SCRIPT = `
 })();
 `;
 
-export default function CanvasEditor() {
+// Bố cục 11/10/2026 (PLAN_TRANG_SOAN_QUAN_TRI): chép kiểu "Tạo landing page" /app — thanh trên 52px (trang · thiết bị · zoom
+// ở giữa; Cài đặt · Công cụ · Lưu bên phải), vùng chính chỉ còn xem trước + bảng thuộc tính. CHỈ ĐỔI BỐ CỤC: toàn bộ state,
+// `handleValueChange(id, lang, value)`, `saveOverrides(page, lang, overrides)`, cơ chế postMessage xem trước, `ELEMENT_DEFS`
+// giữ nguyên — xem test hợp đồng `__tests__/CanvasEditor.contract.spec.jsx`.
+const DEVICE_WIDTH_PX = { mobile: 375, tablet: 768 };
+const ZOOM_MIN = 0.25;
+const ZOOM_MAX = 2;
+const ZOOM_STEP = 0.25;
+
+export default function CanvasEditor({ editorMode = 'canva', onEditorModeChange }) {
+  const { t } = useI18n();
   const iframeRef = useRef(null);
-  
+
   // State
   const [selectedPage, setSelectedPage] = useState('hero');
   const [selectedElement, setSelectedElement] = useState(null);
@@ -206,7 +240,10 @@ export default function CanvasEditor() {
   const [isSaving, setIsSaving] = useState(false);
   const [device, setDevice] = useState('desktop');
   const [previewScale, setPreviewScale] = useState(1);
-  
+  // Chỉ phục vụ trình bày: modal Cài đặt + trạng thái hiển thị (chỉ đọc) của trang đang chọn.
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [displayState, setDisplayState] = useState(null);
+
   const lastLoaded = useRef({ page: null });
 
   // Load element definitions
@@ -223,7 +260,7 @@ export default function CanvasEditor() {
     try {
       const res = await landingCustomizerApiService.getOverrides(page, 'vi');
       let data = {};
-      
+
       if (res.data?.overrides) {
         res.data.overrides.forEach(o => {
           data[o.key] = {
@@ -239,7 +276,7 @@ export default function CanvasEditor() {
           };
         });
       }
-      
+
       setEditedValues(data);
     } catch (err) {
       console.error('Load overrides error:', err);
@@ -260,9 +297,9 @@ export default function CanvasEditor() {
           previewData[`${key}_en`] = val.valueEn;
         }
       });
-      
+
       localStorage.setItem(`landing_overrides_${selectedPage}`, JSON.stringify(previewData));
-      
+
       // Also send to iframe immediately
       const iframe = iframeRef.current;
       if (iframe?.contentWindow) {
@@ -287,9 +324,9 @@ export default function CanvasEditor() {
       // Save both languages
       await landingCustomizerApiService.saveOverrides(selectedPage, 'vi', editedValues);
       await landingCustomizerApiService.saveOverrides(selectedPage, 'en', editedValues);
-      alert('Lưu thành công!');
+      toast.success(t('landingCustomizer.editor.saveSuccess'));
     } catch (err) {
-      alert('Lỗi khi lưu: ' + err.message);
+      toast.error(t('landingCustomizer.editor.saveFailed', { message: err.message }));
     } finally {
       setIsSaving(false);
     }
@@ -323,177 +360,154 @@ export default function CanvasEditor() {
     }
   };
 
-  const getDeviceWidth = () => {
-    switch (device) {
-      case 'mobile': return '375px';
-      case 'tablet': return '768px';
-      default: return '100%';
-    }
-  };
+  // Mở Cài đặt thì hỏi (chỉ đọc) trang này đang hiển thị bản mặc định hay HTML tuỳ chỉnh — chỉnh sửa Canva chỉ có tác dụng
+  // khi hiển thị mặc định. Lỗi thì im lặng về 'unknown', không chặn gì.
+  useEffect(() => {
+    if (!settingsOpen) return undefined;
+    let cancelled = false;
+    setDisplayState('loading');
+    (async () => {
+      try {
+        const res = await landingCustomizerApiService.getHtmlMode(selectedPage);
+        if (!cancelled) setDisplayState(res?.data?.data?.displayMode === 'html' ? 'html' : 'default');
+      } catch {
+        if (!cancelled) setDisplayState('unknown');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [settingsOpen, selectedPage]);
 
   const hasChanges = Object.keys(editedValues).length > 0;
+  const deviceWidthPx = DEVICE_WIDTH_PX[device] || null;
+  const publicUrl = `${window.location.origin}${PAGE_URLS[selectedPage]}`;
+
+  const handlePageChange = (pageId) => {
+    setSelectedPage(pageId);
+    setSelectedElement(null);
+  };
+
+  const pageOptions = PAGES.map((page) => ({
+    value: page.id,
+    label: t(`landingCustomizer.pages.${page.id}`),
+    title: page.path,
+  }));
+  const deviceOptions = ['mobile', 'tablet', 'desktop'].map((key) => ({
+    value: key,
+    label: '',
+    icon: DEVICES[key].icon,
+    title: t(`landingCustomizer.devices.${key}`),
+  }));
+
+  const pageSwitcher = (
+    <TopbarSegmented value={selectedPage} onChange={handlePageChange} options={pageOptions} ariaLabel={t('landingCustomizer.editor.pageSwitcher')} />
+  );
+  const deviceSwitcher = (
+    <TopbarSegmented value={device} onChange={setDevice} options={deviceOptions} ariaLabel={t('landingCustomizer.editor.deviceSwitcher')} />
+  );
+
+  const zoomControl = (
+    <div role="group" aria-label={t('landingCustomizer.editor.zoom')} className="hidden xl:flex items-center gap-0.5 p-1 bg-gray-100/90 dark:bg-dk-raised rounded-xl border border-transparent dark:border-dk-border">
+      <button
+        type="button"
+        onClick={() => setPreviewScale(Math.max(ZOOM_MIN, previewScale - ZOOM_STEP))}
+        disabled={previewScale <= ZOOM_MIN}
+        aria-label={t('landingCustomizer.editor.zoomOut')}
+        title={t('landingCustomizer.editor.zoomOut')}
+        className="p-1.5 rounded-lg text-gray-500 dark:text-dk-text2 hover:text-gray-900 dark:hover:text-dk-text hover:bg-white/60 dark:hover:bg-dk-strong/60 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+      >
+        <HiOutlineMinus className="w-3.5 h-3.5" />
+      </button>
+      <button
+        type="button"
+        onClick={() => setPreviewScale(1)}
+        title={t('landingCustomizer.editor.zoomReset')}
+        className="min-w-[44px] px-1.5 py-1 rounded-lg text-xs font-semibold text-gray-700 dark:text-dk-text hover:text-orange-600 dark:hover:text-orange-400 hover:bg-white/60 dark:hover:bg-dk-strong/60 transition-colors"
+      >
+        {Math.round(previewScale * 100)}%
+      </button>
+      <button
+        type="button"
+        onClick={() => setPreviewScale(Math.min(ZOOM_MAX, previewScale + ZOOM_STEP))}
+        disabled={previewScale >= ZOOM_MAX}
+        aria-label={t('landingCustomizer.editor.zoomIn')}
+        title={t('landingCustomizer.editor.zoomIn')}
+        className="p-1.5 rounded-lg text-gray-500 dark:text-dk-text2 hover:text-gray-900 dark:hover:text-dk-text hover:bg-white/60 dark:hover:bg-dk-strong/60 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+      >
+        <HiOutlinePlus className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+
+  const toolsItems = [
+    {
+      key: 'reset',
+      icon: HiOutlineReply,
+      label: t('landingCustomizer.editor.reset'),
+      description: t('landingCustomizer.editor.resetDesc'),
+      onClick: handleReset,
+      disabled: !hasChanges,
+      danger: true,
+    },
+    {
+      key: 'open-public',
+      icon: HiOutlineExternalLink,
+      label: t('landingCustomizer.editor.openPublic'),
+      description: PAGE_URLS[selectedPage],
+      onClick: () => window.open(publicUrl, '_blank', 'noopener,noreferrer'),
+    },
+  ];
 
   return (
-    <div className="h-full flex flex-col bg-slate-100 dark:bg-dk-bg">
-      {/* Header */}
-      <div className="px-6 py-4 bg-white dark:bg-dk-surface border-b border-slate-200 dark:border-dk-border shadow-sm">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-bold text-slate-800 dark:text-dk-text">
-              Landing Page Editor
-            </h2>
-            <p className="text-sm text-slate-500 dark:text-dk-muted mt-1">
-              Click on any element in the preview to edit. Changes save per language.
-            </p>
+    <AdminEditorShell
+      topbar={(
+        <EditorTopbar
+          icon={HiOutlinePencilAlt}
+          title={t('landingCustomizer.editor.title')}
+          subtitle={t('landingCustomizer.editor.subtitleCanva')}
+          center={<>{pageSwitcher}{deviceSwitcher}{zoomControl}</>}
+          right={(
+            <>
+              <TopbarSettingsButton onClick={() => setSettingsOpen(true)} active={settingsOpen} />
+              <TopbarToolsMenu items={toolsItems} />
+              <TopbarDivider />
+              <TopbarSaveButton onClick={handleSave} saving={isSaving} disabled={!hasChanges} />
+            </>
+          )}
+        />
+      )}
+    >
+      <div className="h-full min-h-0 flex flex-col lg:flex-row">
+        {/* Xem trước */}
+        <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+          {/* Dưới md thanh trên ẩn cụm giữa — cho trang (và thiết bị, từ sm) xuống đây */}
+          <div className="md:hidden shrink-0 flex items-center gap-2 px-3 py-2 overflow-x-auto bg-white dark:bg-dk-surface border-b border-gray-200/80 dark:border-dk-border">
+            {pageSwitcher}
+            <span className="hidden sm:inline-flex">{deviceSwitcher}</span>
           </div>
-          
-          <div className="flex items-center gap-3">
-            {hasChanges && (
+
+          <div className="shrink-0 h-9 px-3 flex items-center gap-2 text-xs bg-white/70 dark:bg-dk-surface border-b border-gray-200/80 dark:border-dk-border">
+            {selectedElement ? (
               <>
-                <button
-                  onClick={handleReset}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-dk-text2 hover:bg-slate-100 dark:hover:bg-dk-raised rounded-lg transition-colors"
-                >
-                  Reset
-                </button>
-                <button
-                  onClick={handleSave}
-                  disabled={isSaving}
-                  className={`px-6 py-2 text-sm font-semibold rounded-lg transition-all ${
-                    isSaving 
-                      ? 'bg-slate-400 text-white' 
-                      : 'bg-orange-500 text-white hover:bg-orange-600'
-                  }`}
-                >
-                  {isSaving ? 'Đang lưu...' : 'Lưu thay đổi'}
-                </button>
+                <HiOutlineCursorClick className="w-4 h-4 text-orange-500 shrink-0" aria-hidden="true" />
+                <span className="text-gray-500 dark:text-dk-text2 shrink-0">{t('landingCustomizer.editor.selected')}</span>
+                <span className="font-semibold text-gray-900 dark:text-dk-text truncate">{selectedElement.label}</span>
               </>
+            ) : (
+              <span className="text-gray-500 dark:text-dk-text2 truncate">{t('landingCustomizer.editor.hint')}</span>
             )}
           </div>
-        </div>
 
-        {/* Page Selector */}
-        <div className="flex items-center gap-4 mt-4 flex-wrap">
-          <label className="text-sm font-medium text-slate-600 dark:text-dk-text2">Trang:</label>
-          <div className="flex bg-slate-100 dark:bg-dk-inset rounded-lg p-1">
-            {PAGES.map((page) => (
-              <button
-                key={page.id}
-                onClick={() => { setSelectedPage(page.id); setSelectedElement(null); }}
-                className={`px-5 py-2.5 text-sm font-semibold rounded-lg transition-all ${
-                  selectedPage === page.id
-                    ? 'bg-orange-500 text-white shadow-md'
-                    : 'text-slate-600 dark:text-dk-text2 hover:bg-white dark:hover:bg-dk-surface'
-                }`}
-              >
-                {page.labelVi}
-              </button>
-            ))}
-          </div>
-
-          <div className="h-8 w-px bg-slate-300 dark:bg-dk-border mx-2" />
-
-          <label className="text-sm font-medium text-slate-600 dark:text-dk-text2">Ngôn ngữ preview:</label>
-          <div className="flex bg-slate-100 dark:bg-dk-inset rounded-lg p-1">
-            <span className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-500 text-white">
-              Tiếng Việt
-            </span>
-            <span className="px-4 py-2 text-sm font-medium rounded-lg text-slate-600 dark:text-dk-text2">
-              English
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Preview Area */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Toolbar */}
-          <div className="px-4 py-2 bg-white dark:bg-dk-surface border-b border-slate-200 dark:border-dk-border flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <span className="px-3 py-1 bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 rounded-full text-xs font-bold">
-                Preview Mode
-              </span>
-              {selectedElement && (
-                <span className="text-xs text-slate-500 dark:text-dk-muted">
-                  Selected: {selectedElement.label}
-                </span>
-              )}
-            </div>
-            
-            <div className="flex items-center gap-4">
-              {/* Zoom controls */}
-              <div className="flex items-center gap-2 bg-slate-100 dark:bg-dk-inset rounded-lg px-2 py-1">
-                <button 
-                  onClick={() => setPreviewScale(Math.max(0.25, previewScale - 0.25))}
-                  className="w-7 h-7 flex items-center justify-center text-slate-600 dark:text-dk-text2 hover:bg-slate-200 dark:hover:bg-dk-raised rounded"
-                >
-                  −
-                </button>
-                <span className="text-xs font-medium text-slate-600 dark:text-dk-text2 w-14 text-center">
-                  {Math.round(previewScale * 100)}%
-                </span>
-                <button 
-                  onClick={() => setPreviewScale(Math.min(2, previewScale + 0.25))}
-                  className="w-7 h-7 flex items-center justify-center text-slate-600 dark:text-dk-text2 hover:bg-slate-200 dark:hover:bg-dk-raised rounded"
-                >
-                  +
-                </button>
-              </div>
-
-              {/* Device switcher */}
-              <div className="flex items-center gap-1">
-                <button 
-                  onClick={() => setDevice('mobile')} 
-                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                    device === 'mobile' ? 'bg-orange-500 text-white' : 'bg-slate-100 dark:bg-dk-raised text-slate-600 dark:text-dk-text hover:bg-slate-200 dark:hover:bg-dk-strong'
-                  }`}
-                >
-                  Mobile
-                </button>
-                <button 
-                  onClick={() => setDevice('tablet')} 
-                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                    device === 'tablet' ? 'bg-orange-500 text-white' : 'bg-slate-100 dark:bg-dk-raised text-slate-600 dark:text-dk-text hover:bg-slate-200 dark:hover:bg-dk-strong'
-                  }`}
-                >
-                  Tablet
-                </button>
-                <button 
-                  onClick={() => setDevice('desktop')} 
-                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                    device === 'desktop' ? 'bg-orange-500 text-white' : 'bg-slate-100 dark:bg-dk-raised text-slate-600 dark:text-dk-text hover:bg-slate-200 dark:hover:bg-dk-strong'
-                  }`}
-                >
-                  Desktop
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Preview */}
-          <div className="flex-1 overflow-auto bg-slate-300 dark:bg-dk-inset p-4">
-            <div className="relative mx-auto bg-white dark:bg-dk-surface shadow-2xl" style={{ width: getDeviceWidth() }}>
-              {/* Browser chrome */}
-              <div className="bg-slate-800 px-4 py-2 flex items-center gap-3">
-                <div className="flex gap-1.5">
-                  <div className="w-3 h-3 rounded-full bg-red-500" />
-                  <div className="w-3 h-3 rounded-full bg-yellow-500" />
-                  <div className="w-3 h-3 rounded-full bg-green-500" />
-                </div>
-                <div className="flex-1 bg-slate-700 rounded-md px-3 py-1 text-xs text-slate-300 truncate">
-                  {window.location.origin}{PAGE_URLS[selectedPage]}?lang=vi&preview=edit
-                </div>
-              </div>
-
-              {/* iframe */}
-              <div 
-                className="relative overflow-auto"
-                style={{ 
-                  transform: `scale(${previewScale})`, 
+          <div className="flex-1 min-h-0 overflow-auto bg-gray-100 dark:bg-dk-inset p-3">
+            <div
+              className="mx-auto h-full bg-white dark:bg-dk-surface shadow-lg ring-1 ring-black/5 overflow-hidden"
+              style={{ width: deviceWidthPx ? `${deviceWidthPx * previewScale}px` : '100%' }}
+            >
+              <div
+                style={{
+                  transform: `scale(${previewScale})`,
                   transformOrigin: 'top left',
-                  width: device === 'desktop' ? '100%' : getDeviceWidth(),
+                  width: deviceWidthPx ? `${deviceWidthPx}px` : `${100 / previewScale}%`,
+                  height: `${100 / previewScale}%`,
                 }}
               >
                 <iframe
@@ -501,8 +515,7 @@ export default function CanvasEditor() {
                   ref={iframeRef}
                   src={`${window.location.origin}${PAGE_URLS[selectedPage]}?lang=vi&preview=edit`}
                   title={`Preview: ${selectedPage}`}
-                  className="border-0 w-full"
-                  style={{ height: '800px', minHeight: '800px' }}
+                  className="border-0 w-full h-full"
                   onLoad={handleIframeLoad}
                   sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups"
                 />
@@ -511,8 +524,10 @@ export default function CanvasEditor() {
           </div>
         </div>
 
-        {/* Right Panel - Edit Form */}
-        <div className="w-96 bg-slate-800 dark:bg-dk-surface border-l border-slate-700 dark:border-dk-border flex flex-col max-h-full overflow-hidden">
+        {/* Bảng thuộc tính — dưới lg xếp dưới xem trước và chỉ hiện khi đã chọn phần tử */}
+        <aside
+          className={`${selectedElement ? 'flex' : 'hidden lg:flex'} flex-col shrink-0 min-h-0 w-full lg:w-96 h-[48%] lg:h-auto bg-white dark:bg-dk-surface border-t lg:border-t-0 lg:border-l border-gray-200 dark:border-dk-border overflow-hidden`}
+        >
           {selectedElement ? (
             <PropertiesPanel
               element={selectedElement}
@@ -521,40 +536,40 @@ export default function CanvasEditor() {
               onClose={() => setSelectedElement(null)}
             />
           ) : (
-            /* No selection state */
-            <div className="flex-1 flex items-center justify-center text-slate-500 dark:text-dk-muted text-sm p-6 text-center">
+            <div className="flex-1 flex items-center justify-center text-gray-500 dark:text-dk-muted text-sm p-6 text-center">
               <div>
-                <div className="text-5xl mb-4">👆</div>
-                <p className="text-base font-medium mb-2 dark:text-dk-text">Click vào phần tử trong preview</p>
-                <p className="text-sm">để chỉnh sửa nội dung, màu sắc, icon...</p>
+                <span className="mx-auto mb-3 w-12 h-12 rounded-2xl bg-orange-50 dark:bg-orange-950/30 text-orange-500 flex items-center justify-center">
+                  <HiOutlineCursorClick className="w-6 h-6" aria-hidden="true" />
+                </span>
+                <p className="text-base font-medium mb-1 text-gray-800 dark:text-dk-text">{t('landingCustomizer.editor.emptyTitle')}</p>
+                <p className="text-sm">{t('landingCustomizer.editor.emptyDesc')}</p>
               </div>
             </div>
           )}
-
-          {/* Element list */}
-          {/*
-          <div className="border-t border-slate-700">
-            <div className="px-4 py-2 bg-slate-900 text-xs text-slate-400 font-medium">
-              DANH SÁCH PHẦN TỬ ({elements.length})
-            </div>
-            <div className="max-h-64 overflow-y-auto">
-              {elements.map((el) => (
-                <button
-                  key={el.id}
-                  onClick={() => setSelectedElement(el)}
-                  className={`w-full px-4 py-2 text-left text-sm hover:bg-slate-700 transition-colors ${
-                    selectedElement?.id === el.id ? 'bg-orange-500/20 text-orange-400' : 'text-slate-300'
-                  }`}
-                >
-                  <div className="text-xs text-slate-500">{el.section}</div>
-                  <div className="truncate">{el.label}</div>
-                </button>
-              ))}
-            </div>
-          </div>
-          */}
-        </div>
+        </aside>
       </div>
-    </div>
+
+      <EditorSettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        title={t('landingCustomizer.editor.settings.title')}
+        subtitle={t('landingCustomizer.editor.settings.subtitle')}
+        footer={<TopbarButton onClick={() => setSettingsOpen(false)}>{t('editorShell.close')}</TopbarButton>}
+      >
+        <EditorModeSettings
+          mode={editorMode}
+          onModeChange={onEditorModeChange}
+          displayState={displayState}
+          pageLabel={t(`landingCustomizer.pages.${selectedPage}`)}
+          pagePath={PAGE_URLS[selectedPage]}
+        >
+          {displayState === 'html' && onEditorModeChange && (
+            <TopbarButton icon={HiOutlineCode} onClick={() => onEditorModeChange('html')}>
+              {t('landingCustomizer.editor.settings.openHtml')}
+            </TopbarButton>
+          )}
+        </EditorModeSettings>
+      </EditorSettingsModal>
+    </AdminEditorShell>
   );
 }

@@ -2,7 +2,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { I18nProvider } from '../../../../i18n';
 import CanvasEditor from '../CanvasEditor';
-import { invoke } from './invoke';
+import { invoke, pickTab } from './invoke';
 
 /**
  * HỢP ĐỒNG DỮ LIỆU của trình soạn Canva (Tuỳ chỉnh Landing). 10/10/2026 một bản viết lại bố cục đã làm hỏng đúng chuỗi này
@@ -119,7 +119,7 @@ describe('CanvasEditor — hợp đồng dữ liệu chọn → gõ → xem trư
     await screen.findByPlaceholderText('Nhập nội dung...');
 
     api.getOverrides.mockResolvedValueOnce({ data: { overrides: [{ key: 'contact.title', valueVi: 'Liên hệ cũ', valueEn: 'Contact old' }] } });
-    fireEvent.click(screen.getAllByRole('button', { name: /Liên h/i })[0]);
+    pickTab(/Liên h/i);
 
     await waitFor(() => expect(api.getOverrides).toHaveBeenCalledWith('contact', 'vi'));
     expect(screen.queryByPlaceholderText('Nhập nội dung...')).not.toBeInTheDocument();

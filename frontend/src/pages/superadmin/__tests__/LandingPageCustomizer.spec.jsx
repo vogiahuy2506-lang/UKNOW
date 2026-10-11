@@ -58,6 +58,7 @@ describe('LandingPageCustomizer — chế độ soạn', () => {
     invoke(/Lưu\s*(&|&amp;)\s*bật HTML/);
     await waitFor(() => expect(api.saveHtmlMode).toHaveBeenCalledTimes(1));
     expect(api.saveHtmlMode).toHaveBeenLastCalledWith('hero', expect.objectContaining({ displayMode: 'html' }));
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /^Lưu$/ })[0]).toBeEnabled()); // lượt lưu xong mới bấm tiếp
 
     invoke(/Hiển thị mặc định/);
     await waitFor(() => expect(api.saveHtmlMode).toHaveBeenCalledTimes(2));

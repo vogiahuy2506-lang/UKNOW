@@ -39,3 +39,13 @@ export function invoke(name) {
   }
   throw new Error(`Không tìm thấy hành động ${String(name)} ở nút trực tiếp, menu Công cụ hay modal Cài đặt`);
 }
+
+/**
+ * Chọn một "tab" chọn nhanh (trang Hero/Liên hệ/Bảng giá, tab ngôn ngữ VI/EN): bố cục cũ là `button`, bố cục mới dùng
+ * `TopbarSegmented` (role="tab"). Cụm chọn trang có thể xuất hiện hai lần (thanh trên + dải dành cho màn hẹp) — bấm cái đầu.
+ */
+export function pickTab(name) {
+  const el = [...screen.queryAllByRole('tab', { name }), ...screen.queryAllByRole('button', { name })][0];
+  if (!el) throw new Error(`Không tìm thấy tab/nút ${String(name)}`);
+  fireEvent.click(el);
+}

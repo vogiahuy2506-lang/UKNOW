@@ -38,7 +38,7 @@ export default function PropertiesPanel({ element, value, onChange, onClose }) {
         return (
           <div className="space-y-4">
             <div>
-              <label className="flex items-center gap-2 text-sm font-medium text-blue-400 mb-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 mb-2">
                 <span className="w-2 h-2 rounded-full bg-blue-500" />
                 Tiếng Việt
               </label>
@@ -46,7 +46,7 @@ export default function PropertiesPanel({ element, value, onChange, onClose }) {
                 type="text"
                 value={currentValue.valueVi || ''}
                 onChange={(e) => handleChange('vi', e.target.value)}
-                className="w-full px-3 py-2 bg-slate-700 dark:bg-dk-inset border border-slate-600 dark:border-dk-border rounded-lg text-white dark:text-dk-text text-sm font-mono focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full px-3 py-2 bg-white dark:bg-dk-inset border border-gray-300 dark:border-dk-border rounded-lg text-gray-900 dark:text-dk-text text-sm font-mono focus:outline-none focus:ring-2 focus:ring-orange-500"
                 placeholder="FaRocket"
               />
               <IconPicker 
@@ -55,7 +55,7 @@ export default function PropertiesPanel({ element, value, onChange, onClose }) {
               />
             </div>
             <div>
-              <label className="flex items-center gap-2 text-sm font-medium text-green-400 mb-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-green-600 dark:text-green-400 mb-2">
                 <span className="w-2 h-2 rounded-full bg-green-500" />
                 English
               </label>
@@ -63,7 +63,7 @@ export default function PropertiesPanel({ element, value, onChange, onClose }) {
                 type="text"
                 value={currentValue.valueEn || ''}
                 onChange={(e) => handleChange('en', e.target.value)}
-                className="w-full px-3 py-2 bg-slate-700 dark:bg-dk-inset border border-slate-600 dark:border-dk-border rounded-lg text-white dark:text-dk-text text-sm font-mono focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full px-3 py-2 bg-white dark:bg-dk-inset border border-gray-300 dark:border-dk-border rounded-lg text-gray-900 dark:text-dk-text text-sm font-mono focus:outline-none focus:ring-2 focus:ring-orange-500"
                 placeholder="FaRocket"
               />
               <IconPicker 
@@ -78,7 +78,7 @@ export default function PropertiesPanel({ element, value, onChange, onClose }) {
         return (
           <div className="space-y-4">
             <div>
-              <label className="flex items-center gap-2 text-sm font-medium text-blue-400 mb-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 mb-2">
                 <span className="w-2 h-2 rounded-full bg-blue-500" />
                 Tiếng Việt - URL
               </label>
@@ -93,12 +93,12 @@ export default function PropertiesPanel({ element, value, onChange, onClose }) {
                 type="text"
                 value={currentValue.valueVi || ''}
                 onChange={(e) => handleChange('vi', e.target.value)}
-                className="w-full px-3 py-2 bg-slate-700 dark:bg-dk-inset border border-slate-600 dark:border-dk-border rounded-lg text-white dark:text-dk-text text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full px-3 py-2 bg-white dark:bg-dk-inset border border-gray-300 dark:border-dk-border rounded-lg text-gray-900 dark:text-dk-text text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                 placeholder="https://..."
               />
             </div>
             <div>
-              <label className="flex items-center gap-2 text-sm font-medium text-green-400 mb-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-green-600 dark:text-green-400 mb-2">
                 <span className="w-2 h-2 rounded-full bg-green-500" />
                 English - URL
               </label>
@@ -113,7 +113,7 @@ export default function PropertiesPanel({ element, value, onChange, onClose }) {
                 type="text"
                 value={currentValue.valueEn || ''}
                 onChange={(e) => handleChange('en', e.target.value)}
-                className="w-full px-3 py-2 bg-slate-700 dark:bg-dk-inset border border-slate-600 dark:border-dk-border rounded-lg text-white dark:text-dk-text text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full px-3 py-2 bg-white dark:bg-dk-inset border border-gray-300 dark:border-dk-border rounded-lg text-gray-900 dark:text-dk-text text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                 placeholder="https://..."
               />
             </div>
@@ -124,7 +124,7 @@ export default function PropertiesPanel({ element, value, onChange, onClose }) {
         return (
           <div className="space-y-4">
             <div>
-              <label className="flex items-center gap-2 text-sm font-medium text-blue-400 mb-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 mb-2">
                 <span className="w-2 h-2 rounded-full bg-blue-500" />
                 Tiếng Việt
               </label>
@@ -132,12 +132,12 @@ export default function PropertiesPanel({ element, value, onChange, onClose }) {
                 value={currentValue.valueVi || ''}
                 onChange={(e) => handleChange('vi', e.target.value)}
                 rows={4}
-                className="w-full px-3 py-2 bg-slate-700 dark:bg-dk-inset border border-slate-600 dark:border-dk-border rounded-lg text-white dark:text-dk-text text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full px-3 py-2 bg-white dark:bg-dk-inset border border-gray-300 dark:border-dk-border rounded-lg text-gray-900 dark:text-dk-text text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-500"
                 placeholder="Nhập nội dung..."
               />
             </div>
             <div>
-              <label className="flex items-center gap-2 text-sm font-medium text-green-400 mb-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-green-600 dark:text-green-400 mb-2">
                 <span className="w-2 h-2 rounded-full bg-green-500" />
                 English
               </label>
@@ -145,7 +145,7 @@ export default function PropertiesPanel({ element, value, onChange, onClose }) {
                 value={currentValue.valueEn || ''}
                 onChange={(e) => handleChange('en', e.target.value)}
                 rows={4}
-                className="w-full px-3 py-2 bg-slate-700 dark:bg-dk-inset border border-slate-600 dark:border-dk-border rounded-lg text-white dark:text-dk-text text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full px-3 py-2 bg-white dark:bg-dk-inset border border-gray-300 dark:border-dk-border rounded-lg text-gray-900 dark:text-dk-text text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-500"
                 placeholder="Enter content..."
               />
             </div>
@@ -156,7 +156,7 @@ export default function PropertiesPanel({ element, value, onChange, onClose }) {
         return (
           <div className="space-y-4">
             <div>
-              <label className="flex items-center gap-2 text-sm font-medium text-blue-400 mb-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 mb-2">
                 <span className="w-2 h-2 rounded-full bg-blue-500" />
                 Tiếng Việt
               </label>
@@ -164,12 +164,12 @@ export default function PropertiesPanel({ element, value, onChange, onClose }) {
                 type="text"
                 value={currentValue.valueVi || ''}
                 onChange={(e) => handleChange('vi', e.target.value)}
-                className="w-full px-3 py-2 bg-slate-700 dark:bg-dk-inset border border-slate-600 dark:border-dk-border rounded-lg text-white dark:text-dk-text text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full px-3 py-2 bg-white dark:bg-dk-inset border border-gray-300 dark:border-dk-border rounded-lg text-gray-900 dark:text-dk-text text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                 placeholder="Nhập nội dung..."
               />
             </div>
             <div>
-              <label className="flex items-center gap-2 text-sm font-medium text-green-400 mb-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-green-600 dark:text-green-400 mb-2">
                 <span className="w-2 h-2 rounded-full bg-green-500" />
                 English
               </label>
@@ -177,7 +177,7 @@ export default function PropertiesPanel({ element, value, onChange, onClose }) {
                 type="text"
                 value={currentValue.valueEn || ''}
                 onChange={(e) => handleChange('en', e.target.value)}
-                className="w-full px-3 py-2 bg-slate-700 dark:bg-dk-inset border border-slate-600 dark:border-dk-border rounded-lg text-white dark:text-dk-text text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full px-3 py-2 bg-white dark:bg-dk-inset border border-gray-300 dark:border-dk-border rounded-lg text-gray-900 dark:text-dk-text text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                 placeholder="Enter content..."
               />
             </div>
@@ -187,29 +187,30 @@ export default function PropertiesPanel({ element, value, onChange, onClose }) {
   };
 
   return (
-    <div className="flex flex-col h-full dark:bg-dk-surface">
+    <div className="flex flex-col h-full bg-white dark:bg-dk-surface">
       {/* Header - Fixed */}
-      <div className="px-4 py-3 bg-slate-900 dark:bg-dk-surface border-b border-slate-700 dark:border-dk-border flex-shrink-0">
+      <div className="px-4 py-3 bg-gray-50 dark:bg-dk-surface border-b border-gray-200 dark:border-dk-border flex-shrink-0">
         <div className="flex items-start justify-between">
           <div>
-            <div className="text-xs text-orange-400 font-medium">{element.section}</div>
-            <div className="text-white dark:text-dk-text font-semibold">{element.label}</div>
-            <div className="text-xs text-slate-400 dark:text-dk-muted mt-1">ID: {element.id}</div>
+            <div className="text-xs text-orange-600 dark:text-orange-400 font-medium">{element.section}</div>
+            <div className="text-gray-900 dark:text-dk-text font-semibold">{element.label}</div>
+            <div className="text-xs text-gray-500 dark:text-dk-muted mt-1">ID: {element.id}</div>
             <div className="mt-1">
               <span className={`inline-block px-2 py-0.5 text-[10px] rounded ${
-                element.type === 'color' ? 'bg-purple-500/20 text-purple-400' :
-                element.type === 'icon' ? 'bg-blue-500/20 text-blue-400' :
-                element.type === 'image' ? 'bg-green-500/20 text-green-400' :
-                element.type === 'textarea' ? 'bg-yellow-500/20 text-yellow-400' :
-                'bg-slate-500/20 text-slate-400 dark:text-dk-muted'
+                element.type === 'color' ? 'bg-purple-500/20 text-purple-600 dark:text-purple-400' :
+                element.type === 'icon' ? 'bg-blue-500/20 text-blue-600 dark:text-blue-400' :
+                element.type === 'image' ? 'bg-green-500/20 text-green-600 dark:text-green-400' :
+                element.type === 'textarea' ? 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400' :
+                'bg-slate-500/20 text-gray-500 dark:text-dk-muted'
               }`}>
                 {element.type.toUpperCase()}
               </span>
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center text-slate-400 dark:text-dk-muted hover:text-white dark:hover:text-dk-text hover:bg-slate-700 dark:hover:bg-dk-strong rounded transition-colors"
+            className="w-8 h-8 flex items-center justify-center text-gray-400 dark:text-dk-muted hover:text-gray-700 dark:hover:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-strong rounded transition-colors"
           >
             ✕
           </button>
@@ -217,7 +218,7 @@ export default function PropertiesPanel({ element, value, onChange, onClose }) {
       </div>
       
       {/* Editor - Scrollable */}
-      <div className="flex-1 overflow-y-auto p-4 dark:bg-dk-surface">
+      <div className="flex-1 overflow-y-auto p-4 bg-white dark:bg-dk-surface">
         {renderEditor()}
       </div>
     </div>
@@ -228,7 +229,7 @@ function ColorEditor({ label, lang, value, onChange }) {
   return (
     <div>
       <label className={`flex items-center gap-2 text-sm font-medium mb-2 ${
-        lang === 'vi' ? 'text-blue-400' : 'text-green-400'
+        lang === 'vi' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'
       }`}>
         <span className={`w-2 h-2 rounded-full ${lang === 'vi' ? 'bg-blue-500' : 'bg-green-500'}`} />
         {label}
@@ -244,7 +245,7 @@ function ColorEditor({ label, lang, value, onChange }) {
           type="text"
           value={value || ''}
           onChange={(e) => onChange(e.target.value)}
-          className="flex-1 px-3 py-2 bg-slate-700 dark:bg-dk-inset border border-slate-600 dark:border-dk-border rounded-lg text-white dark:text-dk-text text-sm font-mono focus:outline-none focus:ring-2 focus:ring-orange-500"
+          className="flex-1 px-3 py-2 bg-white dark:bg-dk-inset border border-gray-300 dark:border-dk-border rounded-lg text-gray-900 dark:text-dk-text text-sm font-mono focus:outline-none focus:ring-2 focus:ring-orange-500"
           placeholder="#000000"
         />
       </div>
@@ -255,7 +256,7 @@ function ColorEditor({ label, lang, value, onChange }) {
             key={color}
             onClick={() => onChange(color)}
             className={`w-6 h-6 rounded border-2 transition-all ${
-              value === color ? 'border-orange-500 scale-110' : 'border-transparent hover:scale-105'
+              value === color ? 'border-orange-500 scale-110' : 'border-gray-200 dark:border-dk-border hover:scale-105'
             }`}
             style={{ backgroundColor: color }}
             title={color}

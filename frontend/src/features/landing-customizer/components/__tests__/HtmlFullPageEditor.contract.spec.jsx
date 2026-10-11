@@ -2,7 +2,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { I18nProvider } from '../../../../i18n';
 import HtmlFullPageEditor from '../HtmlFullPageEditor';
-import { invoke } from './invoke';
+import { invoke, pickTab } from './invoke';
 
 /**
  * HỢP ĐỒNG của trình soạn "HTML Full": nạp getHtmlMode(page) → gõ HTML (tab VI/EN) + CSS → Lưu/"Lưu & bật HTML"/
@@ -61,7 +61,7 @@ describe('HtmlFullPageEditor — hợp đồng nạp / gõ / lưu / bật HTML',
   it('tab English sửa htmlContentEn, không đụng bản Việt', async () => {
     renderEditor();
     await waitFor(() => expect(viBox()).toHaveValue('<p>cũ</p>'));
-    fireEvent.click(screen.getByRole('button', { name: 'English' }));
+    pickTab('English');
     fireEvent.change(enBox(), { target: { value: '<h1>New</h1>' } });
 
     invoke(/^Lưu$/);
@@ -80,6 +80,7 @@ describe('HtmlFullPageEditor — hợp đồng nạp / gõ / lưu / bật HTML',
     invoke(/Lưu\s*(&|&amp;)\s*bật HTML/);
     await waitFor(() => expect(api.saveHtmlMode).toHaveBeenCalledTimes(1));
     expect(api.saveHtmlMode).toHaveBeenLastCalledWith('hero', expect.objectContaining({ displayMode: 'html', htmlContentVi: '<p>cũ</p>' }));
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /^Lưu$/ })[0]).toBeEnabled()); // lượt lưu xong mới bấm tiếp
 
     invoke(/Hiển thị mặc định/);
     await waitFor(() => expect(api.saveHtmlMode).toHaveBeenCalledTimes(2));
@@ -99,7 +100,7 @@ describe('HtmlFullPageEditor — hợp đồng nạp / gõ / lưu / bật HTML',
     renderEditor();
     await waitFor(() => expect(viBox()).toHaveValue('<p>cũ</p>'));
     api.getHtmlMode.mockResolvedValueOnce(echo({ displayMode: 'html', htmlContentVi: '<p>liên hệ</p>', htmlContentEn: '', cssContent: '' }));
-    fireEvent.click(screen.getAllByRole('button', { name: /Liên h/i })[0]);
+    pickTab(/Liên h/i);
     await waitFor(() => expect(api.getHtmlMode).toHaveBeenCalledWith('contact'));
     await waitFor(() => expect(viBox()).toHaveValue('<p>liên hệ</p>'));
 

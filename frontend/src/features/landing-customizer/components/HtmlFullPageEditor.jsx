@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import {
   HiOutlineCode,
+  HiOutlineExternalLink,
+  HiOutlineInformationCircle,
   HiOutlineRefresh,
   HiOutlineSave,
   HiOutlineSparkles,
@@ -14,7 +16,21 @@ import { buildLandingHtmlSrcDoc } from '../utils/buildLandingHtmlSrcDoc.js';
 import { getAiQuotaErrorMessage } from '../../../utils/aiLimitError.util';
 import { LANDING_AI_PROMPT_MAX_CHARS } from '../../landing-canvas/utils/landingAiInputLimits.js';
 import { useI18n } from '../../../i18n';
+import EditorModeSettings from './EditorModeSettings';
+import {
+  AdminEditorShell,
+  EditorSettingsModal,
+  EditorTopbar,
+  TopbarButton,
+  TopbarDivider,
+  TopbarSaveButton,
+  TopbarSegmented,
+  TopbarSettingsButton,
+  TopbarToolsMenu,
+} from '../../../components/editor/AdminEditorShell';
 
+// `label` là chuỗi gửi cho AI làm tiêu đề trang (hợp đồng với backend) — KHÔNG dịch/đổi; chữ hiển thị lấy từ i18n
+// `landingCustomizer.pages.<id>`.
 const PAGES = [
   { id: 'hero', label: 'Trang Hero', path: '/' },
   { id: 'contact', label: 'Trang Liên hệ', path: '/contact' },
@@ -28,14 +44,14 @@ const EMPTY_FORM = {
   cssContent: '',
 };
 
-const PAGE_AI_PLACEHOLDERS = {
-  hero: 'VD: Landing trang chủ Founder AI, hero video nền thành phố, headline về marketing automation + AI chatbot, CTA đăng ký dùng thử.',
-  contact: 'VD: Trang liên hệ Founder AI với form, email, hotline, địa chỉ văn phòng.',
-  pricing: 'VD: Trang bảng giá Founder AI với 4 gói Trial/Starter/Pro/Enterprise, so sánh tính năng.',
-};
+const TEXT_AREA_CLASS = 'w-full rounded-lg border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-inset text-gray-900 dark:text-dk-text dark:placeholder:text-dk-muted px-3 py-2 text-xs font-mono resize-none focus:border-orange-400 focus:ring-1 focus:ring-orange-300 focus:outline-none';
 
-export default function HtmlFullPageEditor() {
+// Bố cục 11/10/2026 (PLAN_TRANG_SOAN_QUAN_TRI): thanh trên 52px (trang ở giữa; Cài đặt · Công cụ · Lưu · Lưu & bật HTML bên
+// phải), vùng chính chỉ còn ô HTML + xem trước. CHỈ ĐỔI BỐ CỤC: state, getHtmlMode/saveHtmlMode/generateHomepageHtmlWithAi,
+// payload `{ displayMode, htmlContentVi, htmlContentEn, cssContent }` giữ nguyên — xem `__tests__/HtmlFullPageEditor.contract.spec.jsx`.
+export default function HtmlFullPageEditor({ editorMode = 'html', onEditorModeChange }) {
   const { t } = useI18n();
+  const th = (key, params) => t(`landingCustomizer.editor.html.${key}`, params);
   const [selectedPage, setSelectedPage] = useState('hero');
   const [langTab, setLangTab] = useState('vi');
   const [form, setForm] = useState(EMPTY_FORM);
@@ -44,6 +60,8 @@ export default function HtmlFullPageEditor() {
   const [aiOpen, setAiOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
+  // Chỉ phục vụ trình bày: modal Cài đặt.
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const loadPage = useCallback(async (page) => {
     setLoading(true);
@@ -57,11 +75,12 @@ export default function HtmlFullPageEditor() {
         cssContent: data.cssContent || '',
       });
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không tải được cấu hình HTML');
+      toast.error(err?.response?.data?.message || th('loadError'));
       setForm(EMPTY_FORM);
     } finally {
       setLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `th` chỉ đổi theo ngôn ngữ giao diện; không nạp lại trang vì đổi ngôn ngữ.
   }, []);
 
   useEffect(() => {
@@ -93,28 +112,28 @@ export default function HtmlFullPageEditor() {
       });
       toast.success(successMessage);
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Lưu thất bại');
+      toast.error(err?.response?.data?.message || th('saveFailed'));
     } finally {
       setSaving(false);
     }
   };
 
-  const handleSave = () => persist({ ...form }, 'Đã lưu cấu hình HTML');
+  const handleSave = () => persist({ ...form }, th('saved'));
 
   const handleEnableHtml = () => persist(
     { ...form, displayMode: 'html' },
-    'Đã bật hiển thị HTML — trang public sẽ dùng HTML tùy chỉnh',
+    th('enabled'),
   );
 
   const handleUseDefault = () => persist(
     { ...form, displayMode: 'default' },
-    'Đã chuyển về hiển thị mặc định (React editor)',
+    th('reverted'),
   );
 
   const runAiGenerate = async () => {
     const prompt = String(aiPrompt || '').trim();
     if (!prompt) {
-      toast.error('Vui lòng nhập mô tả trang cho AI');
+      toast.error(th('aiPromptRequired'));
       return;
     }
 
@@ -128,7 +147,7 @@ export default function HtmlFullPageEditor() {
       });
       const payload = res.data;
       if (!payload?.success || !payload?.data?.html) {
-        throw new Error(payload?.message || 'AI không trả về HTML hợp lệ');
+        throw new Error(payload?.message || th('aiInvalid'));
       }
 
       const html = String(payload.data.html);
@@ -136,12 +155,12 @@ export default function HtmlFullPageEditor() {
       setForm((prev) => ({ ...prev, [field]: html }));
       setAiOpen(false);
       setAiPrompt('');
-      toast.success('Đã tạo HTML — trừ 1 credit AI. Xem preview và lưu khi ổn.');
+      toast.success(th('aiDone'));
     } catch (err) {
       if (err?.response?.data?.code === 'RESOURCE_LIMIT_EXCEEDED') {
         toast.error(getAiQuotaErrorMessage(err, t));
       } else {
-        toast.error(err?.response?.data?.message || err?.message || 'Không tạo được HTML bằng AI');
+        toast.error(err?.response?.data?.message || err?.message || th('aiFailed'));
       }
     } finally {
       setAiBusy(false);
@@ -149,182 +168,167 @@ export default function HtmlFullPageEditor() {
   };
 
   const htmlField = langTab === 'en' ? 'htmlContentEn' : 'htmlContentVi';
+  const langLabel = langTab === 'en' ? th('langEn') : th('langVi');
+  const pageLabel = t(`landingCustomizer.pages.${selectedPage}`);
+  const busy = loading || saving;
+
+  const pageSwitcher = (
+    <TopbarSegmented
+      value={selectedPage}
+      onChange={setSelectedPage}
+      ariaLabel={t('landingCustomizer.editor.pageSwitcher')}
+      options={PAGES.map((page) => ({ value: page.id, label: t(`landingCustomizer.pages.${page.id}`), title: page.path }))}
+    />
+  );
+
+  const toolsItems = [
+    { key: 'save', icon: HiOutlineSave, label: th('save'), description: th('saveDesc'), onClick: handleSave, disabled: busy },
+    { key: 'ai', icon: HiOutlineSparkles, label: th('ai'), description: th('aiDesc'), onClick: () => setAiOpen(true), disabled: busy || aiBusy },
+    { key: 'default', icon: HiOutlineViewGrid, label: th('useDefault'), description: th('useDefaultDesc'), onClick: handleUseDefault, disabled: busy },
+    { key: 'reload', icon: HiOutlineRefresh, label: th('reload'), description: th('reloadDesc'), onClick: () => loadPage(selectedPage), disabled: busy },
+  ];
 
   return (
-    <div className="h-full flex flex-col bg-slate-100 dark:bg-dk-bg">
-      <div className="px-4 py-3 bg-white dark:bg-dk-surface border-b border-slate-200 dark:border-dk-border flex flex-wrap items-center gap-3">
-        <div className="flex bg-slate-100 dark:bg-dk-inset rounded-lg p-0.5">
-          {PAGES.map((page) => (
-            <button
-              key={page.id}
-              type="button"
-              onClick={() => setSelectedPage(page.id)}
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
-                selectedPage === page.id
-                  ? 'bg-orange-500 text-white shadow-sm'
-                  : 'text-slate-600 dark:text-dk-text2 hover:bg-white dark:hover:bg-dk-surface'
-              }`}
-            >
-              {page.label}
-            </button>
-          ))}
+    <AdminEditorShell
+      topbar={(
+        <EditorTopbar
+          icon={HiOutlineCode}
+          title={t('landingCustomizer.editor.title')}
+          subtitle={t('landingCustomizer.editor.subtitleHtml')}
+          center={pageSwitcher}
+          right={(
+            <>
+              <TopbarSettingsButton onClick={() => setSettingsOpen(true)} active={settingsOpen} />
+              <TopbarToolsMenu items={toolsItems} />
+              <TopbarDivider />
+              <span className="hidden sm:inline-flex">
+                <TopbarButton icon={HiOutlineSave} onClick={handleSave} disabled={busy}>{th('save')}</TopbarButton>
+              </span>
+              <TopbarSaveButton onClick={handleEnableHtml} saving={saving} disabled={loading} label={th('saveAndEnable')} icon={HiOutlineCode} />
+            </>
+          )}
+        />
+      )}
+    >
+      <div className="h-full min-h-0 flex flex-col">
+        {/* Dưới md thanh trên ẩn cụm giữa — cho bộ chọn trang xuống đây */}
+        <div className="md:hidden shrink-0 flex items-center gap-2 px-3 py-2 overflow-x-auto bg-white dark:bg-dk-surface border-b border-gray-200/80 dark:border-dk-border">
+          {pageSwitcher}
         </div>
 
-        <div className="h-6 w-px bg-slate-200 dark:bg-dk-border hidden sm:block" />
-
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-slate-500 dark:text-dk-muted">Hiển thị:</span>
-          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-            form.displayMode === 'html'
-              ? 'bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300'
-              : 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
-          }`}
-          >
-            {form.displayMode === 'html' ? 'HTML tùy chỉnh' : 'Mặc định (React)'}
-          </span>
-        </div>
-
-        <div className="flex-1" />
-
-        <button
-          type="button"
-          onClick={() => loadPage(selectedPage)}
-          disabled={loading || saving}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-600 dark:text-dk-text2 hover:bg-slate-100 dark:hover:bg-dk-raised rounded-lg"
-        >
-          <HiOutlineRefresh className="w-4 h-4" />
-          Tải lại
-        </button>
-        <button
-          type="button"
-          onClick={handleUseDefault}
-          disabled={loading || saving}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-700 dark:text-dk-text bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border rounded-lg hover:bg-slate-50 dark:hover:bg-dk-raised"
-        >
-          <HiOutlineViewGrid className="w-4 h-4" />
-          Hiển thị mặc định
-        </button>
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={loading || saving}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-white bg-slate-700 dark:bg-dk-strong rounded-lg hover:bg-slate-800 dark:hover:bg-dk-border-strong disabled:opacity-50"
-        >
-          <HiOutlineSave className="w-4 h-4" />
-          Lưu
-        </button>
-        <button
-          type="button"
-          onClick={handleEnableHtml}
-          disabled={loading || saving}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-white bg-orange-500 rounded-lg hover:bg-orange-600 disabled:opacity-50"
-        >
-          <HiOutlineCode className="w-4 h-4" />
-          Lưu &amp; bật HTML
-        </button>
-      </div>
-
-      <div className="flex-1 flex min-h-0">
-        <section className="w-full lg:w-[42%] xl:w-[38%] flex flex-col border-r border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface min-h-0">
-          <div className="px-4 py-3 border-b border-slate-100 dark:border-dk-border">
-            <p className="text-sm font-medium text-slate-800 dark:text-dk-text">Dán HTML full page</p>
-            <p className="text-xs text-slate-500 dark:text-dk-muted mt-1">
-              Dán file HTML vào đây. Khi bật HTML, trang
-              {' '}
-              <code className="text-orange-600 dark:text-orange-400">{currentPageMeta.path}</code>
-              {' '}
-              sẽ hiển thị theo HTML. Bấm &quot;Hiển thị mặc định&quot; để quay lại React editor (nội dung cũ vẫn được giữ).
-            </p>
-          </div>
-
-          <div className="px-4 py-2 border-b border-slate-100 dark:border-dk-border flex items-center justify-between gap-2 flex-wrap">
-            <div className="flex bg-slate-100 dark:bg-dk-inset rounded-lg p-0.5">
-              <button
-                type="button"
-                onClick={() => setLangTab('vi')}
-                className={`px-3 py-1 text-xs font-medium rounded-md ${
-                  langTab === 'vi' ? 'bg-white dark:bg-dk-raised shadow text-slate-800 dark:text-dk-text' : 'text-slate-500 dark:text-dk-muted'
+        <div className="flex-1 min-h-0 flex flex-col lg:flex-row">
+          <section className="flex-1 lg:flex-none lg:w-[42%] xl:w-[38%] min-h-0 flex flex-col border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface">
+            <div className="shrink-0 px-3 py-2 border-b border-gray-100 dark:border-dk-border flex items-center gap-2 flex-wrap">
+              <TopbarSegmented
+                value={langTab}
+                onChange={setLangTab}
+                ariaLabel={th('langSwitcher')}
+                options={[
+                  { value: 'vi', label: th('langVi') },
+                  { value: 'en', label: th('langEn') },
+                ]}
+              />
+              <span
+                className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                  form.displayMode === 'html'
+                    ? 'bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300'
+                    : 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
                 }`}
               >
-                Tiếng Việt
-              </button>
-              <button
-                type="button"
-                onClick={() => setLangTab('en')}
-                className={`px-3 py-1 text-xs font-medium rounded-md ${
-                  langTab === 'en' ? 'bg-white dark:bg-dk-raised shadow text-slate-800 dark:text-dk-text' : 'text-slate-500 dark:text-dk-muted'
-                }`}
+                {form.displayMode === 'html' ? t('landingCustomizer.editor.settings.state.html') : t('landingCustomizer.editor.settings.state.default')}
+              </span>
+              <span className="flex-1" />
+              <span
+                className="text-gray-400 dark:text-dk-muted hover:text-gray-600 dark:hover:text-dk-text2 cursor-help"
+                title={th('info', { path: currentPageMeta.path })}
+                aria-label={th('info', { path: currentPageMeta.path })}
+                role="img"
               >
-                English
-              </button>
+                <HiOutlineInformationCircle className="w-5 h-5" aria-hidden="true" />
+              </span>
             </div>
-            <button
-              type="button"
-              onClick={() => setAiOpen(true)}
-              disabled={loading || saving || aiBusy}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-900/60 rounded-lg hover:bg-orange-100 dark:hover:bg-orange-900/60 disabled:opacity-50"
-            >
-              <HiOutlineSparkles className="w-4 h-4" />
-              Tạo bằng AI (−1 credit)
-            </button>
-          </div>
 
-          <div className="flex-1 p-4 flex flex-col gap-3 min-h-0">
-            <textarea
-              className="flex-1 min-h-[240px] w-full rounded-lg border border-slate-200 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text dark:placeholder:text-dk-muted px-3 py-2 text-xs font-mono resize-none focus:border-orange-400 focus:ring-1 focus:ring-orange-300"
-              value={form[htmlField]}
-              onChange={(e) => setForm((prev) => ({ ...prev, [htmlField]: e.target.value }))}
-              placeholder={langTab === 'vi'
-                ? '<!-- Dán HTML Tiếng Việt (có thể là fragment hoặc full <!DOCTYPE html>) -->'
-                : '<!-- Paste English HTML (optional — falls back to Vietnamese) -->'}
-              spellCheck={false}
-              disabled={loading}
-            />
-
-            <details className="shrink-0">
-              <summary className="text-xs font-medium text-slate-600 dark:text-dk-text2 cursor-pointer">CSS bổ sung (tuỳ chọn)</summary>
+            <div className="flex-1 p-3 flex flex-col gap-2 min-h-0">
               <textarea
-                className="mt-2 w-full h-24 rounded-lg border border-slate-200 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text dark:placeholder:text-dk-muted px-3 py-2 text-xs font-mono resize-none focus:border-orange-400 focus:ring-1 focus:ring-orange-300"
-                value={form.cssContent}
-                onChange={(e) => setForm((prev) => ({ ...prev, cssContent: e.target.value }))}
-                placeholder="/* Custom CSS injected into page */"
+                className={`${TEXT_AREA_CLASS} flex-1 min-h-[120px]`}
+                value={form[htmlField]}
+                onChange={(e) => setForm((prev) => ({ ...prev, [htmlField]: e.target.value }))}
+                placeholder={langTab === 'vi' ? th('placeholderVi') : th('placeholderEn')}
                 spellCheck={false}
                 disabled={loading}
               />
-            </details>
-          </div>
-        </section>
 
-        <section className="hidden lg:flex flex-1 flex-col min-h-0 bg-slate-900 dark:bg-dk-inset">
-          <div className="px-4 py-2 border-b border-slate-700 dark:border-dk-border text-xs text-slate-400 dark:text-dk-muted flex items-center justify-between">
-            <span>Preview ({langTab === 'en' ? 'English' : 'Tiếng Việt'})</span>
-            <a
-              href={`${currentPageMeta.path}${currentPageMeta.path === '/' ? '' : ''}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-orange-400 hover:underline"
-            >
-              Mở trang public
-            </a>
-          </div>
-          <div className="flex-1 min-h-0 bg-white dark:bg-dk-inset">
-            {loading ? (
-              <div className="h-full flex items-center justify-center text-sm text-slate-500 dark:text-dk-muted">Đang tải…</div>
-            ) : previewSrcDoc ? (
-              <iframe
-                title="HTML preview"
-                className="w-full h-full border-0"
-                sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
-                srcDoc={previewSrcDoc}
-              />
-            ) : (
-              <div className="h-full flex items-center justify-center text-sm text-slate-400 dark:text-dk-muted px-6 text-center">
-                Nhập HTML bên trái để xem preview
-              </div>
-            )}
-          </div>
-        </section>
+              <details className="shrink-0">
+                <summary className="text-xs font-medium text-gray-600 dark:text-dk-text2 cursor-pointer">{th('cssSummary')}</summary>
+                <textarea
+                  className={`${TEXT_AREA_CLASS} mt-2 h-24`}
+                  value={form.cssContent}
+                  onChange={(e) => setForm((prev) => ({ ...prev, cssContent: e.target.value }))}
+                  placeholder={th('cssPlaceholder')}
+                  spellCheck={false}
+                  disabled={loading}
+                />
+              </details>
+            </div>
+          </section>
+
+          <section className="flex-1 min-h-0 flex flex-col bg-gray-100 dark:bg-dk-inset">
+            <div className="shrink-0 px-3 py-2 border-b border-gray-200/80 dark:border-dk-border bg-white/70 dark:bg-dk-surface text-xs text-gray-500 dark:text-dk-text2 flex items-center justify-between gap-2">
+              <span className="truncate">{th('previewTitle', { lang: langLabel })}</span>
+              <a
+                href={currentPageMeta.path}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-orange-600 dark:text-orange-400 hover:underline shrink-0"
+              >
+                <HiOutlineExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
+                {t('landingCustomizer.editor.openPublic')}
+              </a>
+            </div>
+            <div className="flex-1 min-h-0 bg-white dark:bg-dk-inset">
+              {loading ? (
+                <div className="h-full flex items-center justify-center text-sm text-gray-500 dark:text-dk-muted">{th('loading')}</div>
+              ) : previewSrcDoc ? (
+                <iframe
+                  title="HTML preview"
+                  className="w-full h-full border-0"
+                  sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
+                  srcDoc={previewSrcDoc}
+                />
+              ) : (
+                <div className="h-full flex items-center justify-center text-sm text-gray-400 dark:text-dk-muted px-6 text-center">
+                  {th('previewEmpty')}
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
       </div>
+
+      <EditorSettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        title={t('landingCustomizer.editor.settings.title')}
+        subtitle={t('landingCustomizer.editor.settings.subtitle')}
+        footer={<TopbarButton onClick={() => setSettingsOpen(false)}>{t('editorShell.close')}</TopbarButton>}
+      >
+        <EditorModeSettings
+          mode={editorMode}
+          onModeChange={onEditorModeChange}
+          displayState={loading ? 'loading' : form.displayMode}
+          pageLabel={pageLabel}
+          pagePath={currentPageMeta.path}
+        >
+          <div className="flex flex-wrap gap-2 pt-1">
+            <TopbarButton icon={HiOutlineCode} active disabled={busy} onClick={() => { setSettingsOpen(false); handleEnableHtml(); }}>
+              {th('saveAndEnable')}
+            </TopbarButton>
+            <TopbarButton icon={HiOutlineViewGrid} disabled={busy} onClick={() => { setSettingsOpen(false); handleUseDefault(); }}>
+              {th('useDefault')}
+            </TopbarButton>
+          </div>
+        </EditorModeSettings>
+      </EditorSettingsModal>
 
       {aiOpen && createPortal(
         <div
@@ -337,57 +341,54 @@ export default function HtmlFullPageEditor() {
             className="bg-white dark:bg-dk-raised dark:border dark:border-dk-border rounded-xl shadow-2xl w-full max-w-lg overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-dk-border">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-dk-border">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 bg-orange-100 dark:bg-orange-950/40 rounded-lg flex items-center justify-center">
                   <HiOutlineSparkles className="w-5 h-5 text-orange-600 dark:text-orange-400" />
                 </div>
                 <div>
-                  <h3 className="text-base font-semibold text-slate-900 dark:text-dk-text">Tạo HTML bằng AI</h3>
-                  <p className="text-xs text-slate-500 dark:text-dk-muted">
-                    {currentPageMeta.label}
-                    {' · '}
-                    {langTab === 'en' ? 'English' : 'Tiếng Việt'}
-                    {' · '}
-                    trừ 1 credit/lần
+                  <h3 className="text-base font-semibold text-gray-900 dark:text-dk-text">{th('aiModalTitle')}</h3>
+                  <p className="text-xs text-gray-500 dark:text-dk-muted">
+                    {th('aiModalMeta', { page: pageLabel, lang: langLabel })}
                   </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => !aiBusy && setAiOpen(false)}
-                className="p-2 hover:bg-slate-100 dark:hover:bg-dk-strong rounded-lg"
+                aria-label={t('editorShell.close')}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-dk-strong rounded-lg"
               >
-                <HiOutlineX className="w-5 h-5 text-slate-500 dark:text-dk-muted" />
+                <HiOutlineX className="w-5 h-5 text-gray-500 dark:text-dk-muted" />
               </button>
             </div>
 
             <div className="p-5">
-              <label className="block text-sm font-medium text-slate-700 dark:text-dk-text mb-2">
-                Mô tả trang bạn muốn
+              <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-2">
+                {th('aiLabel')}
               </label>
               <textarea
-                className="w-full h-32 rounded-lg border border-slate-200 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text dark:placeholder:text-dk-muted px-3 py-2 text-sm resize-none focus:border-orange-400 focus:ring-1 focus:ring-orange-300"
+                className="w-full h-32 rounded-lg border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-inset text-gray-900 dark:text-dk-text dark:placeholder:text-dk-muted px-3 py-2 text-sm resize-none focus:border-orange-400 focus:ring-1 focus:ring-orange-300 focus:outline-none"
                 value={aiPrompt}
                 onChange={(e) => setAiPrompt(e.target.value)}
                 maxLength={LANDING_AI_PROMPT_MAX_CHARS}
-                placeholder={PAGE_AI_PLACEHOLDERS[selectedPage] || PAGE_AI_PLACEHOLDERS.hero}
+                placeholder={th(`aiPlaceholder.${selectedPage}`)}
                 disabled={aiBusy}
                 spellCheck={false}
               />
-              <p className="mt-2 text-xs text-slate-500 dark:text-dk-muted">
-                HTML sẽ điền vào tab ngôn ngữ đang chọn. Bạn vẫn cần bấm Lưu sau khi chỉnh.
+              <p className="mt-2 text-xs text-gray-500 dark:text-dk-muted">
+                {th('aiNote')}
               </p>
             </div>
 
-            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-slate-100 dark:border-dk-border bg-slate-50 dark:bg-dk-surface">
+            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-100 dark:border-dk-border bg-gray-50 dark:bg-dk-surface">
               <button
                 type="button"
                 onClick={() => !aiBusy && setAiOpen(false)}
                 disabled={aiBusy}
-                className="px-4 py-2 text-sm text-slate-600 dark:text-dk-text2 hover:bg-slate-200 dark:hover:bg-dk-strong rounded-lg disabled:opacity-50"
+                className="px-4 py-2 text-sm text-gray-600 dark:text-dk-text2 hover:bg-gray-200 dark:hover:bg-dk-strong rounded-lg disabled:opacity-50"
               >
-                Huỷ
+                {th('cancel')}
               </button>
               <button
                 type="button"
@@ -395,13 +396,13 @@ export default function HtmlFullPageEditor() {
                 disabled={aiBusy}
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 disabled:opacity-50"
               >
-                {aiBusy ? 'Đang tạo…' : 'Tạo HTML'}
+                {aiBusy ? th('generating') : th('generate')}
               </button>
             </div>
           </div>
         </div>,
         document.body,
       )}
-    </div>
+    </AdminEditorShell>
   );
 }
