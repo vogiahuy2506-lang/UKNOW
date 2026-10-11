@@ -190,12 +190,13 @@ export function TopbarToolsMenu({ items }) {
 }
 
 /** Nút Lưu (gradient cam) — đổi nhãn/icon khi đang lưu. `label` mặc định "Lưu". */
-export function TopbarSaveButton({ onClick, saving = false, disabled = false, label, icon: Icon = HiOutlineCheck }) {
+export function TopbarSaveButton({ onClick, saving = false, disabled = false, label, title, icon: Icon = HiOutlineCheck }) {
   const { t } = useI18n();
   return (
     <button
       type="button"
       onClick={onClick}
+      title={title}
       disabled={saving || disabled}
       className="inline-flex items-center justify-center gap-1.5 h-[36px] px-3.5 sm:px-4 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white border border-transparent hover:from-orange-600 hover:to-amber-600 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed text-xs sm:text-sm font-semibold shadow-xs"
     >

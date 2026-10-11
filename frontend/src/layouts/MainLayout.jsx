@@ -274,7 +274,9 @@ const MainLayout = ({ children = null }) => {
           onToggle={() => setMobileDrawerOpen(!mobileDrawerOpen)}
         />
 
-        <div className="flex-1 min-h-0 min-w-0 flex flex-col" style={{ paddingTop: HEADER_HEIGHT }}>
+        {/* Header ở nhánh mobile nằm TRONG luồng (không fixed như desktop) → không cộng thêm paddingTop, nếu không dư một dải
+            trống 44px phía trên mọi trang (đo 11/10/2026: nội dung bắt đầu ở top=88 thay vì 44). */}
+        <div className="flex-1 min-h-0 min-w-0 flex flex-col">
           {!isSpecialPage && <CreditWarningBanner />}
           {!isSpecialPage && <TopupExpiringBanner />}
           {!isSpecialPage && <WorkspaceInviteAcceptBanner />}
