@@ -210,7 +210,8 @@ describe('GET /api/admin/members — listing', () => {
     expect(res.body.data.map((m) => m.username)).toEqual(['soon_expire']);
   });
 
-  it('expiry=expired → chỉ user đã hết hạn VÀ không còn plan', async () => {
+  // 11/10/2026: "Đã hết hạn" = đã qua ngày hết hạn, KHỚP nhãn planState/cột Hạn — gồm cả người còn gói trong ân hạn.
+  it('expiry=expired → mọi user đã qua ngày hết hạn (kể cả còn gói trong ân hạn), không gồm user còn hạn', async () => {
     const admin = await createUser({ role: 'admin', username: 'sa' });
     const plan = await createPlan({ code: 'basic' });
     const expiredNoPlan = await createUser({ role: 'user', username: 'expired_no_plan', withPlan: false });
@@ -227,7 +228,7 @@ describe('GET /api/admin/members — listing', () => {
       .get('/api/admin/members?expiry=expired')
       .set('Authorization', `Bearer ${token}`);
 
-    expect(res.body.data.map((m) => m.username)).toEqual(['expired_no_plan']);
+    expect(res.body.data.map((m) => m.username).sort()).toEqual(['expired_no_plan', 'expired_with_plan']);
   });
 
   it('trả về phone/phoneVerifiedAt trong danh sách (PR-3, chưa lọc)', async () => {

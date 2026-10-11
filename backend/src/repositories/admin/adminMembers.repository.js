@@ -53,7 +53,10 @@ export async function findAllMembers({ search, planId, status, expiry, role, pho
   if (expiry === 'expiring') {
     conditions.push(`u.subscription_expires_at IS NOT NULL AND u.subscription_expires_at > NOW() AND u.subscription_expires_at <= NOW() + INTERVAL '7 days'`);
   } else if (expiry === 'expired') {
-    conditions.push(`u.subscription_expires_at IS NOT NULL AND u.subscription_expires_at < NOW() AND u.active_plan_id IS NULL`);
+    // 11/10/2026: CÙNG điều kiện với nhãn planState 'expired' và cột "Hạn" (đã qua ngày hết hạn) — kể cả người đang trong
+    // thời gian ân hạn (active_plan_id chưa bị thu hồi). Bản cũ đòi thêm `active_plan_id IS NULL` nên bảng ghi "Đã hết hạn"
+    // mà lọc "Đã hết hạn" lại không ra (tài khoản admin id 1 hết hạn 09:13, còn gói trong ân hạn).
+    conditions.push(`u.subscription_expires_at IS NOT NULL AND u.subscription_expires_at <= NOW()`);
   }
   const planStateCondition = planStateFilterSql(planState, 'u');
   if (planStateCondition) conditions.push(planStateCondition);
