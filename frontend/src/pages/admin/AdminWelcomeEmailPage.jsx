@@ -384,7 +384,7 @@ export default function AdminWelcomeEmailPage() {
       {/* ── Studio Top Header Bar: Thu gọn tối đa, tích hợp các bộ điều khiển ── */}
       <div className="bg-white dark:bg-dk-surface border border-slate-200/80 dark:border-dk-border rounded-2xl p-3 shadow-xs space-y-2.5">
         {/* Hàng 1: Tabs trang + Icon & H1 + Location chip + Nút hành động */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3 flex-wrap min-w-0">
             {/* Tiêu đề trang & Icon (Bên Trái) */}
             <div className="flex items-center gap-2.5 min-w-0">
@@ -392,10 +392,10 @@ export default function AdminWelcomeEmailPage() {
                 <HiOutlineMail className="w-4 h-4" />
               </div>
               <div className="min-w-0">
-                <h1 className="text-sm sm:text-base font-bold text-slate-900 dark:text-dk-text truncate">
+                <h1 className="text-sm sm:text-base font-bold text-slate-900 dark:text-dk-text sm:truncate">
                   {templateMeta.title}
                 </h1>
-                <p className="text-xs text-slate-500 dark:text-dk-muted truncate">
+                <p className="text-xs text-slate-500 dark:text-dk-muted sm:truncate">
                   {templateMeta.subtitle}
                 </p>
               </div>
@@ -436,7 +436,7 @@ export default function AdminWelcomeEmailPage() {
             </div>
 
             {/* Badge vị trí điều hướng */}
-            <p className="inline-flex items-center text-[11px] font-medium text-slate-500 dark:text-dk-text2 bg-slate-100 dark:bg-dk-raised/80 px-2 py-0.5 rounded-md border border-slate-200/60 dark:border-dk-border/60 shrink-0">
+            <p className="inline-flex items-center max-w-full text-[11px] font-medium text-slate-500 dark:text-dk-text2 bg-slate-100 dark:bg-dk-raised/80 px-2 py-0.5 rounded-md border border-slate-200/60 dark:border-dk-border/60 sm:shrink-0">
               {t('adminWelcomeEmail.locationNote')}
             </p>
           </div>
