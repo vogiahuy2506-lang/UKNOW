@@ -135,8 +135,6 @@ class CustomerReadRepository {
               em.open_count,
               em.first_clicked_at::timestamptz AS first_clicked_at,
               em.click_count,
-              em.body_html,
-              em.body_text,
               em.created_at::timestamptz AS created_at
        FROM email_messages em
        LEFT JOIN campaigns c ON c.id = em.id_campaign
@@ -147,6 +145,21 @@ class CustomerReadRepository {
       [customerId]
     );
     return result.rows;
+  }
+
+  /**
+   * Nội dung một email của khách. Lọc cả `id_customer` để không đọc được email của khách khác
+   * (quyền workspace đã kiểm ở service qua `findOwnedCustomer`).
+   */
+  async getCustomerEmailBody(customerId, emailId) {
+    const result = await db.query(
+      `SELECT em.id, em.subject, em.body_html, em.body_text
+       FROM email_messages em
+       WHERE em.id = $1 AND em.id_customer = $2 AND NOT em.is_preview
+       LIMIT 1`,
+      [emailId, customerId]
+    );
+    return result.rows[0] || null;
   }
 
   async getCustomerRecentJourneyEvents(customerId) {
@@ -210,8 +223,6 @@ class CustomerReadRepository {
               em.open_count,
               (em.first_clicked_at AT TIME ZONE 'Asia/Ho_Chi_Minh') AS first_clicked_at,
               em.click_count,
-              em.body_html,
-              em.body_text,
               (em.created_at AT TIME ZONE 'Asia/Ho_Chi_Minh') AS created_at
        FROM email_messages em
        LEFT JOIN campaigns c ON c.id = em.id_campaign
@@ -268,18 +279,13 @@ class CustomerReadRepository {
     return result.rows;
   }
 
-  async getAllCustomerRows({
-    userId,
-    page,
-    limit,
-    status,
-    search,
-    source,
-    consentSource,
-    campaignId,
-    purchaseOrderStatusExpr,
-  }) {
-    const offset = (page - 1) * limit;
+  /**
+   * Dựng mệnh đề WHERE + tham số cho danh sách khách. MỘT nơi định nghĩa bộ lọc cho cả truy vấn
+   * trang lẫn truy vấn đếm dự phòng (trước đây hai bản copy dễ lệch nhau).
+   *
+   * @returns {{ whereSql: string, params: any[], campaignParamIdx: number|null }}
+   */
+  buildCustomerListFilter({ userId, status, search, source, consentSource, campaignId, purchaseOrderStatusExpr }) {
     const parsedCampaignId = Number.parseInt(campaignId, 10);
     const params = [userId];
 
@@ -289,50 +295,7 @@ class CustomerReadRepository {
       campaignParamIdx = params.length;
     }
 
-    const uknowStatusExpr = campaignParamIdx
-      ? `(SELECT cc2.uknow_status FROM campaign_customers cc2 WHERE cc2.id_customer = c.id AND cc2.id_campaign = $${campaignParamIdx} LIMIT 1)`
-      : 'NULL';
-
-    const orderStatusExpr = campaignParamIdx
-      ? `(SELECT ${purchaseOrderStatusExpr} FROM customer_purchases cp WHERE cp.id_customer = c.id AND cp.id_campaign = $${campaignParamIdx} AND cp.id_run IS NOT NULL ORDER BY cp.purchase_date DESC NULLS LAST, cp.id DESC LIMIT 1)`
-      : `(SELECT ${purchaseOrderStatusExpr} FROM customer_purchases cp WHERE cp.id_customer = c.id AND cp.id_run IS NOT NULL ORDER BY cp.purchase_date DESC NULLS LAST, cp.id DESC LIMIT 1)`;
-
-    const campaignInteractionExpr = campaignParamIdx
-      ? `(SELECT cc2.has_clicked FROM campaign_customers cc2 WHERE cc2.id_customer = c.id AND cc2.id_campaign = $${campaignParamIdx} LIMIT 1)`
-      : 'NULL';
-    const campaignOpenedExpr = campaignParamIdx
-      ? `(SELECT cc2.has_opened FROM campaign_customers cc2 WHERE cc2.id_customer = c.id AND cc2.id_campaign = $${campaignParamIdx} LIMIT 1)`
-      : 'NULL';
-    const campaignReceivedExpr = campaignParamIdx
-      ? `(SELECT cc2.email_received_count FROM campaign_customers cc2 WHERE cc2.id_customer = c.id AND cc2.id_campaign = $${campaignParamIdx} LIMIT 1)`
-      : 'NULL';
-
-    let query = `
-      SELECT c.id, c.email, c.phone, c.full_name, c.customer_source, c.consent_source,
-             c.has_purchased, c.total_orders, c.total_spent, c.email_subscribed,
-             COALESCE((
-               SELECT COUNT(*)
-               FROM campaign_customers cc
-               JOIN campaigns cp ON cp.id = cc.id_campaign
-               WHERE cc.id_customer = c.id
-                 AND COALESCE(cp.workspace_owner_id, cp.id_user) = COALESCE(c.workspace_owner_id, c.id_user)
-             ), 0)::INTEGER AS campaign_count,
-             (
-               SELECT MAX(cc.last_activity_at)::timestamptz
-               FROM campaign_customers cc
-               JOIN campaigns cp ON cp.id = cc.id_campaign
-               WHERE cc.id_customer = c.id
-                 AND COALESCE(cp.workspace_owner_id, cp.id_user) = COALESCE(c.workspace_owner_id, c.id_user)
-             ) AS last_campaign_activity_at,
-             ${orderStatusExpr} AS order_status,
-             ${uknowStatusExpr} AS uknow_status,
-             ${campaignInteractionExpr} AS campaign_has_clicked,
-             ${campaignOpenedExpr} AS campaign_has_opened,
-             ${campaignReceivedExpr} AS campaign_email_received_count,
-             c.created_at::timestamptz AS created_at, c.updated_at::timestamptz AS updated_at
-      FROM customers c
-      WHERE COALESCE(c.workspace_owner_id, c.id_user) = $1
-    `;
+    let whereSql = 'COALESCE(c.workspace_owner_id, c.id_user) = $1';
     const normalizedStatus = typeof status === 'string' ? status.trim().toLowerCase() : '';
     const normalizedSource = typeof source === 'string' ? source.trim().toLowerCase() : '';
 
@@ -341,7 +304,7 @@ class CustomerReadRepository {
       if (isOrderStatus) {
         const mappedOrderStatus = normalizedStatus === 'onhold' ? 'on-hold' : normalizedStatus;
         params.push(mappedOrderStatus);
-        query += ` AND EXISTS (
+        whereSql += ` AND EXISTS (
           SELECT 1
           FROM customer_purchases cp
           WHERE cp.id_customer = c.id
@@ -353,25 +316,26 @@ class CustomerReadRepository {
 
     if (search) {
       params.push(`%${search}%`);
-      query += ` AND (c.email ILIKE $${params.length} OR c.phone ILIKE $${params.length} OR c.full_name ILIKE $${params.length})`;
+      whereSql += ` AND (c.email ILIKE $${params.length} OR c.phone ILIKE $${params.length} OR c.full_name ILIKE $${params.length})`;
     }
 
     if (normalizedSource) {
       if (normalizedSource === 'uknow_campaign') {
-        query += ` AND LOWER(c.customer_source) IN ('uknow_campaign', 'campaign_uknow')`;
+        // 'campaign' là giá trị node "lưu khách" từng ghi mặc định trước 10/2026 — dữ liệu cũ còn nguyên trong DB.
+        whereSql += ` AND LOWER(c.customer_source) IN ('uknow_campaign', 'campaign_uknow', 'campaign')`;
       } else if (normalizedSource === 'founderai' || normalizedSource === 'founder ai' || normalizedSource === 'uknow') {
-        query += ` AND LOWER(c.customer_source) IN ('founderai', 'founder ai', 'uknow', 'woocommerce', 'learnpress')`;
+        whereSql += ` AND LOWER(c.customer_source) IN ('founderai', 'founder ai', 'uknow', 'woocommerce', 'learnpress')`;
       }
     }
 
     const normalizedConsentSource = typeof consentSource === 'string' ? consentSource.trim().toLowerCase() : '';
     if (normalizedConsentSource) {
       params.push(normalizedConsentSource);
-      query += ` AND LOWER(c.consent_source) = $${params.length}`;
+      whereSql += ` AND LOWER(c.consent_source) = $${params.length}`;
     }
 
-    if (Number.isFinite(parsedCampaignId)) {
-      query += ` AND EXISTS (
+    if (campaignParamIdx) {
+      whereSql += ` AND EXISTS (
         SELECT 1
         FROM campaigns cp
         WHERE cp.id = $${campaignParamIdx}
@@ -405,85 +369,107 @@ class CustomerReadRepository {
       )`;
     }
 
-    query += ` ORDER BY c.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
-    params.push(limit, offset);
+    return { whereSql, params, campaignParamIdx };
+  }
 
-    let countQuery = 'SELECT COUNT(*) FROM customers c WHERE COALESCE(c.workspace_owner_id, c.id_user) = $1';
-    const countParams = [userId];
-    if (normalizedStatus) {
-      const isOrderStatus = ['completed', 'on-hold', 'onhold'].includes(normalizedStatus);
-      if (isOrderStatus) {
-        const mappedOrderStatus = normalizedStatus === 'onhold' ? 'on-hold' : normalizedStatus;
-        countParams.push(mappedOrderStatus);
-        countQuery += ` AND EXISTS (
-          SELECT 1
-          FROM customer_purchases cp
-          WHERE cp.id_customer = c.id
-            AND cp.id_run IS NOT NULL
-            AND ${purchaseOrderStatusExpr} = $${countParams.length}
-        )`;
-      }
-    }
-    if (search) {
-      countParams.push(`%${search}%`);
-      countQuery += ` AND (c.email ILIKE $${countParams.length} OR c.phone ILIKE $${countParams.length} OR c.full_name ILIKE $${countParams.length})`;
-    }
-    if (normalizedSource) {
-      if (normalizedSource === 'uknow_campaign') {
-        countQuery += ` AND LOWER(c.customer_source) IN ('uknow_campaign', 'campaign_uknow')`;
-      } else if (normalizedSource === 'founderai' || normalizedSource === 'founder ai' || normalizedSource === 'uknow') {
-        countQuery += ` AND LOWER(c.customer_source) IN ('founderai', 'founder ai', 'uknow', 'woocommerce', 'learnpress')`;
-      }
-    }
-    if (normalizedConsentSource) {
-      countParams.push(normalizedConsentSource);
-      countQuery += ` AND LOWER(c.consent_source) = $${countParams.length}`;
-    }
-    if (Number.isFinite(parsedCampaignId)) {
-      countParams.push(parsedCampaignId);
-      countQuery += ` AND EXISTS (
-        SELECT 1
-        FROM campaigns cp
-        WHERE cp.id = $${countParams.length}
-          AND COALESCE(cp.workspace_owner_id, cp.id_user) = COALESCE(c.workspace_owner_id, c.id_user)
-          AND (
-            EXISTS (
-              SELECT 1
-              FROM campaign_customers cc
-              WHERE cc.id_customer = c.id
-                AND cc.id_campaign = cp.id
-            )
-            OR EXISTS (
-              SELECT 1
-              FROM campaign_participations cpa
-              WHERE cpa.id_customer = c.id
-                AND cpa.id_campaign = cp.id
-            )
-            OR EXISTS (
-              SELECT 1
-              FROM customer_purchases cpr
-              WHERE cpr.id_customer = c.id
-                AND cpr.id_campaign = cp.id
-            )
-            OR EXISTS (
-              SELECT 1
-              FROM customer_journey cj
-              WHERE cj.id_customer = c.id
-                AND cj.id_campaign = cp.id
-            )
-          )
-      )`;
+  /**
+   * Danh sách khách (phân trang). Một truy vấn duy nhất:
+   *  1. CTE `page` lọc + sắp + cắt trang trên bảng `customers`, kèm tổng số dòng khớp bằng
+   *     `COUNT(*) OVER()` (thay cho truy vấn COUNT riêng lặp lại toàn bộ bộ lọc);
+   *  2. các số liệu theo từng khách (số chiến dịch, hoạt động gần nhất, trạng thái đơn, chỉ số trong
+   *     một chiến dịch) chỉ tính cho tối đa `limit` dòng của trang, không phải cho cả workspace.
+   * `campaign_customers` có UNIQUE (id_campaign, id_customer) nên LEFT JOIN theo chiến dịch cho tối đa
+   * một dòng — thay cho bốn subquery `cc2` lặp lại.
+   *
+   * @returns {Promise<{ rows: object[], total: number }>}
+   */
+  async getAllCustomerRows({
+    userId,
+    page,
+    limit,
+    status,
+    search,
+    source,
+    consentSource,
+    campaignId,
+    purchaseOrderStatusExpr,
+  }) {
+    const offset = (page - 1) * limit;
+    const { whereSql, params, campaignParamIdx } = this.buildCustomerListFilter({
+      userId, status, search, source, consentSource, campaignId, purchaseOrderStatusExpr,
+    });
+
+    const orderStatusFilter = campaignParamIdx ? `AND cp.id_campaign = $${campaignParamIdx}` : '';
+    const campaignJoin = campaignParamIdx
+      ? `LEFT JOIN campaign_customers cc2
+              ON cc2.id_customer = c.id AND cc2.id_campaign = $${campaignParamIdx}`
+      : '';
+    const campaignColumns = campaignParamIdx
+      ? `cc2.uknow_status AS uknow_status,
+             cc2.has_clicked AS campaign_has_clicked,
+             cc2.has_opened AS campaign_has_opened,
+             cc2.email_received_count AS campaign_email_received_count`
+      : `NULL AS uknow_status,
+             NULL AS campaign_has_clicked,
+             NULL AS campaign_has_opened,
+             NULL AS campaign_email_received_count`;
+
+    const limitIdx = params.length + 1;
+    const offsetIdx = params.length + 2;
+    const queryParams = [...params, limit, offset];
+
+    const result = await db.query(
+      `WITH page AS (
+         SELECT c.id, c.created_at, COUNT(*) OVER() AS total_count
+         FROM customers c
+         WHERE ${whereSql}
+         ORDER BY c.created_at DESC, c.id DESC
+         LIMIT $${limitIdx} OFFSET $${offsetIdx}
+       )
+       SELECT c.id, c.email, c.phone, c.full_name, c.customer_source, c.consent_source,
+              c.has_purchased, c.total_orders, c.total_spent, c.email_subscribed,
+              COALESCE(act.campaign_count, 0)::INTEGER AS campaign_count,
+              act.last_campaign_activity_at,
+              ord.order_status AS order_status,
+              ${campaignColumns},
+              c.created_at::timestamptz AS created_at, c.updated_at::timestamptz AS updated_at,
+              page.total_count
+       FROM page
+       JOIN customers c ON c.id = page.id
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*) AS campaign_count,
+                MAX(cc.last_activity_at)::timestamptz AS last_campaign_activity_at
+         FROM campaign_customers cc
+         JOIN campaigns cp ON cp.id = cc.id_campaign
+         WHERE cc.id_customer = c.id
+           AND COALESCE(cp.workspace_owner_id, cp.id_user) = COALESCE(c.workspace_owner_id, c.id_user)
+       ) act ON TRUE
+       LEFT JOIN LATERAL (
+         SELECT ${purchaseOrderStatusExpr} AS order_status
+         FROM customer_purchases cp
+         WHERE cp.id_customer = c.id
+           AND cp.id_run IS NOT NULL
+           ${orderStatusFilter}
+         ORDER BY cp.purchase_date DESC NULLS LAST, cp.id DESC
+         LIMIT 1
+       ) ord ON TRUE
+       ${campaignJoin}
+       ORDER BY page.created_at DESC, page.id DESC`,
+      queryParams
+    );
+
+    if (result.rows.length > 0) {
+      return { rows: result.rows, total: Number(result.rows[0].total_count) };
     }
 
-    const [result, countResult] = await Promise.all([
-      db.query(query, params),
-      db.query(countQuery, countParams),
-    ]);
-
-    return {
-      rows: result.rows,
-      total: parseInt(countResult.rows[0].count, 10),
-    };
+    // Trang rỗng: hoặc không có khách nào khớp, hoặc `page` vượt quá số trang (cửa sổ COUNT(*) OVER()
+    // không có dòng nào để mang tổng). Chỉ trường hợp offset > 0 mới cần đếm lại để báo đúng tổng.
+    if (offset === 0) return { rows: [], total: 0 };
+    const countResult = await db.query(
+      `SELECT COUNT(*) AS count FROM customers c WHERE ${whereSql}`,
+      params
+    );
+    return { rows: [], total: Number.parseInt(countResult.rows[0].count, 10) };
   }
 
   async getOwnedCampaign(campaignId, userId) {

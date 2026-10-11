@@ -297,27 +297,6 @@ class CustomerCampaignJourneyDetailRepository {
   }
 
   /**
-   * Get overall email summary across all campaigns for a user.
-   *
-   * @param {number} userId
-   * @returns {Promise<object>}
-   */
-  async findOverallSummary(userId) {
-    const result = await db.query(
-      `SELECT
-          COALESCE(COUNT(*), 0)::INTEGER AS participant_count,
-          COALESCE(SUM(cc.email_received_count), 0)::INTEGER AS email_received_count,
-          COALESCE(SUM(cc.email_opened_count), 0)::INTEGER AS email_opened_count,
-          COALESCE(SUM(cc.email_clicked_count), 0)::INTEGER AS email_clicked_count
-       FROM campaign_customers cc
-       JOIN campaigns c ON c.id = cc.id_campaign
-       WHERE COALESCE(c.workspace_owner_id, c.id_user) = $1`,
-      [userId]
-    );
-    return result.rows[0] || {};
-  }
-
-  /**
    * Get conversion summary for a campaign.
    *
    * @param {number} campaignId
@@ -404,50 +383,6 @@ class CustomerCampaignJourneyDetailRepository {
          AND cp.id_campaign IS NOT NULL
          AND COALESCE(cu.workspace_owner_id, cu.id_user) = $2`,
       [customerId, userId]
-    );
-    return result.rows[0] || {};
-  }
-
-  /**
-   * Get overall conversion summary across all campaigns for a user.
-   *
-   * @param {number} userId
-   * @param {string} purchaseOrderStatusExpr SQL expression for order status column
-   * @returns {Promise<object>}
-   */
-  async findOverallConversionSummary(userId, purchaseOrderStatusExpr) {
-    const result = await db.query(
-      `SELECT
-          COALESCE(COUNT(*) FILTER (
-            WHERE ${purchaseOrderStatusExpr} = 'completed'
-          ), 0)::INTEGER AS purchase_count,
-          COALESCE(COUNT(*) FILTER (
-            WHERE ${purchaseOrderStatusExpr} = 'on-hold'
-          ), 0)::INTEGER AS interested_count,
-          COALESCE(COUNT(DISTINCT cp.id_customer), 0)::INTEGER AS converted_customer_count,
-          COALESCE(SUM(cp.amount), 0) AS revenue,
-          COALESCE(SUM(
-            CASE
-              WHEN COALESCE(pe.event_data->>'attributedFromClick', 'false') IN ('true', '1', 'yes')
-                THEN 1
-              ELSE 0
-            END
-          ), 0)::INTEGER AS attributed_from_click_count
-       FROM customer_purchases cp
-       JOIN customers cu ON cu.id = cp.id_customer
-       LEFT JOIN LATERAL (
-          SELECT cj.event_data
-          FROM customer_journey cj
-          WHERE cj.id_customer = cp.id_customer
-            AND cj.event_type = 'order_completed'
-            AND COALESCE(cj.event_data->>'orderId', cj.event_data->>'order_id', '') = COALESCE(cp.order_id, '')
-            AND COALESCE(cj.event_data->>'productName', '') = COALESCE(cp.product_name, '')
-          ORDER BY cj.id DESC
-          LIMIT 1
-       ) pe ON TRUE
-       WHERE cp.id_campaign IS NOT NULL
-         AND COALESCE(cu.workspace_owner_id, cu.id_user) = $1`,
-      [userId]
     );
     return result.rows[0] || {};
   }

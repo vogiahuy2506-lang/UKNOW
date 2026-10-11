@@ -40,6 +40,13 @@ router.get('/interested-courses-from-api', customerController.getInterestedCusto
 // Journey
 router.get('/:id/journey', idParamValidator, handleValidationErrors, customerController.getJourney.bind(customerController));
 router.get('/:id/campaign-participations', idParamValidator, handleValidationErrors, customerController.getCampaignParticipations.bind(customerController));
+router.get(
+  '/:id/emails/:emailId',
+  idParamValidator,
+  param('emailId').isInt({ min: 1 }).withMessage('ID email không hợp lệ'),
+  handleValidationErrors,
+  customerController.getEmailBody.bind(customerController),
+);
 router.get('/:id/campaigns/:campaignId/journey', idParamValidator, handleValidationErrors, customerController.getCampaignJourneyDetail.bind(customerController));
 
 // Get by id — chỉ cần auth

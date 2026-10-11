@@ -989,6 +989,10 @@ CREATE INDEX idx_customers_created_by ON customers(created_by) WHERE created_by 
 CREATE INDEX idx_customers_email ON customers(email);
 CREATE INDEX idx_customers_phone ON customers(phone);
 CREATE INDEX idx_customers_consent_source ON customers(consent_source);
+-- Mirror migration 296 (PR-C2): danh sách khách + khớp trùng liên hệ.
+CREATE INDEX idx_customers_ws_created ON customers ((COALESCE(workspace_owner_id, id_user)), created_at DESC, id DESC);
+CREATE INDEX idx_customers_ws_email_key ON customers ((COALESCE(workspace_owner_id, id_user)), (LOWER(email)));
+CREATE INDEX idx_customers_ws_phone_key ON customers ((COALESCE(workspace_owner_id, id_user)), (RIGHT(regexp_replace(phone, '[^0-9]', '', 'g'), 9)));
 
 -- ─── Courses (WooCommerce sync) ────────────────────────────────────────
 CREATE TABLE courses (

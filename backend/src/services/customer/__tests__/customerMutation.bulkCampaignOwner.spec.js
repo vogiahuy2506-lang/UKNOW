@@ -13,7 +13,7 @@ describe('customerMutationService.bulkUpsert — kiểm chủ chiến dịch', (
   beforeEach(() => {
     jest.restoreAllMocks();
     withTransaction = jest.spyOn(customerMutationRepository, 'withTransaction').mockImplementation(async (fn) => fn({}));
-    jest.spyOn(customerMutationRepository, 'findExistingCustomerId').mockResolvedValue(null);
+    jest.spyOn(customerMutationRepository, 'preloadCustomersByContact').mockResolvedValue([]);
     jest.spyOn(customerMutationRepository, 'insertBulkCustomer').mockResolvedValue(10);
   });
 

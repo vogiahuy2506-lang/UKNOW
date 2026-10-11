@@ -1,4 +1,5 @@
 import db from '../../config/database.js';
+import { CUSTOMER_EMAIL_KEY_SQL, CUSTOMER_PHONE_KEY_SQL } from '../../utils/customerContactMatch.util.js';
 
 class CustomerMutationRepository {
   async createCustomer({ workspaceOwnerId, actorUserId }, payload) {
@@ -37,39 +38,42 @@ class CustomerMutationRepository {
     }
   }
 
-  async findExistingCustomerId(client, userId, { email, phone, zaloId }) {
-    let result = null;
-    if (email && phone) {
-      result = await client.query(
-        `SELECT id FROM customers
-         WHERE COALESCE(workspace_owner_id, id_user) = $1 AND email = $2 AND phone = $3
-         LIMIT 1`,
-        [userId, email, phone]
-      );
-    } else if (email && !phone) {
-      result = await client.query(
-        `SELECT id FROM customers
-         WHERE COALESCE(workspace_owner_id, id_user) = $1 AND email = $2 AND phone IS NULL
-         LIMIT 1`,
-        [userId, email]
-      );
-    } else if (!email && phone) {
-      result = await client.query(
-        `SELECT id FROM customers
-         WHERE COALESCE(workspace_owner_id, id_user) = $1 AND phone = $2 AND email IS NULL
-         LIMIT 1`,
-        [userId, phone]
-      );
-    } else if (zaloId) {
-      result = await client.query(
-        `SELECT id FROM customers
-         WHERE COALESCE(workspace_owner_id, id_user) = $1 AND zalo_id = $2
-         LIMIT 1`,
-        [userId, zaloId]
-      );
+  /**
+   * Nạp MỘT lần các khách trong workspace có thể trùng với một lô liên hệ (email chữ thường,
+   * 9 số cuối SĐT, zalo_id). Dùng chung cho bulk và node "lưu khách" — xem `customerContactMatch.util.js`.
+   * Sắp theo id tăng dần để khi có nhiều dòng trùng khoá thì dòng id nhỏ nhất thắng, ổn định giữa các lần chạy.
+   *
+   * @param {import('pg').PoolClient|object} client
+   * @param {number} workspaceOwnerId
+   * @param {{ emailKeys?: string[], phoneKeys?: string[], zaloIds?: string[] }} keys
+   * @returns {Promise<object[]>}
+   */
+  async preloadCustomersByContact(client, workspaceOwnerId, { emailKeys = [], phoneKeys = [], zaloIds = [] } = {}) {
+    const clauses = [];
+    const params = [workspaceOwnerId];
+    if (emailKeys.length > 0) {
+      params.push(emailKeys);
+      clauses.push(`${CUSTOMER_EMAIL_KEY_SQL} = ANY($${params.length}::text[])`);
     }
+    if (phoneKeys.length > 0) {
+      params.push(phoneKeys);
+      clauses.push(`${CUSTOMER_PHONE_KEY_SQL} = ANY($${params.length}::text[])`);
+    }
+    if (zaloIds.length > 0) {
+      params.push(zaloIds);
+      clauses.push(`zalo_id = ANY($${params.length}::text[])`);
+    }
+    if (clauses.length === 0) return [];
 
-    return result?.rows[0]?.id || null;
+    const result = await client.query(
+      `SELECT id, email, phone, zalo_id, full_name, gender, customer_source, consent_source, notes
+         FROM customers
+        WHERE COALESCE(workspace_owner_id, id_user) = $1
+          AND (${clauses.join(' OR ')})
+        ORDER BY id ASC`,
+      params
+    );
+    return result.rows;
   }
 
   async updateBulkCustomer(client, userId, customerId, customer) {
@@ -183,9 +187,21 @@ class CustomerMutationRepository {
     return result.rows[0] || null;
   }
 
+  async countCustomerPurchases(customerId) {
+    const result = await db.query(
+      'SELECT COUNT(*)::int AS count FROM customer_purchases WHERE id_customer = $1',
+      [customerId]
+    );
+    return result.rows[0]?.count ?? 0;
+  }
+
   async deleteCustomer(userId, id) {
     const result = await db.query(
-      'DELETE FROM customers WHERE id = $1 AND COALESCE(workspace_owner_id, id_user) = $2 RETURNING id',
+      `DELETE FROM customers
+       WHERE id = $1
+         AND COALESCE(workspace_owner_id, id_user) = $2
+         AND NOT EXISTS (SELECT 1 FROM customer_purchases cp WHERE cp.id_customer = customers.id)
+       RETURNING id`,
       [id, userId]
     );
     return result.rows[0] || null;

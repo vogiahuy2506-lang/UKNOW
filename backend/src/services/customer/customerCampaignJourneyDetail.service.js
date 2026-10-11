@@ -100,18 +100,29 @@ class CustomerCampaignJourneyDetailService {
     }
     const purchaseOrderStatusExpr = await customerHelperService.resolvePurchaseOrderStatusExpr('cp');
 
-    const participation = await customerCampaignJourneyDetailRepository.findParticipation(customerId, campaignId);
-    const emailRows = await customerCampaignJourneyDetailRepository.findEmailMessages(customerId, campaignId);
-    const journeyRows = await customerCampaignJourneyDetailRepository.findJourneyEvents(customerId, campaignId);
-    const campaignPurchaseRows = await customerCampaignJourneyDetailRepository.findCampaignPurchases(customerId, campaignId, purchaseOrderStatusExpr);
-    const zaloMessageRows = await customerCampaignJourneyDetailRepository.findZaloMessages(customerId, campaignId);
-
-    const customerSummary = await customerCampaignJourneyDetailRepository.findCustomerSummary(customerId, userId);
-    const campaignSummary = await customerCampaignJourneyDetailRepository.findCampaignSummary(campaignId, userId);
-    const overallSummary = await customerCampaignJourneyDetailRepository.findOverallSummary(userId);
-    const campaignConversionSummary = await customerCampaignJourneyDetailRepository.findCampaignConversionSummary(campaignId, userId, purchaseOrderStatusExpr);
-    const customerConversionSummary = await customerCampaignJourneyDetailRepository.findCustomerConversionSummary(customerId, userId, purchaseOrderStatusExpr);
-    const overallConversionSummary = await customerCampaignJourneyDetailRepository.findOverallConversionSummary(userId, purchaseOrderStatusExpr);
+    // 9 truy vấn độc lập chạy song song (trước đây tuần tự: 12 vòng DB nối đuôi nhau). Hai tổng "toàn workspace"
+    // (overall) bỏ hẳn: FE không đọc `summaries.overall` và chúng quét mọi campaign_customers/customer_purchases của workspace.
+    const [
+      participation,
+      emailRows,
+      journeyRows,
+      campaignPurchaseRows,
+      zaloMessageRows,
+      customerSummary,
+      campaignSummary,
+      campaignConversionSummary,
+      customerConversionSummary,
+    ] = await Promise.all([
+      customerCampaignJourneyDetailRepository.findParticipation(customerId, campaignId),
+      customerCampaignJourneyDetailRepository.findEmailMessages(customerId, campaignId),
+      customerCampaignJourneyDetailRepository.findJourneyEvents(customerId, campaignId),
+      customerCampaignJourneyDetailRepository.findCampaignPurchases(customerId, campaignId, purchaseOrderStatusExpr),
+      customerCampaignJourneyDetailRepository.findZaloMessages(customerId, campaignId),
+      customerCampaignJourneyDetailRepository.findCustomerSummary(customerId, userId),
+      customerCampaignJourneyDetailRepository.findCampaignSummary(campaignId, userId),
+      customerCampaignJourneyDetailRepository.findCampaignConversionSummary(campaignId, userId, purchaseOrderStatusExpr),
+      customerCampaignJourneyDetailRepository.findCustomerConversionSummary(customerId, userId, purchaseOrderStatusExpr),
+    ]);
 
     // Wrap into .rows-compatible shape for downstream code
     const emailsResult = { rows: emailRows };
@@ -442,17 +453,6 @@ class CustomerCampaignJourneyDetailService {
           campaignConversionCount: customerConversionSummary.campaign_conversion_count || 0,
           attributedFromClickCount: customerConversionSummary.attributed_from_click_count || 0,
           revenue: customerConversionSummary.revenue || 0,
-        },
-        overall: {
-          participantCount: overallSummary.participant_count || 0,
-          emailReceivedCount: overallSummary.email_received_count || 0,
-          emailOpenedCount: overallSummary.email_opened_count || 0,
-          emailClickedCount: overallSummary.email_clicked_count || 0,
-          purchaseCount: overallConversionSummary.purchase_count || 0,
-          interestedCount: overallConversionSummary.interested_count || 0,
-          convertedCustomerCount: overallConversionSummary.converted_customer_count || 0,
-          attributedFromClickCount: overallConversionSummary.attributed_from_click_count || 0,
-          revenue: overallConversionSummary.revenue || 0,
         },
       },
     };

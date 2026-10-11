@@ -282,6 +282,29 @@ class CustomerController {
     }
   }
 
+  /**
+   * Nội dung một email đã gửi cho khách (nạp riêng khi mở email, không kèm trong hồ sơ/journey).
+   * @param {import('express').Request} req - params: { id, emailId }
+   * @param {import('express').Response} res
+   */
+  async getEmailBody(req, res) {
+    try {
+      const userId = getWorkspaceContext(req.user).workspaceOwnerId;
+      const data = await customerJourneyService.getEmailBody({
+        userId,
+        customerId: parseInt(req.params.id, 10),
+        emailId: parseInt(req.params.emailId, 10),
+      });
+      res.json({ success: true, data });
+    } catch (error) {
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({ success: false, message: error.message });
+      }
+      console.error('Get customer email body error:', error);
+      res.status(500).json({ success: false, message: 'Lỗi server' });
+    }
+  }
+
   // Chi tiết hành trình customer trong 1 campaign
   /**
    * Lấy chi tiết hành trình của khách hàng trong một campaign cụ thể: email, mua hàng, sự kiện.
@@ -451,12 +474,14 @@ class CustomerController {
         payload: req.body,
       });
 
+      // Nhật ký chỉ ghi số tổng + số dòng lỗi — danh sách lỗi theo dòng (tới 2.000 phần tử) không nhét vào audit log.
+      const { errors: rowErrors, ...bulkSummary } = data;
       await logWorkspace(
         getWorkspaceAuditContext(req),
         AUDIT_ACTIONS.CUSTOMER_BULK_UPSERTED,
         AUDIT_ENTITY_TYPES.CUSTOMER,
         null,
-        data
+        { ...bulkSummary, errorCount: rowErrors.length }
       );
 
       return res.json({

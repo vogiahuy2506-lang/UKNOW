@@ -180,12 +180,42 @@ class CustomerJourneyService {
         clickCount: message.click_count || 0,
         hasOpened: (message.open_count || 0) > 0,
         hasClicked: (message.click_count || 0) > 0,
-        bodyHtml: message.body_html || null,
-        bodyText: message.body_text || null,
       })),
     };
 
     return { timeline, summary };
+  }
+
+  /**
+   * Nội dung (HTML/văn bản) của MỘT email đã gửi cho khách. Hồ sơ khách và `/journey` không còn kèm
+   * `body_html/body_text` của tới 100–200 email (nặng hàng MB, FE không dùng) — nạp riêng khi người dùng mở email.
+   *
+   * @param {object} input
+   * @param {number} input.userId workspace owner
+   * @param {number} input.customerId
+   * @param {number} input.emailId
+   * @returns {Promise<{ id: number, subject: string|null, bodyHtml: string|null, bodyText: string|null }>}
+   */
+  async getEmailBody({ userId, customerId, emailId }) {
+    await this.assertCustomerOwnership(customerId, userId);
+    if (!Number.isFinite(emailId)) {
+      const error = new Error('ID email không hợp lệ');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const row = await customerReadRepository.getCustomerEmailBody(customerId, emailId);
+    if (!row) {
+      const error = new Error('Không tìm thấy email');
+      error.statusCode = 404;
+      throw error;
+    }
+    return {
+      id: row.id,
+      subject: row.subject,
+      bodyHtml: row.body_html || null,
+      bodyText: row.body_text || null,
+    };
   }
 }
 

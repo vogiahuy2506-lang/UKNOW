@@ -17,6 +17,11 @@ import {
 import { applyDataColumnSelectionToItems } from '../../utils/dataColumnSelection.util.js';
 import { isEmailHeader, isPhoneHeader } from '../../utils/columnHeaderMatch.util.js';
 import formService from '../form.service.js';
+import {
+  collectContactLookupKeys,
+  createCustomerContactIndex,
+  findExistingCustomerByContact,
+} from '../../utils/customerContactMatch.util.js';
 import { extractSpreadsheetId, fetchWorksheetNames } from '../../utils/googleSheetWorksheets.util.js';
 
 /**
@@ -572,6 +577,15 @@ class CampaignNodeDataService {
       return t ? t.toLowerCase() : null;
     };
     /**
+     * Nguồn khách ở dạng chuẩn để so sánh: 'campaign' / 'campaign_uknow' là tên cũ của 'uknow_campaign'
+     * (node lưu khách từng ghi mặc định 'campaign'). Không quy về cùng một dạng thì mọi khách cũ bị coi là "đổi"
+     * và bị UPDATE (nhảy updated_at) ở lần chạy đầu sau khi đổi mặc định.
+     */
+    const canonSource = (value) => {
+      const t = normLower(value);
+      return t === 'campaign' || t === 'campaign_uknow' ? 'uknow_campaign' : t;
+    };
+    /**
      * Trùng khớp trạng thái sau UPDATE (cùng semantics COALESCE như câu SQL) với dữ liệu hiện có.
      * Nếu true thì không cần chạy UPDATE — tránh cập nhật `updated_at` oan.
      *
@@ -591,7 +605,7 @@ class CampaignNodeDataService {
       const effPhone = inPhone != null ? inPhone : normText(row.phone);
       const effFullName = inFullName != null ? inFullName : normText(row.full_name);
       const effGender = inGender != null ? normLower(inGender) : normLower(row.gender);
-      const effSource = normLower(inCustomerSource);
+      const effSource = canonSource(inCustomerSource);
       const effNotes = inNotes != null ? normText(inNotes) : normText(row.notes);
 
       return (
@@ -599,7 +613,7 @@ class CampaignNodeDataService {
         && effPhone === normText(row.phone)
         && effFullName === normText(row.full_name)
         && effGender === normLower(row.gender)
-        && effSource === normLower(row.customer_source)
+        && effSource === canonSource(row.customer_source)
         && effNotes === normText(row.notes)
       );
     };
@@ -618,7 +632,7 @@ class CampaignNodeDataService {
         phone: normalizeValue(campaignFlowService.getFieldValue(customerData, fieldMap.phone)),
         fullName: normalizeValue(campaignFlowService.getFieldValue(customerData, fieldMap.fullName)),
         gender: normalizeValue(campaignFlowService.getFieldValue(customerData, fieldMap.gender)),
-        customerSource: normalizeValue(campaignFlowService.getFieldValue(customerData, fieldMap.customerSource)) || 'campaign',
+        customerSource: normalizeValue(campaignFlowService.getFieldValue(customerData, fieldMap.customerSource)) || 'uknow_campaign',
         notes: normalizeValue(campaignFlowService.getFieldValue(customerData, fieldMap.notes)),
       };
       if (!mapped.email && !mapped.phone) continue;
@@ -642,7 +656,7 @@ class CampaignNodeDataService {
         phone: mapped.phone || prev.phone || null,
         fullName: mapped.fullName || prev.fullName || null,
         gender: mapped.gender || prev.gender || null,
-        customerSource: mapped.customerSource || prev.customerSource || 'campaign',
+        customerSource: mapped.customerSource || prev.customerSource || 'uknow_campaign',
         notes: mapped.notes || prev.notes || null,
         consentSource: resolvedConsentSource || prev.consentSource || null,
       });
@@ -670,68 +684,16 @@ class CampaignNodeDataService {
           await campaignNodeDataRepository.setLocalStatementTimeout(client, saveCustomersStmtTimeoutMs);
 
           // --- Preload theo cụm: giảm N+1; cụm sau nhìn thấy bản ghi cụm trước đã commit ---
-          const emailSet = new Set();
-          const phoneSet = new Set();
-          for (const c of chunk) {
-            if (c.email) emailSet.add(c.email);
-            if (c.phone) phoneSet.add(c.phone);
-          }
-          const preloadEmails = Array.from(emailSet);
-          const preloadPhones = Array.from(phoneSet);
-
-          const byEmailPhone = new Map();
-          const byEmail = new Map();
-          const byPhone = new Map();
-
-          /** Gỡ một bản ghi khỏi các map tra cứu (trước khi đổi email/phone hoặc trùng lặp key). */
-          const unindexCustomerRow = (row) => {
-            const e = normEmailKey(row.email);
-            const p = normText(row.phone);
-            if (e && p) byEmailPhone.delete(pairKey(e, p));
-            if (e && byEmail.get(e) === row) byEmail.delete(e);
-            if (p && byPhone.get(p) === row) byPhone.delete(p);
-          };
-
-          /** Đưa bản ghi vào map; mỗi key chỉ giữ bản đầu tiên (tương đương LIMIT 1 không ORDER BY). */
-          const indexCustomerRow = (row) => {
-            const e = normEmailKey(row.email);
-            const p = normText(row.phone);
-            if (e && p) {
-              const k = pairKey(e, p);
-              if (!byEmailPhone.has(k)) byEmailPhone.set(k, row);
-            }
-            if (e && !byEmail.has(e)) byEmail.set(e, row);
-            if (p && !byPhone.has(p)) byPhone.set(p, row);
-          };
-
-          /**
-           * Tìm bản ghi hiện có giống chuỗi SELECT cũ: ưu tiên khớp email+phone, rồi email, rồi phone.
-           *
-           * @param {string|null} email
-           * @param {string|null} phone
-           * @returns {object|null}
-           */
-          const resolveExistingCustomerRow = (email, phone) => {
-            if (email && phone) {
-              const exact = byEmailPhone.get(pairKey(email, phone));
-              if (exact) return exact;
-              const byE = byEmail.get(email);
-              if (byE) return byE;
-              const byP = byPhone.get(phone);
-              if (byP) return byP;
-              return null;
-            }
-            if (email) return byEmail.get(email) || null;
-            if (phone) return byPhone.get(phone) || null;
-            return null;
-          };
-
-          if (preloadEmails.length > 0 || preloadPhones.length > 0) {
-            const preloadRows = await campaignNodeDataRepository.preloadCustomersByEmailPhone(
-              client, userId, preloadEmails, preloadPhones
+          // Khớp "khách đã có" dùng CHUNG một quy tắc với bulk (utils/customerContactMatch.util.js):
+          // email chữ thường, SĐT 9 số cuối, ưu tiên email+SĐT > email > SĐT; mỗi khoá giữ dòng id nhỏ nhất.
+          const contactIndex = createCustomerContactIndex();
+          const lookupKeys = collectContactLookupKeys(chunk);
+          if (lookupKeys.emailKeys.length > 0 || lookupKeys.phoneKeys.length > 0) {
+            const preloadRows = await campaignNodeDataRepository.preloadCustomersByContact(
+              client, userId, lookupKeys
             );
             for (const row of preloadRows) {
-              indexCustomerRow(row);
+              contactIndex.add(row);
             }
           }
 
@@ -740,7 +702,7 @@ class CampaignNodeDataService {
             const phone = customerData.phone;
             const fullName = customerData.fullName;
             const gender = customerData.gender;
-            const customerSource = customerData.customerSource || 'campaign';
+            const customerSource = customerData.customerSource || 'uknow_campaign';
             const notes = customerData.notes;
             // consentSource đã được phát hiện từ dữ liệu gốc (leadId/submissionId/formId) và
             // gắn sẵn vào từng phần tử của normalizedCustomers ở vòng lặp dedupe phía trên.
@@ -751,7 +713,7 @@ class CampaignNodeDataService {
               continue;
             }
 
-            const existingRow = resolveExistingCustomerRow(email, phone);
+            const existingRow = findExistingCustomerByContact(contactIndex, { email, phone });
 
             if (existingRow?.id) {
               const incomingForCompare = {
@@ -765,7 +727,7 @@ class CampaignNodeDataService {
               if (isCustomerRowUnchanged(existingRow, incomingForCompare)) {
                 unchanged += 1;
               } else {
-                unindexCustomerRow(existingRow);
+                contactIndex.remove(existingRow);
                 await campaignNodeDataRepository.updateCustomer(client, {
                   email, phone, fullName, gender, customerSource, consentSource, notes,
                   id: existingRow.id, userId,
@@ -778,7 +740,7 @@ class CampaignNodeDataService {
                 existingRow.customer_source = customerSource != null ? customerSource : existingRow.customer_source;
                 existingRow.consent_source = consentSource != null ? consentSource : existingRow.consent_source;
                 existingRow.notes = notes != null ? notes : existingRow.notes;
-                indexCustomerRow(existingRow);
+                contactIndex.add(existingRow);
                 updated += 1;
               }
               await campaignCustomerRepository.ensureCampaignParticipation(client, campaignId, existingRow.id, runId);
@@ -788,7 +750,7 @@ class CampaignNodeDataService {
               });
               saved += 1;
               if (insertedRow?.id) {
-                indexCustomerRow(insertedRow);
+                contactIndex.add(insertedRow);
                 await campaignCustomerRepository.ensureCampaignParticipation(client, campaignId, insertedRow.id, runId);
               }
             }

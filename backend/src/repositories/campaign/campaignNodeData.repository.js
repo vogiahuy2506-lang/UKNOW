@@ -1,5 +1,6 @@
 import db from '../../config/database.js';
 import { isSuperAdmin } from '../../utils/roleScope.util.js';
+import customerMutationRepository from '../customer/customerMutation.repository.js';
 
 class CampaignNodeDataRepository {
   /**
@@ -105,31 +106,16 @@ class CampaignNodeDataRepository {
   }
 
   /**
-   * Preload existing customers by email/phone within a transaction.
+   * Nạp khách đã có (cùng workspace) có thể trùng với một lô liên hệ, trong transaction của node lưu khách.
+   * Dùng chung truy vấn + quy tắc khớp với bulk — xem `customerMutation.repository.preloadCustomersByContact`.
    *
    * @param {import('pg').PoolClient} client
    * @param {number} userId
-   * @param {string[]} preloadEmails
-   * @param {string[]} preloadPhones
+   * @param {{ emailKeys?: string[], phoneKeys?: string[], zaloIds?: string[] }} keys từ `collectContactLookupKeys`
    * @returns {Promise<object[]>}
    */
-  async preloadCustomersByEmailPhone(client, userId, preloadEmails, preloadPhones) {
-    const parts = [];
-    const params = [userId];
-    let pi = 2;
-    if (preloadEmails.length > 0) {
-      parts.push(`LOWER(email) = ANY($${pi}::text[])`);
-      params.push(preloadEmails);
-      pi += 1;
-    }
-    if (preloadPhones.length > 0) {
-      parts.push(`phone = ANY($${pi}::text[])`);
-      params.push(preloadPhones);
-      pi += 1;
-    }
-    const sql = `SELECT * FROM customers WHERE id_user = $1 AND (${parts.join(' OR ')})`;
-    const { rows } = await client.query(sql, params);
-    return rows;
+  async preloadCustomersByContact(client, userId, keys) {
+    return customerMutationRepository.preloadCustomersByContact(client, userId, keys);
   }
 
   /**

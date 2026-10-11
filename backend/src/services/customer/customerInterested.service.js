@@ -1,5 +1,10 @@
 import customerReadRepository from '../../repositories/customer/customerRead.repository.js';
 
+/** Thời gian chờ tối đa mỗi trang đơn hàng WooCommerce (ms). */
+const WOO_REQUEST_TIMEOUT_MS = 20000;
+/** Trần số trang đơn hàng kéo về mỗi lần (per_page 100) — khớp trần 5000 đơn. */
+const WOO_ORDERS_MAX_PAGES = 60;
+
 class CustomerInterestedService {
   /**
    * Get interested/purchased customers with related courses from DB.
@@ -62,9 +67,12 @@ class CustomerInterestedService {
       ? notPurchasedCourseIds.map((v) => parseInt(v, 10)).filter((v) => Number.isFinite(v))
       : [];
 
-    let scopedCampaignId = campaignIdNum;
+    // Có campaignId (kiểu "interested") thì kết quả LUÔN bị giới hạn trong chiến dịch đó. Trước đây khi chiến dịch
+    // chưa có ai quan tâm, service âm thầm bỏ phạm vi và trả khách của CẢ workspace — người gọi tưởng là khách của
+    // chiến dịch. Rỗng là kết quả đúng; muốn toàn workspace thì không truyền campaignId.
+    const scopedCampaignId = campaignIdNum;
     const shouldScopeByCampaign = Number.isFinite(campaignIdNum) && normalizedCustomerType === 'interested';
-    let result = await customerReadRepository.getInterestedCustomersWithCoursesRows({
+    const result = await customerReadRepository.getInterestedCustomersWithCoursesRows({
       userId,
       scopedCampaignId,
       useCampaignScope: shouldScopeByCampaign,
@@ -76,26 +84,6 @@ class CustomerInterestedService {
       purchaseOrderStatusExpr,
       limit,
     });
-    if (
-      shouldScopeByCampaign &&
-      result.rows.length === 0 &&
-      result.courses.length === 0
-    ) {
-      scopedCampaignId = null;
-      result = await customerReadRepository.getInterestedCustomersWithCoursesRows({
-        userId,
-        scopedCampaignId: null,
-        useCampaignScope: false,
-        selectedCourseIds,
-        normalizedCourseStatuses,
-        normalizedCourseQuery,
-        normalizedNotPurchasedCourseIds,
-        interestedCondition,
-        purchaseOrderStatusExpr,
-        limit,
-      });
-    }
-
     return {
       items: result.rows.map((row) => ({
         id: row.id,
@@ -235,9 +223,12 @@ class CustomerInterestedService {
     let page = 1;
     let hasMore = true;
 
-    while (hasMore && allOrders.length < limit) {
+    // Trần trang + timeout: site WooCommerce treo thì request không được giữ kết nối vô hạn, và không bao giờ kéo
+    // quá WOO_ORDERS_MAX_PAGES trang dù `x-wp-totalpages` báo gì (limit tối đa 5000 đơn = 50 trang).
+    while (hasMore && allOrders.length < limit && page <= WOO_ORDERS_MAX_PAGES) {
       const response = await axios.get(`${baseUrl}/wc/v3/orders`, {
         headers,
+        timeout: WOO_REQUEST_TIMEOUT_MS,
         params: {
           page,
           per_page: perPage,

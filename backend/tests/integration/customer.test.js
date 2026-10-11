@@ -524,14 +524,14 @@ describe('POST /api/customers/bulk — bulk upsert', () => {
 
   it('upsert theo email + phone — bản trùng update thay vì insert', async () => {
     const user = await createUser();
-    await createCustomerRow({ userId: user.id, email: 'dup@u.local', phone: '0911', fullName: 'Old' });
+    await createCustomerRow({ userId: user.id, email: 'dup@u.local', phone: '0911000111', fullName: 'Old' });
     const token = await loginAs(user);
     const res = await request(app)
       .post('/api/customers/bulk')
       .set('Authorization', `Bearer ${token}`)
       .send({
         items: [
-          { email: 'dup@u.local', phone: '0911', fullName: 'Updated' },
+          { email: 'dup@u.local', phone: '0911000111', fullName: 'Updated' },
           { email: 'fresh@u.local', fullName: 'Fresh' },
         ],
       });
