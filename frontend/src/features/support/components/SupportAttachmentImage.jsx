@@ -53,13 +53,13 @@ export default function SupportAttachmentImage({ ticketId, attachment, fetchBlob
 
   if (failed) {
     return (
-      <span className="flex h-20 w-20 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 p-1 text-center text-[10px] text-slate-400 break-all">
+      <span className="flex h-20 w-20 items-center justify-center rounded-lg border border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-raised p-1 text-center text-[10px] text-slate-400 dark:text-dk-muted break-all">
         {attachment.name || t('support.attachments.loadFailed')}
       </span>
     );
   }
   if (!src) {
-    return <span className="block h-20 w-20 animate-pulse rounded-lg bg-slate-100" aria-hidden="true" />;
+    return <span className="block h-20 w-20 animate-pulse rounded-lg bg-slate-100 dark:bg-dk-raised" aria-hidden="true" />;
   }
 
   return (
@@ -68,7 +68,7 @@ export default function SupportAttachmentImage({ ticketId, attachment, fetchBlob
         type="button"
         onClick={() => setOpen(true)}
         aria-label={t('support.attachments.open', { name: attachment.name || '' })}
-        className="block h-20 w-20 overflow-hidden rounded-lg border border-slate-200 bg-white hover:opacity-90"
+        className="block h-20 w-20 overflow-hidden rounded-lg border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface hover:opacity-90"
       >
         <img src={src} alt={attachment.name || ''} className="h-full w-full object-cover" />
       </button>

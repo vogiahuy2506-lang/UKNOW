@@ -32,19 +32,19 @@ function ContactRow({ item, onPatched }) {
   return (
     <tr data-testid="contact-row" className="align-top">
       <td className="px-4 py-3">
-        <div className="font-medium text-slate-900">{item.name}</div>
-        <div className="text-xs text-slate-500 break-all">{item.email}</div>
-        {item.phone && <div className="text-xs text-slate-500">{item.phone}</div>}
+        <div className="font-medium text-slate-900 dark:text-dk-text">{item.name}</div>
+        <div className="text-xs text-slate-500 dark:text-dk-text2 break-all">{item.email}</div>
+        {item.phone && <div className="text-xs text-slate-500 dark:text-dk-text2">{item.phone}</div>}
         {item.company && (
-          <div className="text-xs text-slate-400">
+          <div className="text-xs text-slate-400 dark:text-dk-muted">
             {item.company}
             {item.companySize ? ` · ${item.companySize}` : ''}
           </div>
         )}
       </td>
-      <td className="max-w-sm px-4 py-3 text-slate-700">
+      <td className="max-w-sm px-4 py-3 text-slate-700 dark:text-dk-text">
         <p className="whitespace-pre-wrap break-words">{item.message}</p>
-        <p className="mt-1 text-xs text-slate-400">{formatDateTime(item.createdAt, locale)}</p>
+        <p className="mt-1 text-xs text-slate-400 dark:text-dk-muted">{formatDateTime(item.createdAt, locale)}</p>
       </td>
       <td className="px-4 py-3">
         <select
@@ -52,7 +52,7 @@ function ContactRow({ item, onPatched }) {
           value={item.status}
           disabled={saving}
           onChange={(event) => patch({ status: event.target.value }, 'support.contact.saved')}
-          className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
+          className="rounded-lg border border-slate-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text px-2 py-1 text-sm"
         >
           {CONTACT_STATUSES.map((key) => (
             <option key={key} value={key}>
@@ -67,13 +67,13 @@ function ContactRow({ item, onPatched }) {
           value={notes}
           onChange={(event) => setNotes(event.target.value)}
           rows={2}
-          className="w-full min-w-[12rem] rounded-lg border border-slate-300 px-2 py-1 text-sm"
+          className="w-full min-w-[12rem] rounded-lg border border-slate-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text px-2 py-1 text-sm"
         />
         <button
           type="button"
           disabled={saving || notes === (item.notes || '')}
           onClick={() => patch({ notes }, 'support.contact.saved')}
-          className="mt-1 text-xs font-semibold text-orange-600 hover:text-orange-700 disabled:cursor-not-allowed disabled:text-slate-400"
+          className="mt-1 text-xs font-semibold text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 disabled:cursor-not-allowed disabled:text-slate-400 dark:disabled:text-dk-muted"
         >
           {t('support.contact.saveNotes')}
         </button>
@@ -81,7 +81,7 @@ function ContactRow({ item, onPatched }) {
       <td className="px-4 py-3">
         <a
           href={mailto}
-          className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+          className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-slate-300 dark:border-dk-border-strong px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-dk-text hover:bg-slate-50 dark:hover:bg-dk-raised"
         >
           <HiOutlineMail className="h-4 w-4" aria-hidden="true" />
           {t('support.contact.replyEmail')}
@@ -126,7 +126,7 @@ export default function ContactSubmissionsPanel() {
 
   const tabClass = (active) =>
     `rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-      active ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+      active ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-600 dark:text-dk-text2 hover:bg-slate-100 dark:hover:bg-dk-strong'
     }`;
 
   return (
@@ -150,15 +150,15 @@ export default function ContactSubmissionsPanel() {
         ))}
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface shadow-sm">
         {loading && !data ? (
-          <div className="p-10 text-center text-sm text-slate-400">{t('common.loading')}</div>
+          <div className="p-10 text-center text-sm text-slate-400 dark:text-dk-muted">{t('common.loading')}</div>
         ) : items.length === 0 ? (
-          <div className="p-14 text-center text-sm text-slate-400">{t('support.contact.empty')}</div>
+          <div className="p-14 text-center text-sm text-slate-400 dark:text-dk-muted">{t('support.contact.empty')}</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-100 text-sm">
-              <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <table className="min-w-full divide-y divide-slate-100 dark:divide-dk-border text-sm">
+              <thead className="bg-slate-50 dark:bg-dk-raised text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-dk-text2">
                 <tr>
                   <th className="px-4 py-3">{t('support.contact.columns.contact')}</th>
                   <th className="px-4 py-3">{t('support.contact.columns.message')}</th>
@@ -167,7 +167,7 @@ export default function ContactSubmissionsPanel() {
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-dk-border">
                 {items.map((item) => (
                   <ContactRow key={item.id} item={item} onPatched={replaceItem} />
                 ))}

@@ -45,14 +45,14 @@ export default function SupportThread({ ticketId, messages, perspective, userLab
           >
             <div
               className={`max-w-[85%] rounded-2xl border px-4 py-3 shadow-sm ${
-                mine ? 'border-orange-100 bg-orange-50' : 'border-slate-200 bg-white'
+                mine ? 'border-orange-100 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/40' : 'border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface'
               }`}
             >
               <div className="mb-1 flex flex-wrap items-baseline gap-x-2 text-xs">
-                <span className="font-semibold text-slate-800">{authorLabel(message)}</span>
-                <span className="text-slate-400">{formatDateTime(message.createdAt, locale)}</span>
+                <span className="font-semibold text-slate-800 dark:text-dk-text">{authorLabel(message)}</span>
+                <span className="text-slate-400 dark:text-dk-muted">{formatDateTime(message.createdAt, locale)}</span>
               </div>
-              <p className="whitespace-pre-wrap break-words text-sm text-slate-700">{message.body}</p>
+              <p className="whitespace-pre-wrap break-words text-sm text-slate-700 dark:text-dk-text">{message.body}</p>
               {attachments.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-2">
                   {attachments.map((attachment) => (

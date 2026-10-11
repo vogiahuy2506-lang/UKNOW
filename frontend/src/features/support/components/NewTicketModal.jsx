@@ -59,7 +59,7 @@ export default function NewTicketModal({ onClose, onCreated }) {
   };
 
   const fieldClass =
-    'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100';
+    'w-full rounded-lg border border-slate-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted px-3 py-2 text-sm focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-950/40';
 
   return createPortal(
     <div className="fixed inset-0 z-[900] flex items-center justify-center bg-black/50 p-4" role="presentation">
@@ -68,16 +68,16 @@ export default function NewTicketModal({ onClose, onCreated }) {
         aria-modal="true"
         aria-label={t('support.form.title')}
         onSubmit={handleSubmit}
-        className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-2xl bg-white shadow-xl"
+        className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-2xl bg-white dark:bg-dk-surface shadow-xl"
       >
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-          <h2 className="text-base font-semibold text-slate-900">{t('support.form.title')}</h2>
+        <div className="flex items-center justify-between border-b border-slate-100 dark:border-dk-border px-5 py-4">
+          <h2 className="text-base font-semibold text-slate-900 dark:text-dk-text">{t('support.form.title')}</h2>
           <button
             type="button"
             onClick={onClose}
             disabled={submitting}
             aria-label={t('common.close')}
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            className="rounded-lg p-1.5 text-slate-400 dark:text-dk-muted hover:bg-slate-100 dark:hover:bg-dk-strong hover:text-slate-600 dark:hover:text-dk-text2"
           >
             <HiOutlineX className="h-5 w-5" aria-hidden="true" />
           </button>
@@ -85,7 +85,7 @@ export default function NewTicketModal({ onClose, onCreated }) {
 
         <div className="space-y-4 overflow-y-auto px-5 py-4">
           <div>
-            <label htmlFor="support-category" className="mb-1 block text-sm font-medium text-slate-700">
+            <label htmlFor="support-category" className="mb-1 block text-sm font-medium text-slate-700 dark:text-dk-text">
               {t('support.form.category')}
             </label>
             <select
@@ -103,7 +103,7 @@ export default function NewTicketModal({ onClose, onCreated }) {
           </div>
 
           <div>
-            <label htmlFor="support-subject" className="mb-1 block text-sm font-medium text-slate-700">
+            <label htmlFor="support-subject" className="mb-1 block text-sm font-medium text-slate-700 dark:text-dk-text">
               {t('support.form.subject')}
             </label>
             <input
@@ -118,7 +118,7 @@ export default function NewTicketModal({ onClose, onCreated }) {
           </div>
 
           <div>
-            <label htmlFor="support-body" className="mb-1 block text-sm font-medium text-slate-700">
+            <label htmlFor="support-body" className="mb-1 block text-sm font-medium text-slate-700 dark:text-dk-text">
               {t('support.form.body')}
             </label>
             <textarea
@@ -130,13 +130,13 @@ export default function NewTicketModal({ onClose, onCreated }) {
               placeholder={t('support.form.bodyPlaceholder')}
               className={`${fieldClass} resize-y`}
             />
-            <p className="mt-1 text-right text-xs text-slate-400">
+            <p className="mt-1 text-right text-xs text-slate-400 dark:text-dk-muted">
               {t('support.form.charCount', { n: body.length, max: SUPPORT_BODY_MAX })}
             </p>
           </div>
 
           <div>
-            <span className="mb-1 block text-sm font-medium text-slate-700">{t('support.attachments.label')}</span>
+            <span className="mb-1 block text-sm font-medium text-slate-700 dark:text-dk-text">{t('support.attachments.label')}</span>
             <SupportImagePicker
               value={images}
               onChange={setImages}
@@ -146,12 +146,12 @@ export default function NewTicketModal({ onClose, onCreated }) {
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-3">
+        <div className="flex justify-end gap-2 border-t border-slate-100 dark:border-dk-border px-5 py-3">
           <button
             type="button"
             onClick={onClose}
             disabled={submitting}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            className="rounded-lg border border-slate-300 dark:border-dk-border-strong px-4 py-2 text-sm font-medium text-slate-600 dark:text-dk-text2 hover:bg-slate-50 dark:hover:bg-dk-raised"
           >
             {t('common.cancel')}
           </button>

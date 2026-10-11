@@ -39,8 +39,8 @@ export default function SupportReplyBox({ onSubmit, uploadFn, placeholder }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <label className="block text-sm font-medium text-slate-700" htmlFor="support-reply-body">
+    <form onSubmit={handleSubmit} className="space-y-3 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface p-4 shadow-sm">
+      <label className="block text-sm font-medium text-slate-700 dark:text-dk-text" htmlFor="support-reply-body">
         {t('support.thread.reply')}
       </label>
       <textarea
@@ -50,11 +50,11 @@ export default function SupportReplyBox({ onSubmit, uploadFn, placeholder }) {
         maxLength={SUPPORT_BODY_MAX}
         rows={4}
         placeholder={placeholder || t('support.thread.replyPlaceholder')}
-        className="w-full resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100"
+        className="w-full resize-y rounded-lg border border-slate-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted px-3 py-2 text-sm focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-950/40"
       />
       <SupportImagePicker value={images} onChange={setImages} uploadFn={uploadFn} onUploadingChange={setUploading} />
       <div className="flex items-center justify-between gap-3">
-        <span className="text-xs text-slate-400">
+        <span className="text-xs text-slate-400 dark:text-dk-muted">
           {t('support.form.charCount', { n: body.length, max: SUPPORT_BODY_MAX })}
         </span>
         <button

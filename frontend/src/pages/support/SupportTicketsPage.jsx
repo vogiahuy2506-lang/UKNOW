@@ -47,7 +47,7 @@ export default function SupportTicketsPage() {
 
   const tabClass = (active) =>
     `rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-      active ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+      active ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-600 dark:text-dk-text2 hover:bg-slate-100 dark:hover:bg-dk-strong'
     }`;
 
   const changeStatus = (next) => {
@@ -87,31 +87,31 @@ export default function SupportTicketsPage() {
         ))}
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface shadow-sm">
         {loading && !data ? (
-          <div className="p-10 text-center text-sm text-slate-400">{t('common.loading')}</div>
+          <div className="p-10 text-center text-sm text-slate-400 dark:text-dk-muted">{t('common.loading')}</div>
         ) : items.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 p-14 text-center text-slate-400">
+          <div className="flex flex-col items-center gap-2 p-14 text-center text-slate-400 dark:text-dk-muted">
             <HiOutlineChatAlt2 className="h-10 w-10" aria-hidden="true" />
-            <p className="text-sm font-medium text-slate-600">{t('support.empty')}</p>
+            <p className="text-sm font-medium text-slate-600 dark:text-dk-text2">{t('support.empty')}</p>
             <p className="text-xs">{t('support.emptyHint')}</p>
           </div>
         ) : (
-          <ul className="divide-y divide-slate-100">
+          <ul className="divide-y divide-slate-100 dark:divide-dk-border">
             {items.map((ticket) => (
               <li key={ticket.id}>
                 <Link
                   to={`/app/support/${ticket.id}`}
                   data-testid="support-ticket-row"
-                  className="flex flex-col gap-1 px-5 py-4 hover:bg-slate-50"
+                  className="flex flex-col gap-1 px-5 py-4 hover:bg-slate-50 dark:hover:bg-dk-raised"
                 >
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium text-slate-900">{ticket.subject}</span>
+                    <span className="font-medium text-slate-900 dark:text-dk-text">{ticket.subject}</span>
                     <SupportStatusChip status={ticket.status} />
-                    <span className="text-xs text-slate-500">{t(`support.category.${ticket.category}`)}</span>
+                    <span className="text-xs text-slate-500 dark:text-dk-text2">{t(`support.category.${ticket.category}`)}</span>
                   </div>
                   {ticket.lastMessage?.excerpt && (
-                    <p className="line-clamp-1 text-sm text-slate-500">
+                    <p className="line-clamp-1 text-sm text-slate-500 dark:text-dk-text2">
                       <span className="font-medium">
                         {ticket.lastMessage.authorRole === 'admin'
                           ? t('support.thread.supportTeam')
@@ -121,7 +121,7 @@ export default function SupportTicketsPage() {
                       {ticket.lastMessage.excerpt}
                     </p>
                   )}
-                  <span className="text-xs text-slate-400">{formatDateTime(ticket.lastMessageAt, locale)}</span>
+                  <span className="text-xs text-slate-400 dark:text-dk-muted">{formatDateTime(ticket.lastMessageAt, locale)}</span>
                 </Link>
               </li>
             ))}

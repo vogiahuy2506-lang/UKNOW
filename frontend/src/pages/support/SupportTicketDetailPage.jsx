@@ -69,7 +69,7 @@ export default function SupportTicketDetailPage() {
   };
 
   if (loading && !ticket) {
-    return <div className="p-10 text-center text-sm text-slate-400">{t('common.loading')}</div>;
+    return <div className="p-10 text-center text-sm text-slate-400 dark:text-dk-muted">{t('common.loading')}</div>;
   }
   if (notFound || !ticket) {
     return (
@@ -100,7 +100,7 @@ export default function SupportTicketDetailPage() {
             <button
               type="button"
               onClick={() => setConfirmClose(true)}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              className="rounded-lg border border-slate-300 dark:border-dk-border-strong px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-dk-text2 hover:bg-slate-50 dark:hover:bg-dk-raised"
             >
               {t('support.thread.close')}
             </button>

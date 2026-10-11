@@ -15,7 +15,7 @@ const PAGE_SIZE = 20;
 
 const tabClass = (active) =>
   `rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-    active ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+    active ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-600 dark:text-dk-text2 hover:bg-slate-100 dark:hover:bg-dk-strong'
   }`;
 
 function TicketsTab() {
@@ -85,7 +85,7 @@ function TicketsTab() {
               setCategory(event.target.value);
               setPage(1);
             }}
-            className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+            className="rounded-lg border border-slate-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text px-2 py-1.5 text-sm"
           >
             <option value="">{t('support.admin.allCategories')}</option>
             {SUPPORT_CATEGORIES.map((key) => (
@@ -100,11 +100,11 @@ function TicketsTab() {
             onChange={(event) => setSearchInput(event.target.value)}
             placeholder={t('support.admin.searchPlaceholder')}
             aria-label={t('support.admin.searchPlaceholder')}
-            className="w-56 rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+            className="w-56 rounded-lg border border-slate-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted px-3 py-1.5 text-sm"
           />
           <button
             type="submit"
-            className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="inline-flex items-center gap-1 rounded-lg border border-slate-300 dark:border-dk-border-strong px-3 py-1.5 text-sm font-medium text-slate-700 dark:text-dk-text hover:bg-slate-50 dark:hover:bg-dk-raised"
           >
             <HiOutlineSearch className="h-4 w-4" aria-hidden="true" />
             {t('support.admin.search')}
@@ -112,15 +112,15 @@ function TicketsTab() {
         </form>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface shadow-sm">
         {loading && !data ? (
-          <div className="p-10 text-center text-sm text-slate-400">{t('common.loading')}</div>
+          <div className="p-10 text-center text-sm text-slate-400 dark:text-dk-muted">{t('common.loading')}</div>
         ) : items.length === 0 ? (
-          <div className="p-14 text-center text-sm text-slate-400">{t('support.admin.empty')}</div>
+          <div className="p-14 text-center text-sm text-slate-400 dark:text-dk-muted">{t('support.admin.empty')}</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-100 text-sm">
-              <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <table className="min-w-full divide-y divide-slate-100 dark:divide-dk-border text-sm">
+              <thead className="bg-slate-50 dark:bg-dk-raised text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-dk-text2">
                 <tr>
                   <th className="px-4 py-3">{t('support.admin.columns.sender')}</th>
                   <th className="px-4 py-3">{t('support.admin.columns.category')}</th>
@@ -130,7 +130,7 @@ function TicketsTab() {
                   <th className="px-4 py-3">{t('support.admin.columns.time')}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-dk-border">
                 {items.map((ticket) => (
                   <tr
                     key={ticket.id}
@@ -140,15 +140,15 @@ function TicketsTab() {
                     onKeyDown={(event) => {
                       if (event.key === 'Enter') navigate(`/admin/tickets/${ticket.id}`);
                     }}
-                    className="cursor-pointer hover:bg-slate-50"
+                    className="cursor-pointer hover:bg-slate-50 dark:hover:bg-dk-raised"
                   >
                     <td className="px-4 py-3">
-                      <div className="font-medium text-slate-900">{ticket.user?.fullName || ticket.user?.username || '—'}</div>
-                      <div className="text-xs text-slate-500 break-all">{ticket.user?.email}</div>
+                      <div className="font-medium text-slate-900 dark:text-dk-text">{ticket.user?.fullName || ticket.user?.username || '—'}</div>
+                      <div className="text-xs text-slate-500 dark:text-dk-text2 break-all">{ticket.user?.email}</div>
                     </td>
-                    <td className="px-4 py-3 text-slate-600">{t(`support.category.${ticket.category}`)}</td>
-                    <td className="max-w-xs px-4 py-3 font-medium text-slate-900">{ticket.subject}</td>
-                    <td className="max-w-xs px-4 py-3 text-slate-500">
+                    <td className="px-4 py-3 text-slate-600 dark:text-dk-text2">{t(`support.category.${ticket.category}`)}</td>
+                    <td className="max-w-xs px-4 py-3 font-medium text-slate-900 dark:text-dk-text">{ticket.subject}</td>
+                    <td className="max-w-xs px-4 py-3 text-slate-500 dark:text-dk-text2">
                       {ticket.lastMessage ? (
                         <span className="line-clamp-2">
                           <span className="font-medium">
@@ -166,7 +166,7 @@ function TicketsTab() {
                     <td className="px-4 py-3">
                       <SupportStatusChip status={ticket.status} />
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-slate-400">
+                    <td className="whitespace-nowrap px-4 py-3 text-slate-400 dark:text-dk-muted">
                       {formatDateTime(ticket.lastMessageAt, locale)}
                     </td>
                   </tr>
@@ -189,7 +189,7 @@ export default function AdminSupportTicketsPage() {
 
   return (
     <PageContainer icon={HiOutlineChatAlt2} title={t('support.admin.title')} subtitle={t('support.admin.subtitle')}>
-      <div className="flex gap-1 border-b border-slate-200" role="tablist">
+      <div className="flex gap-1 border-b border-slate-200 dark:border-dk-border" role="tablist">
         {['tickets', 'contact'].map((key) => (
           <button
             key={key}
@@ -199,8 +199,8 @@ export default function AdminSupportTicketsPage() {
             onClick={() => setTab(key)}
             className={`-mb-px border-b-2 px-4 py-2 text-sm font-semibold transition-colors ${
               tab === key
-                ? 'border-orange-500 text-orange-600'
-                : 'border-transparent text-slate-500 hover:text-slate-700'
+                ? 'border-orange-500 text-orange-600 dark:text-orange-400'
+                : 'border-transparent text-slate-500 dark:text-dk-text2 hover:text-slate-700 dark:hover:text-dk-text'
             }`}
           >
             {t(`support.admin.tabs.${key}`)}

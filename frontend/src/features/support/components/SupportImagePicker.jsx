@@ -117,20 +117,20 @@ export default function SupportImagePicker({ value, onChange, uploadFn, onUpload
           handleFiles(event.dataTransfer?.files);
         }}
         className={`flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed px-4 py-4 text-center text-xs transition-colors ${
-          dragOver ? 'border-orange-400 bg-orange-50' : 'border-slate-200 bg-slate-50'
+          dragOver ? 'border-orange-400 bg-orange-50 dark:bg-orange-950/40' : 'border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-raised'
         } ${disabled ? 'opacity-60' : ''}`}
       >
-        <HiOutlinePhotograph className="h-5 w-5 text-slate-400" aria-hidden="true" />
-        <span className="text-slate-500">{t('support.attachments.dropHere')}</span>
+        <HiOutlinePhotograph className="h-5 w-5 text-slate-400 dark:text-dk-muted" aria-hidden="true" />
+        <span className="text-slate-500 dark:text-dk-text2">{t('support.attachments.dropHere')}</span>
         <button
           type="button"
           disabled={disabled || isFull}
           onClick={() => inputRef.current?.click()}
-          className="font-semibold text-orange-600 hover:text-orange-700 disabled:cursor-not-allowed disabled:text-slate-400"
+          className="font-semibold text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 disabled:cursor-not-allowed disabled:text-slate-400 dark:disabled:text-dk-muted"
         >
           {t('support.attachments.add')}
         </button>
-        <span className="text-[11px] text-slate-400">
+        <span className="text-[11px] text-slate-400 dark:text-dk-muted">
           {t('support.attachments.hint', { max: SUPPORT_MAX_ATTACHMENTS })} ·{' '}
           {t('support.attachments.count', { n: value.length, max: SUPPORT_MAX_ATTACHMENTS })}
           {uploading > 0 ? ` · ${t('support.attachments.uploading')}` : ''}
@@ -152,11 +152,11 @@ export default function SupportImagePicker({ value, onChange, uploadFn, onUpload
       {value.length > 0 && (
         <ul className="flex flex-wrap gap-2">
           {value.map((item) => (
-            <li key={item.storageObjectId} className="relative h-16 w-16 overflow-hidden rounded-lg border border-slate-200 bg-white">
+            <li key={item.storageObjectId} className="relative h-16 w-16 overflow-hidden rounded-lg border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface">
               {item.previewUrl ? (
                 <img src={item.previewUrl} alt={item.name} className="h-full w-full object-cover" />
               ) : (
-                <span className="flex h-full w-full items-center justify-center p-1 text-center text-[10px] text-slate-500 break-all">
+                <span className="flex h-full w-full items-center justify-center p-1 text-center text-[10px] text-slate-500 dark:text-dk-text2 break-all">
                   {item.name}
                 </span>
               )}

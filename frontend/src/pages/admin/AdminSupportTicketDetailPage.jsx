@@ -63,7 +63,7 @@ export default function AdminSupportTicketDetailPage() {
   };
 
   if (loading && !ticket) {
-    return <div className="p-10 text-center text-sm text-slate-400">{t('common.loading')}</div>;
+    return <div className="p-10 text-center text-sm text-slate-400 dark:text-dk-muted">{t('common.loading')}</div>;
   }
   if (notFound || !ticket) {
     return (
@@ -95,7 +95,7 @@ export default function AdminSupportTicketDetailPage() {
             value={ticket.status}
             disabled={changingStatus}
             onChange={(event) => handleStatusChange(event.target.value)}
-            className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+            className="rounded-lg border border-slate-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text px-2 py-1.5 text-sm"
           >
             {SUPPORT_STATUSES.map((key) => (
               <option key={key} value={key}>
