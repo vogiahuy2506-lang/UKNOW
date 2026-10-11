@@ -324,7 +324,7 @@ const AdminDashboard = () => {
         </div>
       </div>
 
-      {/* ── Hidden print content ── */}
+      {/* ── Hidden print content — giữ sáng: vùng in/xuất PDF, luôn nền trắng ── */}
       <div ref={printRef} className="admin-print-root absolute left-[-14000px] top-0 w-[1100px] bg-white text-gray-900 font-sans">
         {/* Title */}
         <div className="flex items-center justify-between border-b border-gray-300 pb-4 mb-6">

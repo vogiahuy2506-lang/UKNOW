@@ -291,6 +291,7 @@ function LivePreview({ html, subject, templateKey }) {
         </div>
       </div>
       {html ? (
+        // giữ sáng: thân thư xem trước giống thật, luôn nền trắng (khung bao quanh vẫn theo chế độ tối)
         <iframe
           title="Email Preview"
           srcDoc={previewHtml}

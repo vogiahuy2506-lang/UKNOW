@@ -680,7 +680,7 @@ export default function AdminWelcomeEmailPage() {
                 </button>
               </div>
 
-              {/* Email Client Mock Frame */}
+              {/* Email Client Mock Frame — giữ sáng: mô phỏng hộp thư thật, thân thư luôn nền trắng (lớp bao ngoài vẫn theo chế độ tối) */}
               <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-slate-100 dark:bg-dk-inset p-2.5">
                 <div className="flex-1 flex flex-col bg-white rounded-xl shadow-xs overflow-hidden border border-slate-200/80">
                   {/* Email headers info */}
