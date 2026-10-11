@@ -248,7 +248,8 @@ const QuickSend = () => {
   // hết lượt) mờ + khoá, bấm mở modal giải thích + gợi ý mua thay vì chọn. `adapterChannels` = kênh Telegram/WhatsApp
   // mà HỆ THỐNG bật ([{ key, label }], không lọc theo gói); backend cũ thiếu trường thì hook gọi GET /campaigns/channels như trước.
   const channelAvailability = useChannelAvailability({ fetchAdapterChannels: () => campaignApiService.getChannels() });
-  const { adapterChannels } = channelAvailability;
+  // Thẻ vẽ ra = kênh adapter `visible` (cùng một nguồn với Tạo chiến dịch/Trình dựng); thẻ chưa dùng được vẫn nằm trong danh sách.
+  const adapterChannels = channelAvailability.adapterChannels.filter((c) => channelAvailability[c.key]?.visible);
   const [lockedChannelModal, setLockedChannelModal] = useState(null);
   const isAdapterChannel = adapterChannels.some((c) => c.key === selectedChannel);
   // Một thẻ "Zalo" duy nhất bao cả Zalo cá nhân lẫn Zalo nhóm: "Nhóm" chỉ là một cách chọn người nhận trong ô
