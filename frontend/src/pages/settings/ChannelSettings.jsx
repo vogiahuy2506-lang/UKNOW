@@ -10,11 +10,11 @@ import ChannelNotInPlanNotice from '../../features/settings/components/ChannelNo
 import { useChannelEntitlements } from '../../hooks/queries/useChannelEntitlements';
 
 const TABS = [
-  { key: 'email', label: 'Email', icon: HiOutlineMail, color: 'text-blue-600', bg: 'bg-blue-50 border-blue-100' },
-  { key: 'facebook', label: 'Facebook', icon: FaFacebookF, color: 'text-blue-600', bg: 'bg-blue-50 border-blue-100' },
-  { key: 'zalo', label: 'Zalo', icon: HiOutlineChat, color: 'text-sky-600', bg: 'bg-sky-50 border-sky-100' },
-  { key: 'whatsapp', label: 'WhatsApp', icon: FaWhatsapp, color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100' },
-  { key: 'telegram', label: 'Telegram', icon: FaTelegramPlane, color: 'text-sky-500', bg: 'bg-sky-50 border-sky-100' },
+  { key: 'email', label: 'Email', icon: HiOutlineMail, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/40 border-blue-100 dark:border-blue-800' },
+  { key: 'facebook', label: 'Facebook', icon: FaFacebookF, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/40 border-blue-100 dark:border-blue-800' },
+  { key: 'zalo', label: 'Zalo', icon: HiOutlineChat, color: 'text-sky-600 dark:text-sky-400', bg: 'bg-sky-50 dark:bg-sky-950/40 border-sky-100 dark:border-sky-800' },
+  { key: 'whatsapp', label: 'WhatsApp', icon: FaWhatsapp, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-100 dark:border-emerald-800' },
+  { key: 'telegram', label: 'Telegram', icon: FaTelegramPlane, color: 'text-sky-500 dark:text-sky-400', bg: 'bg-sky-50 dark:bg-sky-950/40 border-sky-100 dark:border-sky-800' },
 ];
 
 const ChannelSettings = () => {

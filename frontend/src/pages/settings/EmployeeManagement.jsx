@@ -109,7 +109,7 @@ const LimitField = ({ label, value, onChange, max, t }) => {
       <label className="flex items-center gap-2 cursor-pointer select-none">
         <input
           type="checkbox"
-          className="w-4 h-4 text-primary-600 rounded"
+          className="w-4 h-4 text-primary-600 dark:text-primary-400 rounded"
           checked={isUnlimited}
           onChange={handleCheck}
         />
@@ -124,7 +124,7 @@ const LimitField = ({ label, value, onChange, max, t }) => {
         onBlur={handleBlur}
       />
       {exceedsMax && (
-        <p className="text-xs text-red-500">{t('employee.exceedsMaxLimit', { max: formatIntVi(max) })}</p>
+        <p className="text-xs text-red-500 dark:text-red-400">{t('employee.exceedsMaxLimit', { max: formatIntVi(max) })}</p>
       )}
     </div>
   );
@@ -644,7 +644,7 @@ const EmployeeManagement = () => {
                     : t('employee.slotUsage', { used: limitMeta.used, max: limitMeta.max })}
                 </span>
                 {limitMeta.lockedCount > 0 && (
-                  <span className="text-amber-600"> {t('employee.slotLockedSuffix', { count: limitMeta.lockedCount })}</span>
+                  <span className="text-amber-600 dark:text-amber-400"> {t('employee.slotLockedSuffix', { count: limitMeta.lockedCount })}</span>
                 )}
                 {limitMeta.canBuySlot && (
                   <>
@@ -652,7 +652,7 @@ const EmployeeManagement = () => {
                     <button
                       type="button"
                       onClick={() => navigate('/app/topup')}
-                      className="text-primary-600 hover:text-primary-700 font-medium"
+                      className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium"
                     >
                       {t('employee.buySlotCta')}
                     </button>
@@ -900,7 +900,7 @@ const EmployeeManagement = () => {
                       {...editForm.register('email', { required: t('employee.emailRequired') })}
                     />
                     {editForm.formState.errors.email && (
-                      <p className="text-red-500 text-sm mt-1">{editForm.formState.errors.email.message}</p>
+                      <p className="text-red-500 dark:text-red-400 text-sm mt-1">{editForm.formState.errors.email.message}</p>
                     )}
                   </div>
                   {selectedEmployee.origin !== 'linked' && (
@@ -1002,7 +1002,7 @@ const EmployeeManagement = () => {
                       <label key={keys[0]} className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-dk-border hover:bg-gray-50 dark:hover:bg-dk-raised cursor-pointer">
                         <input
                           type="checkbox"
-                          className="w-4 h-4 text-primary-600 rounded"
+                          className="w-4 h-4 text-primary-600 dark:text-primary-400 rounded"
                           checked={isChecked}
                           onChange={(e) => setPermState((prev) => {
                             const next = { ...prev };
@@ -1023,7 +1023,7 @@ const EmployeeManagement = () => {
               <div className="space-y-6">
                 <div>
                   <div className="flex items-center gap-2 mb-4">
-                    <HiOutlineMail className="w-5 h-5 text-blue-500" />
+                    <HiOutlineMail className="w-5 h-5 text-blue-500 dark:text-blue-400" />
                     <h3 className="text-sm font-semibold text-gray-800 dark:text-dk-text uppercase tracking-wide">{t('employee.emailLabel')}</h3>
                   </div>
                   <div className="grid grid-cols-2 gap-6">
@@ -1046,7 +1046,7 @@ const EmployeeManagement = () => {
                 <div className="border-t border-gray-100 dark:border-dk-border" />
                 <div>
                   <div className="flex items-center gap-2 mb-4">
-                    <HiOutlineChat className="w-5 h-5 text-green-500" />
+                    <HiOutlineChat className="w-5 h-5 text-green-500 dark:text-green-400" />
                     <h3 className="text-sm font-semibold text-gray-800 dark:text-dk-text uppercase tracking-wide">{t('employee.zaloLabel')}</h3>
                   </div>
                   <div className="grid grid-cols-2 gap-6">
@@ -1069,7 +1069,7 @@ const EmployeeManagement = () => {
                 <div className="border-t border-gray-100 dark:border-dk-border" />
                 <div>
                   <div className="flex items-center gap-2 mb-4">
-                    <HiOutlineKey className="w-5 h-5 text-purple-500" />
+                    <HiOutlineKey className="w-5 h-5 text-purple-500 dark:text-purple-400" />
                     <h3 className="text-sm font-semibold text-gray-800 dark:text-dk-text uppercase tracking-wide">{t('employee.aiCreditsLabel')}</h3>
                   </div>
                   <div className="grid grid-cols-2 gap-6">
@@ -1147,7 +1147,7 @@ const EmployeeManagement = () => {
                           >
                             <input
                               type="checkbox"
-                              className="w-4 h-4 mt-1 text-primary-600 rounded"
+                              className="w-4 h-4 mt-1 text-primary-600 dark:text-primary-400 rounded"
                               checked={isChecked}
                               onChange={(e) => setChannelSelected((prev) => toggleIdInList(prev, account.id, e.target.checked))}
                             />
@@ -1184,7 +1184,7 @@ const EmployeeManagement = () => {
                 )}
                 {channelAccounts !== null && (
                   <>
-                    <p className="text-xs text-gray-500 pt-2 border-t border-gray-100">{t('employee.channelGroupExtraHint')}</p>
+                    <p className="text-xs text-gray-500 dark:text-dk-text2 pt-2 border-t border-gray-100 dark:border-dk-border">{t('employee.channelGroupExtraHint')}</p>
                     <EmployeeChannelAccountGroup
                       groupKey="telegram"
                       title={t('employee.channelGroupTelegram')}
@@ -1304,7 +1304,7 @@ const EmployeeManagement = () => {
                 {...inviteForm.register('email', { required: t('employee.emailRequired') })}
               />
               {inviteForm.formState.errors.email && (
-                <p className="text-red-500 text-sm mt-1">{inviteForm.formState.errors.email.message}</p>
+                <p className="text-red-500 dark:text-red-400 text-sm mt-1">{inviteForm.formState.errors.email.message}</p>
               )}
               <p className="text-xs text-gray-500 dark:text-dk-text2 mt-1">{t('employee.inviteEmailHint')}</p>
             </div>

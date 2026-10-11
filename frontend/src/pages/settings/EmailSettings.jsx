@@ -33,8 +33,8 @@ const EMAIL_MODES = {
     labelKey: 'emailSettings.modeSmtp',
     descKey: 'emailSettings.modeSmtpDesc',
     Icon: HiOutlineLockClosed,
-    badgeCls: 'border-amber-200 bg-amber-50 text-amber-700',
-    cardCls: 'border-amber-500 bg-amber-50/60',
+    badgeCls: 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300',
+    cardCls: 'border-amber-500 bg-amber-50/60 dark:bg-amber-950/40',
     recommended: false,
     tabColor: 'amber',
   },
@@ -44,11 +44,11 @@ const EMAIL_MODES = {
 const SectionCard = ({ icon: Icon, title, subtitle, children, accent = 'orange' }) => {
   const [isOpen, setIsOpen] = useState(true);
   const colors = {
-    orange: 'bg-orange-50 text-orange-500',
-    blue: 'bg-blue-50 text-blue-500',
-    green: 'bg-green-50 text-green-600',
-    purple: 'bg-purple-50 text-purple-500',
-    slate: 'bg-slate-100 text-slate-500',
+    orange: 'bg-orange-50 dark:bg-orange-950/40 text-orange-500 dark:text-orange-400',
+    blue: 'bg-blue-50 dark:bg-blue-950/40 text-blue-500 dark:text-blue-400',
+    green: 'bg-green-50 dark:bg-green-950/40 text-green-600 dark:text-green-400',
+    purple: 'bg-purple-50 dark:bg-purple-950/40 text-purple-500 dark:text-purple-400',
+    slate: 'bg-slate-100 dark:bg-dk-raised text-slate-500 dark:text-dk-text2',
   };
 
   return (
@@ -122,14 +122,14 @@ const SmtpGuideAccordion = ({ t }) => {
         className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-100 dark:hover:bg-dk-surface transition"
         onClick={() => setIsOpen(!isOpen)}
       >
-        <HiOutlineQuestionMarkCircle className="w-5 h-5 text-orange-500" />
+        <HiOutlineQuestionMarkCircle className="w-5 h-5 text-orange-500 dark:text-orange-400" />
         <span className="flex-1 text-left text-sm font-medium text-slate-700 dark:text-dk-text">
           {t('emailSettings.smtpGuideAccordionTitle')}
         </span>
         {isOpen ? (
-          <HiOutlineChevronDown className="w-4 h-4 text-slate-400" />
+          <HiOutlineChevronDown className="w-4 h-4 text-slate-400 dark:text-dk-muted" />
         ) : (
-          <HiOutlineChevronRight className="w-4 h-4 text-slate-400" />
+          <HiOutlineChevronRight className="w-4 h-4 text-slate-400 dark:text-dk-muted" />
         )}
       </button>
 
@@ -633,7 +633,7 @@ const EmailSettings = () => {
       );
     }
     if (!emailSettings.length) {
-      return <div className="px-4 pb-6 text-center text-sm text-slate-500">{t('emailSettings.noEmails')}</div>;
+      return <div className="px-4 pb-6 text-center text-sm text-slate-500 dark:text-dk-text2">{t('emailSettings.noEmails')}</div>;
     }
     return (
       <div className="max-h-[540px] overflow-y-auto">
@@ -685,7 +685,7 @@ const EmailSettings = () => {
                   title={t('emailSettings.delete')}
                 >
                   {isDeletingId === item.id ? (
-                    <span className="inline-block h-4 w-4 rounded-full border-2 border-red-300 border-t-transparent animate-spin" />
+                    <span className="inline-block h-4 w-4 rounded-full border-2 border-red-300 dark:border-red-700 border-t-transparent animate-spin" />
                   ) : (
                     <HiOutlineTrash className="h-4 w-4" />
                   )}
@@ -705,7 +705,7 @@ const EmailSettings = () => {
     return (
       <div className="flex items-center justify-between rounded-lg border border-slate-100 dark:border-dk-border bg-slate-50 dark:bg-dk-bg px-4 py-3 text-xs text-slate-600 dark:text-dk-text">
         <span className="inline-flex items-center gap-2 text-slate-700 dark:text-dk-text">
-          <Icon className="h-4 w-4 text-orange-500" />
+          <Icon className="h-4 w-4 text-orange-500 dark:text-orange-400" />
           <span>
             {t('emailSettings.previewLabel')}{' '}
             <span className="font-semibold text-slate-900 dark:text-dk-text">{previewEmail || '—'}</span>
@@ -741,10 +741,10 @@ const EmailSettings = () => {
               type="button"
               onClick={() => handleDelete(selectedEmailId)}
               disabled={isDeletingId === selectedEmailId}
-              className="inline-flex items-center gap-2 rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-3 py-2 text-xs font-medium text-red-700 dark:text-red-300 transition hover:border-red-300 hover:bg-red-100 dark:hover:bg-red-900/50 disabled:opacity-70"
+              className="inline-flex items-center gap-2 rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-3 py-2 text-xs font-medium text-red-700 dark:text-red-300 transition hover:border-red-300 dark:hover:border-red-700 hover:bg-red-100 dark:hover:bg-red-900/50 disabled:opacity-70"
             >
               {isDeletingId === selectedEmailId ? (
-                <span className="inline-block h-3.5 w-3.5 rounded-full border-2 border-red-300 border-t-transparent animate-spin" />
+                <span className="inline-block h-3.5 w-3.5 rounded-full border-2 border-red-300 dark:border-red-700 border-t-transparent animate-spin" />
               ) : (
                 <HiOutlineTrash className="h-4 w-4" />
               )}
@@ -914,7 +914,7 @@ const EmailSettings = () => {
               >
                 {isTestingConnection ? (
                   <>
-                    <span className="h-4 w-4 rounded-full border-2 border-slate-300 border-t-slate-600 animate-spin" />
+                    <span className="h-4 w-4 rounded-full border-2 border-slate-300 dark:border-dk-border-strong border-t-slate-600 animate-spin" />
                     {t('emailSettings.testingConnection')}
                   </>
                 ) : (
@@ -984,7 +984,7 @@ const EmailSettings = () => {
               type="button"
               onClick={refresh}
               disabled={isRefreshing}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface px-3 py-2 text-sm text-slate-700 dark:text-dk-text transition hover:border-orange-200 hover:text-orange-700 disabled:opacity-70"
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface px-3 py-2 text-sm text-slate-700 dark:text-dk-text transition hover:border-orange-200 dark:hover:border-orange-800 hover:text-orange-700 dark:hover:text-orange-300 disabled:opacity-70"
             >
               <HiOutlineRefresh className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
               {t('common.refresh')}
@@ -1007,7 +1007,7 @@ const EmailSettings = () => {
         <div className="lg:col-span-1">
           <div className="bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border rounded-2xl overflow-hidden">
             <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 dark:border-dk-border/80">
-              <HiOutlineMail className="h-4 w-4 text-orange-500" />
+              <HiOutlineMail className="h-4 w-4 text-orange-500 dark:text-orange-400" />
               <p className="text-sm font-semibold text-slate-900 dark:text-dk-text">{t('emailSettings.listTitle')}</p>
             </div>
             {renderList()}

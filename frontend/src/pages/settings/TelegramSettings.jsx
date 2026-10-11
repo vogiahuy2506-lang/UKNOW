@@ -117,7 +117,7 @@ function QrModal({ open, onClose, qrPayload, qrStatus, qrError, onCancel, onNewQ
           {isSuccess ? (
             <div className="flex flex-col items-center gap-3 py-6 text-center">
               <div className="w-16 h-16 rounded-full bg-green-50 dark:bg-green-950/40 flex items-center justify-center">
-                <HiOutlineCheckCircle className="w-9 h-9 text-green-500" />
+                <HiOutlineCheckCircle className="w-9 h-9 text-green-500 dark:text-green-400" />
               </div>
               <div>
                 <p className="text-base font-semibold text-slate-900 dark:text-dk-text">{t('telegramSettings.modalTitleSuccess')}</p>
@@ -695,7 +695,7 @@ export default function TelegramSettings({ readOnly = false } = {}) {
         </div>
 
         {/* H3: nhân viên chỉ thấy tài khoản được giao */}
-        <EmployeeChannelScopeNote className="px-4 sm:px-5 pt-3 text-xs text-slate-500" />
+        <EmployeeChannelScopeNote className="px-4 sm:px-5 pt-3 text-xs text-slate-500 dark:text-dk-text2" />
 
         {/* Content */}
         {loading ? (

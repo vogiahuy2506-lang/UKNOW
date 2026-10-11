@@ -211,7 +211,7 @@ export const getCategoryBadge = (category, labels = []) => {
 
   // fallback cho data cũ không có trong bảng labels
   return (
-    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">
+    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-dk-raised text-gray-800 dark:text-dk-text border border-gray-200 dark:border-dk-border">
       {category}
     </span>
   );

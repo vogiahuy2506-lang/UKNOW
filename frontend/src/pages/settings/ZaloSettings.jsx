@@ -478,9 +478,9 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
       />
 
       {!isBackendReady && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 shadow-2xs">
+        <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 text-amber-900 dark:text-amber-300 shadow-2xs">
           <div className="flex items-start gap-2">
-            <HiOutlineExclamationCircle className="w-5 h-5 mt-0.5 text-amber-600" />
+            <HiOutlineExclamationCircle className="w-5 h-5 mt-0.5 text-amber-600 dark:text-amber-400" />
             <div className="text-sm">
               <p className="font-semibold">{t('zaloSettings.backendNotReadyTitle')}</p>
               <p className="mt-1">
@@ -494,7 +494,7 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
       {!readOnly && (
         <div className="rounded-2xl border border-slate-200/90 dark:border-dk-border bg-white dark:bg-dk-surface p-6 shadow-2xs space-y-4">
           <div className="flex items-center gap-2 text-slate-900 dark:text-dk-text">
-            <HiOutlineQrcode className="w-5 h-5 text-orange-500" />
+            <HiOutlineQrcode className="w-5 h-5 text-orange-500 dark:text-orange-400" />
             <h2 className="text-base sm:text-lg font-bold">{t('zaloSettings.loginByQr')}</h2>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -520,10 +520,10 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
         {isLoading ? (
           <AccountListSkeleton count={2} />
         ) : sortedAccounts.length === 0 ? (
-          <div className="text-center py-12 text-slate-400">
-            <HiOutlineChatAlt2 className="w-12 h-12 mx-auto mb-3 text-slate-300" />
+          <div className="text-center py-12 text-slate-400 dark:text-dk-muted">
+            <HiOutlineChatAlt2 className="w-12 h-12 mx-auto mb-3 text-slate-300 dark:text-dk-muted" />
             <p className="text-sm font-medium">{t('zaloSettings.noAccounts')}</p>
-            {!readOnly && <p className="text-xs mt-1 text-slate-400">{t('zaloSettings.addFirstAccount')}</p>}
+            {!readOnly && <p className="text-xs mt-1 text-slate-400 dark:text-dk-muted">{t('zaloSettings.addFirstAccount')}</p>}
           </div>
         ) : (
           <div className="space-y-3">
@@ -534,17 +534,17 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
                     <div className="flex items-center flex-wrap gap-2">
                       <h3 className="font-semibold text-slate-900 dark:text-dk-text">{account.displayName}</h3>
                       {account.isDefault && (
-                        <span className="inline-flex items-center text-xs px-2.5 py-0.5 rounded-full font-semibold bg-orange-50 text-orange-700 border border-orange-200/80 shadow-2xs">
+                        <span className="inline-flex items-center text-xs px-2.5 py-0.5 rounded-full font-semibold bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 border border-orange-200/80 dark:border-orange-800 shadow-2xs">
                           {t('zaloSettings.default')}
                         </span>
                       )}
                       <span
                         className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-0.5 rounded-full font-semibold border shadow-2xs ${
                           account.status === 'connected' && account.isActive
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200/80'
+                            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200/80 dark:border-emerald-800'
                             : account.status === 'needs_reauth'
-                              ? 'bg-amber-50 text-amber-800 border-amber-200/80'
-                              : 'bg-red-50 text-red-700 border-red-200/80'
+                              ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-200/80 dark:border-amber-800'
+                              : 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200/80 dark:border-red-800'
                         }`}
                       >
                         <span className={`h-1.5 w-1.5 rounded-full ${
@@ -561,7 +561,7 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
                             : t('zaloSettings.disconnected')}
                       </span>
                       {account.phoneLookupCooldownUntil && new Date(account.phoneLookupCooldownUntil).getTime() > Date.now() && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
                           {t('zaloSettings.phoneLookupCooldownBadge', {
                             until: formatCampaignDateTime(account.phoneLookupCooldownUntil),
                           })}
@@ -569,7 +569,7 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
                       )}
                     </div>
                     {account.status === 'needs_reauth' && (
-                      <p className="text-sm text-amber-800 mt-2">
+                      <p className="text-sm text-amber-800 dark:text-amber-300 mt-2">
                         {t('zaloSettings.needsReauthHint')}
                         {account.lastRestoreAttemptAt
                           ? ` ${t('zaloSettings.lastRestoreAttempt')}: ${formatCampaignDateTime(account.lastRestoreAttemptAt)}`
@@ -621,7 +621,7 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
                         {savingSendLimitIds.includes(account.id) ? t('common.saving') : t('common.save')}
                       </button>
                       {Number(getSendLimitDraft(account)) > 100 && (
-                        <span className="text-xs text-amber-600">{t('zaloSettings.dailySendLimitHighWarning')}</span>
+                        <span className="text-xs text-amber-600 dark:text-amber-400">{t('zaloSettings.dailySendLimitHighWarning')}</span>
                       )}
                     </div>
                     <div className="mt-2">
@@ -664,12 +664,12 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
                           {savingSendSpeedIds.includes(account.id) ? t('common.saving') : t('common.save')}
                         </button>
                         {getSendSpeedDraft(account) === 'fast' && (
-                          <span className="text-xs text-amber-600">
+                          <span className="text-xs text-amber-600 dark:text-amber-400">
                             {t('zaloSettings.sendSpeedFastWarning')}
                           </span>
                         )}
                         {getSendSpeedDraft(account) === 'very_fast' && (
-                          <span className="text-xs text-red-600 font-medium">
+                          <span className="text-xs text-red-600 dark:text-red-400 font-medium">
                             {t('zaloSettings.sendSpeedVeryFastWarning')}
                           </span>
                         )}
@@ -735,7 +735,7 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
                     )}
                     <button
                       type="button"
-                      className="p-2 rounded-md hover:bg-red-50 text-gray-500 hover:text-red-600"
+                      className="p-2 rounded-md hover:bg-red-50 dark:hover:bg-red-950/60 text-gray-500 dark:text-dk-text2 hover:text-red-600 dark:hover:text-red-400"
                       onClick={() => promptDeleteAccount(account)}
                       title={t('zaloSettings.delete')}
                     >
@@ -743,7 +743,7 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
                     </button>
                   </div>
                 </div>
-                {account.notes && <p className="text-sm text-gray-700 mt-3">{account.notes}</p>}
+                {account.notes && <p className="text-sm text-gray-700 dark:text-dk-text mt-3">{account.notes}</p>}
               </div>
             ))}
           </div>
@@ -768,7 +768,7 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
                 </button>
               </div>
               <div className="p-4 space-y-3">
-                <div className="rounded-lg border border-gray-200 dark:border-dk-border bg-white p-3 flex items-center justify-center">
+                <div className="rounded-lg border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface p-3 flex items-center justify-center">
                   <img src={qrPreview.image} alt={t('zaloSettings.qrAlt')} className="w-64 h-64 object-contain" />
                 </div>
                 <p className="text-sm text-gray-600 dark:text-dk-text text-center">
@@ -816,7 +816,7 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
                 </div>
                 <button
                   onClick={() => setShowHelp(false)}
-                  className="w-8 h-8 rounded-lg hover:bg-slate-100 dark:hover:bg-dk-raised flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-dk-text transition-colors"
+                  className="w-8 h-8 rounded-lg hover:bg-slate-100 dark:hover:bg-dk-raised flex items-center justify-center text-slate-400 dark:text-dk-muted hover:text-slate-600 dark:hover:text-dk-text transition-colors"
                 >
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>

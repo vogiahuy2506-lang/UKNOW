@@ -89,7 +89,7 @@ const QUICK_FIELD_PRESETS = [
     role: 'name',
     required: true,
     icon: HiOutlineUser,
-    colorClass: 'text-blue-600 bg-blue-50 border-blue-200/80 hover:bg-blue-100 hover:border-blue-300',
+    colorClass: 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 border-blue-200/80 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-950/60 hover:border-blue-300 dark:hover:border-blue-700',
   },
   {
     id: 'email',
@@ -102,7 +102,7 @@ const QUICK_FIELD_PRESETS = [
     role: 'email',
     required: true,
     icon: HiOutlineMail,
-    colorClass: 'text-purple-600 bg-purple-50 border-purple-200/80 hover:bg-purple-100 hover:border-purple-300',
+    colorClass: 'text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/40 border-purple-200/80 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-950/60 hover:border-purple-300 dark:hover:border-purple-700',
   },
   {
     id: 'phone',
@@ -115,7 +115,7 @@ const QUICK_FIELD_PRESETS = [
     role: 'phone',
     required: true,
     icon: HiOutlinePhone,
-    colorClass: 'text-emerald-600 bg-emerald-50 border-emerald-200/80 hover:bg-emerald-100 hover:border-emerald-300',
+    colorClass: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200/80 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-950/60 hover:border-emerald-300 dark:hover:border-emerald-700',
   },
   {
     id: 'short_text',
@@ -128,7 +128,7 @@ const QUICK_FIELD_PRESETS = [
     role: '',
     required: false,
     icon: HiOutlineAnnotation,
-    colorClass: 'text-amber-600 bg-amber-50 border-amber-200/80 hover:bg-amber-100 hover:border-amber-300',
+    colorClass: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-amber-200/80 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-950/60 hover:border-amber-300 dark:hover:border-amber-700',
   },
   {
     id: 'long_text',
@@ -140,7 +140,7 @@ const QUICK_FIELD_PRESETS = [
     role: '',
     required: false,
     icon: HiOutlineDocumentText,
-    colorClass: 'text-indigo-600 bg-indigo-50 border-indigo-200/80 hover:bg-indigo-100 hover:border-indigo-300',
+    colorClass: 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200/80 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-950/60 hover:border-indigo-300 dark:hover:border-indigo-700',
   },
   {
     id: 'radio',
@@ -154,7 +154,7 @@ const QUICK_FIELD_PRESETS = [
     optionsKey: 'options',
     options: ['Lựa chọn 1', 'Lựa chọn 2'],
     icon: HiOutlineCheckCircle,
-    colorClass: 'text-rose-600 bg-rose-50 border-rose-200/80 hover:bg-rose-100 hover:border-rose-300',
+    colorClass: 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 border-rose-200/80 dark:border-rose-800 hover:bg-rose-100 dark:hover:bg-rose-950/60 hover:border-rose-300 dark:hover:border-rose-700',
   },
   {
     id: 'checkbox',
@@ -168,7 +168,7 @@ const QUICK_FIELD_PRESETS = [
     optionsKey: 'items',
     options: ['Mục 1', 'Mục 2'],
     icon: HiOutlineClipboardCheck,
-    colorClass: 'text-teal-600 bg-teal-50 border-teal-200/80 hover:bg-teal-100 hover:border-teal-300',
+    colorClass: 'text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/40 border-teal-200/80 dark:border-teal-800 hover:bg-teal-100 dark:hover:bg-teal-950/60 hover:border-teal-300 dark:hover:border-teal-700',
   },
   {
     id: 'select',
@@ -182,7 +182,7 @@ const QUICK_FIELD_PRESETS = [
     optionsKey: 'options',
     options: ['Lựa chọn 1', 'Lựa chọn 2'],
     icon: HiOutlineViewList,
-    colorClass: 'text-sky-600 bg-sky-50 border-sky-200/80 hover:bg-sky-100 hover:border-sky-300',
+    colorClass: 'text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/40 border-sky-200/80 dark:border-sky-800 hover:bg-sky-100 dark:hover:bg-sky-950/60 hover:border-sky-300 dark:hover:border-sky-700',
   },
   {
     id: 'date',
@@ -194,7 +194,7 @@ const QUICK_FIELD_PRESETS = [
     role: '',
     required: false,
     icon: HiOutlineCalendar,
-    colorClass: 'text-orange-600 bg-orange-50 border-orange-200/80 hover:bg-orange-100 hover:border-orange-300',
+    colorClass: 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/40 border-orange-200/80 dark:border-orange-800 hover:bg-orange-100 dark:hover:bg-orange-950/60 hover:border-orange-300 dark:hover:border-orange-700',
   },
 ];
 
@@ -1418,8 +1418,8 @@ export default function FormEditorPage() {
 
   if (isLoading) {
     return (
-      <div className="p-12 text-center text-gray-500">
-        <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-200 border-t-primary-600 mb-3" />
+      <div className="p-12 text-center text-gray-500 dark:text-dk-text2">
+        <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-200 dark:border-dk-border border-t-primary-600 mb-3" />
         <p className="text-sm">{t('forms.editorPage.loading')}</p>
       </div>
     );
@@ -1515,7 +1515,7 @@ export default function FormEditorPage() {
               </>
             ) : (
               <>
-                <HiOutlineEye className="w-4 h-4 text-emerald-600" />
+                <HiOutlineEye className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                 <span>{t('forms.publish')}</span>
               </>
             )}
@@ -1575,7 +1575,7 @@ export default function FormEditorPage() {
 
           <div>
             <label className="block text-sm font-semibold text-slate-700 dark:text-dk-text mb-1.5">
-              {t('forms.formTitle')} <span className="text-red-500">*</span>
+              {t('forms.formTitle')} <span className="text-red-500 dark:text-red-400">*</span>
             </label>
             <input
               type="text"
@@ -1672,7 +1672,7 @@ export default function FormEditorPage() {
                   onChange={(e) =>
                     setSettings((prev) => ({ ...prev, notifyOwner: e.target.checked }))
                   }
-                  className="mt-1 h-4 w-4 rounded text-teal-600 focus:ring-teal-500 border-slate-300 dark:border-dk-border-strong"
+                  className="mt-1 h-4 w-4 rounded text-teal-600 dark:text-teal-400 focus:ring-teal-500 border-slate-300 dark:border-dk-border-strong"
                 />
               </div>
 
@@ -1692,7 +1692,7 @@ export default function FormEditorPage() {
                   onChange={(e) =>
                     setSettings((prev) => ({ ...prev, consentEnabled: e.target.checked }))
                   }
-                  className="mt-1 h-4 w-4 rounded text-teal-600 focus:ring-teal-500 border-slate-300 dark:border-dk-border-strong"
+                  className="mt-1 h-4 w-4 rounded text-teal-600 dark:text-teal-400 focus:ring-teal-500 border-slate-300 dark:border-dk-border-strong"
                 />
               </div>
 
@@ -1712,7 +1712,7 @@ export default function FormEditorPage() {
                   onChange={(e) =>
                     setSettings((prev) => ({ ...prev, sendConfirmation: e.target.checked }))
                   }
-                  className="mt-1 h-4 w-4 rounded text-teal-600 focus:ring-teal-500 border-slate-300 dark:border-dk-border-strong"
+                  className="mt-1 h-4 w-4 rounded text-teal-600 dark:text-teal-400 focus:ring-teal-500 border-slate-300 dark:border-dk-border-strong"
                 />
               </div>
 
@@ -1899,7 +1899,7 @@ export default function FormEditorPage() {
                     {/* Nhãn trường */}
                     <div>
                       <label className="block text-xs font-semibold text-gray-700 dark:text-dk-text mb-1">
-                        {t('forms.fieldLabel')} <span className="text-red-500">*</span>
+                        {t('forms.fieldLabel')} <span className="text-red-500 dark:text-red-400">*</span>
                       </label>
                       <input
                         type="text"
@@ -1958,7 +1958,7 @@ export default function FormEditorPage() {
                           type="checkbox"
                           checked={field.required}
                           onChange={(e) => handleUpdateField(idx, 'required', e.target.checked)}
-                          className="h-4 w-4 rounded text-orange-600 focus:ring-orange-500 border-gray-300 dark:border-dk-border-strong"
+                          className="h-4 w-4 rounded text-orange-600 dark:text-orange-400 focus:ring-orange-500 border-gray-300 dark:border-dk-border-strong"
                         />
                         <span className="font-medium">{t('forms.required')}</span>
                       </label>
@@ -2107,7 +2107,7 @@ export default function FormEditorPage() {
                 type="checkbox"
                 checked={booking.enabled}
                 onChange={(e) => handleToggleBookingEnabled(e.target.checked)}
-                className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 dark:border-dk-border-strong"
+                className="h-4 w-4 rounded text-blue-600 dark:text-blue-400 focus:ring-blue-500 border-slate-300 dark:border-dk-border-strong"
               />
             </label>
           </div>
@@ -2120,7 +2120,7 @@ export default function FormEditorPage() {
                   type="checkbox"
                   checked={confirmDisableBooking}
                   onChange={(e) => setConfirmDisableBooking(e.target.checked)}
-                  className="h-4 w-4 rounded text-amber-600 focus:ring-amber-500 border-amber-300 dark:border-amber-700"
+                  className="h-4 w-4 rounded text-amber-600 dark:text-amber-400 focus:ring-amber-500 border-amber-300 dark:border-amber-700"
                 />
                 <span>{t('forms.editorPage.booking.disableConfirmCheckbox')}</span>
               </label>
@@ -2350,7 +2350,7 @@ export default function FormEditorPage() {
                     amount: enabled && !prev.amount && selectedProductAmount !== null ? String(selectedProductAmount) : prev.amount,
                   }));
                 }}
-                className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 dark:border-dk-border-strong dark:bg-dk-bg disabled:opacity-50"
+                className="h-4 w-4 rounded text-emerald-600 dark:text-emerald-400 focus:ring-emerald-500 border-slate-300 dark:border-dk-border-strong dark:bg-dk-bg disabled:opacity-50"
               />
             </label>
           </div>
@@ -2410,7 +2410,7 @@ export default function FormEditorPage() {
                           };
                         });
                       }}
-                      className="rounded text-primary-600 focus:ring-primary-500 border-slate-300 dark:border-dk-border-strong dark:bg-dk-bg"
+                      className="rounded text-primary-600 dark:text-primary-400 focus:ring-primary-500 border-slate-300 dark:border-dk-border-strong dark:bg-dk-bg"
                     />
                     {t('forms.editorPage.payment.methodBank')}
                   </label>
@@ -2434,7 +2434,7 @@ export default function FormEditorPage() {
                           };
                         });
                       }}
-                      className="rounded text-primary-600 focus:ring-primary-500 border-slate-300 dark:border-dk-border-strong dark:bg-dk-bg"
+                      className="rounded text-primary-600 dark:text-primary-400 focus:ring-primary-500 border-slate-300 dark:border-dk-border-strong dark:bg-dk-bg"
                     />
                     {t('forms.editorPage.payment.methodMomo')}
                   </label>
@@ -2652,7 +2652,7 @@ export default function FormEditorPage() {
                           disabled={isEmployee}
                           checked={payment.momoQrMode === 'phone'}
                           onChange={() => setPayment((prev) => ({ ...prev, momoQrMode: 'phone' }))}
-                          className="text-primary-600 focus:ring-primary-500 border-slate-300 dark:border-dk-border-strong dark:bg-dk-bg"
+                          className="text-primary-600 dark:text-primary-400 focus:ring-primary-500 border-slate-300 dark:border-dk-border-strong dark:bg-dk-bg"
                         />
                         <span>{t('forms.editorPage.payment.momoQrModePhone')}</span>
                       </label>
@@ -2670,7 +2670,7 @@ export default function FormEditorPage() {
                           disabled={isEmployee}
                           checked={payment.momoQrMode === 'account'}
                           onChange={() => setPayment((prev) => ({ ...prev, momoQrMode: 'account' }))}
-                          className="text-primary-600 focus:ring-primary-500 border-slate-300 dark:border-dk-border-strong dark:bg-dk-bg"
+                          className="text-primary-600 dark:text-primary-400 focus:ring-primary-500 border-slate-300 dark:border-dk-border-strong dark:bg-dk-bg"
                         />
                         <span>{t('forms.editorPage.payment.momoQrModeAccount')}</span>
                       </label>
@@ -2683,7 +2683,7 @@ export default function FormEditorPage() {
                           disabled={isEmployee}
                           checked={payment.momoQrMode === 'none'}
                           onChange={() => setPayment((prev) => ({ ...prev, momoQrMode: 'none' }))}
-                          className="text-primary-600 focus:ring-primary-500 border-slate-300 dark:border-dk-border-strong dark:bg-dk-bg"
+                          className="text-primary-600 dark:text-primary-400 focus:ring-primary-500 border-slate-300 dark:border-dk-border-strong dark:bg-dk-bg"
                         />
                         <span>{t('forms.editorPage.payment.momoQrModeNone')}</span>
                       </label>
