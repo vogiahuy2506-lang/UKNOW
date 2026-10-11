@@ -11,6 +11,8 @@ import {
   ALLOWED_ROLES,
   ALLOWED_FORM_FONTS,
   MAX_FIELDS,
+  MAX_HELP_TEXT_LENGTH,
+  MAX_CONSENT_TEXT_LENGTH,
 } from '../formDefinition.util.js';
 
 describe('formDefinition.util', () => {
@@ -152,6 +154,39 @@ describe('formDefinition.util', () => {
   });
 });
 
+describe('formDefinition.util - normalizeFormFields: helpText & placeholder (PR-3 trình soạn mới)', () => {
+  it('giữ helpText (đã trim) trên từng trường; thiếu → chuỗi rỗng', () => {
+    const [a, b, c] = normalizeFormFields([
+      { type: 'short_text', label: 'Họ tên', helpText: '  Ghi đúng như trên CMND  ' },
+      { type: 'phone', label: 'SĐT' },
+      { type: 'email', label: 'Email', helpText: '   ' },
+    ]);
+    expect(a.helpText).toBe('Ghi đúng như trên CMND');
+    expect(b.helpText).toBe('');
+    expect(c.helpText).toBe('');
+  });
+
+  it('helpText đúng 300 ký tự thì nhận, 301 ký tự thì báo lỗi nêu tên trường', () => {
+    const ok = normalizeFormFields([{ type: 'short_text', label: 'Họ tên', helpText: 'a'.repeat(MAX_HELP_TEXT_LENGTH) }]);
+    expect(ok[0].helpText).toHaveLength(MAX_HELP_TEXT_LENGTH);
+
+    expect(MAX_HELP_TEXT_LENGTH).toBe(300);
+    expect(() =>
+      normalizeFormFields([{ type: 'short_text', label: 'Họ tên', helpText: 'a'.repeat(MAX_HELP_TEXT_LENGTH + 1) }])
+    ).toThrow('Chữ hướng dẫn của trường "Họ tên..." vượt quá 300 ký tự');
+  });
+
+  it('helpText không phải chuỗi được ép về chuỗi, không làm hỏng các khoá khác', () => {
+    const [f] = normalizeFormFields([{ type: 'number', label: 'Tuổi', helpText: 123, placeholder: ' 18 ', required: true }]);
+    expect(f).toMatchObject({ label: 'Tuổi', type: 'number', required: true, placeholder: '18', helpText: '123' });
+  });
+
+  it('placeholder được lưu (đã trim, cắt 200 ký tự) — trình soạn mới đã có ô nhập', () => {
+    const [f] = normalizeFormFields([{ type: 'short_text', label: 'Họ tên', placeholder: `  ${'p'.repeat(250)}  ` }]);
+    expect(f.placeholder).toHaveLength(200);
+  });
+});
+
 describe('formDefinition.util - normalizeFormSettings', () => {
   it('trả về settings mặc định khi input là null hoặc undefined', () => {
     const sNull = normalizeFormSettings(null);
@@ -187,6 +222,31 @@ describe('formDefinition.util - normalizeFormSettings', () => {
   it('ném lỗi 400 nếu submitButtonText > 50 hoặc successMessage > 500', () => {
     expect(() => normalizeFormSettings({ submitButtonText: 'a'.repeat(51) })).toThrow('Nút gửi không được vượt quá 50 ký tự');
     expect(() => normalizeFormSettings({ successMessage: 'b'.repeat(501) })).toThrow('Thông báo thành công không được vượt quá 500 ký tự');
+  });
+
+  it('consentText: whitelist (đã trim), tối đa 500 ký tự, rỗng/vắng thì KHÔNG có khoá', () => {
+    expect(MAX_CONSENT_TEXT_LENGTH).toBe(500);
+    expect(normalizeFormSettings({ consentEnabled: true, consentText: '  Tôi đồng ý nhận ưu đãi từ Công ty A.  ' })).toMatchObject({
+      consentEnabled: true,
+      consentText: 'Tôi đồng ý nhận ưu đãi từ Công ty A.',
+    });
+    expect(normalizeFormSettings({ consentText: 'c'.repeat(500) }).consentText).toHaveLength(500);
+
+    expect(normalizeFormSettings({ consentEnabled: true })).not.toHaveProperty('consentText');
+    expect(normalizeFormSettings({ consentText: '   ' })).not.toHaveProperty('consentText');
+    expect(normalizeFormSettings({ consentText: null })).not.toHaveProperty('consentText');
+    expect(normalizeFormSettings(null)).not.toHaveProperty('consentText');
+  });
+
+  it('consentText: sai kiểu hoặc > 500 ký tự thì ném lỗi 400 INVALID_FORM_SETTINGS', () => {
+    expect(() => normalizeFormSettings({ consentText: 123 })).toThrow('consentText phải là chuỗi');
+    expect(() => normalizeFormSettings({ consentText: 'c'.repeat(501) })).toThrow('Lời đồng ý không được vượt quá 500 ký tự');
+    try {
+      normalizeFormSettings({ consentText: 'c'.repeat(501) });
+    } catch (err) {
+      expect(err.statusCode).toBe(400);
+      expect(err.code).toBe('INVALID_FORM_SETTINGS');
+    }
   });
 
   it('kiểm tra protocol của redirectUrl: chỉ chấp nhận http:// và https://', () => {

@@ -17,6 +17,8 @@ export const ALLOWED_FIELD_TYPES = Object.freeze([
 export const ALLOWED_ROLES = Object.freeze(['name', 'email', 'phone']);
 export const MAX_FIELDS = 30;
 export const MAX_LABEL_LENGTH = 200;
+// Chữ hướng dẫn nhỏ hiện dưới nhãn/ô nhập (PLAN_BIEU_MAU_TUY_BIEN_AI_LANDING_2026-10-11, PR-3).
+export const MAX_HELP_TEXT_LENGTH = 300;
 export const MAX_OPTIONS = 50;
 export const MAX_OPTION_LENGTH = 100;
 
@@ -105,6 +107,13 @@ export function normalizeFormFields(rawFields) {
 
     const required = Boolean(field.required);
     const placeholder = field.placeholder ? String(field.placeholder).trim().slice(0, MAX_LABEL_LENGTH) : '';
+    // Chữ hướng dẫn: kiểm như nhãn — quá dài thì báo lỗi rõ thay vì cắt lặng lẽ (người dùng nhìn thấy chữ này).
+    const helpText = field.helpText ? String(field.helpText).trim() : '';
+    if (helpText.length > MAX_HELP_TEXT_LENGTH) {
+      throw createValidationError(
+        `Chữ hướng dẫn của trường "${label.slice(0, 30)}..." vượt quá ${MAX_HELP_TEXT_LENGTH} ký tự`
+      );
+    }
 
     let role = null;
     if (field.role) {
@@ -178,6 +187,7 @@ export function normalizeFormFields(rawFields) {
       label,
       required,
       placeholder,
+      helpText,
       role,
       options,
     });
@@ -190,6 +200,8 @@ export const MAX_TITLE_LENGTH = 200;
 export const MAX_DESCRIPTION_LENGTH = 5000;
 export const MAX_SUBMIT_BUTTON_TEXT_LENGTH = 50;
 export const MAX_SUCCESS_MESSAGE_LENGTH = 500;
+// Lời đồng ý nhận tin tuỳ chỉnh hiện cạnh ô đồng ý tiếp thị (FormRenderer đọc settings.consentText).
+export const MAX_CONSENT_TEXT_LENGTH = 500;
 export const MAX_REDIRECT_URL_LENGTH = 2000;
 
 /**
@@ -265,6 +277,18 @@ export function normalizeFormSettings(rawSettings) {
       throw createValidationError(`Thông báo thành công không được vượt quá ${MAX_SUCCESS_MESSAGE_LENGTH} ký tự`, 'INVALID_FORM_SETTINGS');
     }
     settings.successMessage = msg || 'Cảm ơn bạn đã gửi thông tin!';
+  }
+
+  // consentText: chỉ lưu khi có chữ — vắng mặt = renderer dùng câu đồng ý mặc định của hệ thống.
+  if (rawSettings.consentText !== undefined && rawSettings.consentText !== null) {
+    if (typeof rawSettings.consentText !== 'string') {
+      throw createValidationError('consentText phải là chuỗi', 'INVALID_FORM_SETTINGS');
+    }
+    const consentText = rawSettings.consentText.trim();
+    if (consentText.length > MAX_CONSENT_TEXT_LENGTH) {
+      throw createValidationError(`Lời đồng ý không được vượt quá ${MAX_CONSENT_TEXT_LENGTH} ký tự`, 'INVALID_FORM_SETTINGS');
+    }
+    if (consentText) settings.consentText = consentText;
   }
 
   if (rawSettings.redirectUrl !== undefined && rawSettings.redirectUrl !== null && rawSettings.redirectUrl !== '') {

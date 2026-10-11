@@ -889,6 +889,8 @@ class FormService {
         submitButtonText: form.settings?.submitButtonText || 'Gửi thông tin',
         successMessage: form.settings?.successMessage || 'Cảm ơn bạn đã gửi thông tin!',
         redirectUrl: form.settings?.redirectUrl || null,
+        // Lời đồng ý tuỳ chỉnh: chỉ trả khi chủ biểu mẫu có đặt (vắng = renderer dùng câu mặc định).
+        ...(form.settings?.consentText ? { consentText: form.settings.consentText } : {}),
       },
       booking: form.bookingConfig?.enabled
         ? { enabled: true, daysAhead: form.bookingConfig.daysAhead }
