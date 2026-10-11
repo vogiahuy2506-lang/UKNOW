@@ -581,7 +581,7 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
                             : account.status === 'needs_reauth'
                               ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-200/80 dark:border-amber-800'
                               : account.status === 'logged_out'
-                                ? 'bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 border-slate-200/80 dark:border-slate-600'
+                                ? 'bg-slate-100 dark:bg-dk-raised text-slate-600 dark:text-dk-text2 border-slate-200/80 dark:border-dk-border'
                                 : 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200/80 dark:border-red-800'
                         }`}
                       >
@@ -591,7 +591,7 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
                             : account.status === 'needs_reauth'
                               ? 'bg-amber-500'
                               : account.status === 'logged_out'
-                                ? 'bg-slate-400 dark:bg-slate-400'
+                                ? 'bg-slate-400'
                                 : 'bg-red-500'
                         }`} />
                         {account.status === 'connected' && account.isActive
@@ -619,7 +619,7 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
                       </p>
                     )}
                     {account.status === 'logged_out' && (
-                      <p className="text-sm text-slate-600 dark:text-slate-300 mt-2">
+                      <p className="text-sm text-slate-600 dark:text-dk-text2 mt-2">
                         {t('zaloSettings.loggedOutHint')}
                       </p>
                     )}
