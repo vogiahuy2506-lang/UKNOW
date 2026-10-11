@@ -28,7 +28,7 @@ const DashboardSkeleton = () => (
       <div className="space-y-2"><Sk className="h-7 w-48" /><Sk className="h-4 w-64" /></div>
       <Sk className="h-9 w-24 rounded-lg" />
     </div>
-    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
       {[...Array(6)].map((_, i) => <Sk key={i} className="h-28" />)}
     </div>
     <Sk className="h-64" />
@@ -200,7 +200,7 @@ const AdminDashboard = () => {
     >
 
       {/* 6 số */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
         <KpiCard
           testId="kpi-revenue"
           icon={HiOutlineCurrencyDollar}
