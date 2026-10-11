@@ -112,7 +112,7 @@ export default function CustomerImportModal({ isOpen, onClose, onImported }) {
       isOpen={isOpen}
       onClose={busy ? () => {} : onClose}
       title={t('customers.importFlow.title')}
-      contentStyle={{ maxWidth: '900px' }}
+      contentStyle={{ maxWidth: '900px', height: 'auto', maxHeight: '85vh' }}
     >
       <div className="p-6 space-y-4">
         {step === 'select' && (
