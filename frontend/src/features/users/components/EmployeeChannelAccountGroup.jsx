@@ -18,9 +18,9 @@ export default function EmployeeChannelAccountGroup({ groupKey, title, emptyText
   const { t } = useI18n();
   return (
     <section className="space-y-2" data-testid={`channel-group-${groupKey}`} aria-label={title}>
-      <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
+      <h3 className="text-sm font-semibold text-gray-800 dark:text-dk-text">{title}</h3>
       {items.length === 0 ? (
-        <p className="text-sm text-gray-500">{emptyText}</p>
+        <p className="text-sm text-gray-500 dark:text-dk-text2">{emptyText}</p>
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-2">
@@ -30,7 +30,7 @@ export default function EmployeeChannelAccountGroup({ groupKey, title, emptyText
             <button type="button" className="btn btn-secondary text-sm" onClick={() => onChange([])}>
               {t('employee.zaloAccountsSelectNone')}
             </button>
-            <span className="text-sm text-gray-500 ml-auto">
+            <span className="text-sm text-gray-500 dark:text-dk-text2 ml-auto">
               {t('employee.zaloAccountsSelectedCount', { selected: selected.length, total: items.length })}
             </span>
           </div>
@@ -40,28 +40,28 @@ export default function EmployeeChannelAccountGroup({ groupKey, title, emptyText
               return (
                 <label
                   key={item.key}
-                  className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer"
+                  className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 dark:border-dk-border hover:bg-gray-50 dark:hover:bg-dk-raised cursor-pointer"
                 >
                   <input
                     type="checkbox"
-                    className="w-4 h-4 mt-1 text-primary-600 rounded"
+                    className="w-4 h-4 mt-1 text-primary-600 dark:text-primary-400 rounded"
                     checked={isChecked}
                     onChange={(e) => onChange(toggleIdInList(selected, item.key, e.target.checked))}
                   />
                   <span className="min-w-0 flex-1">
                     <span className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-medium text-gray-800 break-all">{item.title}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${item.connected ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                      <span className="text-sm font-medium text-gray-800 dark:text-dk-text break-all">{item.title}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${item.connected ? 'bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-300' : 'bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-300'}`}>
                         {item.connected ? t('employee.zaloAccountConnected') : t('employee.zaloAccountDisconnected')}
                       </span>
                       {item.source === 'legacy' && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">{t('employee.zaloAccountSourceLegacy')}</span>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300">{t('employee.zaloAccountSourceLegacy')}</span>
                       )}
                       {item.source === 'self_login' && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">{t('employee.zaloAccountSourceSelfLogin')}</span>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300">{t('employee.zaloAccountSourceSelfLogin')}</span>
                       )}
                     </span>
-                    {item.subtitle && <span className="block text-xs text-gray-500 mt-0.5">{item.subtitle}</span>}
+                    {item.subtitle && <span className="block text-xs text-gray-500 dark:text-dk-text2 mt-0.5">{item.subtitle}</span>}
                   </span>
                 </label>
               );

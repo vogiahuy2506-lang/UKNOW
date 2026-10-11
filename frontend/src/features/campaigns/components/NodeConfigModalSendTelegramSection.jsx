@@ -129,24 +129,24 @@ export const NodeConfigSendTelegramSection = ({
   return (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{t('telegramNodeSend.nodeName')}</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{t('telegramNodeSend.nodeName')}</label>
         <input
           type="text"
           value={formData.label}
           onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+          className="w-full px-3 py-2 border border-gray-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted rounded-lg focus:ring-2 focus:ring-primary-500"
           placeholder={t('telegramNodeSend.nodeNamePlaceholder')}
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          {t('telegramNodeSend.accountRequired')} <span className="text-red-500">*</span>
+        <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">
+          {t('telegramNodeSend.accountRequired')} <span className="text-red-500 dark:text-red-400">*</span>
         </label>
         <select
           value={formData.telegramAccountId || ''}
           onChange={(e) => handleAccountChange(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+          className="w-full px-3 py-2 border border-gray-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted rounded-lg focus:ring-2 focus:ring-primary-500"
         >
           <option value="">-- {t('telegramNodeSend.selectAccount')} --</option>
           {telegramAccounts.map((account) => (
@@ -161,18 +161,18 @@ export const NodeConfigSendTelegramSection = ({
         </select>
 
         {telegramAccountsStatus === 'loading' && (
-          <p role="status" className="mt-1 text-sm text-gray-500">{t('telegramNodeSend.loadingAccounts')}</p>
+          <p role="status" className="mt-1 text-sm text-gray-500 dark:text-dk-text2">{t('telegramNodeSend.loadingAccounts')}</p>
         )}
 
         {telegramAccountsStatus === 'error' && (
-          <div role="alert" className="mt-2 bg-red-50 border border-red-200 p-3 rounded-lg text-sm text-red-700 space-y-2">
+          <div role="alert" className="mt-2 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 p-3 rounded-lg text-sm text-red-700 dark:text-red-300 space-y-2">
             <p className="font-medium">{t('telegramNodeSend.loadFailed')}</p>
             {telegramAccountsError && <p className="text-xs break-words">{telegramAccountsError}</p>}
             {onRetryTelegramAccounts && (
               <button
                 type="button"
                 onClick={onRetryTelegramAccounts}
-                className="px-3 py-1.5 text-xs font-semibold bg-white border border-red-300 text-red-700 rounded-lg hover:bg-red-100"
+                className="px-3 py-1.5 text-xs font-semibold bg-white dark:bg-dk-surface border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-100 dark:hover:bg-red-950/60"
               >
                 {t('telegramNodeSend.retry')}
               </button>
@@ -181,26 +181,26 @@ export const NodeConfigSendTelegramSection = ({
         )}
 
         {isEmptyAfterSuccess && (
-          <div className="mt-2 bg-amber-50 p-3 rounded-lg text-sm text-amber-700">
+          <div className="mt-2 bg-amber-50 dark:bg-amber-950/40 p-3 rounded-lg text-sm text-amber-700 dark:text-amber-300">
             {isEmployeeContext ? t('telegramNodeSend.noAccountsAssigned') : t('telegramNodeSend.noAccountsAvailable')}
           </div>
         )}
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{t('telegramNodeSend.recipientSource')}</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{t('telegramNodeSend.recipientSource')}</label>
         <select
           value={recipientSource}
           onChange={(e) => handleSourceChange(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+          className="w-full px-3 py-2 border border-gray-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted rounded-lg focus:ring-2 focus:ring-primary-500"
         >
           {showGroupsOption && <option value="telegram_groups">{t('telegramNodeSend.sourceGroups')}</option>}
           <option value="telegram_conversations">{t('telegramNodeSend.sourceConversations')}</option>
           <option value="manual">{t('telegramNodeSend.sourceManual')}</option>
         </select>
-        <p className="mt-1 text-xs text-gray-500">{t('telegramNodeSend.recipientSourceNote')}</p>
+        <p className="mt-1 text-xs text-gray-500 dark:text-dk-text2">{t('telegramNodeSend.recipientSourceNote')}</p>
         {showNoConversationsWarning && (
-          <div role="alert" className="mt-2 bg-amber-50 border border-amber-200 p-3 rounded-lg text-sm text-amber-700">
+          <div role="alert" className="mt-2 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 p-3 rounded-lg text-sm text-amber-700 dark:text-amber-300">
             {t('telegramNodeSend.noConversationsWarning')}
           </div>
         )}
@@ -208,30 +208,30 @@ export const NodeConfigSendTelegramSection = ({
 
       {isGroupsSource && (
         <div data-testid="telegram-groups-picker" className="space-y-2">
-          <p className="text-xs text-gray-500">{t('telegramNodeSend.groupsHint')}</p>
+          <p className="text-xs text-gray-500 dark:text-dk-text2">{t('telegramNodeSend.groupsHint')}</p>
           {!accountId ? (
-            <p className="text-sm text-amber-700">{t('telegramNodeSend.groupsPickAccountFirst')}</p>
+            <p className="text-sm text-amber-700 dark:text-amber-300">{t('telegramNodeSend.groupsPickAccountFirst')}</p>
           ) : (
             <button
               type="button"
               onClick={handleLoadGroups}
               disabled={groupsStatus === 'loading'}
-              className="px-3 py-1.5 text-sm font-semibold bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-60"
+              className="px-3 py-1.5 text-sm font-semibold bg-white dark:bg-dk-surface border border-gray-300 dark:border-dk-border-strong text-gray-700 dark:text-dk-text rounded-lg hover:bg-gray-50 dark:hover:bg-dk-raised disabled:opacity-60"
             >
               {groupsStatus === 'loaded' ? t('telegramNodeSend.reloadGroups') : t('telegramNodeSend.loadGroups')}
             </button>
           )}
           {groupsStatus === 'loading' && (
-            <p role="status" className="text-sm text-gray-500">{t('telegramNodeSend.loadingGroups')}</p>
+            <p role="status" className="text-sm text-gray-500 dark:text-dk-text2">{t('telegramNodeSend.loadingGroups')}</p>
           )}
           {groupsStatus === 'error' && (
-            <div role="alert" className="bg-red-50 border border-red-200 p-3 rounded-lg text-sm text-red-700">
+            <div role="alert" className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 p-3 rounded-lg text-sm text-red-700 dark:text-red-300">
               <p className="font-medium">{t('telegramNodeSend.groupsLoadFailed')}</p>
               {groupsError && <p className="text-xs break-words">{groupsError}</p>}
             </div>
           )}
           {groupsStatus === 'loaded' && groups.length === 0 && (
-            <div className="bg-amber-50 p-3 rounded-lg text-sm text-amber-700">{t('telegramNodeSend.groupsEmpty')}</div>
+            <div className="bg-amber-50 dark:bg-amber-950/40 p-3 rounded-lg text-sm text-amber-700 dark:text-amber-300">{t('telegramNodeSend.groupsEmpty')}</div>
           )}
           {groupsStatus === 'loaded' && groups.length > 0 && (
             <>
@@ -240,18 +240,18 @@ export const NodeConfigSendTelegramSection = ({
                 value={groupsFilter}
                 onChange={(e) => setGroupsFilter(e.target.value)}
                 placeholder={t('telegramNodeSend.groupsFilterPlaceholder')}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
               />
-              <ul className="max-h-56 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+              <ul className="max-h-56 overflow-y-auto border border-gray-200 dark:border-dk-border rounded-lg divide-y divide-gray-100 dark:divide-dk-border">
                 {visibleGroups.map((group) => {
                   const checked = selectedGroups.some((g) => String(g.recipientKey) === String(group.chatId));
                   return (
                     <li key={group.chatId}>
-                      <label className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-gray-50">
+                      <label className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-dk-raised">
                         <input type="checkbox" checked={checked} onChange={() => toggleGroup(group)} />
                         <span className="flex-1 truncate">{group.title}</span>
                         {Number.isFinite(group.membersCount) && (
-                          <span className="text-xs text-gray-400">
+                          <span className="text-xs text-gray-400 dark:text-dk-muted">
                             {t('telegramNodeSend.groupsMembers', { count: group.membersCount })}
                           </span>
                         )}
@@ -262,11 +262,11 @@ export const NodeConfigSendTelegramSection = ({
               </ul>
             </>
           )}
-          <p className="text-xs text-gray-600" data-testid="telegram-groups-selected">
+          <p className="text-xs text-gray-600 dark:text-dk-text2" data-testid="telegram-groups-selected">
             {t('telegramNodeSend.groupsSelectedCount', { count: selectedGroups.length })}
           </p>
           {selectedGroups.length > 0 && groupsStatus !== 'loaded' && (
-            <ul className="text-xs text-gray-500 list-disc pl-5">
+            <ul className="text-xs text-gray-500 dark:text-dk-text2 list-disc pl-5">
               {selectedGroups.map((g) => (
                 <li key={g.recipientKey}>{g.display || g.recipientKey}</li>
               ))}
@@ -277,15 +277,15 @@ export const NodeConfigSendTelegramSection = ({
 
       {recipientSource === 'manual' && (
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">{t('telegramNodeSend.chatIdsLabel')}</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{t('telegramNodeSend.chatIdsLabel')}</label>
           <textarea
             rows={4}
             value={formData.recipientKeys || ''}
             onChange={(e) => setFormData((prev) => ({ ...prev, recipientKeys: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 font-mono text-sm"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted rounded-lg focus:ring-2 focus:ring-primary-500 font-mono text-sm"
             placeholder={t('telegramNodeSend.chatIdsPlaceholder')}
           />
-          <p className="mt-1 text-xs text-gray-500">{t('telegramNodeSend.chatIdsHint')}</p>
+          <p className="mt-1 text-xs text-gray-500 dark:text-dk-text2">{t('telegramNodeSend.chatIdsHint')}</p>
         </div>
       )}
 
