@@ -4123,6 +4123,10 @@ export default {
     openProductUrl: 'Mở liên kết',
     copyProductUrl: 'Sao chép liên kết',
     copiedProductUrl: 'Đã sao chép liên kết sản phẩm',
+    copyLinkFailed: 'Không thể sao chép liên kết',
+    loadingList: 'Đang tải danh sách sản phẩm…',
+    emptyHint: 'Bấm "+ Thêm sản phẩm" ở trên để đưa các sản phẩm hoặc dịch vụ vào hệ thống.',
+    viewDetailTip: 'Nhấn để xem chi tiết sản phẩm',
     conversionSummary: 'Doanh thu & Chuyển đổi',
     funnel: {
       periodLabel: 'Khoảng thời gian',

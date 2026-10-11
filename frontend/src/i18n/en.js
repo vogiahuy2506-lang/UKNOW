@@ -4112,6 +4112,10 @@ export default {
     openProductUrl: 'Open link',
     copyProductUrl: 'Copy link',
     copiedProductUrl: 'Product link copied to clipboard',
+    copyLinkFailed: 'Could not copy the link',
+    loadingList: 'Loading products…',
+    emptyHint: 'Click "+ Add product" above to add your products or services to the system.',
+    viewDetailTip: 'Click to view product details',
     conversionSummary: 'Revenue & Conversions',
     funnel: {
       periodLabel: 'Time range',

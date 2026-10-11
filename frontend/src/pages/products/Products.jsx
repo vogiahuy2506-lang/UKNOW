@@ -211,7 +211,7 @@ function ProductDetailModal({ product, funnel, canViewFunnel, onClose, onEdit })
       toast.success(t('products.copiedProductUrl'));
       setTimeout(() => setCopiedLink(false), 2000);
     } catch {
-      toast.error('Không thể sao chép liên kết');
+      toast.error(t('products.copyLinkFailed'));
     }
   };
 
@@ -940,7 +940,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
             <div className="w-7 h-7 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-xs text-slate-500 dark:text-dk-text2 font-medium">Đang tải danh sách sản phẩm…</p>
+            <p className="text-xs text-slate-500 dark:text-dk-text2 font-medium">{t('products.loadingList')}</p>
           </div>
         ) : products.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center px-4">
@@ -949,7 +949,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
             </div>
             <p className="text-sm font-semibold text-slate-700 dark:text-dk-text">{t('products.noProducts')}</p>
             <p className="text-xs text-slate-400 dark:text-dk-text2 mt-1 max-w-sm leading-relaxed">
-              Bấm "+ Thêm sản phẩm" ở trên để đưa các sản phẩm hoặc dịch vụ vào hệ thống.
+              {t('products.emptyHint')}
             </p>
           </div>
         ) : (
@@ -1062,7 +1062,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                                   type="button"
                                   onClick={() => openDetail(product)}
                                   className="text-left text-sm font-semibold text-slate-900 dark:text-dk-text hover:text-orange-600 dark:hover:text-orange-400 transition-colors cursor-pointer group truncate max-w-xs sm:max-w-md"
-                                  title="Nhấn để xem chi tiết sản phẩm"
+                                  title={t('products.viewDetailTip')}
                                 >
                                   <span className="group-hover:underline">{product.productName}</span>
                                 </button>
