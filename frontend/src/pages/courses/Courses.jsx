@@ -31,12 +31,12 @@ const StatusBadge = ({ status }) => {
   const label = labels[normalizedStatus] || normalizedStatus;
   const statusConfig =
     normalizedStatus === 'publish'
-      ? { cls: 'bg-emerald-50 text-emerald-700 border-emerald-200/80', dot: 'bg-emerald-500' }
+      ? { cls: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200/80 dark:border-emerald-800', dot: 'bg-emerald-500' }
       : normalizedStatus === 'pending'
-        ? { cls: 'bg-amber-50 text-amber-700 border-amber-200/80', dot: 'bg-amber-500' }
+        ? { cls: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200/80 dark:border-amber-800', dot: 'bg-amber-500' }
         : normalizedStatus === 'private'
-          ? { cls: 'bg-purple-50 text-purple-700 border-purple-200/80', dot: 'bg-purple-500' }
-          : { cls: 'bg-slate-100 text-slate-600 border-slate-200', dot: 'bg-slate-400' };
+          ? { cls: 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200/80 dark:border-purple-800', dot: 'bg-purple-500' }
+          : { cls: 'bg-slate-100 dark:bg-dk-raised text-slate-600 dark:text-dk-text2 border-slate-200 dark:border-dk-border', dot: 'bg-slate-400' };
 
   return (
     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border shadow-2xs ${statusConfig.cls}`}>
@@ -141,21 +141,21 @@ const Courses = () => {
       }
     >
       {/* Search */}
-      <div className="rounded-2xl border border-slate-200/90 bg-white p-3.5 shadow-2xs">
+      <div className="rounded-2xl border border-slate-200/90 dark:border-dk-border/90 bg-white dark:bg-dk-surface p-3.5 shadow-2xs">
         <form onSubmit={handleSearch} className="flex gap-2 sm:gap-3">
           <div className="relative flex-1">
-            <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-dk-muted pointer-events-none" />
             <input
               type="text"
               value={pendingSearch}
               onChange={(e) => setPendingSearch(e.target.value)}
               placeholder={t('courses.searchPlaceholder')}
-              className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400"
+              className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm bg-slate-50 dark:bg-dk-inset dark:text-dk-text hover:bg-slate-100/70 dark:hover:bg-dk-strong/70 focus:bg-white dark:focus:bg-dk-raised border border-slate-200 dark:border-dk-border rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 dark:placeholder:text-dk-muted"
             />
           </div>
           <button
             type="submit"
-            className="px-4 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs sm:text-sm font-semibold text-slate-700 transition-colors shadow-2xs shrink-0"
+            className="px-4 py-2 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface hover:bg-slate-50 dark:hover:bg-dk-raised text-xs sm:text-sm font-semibold text-slate-700 dark:text-dk-text transition-colors shadow-2xs shrink-0"
           >
             {t('common.search')}
           </button>
@@ -163,69 +163,69 @@ const Courses = () => {
       </div>
 
       {/* Courses table */}
-      <div className="rounded-2xl border border-slate-200/90 bg-white shadow-2xs overflow-hidden">
+      <div className="rounded-2xl border border-slate-200/90 dark:border-dk-border/90 bg-white dark:bg-dk-surface shadow-2xs overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center h-48">
-            <div className="w-6 h-6 border-2 border-slate-200 border-t-orange-500 rounded-full animate-spin" />
+            <div className="w-6 h-6 border-2 border-slate-200 dark:border-dk-border border-t-orange-500 rounded-full animate-spin" />
           </div>
         ) : courses.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-48 text-slate-400 gap-2">
-            <HiOutlineAcademicCap className="w-10 h-10 text-slate-300" />
+          <div className="flex flex-col items-center justify-center h-48 text-slate-400 dark:text-dk-muted gap-2">
+            <HiOutlineAcademicCap className="w-10 h-10 text-slate-300 dark:text-dk-muted" />
             <p className="text-sm">{t('courses.noCourses')}</p>
           </div>
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-slate-100">
-                <thead className="bg-slate-50/80">
+              <table className="min-w-full divide-y divide-slate-100 dark:divide-dk-border">
+                <thead className="bg-slate-50/80 dark:bg-dk-raised/80">
                   <tr>
-                    <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">
                       {t('courses.courseCode')}
                     </th>
-                    <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">
                       {t('courses.courseName')}
                     </th>
-                    <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">
                       {t('courses.price')}
                     </th>
-                    <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">
                       {t('common.status')}
                     </th>
-                    <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">
                       {t('courses.lastUpdated')}
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-slate-100">
+                <tbody className="bg-white dark:bg-dk-surface divide-y divide-slate-100 dark:divide-dk-border">
                   {courses.map((course) => (
-                    <tr key={course.id} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap text-xs sm:text-sm font-mono text-slate-500">
+                    <tr key={course.id} className="hover:bg-slate-50/70 dark:hover:bg-dk-raised/70 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap text-xs sm:text-sm font-mono text-slate-500 dark:text-dk-text2">
                         {course.courseCode}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center">
-                          <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-orange-50 border border-orange-100/80 text-orange-600 shrink-0 mr-3 shadow-2xs">
+                          <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-orange-50 dark:bg-orange-950/40 border border-orange-100/80 dark:border-orange-800 text-orange-600 dark:text-orange-400 shrink-0 mr-3 shadow-2xs">
                             <HiOutlineAcademicCap className="w-5 h-5" />
                           </div>
                           <div className="min-w-0">
-                            <div className="text-xs sm:text-sm font-semibold text-slate-900 truncate">
+                            <div className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-dk-text truncate">
                               {course.courseName}
                             </div>
                             {course.category && (
-                              <div className="text-xs text-slate-400 mt-0.5 truncate">
+                              <div className="text-xs text-slate-400 dark:text-dk-muted mt-0.5 truncate">
                                 {course.category}
                               </div>
                             )}
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-xs sm:text-sm text-slate-900 font-semibold">
+                      <td className="px-6 py-4 whitespace-nowrap text-xs sm:text-sm text-slate-900 dark:text-dk-text font-semibold">
                         {formatPrice(course.price)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <StatusBadge status={course.status} />
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-xs sm:text-sm text-slate-500">
+                      <td className="px-6 py-4 whitespace-nowrap text-xs sm:text-sm text-slate-500 dark:text-dk-text2">
                         {formatDate(course.updatedAt)}
                       </td>
                     </tr>
@@ -236,23 +236,23 @@ const Courses = () => {
 
             {/* Pagination */}
             {pagination.totalPages > 1 && (
-              <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
-                <p className="text-xs sm:text-sm text-slate-500 font-medium">{t('courses.totalCourses', { total: pagination.total })}</p>
+              <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 dark:border-dk-border bg-slate-50/50 dark:bg-dk-raised/50">
+                <p className="text-xs sm:text-sm text-slate-500 dark:text-dk-text2 font-medium">{t('courses.totalCourses', { total: pagination.total })}</p>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setPagination((p) => ({ ...p, page: p.page - 1 }))}
                     disabled={pagination.page === 1}
-                    className="p-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 disabled:opacity-40 transition-colors shadow-2xs"
+                    className="p-1.5 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface hover:bg-slate-50 dark:hover:bg-dk-raised text-slate-600 dark:text-dk-text2 disabled:opacity-40 transition-colors shadow-2xs"
                   >
                     <HiOutlineChevronLeft className="w-4 h-4" />
                   </button>
-                  <span className="text-xs sm:text-sm px-1.5 font-semibold text-slate-700">
+                  <span className="text-xs sm:text-sm px-1.5 font-semibold text-slate-700 dark:text-dk-text">
                     {pagination.page} / {pagination.totalPages}
                   </span>
                   <button
                     onClick={() => setPagination((p) => ({ ...p, page: p.page + 1 }))}
                     disabled={pagination.page === pagination.totalPages}
-                    className="p-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 disabled:opacity-40 transition-colors shadow-2xs"
+                    className="p-1.5 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface hover:bg-slate-50 dark:hover:bg-dk-raised text-slate-600 dark:text-dk-text2 disabled:opacity-40 transition-colors shadow-2xs"
                   >
                     <HiOutlineChevronRight className="w-4 h-4" />
                   </button>

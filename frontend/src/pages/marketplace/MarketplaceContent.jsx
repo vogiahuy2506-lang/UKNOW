@@ -191,9 +191,9 @@ const TYPE_OPTIONS = [
     !isLoading && !isLoadingMore && listings.length > 0 && pagination.page >= pagination.totalPages;
 
   return (
-    <div className="flex flex-col h-full bg-gray-50">
+    <div className="flex flex-col h-full bg-gray-50 dark:bg-dk-bg">
       {/* Header */}
-      <header className="flex-shrink-0 bg-white border-b border-gray-200">
+      <header className="flex-shrink-0 bg-white dark:bg-dk-surface border-b border-gray-200 dark:border-dk-border">
         <div className="px-6 pt-5 pb-3">
           {/* Top row */}
           <div className="flex items-center justify-between mb-4">
@@ -202,10 +202,10 @@ const TYPE_OPTIONS = [
                 <HiOutlineSparkles className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h1 className="text-lg font-bold text-gray-900 leading-tight">
+                <h1 className="text-lg font-bold text-gray-900 dark:text-dk-text leading-tight">
                   {t('browse.headerTitle') || 'Marketplace'}
                 </h1>
-                <p className="text-xs text-gray-500 leading-tight">
+                <p className="text-xs text-gray-500 dark:text-dk-text2 leading-tight">
                   {t('browse.headerSubtitle') || 'Khám phá và chia sẻ template'}
                 </p>
               </div>
@@ -218,7 +218,7 @@ const TYPE_OPTIONS = [
               {onClose && (
                 <button
                   onClick={onClose}
-                  className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors"
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-dk-strong rounded-lg text-gray-500 dark:text-dk-text2 transition-colors"
                   aria-label={t('browse.close') || 'Đóng'}
                 >
                   <HiOutlineX className="w-5 h-5" />
@@ -228,15 +228,15 @@ const TYPE_OPTIONS = [
           </div>
 
           {/* Tabs */}
-          <div className="flex items-center gap-1 border-b border-gray-200 -mb-px">
+          <div className="flex items-center gap-1 border-b border-gray-200 dark:border-dk-border -mb-px">
             {TABS.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
                 className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
                   currentTab === tab.id
-                    ? 'border-orange-500 text-orange-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                    ? 'border-orange-500 text-orange-600 dark:text-orange-400'
+                    : 'border-transparent text-gray-500 dark:text-dk-text2 hover:text-gray-700 dark:hover:text-dk-text'
                 }`}
               >
                 {tab.label}
@@ -250,26 +250,26 @@ const TYPE_OPTIONS = [
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-7xl mx-auto px-6 py-5">
           {/* Search & Filters Bar */}
-          <div className="bg-white rounded-xl border border-gray-100 p-4 mb-5">
+          <div className="bg-white dark:bg-dk-surface rounded-xl border border-gray-100 dark:border-dk-border p-4 mb-5">
             {/* Top row: Search + Actions */}
             <div className="flex flex-col lg:flex-row lg:items-center gap-3">
               {/* Search */}
               <div className="flex-1 relative">
-                <HiOutlineSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <HiOutlineSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-dk-muted" />
                 <input
                   type="text"
                   placeholder={t('browse.searchPlaceholder') || 'Tìm kiếm template...'}
                   value={filters.search}
                   onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
-                  className="h-10 w-full pl-9 pr-9 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 focus:outline-none transition-all"
+                  className="h-10 w-full pl-9 pr-9 text-sm bg-gray-50 dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted border border-gray-200 dark:border-dk-border rounded-lg focus:bg-white dark:focus:bg-dk-raised focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 focus:outline-none transition-all"
                 />
                 {filters.search && (
                   <button
                     onClick={() => setFilters((prev) => ({ ...prev, search: '' }))}
                     aria-label={t('browse.clearSearch') || 'Xóa'}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-200 rounded transition-colors"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-200 dark:hover:bg-dk-strong rounded transition-colors"
                   >
-                    <HiOutlineX className="w-4 h-4 text-gray-400" />
+                    <HiOutlineX className="w-4 h-4 text-gray-400 dark:text-dk-muted" />
                   </button>
                 )}
               </div>
@@ -280,20 +280,20 @@ const TYPE_OPTIONS = [
                   <select
                     value={filters.sort}
                     onChange={(e) => setFilters((prev) => ({ ...prev, sort: e.target.value }))}
-                    className="h-10 pl-3 pr-9 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 focus:outline-none transition-all appearance-none cursor-pointer min-w-[160px]"
+                    className="h-10 pl-3 pr-9 text-sm bg-gray-50 dark:bg-dk-inset dark:text-dk-text border border-gray-200 dark:border-dk-border rounded-lg focus:bg-white dark:focus:bg-dk-raised focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 focus:outline-none transition-all appearance-none cursor-pointer min-w-[160px]"
                   >
                     {SORT_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>{opt.label}</option>
                     ))}
                   </select>
-                  <HiOutlineChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <HiOutlineChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-dk-muted" />
                 </div>
 
-                <div className="flex items-center gap-0.5 p-1 bg-gray-100 rounded-lg flex-shrink-0">
+                <div className="flex items-center gap-0.5 p-1 bg-gray-100 dark:bg-dk-raised rounded-lg flex-shrink-0">
                   <button
                     onClick={() => setViewMode('grid')}
                     className={`h-8 w-8 inline-flex items-center justify-center rounded-md transition-all ${
-                      viewMode === 'grid' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                      viewMode === 'grid' ? 'bg-white dark:bg-dk-surface shadow-sm text-gray-900 dark:text-dk-text' : 'text-gray-500 dark:text-dk-text2 hover:text-gray-700 dark:hover:text-dk-text'
                     }`}
                     aria-label={t('browse.viewGrid') || 'Lưới'}
                   >
@@ -302,7 +302,7 @@ const TYPE_OPTIONS = [
                   <button
                     onClick={() => setViewMode('list')}
                     className={`h-8 w-8 inline-flex items-center justify-center rounded-md transition-all ${
-                      viewMode === 'list' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                      viewMode === 'list' ? 'bg-white dark:bg-dk-surface shadow-sm text-gray-900 dark:text-dk-text' : 'text-gray-500 dark:text-dk-text2 hover:text-gray-700 dark:hover:text-dk-text'
                     }`}
                     aria-label={t('browse.viewList') || 'Danh sách'}
                   >
@@ -313,9 +313,9 @@ const TYPE_OPTIONS = [
             </div>
 
             {/* Filter chips row */}
-            <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-gray-100">
+            <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-dk-border">
               {/* Type filter */}
-              <span className="text-xs text-gray-400 font-medium mr-1">Loại:</span>
+              <span className="text-xs text-gray-400 dark:text-dk-muted font-medium mr-1">Loại:</span>
               <div className="flex items-center gap-1">
                 {TYPE_OPTIONS.map((opt) => (
                   <button
@@ -324,7 +324,7 @@ const TYPE_OPTIONS = [
                     className={`px-3 py-1.5 text-xs font-medium rounded-full transition-all ${
                       filters.type === opt.value
                         ? 'bg-orange-500 text-white shadow-sm'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        : 'bg-gray-100 dark:bg-dk-raised text-gray-600 dark:text-dk-text2 hover:bg-gray-200 dark:hover:bg-dk-strong'
                     }`}
                   >
                     {opt.label}
@@ -336,7 +336,7 @@ const TYPE_OPTIONS = [
               {hasActiveFilters && (
                 <button
                   onClick={clearFilters}
-                  className="ml-auto text-xs text-orange-600 hover:text-orange-700 font-medium flex items-center gap-1"
+                  className="ml-auto text-xs text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 font-medium flex items-center gap-1"
                 >
                   <HiOutlineX className="w-3.5 h-3.5" />
                   Xóa lọc
@@ -347,8 +347,8 @@ const TYPE_OPTIONS = [
 
           {/* Results count */}
           <div className="flex items-center justify-between mb-4">
-            <p className="text-sm text-gray-500">
-              <span className="font-semibold text-gray-900">{pagination.total || 0}</span> template
+            <p className="text-sm text-gray-500 dark:text-dk-text2">
+              <span className="font-semibold text-gray-900 dark:text-dk-text">{pagination.total || 0}</span> template
             </p>
           </div>
 
@@ -359,18 +359,18 @@ const TYPE_OPTIONS = [
               : 'space-y-2'
             }>
               {[...Array(8)].map((_, i) => (
-                <div key={i} className="bg-white rounded-xl overflow-hidden animate-pulse border border-gray-100">
+                <div key={i} className="bg-white dark:bg-dk-surface rounded-xl overflow-hidden animate-pulse border border-gray-100 dark:border-dk-border">
                   <div className="p-5">
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex gap-2">
-                        <div className="h-5 w-20 bg-gray-100 rounded" />
-                        <div className="h-5 w-16 bg-gray-100 rounded" />
+                        <div className="h-5 w-20 bg-gray-100 dark:bg-dk-raised rounded" />
+                        <div className="h-5 w-16 bg-gray-100 dark:bg-dk-raised rounded" />
                       </div>
-                      <div className="h-7 w-7 bg-gray-100 rounded" />
+                      <div className="h-7 w-7 bg-gray-100 dark:bg-dk-raised rounded" />
                     </div>
-                    <div className="h-5 bg-gray-100 rounded w-3/4 mb-3" />
-                    <div className="h-3 bg-gray-100 rounded w-full mb-2" />
-                    <div className="h-3 bg-gray-100 rounded w-2/3" />
+                    <div className="h-5 bg-gray-100 dark:bg-dk-raised rounded w-3/4 mb-3" />
+                    <div className="h-3 bg-gray-100 dark:bg-dk-raised rounded w-full mb-2" />
+                    <div className="h-3 bg-gray-100 dark:bg-dk-raised rounded w-2/3" />
                   </div>
                 </div>
               ))}
@@ -379,14 +379,14 @@ const TYPE_OPTIONS = [
 
           {/* Empty state */}
           {!isLoading && listings.length === 0 && (
-            <div className="bg-white rounded-xl p-12 text-center border border-gray-100">
-              <div className="w-16 h-16 bg-orange-50 rounded-xl flex items-center justify-center mx-auto mb-4">
-                <HiOutlineSparkles className="w-8 h-8 text-orange-500" />
+            <div className="bg-white dark:bg-dk-surface rounded-xl p-12 text-center border border-gray-100 dark:border-dk-border">
+              <div className="w-16 h-16 bg-orange-50 dark:bg-orange-950/40 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <HiOutlineSparkles className="w-8 h-8 text-orange-500 dark:text-orange-400" />
               </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-2">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-dk-text mb-2">
                 {filters.search || filters.type !== 'all' ? 'Không tìm thấy kết quả' : 'Chưa có template nào'}
               </h3>
-              <p className="text-gray-500 mb-5 max-w-sm mx-auto text-sm">
+              <p className="text-gray-500 dark:text-dk-text2 mb-5 max-w-sm mx-auto text-sm">
                 {filters.search || filters.type !== 'all'
                   ? 'Thử tìm kiếm với từ khóa khác hoặc xóa bộ lọc'
                   : 'Hãy là người đầu tiên chia sẻ template của bạn'}
@@ -425,9 +425,9 @@ const TYPE_OPTIONS = [
 
           {/* List view */}
           {!isLoading && listings.length > 0 && viewMode === 'list' && (
-            <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+            <div className="bg-white dark:bg-dk-surface rounded-xl border border-gray-100 dark:border-dk-border overflow-hidden">
               {listings.map((listing, index) => (
-                <div key={listing.id} className={index !== listings.length - 1 ? 'border-b border-gray-100' : ''}>
+                <div key={listing.id} className={index !== listings.length - 1 ? 'border-b border-gray-100 dark:border-dk-border' : ''}>
                   <ListingCard
                     listing={listing}
                     view="list"
@@ -447,13 +447,13 @@ const TYPE_OPTIONS = [
           {!isLoading && listings.length > 0 && (
             <div className="mt-6 flex flex-col items-center gap-2">
               {isLoadingMore && (
-                <div className="flex items-center gap-2 text-sm text-gray-500">
+                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-dk-text2">
                   <div className="spinner w-4 h-4" />
                   Đang tải thêm...
                 </div>
               )}
               {showEndOfList && (
-                <p className="text-sm text-gray-400">
+                <p className="text-sm text-gray-400 dark:text-dk-muted">
                   Đã hiển thị tất cả {listings.length} template
                 </p>
               )}

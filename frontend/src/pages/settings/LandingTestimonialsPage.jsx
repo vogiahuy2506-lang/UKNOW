@@ -253,33 +253,33 @@ const LandingTestimonialsPage = () => {
     >
 
       {loading ? (
-        <p className="text-gray-500">{t('landingTestimonials.loading')}</p>
+        <p className="text-gray-500 dark:text-dk-text2">{t('landingTestimonials.loading')}</p>
       ) : (
-        <div className="overflow-x-auto border border-gray-200 rounded-lg">
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead className="bg-gray-50">
+        <div className="overflow-x-auto border border-gray-200 dark:border-dk-border rounded-lg">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-dk-border text-sm">
+            <thead className="bg-gray-50 dark:bg-dk-raised">
               <tr>
-                <th className="px-3 py-2 text-left font-semibold text-gray-700">{t('landingTestimonials.nameVi')}</th>
-                <th className="px-3 py-2 text-center font-semibold text-gray-700">{t('landingTestimonials.stars')}</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-700 max-w-xs">{t('landingTestimonials.content')}</th>
-                <th className="px-3 py-2 text-center font-semibold text-gray-700 w-[88px]">{t('landingTestimonials.image')}</th>
-                <th className="px-3 py-2 text-center font-semibold text-gray-700">{t('landingTestimonials.visible')}</th>
-                <th className="px-3 py-2 text-right font-semibold text-gray-700">{t('landingTestimonials.actions')}</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-700 dark:text-dk-text">{t('landingTestimonials.nameVi')}</th>
+                <th className="px-3 py-2 text-center font-semibold text-gray-700 dark:text-dk-text">{t('landingTestimonials.stars')}</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-700 dark:text-dk-text max-w-xs">{t('landingTestimonials.content')}</th>
+                <th className="px-3 py-2 text-center font-semibold text-gray-700 dark:text-dk-text w-[88px]">{t('landingTestimonials.image')}</th>
+                <th className="px-3 py-2 text-center font-semibold text-gray-700 dark:text-dk-text">{t('landingTestimonials.visible')}</th>
+                <th className="px-3 py-2 text-right font-semibold text-gray-700 dark:text-dk-text">{t('landingTestimonials.actions')}</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 bg-white">
+            <tbody className="divide-y divide-gray-100 dark:divide-dk-border bg-white dark:bg-dk-surface">
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-3 py-8 text-center text-gray-500">
+                  <td colSpan={6} className="px-3 py-8 text-center text-gray-500 dark:text-dk-text2">
                     {t('landingTestimonials.noRecords')}
                   </td>
                 </tr>
               ) : (
                 rows.map((r) => (
                   <tr key={r.id}>
-                    <td className="px-3 py-2 text-gray-900 max-w-[140px] truncate">{r.nameVi}</td>
-                    <td className="px-3 py-2 text-center text-amber-600">{r.starRating}★</td>
-                    <td className="px-3 py-2 text-gray-600 max-w-md truncate">{r.quoteVi}</td>
+                    <td className="px-3 py-2 text-gray-900 dark:text-dk-text max-w-[140px] truncate">{r.nameVi}</td>
+                    <td className="px-3 py-2 text-center text-amber-600 dark:text-amber-400">{r.starRating}★</td>
+                    <td className="px-3 py-2 text-gray-600 dark:text-dk-text2 max-w-md truncate">{r.quoteVi}</td>
                     <td className="px-3 py-2 text-center align-middle">
                       {r.imageUrl ? (
                         <a
@@ -292,11 +292,11 @@ const LandingTestimonialsPage = () => {
                           <img
                             src={normalizePublicFileUrlForEmbed(r.imageUrl)}
                             alt=""
-                            className="h-10 w-10 rounded-md border border-gray-200 object-cover bg-gray-50"
+                            className="h-10 w-10 rounded-md border border-gray-200 dark:border-dk-border object-cover bg-gray-50 dark:bg-dk-raised"
                           />
                         </a>
                       ) : (
-                        <span className="text-gray-400">—</span>
+                        <span className="text-gray-400 dark:text-dk-muted">—</span>
                       )}
                     </td>
                     <td className="px-3 py-2 text-center">{r.isActive ? t('landingTestimonials.yes') : t('landingTestimonials.no')}</td>
@@ -304,14 +304,14 @@ const LandingTestimonialsPage = () => {
                       <button
                         type="button"
                         onClick={() => openEdit(r)}
-                        className="inline-flex items-center gap-1 px-2 py-1 text-primary-600 hover:bg-primary-50 rounded"
+                        className="inline-flex items-center gap-1 px-2 py-1 text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-950/60 rounded"
                       >
                         <HiOutlinePencil /> {t('landingTestimonials.edit')}
                       </button>
                       <button
                         type="button"
                         onClick={() => onDelete(r)}
-                        className="inline-flex items-center gap-1 px-2 py-1 text-red-600 hover:bg-red-50 rounded ml-2"
+                        className="inline-flex items-center gap-1 px-2 py-1 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/60 rounded ml-2"
                       >
                         <HiOutlineTrash /> {t('landingTestimonials.delete')}
                       </button>
@@ -326,23 +326,23 @@ const LandingTestimonialsPage = () => {
 
       {modalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40">
-          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-4">{editingId ? t('landingTestimonials.editTestimonial') : t('landingTestimonials.createTestimonial')}</h2>
+          <div className="bg-white dark:bg-dk-surface rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-dk-text mb-4">{editingId ? t('landingTestimonials.editTestimonial') : t('landingTestimonials.createTestimonial')}</h2>
             <form onSubmit={onSubmit} className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block sm:col-span-2">
-                  <span className="text-xs font-medium text-gray-600">{t('landingTestimonials.contentVi')}</span>
+                  <span className="text-xs font-medium text-gray-600 dark:text-dk-text2">{t('landingTestimonials.contentVi')}</span>
                   <textarea
-                    className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm min-h-[80px]"
+                    className="mt-1 w-full border border-gray-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted rounded-lg px-3 py-2 text-sm min-h-[80px]"
                     value={form.quoteVi}
                     onChange={(e) => setField('quoteVi', e.target.value)}
                     required
                   />
                 </label>
                 <label className="block sm:col-span-2">
-                  <span className="text-xs font-medium text-gray-600">{t('landingTestimonials.contentEn')}</span>
+                  <span className="text-xs font-medium text-gray-600 dark:text-dk-text2">{t('landingTestimonials.contentEn')}</span>
                   <textarea
-                    className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm min-h-[80px]"
+                    className="mt-1 w-full border border-gray-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted rounded-lg px-3 py-2 text-sm min-h-[80px]"
                     value={form.quoteEn}
                     onChange={(e) => setField('quoteEn', e.target.value)}
                     required
@@ -350,9 +350,9 @@ const LandingTestimonialsPage = () => {
                 </label>
               </div>
               <label className="block">
-                <span className="text-xs font-medium text-gray-600">{t('landingTestimonials.starCount')}</span>
+                <span className="text-xs font-medium text-gray-600 dark:text-dk-text2">{t('landingTestimonials.starCount')}</span>
                 <select
-                  className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  className="mt-1 w-full border border-gray-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text rounded-lg px-3 py-2 text-sm"
                   value={form.starRating}
                   onChange={(e) => setField('starRating', Number(e.target.value))}
                 >
@@ -365,18 +365,18 @@ const LandingTestimonialsPage = () => {
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block">
-                  <span className="text-xs font-medium text-gray-600">{t('landingTestimonials.nameVi')}</span>
+                  <span className="text-xs font-medium text-gray-600 dark:text-dk-text2">{t('landingTestimonials.nameVi')}</span>
                   <input
-                    className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    className="mt-1 w-full border border-gray-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted rounded-lg px-3 py-2 text-sm"
                     value={form.nameVi}
                     onChange={(e) => setField('nameVi', e.target.value)}
                     required
                   />
                 </label>
                 <label className="block">
-                  <span className="text-xs font-medium text-gray-600">{t('landingTestimonials.nameEn')}</span>
+                  <span className="text-xs font-medium text-gray-600 dark:text-dk-text2">{t('landingTestimonials.nameEn')}</span>
                   <input
-                    className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    className="mt-1 w-full border border-gray-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted rounded-lg px-3 py-2 text-sm"
                     value={form.nameEn}
                     onChange={(e) => setField('nameEn', e.target.value)}
                     required
@@ -385,17 +385,17 @@ const LandingTestimonialsPage = () => {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block">
-                  <span className="text-xs font-medium text-gray-600">{t('landingTestimonials.roleVi')}</span>
+                  <span className="text-xs font-medium text-gray-600 dark:text-dk-text2">{t('landingTestimonials.roleVi')}</span>
                   <input
-                    className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    className="mt-1 w-full border border-gray-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted rounded-lg px-3 py-2 text-sm"
                     value={form.roleVi}
                     onChange={(e) => setField('roleVi', e.target.value)}
                   />
                 </label>
                 <label className="block">
-                  <span className="text-xs font-medium text-gray-600">{t('landingTestimonials.roleEn')}</span>
+                  <span className="text-xs font-medium text-gray-600 dark:text-dk-text2">{t('landingTestimonials.roleEn')}</span>
                   <input
-                    className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    className="mt-1 w-full border border-gray-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted rounded-lg px-3 py-2 text-sm"
                     value={form.roleEn}
                     onChange={(e) => setField('roleEn', e.target.value)}
                   />
@@ -403,18 +403,18 @@ const LandingTestimonialsPage = () => {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block">
-                  <span className="text-xs font-medium text-gray-600">{t('landingTestimonials.locationVi')}</span>
+                  <span className="text-xs font-medium text-gray-600 dark:text-dk-text2">{t('landingTestimonials.locationVi')}</span>
                   <input
-                    className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    className="mt-1 w-full border border-gray-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted rounded-lg px-3 py-2 text-sm"
                     value={form.locationVi}
                     onChange={(e) => setField('locationVi', e.target.value)}
                     placeholder={t('landingTestimonials.locationPlaceholderVi')}
                   />
                 </label>
                 <label className="block">
-                  <span className="text-xs font-medium text-gray-600">{t('landingTestimonials.locationEn')}</span>
+                  <span className="text-xs font-medium text-gray-600 dark:text-dk-text2">{t('landingTestimonials.locationEn')}</span>
                   <input
-                    className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    className="mt-1 w-full border border-gray-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted rounded-lg px-3 py-2 text-sm"
                     value={form.locationEn}
                     onChange={(e) => setField('locationEn', e.target.value)}
                     placeholder={t('landingTestimonials.locationPlaceholderEn')}
@@ -422,10 +422,10 @@ const LandingTestimonialsPage = () => {
                 </label>
               </div>
               <label className="block">
-                <span className="text-xs font-medium text-gray-600">
+                <span className="text-xs font-medium text-gray-600 dark:text-dk-text2">
                   {t('landingTestimonials.imageUrlLabel')}
                 </span>
-                <p className="text-xs text-amber-900/90 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-2 mt-1.5 space-y-1">
+                <p className="text-xs text-amber-900/90 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-100 dark:border-amber-800 rounded-lg px-2.5 py-2 mt-1.5 space-y-1">
                   <span className="block">
                     {t('landingTestimonials.imageUrlNote1')}
                   </span>
@@ -434,8 +434,8 @@ const LandingTestimonialsPage = () => {
                   </span>
                 </p>
                 <input
-                  className={`mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm ${
-                    pendingImage ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''
+                  className={`mt-1 w-full border border-gray-300 dark:border-dk-border-strong rounded-lg px-3 py-2 text-sm ${
+                    pendingImage ? 'bg-gray-100 dark:bg-dk-raised text-gray-500 dark:text-dk-text2 cursor-not-allowed' : 'dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted'
                   }`}
                   value={form.imageUrl}
                   onChange={(e) => setField('imageUrl', e.target.value)}
@@ -444,18 +444,18 @@ const LandingTestimonialsPage = () => {
                   title={pendingImage ? t('landingTestimonials.imageDisabledNote') : ''}
                 />
               </label>
-              <div className="rounded-lg border border-dashed border-gray-300 p-3">
-                <p className="text-xs text-gray-600 mb-2">
+              <div className="rounded-lg border border-dashed border-gray-300 dark:border-dk-border-strong p-3">
+                <p className="text-xs text-gray-600 dark:text-dk-text2 mb-2">
                   {t('landingTestimonials.uploadImageLabel')}
                 </p>
                 <input type="file" accept="image/*" onChange={onPickImage} disabled={uploadingFile} className="text-sm" />
                 {pendingImage && (
                   <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <p className="text-xs text-primary-600">{t('landingTestimonials.pendingSave', { name: pendingImage.originalName })}</p>
+                    <p className="text-xs text-primary-600 dark:text-primary-400">{t('landingTestimonials.pendingSave', { name: pendingImage.originalName })}</p>
                     <button
                       type="button"
                       onClick={clearPendingImage}
-                      className="text-xs font-medium text-gray-700 underline hover:text-primary-600"
+                      className="text-xs font-medium text-gray-700 dark:text-dk-text underline hover:text-primary-600 dark:hover:text-primary-400"
                     >
                       {t('landingTestimonials.cancelUpload')}
                     </button>
@@ -468,13 +468,13 @@ const LandingTestimonialsPage = () => {
                   checked={form.isActive}
                   onChange={(e) => setField('isActive', e.target.checked)}
                 />
-                <span className="text-gray-700">{t('landingTestimonials.isActiveLabel')}</span>
+                <span className="text-gray-700 dark:text-dk-text">{t('landingTestimonials.isActiveLabel')}</span>
               </label>
               <div className="flex justify-end gap-2 pt-4">
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+                  className="px-4 py-2 text-sm border border-gray-300 dark:border-dk-border-strong rounded-lg hover:bg-gray-50 dark:hover:bg-dk-raised"
                 >
                   {t('landingTestimonials.cancel')}
                 </button>

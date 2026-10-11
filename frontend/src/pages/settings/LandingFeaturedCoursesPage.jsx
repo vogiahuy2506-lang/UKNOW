@@ -239,32 +239,32 @@ const LandingFeaturedCoursesPage = () => {
     >
 
       {loading ? (
-        <p className="text-gray-500">{t('landingFeaturedCourses.loading')}</p>
+        <p className="text-gray-500 dark:text-dk-text2">{t('landingFeaturedCourses.loading')}</p>
       ) : (
-        <div className="overflow-x-auto border border-gray-200 rounded-lg">
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead className="bg-gray-50">
+        <div className="overflow-x-auto border border-gray-200 dark:border-dk-border rounded-lg">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-dk-border text-sm">
+            <thead className="bg-gray-50 dark:bg-dk-raised">
               <tr>
-                <th className="px-3 py-2 text-left font-semibold text-gray-700">{t('landingFeaturedCourses.titleVi')}</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-700">{t('landingFeaturedCourses.link')}</th>
-                <th className="px-3 py-2 text-center font-semibold text-gray-700 w-[88px]">{t('landingFeaturedCourses.image')}</th>
-                <th className="px-3 py-2 text-center font-semibold text-gray-700">{t('landingFeaturedCourses.visible')}</th>
-                <th className="px-3 py-2 text-right font-semibold text-gray-700">{t('landingFeaturedCourses.actions')}</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-700 dark:text-dk-text">{t('landingFeaturedCourses.titleVi')}</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-700 dark:text-dk-text">{t('landingFeaturedCourses.link')}</th>
+                <th className="px-3 py-2 text-center font-semibold text-gray-700 dark:text-dk-text w-[88px]">{t('landingFeaturedCourses.image')}</th>
+                <th className="px-3 py-2 text-center font-semibold text-gray-700 dark:text-dk-text">{t('landingFeaturedCourses.visible')}</th>
+                <th className="px-3 py-2 text-right font-semibold text-gray-700 dark:text-dk-text">{t('landingFeaturedCourses.actions')}</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 bg-white">
+            <tbody className="divide-y divide-gray-100 dark:divide-dk-border bg-white dark:bg-dk-surface">
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-3 py-8 text-center text-gray-500">
+                  <td colSpan={5} className="px-3 py-8 text-center text-gray-500 dark:text-dk-text2">
                     {t('landingFeaturedCourses.noRecords')}
                   </td>
                 </tr>
               ) : (
                 rows.map((r) => (
                   <tr key={r.id}>
-                    <td className="px-3 py-2 text-gray-900 max-w-xs truncate">{r.titleVi}</td>
+                    <td className="px-3 py-2 text-gray-900 dark:text-dk-text max-w-xs truncate">{r.titleVi}</td>
                     <td className="px-3 py-2 max-w-xs truncate">
-                      <a href={r.linkUrl} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:underline">
+                      <a href={r.linkUrl} target="_blank" rel="noopener noreferrer" className="text-primary-600 dark:text-primary-400 hover:underline">
                         {r.linkUrl}
                       </a>
                     </td>
@@ -280,11 +280,11 @@ const LandingFeaturedCoursesPage = () => {
                           <img
                             src={normalizePublicFileUrlForEmbed(r.imageUrl)}
                             alt=""
-                            className="h-10 w-10 rounded-md border border-gray-200 object-cover bg-gray-50"
+                            className="h-10 w-10 rounded-md border border-gray-200 dark:border-dk-border object-cover bg-gray-50 dark:bg-dk-raised"
                           />
                         </a>
                       ) : (
-                        <span className="text-gray-400">—</span>
+                        <span className="text-gray-400 dark:text-dk-muted">—</span>
                       )}
                     </td>
                     <td className="px-3 py-2 text-center">{r.isActive ? t('landingFeaturedCourses.yes') : t('landingFeaturedCourses.no')}</td>
@@ -292,14 +292,14 @@ const LandingFeaturedCoursesPage = () => {
                       <button
                         type="button"
                         onClick={() => openEdit(r)}
-                        className="inline-flex items-center gap-1 px-2 py-1 text-primary-600 hover:bg-primary-50 rounded"
+                        className="inline-flex items-center gap-1 px-2 py-1 text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-950/60 rounded"
                       >
                         <HiOutlinePencil /> {t('landingFeaturedCourses.edit')}
                       </button>
                       <button
                         type="button"
                         onClick={() => onDelete(r)}
-                        className="inline-flex items-center gap-1 px-2 py-1 text-red-600 hover:bg-red-50 rounded ml-2"
+                        className="inline-flex items-center gap-1 px-2 py-1 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/60 rounded ml-2"
                       >
                         <HiOutlineTrash /> {t('landingFeaturedCourses.delete')}
                       </button>
@@ -314,23 +314,23 @@ const LandingFeaturedCoursesPage = () => {
 
       {modalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40">
-          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-4">{editingId ? t('landingFeaturedCourses.editCourse') : t('landingFeaturedCourses.createCourse')}</h2>
+          <div className="bg-white dark:bg-dk-surface rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-dk-text mb-4">{editingId ? t('landingFeaturedCourses.editCourse') : t('landingFeaturedCourses.createCourse')}</h2>
             <form onSubmit={onSubmit} className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block">
-                  <span className="text-xs font-medium text-gray-600">{t('landingFeaturedCourses.titleVi')}</span>
+                  <span className="text-xs font-medium text-gray-600 dark:text-dk-text2">{t('landingFeaturedCourses.titleVi')}</span>
                   <input
-                    className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    className="mt-1 w-full border border-gray-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted rounded-lg px-3 py-2 text-sm"
                     value={form.titleVi}
                     onChange={(e) => setField('titleVi', e.target.value)}
                     required
                   />
                 </label>
                 <label className="block">
-                  <span className="text-xs font-medium text-gray-600">{t('landingFeaturedCourses.titleEn')}</span>
+                  <span className="text-xs font-medium text-gray-600 dark:text-dk-text2">{t('landingFeaturedCourses.titleEn')}</span>
                   <input
-                    className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    className="mt-1 w-full border border-gray-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted rounded-lg px-3 py-2 text-sm"
                     value={form.titleEn}
                     onChange={(e) => setField('titleEn', e.target.value)}
                     required
@@ -339,27 +339,27 @@ const LandingFeaturedCoursesPage = () => {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block">
-                  <span className="text-xs font-medium text-gray-600">{t('landingFeaturedCourses.tagVi')}</span>
+                  <span className="text-xs font-medium text-gray-600 dark:text-dk-text2">{t('landingFeaturedCourses.tagVi')}</span>
                   <input
-                    className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    className="mt-1 w-full border border-gray-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted rounded-lg px-3 py-2 text-sm"
                     value={form.tagVi}
                     onChange={(e) => setField('tagVi', e.target.value)}
                   />
                 </label>
                 <label className="block">
-                  <span className="text-xs font-medium text-gray-600">{t('landingFeaturedCourses.tagEn')}</span>
+                  <span className="text-xs font-medium text-gray-600 dark:text-dk-text2">{t('landingFeaturedCourses.tagEn')}</span>
                   <input
-                    className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    className="mt-1 w-full border border-gray-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted rounded-lg px-3 py-2 text-sm"
                     value={form.tagEn}
                     onChange={(e) => setField('tagEn', e.target.value)}
                   />
                 </label>
               </div>
               <label className="block">
-                <span className="text-xs font-medium text-gray-600">
+                <span className="text-xs font-medium text-gray-600 dark:text-dk-text2">
                   {t('landingFeaturedCourses.imageUrlLabel')}
                 </span>
-                <p className="text-xs text-amber-900/90 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-2 mt-1.5 space-y-1">
+                <p className="text-xs text-amber-900/90 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-100 dark:border-amber-800 rounded-lg px-2.5 py-2 mt-1.5 space-y-1">
                   <span className="block">
                     {t('landingFeaturedCourses.imageUrlNote1')}
                   </span>
@@ -368,8 +368,8 @@ const LandingFeaturedCoursesPage = () => {
                   </span>
                 </p>
                 <input
-                  className={`mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm ${
-                    pendingImage ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''
+                  className={`mt-1 w-full border border-gray-300 dark:border-dk-border-strong rounded-lg px-3 py-2 text-sm ${
+                    pendingImage ? 'bg-gray-100 dark:bg-dk-raised text-gray-500 dark:text-dk-text2 cursor-not-allowed' : 'dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted'
                   }`}
                   value={form.imageUrl}
                   onChange={(e) => setField('imageUrl', e.target.value)}
@@ -378,18 +378,18 @@ const LandingFeaturedCoursesPage = () => {
                   title={pendingImage ? t('landingFeaturedCourses.imageDisabledNote') : ''}
                 />
               </label>
-              <div className="rounded-lg border border-dashed border-gray-300 p-3">
-                <p className="text-xs text-gray-600 mb-2">
+              <div className="rounded-lg border border-dashed border-gray-300 dark:border-dk-border-strong p-3">
+                <p className="text-xs text-gray-600 dark:text-dk-text2 mb-2">
                   {t('landingFeaturedCourses.uploadImageLabel')}
                 </p>
                 <input type="file" accept="image/*" onChange={onPickImage} disabled={uploadingFile} className="text-sm" />
                 {pendingImage && (
                   <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <p className="text-xs text-primary-600">{t('landingFeaturedCourses.pendingSave', { name: pendingImage.originalName })}</p>
+                    <p className="text-xs text-primary-600 dark:text-primary-400">{t('landingFeaturedCourses.pendingSave', { name: pendingImage.originalName })}</p>
                     <button
                       type="button"
                       onClick={clearPendingImage}
-                      className="text-xs font-medium text-gray-700 underline hover:text-primary-600"
+                      className="text-xs font-medium text-gray-700 dark:text-dk-text underline hover:text-primary-600 dark:hover:text-primary-400"
                     >
                       {t('landingFeaturedCourses.cancelUpload')}
                     </button>
@@ -397,9 +397,9 @@ const LandingFeaturedCoursesPage = () => {
                 )}
               </div>
               <label className="block">
-                <span className="text-xs font-medium text-gray-600">{t('landingFeaturedCourses.courseLink')}</span>
+                <span className="text-xs font-medium text-gray-600 dark:text-dk-text2">{t('landingFeaturedCourses.courseLink')}</span>
                 <input
-                  className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  className="mt-1 w-full border border-gray-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted rounded-lg px-3 py-2 text-sm"
                   value={form.linkUrl}
                   onChange={(e) => setField('linkUrl', e.target.value)}
                   placeholder={t('landingFeaturedCourses.courseLinkPlaceholder')}
@@ -412,13 +412,13 @@ const LandingFeaturedCoursesPage = () => {
                   checked={form.isActive}
                   onChange={(e) => setField('isActive', e.target.checked)}
                 />
-                <span className="text-gray-700">{t('landingFeaturedCourses.isActiveLabel')}</span>
+                <span className="text-gray-700 dark:text-dk-text">{t('landingFeaturedCourses.isActiveLabel')}</span>
               </label>
               <div className="flex justify-end gap-2 pt-4">
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+                  className="px-4 py-2 text-sm border border-gray-300 dark:border-dk-border-strong rounded-lg hover:bg-gray-50 dark:hover:bg-dk-raised"
                 >
                   {t('landingFeaturedCourses.cancel')}
                 </button>

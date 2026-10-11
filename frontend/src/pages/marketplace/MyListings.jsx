@@ -97,9 +97,9 @@ const MyListings = () => {
 
   const getStatusBadge = (status) => {
     const styles = {
-      draft: 'bg-gray-100 text-gray-600',
-      published: 'bg-emerald-100 text-emerald-700',
-      paused: 'bg-amber-100 text-amber-700',
+      draft: 'bg-gray-100 dark:bg-dk-raised text-gray-600 dark:text-dk-text2',
+      published: 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300',
+      paused: 'bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300',
     };
     const labels = {
       draft: 'Nháp',
@@ -120,7 +120,7 @@ const MyListings = () => {
         label: 'Xuất bản',
         icon: HiOutlinePlay,
         onClick: () => handlePublish(listing.id),
-        className: 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50',
+        className: 'text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/60',
       });
     }
     if (listing.status === 'published') {
@@ -128,7 +128,7 @@ const MyListings = () => {
         label: 'Tạm dừng',
         icon: HiOutlinePause,
         onClick: () => handlePause(listing.id),
-        className: 'text-amber-600 hover:text-amber-700 hover:bg-amber-50',
+        className: 'text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/60',
       });
     }
     if (listing.status === 'paused') {
@@ -136,7 +136,7 @@ const MyListings = () => {
         label: 'Xuất bản lại',
         icon: HiOutlinePlay,
         onClick: () => handlePublish(listing.id),
-        className: 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50',
+        className: 'text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/60',
       });
     }
     return actions;
@@ -153,8 +153,8 @@ const MyListings = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Template của tôi</h1>
-          <p className="text-gray-500 mt-1">Quản lý các template đã chia sẻ trên marketplace</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-dk-text">Template của tôi</h1>
+          <p className="text-gray-500 dark:text-dk-text2 mt-1">Quản lý các template đã chia sẻ trên marketplace</p>
         </div>
         <Link to="/app/marketplace/create" className="btn btn-primary">
           <HiOutlinePlus className="w-4 h-4 mr-1.5" />
@@ -175,7 +175,7 @@ const MyListings = () => {
             <option value="published">Đã đăng</option>
             <option value="paused">Tạm dừng</option>
           </select>
-          <span className="text-sm text-gray-500">
+          <span className="text-sm text-gray-500 dark:text-dk-text2">
             {pagination.total} template
           </span>
         </div>
@@ -189,11 +189,11 @@ const MyListings = () => {
           </div>
         ) : listings.length === 0 ? (
           <div className="py-16 text-center">
-            <div className="w-16 h-16 bg-orange-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <HiOutlineTemplate className="w-8 h-8 text-orange-600" />
+            <div className="w-16 h-16 bg-orange-50 dark:bg-orange-950/40 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <HiOutlineTemplate className="w-8 h-8 text-orange-600 dark:text-orange-400" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Chưa có template nào</h3>
-            <p className="text-sm text-gray-500 mb-5">Bắt đầu chia sẻ template đầu tiên của bạn</p>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-dk-text mb-2">Chưa có template nào</h3>
+            <p className="text-sm text-gray-500 dark:text-dk-text2 mb-5">Bắt đầu chia sẻ template đầu tiên của bạn</p>
             <Link to="/app/marketplace/create" className="btn btn-primary">
               <HiOutlinePlus className="w-4 h-4 mr-1.5" />
               Tạo template đầu tiên
@@ -220,21 +220,21 @@ const MyListings = () => {
                     <tr
                       key={listing.id}
                       onClick={() => navigate(`/app/marketplace/listing/${listing.id}/settings`)}
-                      className="cursor-pointer hover:bg-gray-50 transition-colors"
+                      className="cursor-pointer hover:bg-gray-50 dark:hover:bg-dk-raised transition-colors"
                     >
                       <td>
-                        <span className="font-semibold text-gray-900 group-hover:text-orange-600 block">
+                        <span className="font-semibold text-gray-900 dark:text-dk-text group-hover:text-orange-600 dark:group-hover:text-orange-400 block">
                           {listing.title}
                         </span>
-                        <p className="text-sm text-gray-500 mt-0.5 line-clamp-1">
+                        <p className="text-sm text-gray-500 dark:text-dk-text2 mt-0.5 line-clamp-1">
                           {listing.description || 'Không có mô tả'}
                         </p>
                       </td>
                       <td>
                         <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium ${
                           listing.resource_type === 'campaign' 
-                            ? 'bg-orange-50 text-orange-600' 
-                            : 'bg-purple-50 text-purple-600'
+                            ? 'bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400' 
+                            : 'bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400'
                         }`}>
                           <TypeIcon className="w-3.5 h-3.5" />
                           {listing.resource_type === 'campaign' ? 'Chiến dịch' : 'Chatbot'}
@@ -243,16 +243,16 @@ const MyListings = () => {
                       <td>{getStatusBadge(listing.status)}</td>
                       <td>
                         {listing.price_credits > 0 ? (
-                          <span className="text-orange-600 font-medium">{listing.price_credits} credits</span>
+                          <span className="text-orange-600 dark:text-orange-400 font-medium">{listing.price_credits} credits</span>
                         ) : (
-                          <span className="text-emerald-600 font-medium">Miễn phí</span>
+                          <span className="text-emerald-600 dark:text-emerald-400 font-medium">Miễn phí</span>
                         )}
                       </td>
                       <td>
                         <div className="flex items-center gap-1">
                           <HiOutlineStar className="w-4 h-4 text-amber-400 fill-amber-400" />
                           <span>{typeof listing.rating_avg === 'number' ? listing.rating_avg.toFixed(1) : '0.0'}</span>
-                          <span className="text-gray-400 text-sm">({listing.rating_count || 0})</span>
+                          <span className="text-gray-400 dark:text-dk-muted text-sm">({listing.rating_count || 0})</span>
                         </div>
                       </td>
                       <td>{listing.purchase_count || 0}</td>
@@ -260,7 +260,7 @@ const MyListings = () => {
                         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                           <button
                             onClick={() => navigate(`/app/marketplace/listing/${listing.id}/settings`)}
-                            className="p-2 rounded-lg text-gray-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
+                            className="p-2 rounded-lg text-gray-400 dark:text-dk-muted hover:text-orange-600 dark:hover:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950/60 transition-colors"
                             title="Cài đặt"
                           >
                             <HiOutlineCog className="w-4 h-4" />
@@ -277,7 +277,7 @@ const MyListings = () => {
                           ))}
                           <button
                             onClick={() => handleDelete(listing.id)}
-                            className="p-2 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                            className="p-2 rounded-lg text-red-400 hover:text-red-600 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/60 transition-colors"
                             title="Xóa"
                           >
                             <HiOutlineTrash className="w-4 h-4" />
@@ -292,7 +292,7 @@ const MyListings = () => {
           </div>
         )}
         {!isLoading && pagination.totalPages > 1 && (
-          <div className="border-t border-gray-200 px-4 py-3">
+          <div className="border-t border-gray-200 dark:border-dk-border px-4 py-3">
             <Pagination
               currentPage={pagination.page}
               totalPages={pagination.totalPages}

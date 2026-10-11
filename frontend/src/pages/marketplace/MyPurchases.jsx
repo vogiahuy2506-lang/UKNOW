@@ -71,8 +71,8 @@ const MyPurchases = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('purchases.title')}</h1>
-          <p className="text-gray-500 mt-1">{t('purchases.subtitle')}</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-dk-text">{t('purchases.title')}</h1>
+          <p className="text-gray-500 dark:text-dk-text2 mt-1">{t('purchases.subtitle')}</p>
         </div>
       </div>
 
@@ -85,11 +85,11 @@ const MyPurchases = () => {
         </div>
       ) : purchases.length === 0 ? (
         <div className="card py-16 text-center">
-          <div className="w-16 h-16 bg-purple-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <HiOutlineShoppingCart className="w-8 h-8 text-purple-600" />
+          <div className="w-16 h-16 bg-purple-50 dark:bg-purple-950/40 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <HiOutlineShoppingCart className="w-8 h-8 text-purple-600 dark:text-purple-400" />
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">{t('purchases.emptyTitle')}</h3>
-          <p className="text-sm text-gray-500 mb-5">{t('purchases.emptyDesc')}</p>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-dk-text mb-2">{t('purchases.emptyTitle')}</h3>
+          <p className="text-sm text-gray-500 dark:text-dk-text2 mb-5">{t('purchases.emptyDesc')}</p>
           <Link to="/app/marketplace" className="btn btn-primary">
             <HiOutlineSparkles className="w-4 h-4 mr-1.5" />
             Khám phá marketplace
@@ -117,20 +117,20 @@ const MyPurchases = () => {
                       <td>
                         <button
                           onClick={() => showListing(purchase.listing_id, 'purchases')}
-                          className="font-semibold text-gray-900 hover:text-orange-600 text-left block"
+                          className="font-semibold text-gray-900 dark:text-dk-text hover:text-orange-600 dark:hover:text-orange-400 text-left block"
                         >
                           {purchase.title || `Template #${purchase.listing_id}`}
                         </button>
-                        <p className="text-sm text-gray-500 mt-0.5 line-clamp-1">
+                        <p className="text-sm text-gray-500 dark:text-dk-text2 mt-0.5 line-clamp-1">
                           {purchase.description || 'Không có mô tả'}
                         </p>
                       </td>
                       <td>
-                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300">
                           {purchase.cloned_resource_type === 'campaign' ? 'Chiến dịch' : 'Chatbot'}
                         </span>
                       </td>
-                      <td className="text-gray-600">
+                      <td className="text-gray-600 dark:text-dk-text2">
                         <div className="flex items-center gap-2">
                           <div className="w-7 h-7 rounded-full bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center text-xs font-medium">
                             {(purchase.seller_name || '?').charAt(0).toUpperCase()}
@@ -139,18 +139,18 @@ const MyPurchases = () => {
                         </div>
                       </td>
                       <td>
-                        <div className="flex items-center gap-1.5 text-gray-500 text-sm">
+                        <div className="flex items-center gap-1.5 text-gray-500 dark:text-dk-text2 text-sm">
                           <HiOutlineClock className="w-4 h-4" />
                           {formatDate(purchase.purchased_at)}
                         </div>
                       </td>
                       <td>
                         {purchase.credits_spent > 0 ? (
-                          <span className="text-amber-600 font-medium">
+                          <span className="text-amber-600 dark:text-amber-400 font-medium">
                             {purchase.credits_spent} credits
                           </span>
                         ) : (
-                          <span className="text-green-600 font-medium">Miễn phí</span>
+                          <span className="text-green-600 dark:text-green-400 font-medium">Miễn phí</span>
                         )}
                       </td>
                       <td>
@@ -170,7 +170,7 @@ const MyPurchases = () => {
 
             {/* Pagination */}
             {pagination.totalPages > 1 && (
-              <div className="border-t border-gray-200 px-4 py-3">
+              <div className="border-t border-gray-200 dark:border-dk-border px-4 py-3">
                 <Pagination
                   currentPage={pagination.page}
                   totalPages={pagination.totalPages}

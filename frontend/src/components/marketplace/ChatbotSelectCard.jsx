@@ -27,8 +27,8 @@ const ChatbotSelectCard = ({
       className={`
         relative p-4 rounded-xl border-2 cursor-pointer transition-all duration-200
         ${isSelected
-          ? 'border-orange-400 bg-orange-50 shadow-md'
-          : 'border-gray-200 bg-white hover:border-orange-200 hover:shadow-md'
+          ? 'border-orange-400 bg-orange-50 dark:bg-orange-950/40 shadow-md'
+          : 'border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface hover:border-orange-200 dark:hover:border-orange-800 hover:shadow-md'
         }
         ${chatbot.isListed ? 'opacity-70' : ''}
       `}
@@ -43,7 +43,7 @@ const ChatbotSelectCard = ({
       {/* Listed badge */}
       {chatbot.isListed && (
         <div className="absolute top-3 left-3">
-          <span className="px-2 py-0.5 text-xs font-medium rounded bg-gray-100 text-gray-500">
+          <span className="px-2 py-0.5 text-xs font-medium rounded bg-gray-100 dark:bg-dk-raised text-gray-500 dark:text-dk-text2">
             {l.listed}
           </span>
         </div>
@@ -59,8 +59,8 @@ const ChatbotSelectCard = ({
               className="w-14 h-14 rounded-xl object-cover"
             />
           ) : (
-            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-purple-100 to-purple-200 flex items-center justify-center">
-              <HiOutlineChat className="w-7 h-7 text-purple-500" />
+            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-purple-100 dark:from-purple-950/40 to-purple-200 dark:to-purple-900/40 flex items-center justify-center">
+              <HiOutlineChat className="w-7 h-7 text-purple-500 dark:text-purple-400" />
             </div>
           )}
         </div>
@@ -68,12 +68,12 @@ const ChatbotSelectCard = ({
         {/* Info */}
         <div className="flex-1 min-w-0">
           {/* Name */}
-          <h3 className="font-semibold text-gray-900 line-clamp-1 mb-1">
+          <h3 className="font-semibold text-gray-900 dark:text-dk-text line-clamp-1 mb-1">
             {chatbot.name || 'Untitled Chatbot'}
           </h3>
 
           {/* Description */}
-          <p className="text-sm text-gray-500 line-clamp-2 mb-3">
+          <p className="text-sm text-gray-500 dark:text-dk-text2 line-clamp-2 mb-3">
             {chatbot.description || 'Không có mô tả'}
           </p>
 
@@ -81,11 +81,11 @@ const ChatbotSelectCard = ({
           <div className="flex items-center gap-2 flex-wrap">
             {/* Knowledge base badge */}
             {chatbot.hasKnowledgeBase ? (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded bg-green-100 text-green-700">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-300">
                 {l.hasKnowledgeBase} ({chatbot.chunkCount})
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded bg-gray-100 text-gray-500">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded bg-gray-100 dark:bg-dk-raised text-gray-500 dark:text-dk-text2">
                 {l.noKnowledgeBase}
               </span>
             )}
@@ -103,8 +103,8 @@ const ChatbotSelectCard = ({
           ${isSelected
             ? 'bg-orange-500 text-white hover:bg-orange-600'
             : chatbot.isListed
-              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-              : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+              ? 'bg-gray-100 dark:bg-dk-raised text-gray-400 dark:text-dk-muted cursor-not-allowed'
+              : 'bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-900/50'
           }
         `}
       >

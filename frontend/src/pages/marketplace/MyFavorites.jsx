@@ -79,8 +79,8 @@ const MyFavorites = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('favorites.title')}</h1>
-          <p className="text-gray-500 mt-1">{t('favorites.subtitle')}</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-dk-text">{t('favorites.title')}</h1>
+          <p className="text-gray-500 dark:text-dk-text2 mt-1">{t('favorites.subtitle')}</p>
         </div>
       </div>
 
@@ -93,11 +93,11 @@ const MyFavorites = () => {
         </div>
       ) : favorites.length === 0 ? (
         <div className="card py-16 text-center">
-          <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <div className="w-16 h-16 bg-red-50 dark:bg-red-950/40 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <HiOutlineHeart className="w-8 h-8 text-red-400" />
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">{t('favorites.emptyTitle')}</h3>
-          <p className="text-sm text-gray-500 mb-5">{t('favorites.emptyDesc')}</p>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-dk-text mb-2">{t('favorites.emptyTitle')}</h3>
+          <p className="text-sm text-gray-500 dark:text-dk-text2 mb-5">{t('favorites.emptyDesc')}</p>
           <Link to="/app/marketplace" className="btn btn-primary">
             <HiOutlineEye className="w-4 h-4 mr-1.5" />
             Khám phá marketplace
@@ -123,7 +123,7 @@ const MyFavorites = () => {
                 {/* Remove button */}
                 <button
                   onClick={(e) => handleRemoveFavorite(listing.id, e)}
-                  className="absolute top-3 right-3 p-2 bg-white rounded-full shadow-sm text-red-500 hover:text-red-600 hover:bg-red-50 transition-colors z-10"
+                  className="absolute top-3 right-3 p-2 bg-white dark:bg-dk-surface rounded-full shadow-sm text-red-500 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/60 transition-colors z-10"
                   title={t('favorites.removeTitle')}
                 >
                   <HiOutlineHeart className="w-5 h-5 fill-red-500" />

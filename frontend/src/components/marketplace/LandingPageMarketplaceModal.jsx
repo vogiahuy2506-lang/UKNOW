@@ -158,44 +158,44 @@ const LandingPageMarketplaceModal = ({ open, landingPage, onClose, onSuccess }) 
         role="dialog"
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden"
+        className="bg-white dark:bg-dk-surface rounded-xl shadow-2xl w-full max-w-md overflow-hidden"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-orange-50">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-dk-border bg-orange-50 dark:bg-orange-950/40">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
-              <HiOutlineGlobeAlt className="w-5 h-5 text-orange-600" />
+            <div className="w-10 h-10 bg-orange-100 dark:bg-orange-950/40 rounded-xl flex items-center justify-center">
+              <HiOutlineGlobeAlt className="w-5 h-5 text-orange-600 dark:text-orange-400" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-dk-text">
                 {t('landingPagesAdmin.publishToMarketplace')}
               </h3>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-gray-500 dark:text-dk-text2">
                 {t('landingPagesAdmin.publishSubtitle')}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-orange-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-orange-100 dark:hover:bg-orange-950/60 rounded-lg transition-colors"
             aria-label={t('common.close') || 'Đóng'}
           >
-            <HiOutlineX className="w-5 h-5 text-gray-500" />
+            <HiOutlineX className="w-5 h-5 text-gray-500 dark:text-dk-text2" />
           </button>
         </div>
 
         {/* Body */}
         <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
           {/* Landing page preview */}
-          <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
-            <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center">
-              <HiOutlineGlobeAlt className="w-5 h-5 text-orange-600" />
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-dk-raised border border-gray-100 dark:border-dk-border">
+            <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-950/40 flex items-center justify-center">
+              <HiOutlineGlobeAlt className="w-5 h-5 text-orange-600 dark:text-orange-400" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="font-semibold text-gray-900 truncate">
+              <p className="font-semibold text-gray-900 dark:text-dk-text truncate">
                 {landingPage.title || '—'}
               </p>
-              <p className="text-xs text-gray-500 truncate">
+              <p className="text-xs text-gray-500 dark:text-dk-text2 truncate">
                 {landingPage.slug
                   ? `${landingPage.slug}.founderai.biz`
                   : landingPage.customDomainHostname || '—'}
@@ -205,9 +205,9 @@ const LandingPageMarketplaceModal = ({ open, landingPage, onClose, onSuccess }) 
 
           {/* Title */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1.5">
               {t('landingPagesAdmin.publishFieldTitle')}{' '}
-              <span className="text-red-500">*</span>
+              <span className="text-red-500 dark:text-red-400">*</span>
             </label>
             <input
               type="text"
@@ -217,14 +217,14 @@ const LandingPageMarketplaceModal = ({ open, landingPage, onClose, onSuccess }) 
               }
               placeholder={t('landingPagesAdmin.publishFieldTitlePlaceholder')}
               maxLength={255}
-              className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all"
+              className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted focus:outline-none focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 focus:border-orange-400 transition-all"
             />
-            <p className="text-xs text-gray-400 mt-1">{form.title.length}/255</p>
+            <p className="text-xs text-gray-400 dark:text-dk-muted mt-1">{form.title.length}/255</p>
           </div>
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1.5">
               {t('landingPagesAdmin.publishFieldDescription')}
             </label>
             <textarea
@@ -235,18 +235,18 @@ const LandingPageMarketplaceModal = ({ open, landingPage, onClose, onSuccess }) 
               placeholder={t('landingPagesAdmin.publishFieldDescriptionPlaceholder')}
               rows={3}
               maxLength={2000}
-              className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all resize-none"
+              className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted focus:outline-none focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 focus:border-orange-400 transition-all resize-none"
             />
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs text-gray-400 dark:text-dk-muted mt-1">
               {form.description.length}/2000
             </p>
           </div>
 
           {/* Tags */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1.5">
               {t('landingPagesAdmin.publishFieldTags')}{' '}
-              <span className="font-normal text-gray-400">
+              <span className="font-normal text-gray-400 dark:text-dk-muted">
                 ({t('landingPagesAdmin.publishFieldTagsHint')})
               </span>
             </label>
@@ -254,13 +254,13 @@ const LandingPageMarketplaceModal = ({ open, landingPage, onClose, onSuccess }) 
               {form.tags.map((tag) => (
                 <span
                   key={tag}
-                  className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded-full"
+                  className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 text-xs rounded-full"
                 >
                   {tag}
                   <button
                     type="button"
                     onClick={() => handleRemoveTag(tag)}
-                    className="hover:text-orange-900"
+                    className="hover:text-orange-900 dark:hover:text-orange-300"
                     aria-label={`Remove tag ${tag}`}
                   >
                     <HiOutlineX className="w-3 h-3" />
@@ -275,14 +275,14 @@ const LandingPageMarketplaceModal = ({ open, landingPage, onClose, onSuccess }) 
                 onChange={(e) => setTagInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder={t('landingPagesAdmin.publishFieldTagsPlaceholder')}
-                className="w-full px-3.5 py-2 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all"
+                className="w-full px-3.5 py-2 text-sm rounded-xl border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted focus:outline-none focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 focus:border-orange-400 transition-all"
               />
             )}
           </div>
 
           {/* Price */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1.5">
               {t('landingPagesAdmin.publishFieldPrice')}
             </label>
             <div className="flex items-center gap-2">
@@ -294,7 +294,7 @@ const LandingPageMarketplaceModal = ({ open, landingPage, onClose, onSuccess }) 
                     priceCredits: Math.max(0, prev.priceCredits - 10),
                   }))
                 }
-                className="w-10 h-10 rounded-xl border border-gray-200 hover:border-orange-300 hover:bg-orange-50 text-gray-700 font-semibold transition-colors"
+                className="w-10 h-10 rounded-xl border border-gray-200 dark:border-dk-border hover:border-orange-300 dark:hover:border-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950/60 text-gray-700 dark:text-dk-text font-semibold transition-colors"
               >
                 −
               </button>
@@ -306,7 +306,7 @@ const LandingPageMarketplaceModal = ({ open, landingPage, onClose, onSuccess }) 
                     priceCredits: Math.max(0, parseInt(v, 10) || 0),
                   }))
                 }
-                className="flex-1 px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all text-center font-semibold"
+                className="flex-1 px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted focus:outline-none focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 focus:border-orange-400 transition-all text-center font-semibold"
               />
               <button
                 type="button"
@@ -316,24 +316,24 @@ const LandingPageMarketplaceModal = ({ open, landingPage, onClose, onSuccess }) 
                     priceCredits: prev.priceCredits + 10,
                   }))
                 }
-                className="w-10 h-10 rounded-xl border border-gray-200 hover:border-orange-300 hover:bg-orange-50 text-gray-700 font-semibold transition-colors"
+                className="w-10 h-10 rounded-xl border border-gray-200 dark:border-dk-border hover:border-orange-300 dark:hover:border-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950/60 text-gray-700 dark:text-dk-text font-semibold transition-colors"
               >
                 +
               </button>
             </div>
-            <p className="text-xs text-gray-500 mt-2">
+            <p className="text-xs text-gray-500 dark:text-dk-text2 mt-2">
               {t('landingPagesAdmin.publishPriceFreeHint')}
             </p>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex items-center justify-end gap-2.5">
+        <div className="px-6 py-4 border-t border-gray-100 dark:border-dk-border bg-gray-50 dark:bg-dk-raised flex items-center justify-end gap-2.5">
           <button
             type="button"
             onClick={onClose}
             disabled={isSubmitting}
-            className="px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-200 rounded-xl transition-colors disabled:opacity-50"
+            className="px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-dk-text2 hover:bg-gray-200 dark:hover:bg-dk-strong rounded-xl transition-colors disabled:opacity-50"
           >
             {t('common.cancel') || 'Hủy'}
           </button>

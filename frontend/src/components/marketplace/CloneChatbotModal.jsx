@@ -141,7 +141,7 @@ const CloneChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
         aria-modal="true"
         aria-labelledby="share-chatbot-title"
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl shadow-orange-500/20 animate-[modalIn_0.28s_cubic-bezier(0.16,1,0.3,1)]"
+        className="relative w-full max-w-lg overflow-hidden rounded-3xl bg-white dark:bg-dk-surface shadow-2xl shadow-orange-500/20 animate-[modalIn_0.28s_cubic-bezier(0.16,1,0.3,1)]"
       >
         {/* Animated gradient header */}
         <div className="relative overflow-hidden bg-gradient-to-br from-orange-500 via-orange-500 to-amber-500 px-6 pt-6 pb-8">
@@ -181,12 +181,12 @@ const CloneChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
         {/* Body */}
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
           {/* Chatbot preview */}
-          <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-100">
+          <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-dk-raised border border-slate-100 dark:border-dk-border">
             {chatbot?.avatar_url ? (
               <img
                 src={chatbot.avatar_url}
                 alt=""
-                className="w-11 h-11 rounded-xl object-cover ring-1 ring-slate-200"
+                className="w-11 h-11 rounded-xl object-cover ring-1 ring-slate-200 dark:ring-dk-border"
               />
             ) : (
               <div className="flex items-center justify-center w-11 h-11 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 text-white">
@@ -194,12 +194,12 @@ const CloneChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
               </div>
             )}
             <div className="min-w-0 flex-1">
-              <p className="font-semibold text-slate-900 truncate">{chatbot?.name}</p>
-              <p className="text-xs text-slate-500 truncate">
+              <p className="font-semibold text-slate-900 dark:text-dk-text truncate">{chatbot?.name}</p>
+              <p className="text-xs text-slate-500 dark:text-dk-text2 truncate">
                 {chatbot?.description || t('common.noDescription') || 'Không có mô tả'}
               </p>
             </div>
-            <span className="hidden sm:inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-orange-700 bg-orange-50 rounded-full">
+            <span className="hidden sm:inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-950/40 rounded-full">
               <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
               Sẵn sàng chia sẻ
             </span>
@@ -207,7 +207,7 @@ const CloneChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
 
           {/* Email input */}
           <div>
-            <label className="block text-sm font-semibold text-slate-900 mb-1.5">
+            <label className="block text-sm font-semibold text-slate-900 dark:text-dk-text mb-1.5">
               {t('chatbot.recipientEmail') || 'Email người nhận'}
             </label>
             <EmailTagsInput
@@ -221,7 +221,7 @@ const CloneChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
               placeholder={t('chatbot.emailPlaceholder') || 'nguyen@example.com'}
             />
             {!error && (
-              <p className="mt-1.5 text-xs text-slate-500">
+              <p className="mt-1.5 text-xs text-slate-500 dark:text-dk-text2">
                 {t('chatbot.cloneNote') || 'Người nhận phải có tài khoản trong hệ thống. Có thể thêm nhiều người.'}
               </p>
             )}
@@ -229,7 +229,7 @@ const CloneChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
 
           {/* Permission selector */}
           <div>
-            <label className="block text-sm font-semibold text-slate-900 mb-2">
+            <label className="block text-sm font-semibold text-slate-900 dark:text-dk-text mb-2">
               Quyền truy cập
             </label>
             <div className="grid grid-cols-3 gap-2">
@@ -244,8 +244,8 @@ const CloneChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
                     disabled={submitting || success}
                     className={`group relative flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all text-center ${
                       active
-                        ? 'border-orange-500 bg-orange-50/60 shadow-sm'
-                        : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                        ? 'border-orange-500 bg-orange-50/60 dark:bg-orange-950/40 shadow-sm'
+                        : 'border-slate-200 dark:border-dk-border hover:border-slate-300 dark:hover:border-dk-border-strong hover:bg-slate-50 dark:hover:bg-dk-raised'
                     }`}
                   >
                     <span
@@ -253,8 +253,8 @@ const CloneChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
                     >
                       <Icon className="w-4 h-4" />
                     </span>
-                    <span className="text-xs font-semibold text-slate-900">{p.label}</span>
-                    <span className="text-[10px] leading-tight text-slate-500 line-clamp-2">
+                    <span className="text-xs font-semibold text-slate-900 dark:text-dk-text">{p.label}</span>
+                    <span className="text-[10px] leading-tight text-slate-500 dark:text-dk-text2 line-clamp-2">
                       {p.desc}
                     </span>
                     {active && (
@@ -268,8 +268,8 @@ const CloneChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
 
           {/* Optional note */}
           <div>
-            <label className="block text-sm font-semibold text-slate-900 mb-1.5">
-              Lời nhắn <span className="font-normal text-slate-400">(tuỳ chọn)</span>
+            <label className="block text-sm font-semibold text-slate-900 dark:text-dk-text mb-1.5">
+              Lời nhắn <span className="font-normal text-slate-400 dark:text-dk-muted">(tuỳ chọn)</span>
             </label>
             <textarea
               value={note}
@@ -277,15 +277,15 @@ const CloneChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
               rows={2}
               placeholder="Gửi kèm lời nhắn cho người nhận..."
               disabled={submitting || success}
-              className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all resize-none"
+              className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted focus:outline-none focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 focus:border-orange-400 transition-all resize-none"
             />
           </div>
 
           {/* Info box */}
-          <div className="flex gap-3 p-3 rounded-xl bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-100/80">
-            <HiOutlineClock className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-slate-700 leading-relaxed">
-              <span className="font-semibold text-orange-900">
+          <div className="flex gap-3 p-3 rounded-xl bg-gradient-to-br from-orange-50 dark:from-orange-950/40 to-amber-50 dark:to-amber-950/40 border border-orange-100/80 dark:border-orange-800">
+            <HiOutlineClock className="w-5 h-5 text-orange-600 dark:text-orange-400 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-slate-700 dark:text-dk-text leading-relaxed">
+              <span className="font-semibold text-orange-900 dark:text-orange-300">
                 {t('chatbot.cloneIncludes') || 'Bản sao bao gồm'}:
               </span>{' '}
               {t('chatbot.cloneIncludesList') ||
@@ -295,12 +295,12 @@ const CloneChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
         </form>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-end gap-2.5">
+        <div className="px-6 py-4 border-t border-slate-100 dark:border-dk-border bg-slate-50/50 dark:bg-dk-raised/50 flex items-center justify-end gap-2.5">
           <button
             type="button"
             onClick={onClose}
             disabled={submitting}
-            className="px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-200/70 rounded-xl transition-colors disabled:opacity-50"
+            className="px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-dk-text hover:bg-slate-200/70 dark:hover:bg-dk-strong/70 rounded-xl transition-colors disabled:opacity-50"
           >
             {t('common.cancel') || 'Hủy'}
           </button>

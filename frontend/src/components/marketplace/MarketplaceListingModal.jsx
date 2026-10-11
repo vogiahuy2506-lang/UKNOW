@@ -138,37 +138,37 @@ const MarketplaceListingModal = ({ open, chatbot, onClose, onSuccess }) => {
         role="dialog"
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden"
+        className="bg-white dark:bg-dk-surface rounded-xl shadow-2xl w-full max-w-md overflow-hidden"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-orange-50">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-dk-border bg-orange-50 dark:bg-orange-950/40">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
-              <HiOutlineChat className="w-5 h-5 text-orange-600" />
+            <div className="w-10 h-10 bg-orange-100 dark:bg-orange-950/40 rounded-xl flex items-center justify-center">
+              <HiOutlineChat className="w-5 h-5 text-orange-600 dark:text-orange-400" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Đăng lên Marketplace</h3>
-              <p className="text-sm text-gray-500">Chia sẻ chatbot với cộng đồng</p>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-dk-text">Đăng lên Marketplace</h3>
+              <p className="text-sm text-gray-500 dark:text-dk-text2">Chia sẻ chatbot với cộng đồng</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-orange-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-orange-100 dark:hover:bg-orange-950/60 rounded-lg transition-colors"
             aria-label="Đóng"
           >
-            <HiOutlineX className="w-5 h-5 text-gray-500" />
+            <HiOutlineX className="w-5 h-5 text-gray-500 dark:text-dk-text2" />
           </button>
         </div>
 
         {/* Body */}
         <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
           {/* Chatbot preview */}
-          <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-dk-raised border border-gray-100 dark:border-dk-border">
             {chatbot?.avatar_url ? (
               <img
                 src={chatbot.avatar_url}
                 alt=""
-                className="w-10 h-10 rounded-xl object-cover ring-1 ring-gray-200"
+                className="w-10 h-10 rounded-xl object-cover ring-1 ring-gray-200 dark:ring-dk-border"
               />
             ) : (
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-white">
@@ -176,8 +176,8 @@ const MarketplaceListingModal = ({ open, chatbot, onClose, onSuccess }) => {
               </div>
             )}
             <div className="min-w-0 flex-1">
-              <p className="font-semibold text-gray-900 truncate">{chatbot?.name}</p>
-              <p className="text-xs text-gray-500 truncate">
+              <p className="font-semibold text-gray-900 dark:text-dk-text truncate">{chatbot?.name}</p>
+              <p className="text-xs text-gray-500 dark:text-dk-text2 truncate">
                 {chatbot?.description || 'Không có mô tả'}
               </p>
             </div>
@@ -185,8 +185,8 @@ const MarketplaceListingModal = ({ open, chatbot, onClose, onSuccess }) => {
 
           {/* Title */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Tiêu đề <span className="text-red-500">*</span>
+            <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1.5">
+              Tiêu đề <span className="text-red-500 dark:text-red-400">*</span>
             </label>
             <input
               type="text"
@@ -194,14 +194,14 @@ const MarketplaceListingModal = ({ open, chatbot, onClose, onSuccess }) => {
               onChange={(e) => setForm(prev => ({ ...prev, title: e.target.value }))}
               placeholder="Tên chatbot của bạn"
               maxLength={255}
-              className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all"
+              className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted focus:outline-none focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 focus:border-orange-400 transition-all"
             />
-            <p className="text-xs text-gray-400 mt-1">{form.title.length}/255</p>
+            <p className="text-xs text-gray-400 dark:text-dk-muted mt-1">{form.title.length}/255</p>
           </div>
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1.5">
               Mô tả
             </label>
             <textarea
@@ -209,26 +209,26 @@ const MarketplaceListingModal = ({ open, chatbot, onClose, onSuccess }) => {
               onChange={(e) => setForm(prev => ({ ...prev, description: e.target.value }))}
               placeholder="Mô tả ngắn về chatbot..."
               rows={3}
-              className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all resize-none"
+              className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted focus:outline-none focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 focus:border-orange-400 transition-all resize-none"
             />
           </div>
 
           {/* Tags */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Tags <span className="font-normal text-gray-400">(tối đa 5)</span>
+            <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1.5">
+              Tags <span className="font-normal text-gray-400 dark:text-dk-muted">(tối đa 5)</span>
             </label>
             <div className="flex flex-wrap gap-1.5 mb-2">
               {form.tags.map(tag => (
                 <span
                   key={tag}
-                  className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded-full"
+                  className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 text-xs rounded-full"
                 >
                   {tag}
                   <button
                     type="button"
                     onClick={() => handleRemoveTag(tag)}
-                    className="hover:text-orange-900"
+                    className="hover:text-orange-900 dark:hover:text-orange-300"
                   >
                     <HiOutlineX className="w-3 h-3" />
                   </button>
@@ -242,57 +242,57 @@ const MarketplaceListingModal = ({ open, chatbot, onClose, onSuccess }) => {
                 onChange={(e) => setTagInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Nhấn Enter để thêm tag"
-                className="w-full px-3.5 py-2 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all"
+                className="w-full px-3.5 py-2 text-sm rounded-xl border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted focus:outline-none focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 focus:border-orange-400 transition-all"
               />
             )}
           </div>
 
           {/* Price */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1.5">
               Giá (credits)
             </label>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => setForm(prev => ({ ...prev, priceCredits: Math.max(0, prev.priceCredits - 10) }))}
-                className="w-10 h-10 rounded-xl border border-gray-200 hover:border-orange-300 hover:bg-orange-50 text-gray-700 font-semibold transition-colors"
+                className="w-10 h-10 rounded-xl border border-gray-200 dark:border-dk-border hover:border-orange-300 dark:hover:border-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950/60 text-gray-700 dark:text-dk-text font-semibold transition-colors"
               >
                 -
               </button>
               <NumberInput
                 value={form.priceCredits}
                 onChange={(v) => setForm(prev => ({ ...prev, priceCredits: Math.max(0, parseInt(v, 10) || 0) }))}
-                className="flex-1 px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all text-center font-semibold"
+                className="flex-1 px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted focus:outline-none focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 focus:border-orange-400 transition-all text-center font-semibold"
               />
               <button
                 type="button"
                 onClick={() => setForm(prev => ({ ...prev, priceCredits: prev.priceCredits + 10 }))}
-                className="w-10 h-10 rounded-xl border border-gray-200 hover:border-orange-300 hover:bg-orange-50 text-gray-700 font-semibold transition-colors"
+                className="w-10 h-10 rounded-xl border border-gray-200 dark:border-dk-border hover:border-orange-300 dark:hover:border-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950/60 text-gray-700 dark:text-dk-text font-semibold transition-colors"
               >
                 +
               </button>
             </div>
-            <p className="text-xs text-gray-500 mt-2">
+            <p className="text-xs text-gray-500 dark:text-dk-text2 mt-2">
               Đặt <strong>0 credits</strong> để chia sẻ miễn phí
             </p>
           </div>
 
           {/* Knowledge Base option */}
           {chatbot?.hasKnowledgeBase && (
-            <div className="flex items-start gap-3 p-3 bg-orange-50 rounded-xl border border-orange-100">
+            <div className="flex items-start gap-3 p-3 bg-orange-50 dark:bg-orange-950/40 rounded-xl border border-orange-100 dark:border-orange-800">
               <input
                 type="checkbox"
                 id="includeKb"
                 checked={includeKnowledgeBase}
                 onChange={(e) => setIncludeKnowledgeBase(e.target.checked)}
-                className="mt-0.5 w-4 h-4 text-orange-600 rounded border-gray-300 focus:ring-orange-500"
+                className="mt-0.5 w-4 h-4 text-orange-600 dark:text-orange-400 rounded border-gray-300 dark:border-dk-border-strong focus:ring-orange-500"
               />
               <div>
-                <label htmlFor="includeKb" className="text-sm font-medium text-gray-900 cursor-pointer">
+                <label htmlFor="includeKb" className="text-sm font-medium text-gray-900 dark:text-dk-text cursor-pointer">
                   Bao gồm Knowledge Base
                 </label>
-                <p className="text-xs text-gray-500 mt-0.5">
+                <p className="text-xs text-gray-500 dark:text-dk-text2 mt-0.5">
                   Chatbot này có {chatbot.chunkCount || 0} chunks. Người mua sẽ nhận được nội dung knowledge base.
                 </p>
               </div>
@@ -301,12 +301,12 @@ const MarketplaceListingModal = ({ open, chatbot, onClose, onSuccess }) => {
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex items-center justify-end gap-2.5">
+        <div className="px-6 py-4 border-t border-gray-100 dark:border-dk-border bg-gray-50 dark:bg-dk-raised flex items-center justify-end gap-2.5">
           <button
             type="button"
             onClick={onClose}
             disabled={isSubmitting}
-            className="px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-200 rounded-xl transition-colors disabled:opacity-50"
+            className="px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-dk-text2 hover:bg-gray-200 dark:hover:bg-dk-strong rounded-xl transition-colors disabled:opacity-50"
           >
             Hủy
           </button>

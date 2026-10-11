@@ -2,19 +2,19 @@
 import { HiOutlineStar, HiOutlineEye, HiOutlineShoppingCart, HiOutlineClock, HiOutlineMail, HiOutlineChat, HiOutlineTemplate } from 'react-icons/hi';
 
 export const CATEGORY_STYLES = {
-  email: { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Email' },
-  zalo_personal: { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Zalo cá nhân' },
-  zalo_group: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Zalo nhóm' },
-  facebook: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Facebook' },
-  telegram: { bg: 'bg-sky-100', text: 'text-sky-700', label: 'Telegram' },
-  sms: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'SMS' },
-  default: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Khác' },
+  email: { bg: 'bg-orange-100 dark:bg-orange-950/40', text: 'text-orange-700 dark:text-orange-300', label: 'Email' },
+  zalo_personal: { bg: 'bg-orange-100 dark:bg-orange-950/40', text: 'text-orange-700 dark:text-orange-300', label: 'Zalo cá nhân' },
+  zalo_group: { bg: 'bg-amber-100 dark:bg-amber-950/40', text: 'text-amber-700 dark:text-amber-300', label: 'Zalo nhóm' },
+  facebook: { bg: 'bg-blue-100 dark:bg-blue-950/40', text: 'text-blue-700 dark:text-blue-300', label: 'Facebook' },
+  telegram: { bg: 'bg-sky-100 dark:bg-sky-950/40', text: 'text-sky-700 dark:text-sky-300', label: 'Telegram' },
+  sms: { bg: 'bg-gray-100 dark:bg-dk-raised', text: 'text-gray-700 dark:text-dk-text', label: 'SMS' },
+  default: { bg: 'bg-gray-100 dark:bg-dk-raised', text: 'text-gray-700 dark:text-dk-text', label: 'Khác' },
 };
 
 export const TYPE_STYLES = {
-  campaign: { bg: 'bg-orange-50', text: 'text-orange-600', label: 'Chiến dịch', Icon: HiOutlineMail },
-  chatbot: { bg: 'bg-purple-50', text: 'text-purple-600', label: 'Chatbot', Icon: HiOutlineChat },
-  landing_page: { bg: 'bg-blue-50', text: 'text-blue-600', label: 'Landing Page', Icon: HiOutlineTemplate },
+  campaign: { bg: 'bg-orange-50 dark:bg-orange-950/40', text: 'text-orange-600 dark:text-orange-400', label: 'Chiến dịch', Icon: HiOutlineMail },
+  chatbot: { bg: 'bg-purple-50 dark:bg-purple-950/40', text: 'text-purple-600 dark:text-purple-400', label: 'Chatbot', Icon: HiOutlineChat },
+  landing_page: { bg: 'bg-blue-50 dark:bg-blue-950/40', text: 'text-blue-600 dark:text-blue-400', label: 'Landing Page', Icon: HiOutlineTemplate },
 };
 
 const formatNumber = (n) => {
@@ -29,7 +29,7 @@ const renderStars = (rating) => {
       {[1, 2, 3, 4, 5].map((star) => (
         <HiOutlineStar
           key={star}
-          className={`w-3.5 h-3.5 ${star <= fullStars ? 'text-amber-400 fill-amber-400' : 'text-gray-200'}`}
+          className={`w-3.5 h-3.5 ${star <= fullStars ? 'text-amber-400 fill-amber-400' : 'text-gray-200 dark:text-dk-border-strong'}`}
         />
       ))}
     </div>
@@ -64,11 +64,11 @@ const ListingCard = ({
   if (view === 'grid') {
     return (
       <div
-        className="group bg-white rounded-xl overflow-hidden border border-gray-200 hover:border-orange-200 hover:shadow-lg transition-all duration-200 cursor-pointer flex flex-col"
+        className="group bg-white dark:bg-dk-surface rounded-xl overflow-hidden border border-gray-200 dark:border-dk-border hover:border-orange-200 dark:hover:border-orange-800 hover:shadow-lg transition-all duration-200 cursor-pointer flex flex-col"
         onClick={onClick ? handleCardClick : undefined}
       >
         {/* Header */}
-        <div className="p-5 bg-gradient-to-br from-gray-50 to-white flex flex-col flex-1">
+        <div className="p-5 bg-gradient-to-br from-gray-50 dark:from-dk-raised to-white dark:to-dk-surface flex flex-col flex-1">
           {/* Type badge */}
           <div className="mb-3">
             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg ${typeStyle.bg} ${typeStyle.text}`}>
@@ -78,19 +78,19 @@ const ListingCard = ({
           </div>
 
           {/* Title */}
-          <h3 className="font-semibold text-gray-900 line-clamp-2 mb-2 group-hover:text-orange-600 transition-colors">
+          <h3 className="font-semibold text-gray-900 dark:text-dk-text line-clamp-2 mb-2 group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors">
             {listing.title}
           </h3>
 
           {/* Description */}
-          <p className="text-sm text-gray-500 line-clamp-2 flex-1">
+          <p className="text-sm text-gray-500 dark:text-dk-text2 line-clamp-2 flex-1">
             {listing.description || l.noDescription}
           </p>
 
           {/* Rating - pushed to bottom */}
-          <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100">
+          <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-dk-border">
             {renderStars(listing.rating_avg)}
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-gray-500 dark:text-dk-text2">
               {typeof listing.rating_avg === 'number' ? listing.rating_avg.toFixed(1) : '0.0'}
               <span className="ml-1">({listing.rating_count || 0})</span>
             </span>
@@ -98,10 +98,10 @@ const ListingCard = ({
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-4 bg-gray-50 border-t border-gray-100">
+        <div className="px-5 py-4 bg-gray-50 dark:bg-dk-raised border-t border-gray-100 dark:border-dk-border">
           <div className="flex items-center justify-between">
             {/* Stats */}
-            <div className="flex items-center gap-3 text-xs text-gray-500">
+            <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-dk-text2">
               <span className="flex items-center gap-1">
                 <HiOutlineEye className="w-3.5 h-3.5" />
                 {formatNumber(listing.view_count || 0)}
@@ -115,20 +115,20 @@ const ListingCard = ({
             {/* Price */}
             <div className="text-sm font-semibold">
               {listing.price_credits > 0 ? (
-                <span className="text-orange-600">{listing.price_credits} {l.creditsShort}</span>
+                <span className="text-orange-600 dark:text-orange-400">{listing.price_credits} {l.creditsShort}</span>
               ) : (
-                <span className="text-emerald-600">{l.free}</span>
+                <span className="text-emerald-600 dark:text-emerald-400">{l.free}</span>
               )}
             </div>
           </div>
 
           {/* Seller & Date */}
-          <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-200">
-            <span className="text-xs text-gray-400">
+          <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-200 dark:border-dk-border">
+            <span className="text-xs text-gray-400 dark:text-dk-muted">
               {listing.seller_name || 'Người dùng ẩn danh'}
             </span>
             {listing.created_at && (
-              <span className="text-xs text-gray-400 flex items-center gap-1">
+              <span className="text-xs text-gray-400 dark:text-dk-muted flex items-center gap-1">
                 <HiOutlineClock className="w-3 h-3" />
                 {new Date(listing.created_at).toLocaleDateString('vi-VN', { day: '2-digit', month: 'short' })}
               </span>
@@ -142,7 +142,7 @@ const ListingCard = ({
   // List view
   return (
     <div
-      className="p-4 bg-white hover:bg-gray-50 transition-colors cursor-pointer border-b border-gray-100 last:border-b-0"
+      className="p-4 bg-white dark:bg-dk-surface hover:bg-gray-50 dark:hover:bg-dk-raised transition-colors cursor-pointer border-b border-gray-100 dark:border-dk-border last:border-b-0"
       onClick={onClick ? handleCardClick : undefined}
     >
       <div className="flex items-center gap-4">
@@ -158,10 +158,10 @@ const ListingCard = ({
               {typeStyle.label}
             </span>
           </div>
-          <h3 className="font-semibold text-gray-900 line-clamp-1 group-hover:text-orange-600 transition-colors">
+          <h3 className="font-semibold text-gray-900 dark:text-dk-text line-clamp-1 group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors">
             {listing.title}
           </h3>
-          <p className="text-sm text-gray-500 line-clamp-1 mt-0.5">
+          <p className="text-sm text-gray-500 dark:text-dk-text2 line-clamp-1 mt-0.5">
             {listing.description || l.noDescription}
           </p>
         </div>
@@ -169,13 +169,13 @@ const ListingCard = ({
         {/* Rating */}
         <div className="hidden md:flex flex-col items-center gap-1 flex-shrink-0 w-24">
           <div className="flex items-center">{renderStars(listing.rating_avg)}</div>
-          <span className="text-xs text-gray-500">
+          <span className="text-xs text-gray-500 dark:text-dk-text2">
             {typeof listing.rating_avg === 'number' ? listing.rating_avg.toFixed(1) : '0.0'} ({listing.rating_count || 0})
           </span>
         </div>
 
         {/* Stats */}
-        <div className="hidden lg:flex items-center gap-4 text-sm text-gray-500 flex-shrink-0">
+        <div className="hidden lg:flex items-center gap-4 text-sm text-gray-500 dark:text-dk-text2 flex-shrink-0">
           <span className="flex items-center gap-1">
             <HiOutlineEye className="w-4 h-4" />
             {formatNumber(listing.view_count || 0)}
@@ -189,11 +189,11 @@ const ListingCard = ({
         {/* Price */}
         <div className="w-28 text-right flex-shrink-0">
           {listing.price_credits > 0 ? (
-            <span className="text-orange-600 font-semibold text-sm">
+            <span className="text-orange-600 dark:text-orange-400 font-semibold text-sm">
               {listing.price_credits} {l.creditsShort}
             </span>
           ) : (
-            <span className="text-emerald-600 font-semibold text-sm">{l.free}</span>
+            <span className="text-emerald-600 dark:text-emerald-400 font-semibold text-sm">{l.free}</span>
           )}
         </div>
 

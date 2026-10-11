@@ -147,48 +147,48 @@ const AdminMarketplace = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="card p-4">
             <div className="flex items-center gap-3">
-              <div className="p-3 bg-blue-100 rounded-lg">
-                <HiOutlineShoppingBag className="w-6 h-6 text-blue-600" />
+              <div className="p-3 bg-blue-100 dark:bg-blue-950/40 rounded-lg">
+                <HiOutlineShoppingBag className="w-6 h-6 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{stats.totalListings || 0}</p>
-                <p className="text-sm text-gray-500">Tổng listings</p>
+                <p className="text-sm text-gray-500 dark:text-dk-text2">Tổng listings</p>
               </div>
             </div>
           </div>
 
           <div className="card p-4">
             <div className="flex items-center gap-3">
-              <div className="p-3 bg-green-100 rounded-lg">
-                <HiOutlineCheck className="w-6 h-6 text-green-600" />
+              <div className="p-3 bg-green-100 dark:bg-green-950/40 rounded-lg">
+                <HiOutlineCheck className="w-6 h-6 text-green-600 dark:text-green-400" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{stats.byStatus?.published || 0}</p>
-                <p className="text-sm text-gray-500">Đã đăng</p>
+                <p className="text-sm text-gray-500 dark:text-dk-text2">Đã đăng</p>
               </div>
             </div>
           </div>
 
           <div className="card p-4">
             <div className="flex items-center gap-3">
-              <div className="p-3 bg-yellow-100 rounded-lg">
-                <HiOutlineFilter className="w-6 h-6 text-yellow-600" />
+              <div className="p-3 bg-yellow-100 dark:bg-yellow-950/40 rounded-lg">
+                <HiOutlineFilter className="w-6 h-6 text-yellow-600 dark:text-yellow-400" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{stats.byStatus?.draft || 0}</p>
-                <p className="text-sm text-gray-500">Nháp</p>
+                <p className="text-sm text-gray-500 dark:text-dk-text2">Nháp</p>
               </div>
             </div>
           </div>
 
           <div className="card p-4">
             <div className="flex items-center gap-3">
-              <div className="p-3 bg-amber-100 rounded-lg">
-                <HiOutlineCurrencyDollar className="w-6 h-6 text-amber-600" />
+              <div className="p-3 bg-amber-100 dark:bg-amber-950/40 rounded-lg">
+                <HiOutlineCurrencyDollar className="w-6 h-6 text-amber-600 dark:text-amber-400" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{stats.totalRevenue || 0}</p>
-                <p className="text-sm text-gray-500">Tổng credits</p>
+                <p className="text-sm text-gray-500 dark:text-dk-text2">Tổng credits</p>
               </div>
             </div>
           </div>
@@ -199,7 +199,7 @@ const AdminMarketplace = () => {
       <div className="card p-4">
         <div className="flex flex-col lg:flex-row gap-4">
           <div className="relative flex-1">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-dk-muted">
               <HiOutlineSearch className="w-5 h-5" />
             </span>
             <input
@@ -245,9 +245,9 @@ const AdminMarketplace = () => {
 
       {/* Bulk Actions */}
       {selectedIds.length > 0 && (
-        <div className="card p-4 bg-blue-50 border-blue-200">
+        <div className="card p-4 bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800">
           <div className="flex items-center justify-between">
-            <span className="font-medium text-blue-700">
+            <span className="font-medium text-blue-700 dark:text-blue-300">
               Đã chọn {selectedIds.length} listing
             </span>
             <div className="flex gap-2">
@@ -278,7 +278,7 @@ const AdminMarketplace = () => {
           </div>
         ) : listings.length === 0 ? (
           <div className="empty-state py-16">
-            <h3 className="text-lg font-medium text-gray-900">Không có listing nào</h3>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-dk-text">Không có listing nào</h3>
           </div>
         ) : (
           <div className="table-container">
@@ -290,7 +290,7 @@ const AdminMarketplace = () => {
                       type="checkbox"
                       checked={selectedIds.length === listings.length && listings.length > 0}
                       onChange={toggleSelectAll}
-                      className="rounded border-gray-300"
+                      className="rounded border-gray-300 dark:border-dk-border-strong"
                     />
                   </th>
                   <th>Template</th>
@@ -309,17 +309,17 @@ const AdminMarketplace = () => {
                         type="checkbox"
                         checked={selectedIds.includes(listing.id)}
                         onChange={() => toggleSelect(listing.id)}
-                        className="rounded border-gray-300"
+                        className="rounded border-gray-300 dark:border-dk-border-strong"
                       />
                     </td>
                     <td>
                       <button
                         onClick={() => showListing(listing.id, 'browse')}
-                        className="font-medium text-primary-600 hover:text-primary-700 text-left"
+                        className="font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 text-left"
                       >
                         {listing.title}
                       </button>
-                      <p className="text-sm text-gray-500 mt-0.5 line-clamp-1">
+                      <p className="text-sm text-gray-500 dark:text-dk-text2 mt-0.5 line-clamp-1">
                         {listing.description || 'Không có mô tả'}
                       </p>
                     </td>
@@ -333,9 +333,9 @@ const AdminMarketplace = () => {
                     <td>{getStatusBadge(listing.status)}</td>
                     <td>
                       {listing.price_credits > 0 ? (
-                        <span className="text-amber-600 font-medium">{listing.price_credits} credits</span>
+                        <span className="text-amber-600 dark:text-amber-400 font-medium">{listing.price_credits} credits</span>
                       ) : (
-                        <span className="text-green-600 font-medium">Miễn phí</span>
+                        <span className="text-green-600 dark:text-green-400 font-medium">Miễn phí</span>
                       )}
                     </td>
                     <td>
@@ -355,7 +355,7 @@ const AdminMarketplace = () => {
                         {listing.status === 'draft' && (
                           <button
                             onClick={() => handleStatusChange(listing.id, 'published')}
-                            className="btn btn-sm btn-ghost text-green-600 hover:text-green-700"
+                            className="btn btn-sm btn-ghost text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300"
                             title="Đăng listing"
                           >
                             <HiOutlineCheck className="w-4 h-4" />
@@ -364,7 +364,7 @@ const AdminMarketplace = () => {
                         {listing.status === 'published' && (
                           <button
                             onClick={() => handleStatusChange(listing.id, 'paused')}
-                            className="btn btn-sm btn-ghost text-yellow-600 hover:text-yellow-700"
+                            className="btn btn-sm btn-ghost text-yellow-600 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300"
                             title="Tạm dừng"
                           >
                             <HiOutlineFilter className="w-4 h-4" />
@@ -372,7 +372,7 @@ const AdminMarketplace = () => {
                         )}
                         <button
                           onClick={() => handleDelete(listing.id)}
-                          className="btn btn-sm btn-ghost text-red-600 hover:text-red-700"
+                          className="btn btn-sm btn-ghost text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
                           title="Xóa"
                         >
                           <HiOutlineTrash className="w-4 h-4" />
@@ -388,7 +388,7 @@ const AdminMarketplace = () => {
 
         {/* Pagination */}
         {pagination.totalPages > 1 && (
-          <div className="border-t border-gray-200 px-4 py-3">
+          <div className="border-t border-gray-200 dark:border-dk-border px-4 py-3">
             <Pagination
               currentPage={pagination.page}
               totalPages={pagination.totalPages}

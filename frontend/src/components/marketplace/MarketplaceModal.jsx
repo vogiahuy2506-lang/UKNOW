@@ -92,7 +92,7 @@ const MarketplaceModal = ({
       />
       <div
         ref={modalRef}
-        className={`relative w-full max-w-6xl h-full max-h-[90vh] bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col transition-all duration-300 ${isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
+        className={`relative w-full max-w-6xl h-full max-h-[90vh] bg-white dark:bg-dk-surface rounded-xl shadow-2xl overflow-hidden flex flex-col transition-all duration-300 ${isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
       >
         {showCreateForm && (
           <CreateListing onClose={onClose} onSuccess={handleCreateSuccess} />

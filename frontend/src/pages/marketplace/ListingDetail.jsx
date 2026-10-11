@@ -32,20 +32,20 @@ import LandingPagePreview from '../../components/marketplace/LandingPagePreview'
 const RESOURCE_VISUAL = {
   campaign: {
     Icon: HiOutlineMail,
-    bg: 'bg-orange-100',
-    text: 'text-orange-600',
+    bg: 'bg-orange-100 dark:bg-orange-950/40',
+    text: 'text-orange-600 dark:text-orange-400',
     label: 'Chiến dịch',
   },
   chatbot: {
     Icon: HiOutlineChat,
-    bg: 'bg-purple-100',
-    text: 'text-purple-600',
+    bg: 'bg-purple-100 dark:bg-purple-950/40',
+    text: 'text-purple-600 dark:text-purple-400',
     label: 'Chatbot',
   },
   landing_page: {
     Icon: HiOutlineGlobe,
-    bg: 'bg-blue-100',
-    text: 'text-blue-600',
+    bg: 'bg-blue-100 dark:bg-blue-950/40',
+    text: 'text-blue-600 dark:text-blue-400',
     label: 'Landing Page',
   },
 };
@@ -118,7 +118,7 @@ const StarRating = ({
     const currentRating = hoverRating || rating;
     if (currentRating >= starIndex) return 'fill-amber-400 text-amber-400';
     if (allowHalf && currentRating >= starIndex - 0.5) return 'fill-amber-400/50 text-amber-400';
-    return 'text-gray-200';
+    return 'text-gray-200 dark:text-dk-border-strong';
   };
   
   const handleMouseMove = (e, starIndex) => {
@@ -171,7 +171,7 @@ const StarRating = ({
         ))}
       </div>
       {showLabel && displayRating > 0 && (
-        <span className="ml-2 text-sm font-semibold text-amber-600">
+        <span className="ml-2 text-sm font-semibold text-amber-600 dark:text-amber-400">
           {displayRating % 1 === 0.5 ? displayRating.toFixed(1) : displayRating}/5
         </span>
       )}
@@ -195,15 +195,15 @@ const RatingDistribution = ({ reviews }) => {
         const percentage = Math.round((count / total) * 100);
         return (
           <div key={rating} className="flex items-center gap-2 text-sm">
-            <span className="w-3 text-gray-500 font-medium">{rating}</span>
+            <span className="w-3 text-gray-500 dark:text-dk-text2 font-medium">{rating}</span>
             <HiStar className="w-3 h-3 text-amber-400 fill-amber-400" />
-            <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div className="flex-1 h-2 bg-gray-100 dark:bg-dk-raised rounded-full overflow-hidden">
               <div 
                 className="h-full bg-amber-400 rounded-full transition-all duration-500"
                 style={{ width: `${percentage}%` }}
               />
             </div>
-            <span className="w-10 text-right text-xs text-gray-500">{count}</span>
+            <span className="w-10 text-right text-xs text-gray-500 dark:text-dk-text2">{count}</span>
           </div>
         );
       })}
@@ -240,12 +240,12 @@ const ReviewCard = ({ review, isOwnReview }) => {
     <article className={`
       rounded-xl border p-4 transition-all
       ${isOwnReview 
-        ? 'border-amber-200 bg-amber-50/50' 
-        : 'border-gray-100 bg-white hover:border-gray-200 hover:shadow-sm'
+        ? 'border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/40' 
+        : 'border-gray-100 dark:border-dk-border bg-white dark:bg-dk-surface hover:border-gray-200 dark:hover:border-dk-border-strong hover:shadow-sm'
       }
     `}>
       {isOwnReview && (
-        <div className="flex items-center gap-1.5 mb-3 text-xs text-amber-600 font-medium">
+        <div className="flex items-center gap-1.5 mb-3 text-xs text-amber-600 dark:text-amber-400 font-medium">
           <HiOutlineCheckCircle className="w-3.5 h-3.5" />
           Đánh giá của bạn
         </div>
@@ -264,10 +264,10 @@ const ReviewCard = ({ review, isOwnReview }) => {
             )}
           </div>
           <div>
-            <p className="text-sm font-semibold text-gray-900">
+            <p className="text-sm font-semibold text-gray-900 dark:text-dk-text">
               {review.reviewer_name || 'Người dùng ẩn danh'}
             </p>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-gray-400 dark:text-dk-muted">
               {formatRelativeTime(review.created_at)}
             </p>
           </div>
@@ -279,13 +279,13 @@ const ReviewCard = ({ review, isOwnReview }) => {
       
       {review.review_text && (
         <div className="mb-3">
-          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+          <p className="text-sm text-gray-700 dark:text-dk-text leading-relaxed whitespace-pre-wrap">
             {displayText}
           </p>
           {isLongReview && (
             <button
               onClick={() => setShowFull(!showFull)}
-              className="mt-1 text-xs text-orange-500 hover:text-orange-600 font-medium"
+              className="mt-1 text-xs text-orange-500 dark:text-orange-400 hover:text-orange-600 dark:hover:text-orange-300 font-medium"
             >
               {showFull ? 'Thu gọn' : 'Xem thêm'}
             </button>
@@ -306,17 +306,17 @@ const ReviewCard = ({ review, isOwnReview }) => {
         </div>
       )}
       
-      <footer className="flex items-center gap-4 pt-3 border-t border-gray-100">
+      <footer className="flex items-center gap-4 pt-3 border-t border-gray-100 dark:border-dk-border">
         <button
           onClick={handleVoteHelpful}
           disabled={hasVoted || isOwnReview}
           className={`
             inline-flex items-center gap-1.5 text-xs transition-colors
             ${hasVoted 
-              ? 'text-emerald-600' 
+              ? 'text-emerald-600 dark:text-emerald-400' 
               : isOwnReview 
-                ? 'text-gray-300 cursor-not-allowed' 
-                : 'text-gray-400 hover:text-emerald-600'
+                ? 'text-gray-300 dark:text-dk-muted cursor-not-allowed' 
+                : 'text-gray-400 dark:text-dk-muted hover:text-emerald-600 dark:hover:text-emerald-400'
             }
           `}
         >
@@ -386,19 +386,19 @@ const ReviewForm = ({ listingId, hasPurchased, onReviewSubmitted }) => {
     <div className={`
       rounded-xl border-2 transition-all duration-300 overflow-hidden
       ${isFocused 
-        ? 'border-orange-300 bg-orange-50/30 shadow-md' 
-        : 'border-gray-200 bg-gray-50'
+        ? 'border-orange-300 dark:border-orange-700 bg-orange-50/30 dark:bg-orange-950/30 shadow-md' 
+        : 'border-gray-200 dark:border-dk-border bg-gray-50 dark:bg-dk-raised'
       }
     `}>
       <div className="p-4">
-        <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
-          <HiOutlineChatAlt2 className="w-4 h-4 text-orange-500" />
+        <h3 className="text-sm font-bold text-gray-900 dark:text-dk-text mb-3 flex items-center gap-2">
+          <HiOutlineChatAlt2 className="w-4 h-4 text-orange-500 dark:text-orange-400" />
           Viết đánh giá của bạn
         </h3>
         
         {/* Rating selector */}
         <div className="mb-4">
-          <label className="block text-xs font-medium text-gray-600 mb-2">
+          <label className="block text-xs font-medium text-gray-600 dark:text-dk-text2 mb-2">
             Đánh giá của bạn
           </label>
           <div className="flex items-center gap-3">
@@ -418,13 +418,13 @@ const ReviewForm = ({ listingId, hasPurchased, onReviewSubmitted }) => {
                     className={`w-8 h-8 transition-colors ${
                       star <= displayRating
                         ? 'text-amber-400 fill-amber-400'
-                        : 'text-gray-200'
+                        : 'text-gray-200 dark:text-dk-border-strong'
                     }`}
                   />
                 </button>
               ))}
             </div>
-            <span className="text-sm font-semibold text-amber-600 min-w-[120px]">
+            <span className="text-sm font-semibold text-amber-600 dark:text-amber-400 min-w-[120px]">
               {ratingLabels[Math.round(rating)] || 'Chọn số sao'}
             </span>
           </div>
@@ -432,7 +432,7 @@ const ReviewForm = ({ listingId, hasPurchased, onReviewSubmitted }) => {
         
         {/* Review textarea */}
         <div className="mb-4">
-          <label className="block text-xs font-medium text-gray-600 mb-2">
+          <label className="block text-xs font-medium text-gray-600 dark:text-dk-text2 mb-2">
             Chia sẻ trải nghiệm của bạn {reviewText.length > 0 && `(${reviewText.length}/${charCount})`}
           </label>
           <textarea
@@ -442,11 +442,11 @@ const ReviewForm = ({ listingId, hasPurchased, onReviewSubmitted }) => {
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
             placeholder="Template này có chất lượng như thế nào? Bạn đã sử dụng nó ra sao? Điều gì bạn thích và không thích?"
-            className="input resize-none transition-all focus:ring-2 focus:ring-orange-200"
+            className="input resize-none transition-all focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800"
             rows={4}
           />
           <div className="flex justify-between items-center mt-1.5">
-            <p className={`text-xs ${reviewText.length > charCount * 0.9 ? 'text-orange-500' : 'text-gray-400'}`}>
+            <p className={`text-xs ${reviewText.length > charCount * 0.9 ? 'text-orange-500 dark:text-orange-400' : 'text-gray-400 dark:text-dk-muted'}`}>
               {charCount - reviewText.length} ký tự còn lại
             </p>
           </div>
@@ -462,7 +462,7 @@ const ReviewForm = ({ listingId, hasPurchased, onReviewSubmitted }) => {
               key={tip}
               type="button"
               onClick={() => setReviewText(prev => prev ? `${prev} ${tip}.` : `${tip}.`)}
-              className="px-2 py-1 text-xs bg-white border border-gray-200 rounded-lg text-gray-600 hover:bg-orange-50 hover:border-orange-200 hover:text-orange-600 transition-colors"
+              className="px-2 py-1 text-xs bg-white dark:bg-dk-surface border border-gray-200 dark:border-dk-border rounded-lg text-gray-600 dark:text-dk-text2 hover:bg-orange-50 dark:hover:bg-orange-950/60 hover:border-orange-200 dark:hover:border-orange-800 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
             >
               + {tip}
             </button>
@@ -472,7 +472,7 @@ const ReviewForm = ({ listingId, hasPurchased, onReviewSubmitted }) => {
         {/* Submit button */}
         <div className="flex items-center justify-between">
           <div className={`flex items-center gap-1.5 text-sm ${
-            hasPurchased ? 'text-emerald-600' : 'text-gray-400'
+            hasPurchased ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-dk-muted'
           }`}>
             <HiOutlineCheckCircle className="w-4 h-4" />
             {hasPurchased ? 'Đã xác nhận mua hàng' : 'Cần mua để đánh giá'}
@@ -483,7 +483,7 @@ const ReviewForm = ({ listingId, hasPurchased, onReviewSubmitted }) => {
             className={`
               px-5 py-2 rounded-lg text-sm font-semibold transition-all
               ${isSubmitting || !hasPurchased || rating < 1
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                ? 'bg-gray-100 dark:bg-dk-raised text-gray-400 dark:text-dk-muted cursor-not-allowed'
                 : 'bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:shadow-lg hover:scale-105'
               }
             `}
@@ -553,27 +553,27 @@ const ReviewsSection = ({ listingId, listing, reviews, onReviewSubmitted }) => {
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-100 to-orange-100 text-orange-600 flex items-center justify-center">
+          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-100 dark:from-amber-950/40 to-orange-100 dark:to-orange-950/40 text-orange-600 dark:text-orange-400 flex items-center justify-center">
             <HiOutlineChatAlt2 className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-gray-900">Đánh giá từ cộng đồng</h2>
-            <p className="text-xs text-gray-500">{ratingStats.count || 0} đánh giá</p>
+            <h2 className="text-base font-bold text-gray-900 dark:text-dk-text">Đánh giá từ cộng đồng</h2>
+            <p className="text-xs text-gray-500 dark:text-dk-text2">{ratingStats.count || 0} đánh giá</p>
           </div>
         </div>
       </div>
       
       {/* Rating summary card */}
-      <div className="mb-6 rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 p-5 border border-amber-100">
+      <div className="mb-6 rounded-xl bg-gradient-to-br from-amber-50 dark:from-amber-950/40 to-orange-50 dark:to-orange-950/40 p-5 border border-amber-100 dark:border-amber-800">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Average rating */}
           <div className="flex items-center gap-4">
             <div className="text-center">
-              <div className="text-5xl font-bold text-gray-900">{Number(ratingStats.average || 0).toFixed(1)}</div>
+              <div className="text-5xl font-bold text-gray-900 dark:text-dk-text">{Number(ratingStats.average || 0).toFixed(1)}</div>
               <div className="mt-1">
                 <StarRating rating={Number(ratingStats.average || 0)} size="lg" />
               </div>
-              <p className="mt-1 text-sm text-gray-500">{(ratingStats.count || 0)} đánh giá</p>
+              <p className="mt-1 text-sm text-gray-500 dark:text-dk-text2">{(ratingStats.count || 0)} đánh giá</p>
             </div>
           </div>
           
@@ -584,15 +584,15 @@ const ReviewsSection = ({ listingId, listing, reviews, onReviewSubmitted }) => {
         </div>
         
         {/* Filter & sort */}
-        <div className="mt-5 pt-4 border-t border-amber-200/50 flex flex-wrap items-center gap-3">
-          <span className="text-xs font-medium text-gray-600">Lọc theo:</span>
+        <div className="mt-5 pt-4 border-t border-amber-200/50 dark:border-amber-800 flex flex-wrap items-center gap-3">
+          <span className="text-xs font-medium text-gray-600 dark:text-dk-text2">Lọc theo:</span>
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setFilterRating(0)}
               className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                 filterRating === 0
-                  ? 'bg-gray-900 text-white'
-                  : 'bg-white text-gray-600 hover:bg-gray-100'
+                  ? 'bg-gray-900 dark:bg-dk-strong text-white'
+                  : 'bg-white dark:bg-dk-surface text-gray-600 dark:text-dk-text2 hover:bg-gray-100 dark:hover:bg-dk-strong'
               }`}
             >
               Tất cả
@@ -604,7 +604,7 @@ const ReviewsSection = ({ listingId, listing, reviews, onReviewSubmitted }) => {
                 className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                   filterRating === rating
                     ? 'bg-amber-500 text-white'
-                    : 'bg-white text-gray-600 hover:bg-amber-50'
+                    : 'bg-white dark:bg-dk-surface text-gray-600 dark:text-dk-text2 hover:bg-amber-50 dark:hover:bg-amber-950/60'
                 }`}
               >
                 <span>{rating}</span>
@@ -613,11 +613,11 @@ const ReviewsSection = ({ listingId, listing, reviews, onReviewSubmitted }) => {
             ))}
           </div>
           
-          <span className="ml-auto text-xs font-medium text-gray-600">Sắp xếp:</span>
+          <span className="ml-auto text-xs font-medium text-gray-600 dark:text-dk-text2">Sắp xếp:</span>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            className="px-3 py-1 rounded-full text-xs font-medium bg-white border border-gray-200 text-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-200"
+            className="px-3 py-1 rounded-full text-xs font-medium bg-white dark:bg-dk-inset border border-gray-200 dark:border-dk-border text-gray-600 dark:text-dk-text2 focus:outline-none focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800"
           >
             <option value="newest">Mới nhất</option>
             <option value="oldest">Cũ nhất</option>
@@ -641,10 +641,10 @@ const ReviewsSection = ({ listingId, listing, reviews, onReviewSubmitted }) => {
         </div>
       ) : (
         <div className="text-center py-10 mb-6">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
-            <HiOutlineChatAlt2 className="w-8 h-8 text-gray-300" />
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 dark:bg-dk-raised flex items-center justify-center">
+            <HiOutlineChatAlt2 className="w-8 h-8 text-gray-300 dark:text-dk-muted" />
           </div>
-          <p className="text-gray-500">
+          <p className="text-gray-500 dark:text-dk-text2">
             {filterRating > 0 
               ? `Không có đánh giá ${filterRating} sao nào.` 
               : 'Chưa có đánh giá nào. Hãy là người đầu tiên!'
@@ -658,7 +658,7 @@ const ReviewsSection = ({ listingId, listing, reviews, onReviewSubmitted }) => {
         <div className="text-center mb-6">
           <button
             onClick={() => setVisibleCount(c => c + 5)}
-            className="px-6 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+            className="px-6 py-2 rounded-lg border border-gray-200 dark:border-dk-border text-sm font-medium text-gray-600 dark:text-dk-text2 hover:bg-gray-50 dark:hover:bg-dk-raised transition-colors"
           >
             Xem thêm {filteredReviews.length - visibleCount} đánh giá
           </button>
@@ -822,13 +822,13 @@ const ListingDetail = ({ id: idProp, onClose, onAfterPurchase }) => {
   if (isLoading) {
     return (
       <div className="space-y-5 p-6 animate-pulse">
-        <div className="h-32 bg-gray-100 rounded-xl" />
+        <div className="h-32 bg-gray-100 dark:bg-dk-raised rounded-xl" />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           <div className="lg:col-span-2 space-y-4">
-            <div className="h-32 bg-gray-100 rounded-xl" />
-            <div className="h-48 bg-gray-100 rounded-xl" />
+            <div className="h-32 bg-gray-100 dark:bg-dk-raised rounded-xl" />
+            <div className="h-48 bg-gray-100 dark:bg-dk-raised rounded-xl" />
           </div>
-          <div className="h-56 bg-gray-100 rounded-xl" />
+          <div className="h-56 bg-gray-100 dark:bg-dk-raised rounded-xl" />
         </div>
       </div>
     );
@@ -844,14 +844,14 @@ const ListingDetail = ({ id: idProp, onClose, onAfterPurchase }) => {
   const isFree = !(listing.price_credits > 0);
 
   return (
-    <div className="min-h-full bg-gray-50">
+    <div className="min-h-full bg-gray-50 dark:bg-dk-bg">
       {/* Header */}
-      <div className="flex-shrink-0 bg-white border-b border-gray-200">
+      <div className="flex-shrink-0 bg-white dark:bg-dk-surface border-b border-gray-200 dark:border-dk-border">
         <div className="px-6 py-4">
           <div className="flex items-center justify-between mb-4">
             <button
               onClick={onClose}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 dark:text-dk-text2 hover:bg-gray-100 dark:hover:bg-dk-strong rounded-lg transition-colors"
             >
               <HiOutlineChevronLeft className="w-4 h-4" />
               Quay lại
@@ -860,7 +860,7 @@ const ListingDetail = ({ id: idProp, onClose, onAfterPurchase }) => {
               <button
                 onClick={handleToggleFavorite}
                 className={`p-2 rounded-lg transition-colors ${
-                  isFavorited ? 'text-red-500 bg-red-50' : 'text-gray-500 hover:bg-gray-100'
+                  isFavorited ? 'text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-950/40' : 'text-gray-500 dark:text-dk-text2 hover:bg-gray-100 dark:hover:bg-dk-strong'
                 }`}
                 title={isFavorited ? 'Bỏ yêu thích' : 'Yêu thích'}
               >
@@ -868,7 +868,7 @@ const ListingDetail = ({ id: idProp, onClose, onAfterPurchase }) => {
               </button>
               <button
                 onClick={handleShare}
-                className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
+                className="p-2 rounded-lg text-gray-500 dark:text-dk-text2 hover:bg-gray-100 dark:hover:bg-dk-strong transition-colors"
                 title="Chia sẻ"
               >
                 <HiOutlineShare className="w-5 h-5" />
@@ -886,54 +886,54 @@ const ListingDetail = ({ id: idProp, onClose, onAfterPurchase }) => {
                   {visual.label}
                 </span>
                 {listing.hasPurchased && (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-emerald-100 text-emerald-700">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300">
                     <HiOutlineCheckCircle className="w-3.5 h-3.5" />
                     Đã mua
                   </span>
                 )}
               </div>
-              <h1 className="text-xl font-bold text-gray-900 leading-tight">{listing.title}</h1>
+              <h1 className="text-xl font-bold text-gray-900 dark:text-dk-text leading-tight">{listing.title}</h1>
             </div>
           </div>
 
           {/* Quick stats */}
           <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="rounded-lg border border-gray-100 px-3 py-2.5">
-              <div className="flex items-center gap-1.5 text-xs text-gray-500">
+            <div className="rounded-lg border border-gray-100 dark:border-dk-border px-3 py-2.5">
+              <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-dk-text2">
                 <HiOutlineEye className="w-3.5 h-3.5" />
                 Lượt xem
               </div>
-              <div className="mt-1 text-base font-bold text-gray-900">{formatNumber(listing.view_count || 0)}</div>
+              <div className="mt-1 text-base font-bold text-gray-900 dark:text-dk-text">{formatNumber(listing.view_count || 0)}</div>
             </div>
-            <div className="rounded-lg border border-gray-100 px-3 py-2.5">
-              <div className="flex items-center gap-1.5 text-xs text-gray-500">
+            <div className="rounded-lg border border-gray-100 dark:border-dk-border px-3 py-2.5">
+              <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-dk-text2">
                 <HiOutlineShoppingCart className="w-3.5 h-3.5" />
                 Lượt mua
               </div>
-              <div className="mt-1 text-base font-bold text-gray-900">{formatNumber(listing.purchase_count || 0)}</div>
+              <div className="mt-1 text-base font-bold text-gray-900 dark:text-dk-text">{formatNumber(listing.purchase_count || 0)}</div>
             </div>
-            <div className="rounded-lg border border-gray-100 px-3 py-2.5">
-              <div className="flex items-center gap-1.5 text-xs text-gray-500">
+            <div className="rounded-lg border border-gray-100 dark:border-dk-border px-3 py-2.5">
+              <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-dk-text2">
                 <HiOutlineStar className="w-3.5 h-3.5" />
                 Đánh giá
               </div>
-              <div className="mt-1 text-base font-bold text-gray-900 flex items-center gap-1.5">
+              <div className="mt-1 text-base font-bold text-gray-900 dark:text-dk-text flex items-center gap-1.5">
                 {ratingText ? (
                   <>
                     {ratingText}
-                    <span className="text-xs text-gray-400 font-normal">({listing.rating_count || 0})</span>
+                    <span className="text-xs text-gray-400 dark:text-dk-muted font-normal">({listing.rating_count || 0})</span>
                   </>
                 ) : (
-                  <span className="text-xs text-gray-400">Chưa có đánh giá</span>
+                  <span className="text-xs text-gray-400 dark:text-dk-muted">Chưa có đánh giá</span>
                 )}
               </div>
             </div>
-            <div className="rounded-lg border border-gray-100 px-3 py-2.5">
-              <div className="flex items-center gap-1.5 text-xs text-gray-500">
+            <div className="rounded-lg border border-gray-100 dark:border-dk-border px-3 py-2.5">
+              <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-dk-text2">
                 <HiOutlineClock className="w-3.5 h-3.5" />
                 Đăng ngày
               </div>
-              <div className="mt-1 text-sm font-semibold text-gray-900">{formatDate(listing.created_at)}</div>
+              <div className="mt-1 text-sm font-semibold text-gray-900 dark:text-dk-text">{formatDate(listing.created_at)}</div>
             </div>
           </div>
         </div>
@@ -952,8 +952,8 @@ const ListingDetail = ({ id: idProp, onClose, onAfterPurchase }) => {
                     {(listing.seller_name || '?').charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">Được tạo bởi</p>
-                    <p className="text-sm font-bold text-gray-900">{listing.seller_name}</p>
+                    <p className="text-xs text-gray-500 dark:text-dk-text2">Được tạo bởi</p>
+                    <p className="text-sm font-bold text-gray-900 dark:text-dk-text">{listing.seller_name}</p>
                   </div>
                 </div>
               </div>
@@ -962,28 +962,28 @@ const ListingDetail = ({ id: idProp, onClose, onAfterPurchase }) => {
             {/* Description */}
             <section className="card p-5">
               <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 flex items-center justify-center">
                   <HiOutlineDocumentText className="w-4 h-4" />
                 </div>
-                <h2 className="text-base font-bold text-gray-900">Mô tả template</h2>
+                <h2 className="text-base font-bold text-gray-900 dark:text-dk-text">Mô tả template</h2>
               </div>
-              <p className="text-sm leading-relaxed text-gray-700 whitespace-pre-wrap">
+              <p className="text-sm leading-relaxed text-gray-700 dark:text-dk-text whitespace-pre-wrap">
                 {listing.description || (
-                  <span className="text-gray-400 italic">Người bán chưa cung cấp mô tả.</span>
+                  <span className="text-gray-400 dark:text-dk-muted italic">Người bán chưa cung cấp mô tả.</span>
                 )}
               </p>
 
               {listing.tags && listing.tags.length > 0 && (
-                <div className="mt-5 pt-4 border-t border-gray-100">
+                <div className="mt-5 pt-4 border-t border-gray-100 dark:border-dk-border">
                   <div className="flex items-center gap-2 mb-3">
-                    <HiOutlineTag className="w-4 h-4 text-gray-400" />
-                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tags</span>
+                    <HiOutlineTag className="w-4 h-4 text-gray-400 dark:text-dk-muted" />
+                    <span className="text-xs font-semibold text-gray-500 dark:text-dk-text2 uppercase tracking-wide">Tags</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {listing.tags.map((tag, idx) => (
                       <span
                         key={idx}
-                        className="px-2.5 py-1 rounded-lg bg-gray-100 text-gray-700 text-xs font-medium"
+                        className="px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-dk-raised text-gray-700 dark:text-dk-text text-xs font-medium"
                       >
                         #{tag}
                       </span>
@@ -1009,14 +1009,14 @@ const ListingDetail = ({ id: idProp, onClose, onAfterPurchase }) => {
             )}
 
             {/* Tips */}
-            <section className="rounded-xl p-4 border border-blue-100 bg-blue-50">
+            <section className="rounded-xl p-4 border border-blue-100 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40">
               <div className="flex items-start gap-3">
-                <div className="w-9 h-9 rounded-lg bg-white text-blue-600 flex items-center justify-center flex-shrink-0">
+                <div className="w-9 h-9 rounded-lg bg-white dark:bg-dk-surface text-blue-600 dark:text-blue-400 flex items-center justify-center flex-shrink-0">
                   <HiOutlineLightBulb className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-gray-900 mb-1">Mẹo sử dụng</h3>
-                  <p className="text-sm text-gray-600 leading-relaxed">
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-dk-text mb-1">Mẹo sử dụng</h3>
+                  <p className="text-sm text-gray-600 dark:text-dk-text2 leading-relaxed">
                     Sau khi mua, bạn có thể tùy chỉnh nội dung, hình ảnh và thông số của template trong workspace của mình.
                   </p>
                 </div>
@@ -1037,31 +1037,31 @@ const ListingDetail = ({ id: idProp, onClose, onAfterPurchase }) => {
             <div className="space-y-4">
               {/* Purchase card */}
               <div className="card overflow-hidden">
-                <div className="p-5 text-center border-b border-gray-100">
+                <div className="p-5 text-center border-b border-gray-100 dark:border-dk-border">
                   {isFree ? (
                     <>
-                      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold mb-3">
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-xs font-semibold mb-3">
                         <HiOutlineDownload className="w-4 h-4" />
                         Miễn phí
                       </div>
-                      <div className="text-3xl font-bold text-emerald-600">Tải về ngay</div>
-                      <p className="text-xs text-gray-500 mt-1">Không tốn credits</p>
+                      <div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">Tải về ngay</div>
+                      <p className="text-xs text-gray-500 dark:text-dk-text2 mt-1">Không tốn credits</p>
                     </>
                   ) : (
                     <>
-                      <p className="text-xs text-gray-500 mb-2">Giá</p>
+                      <p className="text-xs text-gray-500 dark:text-dk-text2 mb-2">Giá</p>
                       <div className="flex items-baseline justify-center gap-1.5">
-                        <span className="text-4xl font-bold text-gray-900">{listing.price_credits}</span>
-                        <span className="text-base text-gray-500 font-medium">credits</span>
+                        <span className="text-4xl font-bold text-gray-900 dark:text-dk-text">{listing.price_credits}</span>
+                        <span className="text-base text-gray-500 dark:text-dk-text2 font-medium">credits</span>
                       </div>
-                      <p className="text-xs text-gray-500 mt-2">Dùng vĩnh viễn</p>
+                      <p className="text-xs text-gray-500 dark:text-dk-text2 mt-2">Dùng vĩnh viễn</p>
                     </>
                   )}
                 </div>
 
                 <div className="p-5">
                   {listing.hasPurchased ? (
-                    <div className="rounded-lg bg-emerald-50 text-emerald-700 p-4 text-center">
+                    <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 p-4 text-center">
                       <HiOutlineCheckCircle className="w-8 h-8 mx-auto mb-2" />
                       <p className="text-sm font-bold">Bạn đã sở hữu template này</p>
                     </div>
@@ -1092,35 +1092,35 @@ const ListingDetail = ({ id: idProp, onClose, onAfterPurchase }) => {
                 </div>
 
                 <ul className="px-5 pb-5 space-y-2.5 text-sm">
-                  <li className="flex items-center gap-2.5 text-gray-600">
-                    <HiOutlineClock className="w-4 h-4 text-gray-400" />
-                    <span>Đăng <span className="font-semibold text-gray-900">{formatDate(listing.created_at)}</span></span>
+                  <li className="flex items-center gap-2.5 text-gray-600 dark:text-dk-text2">
+                    <HiOutlineClock className="w-4 h-4 text-gray-400 dark:text-dk-muted" />
+                    <span>Đăng <span className="font-semibold text-gray-900 dark:text-dk-text">{formatDate(listing.created_at)}</span></span>
                   </li>
-                  <li className="flex items-center gap-2.5 text-gray-600">
-                    <HiOutlineUser className="w-4 h-4 text-gray-400" />
-                    <span className="truncate">Tác giả <span className="font-semibold text-gray-900">{listing.seller_name}</span></span>
+                  <li className="flex items-center gap-2.5 text-gray-600 dark:text-dk-text2">
+                    <HiOutlineUser className="w-4 h-4 text-gray-400 dark:text-dk-muted" />
+                    <span className="truncate">Tác giả <span className="font-semibold text-gray-900 dark:text-dk-text">{listing.seller_name}</span></span>
                   </li>
-                  <li className="flex items-center gap-2.5 text-gray-600">
-                    <HiOutlineEye className="w-4 h-4 text-gray-400" />
-                    <span><span className="font-semibold text-gray-900">{formatNumber(listing.view_count || 0)}</span> lượt xem</span>
+                  <li className="flex items-center gap-2.5 text-gray-600 dark:text-dk-text2">
+                    <HiOutlineEye className="w-4 h-4 text-gray-400 dark:text-dk-muted" />
+                    <span><span className="font-semibold text-gray-900 dark:text-dk-text">{formatNumber(listing.view_count || 0)}</span> lượt xem</span>
                   </li>
-                  <li className="flex items-center gap-2.5 text-gray-600">
-                    <HiOutlineShoppingCart className="w-4 h-4 text-gray-400" />
-                    <span><span className="font-semibold text-gray-900">{formatNumber(listing.purchase_count || 0)}</span> lượt mua</span>
+                  <li className="flex items-center gap-2.5 text-gray-600 dark:text-dk-text2">
+                    <HiOutlineShoppingCart className="w-4 h-4 text-gray-400 dark:text-dk-muted" />
+                    <span><span className="font-semibold text-gray-900 dark:text-dk-text">{formatNumber(listing.purchase_count || 0)}</span> lượt mua</span>
                   </li>
                 </ul>
               </div>
 
               {/* Trust badge */}
               <div className="card p-4 text-center">
-                <div className="w-10 h-10 mx-auto rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center mb-2">
+                <div className="w-10 h-10 mx-auto rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-2">
                   <HiOutlineCheckCircle className="w-6 h-6" />
                 </div>
-                <p className="text-sm font-bold text-gray-900">Đã kiểm duyệt</p>
-                <p className="text-xs text-gray-500 mt-1">Template đạt chuẩn UKNOW</p>
+                <p className="text-sm font-bold text-gray-900 dark:text-dk-text">Đã kiểm duyệt</p>
+                <p className="text-xs text-gray-500 dark:text-dk-text2 mt-1">Template đạt chuẩn UKNOW</p>
               </div>
 
-              <button className="w-full text-gray-400 hover:text-gray-600 py-2 text-sm inline-flex items-center justify-center gap-1.5">
+              <button className="w-full text-gray-400 dark:text-dk-muted hover:text-gray-600 dark:hover:text-dk-text2 py-2 text-sm inline-flex items-center justify-center gap-1.5">
                 <HiOutlineFlag className="w-4 h-4" />
                 Báo cáo template
               </button>

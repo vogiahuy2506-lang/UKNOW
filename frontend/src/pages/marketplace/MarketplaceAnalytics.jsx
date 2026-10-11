@@ -44,7 +44,7 @@ const MarketplaceAnalytics = () => {
     return (
       <div className="space-y-6">
         <div className="animate-pulse">
-          <div className="h-8 w-64 bg-gray-200 rounded mb-6"></div>
+          <div className="h-8 w-64 bg-gray-200 dark:bg-dk-strong rounded mb-6"></div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {[...Array(4)].map((_, i) => (
               <div key={i} className="card p-6 h-32"></div>
@@ -76,19 +76,19 @@ const MarketplaceAnalytics = () => {
         <div className="card p-6">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500">Tổng Listings</p>
-              <p className="text-3xl font-bold text-gray-900 mt-1">{stats?.totalListings || 0}</p>
+              <p className="text-sm font-medium text-gray-500 dark:text-dk-text2">Tổng Listings</p>
+              <p className="text-3xl font-bold text-gray-900 dark:text-dk-text mt-1">{stats?.totalListings || 0}</p>
             </div>
-            <div className="p-3 bg-blue-100 rounded-lg">
-              <HiOutlineShoppingBag className="w-6 h-6 text-blue-600" />
+            <div className="p-3 bg-blue-100 dark:bg-blue-950/40 rounded-lg">
+              <HiOutlineShoppingBag className="w-6 h-6 text-blue-600 dark:text-blue-400" />
             </div>
           </div>
-          <div className="flex items-center gap-4 mt-4 pt-4 border-t border-gray-100">
-            <span className="flex items-center gap-1 text-sm text-green-600">
+          <div className="flex items-center gap-4 mt-4 pt-4 border-t border-gray-100 dark:border-dk-border">
+            <span className="flex items-center gap-1 text-sm text-green-600 dark:text-green-400">
               <HiOutlineTrendingUp className="w-4 h-4" />
               {stats?.byStatus?.published || 0} đã đăng
             </span>
-            <span className="flex items-center gap-1 text-sm text-yellow-600">
+            <span className="flex items-center gap-1 text-sm text-yellow-600 dark:text-yellow-400">
               <HiOutlineTrendingDown className="w-4 h-4" />
               {stats?.byStatus?.draft || 0} nháp
             </span>
@@ -99,14 +99,14 @@ const MarketplaceAnalytics = () => {
         <div className="card p-6">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500">Tổng Credits</p>
-              <p className="text-3xl font-bold text-amber-600 mt-1">{formatNumber(stats?.totalRevenue || 0)}</p>
+              <p className="text-sm font-medium text-gray-500 dark:text-dk-text2">Tổng Credits</p>
+              <p className="text-3xl font-bold text-amber-600 dark:text-amber-400 mt-1">{formatNumber(stats?.totalRevenue || 0)}</p>
             </div>
-            <div className="p-3 bg-amber-100 rounded-lg">
-              <HiOutlineCurrencyDollar className="w-6 h-6 text-amber-600" />
+            <div className="p-3 bg-amber-100 dark:bg-amber-950/40 rounded-lg">
+              <HiOutlineCurrencyDollar className="w-6 h-6 text-amber-600 dark:text-amber-400" />
             </div>
           </div>
-          <p className="text-sm text-gray-500 mt-4 pt-4 border-t border-gray-100">
+          <p className="text-sm text-gray-500 dark:text-dk-text2 mt-4 pt-4 border-t border-gray-100 dark:border-dk-border">
             Tổng credits giao dịch
           </p>
         </div>
@@ -115,19 +115,19 @@ const MarketplaceAnalytics = () => {
         <div className="card p-6">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500">Đã Đăng</p>
-              <p className="text-3xl font-bold text-green-600 mt-1">{stats?.byStatus?.published || 0}</p>
+              <p className="text-sm font-medium text-gray-500 dark:text-dk-text2">Đã Đăng</p>
+              <p className="text-3xl font-bold text-green-600 dark:text-green-400 mt-1">{stats?.byStatus?.published || 0}</p>
             </div>
-            <div className="p-3 bg-green-100 rounded-lg">
-              <HiOutlineStar className="w-6 h-6 text-green-600" />
+            <div className="p-3 bg-green-100 dark:bg-green-950/40 rounded-lg">
+              <HiOutlineStar className="w-6 h-6 text-green-600 dark:text-green-400" />
             </div>
           </div>
-          <div className="mt-4 pt-4 border-t border-gray-100">
+          <div className="mt-4 pt-4 border-t border-gray-100 dark:border-dk-border">
             <div className="flex items-center justify-between text-sm mb-1">
-              <span className="text-gray-500">Tỷ lệ đăng</span>
+              <span className="text-gray-500 dark:text-dk-text2">Tỷ lệ đăng</span>
               <span className="font-medium">{publishedPercent}%</span>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
+            <div className="w-full bg-gray-200 dark:bg-dk-strong rounded-full h-2">
               <div
                 className="bg-green-500 h-2 rounded-full transition-all"
                 style={{ width: `${publishedPercent}%` }}
@@ -140,14 +140,14 @@ const MarketplaceAnalytics = () => {
         <div className="card p-6">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500">Tạm Dừng</p>
-              <p className="text-3xl font-bold text-yellow-600 mt-1">{stats?.byStatus?.paused || 0}</p>
+              <p className="text-sm font-medium text-gray-500 dark:text-dk-text2">Tạm Dừng</p>
+              <p className="text-3xl font-bold text-yellow-600 dark:text-yellow-400 mt-1">{stats?.byStatus?.paused || 0}</p>
             </div>
-            <div className="p-3 bg-yellow-100 rounded-lg">
-              <HiOutlineEye className="w-6 h-6 text-yellow-600" />
+            <div className="p-3 bg-yellow-100 dark:bg-yellow-950/40 rounded-lg">
+              <HiOutlineEye className="w-6 h-6 text-yellow-600 dark:text-yellow-400" />
             </div>
           </div>
-          <p className="text-sm text-gray-500 mt-4 pt-4 border-t border-gray-100">
+          <p className="text-sm text-gray-500 dark:text-dk-text2 mt-4 pt-4 border-t border-gray-100 dark:border-dk-border">
             Listing tạm thời không hiển thị
           </p>
         </div>
@@ -175,13 +175,13 @@ const MarketplaceAnalytics = () => {
 
       {/* Top Sellers Table */}
       <div className="card">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Top người bán</h2>
-          <p className="text-sm text-gray-500 mt-1">Những người bán có doanh thu cao nhất</p>
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-dk-border">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-dk-text">Top người bán</h2>
+          <p className="text-sm text-gray-500 dark:text-dk-text2 mt-1">Những người bán có doanh thu cao nhất</p>
         </div>
 
         {topSellers.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">
+          <div className="p-8 text-center text-gray-500 dark:text-dk-text2">
             Chưa có dữ liệu
           </div>
         ) : (
@@ -198,18 +198,18 @@ const MarketplaceAnalytics = () => {
               <tbody>
                 {topSellers.map((seller, index) => (
                   <tr key={seller.id_user}>
-                    <td className="text-gray-400">{index + 1}</td>
+                    <td className="text-gray-400 dark:text-dk-muted">{index + 1}</td>
                     <td>
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
-                          <HiOutlineUser className="w-4 h-4 text-gray-500" />
+                        <div className="w-8 h-8 bg-gray-100 dark:bg-dk-raised rounded-full flex items-center justify-center">
+                          <HiOutlineUser className="w-4 h-4 text-gray-500 dark:text-dk-text2" />
                         </div>
                         <span className="font-medium">{seller.full_name || seller.username}</span>
                       </div>
                     </td>
                     <td>{seller.listing_count}</td>
                     <td>
-                      <span className="text-amber-600 font-semibold">{seller.total_revenue} credits</span>
+                      <span className="text-amber-600 dark:text-amber-400 font-semibold">{seller.total_revenue} credits</span>
                     </td>
                   </tr>
                 ))}

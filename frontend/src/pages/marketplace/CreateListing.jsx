@@ -343,26 +343,26 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
     || chatbots.find((c) => c.id === parseInt(form.chatbotId, 10));
 
   return (
-    <div className="flex flex-col h-full bg-gray-50">
+    <div className="flex flex-col h-full bg-gray-50 dark:bg-dk-bg">
       {/* Header */}
-      <header className="flex-shrink-0 border-b border-gray-200 bg-white">
+      <header className="flex-shrink-0 border-b border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface">
         <div className="px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-              resourceType === 'chatbot' ? 'bg-purple-100' :
-              resourceType === 'landing_page' ? 'bg-blue-100' : 'bg-orange-100'
+              resourceType === 'chatbot' ? 'bg-purple-100 dark:bg-purple-950/40' :
+              resourceType === 'landing_page' ? 'bg-blue-100 dark:bg-blue-950/40' : 'bg-orange-100 dark:bg-orange-950/40'
             }`}>
               {resourceType === 'chatbot' ? (
-                <HiOutlineChat className="w-5 h-5 text-purple-600" />
+                <HiOutlineChat className="w-5 h-5 text-purple-600 dark:text-purple-400" />
               ) : resourceType === 'landing_page' ? (
-                <HiOutlineGlobe className="w-5 h-5 text-blue-600" />
+                <HiOutlineGlobe className="w-5 h-5 text-blue-600 dark:text-blue-400" />
               ) : (
-                <HiOutlineTemplate className="w-5 h-5 text-orange-600" />
+                <HiOutlineTemplate className="w-5 h-5 text-orange-600 dark:text-orange-400" />
               )}
             </div>
             <div>
-              <h1 className="text-lg font-bold text-gray-900">Tạo Template mới</h1>
-              <p className="text-sm text-gray-500">
+              <h1 className="text-lg font-bold text-gray-900 dark:text-dk-text">Tạo Template mới</h1>
+              <p className="text-sm text-gray-500 dark:text-dk-text2">
                 {resourceType === 'chatbot' ? 'Chia sẻ chatbot của bạn trên marketplace' :
                  resourceType === 'landing_page' ? 'Chia sẻ landing page của bạn trên marketplace' :
                  'Chia sẻ chiến dịch của bạn trên marketplace'}
@@ -371,7 +371,7 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors"
+            className="p-2 hover:bg-gray-100 dark:hover:bg-dk-strong rounded-lg text-gray-500 dark:text-dk-text2 transition-colors"
             aria-label="Đóng"
           >
             <HiOutlineX className="w-5 h-5" />
@@ -393,21 +393,21 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
                           ? 'bg-emerald-500 text-white'
                           : isActive
                           ? 'bg-orange-600 text-white'
-                          : 'bg-gray-100 text-gray-400'
+                          : 'bg-gray-100 dark:bg-dk-raised text-gray-400 dark:text-dk-muted'
                       }`}
                     >
                       {isDone ? '✓' : step.id}
                     </div>
                     <span
                       className={`text-sm font-medium hidden sm:inline ${
-                        isActive ? 'text-gray-900' : isDone ? 'text-emerald-600' : 'text-gray-400'
+                        isActive ? 'text-gray-900 dark:text-dk-text' : isDone ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-dk-muted'
                       }`}
                     >
                       {step.label}
                     </span>
                   </div>
                   {idx < STEPS.length - 1 && (
-                    <div className={`flex-1 mx-3 h-0.5 rounded ${isDone ? 'bg-emerald-400' : 'bg-gray-200'}`} />
+                    <div className={`flex-1 mx-3 h-0.5 rounded ${isDone ? 'bg-emerald-400' : 'bg-gray-200 dark:bg-dk-strong'}`} />
                   )}
                 </div>
               );
@@ -422,16 +422,16 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
           {/* Step 1: Resource selection */}
           {currentStep === 1 && (
             <div className="space-y-4">
-              <div className="card p-4 bg-orange-50 border-orange-100">
+              <div className="card p-4 bg-orange-50 dark:bg-orange-950/40 border-orange-100 dark:border-orange-800">
                 <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center flex-shrink-0">
-                    <HiOutlineLightBulb className="w-4 h-4 text-orange-600" />
+                  <div className="w-8 h-8 rounded-lg bg-orange-100 dark:bg-orange-950/40 flex items-center justify-center flex-shrink-0">
+                    <HiOutlineLightBulb className="w-4 h-4 text-orange-600 dark:text-orange-400" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-900 mb-1">
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-dk-text mb-1">
                       Chọn tài nguyên làm template
                     </h3>
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-gray-600 dark:text-dk-text2">
                       Chiến dịch hoặc chatbot được chọn sẽ được đóng gói thành template để chia sẻ trên marketplace
                     </p>
                   </div>
@@ -447,7 +447,7 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
                     className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-medium transition-all ${
                       resourceType === 'campaign'
                         ? 'bg-orange-600 text-white shadow-md'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        : 'bg-gray-100 dark:bg-dk-raised text-gray-600 dark:text-dk-text2 hover:bg-gray-200 dark:hover:bg-dk-strong'
                     }`}
                   >
                     <HiOutlineMail className="w-5 h-5" />
@@ -459,7 +459,7 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
                     className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-medium transition-all ${
                       resourceType === 'chatbot'
                         ? 'bg-purple-600 text-white shadow-md'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        : 'bg-gray-100 dark:bg-dk-raised text-gray-600 dark:text-dk-text2 hover:bg-gray-200 dark:hover:bg-dk-strong'
                     }`}
                   >
                     <HiOutlineChat className="w-5 h-5" />
@@ -471,7 +471,7 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
                     className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-medium transition-all ${
                       resourceType === 'landing_page'
                         ? 'bg-blue-600 text-white shadow-md'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        : 'bg-gray-100 dark:bg-dk-raised text-gray-600 dark:text-dk-text2 hover:bg-gray-200 dark:hover:bg-dk-strong'
                     }`}
                   >
                     <HiOutlineGlobe className="w-5 h-5" />
@@ -483,8 +483,8 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
                 {resourceType === 'campaign' && (
                   <>
                     <div className="flex items-center justify-between mb-4">
-                      <label className="text-sm font-semibold text-gray-900">
-                        Chiến dịch của bạn <span className="text-red-500">*</span>
+                      <label className="text-sm font-semibold text-gray-900 dark:text-dk-text">
+                        Chiến dịch của bạn <span className="text-red-500 dark:text-red-400">*</span>
                       </label>
                       <div className="flex items-center gap-1.5">
                         {CAMPAIGN_TYPE_FILTERS.map((filter) => (
@@ -495,7 +495,7 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
                             className={`px-2.5 py-1 text-xs font-medium rounded-lg transition-colors ${
                               typeFilter === filter.value
                                 ? 'bg-orange-600 text-white'
-                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                : 'bg-gray-100 dark:bg-dk-raised text-gray-600 dark:text-dk-text2 hover:bg-gray-200 dark:hover:bg-dk-strong'
                             }`}
                           >
                             {filter.label}
@@ -504,19 +504,19 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
                       </div>
                     </div>
                     {isLoadingCampaigns ? (
-                      <div className="flex items-center gap-3 py-6 text-sm text-gray-500">
+                      <div className="flex items-center gap-3 py-6 text-sm text-gray-500 dark:text-dk-text2">
                         <div className="spinner w-5 h-5" />
                         Đang tải...
                       </div>
                     ) : filteredCampaigns.length === 0 ? (
                       <div className="text-center py-8">
-                        <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-gray-100 flex items-center justify-center">
-                          <HiOutlineMail className="w-6 h-6 text-gray-400" />
+                        <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-gray-100 dark:bg-dk-raised flex items-center justify-center">
+                          <HiOutlineMail className="w-6 h-6 text-gray-400 dark:text-dk-muted" />
                         </div>
-                        <p className="text-gray-600 font-medium mb-1">
+                        <p className="text-gray-600 dark:text-dk-text2 font-medium mb-1">
                           {typeFilter ? 'Không có chiến dịch loại này' : 'Chưa có chiến dịch nào'}
                         </p>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-gray-500 dark:text-dk-text2">
                           {typeFilter ? 'Thử chọn loại khác' : 'Tạo chiến dịch để bắt đầu'}
                         </p>
                       </div>
@@ -531,8 +531,8 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
                               onClick={() => handleCampaignSelect(String(c.id))}
                               className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
                                 isSelected
-                                  ? 'border-orange-500 bg-orange-50'
-                                  : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                                  ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/40'
+                                  : 'border-gray-200 dark:border-dk-border hover:border-gray-300 dark:hover:border-dk-border-strong hover:bg-gray-50 dark:hover:bg-dk-raised'
                               }`}
                             >
                               <div className="flex items-center gap-3">
@@ -540,22 +540,22 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
                                   className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
                                     isSelected
                                       ? 'bg-orange-500 text-white'
-                                      : 'bg-gray-100 text-gray-500'
+                                      : 'bg-gray-100 dark:bg-dk-raised text-gray-500 dark:text-dk-text2'
                                   }`}
                                 >
                                   <HiOutlineMail className="w-5 h-5" />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <p className="font-semibold text-gray-900 truncate">
+                                  <p className="font-semibold text-gray-900 dark:text-dk-text truncate">
                                     {c.campaignName}
                                   </p>
-                                  <p className="text-xs text-gray-500 mt-0.5">
+                                  <p className="text-xs text-gray-500 dark:text-dk-text2 mt-0.5">
                                     {CAMPAIGN_TYPE_LABELS[c.campaignType] || c.campaignType} •
                                     Tạo {new Date(c.createdAt).toLocaleDateString('vi-VN')}
                                   </p>
                                 </div>
                                 {isSelected && (
-                                  <HiOutlineCheckCircle className="w-5 h-5 text-orange-600 flex-shrink-0" />
+                                  <HiOutlineCheckCircle className="w-5 h-5 text-orange-600 dark:text-orange-400 flex-shrink-0" />
                                 )}
                               </div>
                             </button>
@@ -564,7 +564,7 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
                       </div>
                     )}
                     {errors.campaignId && (
-                      <p className="mt-2 text-sm text-red-600">{errors.campaignId}</p>
+                      <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.campaignId}</p>
                     )}
                   </>
                 )}
@@ -573,22 +573,22 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
                 {resourceType === 'chatbot' && (
                   <>
                     <div className="flex items-center justify-between mb-4">
-                      <label className="text-sm font-semibold text-gray-900">
-                        Chatbot của bạn <span className="text-red-500">*</span>
+                      <label className="text-sm font-semibold text-gray-900 dark:text-dk-text">
+                        Chatbot của bạn <span className="text-red-500 dark:text-red-400">*</span>
                       </label>
                     </div>
                     {isLoadingChatbots ? (
-                      <div className="flex items-center gap-3 py-6 text-sm text-gray-500">
+                      <div className="flex items-center gap-3 py-6 text-sm text-gray-500 dark:text-dk-text2">
                         <div className="spinner w-5 h-5" />
                         Đang tải...
                       </div>
                     ) : chatbots.length === 0 ? (
                       <div className="text-center py-8">
-                        <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-gray-100 flex items-center justify-center">
-                          <HiOutlineChat className="w-6 h-6 text-gray-400" />
+                        <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-gray-100 dark:bg-dk-raised flex items-center justify-center">
+                          <HiOutlineChat className="w-6 h-6 text-gray-400 dark:text-dk-muted" />
                         </div>
-                        <p className="text-gray-600 font-medium mb-1">Chưa có chatbot nào</p>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-gray-600 dark:text-dk-text2 font-medium mb-1">Chưa có chatbot nào</p>
+                        <p className="text-sm text-gray-500 dark:text-dk-text2">
                           Tạo chatbot trong Chatbot Studio để bắt đầu
                         </p>
                       </div>
@@ -605,7 +605,7 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
                       </div>
                     )}
                     {errors.chatbotId && (
-                      <p className="mt-2 text-sm text-red-600">{errors.chatbotId}</p>
+                      <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.chatbotId}</p>
                     )}
                   </>
                 )}
@@ -614,22 +614,22 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
                 {resourceType === 'landing_page' && (
                   <>
                     <div className="flex items-center justify-between mb-4">
-                      <label className="text-sm font-semibold text-gray-900">
-                        Landing Page của bạn <span className="text-red-500">*</span>
+                      <label className="text-sm font-semibold text-gray-900 dark:text-dk-text">
+                        Landing Page của bạn <span className="text-red-500 dark:text-red-400">*</span>
                       </label>
                     </div>
                     {isLoadingLandingPages ? (
-                      <div className="flex items-center gap-3 py-6 text-sm text-gray-500">
+                      <div className="flex items-center gap-3 py-6 text-sm text-gray-500 dark:text-dk-text2">
                         <div className="spinner w-5 h-5" />
                         Đang tải...
                       </div>
                     ) : landingPages.length === 0 ? (
                       <div className="text-center py-8">
-                        <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-gray-100 flex items-center justify-center">
-                          <HiOutlineGlobe className="w-6 h-6 text-gray-400" />
+                        <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-gray-100 dark:bg-dk-raised flex items-center justify-center">
+                          <HiOutlineGlobe className="w-6 h-6 text-gray-400 dark:text-dk-muted" />
                         </div>
-                        <p className="text-gray-600 font-medium mb-1">Chưa có landing page nào</p>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-gray-600 dark:text-dk-text2 font-medium mb-1">Chưa có landing page nào</p>
+                        <p className="text-sm text-gray-500 dark:text-dk-text2">
                           Tạo landing page để bắt đầu
                         </p>
                       </div>
@@ -644,8 +644,8 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
                               onClick={() => handleLandingPageSelect(String(lp.id))}
                               className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
                                 isSelected
-                                  ? 'border-blue-500 bg-blue-50'
-                                  : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40'
+                                  : 'border-gray-200 dark:border-dk-border hover:border-gray-300 dark:hover:border-dk-border-strong hover:bg-gray-50 dark:hover:bg-dk-raised'
                               }`}
                             >
                               <div className="flex items-center gap-3">
@@ -653,22 +653,22 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
                                   className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
                                     isSelected
                                       ? 'bg-blue-500 text-white'
-                                      : 'bg-gray-100 text-gray-500'
+                                      : 'bg-gray-100 dark:bg-dk-raised text-gray-500 dark:text-dk-text2'
                                   }`}
                                 >
                                   <HiOutlineGlobe className="w-5 h-5" />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <p className="font-semibold text-gray-900 truncate">
+                                  <p className="font-semibold text-gray-900 dark:text-dk-text truncate">
                                     {lp.title || lp.slug || 'Untitled'}
                                   </p>
-                                  <p className="text-xs text-gray-500 mt-0.5">
+                                  <p className="text-xs text-gray-500 dark:text-dk-text2 mt-0.5">
                                     {lp.isPublished ? 'Đã xuất bản' : 'Nháp'} •
                                     Tạo {lp.createdAt ? new Date(lp.createdAt).toLocaleDateString('vi-VN') : '-'}
                                   </p>
                                 </div>
                                 {isSelected && (
-                                  <HiOutlineCheckCircle className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                                  <HiOutlineCheckCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
                                 )}
                               </div>
                             </button>
@@ -677,7 +677,7 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
                       </div>
                     )}
                     {errors.landingPageId && (
-                      <p className="mt-2 text-sm text-red-600">{errors.landingPageId}</p>
+                      <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.landingPageId}</p>
                     )}
                   </>
                 )}
@@ -689,26 +689,26 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
           {currentStep === 2 && (
             <div className="space-y-4">
               {/* Selected resource summary */}
-              <div className="card p-3 bg-gradient-to-r from-orange-50 to-amber-50 border-orange-100">
+              <div className="card p-3 bg-gradient-to-r from-orange-50 dark:from-orange-950/40 to-amber-50 dark:to-amber-950/40 border-orange-100 dark:border-orange-800">
                 <div className="flex items-center gap-3">
                   <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                    resourceType === 'chatbot' ? 'bg-purple-100' :
-                    resourceType === 'landing_page' ? 'bg-blue-100' : 'bg-orange-100'
+                    resourceType === 'chatbot' ? 'bg-purple-100 dark:bg-purple-950/40' :
+                    resourceType === 'landing_page' ? 'bg-blue-100 dark:bg-blue-950/40' : 'bg-orange-100 dark:bg-orange-950/40'
                   }`}>
                     {resourceType === 'chatbot' ? (
-                      <HiOutlineChat className="w-4 h-4 text-purple-600" />
+                      <HiOutlineChat className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                     ) : resourceType === 'landing_page' ? (
-                      <HiOutlineGlobe className="w-4 h-4 text-blue-600" />
+                      <HiOutlineGlobe className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                     ) : (
-                      <HiOutlineMail className="w-4 h-4 text-orange-600" />
+                      <HiOutlineMail className="w-4 h-4 text-orange-600 dark:text-orange-400" />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs text-gray-500 font-medium">
+                    <p className="text-xs text-gray-500 dark:text-dk-text2 font-medium">
                       {resourceType === 'chatbot' ? 'Chatbot' :
                        resourceType === 'landing_page' ? 'Landing Page' : 'Chiến dịch'} đã chọn
                     </p>
-                    <p className="text-sm font-semibold text-gray-900 truncate">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-dk-text truncate">
                       {resourceType === 'campaign'
                         ? selectedCampaign?.campaignName || selectedCampaign?.name || '—'
                         : resourceType === 'landing_page'
@@ -720,7 +720,7 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
                   <button
                     type="button"
                     onClick={() => setCurrentStep(1)}
-                    className="text-xs font-medium text-orange-600 hover:text-orange-700 px-2 py-1 rounded hover:bg-orange-100 transition-colors flex-shrink-0"
+                    className="text-xs font-medium text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 px-2 py-1 rounded hover:bg-orange-100 dark:hover:bg-orange-950/60 transition-colors flex-shrink-0"
                   >
                     Đổi
                   </button>
@@ -748,7 +748,7 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
 
                 {/* Mô tả ngắn */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-900 mb-1.5">
+                  <label className="block text-sm font-semibold text-gray-900 dark:text-dk-text mb-1.5">
                     Mô tả ngắn
                   </label>
                   <textarea
@@ -761,31 +761,31 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
                     }}
                     placeholder="Mô tả ngắn gọn về template, đối tượng phù hợp..."
                     rows={3}
-                    className={`input w-full resize-none ${errors.description ? 'border-red-300 focus:border-red-500' : ''}`}
+                    className={`input w-full resize-none ${errors.description ? 'border-red-300 dark:border-red-700 focus:border-red-500' : ''}`}
                   />
                   <div className="flex items-center justify-between mt-1.5">
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-500 dark:text-dk-text2">
                       Giúp người mua hiểu nhanh về template của bạn
                     </p>
-                    <p className={`text-xs ${form.description.length >= 250 ? 'text-orange-600' : 'text-gray-500'}`}>
+                    <p className={`text-xs ${form.description.length >= 250 ? 'text-orange-600 dark:text-orange-400' : 'text-gray-500 dark:text-dk-text2'}`}>
                       {form.description.length}/250
                     </p>
                   </div>
                   {errors.description && (
-                    <p className="mt-1 text-sm text-red-600">{errors.description}</p>
+                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.description}</p>
                   )}
                 </div>
 
                 {/* Giá */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-900 mb-1.5">
+                  <label className="block text-sm font-semibold text-gray-900 dark:text-dk-text mb-1.5">
                     Giá (credits)
                   </label>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={() => updateForm('priceCredits', Math.max(0, parseInt(form.priceCredits, 10) - 50))}
-                      className="w-9 h-9 rounded-lg border border-gray-200 hover:border-orange-300 hover:bg-orange-50 text-gray-700 font-semibold transition-colors flex-shrink-0"
+                      className="w-9 h-9 rounded-lg border border-gray-200 dark:border-dk-border hover:border-orange-300 dark:hover:border-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950/60 text-gray-700 dark:text-dk-text font-semibold transition-colors flex-shrink-0"
                     >
                       −
                     </button>
@@ -798,7 +798,7 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
                     <button
                       type="button"
                       onClick={() => updateForm('priceCredits', parseInt(form.priceCredits, 10) + 50)}
-                      className="w-9 h-9 rounded-lg border border-gray-200 hover:border-orange-300 hover:bg-orange-50 text-gray-700 font-semibold transition-colors flex-shrink-0"
+                      className="w-9 h-9 rounded-lg border border-gray-200 dark:border-dk-border hover:border-orange-300 dark:hover:border-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950/60 text-gray-700 dark:text-dk-text font-semibold transition-colors flex-shrink-0"
                     >
                       +
                     </button>
@@ -809,8 +809,8 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
                       onClick={() => updateForm('priceCredits', 0)}
                       className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
                         form.priceCredits === 0
-                          ? 'bg-emerald-50 border-emerald-300 text-emerald-700 font-medium'
-                          : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+                          ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 font-medium'
+                          : 'bg-white dark:bg-dk-surface border-gray-200 dark:border-dk-border text-gray-600 dark:text-dk-text2 hover:border-gray-300 dark:hover:border-dk-border-strong'
                       }`}
                     >
                       Miễn phí
@@ -820,8 +820,8 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
                       onClick={() => updateForm('priceCredits', 100)}
                       className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
                         form.priceCredits === 100
-                          ? 'bg-orange-50 border-orange-300 text-orange-700 font-medium'
-                          : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+                          ? 'bg-orange-50 dark:bg-orange-950/40 border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-300 font-medium'
+                          : 'bg-white dark:bg-dk-surface border-gray-200 dark:border-dk-border text-gray-600 dark:text-dk-text2 hover:border-gray-300 dark:hover:border-dk-border-strong'
                       }`}
                     >
                       100 credits
@@ -831,8 +831,8 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
                       onClick={() => updateForm('priceCredits', 500)}
                       className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
                         form.priceCredits === 500
-                          ? 'bg-orange-50 border-orange-300 text-orange-700 font-medium'
-                          : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+                          ? 'bg-orange-50 dark:bg-orange-950/40 border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-300 font-medium'
+                          : 'bg-white dark:bg-dk-surface border-gray-200 dark:border-dk-border text-gray-600 dark:text-dk-text2 hover:border-gray-300 dark:hover:border-dk-border-strong'
                       }`}
                     >
                       500 credits
@@ -842,7 +842,7 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
 
                 {/* Công bố bán */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-900 mb-1.5">
+                  <label className="block text-sm font-semibold text-gray-900 dark:text-dk-text mb-1.5">
                     Công bố bán
                   </label>
                   <button
@@ -850,23 +850,23 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
                     onClick={() => updateForm('publishForSale', !form.publishForSale)}
                     className={`w-full flex items-center justify-between gap-3 p-3 rounded-xl border-2 transition-all ${
                       form.publishForSale
-                        ? 'border-emerald-500 bg-emerald-50'
-                        : 'border-gray-200 bg-white hover:border-gray-300'
+                        ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40'
+                        : 'border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface hover:border-gray-300 dark:hover:border-dk-border-strong'
                     }`}
                     role="switch"
                     aria-checked={Boolean(form.publishForSale)}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                        form.publishForSale ? 'bg-emerald-100' : 'bg-gray-100'
+                        form.publishForSale ? 'bg-emerald-100 dark:bg-emerald-950/40' : 'bg-gray-100 dark:bg-dk-raised'
                       }`}>
-                        <HiOutlineGlobe className={`w-4 h-4 ${form.publishForSale ? 'text-emerald-600' : 'text-gray-500'}`} />
+                        <HiOutlineGlobe className={`w-4 h-4 ${form.publishForSale ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-dk-text2'}`} />
                       </div>
                       <div className="text-left min-w-0">
-                        <p className={`text-sm font-semibold ${form.publishForSale ? 'text-emerald-900' : 'text-gray-900'}`}>
+                        <p className={`text-sm font-semibold ${form.publishForSale ? 'text-emerald-900 dark:text-emerald-300' : 'text-gray-900 dark:text-dk-text'}`}>
                           {form.publishForSale ? 'Đang công bố bán' : 'Chưa công bố'}
                         </p>
-                        <p className="text-xs text-gray-500 truncate">
+                        <p className="text-xs text-gray-500 dark:text-dk-text2 truncate">
                           {form.publishForSale
                             ? 'Template sẽ hiển thị trên marketplace ngay sau khi tạo'
                             : 'Lưu ở trạng thái nháp, có thể công bố sau'}
@@ -875,9 +875,10 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
                     </div>
                     <span
                       className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
-                        form.publishForSale ? 'bg-emerald-500' : 'bg-gray-300'
+                        form.publishForSale ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-dk-border-strong'
                       }`}
                     >
+                      {/* giữ sáng: núm công tắc luôn trắng */}
                       <span
                         className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
                           form.publishForSale ? 'translate-x-6' : 'translate-x-1'
@@ -889,7 +890,7 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
 
                 {/* Tags */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-900 mb-1.5">
+                  <label className="block text-sm font-semibold text-gray-900 dark:text-dk-text mb-1.5">
                     Tags
                   </label>
                   <TagInput
@@ -897,7 +898,7 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
                     onChange={(tags) => updateForm('tags', tags)}
                     placeholder="Nhấn Enter để thêm..."
                   />
-                  <p className="text-xs text-gray-500 mt-1.5">
+                  <p className="text-xs text-gray-500 dark:text-dk-text2 mt-1.5">
                     Giúp người khác tìm thấy template dễ hơn
                   </p>
                 </div>
@@ -911,19 +912,19 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
               <div className="card p-5 space-y-4">
                 {/* Knowledge base option for chatbots */}
                 {resourceType === 'chatbot' && selectedChatbot?.hasKnowledgeBase && (
-                  <div className="flex items-start gap-3 p-3 bg-purple-50 rounded-lg border border-purple-100">
+                  <div className="flex items-start gap-3 p-3 bg-purple-50 dark:bg-purple-950/40 rounded-lg border border-purple-100 dark:border-purple-800">
                     <input
                       type="checkbox"
                       id="includeKb"
                       checked={includeKnowledgeBase}
                       onChange={(e) => setIncludeKnowledgeBase(e.target.checked)}
-                      className="mt-0.5 w-4 h-4 text-purple-600 rounded border-purple-300 focus:ring-purple-500"
+                      className="mt-0.5 w-4 h-4 text-purple-600 dark:text-purple-400 rounded border-purple-300 dark:border-purple-700 focus:ring-purple-500"
                     />
                     <div>
-                      <label htmlFor="includeKb" className="text-sm font-medium text-gray-900 cursor-pointer">
+                      <label htmlFor="includeKb" className="text-sm font-medium text-gray-900 dark:text-dk-text cursor-pointer">
                         Bao gồm Knowledge Base
                       </label>
-                      <p className="text-xs text-gray-500 mt-0.5">
+                      <p className="text-xs text-gray-500 dark:text-dk-text2 mt-0.5">
                         Chatbot này có {selectedChatbot.chunkCount} chunks. Người mua sẽ nhận được nội dung knowledge base.
                       </p>
                     </div>
@@ -931,14 +932,14 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
                 )}
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-900 mb-2">
-                    Giá bán <span className="text-gray-400 font-normal">(credits)</span>
+                  <label className="block text-sm font-semibold text-gray-900 dark:text-dk-text mb-2">
+                    Giá bán <span className="text-gray-400 dark:text-dk-muted font-normal">(credits)</span>
                   </label>
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
                       onClick={() => updateForm('priceCredits', Math.max(0, parseInt(form.priceCredits, 10) - 50))}
-                      className="w-10 h-10 rounded-xl border border-gray-200 hover:border-orange-300 hover:bg-orange-50 text-gray-700 font-semibold transition-colors"
+                      className="w-10 h-10 rounded-xl border border-gray-200 dark:border-dk-border hover:border-orange-300 dark:hover:border-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950/60 text-gray-700 dark:text-dk-text font-semibold transition-colors"
                     >
                       −
                     </button>
@@ -950,12 +951,12 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
                     <button
                       type="button"
                       onClick={() => updateForm('priceCredits', parseInt(form.priceCredits, 10) + 50)}
-                      className="w-10 h-10 rounded-xl border border-gray-200 hover:border-orange-300 hover:bg-orange-50 text-gray-700 font-semibold transition-colors"
+                      className="w-10 h-10 rounded-xl border border-gray-200 dark:border-dk-border hover:border-orange-300 dark:hover:border-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950/60 text-gray-700 dark:text-dk-text font-semibold transition-colors"
                     >
                       +
                     </button>
                   </div>
-                  <p className="text-sm text-gray-500 mt-2">
+                  <p className="text-sm text-gray-500 dark:text-dk-text2 mt-2">
                     Đặt <strong>0 credits</strong> để chia sẻ miễn phí
                   </p>
                 </div>
@@ -964,7 +965,7 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
               {/* Summary */}
               {(selectedCampaign || selectedChatbot || form.landingPageId) && (
                 <div className="card p-4 bg-gray-900 text-white">
-                  <p className="text-xs uppercase tracking-wider text-gray-400 mb-3">Tóm tắt</p>
+                  <p className="text-xs uppercase tracking-wider text-gray-400 dark:text-dk-muted mb-3">Tóm tắt</p>
                   <div className="flex items-start gap-3">
                     <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
                       resourceType === 'chatbot' ? 'bg-purple-500' :
@@ -980,7 +981,7 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold truncate">{form.title}</p>
-                      <p className="text-xs text-gray-400 mt-1">
+                      <p className="text-xs text-gray-400 dark:text-dk-muted mt-1">
                         {resourceType === 'chatbot' && selectedChatbot
                           ? `Chatbot • ${includeKnowledgeBase && selectedChatbot.hasKnowledgeBase ? 'Có KB' : 'Không KB'}`
                           : resourceType === 'landing_page'
@@ -988,7 +989,7 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
                           : `Chiến dịch • ${selectedCampaign?.campaignName || ''}`
                         }
                       </p>
-                      <p className="text-xs text-gray-400 mt-1">
+                      <p className="text-xs text-gray-400 dark:text-dk-muted mt-1">
                         {form.priceCredits === 0 ? 'Miễn phí' : `${form.priceCredits} credits`}
                       </p>
                     </div>
@@ -1001,12 +1002,12 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
       </div>
 
       {/* Footer */}
-      <footer className="flex-shrink-0 border-t border-gray-200 bg-white px-6 py-4">
+      <footer className="flex-shrink-0 border-t border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface px-6 py-4">
         <div className="flex items-center justify-between">
           <button
             type="button"
             onClick={currentStep === 1 ? onClose : handleBack}
-            className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-strong rounded-lg transition-colors"
           >
             {currentStep === 1 ? 'Hủy' : 'Quay lại'}
           </button>

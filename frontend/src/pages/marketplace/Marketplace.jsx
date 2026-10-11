@@ -28,7 +28,7 @@ const MarketplacePage = () => {
 
   return (
     <div className="flex-1 min-h-[60vh] flex items-center justify-center">
-      <div className="text-center text-gray-500">
+      <div className="text-center text-gray-500 dark:text-dk-text2">
         <div className="spinner w-8 h-8 mx-auto mb-3"></div>
         <p className="text-sm">Đang mở Marketplace...</p>
       </div>
