@@ -1,6 +1,14 @@
 // Vietnamese translations for UKNOW platform
 
 export default {
+  // Khung trình soạn của quản trị (components/editor/AdminEditorShell.jsx).
+  editorShell: {
+    settings: 'Cài đặt',
+    tools: 'Công cụ',
+    save: 'Lưu',
+    saving: 'Đang lưu...',
+    close: 'Đóng',
+  },
   common: {
     appName: 'Founder AI',
     loading: 'Đang tải...',

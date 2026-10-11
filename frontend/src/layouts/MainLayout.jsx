@@ -155,6 +155,8 @@ const MainLayout = ({ children = null }) => {
   const isLandingCanvas = /^\/app\/settings\/landing-pages\/(new|\d+\/edit)$/.test(
     location.pathname
   );
+  // 11/10/2026: trang SOẠN của quản trị dùng khung editor tràn màn (components/editor/AdminEditorShell) giống canvas landing.
+  const isAdminEditor = /^\/admin\/(landing-customizer|welcome-email|notification-center)\/?$/.test(location.pathname);
   const showAiSidePanel = aiPanelOpen && !isAiHomePage && !isLandingCanvas;
 
   useEffect(() => {
@@ -240,7 +242,7 @@ const MainLayout = ({ children = null }) => {
   }, [setSidebarOpen]);
 
   const isBuilderPage = isFullLayout || isLandingCanvas;
-  const isSpecialPage = isFullLayout || isInboxPage || isAiHomePage || isChatbotStudio || isLandingCanvas;
+  const isSpecialPage = isFullLayout || isInboxPage || isAiHomePage || isChatbotStudio || isLandingCanvas || isAdminEditor;
 
   // Persist sidebar width for full-screen editors
   useEffect(() => {
@@ -354,7 +356,7 @@ const MainLayout = ({ children = null }) => {
         <main
           ref={mainContentRef}
           className={`flex-1 min-w-0 overflow-auto bg-white dark:bg-dk-inset ${
-            isLandingCanvas ? 'rounded-none border-0 shadow-none' : 'rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_12px_rgba(15,23,42,0.04)] border border-gray-200/70 dark:border-dk-border/80 text-slate-900 dark:text-dk-text'
+            isLandingCanvas || isAdminEditor ? 'rounded-none border-0 shadow-none' : 'rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_12px_rgba(15,23,42,0.04)] border border-gray-200/70 dark:border-dk-border/80 text-slate-900 dark:text-dk-text'
           } relative ${isSpecialPage ? '' : 'p-2 md:p-3'}`}
         >
           <div className="relative h-full flex flex-col min-h-0">
