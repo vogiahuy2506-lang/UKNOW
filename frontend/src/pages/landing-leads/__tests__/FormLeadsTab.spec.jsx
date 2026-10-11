@@ -110,7 +110,8 @@ describe('FormLeadsTab — tab "Từ biểu mẫu"', () => {
     expect(first.getAllByText('Biểu mẫu tư vấn').length).toBeGreaterThan(0);
     expect(first.getByText('/khoa-hoc')).toBeInTheDocument();
     expect(first.getByText('facebook')).toBeInTheDocument();
-    expect(first.getByTestId('form-lead-status')).toHaveAttribute('data-status', 'submitted');
+    // Huy hiệu xuất hiện 2 lần trong DOM (cột Trạng thái cho ≥sm + dòng dưới tên cho điện thoại) — cùng một trạng thái.
+    expect(first.getAllByTestId('form-lead-status').map((el) => el.dataset.status)).toEqual(['submitted', 'submitted']);
     expect(first.getByRole('button', { name: 'Xem chi tiết' })).toBeInTheDocument();
 
     // Không tên: chữ "Chưa cung cấp"; không nguồn: gạch ngang.
@@ -118,8 +119,8 @@ describe('FormLeadsTab — tab "Từ biểu mẫu"', () => {
     expect(second.getByText('Chưa cung cấp')).toBeInTheDocument();
     expect(second.getByText('0902222222')).toBeInTheDocument();
     // pending_payment mà hết hạn giữ chỗ → hiện "Hết hạn thanh toán", không phải "Chờ thanh toán".
-    expect(second.getByTestId('form-lead-status')).toHaveAttribute('data-status', 'hold_expired');
-    expect(second.getByText('Hết hạn thanh toán')).toBeInTheDocument();
+    expect(second.getAllByTestId('form-lead-status').map((el) => el.dataset.status)).toEqual(['hold_expired', 'hold_expired']);
+    expect(second.getAllByText('Hết hạn thanh toán').length).toBeGreaterThan(0);
   });
 
   it('mở trang: gọi API trang 1, limit 20, chưa lọc gì', async () => {

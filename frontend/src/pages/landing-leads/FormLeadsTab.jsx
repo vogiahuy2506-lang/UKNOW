@@ -230,11 +230,11 @@ export default function FormLeadsTab() {
           <table className="min-w-full divide-y divide-slate-100 dark:divide-dk-border">
             <thead className="bg-slate-50/80 dark:bg-dk-raised/50">
               <tr>
-                <th className={`pl-4 sm:pl-6 ${TH_CLASS} whitespace-nowrap`}>{t('landingLeads.formsTab.colTime')}</th>
-                <th className={TH_CLASS}>{t('landingLeads.formsTab.colRespondent')}</th>
-                <th className={`${TH_CLASS} hidden md:table-cell`}>{t('landingLeads.formsTab.colForm')}</th>
-                <th className={`${TH_CLASS} hidden md:table-cell`}>{t('landingLeads.formsTab.colSource')}</th>
-                <th className={TH_CLASS}>{t('landingLeads.formsTab.colStatus')}</th>
+                <th className={`pl-6 ${TH_CLASS} whitespace-nowrap hidden sm:table-cell`}>{t('landingLeads.formsTab.colTime')}</th>
+                <th className={`pl-4 sm:pl-3 ${TH_CLASS}`}>{t('landingLeads.formsTab.colRespondent')}</th>
+                <th className={`${TH_CLASS} hidden xl:table-cell`}>{t('landingLeads.formsTab.colForm')}</th>
+                <th className={`${TH_CLASS} hidden xl:table-cell`}>{t('landingLeads.formsTab.colSource')}</th>
+                <th className={`${TH_CLASS} hidden sm:table-cell`}>{t('landingLeads.formsTab.colStatus')}</th>
                 <th className={`${TH_CLASS} pr-4 sm:pr-6 text-right whitespace-nowrap`}>{t('landingLeads.formsTab.colActions')}</th>
               </tr>
             </thead>
@@ -287,10 +287,10 @@ export default function FormLeadsTab() {
                   }}
                   className="cursor-pointer hover:bg-slate-50/70 dark:hover:bg-dk-raised/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-500/40 transition-colors"
                 >
-                  <td className="pl-4 sm:pl-6 pr-3 py-4 text-xs text-slate-500 dark:text-dk-text2 whitespace-nowrap">
+                  <td className="pl-6 pr-3 py-4 text-xs text-slate-500 dark:text-dk-text2 whitespace-nowrap hidden sm:table-cell">
                     {formatSubmittedAt(row.createdAt)}
                   </td>
-                  <td className="px-3 py-4 text-xs sm:text-sm max-w-[200px] sm:max-w-[260px]">
+                  <td className="pl-4 sm:pl-3 pr-3 py-4 text-xs sm:text-sm max-w-[220px]">
                     <p className="truncate font-semibold text-slate-900 dark:text-dk-text">
                       {row.respondentName || (
                         <span className="italic font-normal text-slate-400 dark:text-dk-muted">{t('landingLeads.formsTab.notProvided')}</span>
@@ -301,12 +301,17 @@ export default function FormLeadsTab() {
                         {[row.respondentEmail, row.respondentPhone].filter(Boolean).join(' · ')}
                       </p>
                     ) : null}
-                    <p className="truncate text-[11px] text-slate-400 dark:text-dk-muted md:hidden">{row.formTitle}</p>
+                    <p className="truncate text-[11px] text-slate-400 dark:text-dk-muted xl:hidden">{row.formTitle}</p>
+                    <p className="text-[11px] text-slate-400 dark:text-dk-muted sm:hidden">{formatSubmittedAt(row.createdAt)}</p>
+                    {/* Điện thoại: bảng chỉ còn 2 cột (Người nộp · Hành động) nên trạng thái xuống dưới tên, khỏi phải cuộn ngang. */}
+                    <div className="mt-1 sm:hidden">
+                      <FormLeadStatusBadge submission={row} />
+                    </div>
                   </td>
-                  <td className="px-3 py-4 text-xs sm:text-sm text-slate-700 dark:text-dk-text max-w-[200px] hidden md:table-cell">
+                  <td className="px-3 py-4 text-xs sm:text-sm text-slate-700 dark:text-dk-text max-w-[160px] hidden xl:table-cell">
                     <p className="truncate" title={row.formTitle}>{row.formTitle || '—'}</p>
                   </td>
-                  <td className="px-3 py-4 text-xs text-slate-700 dark:text-dk-text max-w-[180px] hidden md:table-cell">
+                  <td className="px-3 py-4 text-xs text-slate-700 dark:text-dk-text max-w-[140px] hidden xl:table-cell">
                     {row.landingPageSlug || row.utmSource ? (
                       <div className="min-w-0 space-y-0.5">
                         {row.landingPageSlug ? (
@@ -320,7 +325,7 @@ export default function FormLeadsTab() {
                       <span className="text-slate-400 dark:text-dk-muted">—</span>
                     )}
                   </td>
-                  <td className="px-3 py-4 whitespace-nowrap">
+                  <td className="px-3 py-4 whitespace-nowrap hidden sm:table-cell">
                     <FormLeadStatusBadge submission={row} />
                   </td>
                   <td className="pl-1 pr-4 sm:pr-6 py-4 whitespace-nowrap text-right">
