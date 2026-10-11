@@ -232,7 +232,7 @@ export default function AllCustomersTab() {
                 <th className="text-slate-500 dark:text-dk-text2">{t('customers.all.emailStatus')}</th>
                 <th className="text-slate-500 dark:text-dk-text2">{t('customers.all.source')}</th>
                 <th className="text-slate-500 dark:text-dk-text2">{t('customers.all.createdAt')}</th>
-                <th className="text-right text-slate-500 dark:text-dk-text2">{t('customers.all.actions')}</th>
+                <th className="!text-right text-slate-500 dark:text-dk-text2">{t('customers.all.actions')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-dk-border">
