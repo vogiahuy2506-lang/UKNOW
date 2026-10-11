@@ -256,7 +256,7 @@ const ConversationItem = ({
   );
 };
 
-const EmptyState = ({ title, hint }) => (
+const EmptyState = ({ title, hint, actionLabel, onAction }) => (
   <div className="flex-1 flex items-center justify-center text-gray-500 dark:text-dk-text2">
     <div className="text-center p-8">
       <div className="w-20 h-20 mx-auto mb-4 rounded-3xl bg-gray-100 dark:bg-dk-raised flex items-center justify-center">
@@ -264,6 +264,11 @@ const EmptyState = ({ title, hint }) => (
       </div>
       <p className="text-base font-semibold text-gray-600 dark:text-dk-text">{title}</p>
       <p className="text-sm text-gray-400 dark:text-dk-muted mt-2">{hint}</p>
+      {actionLabel && onAction && (
+        <button type="button" onClick={onAction} className="btn btn-primary text-xs mt-4">
+          {actionLabel}
+        </button>
+      )}
     </div>
   </div>
 );
@@ -295,6 +300,11 @@ const ConversationList = ({
   onDelete,
   /** Đang có bộ lọc / từ khoá tìm kiếm: danh sách rỗng nghĩa là "không khớp" chứ không phải "chưa có gì". */
   hasActiveFilters = false,
+  /**
+   * Thay hai giọng rỗng mặc định bằng nội dung riêng: `{ title, hint, actionLabel?, onAction? }`. Trang Hộp thư dùng khi
+   * đang xem một kênh CHƯA kết nối ("Chưa kết nối Telegram" + nút kết nối). Không truyền → hành vi cũ nguyên vẹn.
+   */
+  emptyState = null,
 }) => {
   const { t, locale } = useI18n();
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -319,10 +329,19 @@ const ConversationList = ({
       {isLoading && conversations.length === 0 && <LoadingSkeleton />}
 
       {!isLoading && filteredConversations.length === 0 && (
-        <EmptyState
-          title={hasActiveFilters ? t('inbox.emptyFilteredTitle') : t('inbox.emptyListTitle')}
-          hint={hasActiveFilters ? t('inbox.emptyFilteredHint') : t('inbox.emptyListHint')}
-        />
+        emptyState ? (
+          <EmptyState
+            title={emptyState.title}
+            hint={emptyState.hint}
+            actionLabel={emptyState.actionLabel}
+            onAction={emptyState.onAction}
+          />
+        ) : (
+          <EmptyState
+            title={hasActiveFilters ? t('inbox.emptyFilteredTitle') : t('inbox.emptyListTitle')}
+            hint={hasActiveFilters ? t('inbox.emptyFilteredHint') : t('inbox.emptyListHint')}
+          />
+        )
       )}
 
       {filteredConversations.length > 0 && (

@@ -48,6 +48,18 @@ const saveAccountPreference = (userId, accountId) => {
 
 const SEARCH_DEBOUNCE_MS = 300;
 
+/**
+ * Bốn kênh luôn có tab trong bộ lọc (`FIXED_INBOX_CHANNELS`) → tên hiển thị và nơi nối khi kênh chưa kết nối.
+ * Zalo / WhatsApp / Telegram nối ở Cài đặt kênh (mở thẳng tab qua hash); web chat không nối ở đó mà lấy mã nhúng ở
+ * Chatbot của tôi. Zalo OA không có ở đây: không còn chỗ nối nên không bày tab cố định.
+ */
+const CHANNEL_CONNECT_TARGETS = {
+  web: { nameKey: 'inbox.webChat', path: '/app/chatbot-studio' },
+  zalo_personal: { nameKey: 'inbox.zaloPersonal', path: '/app/settings/channels#zalo' },
+  whatsapp_baileys: { name: 'WhatsApp', path: '/app/settings/channels#whatsapp' },
+  telegram: { name: 'Telegram', path: '/app/settings/channels#telegram' },
+};
+
 /** Loại hội thoại của một sự kiện SSE. Sự kiện AI trả lời Zalo không có `type`, chỉ có `channel` → suy ra. */
 const getSseConversationType = (data) => {
   if (data.type) return data.type;
@@ -177,6 +189,8 @@ const InboxPage = () => {
   const canReply = !isEmployeeContext || permissions.inbox_reply === true;
   const canManage = !isEmployeeContext || permissions.inbox_manage === true;
   const canManageChannels = !isEmployeeContext || permissions.chatbot_channels_manage === true;
+  // Trang "Chatbot của tôi" (nơi lấy mã nhúng web chat) có quyền riêng, khác quyền kết nối kênh.
+  const canManageChatbots = !isEmployeeContext || permissions.chatbots_manage === true;
   
   const { isEnabled: notificationsEnabled, toggleNotifications, showNotification } = useDesktopNotifications();
   
@@ -206,8 +220,10 @@ const InboxPage = () => {
   const [sessionLoaded, setSessionLoaded] = useState(false);
   
   const [showDetails, setShowDetails] = useState(false);
-  // Kênh user có trong Hộp thư (từ server) — chỉ hiện tab của các kênh đó (H-12).
+  // Kênh user ĐÃ NỐI hoặc đã có hội thoại (từ server). Tab của bốn kênh chính luôn hiện; kênh không có trong danh sách này
+  // là "Chưa kết nối" (H-12, sửa 11/10). `channelsLoaded` = đã nhận được danh sách hợp lệ lần nào chưa.
   const [availableChannels, setAvailableChannels] = useState([]);
+  const [channelsLoaded, setChannelsLoaded] = useState(false);
   const [confirmMarkAllRead, setConfirmMarkAllRead] = useState(false);
   const searchInputRef = useRef(null);
   
@@ -477,12 +493,44 @@ const InboxPage = () => {
     try {
       const response = await chatbotApi.getInboxChannels();
       const channels = response?.data?.channels;
-      if (response?.success && Array.isArray(channels)) setAvailableChannels(channels);
+      if (response?.success && Array.isArray(channels)) {
+        setAvailableChannels(channels);
+        setChannelsLoaded(true);
+      }
     } catch {
-      // Lỗi tải danh sách kênh chỉ làm hàng tab kênh ẩn đi, không chặn Hộp thư.
+      // Lỗi tải danh sách kênh không chặn Hộp thư. `channelsLoaded` giữ nguyên false: chưa biết kênh nào đã nối thì KHÔNG
+      // được nói "Chưa kết nối" (lỗi mạng thoáng qua sẽ thành lời nói sai với người đã nối).
     }
   }, []);
   loadAvailableChannelsRef.current = loadAvailableChannels;
+
+  // Đang xem một kênh chính chưa nối (và đã biết chắc là chưa nối) → danh sách rỗng thành lời mời kết nối.
+  const notConnectedEmptyState = useMemo(() => {
+    const target = CHANNEL_CONNECT_TARGETS[filters.channel];
+    if (!channelsLoaded || !target || availableChannels.includes(filters.channel)) return null;
+    const channelName = target.nameKey ? t(target.nameKey) : target.name;
+    const title = t('inbox.channelNotConnectedTitle', { channel: channelName });
+    const isWeb = filters.channel === 'web';
+    if (!(isWeb ? canManageChatbots : canManageChannels)) {
+      return { title, hint: t('inbox.channelNotConnectedEmployeeHint') };
+    }
+    const hint = isWeb ? t('inbox.webNotConnectedHint') : t('inbox.channelNotConnectedHint', { channel: channelName });
+    // Luật một nút: ở tab Zalo, ô chọn tài khoản phía trên ĐÃ vẽ nút "Chưa kết nối Zalo" khi chưa có tài khoản nào (và khi
+    // đang nạp thì chưa biết) → trạng thái rỗng chỉ có chữ. Chỉ khi đã có tài khoản mà kênh vẫn chưa tính là nối (ô chọn
+    // không vẽ nút) thì nút ở đây mới là đường duy nhất tới Cài đặt kênh.
+    const selectorOwnsConnectButton = filters.channel === 'zalo_personal'
+      && !(sessionLoaded && (sessionStatus.accounts?.length || 0) > 0);
+    if (selectorOwnsConnectButton) return { title, hint };
+    return {
+      title,
+      hint,
+      actionLabel: isWeb ? t('inbox.openChatbotStudio') : t('inbox.connectChannel', { channel: channelName }),
+      onAction: () => navigate(target.path),
+    };
+  }, [
+    filters.channel, channelsLoaded, availableChannels, canManageChatbots, canManageChannels,
+    sessionLoaded, sessionStatus.accounts, navigate, t,
+  ]);
 
   const fetchContactAlertsCount = useCallback(async () => {
     try {
@@ -1177,6 +1225,7 @@ const InboxPage = () => {
               filters={filters}
               onChange={handleFilterChange}
               availableChannels={availableChannels}
+              channelsLoaded={channelsLoaded}
             />
 
             {(!filters.channel || filters.channel === 'zalo_personal') && (
@@ -1223,6 +1272,7 @@ const InboxPage = () => {
             hasMore={hasMore}
             onDelete={canManage ? handleDeleteConversation : undefined}
             hasActiveFilters={Boolean(filters.search || filters.channel || filters.kind || filters.unreadOnly || filters.date !== 'all')}
+            emptyState={notConnectedEmptyState}
           />
         </div>
       </div>

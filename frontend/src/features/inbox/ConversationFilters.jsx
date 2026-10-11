@@ -19,9 +19,12 @@ const DATE_OPTIONS = (t) => [
 ];
 
 /**
- * Mọi tab kênh có thể có. Facebook không còn (kết nối Facebook đã chốt không làm, 21/09). Hộp thư chỉ hiện tab của
- * kênh user THỰC SỰ có (`availableChannels` từ server) — trước đây cố định 7 tab cho mọi người, tràn ngang ở 360 px (H-12).
- * Icon Telegram dùng logo máy bay giấy, không dùng tam giác có vạch của heroicons (giống biển cảnh báo).
+ * Mọi tab kênh có thể có. Facebook không còn (kết nối Facebook đã chốt không làm, 21/09). Icon Telegram dùng logo máy bay
+ * giấy, không dùng tam giác có vạch của heroicons (giống biển cảnh báo).
+ *
+ * Từ 11/10: bốn kênh có chỗ nối (`FIXED_INBOX_CHANNELS`) LUÔN hiện, kênh chưa nối thì đánh dấu "Chưa kết nối" và trang
+ * Hộp thư mời kết nối — giấu tab khiến người dùng tưởng mất tính năng (trước đó H-12 chỉ hiện tab của kênh `availableChannels`).
+ * `zalo_oa` không còn chỗ nối nên chỉ hiện khi tài khoản còn kênh đó.
  */
 const CHANNEL_OPTIONS = (t) => [
   { value: '', label: t('inbox.allChannels'), Icon: HiGlobeAlt, short: t('inbox.channelAllShort') },
@@ -32,10 +35,13 @@ const CHANNEL_OPTIONS = (t) => [
   { value: 'telegram', label: 'Telegram', Icon: FaTelegramPlane, short: 'TG' },
 ];
 
+/** Kênh luôn có tab, theo thứ tự hiển thị. Web chat nối ở Chatbot của tôi; Zalo/WhatsApp/Telegram nối ở Cài đặt kênh. */
+const FIXED_INBOX_CHANNELS = ['web', 'zalo_personal', 'whatsapp_baileys', 'telegram'];
+
 /** Từ 5 kênh trở lên (cộng "Tất cả" là 6 nút) thì gom thành một ô chọn "Kênh" thay vì hàng tab tràn ngang. */
 const MAX_TABS = 4;
 
-const ChannelTabs = ({ channels, value, onChange }) => (
+const ChannelTabs = ({ channels, value, onChange, notConnectedLabel }) => (
   <div className="flex gap-1 rounded-xl bg-gray-100 dark:bg-dk-raised p-1">
     {channels.map((channel) => {
       const active = value === channel.value;
@@ -45,8 +51,8 @@ const ChannelTabs = ({ channels, value, onChange }) => (
           key={channel.value || 'all'}
           type="button"
           onClick={() => onChange(channel.value)}
-          title={channel.label}
-          className={`flex min-w-0 flex-1 items-center justify-center gap-1.5 px-2 py-1.5 text-[11px] font-semibold rounded-lg whitespace-nowrap transition-all ${
+          title={channel.notConnected ? `${channel.label} — ${notConnectedLabel}` : channel.label}
+          className={`relative flex min-w-0 flex-auto items-center justify-center gap-1 px-1.5 py-1.5 text-[11px] font-semibold rounded-lg whitespace-nowrap transition-all ${
             active
               ? 'bg-white dark:bg-dk-surface text-primary-600 dark:text-primary-400 shadow-sm ring-1 ring-black/5 dark:ring-dk-border/10'
               : 'text-gray-500 dark:text-dk-text2 hover:bg-white/70 dark:hover:bg-dk-surface/60 hover:text-gray-700 dark:hover:text-dk-text'
@@ -54,6 +60,14 @@ const ChannelTabs = ({ channels, value, onChange }) => (
         >
           {Icon && <Icon className="w-3.5 h-3.5 shrink-0" />}
           <span className="truncate">{channel.short || channel.label}</span>
+          {/* Chấm xám nhỏ đặt chồng lên góc nút: không đổi kích thước nút, hàng tab không tràn thêm. */}
+          {channel.notConnected && (
+            <span
+              role="img"
+              aria-label={notConnectedLabel}
+              className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-gray-300 dark:bg-dk-border-strong"
+            />
+          )}
         </button>
       );
     })}
@@ -135,13 +149,16 @@ const Chip = ({ active, onClick, children }) => (
 );
 
 /**
- * Bộ lọc danh sách (H-12, H-13): hàng tab kênh (chỉ kênh user có), rồi MỘT hàng chip [Chưa đọc] [Cá nhân] [Nhóm] +
+ * Bộ lọc danh sách (H-12, H-13): hàng tab kênh (bốn kênh cố định luôn hiện, kênh chưa nối có chấm xám), rồi MỘT hàng chip [Chưa đọc] [Cá nhân] [Nhóm] +
  * "Thời gian". Bỏ "Trạng thái" (100% hội thoại đang hoạt động) và "Sắp xếp" (chỉ sắp trong 20 dòng đã tải, server luôn
  * trả mới nhất trước) — "Chưa đọc" giờ lọc phía server nên áp lên cả danh sách.
  *
- * @param {{ filters: object, onChange: Function, availableChannels?: string[] }} props
+ * `channelsLoaded=false` (server chưa trả `availableChannels`, hoặc lỗi) → chưa biết kênh nào đã nối nên KHÔNG đánh dấu
+ * "Chưa kết nối" ở tab nào (tránh nháy rồi đổi).
+ *
+ * @param {{ filters: object, onChange: Function, availableChannels?: string[], channelsLoaded?: boolean }} props
  */
-const ConversationFilters = ({ filters, onChange, availableChannels = [] }) => {
+const ConversationFilters = ({ filters, onChange, availableChannels = [], channelsLoaded = true }) => {
   const { t } = useI18n();
   const dateOptions = DATE_OPTIONS(t);
 
@@ -156,17 +173,21 @@ const ConversationFilters = ({ filters, onChange, availableChannels = [] }) => {
   const allOptions = CHANNEL_OPTIONS(t);
   const channelOptions = [
     allOptions[0],
-    ...allOptions.slice(1).filter((option) => availableChannels.includes(option.value)),
+    ...allOptions
+      .slice(1)
+      .filter((option) => FIXED_INBOX_CHANNELS.includes(option.value) || availableChannels.includes(option.value))
+      .map((option) => ({
+        ...option,
+        notConnected: channelsLoaded && !availableChannels.includes(option.value),
+      })),
   ];
-  // Một kênh duy nhất thì "Tất cả" và kênh đó là một — không cần hàng tab.
-  const showChannels = channelOptions.length >= 3;
   const useDropdown = channelOptions.length - 1 > MAX_TABS;
 
   const hasAdvancedFilters = filters.date !== 'all' || !!filters.kind || filters.unreadOnly === true;
 
   return (
     <div className="space-y-2">
-      {showChannels && (useDropdown ? (
+      {useDropdown ? (
         <FilterDropdown
           options={channelOptions.map((c) => ({ value: c.value, label: c.label }))}
           value={filters.channel}
@@ -178,8 +199,9 @@ const ConversationFilters = ({ filters, onChange, availableChannels = [] }) => {
           channels={channelOptions}
           value={filters.channel}
           onChange={(val) => handleChange('channel', val)}
+          notConnectedLabel={t('inbox.channelNotConnectedBadge')}
         />
-      ))}
+      )}
 
       <div className="flex flex-wrap items-center gap-1.5">
         <Chip active={filters.unreadOnly === true} onClick={() => handleChange('unreadOnly', !filters.unreadOnly)}>
@@ -212,5 +234,5 @@ const ConversationFilters = ({ filters, onChange, availableChannels = [] }) => {
   );
 };
 
-export { ConversationFilters, ChannelTabs, DATE_OPTIONS, CHANNEL_OPTIONS };
+export { ConversationFilters, ChannelTabs, DATE_OPTIONS, CHANNEL_OPTIONS, FIXED_INBOX_CHANNELS };
 export default ConversationFilters;
