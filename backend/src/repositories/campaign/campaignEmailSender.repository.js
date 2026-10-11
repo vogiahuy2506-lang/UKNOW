@@ -27,8 +27,58 @@ class CampaignEmailSenderRepository {
   }
 
   /**
-   * Check if a lead with this email has refused consent (marketing_consent = FALSE)
-   * or has withdrawn consent for this user / workspace, based on the newest lead record.
+   * Bản ghi đồng ý MỚI NHẤT của một người (khớp theo email hoặc SĐT) trong workspace, gộp CẢ HAI nguồn thu khách:
+   * `leads` (form viết thẳng trong HTML landing) và `form_submissions` (Biểu mẫu). Trả `true` khi bản ghi
+   * mới nhất có `marketing_consent = FALSE`. NULL (chưa hỏi) trả `false` — chốt 19/09, nhóm chưa hỏi vẫn gửi.
+   *
+   * Thời điểm quyết định của một bản ghi = `GREATEST(created_at, consent_withdrawn_at)`:
+   *  - Rút đồng ý qua link footer (lead: `withdrawConsentById`; Biểu mẫu: `withdrawSubmissionConsentById`) UPDATE TẠI
+   *    CHỖ `marketing_consent = FALSE` + `consent_withdrawn_at = NOW()`, KHÔNG đổi `created_at`. Nếu chỉ so
+   *    `created_at`, một bản ghi đồng ý MỚI HƠN lúc đăng ký nhưng CŨ HƠN lúc rút sẽ đè mất lời rút — và vì hai
+   *    bảng nay được so chung, một bài nộp Biểu mẫu mới sẽ làm lead đã rút ở landing nhận tin trở lại.
+   *    `GREATEST` bỏ qua NULL nên bản ghi chưa từng rút vẫn xếp theo `created_at` như trước.
+   *  - Hoà thời điểm (cực hiếm): ưu tiên bản ghi Biểu mẫu, rồi id lớn hơn.
+   *
+   * `leadMatch` / `formMatch` là mảnh SQL TĨNH do chính lớp này truyền (không bao giờ là input người dùng); giá trị
+   * khớp luôn đi qua tham số `$2`.
+   *
+   * @param {number} userId chủ workspace (hoặc user — lead cũ chỉ có id_user)
+   * @param {string} leadMatch điều kiện cột của `leads`, dùng `$2`
+   * @param {string} formMatch điều kiện cột của `form_submissions`, dùng `$2`
+   * @param {string} matchValue
+   * @returns {Promise<boolean>}
+   */
+  async _isNewestConsentRefused(userId, leadMatch, formMatch, matchValue) {
+    const result = await db.query(
+      `SELECT marketing_consent
+         FROM (
+           SELECT marketing_consent,
+                  GREATEST(created_at, consent_withdrawn_at) AS decided_at,
+                  0 AS source_rank,
+                  id
+             FROM leads
+            WHERE (COALESCE(workspace_owner_id, id_user) = $1 OR id_user = $1)
+              AND ${leadMatch}
+           UNION ALL
+           SELECT marketing_consent,
+                  GREATEST(created_at, consent_withdrawn_at) AS decided_at,
+                  1 AS source_rank,
+                  id
+             FROM form_submissions
+            WHERE workspace_owner_id = $1
+              AND ${formMatch}
+         ) AS consent_records
+        ORDER BY decided_at DESC, source_rank DESC, id DESC
+        LIMIT 1`,
+      [userId, matchValue]
+    );
+    if (result.rowCount === 0) return false;
+    return result.rows[0].marketing_consent === false;
+  }
+
+  /**
+   * Người có email này đã TỪ CHỐI hoặc RÚT LẠI đồng ý nhận tin chưa (marketing_consent = FALSE), xét theo bản ghi
+   * MỚI NHẤT giữa `leads` và `form_submissions` của workspace (xem `_isNewestConsentRefused`).
    * NULL (chưa hỏi) trả false — theo chốt 19/09 nhóm chưa hỏi vẫn gửi.
    *
    * @param {number} userId
@@ -36,21 +86,17 @@ class CampaignEmailSenderRepository {
    * @returns {Promise<boolean>}
    */
   async isLeadConsentRefusedOrWithdrawn(userId, emailLower) {
-    const result = await db.query(
-      `SELECT marketing_consent
-       FROM leads
-       WHERE (COALESCE(workspace_owner_id, id_user) = $1 OR id_user = $1)
-         AND email = $2
-       ORDER BY created_at DESC, id DESC
-       LIMIT 1`,
-      [userId, emailLower]
+    return this._isNewestConsentRefused(
+      userId,
+      'email = $2',
+      'LOWER(respondent_email) = $2',
+      emailLower
     );
-    if (result.rowCount === 0) return false;
-    return result.rows[0].marketing_consent === false;
   }
 
   /**
-   * Lead mới nhất theo SĐT có ĐANG TỪ CHỐI nhận tin không (marketing_consent = FALSE).
+   * Người có SĐT này (so 9 chữ số cuối) ĐANG TỪ CHỐI nhận tin không (marketing_consent = FALSE), xét theo bản ghi
+   * MỚI NHẤT giữa `leads` và `form_submissions` của workspace (xem `_isNewestConsentRefused`).
    * NULL (chưa hỏi) trả false — theo chốt 19/09 nhóm chưa hỏi vẫn gửi.
    *
    * @param {number} userId
@@ -61,17 +107,12 @@ class CampaignEmailSenderRepository {
     const digits = String(phoneNormalized || '').replace(/\D/g, '');
     if (digits.length < 9) return false;
     const last9 = digits.slice(-9);
-    const result = await db.query(
-      `SELECT marketing_consent
-         FROM leads
-        WHERE (COALESCE(workspace_owner_id, id_user) = $1 OR id_user = $1)
-          AND RIGHT(regexp_replace(phone, '[^0-9]', '', 'g'), 9) = $2
-        ORDER BY created_at DESC, id DESC
-        LIMIT 1`,
-      [userId, last9]
+    return this._isNewestConsentRefused(
+      userId,
+      "RIGHT(regexp_replace(phone, '[^0-9]', '', 'g'), 9) = $2",
+      "RIGHT(regexp_replace(respondent_phone, '[^0-9]', '', 'g'), 9) = $2",
+      last9
     );
-    if (result.rowCount === 0) return false;
-    return result.rows[0].marketing_consent === false;
   }
 
   /**
