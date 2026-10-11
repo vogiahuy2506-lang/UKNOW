@@ -15,7 +15,9 @@ import { ZaloGroupPickerCard } from '../../features/ai/components/AiChatbotWizar
 import { htmlToPlainText } from '../../utils/htmlToPlainText.util.js';
 import { miniMarkdownToHtml } from '../../utils/miniMarkdownToHtml.js';
 import { resolveActionIdempotencyKey } from '../../utils/idempotency.util.js';
-import { useChannelEntitlements } from '../../hooks/queries/useChannelEntitlements';
+import { useChannelAvailability } from '../../hooks/queries/useChannelAvailability';
+import ChannelUnavailableModal from '../../components/common/ChannelUnavailableModal';
+import ChannelLockBadge from '../../components/common/ChannelLockBadge';
 import useStorageQuota from '../../features/storage/useStorageQuota';
 import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../features/storage/validateUpload';
 import { notifyStorageQuotaRefresh } from '../../features/storage/storageEvents';
@@ -77,9 +79,8 @@ const CHANNEL_TYPES = {
   ZALO_GROUP: 'zalo_group',
 };
 
-// W7a — kênh 'adapter' (Telegram/WhatsApp) chỉ hiện khi GET /campaigns/channels báo bật; giao diện riêng
+// W7a — kênh 'adapter' (Telegram/WhatsApp) hiện khi HỆ THỐNG bật kênh (useChannelAvailability); giao diện riêng
 // ở QuickSendAdapterPanel (không dùng bước mẫu/đính kèm/xem trước của Email/Zalo).
-const ADAPTER_CHANNEL_KEYS = ['telegram', 'whatsapp'];
 const ADAPTER_CHANNEL_ICONS = { telegram: FaTelegramPlane, whatsapp: FaWhatsapp };
 const CHANNEL_GRID_CLASSES = {
   1: 'grid-cols-1',
@@ -243,15 +244,17 @@ const QuickSend = () => {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(QUICK_SEND_STEPS.RECIPIENTS);
   const [selectedChannel, setSelectedChannel] = useState(CHANNEL_TYPES.EMAIL);
-  // W7a — kênh adapter đang bật ([{ key, label }]); lỗi/BE cũ -> [] (không có thẻ Telegram/WhatsApp).
-  const [adapterChannels, setAdapterChannels] = useState([]);
+  // 11/10/2026 — KHÔNG ẩn thẻ kênh nữa: mọi thẻ `visible` đều vẽ ra; thẻ chưa dùng được (gói không có kênh / hết hạn /
+  // hết lượt) mờ + khoá, bấm mở modal giải thích + gợi ý mua thay vì chọn. `adapterChannels` = kênh Telegram/WhatsApp
+  // mà HỆ THỐNG bật ([{ key, label }], không lọc theo gói); backend cũ thiếu trường thì hook gọi GET /campaigns/channels như trước.
+  const channelAvailability = useChannelAvailability({ fetchAdapterChannels: () => campaignApiService.getChannels() });
+  const { adapterChannels } = channelAvailability;
+  const [lockedChannelModal, setLockedChannelModal] = useState(null);
   const isAdapterChannel = adapterChannels.some((c) => c.key === selectedChannel);
   // Một thẻ "Zalo" duy nhất bao cả Zalo cá nhân lẫn Zalo nhóm: "Nhóm" chỉ là một cách chọn người nhận trong ô
   // "Loại người nhận" (giống Telegram/WhatsApp). Giá trị nội bộ 'zalo_group' giữ nguyên để gửi/ước tính/giãn cách
   // không đổi — chỉ đổi cách người dùng chọn ra nó.
   const isZaloFamily = selectedChannel === CHANNEL_TYPES.ZALO || selectedChannel === CHANNEL_TYPES.ZALO_GROUP;
-  // P12 — gói không có kênh Zalo: ẩn thẻ Zalo (gồm cả cách chọn Nhóm). Mặc định "có quyền" khi đang tải/lỗi (BE vẫn 403 khi gửi).
-  const { zalo: zaloEntitled } = useChannelEntitlements();
 
   // Manual input state
   const [manualEmails, setManualEmails] = useState('');
@@ -453,25 +456,6 @@ const QuickSend = () => {
     // Xóa state để tránh F5 nạp lại draft cũ
     navigate(location.pathname, { replace: true, state: null });
   }, [location.state, location.pathname, navigate]);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await campaignApiService.getChannels();
-        if (cancelled) return;
-        const channels = res?.data?.data?.channels;
-        setAdapterChannels(
-          Array.isArray(channels)
-            ? channels.filter((c) => ADAPTER_CHANNEL_KEYS.includes(c?.key)).map((c) => ({ key: c.key, label: c.label || c.key }))
-            : []
-        );
-      } catch {
-        if (!cancelled) setAdapterChannels([]);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
 
   const tRef = useRef(t);
   useEffect(() => {
@@ -1363,12 +1347,20 @@ const QuickSend = () => {
   // cũng là hai danh sách riêng) — xoá để không lỡ tay gửi nội dung của kênh cũ sang kênh mới.
   // Đổi giữa Zalo cá nhân ↔ Zalo nhóm giữ nguyên vì cùng "họ" (cùng danh sách mẫu, cùng dạng
   // plain text).
+  const emailAvailable = channelAvailability.email.available;
+  const zaloAvailable = channelAvailability.zalo.available;
+  const telegramAvailable = channelAvailability.telegram.visible && channelAvailability.telegram.available;
+  const whatsappAvailable = channelAvailability.whatsapp.visible && channelAvailability.whatsapp.available;
   useEffect(() => {
-    // Bản nháp từ trợ lý AI/điều hướng có thể mang sẵn kênh Zalo -> chuyển sang email khi gói không có Zalo.
-    if (!zaloEntitled && (selectedChannel === CHANNEL_TYPES.ZALO || selectedChannel === CHANNEL_TYPES.ZALO_GROUP)) {
-      handleChannelChange(CHANNEL_TYPES.EMAIL);
-    }
-  }, [zaloEntitled, selectedChannel]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Kênh đang chọn (kể cả từ bản nháp của trợ lý AI/điều hướng) trở thành không dùng được -> về kênh dùng được đầu tiên.
+    // Không còn kênh nào dùng được (vd gói hết hạn) thì giữ nguyên: thẻ nào cũng khoá, backend vẫn chặn lúc gửi.
+    const currentKey = isZaloFamily ? 'zalo' : selectedChannel;
+    if (channelAvailability[currentKey]?.available !== false) return;
+    const nextKey = ['email', 'zalo', 'telegram', 'whatsapp'].find(
+      (key) => key !== currentKey && channelAvailability[key]?.visible && channelAvailability[key]?.available
+    );
+    if (nextKey) handleChannelChange(nextKey);
+  }, [emailAvailable, zaloAvailable, telegramAvailable, whatsappAvailable, selectedChannel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleChannelChange = (nextChannel) => {
     if (nextChannel === selectedChannel) return;
@@ -1519,14 +1511,17 @@ const QuickSend = () => {
             {/* Channel Type */}
             <div className="bg-white dark:bg-dk-surface rounded-xl border border-gray-200 dark:border-dk-border p-6">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-dk-text mb-4">{t('quickSend.selectChannel')}</h2>
-              <div className={`grid gap-4 ${CHANNEL_GRID_CLASSES[1 + (zaloEntitled ? 1 : 0) + adapterChannels.length] || 'grid-cols-3'}`}>
+              <div className={`grid gap-4 ${CHANNEL_GRID_CLASSES[2 + adapterChannels.length] || 'grid-cols-3'}`}>
                 <button
-                  onClick={() => handleChannelChange(CHANNEL_TYPES.EMAIL)}
+                  data-testid="quick-send-channel-email"
+                  aria-disabled={!channelAvailability.email.available ? 'true' : undefined}
+                  title={!channelAvailability.email.available ? t('channelUnavailable.lockedTip', { channel: 'Email' }) : undefined}
+                  onClick={() => (channelAvailability.email.available ? handleChannelChange(CHANNEL_TYPES.EMAIL) : setLockedChannelModal('email'))}
                   className={`relative p-4 rounded-xl border-2 transition flex flex-col items-center gap-2.5 ${
                     selectedChannel === CHANNEL_TYPES.EMAIL
                       ? 'border-orange-500 bg-orange-50/60 dark:bg-orange-950/30 shadow-sm ring-1 ring-orange-500/20'
                       : 'border-gray-200 dark:border-dk-border hover:border-gray-300 dark:hover:border-dk-border hover:bg-gray-50/70 dark:hover:bg-dk-raised/60 shadow-xs'
-                  }`}
+                  } ${!channelAvailability.email.available ? 'opacity-60' : ''}`}
                 >
                   <span
                     className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors shadow-xs ${
@@ -1541,24 +1536,32 @@ const QuickSend = () => {
                   <span className={`font-semibold text-sm ${selectedChannel === CHANNEL_TYPES.EMAIL ? 'text-orange-950 dark:text-orange-300' : 'text-gray-700 dark:text-dk-text'}`}>
                     Email
                   </span>
-                  {selectedChannel === CHANNEL_TYPES.EMAIL && (
+                  {!channelAvailability.email.available ? (
+                    <ChannelLockBadge />
+                  ) : selectedChannel === CHANNEL_TYPES.EMAIL && (
                     <span className="absolute top-2.5 right-2.5 w-4 h-4 rounded-full bg-orange-500 text-white flex items-center justify-center shadow-xs" aria-hidden="true">
                       <HiCheck className="w-2.5 h-2.5 stroke-[2.5]" />
                     </span>
                   )}
                 </button>
-                {zaloEntitled && (
-                <>
                 <button
                   data-testid="quick-send-channel-zalo"
+                  aria-disabled={!channelAvailability.zalo.available ? 'true' : undefined}
+                  title={!channelAvailability.zalo.available ? t('channelUnavailable.lockedTip', { channel: 'Zalo' }) : undefined}
                   // Đang ở Zalo nhóm thì bấm lại thẻ Zalo giữ nguyên (không tự rơi về cá nhân) — đổi sang/ra
                   // Nhóm là việc của ô "Loại người nhận".
-                  onClick={() => { if (!isZaloFamily) handleChannelChange(CHANNEL_TYPES.ZALO); }}
+                  onClick={() => {
+                    if (!channelAvailability.zalo.available) {
+                      setLockedChannelModal('zalo');
+                      return;
+                    }
+                    if (!isZaloFamily) handleChannelChange(CHANNEL_TYPES.ZALO);
+                  }}
                   className={`relative p-4 rounded-xl border-2 transition flex flex-col items-center gap-2.5 ${
                     isZaloFamily
                       ? 'border-orange-500 bg-orange-50/60 dark:bg-orange-950/30 shadow-sm ring-1 ring-orange-500/20'
                       : 'border-gray-200 dark:border-dk-border hover:border-gray-300 dark:hover:border-dk-border hover:bg-gray-50/70 dark:hover:bg-dk-raised/60 shadow-xs'
-                  }`}
+                  } ${!channelAvailability.zalo.available ? 'opacity-60' : ''}`}
                 >
                   <span
                     className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors shadow-xs ${
@@ -1573,17 +1576,18 @@ const QuickSend = () => {
                   <span className={`font-semibold text-sm ${isZaloFamily ? 'text-orange-950 dark:text-orange-300' : 'text-gray-700 dark:text-dk-text'}`}>
                     Zalo
                   </span>
-                  {isZaloFamily && (
+                  {!channelAvailability.zalo.available ? (
+                    <ChannelLockBadge />
+                  ) : isZaloFamily && (
                     <span className="absolute top-2.5 right-2.5 w-4 h-4 rounded-full bg-orange-500 text-white flex items-center justify-center shadow-xs" aria-hidden="true">
                       <HiCheck className="w-2.5 h-2.5 stroke-[2.5]" />
                     </span>
                   )}
                 </button>
-                </>
-                )}
                 {adapterChannels.map((adapter) => {
                   const AdapterIcon = ADAPTER_CHANNEL_ICONS[adapter.key];
                   const isActive = selectedChannel === adapter.key;
+                  const isLocked = channelAvailability[adapter.key]?.available === false;
                   const isTelegram = adapter.key === 'telegram';
                   const isWhatsApp = adapter.key === 'whatsapp';
                   const iconBg = isTelegram
@@ -1601,12 +1605,14 @@ const QuickSend = () => {
                     <button
                       key={adapter.key}
                       data-testid={`quick-send-channel-${adapter.key}`}
-                      onClick={() => handleChannelChange(adapter.key)}
+                      aria-disabled={isLocked ? 'true' : undefined}
+                      title={isLocked ? t('channelUnavailable.lockedTip', { channel: adapter.label }) : undefined}
+                      onClick={() => (isLocked ? setLockedChannelModal(adapter.key) : handleChannelChange(adapter.key))}
                       className={`relative p-4 rounded-xl border-2 transition flex flex-col items-center gap-2.5 ${
                         isActive
                           ? 'border-orange-500 bg-orange-50/60 dark:bg-orange-950/30 shadow-sm ring-1 ring-orange-500/20'
                           : 'border-gray-200 dark:border-dk-border hover:border-gray-300 dark:hover:border-dk-border hover:bg-gray-50/70 dark:hover:bg-dk-raised/60 shadow-xs'
-                      }`}
+                      } ${isLocked ? 'opacity-60' : ''}`}
                     >
                       <span
                         className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors shadow-xs ${
@@ -1619,7 +1625,9 @@ const QuickSend = () => {
                       <span className={`font-semibold text-sm ${isActive ? 'text-orange-950 dark:text-orange-300' : 'text-gray-700 dark:text-dk-text'}`}>
                         {adapter.label}
                       </span>
-                      {isActive && (
+                      {isLocked ? (
+                        <ChannelLockBadge />
+                      ) : isActive && (
                         <span className="absolute top-2.5 right-2.5 w-4 h-4 rounded-full bg-orange-500 text-white flex items-center justify-center shadow-xs" aria-hidden="true">
                           <HiCheck className="w-2.5 h-2.5 stroke-[2.5]" />
                         </span>
@@ -1629,6 +1637,14 @@ const QuickSend = () => {
                 })}
               </div>
             </div>
+
+            {lockedChannelModal && (
+              <ChannelUnavailableModal
+                channel={lockedChannelModal}
+                info={channelAvailability[lockedChannelModal]}
+                onClose={() => setLockedChannelModal(null)}
+              />
+            )}
 
             {isAdapterChannel && (
               <QuickSendAdapterPanel

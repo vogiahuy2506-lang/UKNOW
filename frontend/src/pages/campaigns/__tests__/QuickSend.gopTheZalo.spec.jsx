@@ -248,12 +248,12 @@ describe('QuickSend — gộp thẻ Zalo nhóm vào thẻ Zalo', () => {
     await waitFor(() => expect(within(chips).getByText('Nhóm Beta')).toBeInTheDocument());
   });
 
-  it('gói không có kênh Zalo -> không có thẻ Zalo và không có ô Loại người nhận', async () => {
+  it('gói không có kênh Zalo -> thẻ Zalo VẪN hiện nhưng khoá (11/10/2026), không có thẻ nhóm riêng và không có ô Loại người nhận', async () => {
     m.entitlements = { telegram: true, whatsapp: true, zalo: false, limits: {}, isLoading: false };
     render(<QuickSend />);
     await screen.findByText('quickSend.selectChannel');
 
-    expect(screen.queryByTestId('quick-send-channel-zalo')).toBeNull();
+    expect(screen.getByTestId('quick-send-channel-zalo')).toHaveAttribute('aria-disabled', 'true');
     expect(screen.queryByTestId('quick-send-channel-zalo_group')).toBeNull();
     expect(screen.queryByText('quickSend.zaloRecipientTypeLabel')).toBeNull();
     expect(screen.queryByRole('radio', { name: 'quickSend.zaloRecipientTypeGroup' })).toBeNull();

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import QuickSend from '../QuickSend';
 import emailTemplateApiService from '../../../features/templates/services/emailTemplateApi.service';
 import zaloTemplateApiService from '../../../features/templates/services/zaloTemplateApi.service';
@@ -9,9 +9,10 @@ import campaignApiService from '../../../features/campaigns/services/campaignApi
 import campaignBuilderApiService from '../../../features/campaigns/services/campaignBuilderApi.service';
 
 /**
- * P12 (PLAN_TG_WA_DAY_DU mục 19) — Gửi nhanh: gói không có kênh Zalo thì ẩn thẻ Zalo (từ 03/10/2026 thẻ Zalo đã bao
- * cả cách chọn "Nhóm", không còn thẻ Zalo nhóm riêng) và nếu đang chọn Zalo thì chuyển sang Email; gói có Zalo
- * (kể cả limit=1) vẫn đủ 2 thẻ lõi (Email + Zalo).
+ * P12 (PLAN_TG_WA_DAY_DU mục 19) — Gửi nhanh và kênh Zalo theo gói. 11/10/2026 (PLAN_KENH_KHONG_AN_KHOA_VA_GOI_Y_MUA):
+ * gói không có Zalo thì thẻ Zalo KHÔNG còn bị ẩn — vẫn hiện nhưng mờ + khoá, bấm mở modal gợi ý mua slot; nếu đang chọn
+ * Zalo thì chuyển sang Email. (Từ 03/10/2026 thẻ Zalo bao cả cách chọn "Nhóm", không còn thẻ Zalo nhóm riêng.)
+ * Gói có Zalo (kể cả limit=1) vẫn đủ 2 thẻ lõi (Email + Zalo) và dùng được.
  */
 const entitlementsState = { telegram: true, whatsapp: true, zalo: true, limits: {}, isLoading: false };
 vi.mock('../../../hooks/queries/useChannelEntitlements', () => ({
@@ -79,15 +80,33 @@ describe('QuickSend — P12 quyền kênh Zalo', () => {
     campaignApiService.getChannels.mockResolvedValue({ data: { data: { channels: [] } } });
   });
 
-  it('zalo:false -> không có thẻ Zalo (cũng không có cách chọn Nhóm), còn thẻ Email', async () => {
+  it('zalo:false -> thẻ Zalo VẪN hiện nhưng khoá (aria-disabled, mờ, có ổ khoá); không có cách chọn Nhóm; thẻ Email dùng được', async () => {
     entitlementsState.zalo = false;
     render(<QuickSend />);
     await screen.findByText('quickSend.selectChannel');
-    expect(screen.queryByTestId('quick-send-channel-zalo')).toBeNull();
+    const zaloCard = screen.getByTestId('quick-send-channel-zalo');
+    expect(zaloCard).toHaveAttribute('aria-disabled', 'true');
+    expect(zaloCard.className).toContain('opacity-60');
+    expect(within(zaloCard).getByTestId('channel-lock-badge')).toBeInTheDocument();
     expect(screen.queryByTestId('quick-send-channel-zalo_group')).toBeNull();
     expect(screen.queryByText('quickSend.zaloRecipientTypeLabel')).toBeNull();
     expect(screen.queryByRole('radio', { name: 'quickSend.zaloRecipientTypeGroup' })).toBeNull();
     expect(screen.getByText('Email')).toBeInTheDocument();
+    expect(screen.getByTestId('quick-send-channel-email')).not.toHaveAttribute('aria-disabled');
+  });
+
+  it('zalo:false -> bấm thẻ Zalo mở modal "Gói hiện tại không có Zalo" có nút mua slot, KHÔNG đổi kênh đang chọn (vẫn Email)', async () => {
+    entitlementsState.zalo = false;
+    render(<QuickSend />);
+    fireEvent.click(await screen.findByTestId('quick-send-channel-zalo'));
+    const modal = await screen.findByTestId('channel-unavailable-modal');
+    expect(modal).toHaveAttribute('data-reason', 'not_in_plan');
+    expect(within(modal).getByTestId('channel-unavailable-action-buySlot')).toBeInTheDocument();
+    // Vẫn ở Email: có ô chọn tài khoản gửi email, không có ô loại người nhận Zalo.
+    expect(screen.getByText('quickSend.selectSenderAccount')).toBeInTheDocument();
+    expect(screen.queryByText('quickSend.zaloRecipientTypeLabel')).toBeNull();
+    fireEvent.click(within(modal).getByRole('button', { name: 'common.close' }));
+    expect(screen.queryByTestId('channel-unavailable-modal')).toBeNull();
   });
 
   it('zalo:true với limit=1 -> đủ 2 thẻ lõi Email + Zalo, không còn thẻ Zalo nhóm (Zalo không biến mất với khách trả phí)', async () => {
@@ -99,13 +118,13 @@ describe('QuickSend — P12 quyền kênh Zalo', () => {
     expect(zaloCard.parentElement.children).toHaveLength(2);
   });
 
-  it('đang chọn Zalo rồi quyền về false (đổi gói/tải xong) -> chuyển sang Email, thẻ Zalo biến mất', async () => {
+  it('đang chọn Zalo rồi quyền về false (đổi gói/tải xong) -> chuyển sang Email, thẻ Zalo vẫn hiện nhưng khoá', async () => {
     const { rerender } = render(<QuickSend />);
     fireEvent.click(await screen.findByTestId('quick-send-channel-zalo'));
     entitlementsState.zalo = false;
     rerender(<QuickSend />);
-    await waitFor(() => expect(screen.queryByTestId('quick-send-channel-zalo')).toBeNull());
-    expect(screen.getByText('quickSend.selectSenderAccount')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('quick-send-channel-zalo')).toHaveAttribute('aria-disabled', 'true'));
+    await waitFor(() => expect(screen.getByText('quickSend.selectSenderAccount')).toBeInTheDocument());
     expect(screen.queryByText('quickSend.zaloRecipientTypeLabel')).toBeNull();
   });
 });
