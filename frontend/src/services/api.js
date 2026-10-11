@@ -297,6 +297,16 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
+    // Cổng khoá gói hết hạn (PLAN_CONG_KHOA_GOI_HET_HAN_2026-10-11): `requireActivePlan` trả 403 PLAN_EXPIRED /
+    // NO_ACTIVE_PLAN cho ~22 nhóm route. Ghi mã vào store để MainLayout dựng modal khoá; KHÔNG đụng phiên
+    // (token vẫn hợp lệ). Lỗi vẫn được trả cho trang gọi — trang giữ trạng thái rỗng, còn toast lỗi chung
+    // của trang bị MainLayout dẹp trong lúc modal mở.
+    if (statusCode === 403 && (errorData?.code === 'PLAN_EXPIRED' || errorData?.code === 'NO_ACTIVE_PLAN')) {
+      authStore?.getState().setPlanLockedCode(errorData.code);
+      error._planLocked = true;
+      return Promise.reject(error);
+    }
+
     // Chỉ xử lý phiên cho các lỗi 401 và 402
     if (statusCode !== 401 && statusCode !== 402) {
       return Promise.reject(error);

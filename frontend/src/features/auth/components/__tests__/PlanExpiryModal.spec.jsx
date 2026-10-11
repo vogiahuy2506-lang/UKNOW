@@ -22,6 +22,8 @@ describe('PlanExpiryModal — 3 giọng cảnh báo và tương tác', () => {
           isOpen={props.isOpen ?? true}
           billingStatus={props.billingStatus}
           onClose={props.onClose || onClose}
+          locked={props.locked}
+          isEmployee={props.isEmployee}
         />
       </I18nProvider>
     );
@@ -46,7 +48,7 @@ describe('PlanExpiryModal — 3 giọng cảnh báo và tương tác', () => {
 
     expect(screen.getByRole('heading', { level: 2, name: 'Gói của bạn đã hết hạn' })).toBeInTheDocument();
     expect(screen.getByText('Đã hết hạn')).toBeInTheDocument();
-    expect(screen.getByText(/Các chiến dịch marketing của bạn đã tạm dừng/i)).toBeInTheDocument();
+    expect(screen.getByText(/Các tính năng đang tạm khoá, dữ liệu của bạn vẫn được giữ nguyên/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Nâng cấp ngay/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Để sau/i })).toBeInTheDocument();
   });
@@ -64,7 +66,7 @@ describe('PlanExpiryModal — 3 giọng cảnh báo và tương tác', () => {
     // Nếu bỏ planRevokedAfterExpiry khỏi PlanExpiryModal, modal sẽ không render gì (bị rỗng)
     expect(screen.getByRole('heading', { level: 2, name: 'Gói của bạn đã hết hạn' })).toBeInTheDocument();
     expect(screen.getByText('Đã hết hạn')).toBeInTheDocument();
-    expect(screen.getByText(/Các chiến dịch marketing của bạn đã tạm dừng/i)).toBeInTheDocument();
+    expect(screen.getByText(/Các tính năng đang tạm khoá, dữ liệu của bạn vẫn được giữ nguyên/i)).toBeInTheDocument();
   });
 
   it('Nhánh 2: Đang trong ân hạn (isInGracePeriod = true) — hiện giọng ân hạn (Ca 8)', () => {
@@ -150,5 +152,87 @@ describe('PlanExpiryModal — 3 giọng cảnh báo và tương tác', () => {
     fireEvent.click(overlay);
 
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * Chế độ khoá (PLAN_CONG_KHOA_GOI_HET_HAN_2026-10-11): server đã chặn thật nên modal không có lối thoát
+ * ngoài gia hạn / hỗ trợ. Mỗi ca dưới đây có một đột biến tương ứng làm nó đỏ.
+ */
+describe('PlanExpiryModal — chế độ locked', () => {
+  const onClose = vi.fn();
+  const expired = { isFullyExpired: true, planRevokedAfterExpiry: false, isInGracePeriod: false };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const renderLocked = (props = {}) =>
+    render(
+      <I18nProvider>
+        <PlanExpiryModal
+          isOpen
+          billingStatus={props.billingStatus === undefined ? expired : props.billingStatus}
+          onClose={onClose}
+          locked
+          isEmployee={props.isEmployee}
+        />
+      </I18nProvider>
+    );
+
+  it('KHÔNG có nút X và KHÔNG có "Để sau"', () => {
+    renderLocked();
+    expect(screen.queryByRole('button', { name: 'Đóng' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Để sau/i })).not.toBeInTheDocument();
+  });
+
+  it('click nền và phím Esc KHÔNG gọi onClose', () => {
+    renderLocked();
+    fireEvent.click(screen.getByRole('dialog'));
+    fireEvent.keyDown(document, { key: 'Escape', code: 'Escape' });
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape', code: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('chủ TK: mô tả "tạm khoá… dữ liệu vẫn được giữ nguyên", nút "Gia hạn ngay" → /app/billing, không gọi onClose', () => {
+    renderLocked();
+    expect(screen.getByRole('heading', { level: 2, name: 'Gói của bạn đã hết hạn' })).toBeInTheDocument();
+    expect(screen.getByText(/Các tính năng đang tạm khoá cho đến khi gia hạn\. Dữ liệu khách hàng, chiến dịch/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Gia hạn ngay/i }));
+    expect(mockNavigate).toHaveBeenCalledWith('/app/billing');
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('nhân viên: lời nhắn báo chủ gia hạn, nút "Xem bảng giá" → /pricing (không có "Gia hạn ngay")', () => {
+    renderLocked({ isEmployee: true });
+    expect(screen.getByText(/Gói của chủ tài khoản đã hết hạn/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Gia hạn ngay/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Xem bảng giá/i }));
+    expect(mockNavigate).toHaveBeenCalledWith('/pricing');
+  });
+
+  it('"Cần hỗ trợ" → /app/support', () => {
+    renderLocked();
+    fireEvent.click(screen.getByRole('button', { name: /Cần hỗ trợ/i }));
+    expect(mockNavigate).toHaveBeenCalledWith('/app/support');
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('billingStatus null (chưa nạp hồ sơ nhưng server đã báo khoá) vẫn render; tài khoản không có gói vẫn giọng "đã hết hạn"', () => {
+    const { unmount } = renderLocked({ billingStatus: null });
+    expect(screen.getByRole('heading', { level: 2, name: 'Gói của bạn đã hết hạn' })).toBeInTheDocument();
+    unmount();
+    renderLocked({ billingStatus: { hasPlan: false, isFullyExpired: false, planRevokedAfterExpiry: false } });
+    expect(screen.getByRole('heading', { level: 2, name: 'Gói của bạn đã hết hạn' })).toBeInTheDocument();
+  });
+
+  it('không locked mà billingStatus null → vẫn không render (hành vi cũ)', () => {
+    const { container } = render(
+      <I18nProvider>
+        <PlanExpiryModal isOpen billingStatus={null} onClose={onClose} />
+      </I18nProvider>
+    );
+    expect(container).toBeEmptyDOMElement();
   });
 });

@@ -19,6 +19,8 @@ import PlanExpiryModal from '../features/auth/components/PlanExpiryModal';
 import { trialWelcomeKey } from '../stores/authStore';
 import { shouldWarnPlanExpiry } from '../utils/subscriptionStatus.util';
 import { planExpiryDismissKey } from '../utils/billingProfile.util';
+import { isPathExcludedFromPlanLock } from '../utils/planLock.util';
+import { usePlanLockToastGuard } from '../features/auth/hooks/usePlanLockToastGuard';
 
 const SIDEBAR_WIDTH_COLLAPSED = 44; // icon-only desktop width
 const SIDEBAR_WIDTH_EXPANDED = 220; // expanded desktop width
@@ -116,8 +118,22 @@ const MainLayout = ({ children = null }) => {
     setExpiryDismissed(true);
   };
 
+  // Cổng khoá gói hết hạn (PLAN_CONG_KHOA_GOI_HET_HAN_2026-10-11): server đã chặn thật (403 PLAN_EXPIRED /
+  // NO_ACTIVE_PLAN) nên modal KHÔNG đóng được và KHÔNG phụ thuộc "Để sau" của cảnh báo cũ. Áp cho cả nhân
+  // viên (họ cũng bị 403 vì gói của chủ). `billingStatus` null (chưa nạp hồ sơ) chỉ khoá khi server đã báo mã.
+  const planLockedCode = useAuthStore((state) => state.planLockedCode);
+  const planLocked =
+    !anyGateOpen && !trial
+    && user?.role !== 'admin'
+    && Boolean(billingStatus?.isFullyExpired || billingStatus?.planRevokedAfterExpiry || planLockedCode);
+  const planLockModalOpen = planLocked && !isPathExcludedFromPlanLock(location.pathname);
+  // Toast lỗi chung của trang nổi trên modal (Toaster zIndex 999999) → dẹp trong lúc modal khoá mở.
+  usePlanLockToastGuard(planLockModalOpen);
+
+  // Cảnh báo đóng được (ân hạn / sắp hết hạn) — chỉ khi KHÔNG khoá.
   const planExpiryWarning =
     !anyGateOpen && !trial
+    && !planLocked
     && activeContext?.type === 'self'
     && user?.role !== 'admin'
     && shouldWarnPlanExpiry(billingStatus)
@@ -275,9 +291,11 @@ const MainLayout = ({ children = null }) => {
         />
 
         <PlanExpiryModal
-          isOpen={Boolean(planExpiryWarning)}
+          isOpen={Boolean(planExpiryWarning) || planLockModalOpen}
           billingStatus={billingStatus}
           onClose={handleClosePlanExpiry}
+          locked={planLockModalOpen}
+          isEmployee={activeContext?.type === 'employee'}
         />
 
         {!isAiHomePage && !isChatbotStudio && !isLandingCanvas && (
@@ -377,9 +395,11 @@ const MainLayout = ({ children = null }) => {
       />
 
       <PlanExpiryModal
-        isOpen={Boolean(planExpiryWarning)}
+        isOpen={Boolean(planExpiryWarning) || planLockModalOpen}
         billingStatus={billingStatus}
         onClose={handleClosePlanExpiry}
+        locked={planLockModalOpen}
+        isEmployee={activeContext?.type === 'employee'}
       />
     </div>
   );

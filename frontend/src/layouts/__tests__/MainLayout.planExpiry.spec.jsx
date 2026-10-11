@@ -15,6 +15,7 @@ const m = vi.hoisted(() => ({
   isAuthenticated: true,
   activeContext: { type: 'self' },
   billingStatus: null,
+  planLockedCode: null,
 }));
 
 vi.mock('../../stores/authStore', () => ({
@@ -39,9 +40,13 @@ vi.mock('../../features/auth/components/TrialWelcomeModal', () => ({ default: ()
 
 // Stub PlanExpiryModal để kiểm tra trạng thái mở/đóng trong MainLayout
 vi.mock('../../features/auth/components/PlanExpiryModal', () => ({
-  default: ({ isOpen, onClose, billingStatus }) =>
+  default: ({ isOpen, onClose, billingStatus, locked, isEmployee }) =>
     isOpen ? (
-      <div data-testid="plan-expiry-modal-open">
+      <div
+        data-testid="plan-expiry-modal-open"
+        data-locked={locked ? 'true' : 'false'}
+        data-employee={isEmployee ? 'true' : 'false'}
+      >
         <button onClick={onClose}>Đóng popup</button>
         <span data-testid="expiry-status">{JSON.stringify(billingStatus)}</span>
       </div>
@@ -54,6 +59,7 @@ const renderLayout = (initialRoute = '/app') =>
       <Routes>
         <Route path="/app" element={<MainLayout />}>
           <Route path="reports" element={<div data-testid="reports-page">Trang Báo Cáo Dashboard</div>} />
+          <Route path="*" element={<div data-testid="any-page">Trang bất kỳ</div>} />
         </Route>
       </Routes>
     </MemoryRouter>
@@ -77,6 +83,7 @@ describe('MainLayout — PlanExpiryModal theo PR-1 mục 3 và 5', () => {
     m.activeContext = { type: 'self' };
     m.phoneOtpEnabled = false;
     m.billingStatus = null;
+    m.planLockedCode = null;
   });
 
   it('Ca 1: Chủ TK, gói còn 4 ngày (daysUntilExpiry = 4) → KHÔNG hiện modal', () => {
@@ -152,10 +159,14 @@ describe('MainLayout — PlanExpiryModal theo PR-1 mục 3 và 5', () => {
     expect(screen.queryByTestId('plan-expiry-modal-open')).not.toBeInTheDocument();
   });
 
-  it('Ca 3, 4, 5: Bấm tắt → lưu sessionStorage, không hiện lại trong cùng tab; xoá sessionStorage → hiện lại', () => {
+  it('Ca 3, 4, 5: Cảnh báo sắp hết hạn: bấm tắt → lưu sessionStorage, không hiện lại trong cùng tab; xoá sessionStorage → hiện lại', () => {
+    // Gói đã hết hạn hẳn giờ là modal KHOÁ (không tắt được) — xem khối "cổng khoá" bên dưới; việc tắt + nhớ
+    // phiên chỉ còn cho cảnh báo đóng được (sắp hết hạn / ân hạn).
     m.billingStatus = {
       hasPlan: true,
-      isFullyExpired: true,
+      isFullyExpired: false,
+      isInGracePeriod: false,
+      daysUntilExpiry: 2,
     };
 
     const { unmount } = renderLayout();
@@ -249,5 +260,124 @@ describe('MainLayout — PlanExpiryModal trên nhánh mobile', () => {
     window.innerWidth = 1024;
     renderLayout();
     expect(screen.getByTestId('plan-expiry-modal-open')).toBeInTheDocument();
+  });
+});
+
+/**
+ * Cổng khoá gói hết hạn (PLAN_CONG_KHOA_GOI_HET_HAN_2026-10-11): gói đã quá hạn (hoặc server vừa trả 403
+ * PLAN_EXPIRED / NO_ACTIVE_PLAN) thì modal KHOÁ hiện trên mọi trang trừ billing / support / thông báo,
+ * không phụ thuộc "Để sau" đã lưu của cảnh báo cũ.
+ */
+describe('MainLayout — cổng khoá gói hết hạn', () => {
+  const baseUser = {
+    id: 100,
+    role: 'user',
+    phone: '0912345678',
+    phoneVerifiedAt: '2026-09-10T00:00:00Z',
+    hasConsented: true,
+    mustChangePassword: false,
+  };
+  const modal = () => screen.queryByTestId('plan-expiry-modal-open');
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    sessionStorage.clear();
+    localStorage.clear();
+    m.user = { ...baseUser };
+    m.activeContext = { type: 'self' };
+    m.phoneOtpEnabled = false;
+    m.planLockedCode = null;
+    m.billingStatus = { hasPlan: true, isFullyExpired: true, daysUntilExpiry: -1 };
+  });
+
+  it('gói quá hạn, trang /app/products → modal HIỆN ở chế độ khoá', () => {
+    renderLayout('/app/products');
+    expect(modal()).toBeInTheDocument();
+    expect(modal()).toHaveAttribute('data-locked', 'true');
+  });
+
+  it('"Để sau" đã lưu trong sessionStorage KHÔNG làm modal khoá biến mất', () => {
+    sessionStorage.setItem(planExpiryDismissKey(m.user.id), 'true');
+    renderLayout('/app/products');
+    expect(modal()).toBeInTheDocument();
+    expect(modal()).toHaveAttribute('data-locked', 'true');
+  });
+
+  it.each(['/app/billing', '/app/billing/history', '/app/support', '/app/support/3', '/app/settings/notifications'])(
+    'trang loại trừ %s → KHÔNG hiện modal',
+    (path) => {
+      renderLayout(path);
+      expect(modal()).not.toBeInTheDocument();
+    }
+  );
+
+  it('ranh giới đường dẫn: /app/billingx KHÔNG được coi là /app/billing → vẫn khoá', () => {
+    renderLayout('/app/billingx');
+    expect(modal()).toBeInTheDocument();
+  });
+
+  it('server báo 403 (planLockedCode) khi hồ sơ chưa nạp (billingStatus null) → modal khoá hiện', () => {
+    m.billingStatus = null;
+    m.planLockedCode = 'PLAN_EXPIRED';
+    renderLayout('/app/products');
+    expect(modal()).toBeInTheDocument();
+    expect(modal()).toHaveAttribute('data-locked', 'true');
+  });
+
+  it('không có planLockedCode lẫn billingStatus hết hạn → KHÔNG khoá (chưa nạp hồ sơ ≠ hết hạn)', () => {
+    m.billingStatus = null;
+    renderLayout('/app/products');
+    expect(modal()).not.toBeInTheDocument();
+  });
+
+  it('gói còn hiệu lực dù planLockedCode đã bị gỡ → không modal', () => {
+    m.billingStatus = { hasPlan: true, isFullyExpired: false, isInGracePeriod: false, daysUntilExpiry: 20 };
+    renderLayout('/app/products');
+    expect(modal()).not.toBeInTheDocument();
+  });
+
+  it('sắp hết hạn (còn 2 ngày) → modal CŨ, đóng được (không khoá)', () => {
+    m.billingStatus = { hasPlan: true, isFullyExpired: false, isInGracePeriod: false, daysUntilExpiry: 2 };
+    renderLayout('/app/products');
+    expect(modal()).toHaveAttribute('data-locked', 'false');
+    fireEvent.click(screen.getByText('Đóng popup'));
+    expect(modal()).not.toBeInTheDocument();
+  });
+
+  it('nhân viên (activeContext employee), gói của chủ hết hạn → modal khoá, giọng nhân viên', () => {
+    m.activeContext = { type: 'employee', ownerId: 999 };
+    renderLayout('/app/products');
+    expect(modal()).toBeInTheDocument();
+    expect(modal()).toHaveAttribute('data-locked', 'true');
+    expect(modal()).toHaveAttribute('data-employee', 'true');
+  });
+
+  it('chủ TK → giọng chủ (isEmployee = false)', () => {
+    renderLayout('/app/products');
+    expect(modal()).toHaveAttribute('data-employee', 'false');
+  });
+
+  it('super admin (role admin) → KHÔNG modal, kể cả khi có planLockedCode', () => {
+    m.user.role = 'admin';
+    m.planLockedCode = 'PLAN_EXPIRED';
+    renderLayout('/app/products');
+    expect(modal()).not.toBeInTheDocument();
+  });
+
+  it('nhường cổng bắt buộc: chưa đồng ý điều khoản → modal khoá chưa hiện', () => {
+    m.user.hasConsented = false;
+    renderLayout('/app/products');
+    expect(modal()).not.toBeInTheDocument();
+  });
+
+  it('nhánh mobile (< 1024px) cũng hiện modal khoá', () => {
+    const widthGoc = window.innerWidth;
+    try {
+      window.innerWidth = 500;
+      renderLayout('/app/products');
+      expect(modal()).toHaveAttribute('data-locked', 'true');
+    } finally {
+      window.innerWidth = widthGoc;
+    }
   });
 });

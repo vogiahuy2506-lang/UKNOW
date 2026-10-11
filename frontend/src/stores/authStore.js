@@ -269,6 +269,16 @@ let initializeInFlight = null;
 // động) có cơ hội thử lại nếu lần đầu chỉ là mạng chập chờn.
 let phoneOtpEnabledFetchPromise = null;
 
+// Cổng khoá gói hết hạn (PLAN_CONG_KHOA_GOI_HET_HAN_2026-10-11): server trả 403 PLAN_EXPIRED / NO_ACTIVE_PLAN
+// thì api.js ghi mã vào `planLockedCode`. Mã chỉ được gỡ khi hồ sơ mới cho thấy ĐANG CÓ gói còn hiệu lực
+// (gia hạn xong) — gói chưa từng có / đã thu hồi thì giữ nguyên, tránh nhấp nháy mỗi lần nạp lại hồ sơ.
+const hasActiveUnexpiredPlan = (billingStatus) =>
+  Boolean(billingStatus?.hasPlan) && !billingStatus.isFullyExpired && !billingStatus.planRevokedAfterExpiry;
+
+/** Gỡ mã khoá nếu hồ sơ vừa nạp cho thấy gói đã có hiệu lực. Trả về phần state cần set. */
+const clearPlanLockIfRenewed = (slice, currentCode) =>
+  currentCode && hasActiveUnexpiredPlan(slice.billingStatus) ? { ...slice, planLockedCode: null } : slice;
+
 const billingSliceFromProfile = (profile = {}) => ({
   aiCredits: {
     used: Number(profile.aiCreditsUsed || 0),
@@ -317,6 +327,7 @@ function completeLogin(data, rememberMe) {
     user: normalizedUser,
     isAuthenticated: true,
     activeContext,
+    planLockedCode: null,
     phoneReminderDismissed: false,
     referralPromptDismissed: false,
   });
@@ -331,6 +342,8 @@ export const useAuthStore = create((set, get) => ({
   sendUsage: { ...EMPTY_SEND_USAGE },
   addons: null,
   billingStatus: null,
+  /** Mã server báo khoá gói ('PLAN_EXPIRED' | 'NO_ACTIVE_PLAN') — do api.js ghi khi nhận 403; null = không khoá. */
+  planLockedCode: null,
   /** Ngữ cảnh hoạt động hiện tại: { type: 'self' } hoặc { type: 'employee', ownerId, ownerName, ... } */
   activeContext: { type: 'self' },
   // PR-2 (xác thực SĐT) — mặc định false: chưa fetch xong, lỗi mạng, hay backend tắt tính
@@ -382,6 +395,7 @@ export const useAuthStore = create((set, get) => ({
             isAuthenticated: true,
             isLoading: false,
             activeContext,
+            planLockedCode: null,
             sessionCheckFailed: false,
           });
         } catch (error) {
@@ -465,7 +479,7 @@ export const useAuthStore = create((set, get) => ({
           notifyStorageQuotaClear();
           await clearQueryCache();
           if (isStale()) return { success: false };
-          set({ user: normalizedUser, activeContext: reconciled.context });
+          set({ user: normalizedUser, activeContext: reconciled.context, planLockedCode: null });
           notifyStorageQuotaRefresh();
           return { success: true, user: normalizedUser, contextChanged: true };
         }
@@ -586,6 +600,7 @@ export const useAuthStore = create((set, get) => ({
         sendUsage: { ...EMPTY_SEND_USAGE },
         addons: null,
         billingStatus: null,
+        planLockedCode: null,
         activeContext: { type: 'self' },
         // Chủ động đăng xuất (vd "Đăng nhập lại" ở màn Thử lại) — trang đăng nhập không được còn băng
         // "không kiểm tra được phiên" của phiên vừa bỏ.
@@ -609,13 +624,18 @@ export const useAuthStore = create((set, get) => ({
     const response = await api.get('/users/profile');
     const profile = response?.data?.data || {};
     const slice = billingSliceFromProfile(profile);
-    set(slice);
+    set(clearPlanLockIfRenewed(slice, get().planLockedCode));
     return slice.aiCredits;
   },
 
   /** Đồng bộ billing từ payload profile đã có (tránh gọi API trùng). */
   syncBillingFromProfile: (profile = {}) => {
-    set(billingSliceFromProfile(profile));
+    set(clearPlanLockIfRenewed(billingSliceFromProfile(profile), get().planLockedCode));
+  },
+
+  /** api.js gọi khi server trả 403 PLAN_EXPIRED / NO_ACTIVE_PLAN → MainLayout dựng modal khoá. */
+  setPlanLockedCode: (code) => {
+    if (get().planLockedCode !== code) set({ planLockedCode: code || null });
   },
 
   /**
@@ -630,7 +650,7 @@ export const useAuthStore = create((set, get) => ({
       saveContext(ctx);
       notifyStorageQuotaClear();
       await clearQueryCache();
-      set({ activeContext: ctx });
+      set({ activeContext: ctx, planLockedCode: null });
       notifyStorageQuotaRefresh();
       return;
     }
@@ -659,7 +679,7 @@ export const useAuthStore = create((set, get) => ({
     saveContext(ctx);
     notifyStorageQuotaClear();
     await clearQueryCache();
-    set({ activeContext: ctx });
+    set({ activeContext: ctx, planLockedCode: null });
     notifyStorageQuotaRefresh();
   },
 
