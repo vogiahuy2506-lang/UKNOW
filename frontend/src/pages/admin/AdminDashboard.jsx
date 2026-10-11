@@ -145,7 +145,7 @@ const AdminDashboard = () => {
 
   if (error) return (
     <div className="card p-10 text-center">
-      <p className="text-red-500 mb-3">{error}</p>
+      <p className="text-red-500 dark:text-red-400 mb-3">{error}</p>
       <button onClick={refetch} className="btn btn-primary">{t('adminDashboard.retry')}</button>
     </div>
   );
@@ -173,7 +173,7 @@ const AdminDashboard = () => {
         <div>
           <span>{t('adminDashboard.description')}</span>
           {(dataSince || dataSinceNote) && (
-            <p className="text-xs text-amber-700 mt-1">
+            <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
               {dataSince ? `Dữ liệu từ ${dataSince}. ` : ''}{dataSinceNote || ''}
             </p>
           )}

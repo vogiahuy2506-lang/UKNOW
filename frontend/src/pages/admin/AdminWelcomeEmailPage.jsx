@@ -450,7 +450,7 @@ export default function AdminWelcomeEmailPage() {
                 onClick={reset}
                 disabled={isResetting || isSaving}
               >
-                <HiOutlineRefresh className={`h-3.5 w-3.5 text-slate-500 ${isResetting ? 'animate-spin' : ''}`} />
+                <HiOutlineRefresh className={`h-3.5 w-3.5 text-slate-500 dark:text-dk-text2 ${isResetting ? 'animate-spin' : ''}`} />
                 <span>{isResetting ? t('adminWelcomeEmail.resetting') : t('adminWelcomeEmail.restoreDefault')}</span>
               </button>
               <button
@@ -675,7 +675,7 @@ export default function AdminWelcomeEmailPage() {
                   onClick={() => requestPreview(template, templateKey)}
                   disabled={isPreviewing}
                 >
-                  <HiOutlineEye className="h-3.5 w-3.5 text-slate-500" />
+                  <HiOutlineEye className="h-3.5 w-3.5 text-slate-500 dark:text-dk-text2" />
                   <span>{isPreviewing ? t('adminWelcomeEmail.previewing') : t('adminWelcomeEmail.refreshPreview')}</span>
                 </button>
               </div>

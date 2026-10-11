@@ -307,14 +307,14 @@ const Header = ({ onToggleSidebar }) => {
                 </button>
                 <button
                   onClick={() => { navigate(notificationsPagePath(user)); setProfileOpen(false); }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-gray-700 hover:bg-gray-50 rounded-xl transition-colors"
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-gray-700 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised/70 rounded-xl transition-colors"
                 >
                   <HiOutlineBell className="w-4 h-4 text-gray-400" />
                   {t('header.notifications')}
                 </button>
                 <button
                   onClick={() => { navigate(supportListPath(user)); setProfileOpen(false); }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-gray-700 hover:bg-gray-50 rounded-xl transition-colors"
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-gray-700 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised/70 rounded-xl transition-colors"
                 >
                   <HiOutlineSupport className="w-4 h-4 text-gray-400" />
                   {t('header.support')}

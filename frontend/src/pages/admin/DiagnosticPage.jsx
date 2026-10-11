@@ -857,7 +857,7 @@ export default function DiagnosticPage() {
                     step={1}
                     value={delaySeconds}
                     onChange={(e) => setDelaySeconds(Number(e.target.value))}
-                    className="w-full accent-primary-500 mt-1"
+                    className="w-full accent-primary-500 dark:[color-scheme:dark] mt-1"
                   />
                   <div className="flex justify-between text-xs text-gray-400 dark:text-dk-muted mt-1">
                     <span>1s</span>
