@@ -37,7 +37,7 @@ const selectElement = (editId) => {
 const previewStore = (page) => JSON.parse(window.localStorage.getItem(`landing_overrides_${page}`) || '{}');
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks(); // cả hàng đợi mockResolvedValueOnce — một ca đỏ không được rò sang ca sau
   window.localStorage.clear();
   window.alert = vi.fn();
   api.getOverrides.mockResolvedValue({

@@ -29,7 +29,7 @@ const enBox = () => screen.getByPlaceholderText(/Paste English HTML/);
 const echo = (payload) => ({ data: { data: payload } });
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   api.getHtmlMode.mockResolvedValue(echo({ displayMode: 'default', htmlContentVi: '<p>cũ</p>', htmlContentEn: '', cssContent: '' }));
   api.saveHtmlMode.mockImplementation(async (page, payload) => echo(payload));
 });
@@ -126,6 +126,22 @@ describe('HtmlFullPageEditor — hợp đồng nạp / gõ / lưu / bật HTML',
       title: 'Founder AI — Trang Hero',
     });
     await waitFor(() => expect(viBox()).toHaveValue('<main>AI</main>'));
+  });
+
+  it('Tạo bằng AI ở tab English: locale = "en" và HTML điền vào ô English, bản Việt giữ nguyên', async () => {
+    api.generateHomepageHtmlWithAi.mockResolvedValue({ data: { success: true, data: { html: '<main>EN AI</main>' } } });
+    renderEditor();
+    await waitFor(() => expect(viBox()).toHaveValue('<p>cũ</p>'));
+    pickTab('English');
+
+    invoke(/Tạo bằng AI/);
+    fireEvent.change(await screen.findByPlaceholderText(/VD: Landing trang chủ/), { target: { value: 'English page' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo HTML' }));
+
+    await waitFor(() => expect(api.generateHomepageHtmlWithAi).toHaveBeenCalledWith(expect.objectContaining({ prompt: 'English page', locale: 'en' })));
+    await waitFor(() => expect(enBox()).toHaveValue('<main>EN AI</main>'));
+    pickTab('Tiếng Việt');
+    expect(viBox()).toHaveValue('<p>cũ</p>');
   });
 
   it('nạp lỗi thì báo lỗi và về form rỗng (không treo ở trạng thái đang tải)', async () => {

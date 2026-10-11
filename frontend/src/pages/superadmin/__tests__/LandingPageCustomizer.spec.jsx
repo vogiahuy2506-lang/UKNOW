@@ -26,7 +26,7 @@ import api from '../../../features/landing-customizer/services/landingCustomizer
 const renderPage = () => render(<I18nProvider><LandingPageCustomizer /></I18nProvider>);
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   window.localStorage.clear();
   api.getOverrides.mockResolvedValue({ data: { overrides: [] } });
   api.getHtmlMode.mockResolvedValue({ data: { data: { displayMode: 'default', htmlContentVi: '<p>x</p>', htmlContentEn: '', cssContent: '' } } });

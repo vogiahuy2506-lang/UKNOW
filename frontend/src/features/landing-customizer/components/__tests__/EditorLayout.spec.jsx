@@ -30,7 +30,7 @@ const selectElement = (editId) => act(() => {
 });
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   window.localStorage.clear();
   window.alert = vi.fn();
   api.getOverrides.mockResolvedValue({ data: { overrides: [] } });
