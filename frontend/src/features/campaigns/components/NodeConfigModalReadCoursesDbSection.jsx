@@ -23,10 +23,10 @@ const getCourseStatusLabel = (status, t) => {
 
 const getCourseStatusClassName = (status) => {
   const normalized = normalizeCourseStatus(status);
-  if (normalized === 'publish') return 'text-green-600';
-  if (normalized === 'pending') return 'text-amber-600';
-  if (normalized === 'private') return 'text-purple-600';
-  return 'text-gray-500';
+  if (normalized === 'publish') return 'text-green-600 dark:text-green-400';
+  if (normalized === 'pending') return 'text-amber-600 dark:text-amber-400';
+  if (normalized === 'private') return 'text-purple-600 dark:text-purple-400';
+  return 'text-gray-500 dark:text-dk-text2';
 };
 
 /**
@@ -120,28 +120,28 @@ export const NodeConfigReadCoursesDbSection = ({
         return (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('readCoursesDb.nodeName')}</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">{t('readCoursesDb.nodeName')}</label>
               <input
                 type="text"
                 value={formData.label}
                 onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                 placeholder={t('readCoursesDb.readCoursesPlaceholder')}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('readCoursesDb.maxRecords')}</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">{t('readCoursesDb.maxRecords')}</label>
               <NumberInput
                 min={1}
                 max={5000}
                 value={formData.coursesDbLimit || 1000}
                 onChange={(v) => setFormData((prev) => ({ ...prev, coursesDbLimit: parseInt(v, 10) || 1000 }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
               />
-              <p className="text-xs text-gray-500 mt-1">{t('readCoursesDb.maxRecordsHint')}</p>
+              <p className="text-xs text-gray-500 mt-1 dark:text-dk-text2">{t('readCoursesDb.maxRecordsHint')}</p>
             </div>
-            <div className="bg-blue-50 p-3 rounded-lg">
-              <p className="text-sm text-blue-700">
+            <div className="bg-blue-50 p-3 rounded-lg dark:bg-blue-950/40">
+              <p className="text-sm text-blue-700 dark:text-blue-300">
                 <strong>{t('readCoursesDb.note')}:</strong> {t('readCoursesDb.readCoursesNote')}
               </p>
             </div>
@@ -153,19 +153,19 @@ export const NodeConfigReadCoursesDbSection = ({
           <div className="space-y-4">
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-medium text-gray-700">{t('readCoursesDb.filterByCourse')}</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-dk-text">{t('readCoursesDb.filterByCourse')}</label>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={handleLoadCoursesPreview}
                     disabled={isLoadingCoursesPreview}
-                    className="px-3 py-1.5 text-xs rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium transition-colors"
+                    className="px-3 py-1.5 text-xs rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium transition-colors dark:bg-blue-950/40 dark:hover:bg-blue-900/40 dark:text-blue-300"
                   >
                     {isLoadingCoursesPreview ? t('readCoursesDb.loading') : t('readCoursesDb.loadList')}
                   </button>
                   <button
                     type="button"
-                    className="px-3 py-1.5 text-xs rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition-colors"
+                    className="px-3 py-1.5 text-xs rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition-colors dark:bg-dk-raised dark:hover:bg-dk-strong dark:text-dk-text"
                     onClick={() => setFormData((prev) => ({ ...prev, coursesDbSelectedIds: [] }))}
                     disabled={!selectedCoursesDbIds.length}
                   >
@@ -175,8 +175,8 @@ export const NodeConfigReadCoursesDbSection = ({
               </div>
 
               {selectedCoursesDbIds.length > 0 && (
-                <div className="mb-3 p-2 bg-primary-50 rounded-lg">
-                  <p className="text-xs text-primary-700">
+                <div className="mb-3 p-2 bg-primary-50 rounded-lg dark:bg-primary-950/40">
+                  <p className="text-xs text-primary-700 dark:text-primary-300">
                     <strong>1</strong> {t('readCoursesDb.courseSelected')}
                   </p>
                 </div>
@@ -188,11 +188,11 @@ export const NodeConfigReadCoursesDbSection = ({
                   placeholder={t('readCoursesDb.searchCourse')}
                   value={formData.coursesDbSearchTerm || ''}
                   onChange={(e) => setFormData((prev) => ({ ...prev, coursesDbSearchTerm: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                 />
               </div>
               <div className="mb-3">
-                <p className="text-xs font-medium text-gray-600 mb-2">{t('readCoursesDb.filterByStatus')}</p>
+                <p className="text-xs font-medium text-gray-600 mb-2 dark:text-dk-text2">{t('readCoursesDb.filterByStatus')}</p>
                 <div className="flex flex-wrap gap-2">
                   {COURSE_STATUS_OPTIONS.map((status) => {
                     const activeStatuses = (Array.isArray(formData.coursesDbStatuses) ? formData.coursesDbStatuses : [])
@@ -205,9 +205,9 @@ export const NodeConfigReadCoursesDbSection = ({
                         onClick={() => toggleCourseStatusFilter(status)}
                         className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${
                           checked
-                            ? 'bg-primary-50 border-primary-300 text-primary-700'
-                            : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-                        }`}
+                            ? 'bg-primary-50 border-primary-300 text-primary-700 dark:bg-primary-950/40 dark:border-primary-800 dark:text-primary-300'
+                            : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 dark:bg-dk-raised dark:border-dk-border dark:text-dk-text2 dark:hover:bg-dk-strong'
+                        } dark:border-dk-border`}
                       >
                         {getCourseStatusLabel(status, t)}
                       </button>
@@ -216,16 +216,16 @@ export const NodeConfigReadCoursesDbSection = ({
                 </div>
               </div>
 
-              <div className="border border-gray-200 rounded-lg p-4 max-h-96 overflow-auto bg-gray-50">
+              <div className="border border-gray-200 rounded-lg p-4 max-h-96 overflow-auto bg-gray-50 dark:bg-dk-raised dark:border-dk-border">
                 {isLoadingCoursesPreview ? (
                   <div className="text-center py-8">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-2"></div>
-                    <p className="text-sm text-gray-500">{t('readCoursesDb.loadingCoursesList')}</p>
+                    <p className="text-sm text-gray-500 dark:text-dk-text2">{t('readCoursesDb.loadingCoursesList')}</p>
                   </div>
                 ) : coursesPreviewItems.length === 0 ? (
                   <div className="text-center py-8">
                     <HiOutlineShoppingCart className="w-12 h-12 text-gray-300 mx-auto mb-2" />
-                    <p className="text-sm text-gray-500">{t('readCoursesDb.noCourses')}</p>
+                    <p className="text-sm text-gray-500 dark:text-dk-text2">{t('readCoursesDb.noCourses')}</p>
                     <p className="text-xs text-gray-400 mt-1">{t('readCoursesDb.pressLoadList')}</p>
                   </div>
                 ) : (
@@ -242,7 +242,7 @@ export const NodeConfigReadCoursesDbSection = ({
                       return (
                         <div className="text-center py-8">
                           <HiOutlineShoppingCart className="w-12 h-12 text-gray-300 mx-auto mb-2" />
-                          <p className="text-sm text-gray-500">{t('readCoursesDb.noCoursesFound', { searchTerm: formData.coursesDbSearchTerm })}</p>
+                          <p className="text-sm text-gray-500 dark:text-dk-text2">{t('readCoursesDb.noCoursesFound', { searchTerm: formData.coursesDbSearchTerm })}</p>
                         </div>
                       );
                     }
@@ -259,23 +259,23 @@ export const NodeConfigReadCoursesDbSection = ({
                             <label
                               key={`${course.id || 'none'}-${idx}`}
                               className={`flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
-                                checked ? 'bg-primary-50 border border-primary-200' : 'bg-white border border-gray-200 hover:bg-gray-50'
+                                checked ? 'bg-primary-50 border border-primary-200 dark:bg-primary-950/40 dark:border-primary-800' : 'bg-white border border-gray-200 hover:bg-gray-50 dark:bg-dk-surface dark:border-dk-border dark:hover:bg-dk-raised'
                               }`}
                             >
                               <input
                                 type="radio"
                                 name="selected-course"
-                                className="mt-1 border-gray-300 text-primary-600 focus:ring-primary-500"
+                                className="mt-1 border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dk-border-strong dark:text-primary-400"
                                 checked={checked}
                                 onChange={() => toggleCourseDb(courseId)}
                                 disabled={!Number.isFinite(courseId)}
                               />
                               <div className="flex-1 min-w-0">
-                                <div className="text-sm font-medium text-gray-900">
+                                <div className="text-sm font-medium text-gray-900 dark:text-dk-text">
                                   {courseName}
-                                  {courseCode && <span className="text-gray-500 ml-1 font-mono">({courseCode})</span>}
+                                  {courseCode && <span className="text-gray-500 ml-1 font-mono dark:text-dk-text2">({courseCode})</span>}
                                 </div>
-                                <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
+                                <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5 dark:text-dk-text2">
                                   <span>{price}</span>
                                   {course.status !== undefined && course.status !== null && (
                                     <>
@@ -295,13 +295,13 @@ export const NodeConfigReadCoursesDbSection = ({
                   })()
                 )}
               </div>
-              <p className="text-xs text-gray-500 mt-2">
+              <p className="text-xs text-gray-500 mt-2 dark:text-dk-text2">
                 <strong>{t('readCoursesDb.note')}:</strong> {t('readCoursesDb.noSelectionNote')}
               </p>
             </div>
 
-            <div className="bg-amber-50 p-3 rounded-lg">
-              <p className="text-sm text-amber-700">
+            <div className="bg-amber-50 p-3 rounded-lg dark:bg-amber-950/40">
+              <p className="text-sm text-amber-700 dark:text-amber-300">
                 <strong>{t('readCoursesDb.tip')}:</strong> {t('readCoursesDb.tipContent')}
               </p>
             </div>
@@ -315,9 +315,9 @@ export const NodeConfigReadCoursesDbSection = ({
 
   return (
     <div className="flex" style={{ minHeight: '500px' }}>
-      <div className="w-64 border-r border-gray-200 flex flex-col">
-        <div className="p-3 border-b border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-700">{t('readCoursesDb.settings')}</h3>
+      <div className="w-64 border-r border-gray-200 flex flex-col dark:border-dk-border">
+        <div className="p-3 border-b border-gray-200 dark:border-dk-border">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-dk-text">{t('readCoursesDb.settings')}</h3>
         </div>
         <div className="flex-1 overflow-y-auto">
           {readCoursesDbSections.map((section) => {
@@ -328,14 +328,14 @@ export const NodeConfigReadCoursesDbSection = ({
                 onClick={() => setSelectedReadCoursesDbSection(section.id)}
                 className={`px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors ${
                   selectedReadCoursesDbSection === section.id
-                    ? 'bg-primary-50 border-l-4 border-primary-600'
+                    ? 'bg-primary-50 border-l-4 border-primary-600 dark:bg-primary-950/40'
                     : 'border-l-4 border-transparent'
-                }`}
+                } dark:hover:bg-dk-raised`}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Icon className={`w-4 h-4 ${selectedReadCoursesDbSection === section.id ? 'text-primary-600' : 'text-gray-500'}`} />
-                    <span className={`text-sm ${selectedReadCoursesDbSection === section.id ? 'font-medium text-primary-900' : 'text-gray-700'}`}>
+                    <Icon className={`w-4 h-4 ${selectedReadCoursesDbSection === section.id ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-dk-text2'}`} />
+                    <span className={`text-sm ${selectedReadCoursesDbSection === section.id ? 'font-medium text-primary-900 dark:text-primary-300' : 'text-gray-700 dark:text-dk-text'}`}>
                       {section.name}
                     </span>
                   </div>

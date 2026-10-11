@@ -19,10 +19,10 @@ const normalizeCourseStatus = (status) => String(status || '').trim().toLowerCas
 
 const getCourseStatusClassName = (status) => {
   const normalized = normalizeCourseStatus(status);
-  if (normalized === 'publish') return 'text-green-600';
-  if (normalized === 'pending') return 'text-amber-600';
-  if (normalized === 'private') return 'text-purple-600';
-  return 'text-gray-500';
+  if (normalized === 'publish') return 'text-green-600 dark:text-green-400';
+  if (normalized === 'pending') return 'text-amber-600 dark:text-amber-400';
+  if (normalized === 'private') return 'text-purple-600 dark:text-purple-400';
+  return 'text-gray-500 dark:text-dk-text2';
 };
 
 /**
@@ -234,27 +234,27 @@ export const NodeConfigReadInterestedCustomersSection = ({
         return (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('nodeConfig.nodeName')}</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">{t('nodeConfig.nodeName')}</label>
               <input
                 type="text"
                 value={formData.label}
                 onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                 placeholder={t('nodeConfig.placeholderNodeName')}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">{t('nodeConfig.dataSource')}</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-dk-text">{t('nodeConfig.dataSource')}</label>
               <div className="space-y-2">
                 {dataSourceOpts.map((opt) => (
                   <label
                     key={opt.value}
                     className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
                       currentDataSource === opt.value
-                        ? 'bg-primary-50 border-primary-400'
-                        : 'bg-white border-gray-200 hover:bg-gray-50'
-                    }`}
+                        ? 'bg-primary-50 border-primary-400 dark:bg-primary-950/40'
+                        : 'bg-white border-gray-200 hover:bg-gray-50 dark:bg-dk-surface dark:border-dk-border dark:hover:bg-dk-raised'
+                    } dark:border-dk-border`}
                   >
                     <input
                       type="radio"
@@ -277,13 +277,13 @@ export const NodeConfigReadInterestedCustomersSection = ({
                         setTestPreviewSearchQuery('');
                         setTestPreviewItems([]);
                       }}
-                      className="mt-0.5 text-primary-600 focus:ring-primary-500"
+                      className="mt-0.5 text-primary-600 focus:ring-primary-500 dark:text-primary-400"
                     />
                     <div className="flex-1 min-w-0">
-                      <div className={`text-sm font-medium ${currentDataSource === opt.value ? 'text-primary-900' : 'text-gray-800'}`}>
+                      <div className={`text-sm font-medium ${currentDataSource === opt.value ? 'text-primary-900 dark:text-primary-300' : 'text-gray-800 dark:text-dk-text'}`}>
                         {opt.label}
                       </div>
-                      <div className="text-xs text-gray-500 mt-0.5">{opt.desc}</div>
+                      <div className="text-xs text-gray-500 mt-0.5 dark:text-dk-text2">{opt.desc}</div>
                     </div>
                   </label>
                 ))}
@@ -291,16 +291,16 @@ export const NodeConfigReadInterestedCustomersSection = ({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">{t('nodeConfig.filterByCondition')}</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-dk-text">{t('nodeConfig.filterByCondition')}</label>
               <div className="space-y-2">
                 {customerTypeOpts.map((opt) => (
                   <label
                     key={opt.value}
                     className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
                       currentCustomerType === opt.value
-                        ? 'bg-primary-50 border-primary-400'
-                        : 'bg-white border-gray-200 hover:bg-gray-50'
-                    }`}
+                        ? 'bg-primary-50 border-primary-400 dark:bg-primary-950/40'
+                        : 'bg-white border-gray-200 hover:bg-gray-50 dark:bg-dk-surface dark:border-dk-border dark:hover:bg-dk-raised'
+                    } dark:border-dk-border`}
                   >
                     <input
                       type="radio"
@@ -308,13 +308,13 @@ export const NodeConfigReadInterestedCustomersSection = ({
                       value={opt.value}
                       checked={currentCustomerType === opt.value}
                       onChange={() => setFormData((prev) => ({ ...prev, interestedCustomerType: opt.value }))}
-                      className="mt-0.5 text-primary-600 focus:ring-primary-500"
+                      className="mt-0.5 text-primary-600 focus:ring-primary-500 dark:text-primary-400"
                     />
                     <div className="flex-1 min-w-0">
-                      <div className={`text-sm font-medium ${currentCustomerType === opt.value ? 'text-primary-900' : 'text-gray-800'}`}>
+                      <div className={`text-sm font-medium ${currentCustomerType === opt.value ? 'text-primary-900 dark:text-primary-300' : 'text-gray-800 dark:text-dk-text'}`}>
                         {opt.label}
                       </div>
-                      <div className="text-xs text-gray-500 mt-0.5">{opt.desc}</div>
+                      <div className="text-xs text-gray-500 mt-0.5 dark:text-dk-text2">{opt.desc}</div>
                     </div>
                   </label>
                 ))}
@@ -322,15 +322,15 @@ export const NodeConfigReadInterestedCustomersSection = ({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('nodeConfig.maxRecords')}</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">{t('nodeConfig.maxRecords')}</label>
               <NumberInput
                 min={1}
                 max={5000}
                 value={formData.interestedLimit || 1000}
                 onChange={(v) => setFormData((prev) => ({ ...prev, interestedLimit: parseInt(v, 10) || 1000 }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 mt-1 dark:text-dk-text2">
                 {currentCustomerType === 'purchased'
                   ? t('nodeConfig.purchasedNote')
                   : currentCustomerType === 'both'
@@ -339,8 +339,8 @@ export const NodeConfigReadInterestedCustomersSection = ({
               </p>
             </div>
 
-            <div className="bg-blue-50 p-3 rounded-lg">
-              <p className="text-sm text-blue-700">
+            <div className="bg-blue-50 p-3 rounded-lg dark:bg-blue-950/40">
+              <p className="text-sm text-blue-700 dark:text-blue-300">
                 <strong>{t('nodeConfig.note')}</strong>{' '}
                 {currentDataSource === 'database'
                   ? t('nodeConfig.databaseTip')
@@ -356,11 +356,11 @@ export const NodeConfigReadInterestedCustomersSection = ({
           <div className="space-y-4">
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-medium text-gray-700">{t('nodeConfig.filterCourses')}</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-dk-text">{t('nodeConfig.filterCourses')}</label>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    className="px-3 py-1.5 text-xs rounded-lg bg-primary-50 hover:bg-primary-100 text-primary-700 font-medium transition-colors"
+                    className="px-3 py-1.5 text-xs rounded-lg bg-primary-50 hover:bg-primary-100 text-primary-700 font-medium transition-colors dark:bg-primary-950/40 dark:hover:bg-primary-900/40 dark:text-primary-300"
                     onClick={() => setFormData((prev) => ({ ...prev, interestedCourseIds: selectableIds }))}
                     disabled={!selectableIds.length}
                   >
@@ -368,7 +368,7 @@ export const NodeConfigReadInterestedCustomersSection = ({
                   </button>
                   <button
                     type="button"
-                    className="px-3 py-1.5 text-xs rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition-colors"
+                    className="px-3 py-1.5 text-xs rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition-colors dark:bg-dk-raised dark:hover:bg-dk-strong dark:text-dk-text"
                     onClick={() => setFormData((prev) => ({ ...prev, interestedCourseIds: [] }))}
                     disabled={!selectedCourseIds.length}
                   >
@@ -378,8 +378,8 @@ export const NodeConfigReadInterestedCustomersSection = ({
               </div>
 
               {selectedCourseIds.length > 0 && (
-                <div className="mb-3 p-2 bg-primary-50 rounded-lg">
-                  <p className="text-xs text-primary-700">
+                <div className="mb-3 p-2 bg-primary-50 rounded-lg dark:bg-primary-950/40">
+                  <p className="text-xs text-primary-700 dark:text-primary-300">
                     <strong>{selectedCourseIds.length}</strong> {t('nodeConfig.coursesSelected', { count: selectedCourseIds.length, defaultValue: `khóa học đã được chọn` })}
                   </p>
                 </div>
@@ -395,11 +395,11 @@ export const NodeConfigReadInterestedCustomersSection = ({
                     setCourseSearchQuery(nextQuery);
                     setFormData((prev) => ({ ...prev, interestedCourseQuery: nextQuery }));
                   }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                 />
               </div>
               <div className="mb-3">
-                <p className="text-xs font-medium text-gray-600 mb-2">{t('nodeConfig.filterByStatus')}</p>
+                <p className="text-xs font-medium text-gray-600 mb-2 dark:text-dk-text2">{t('nodeConfig.filterByStatus')}</p>
                 <div className="flex flex-wrap gap-2">
                   {INTERESTED_COURSE_STATUS_OPTIONS.map((status) => {
                     const checked = selectedCourseStatuses.includes(status);
@@ -410,9 +410,9 @@ export const NodeConfigReadInterestedCustomersSection = ({
                         onClick={() => toggleCourseStatusFilter(status)}
                         className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${
                           checked
-                            ? 'bg-primary-50 border-primary-300 text-primary-700'
-                            : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-                        }`}
+                            ? 'bg-primary-50 border-primary-300 text-primary-700 dark:bg-primary-950/40 dark:border-primary-800 dark:text-primary-300'
+                            : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 dark:bg-dk-raised dark:border-dk-border dark:text-dk-text2 dark:hover:bg-dk-strong'
+                        } dark:border-dk-border`}
                       >
                         {getCourseStatusLabel(status)}
                       </button>
@@ -421,16 +421,16 @@ export const NodeConfigReadInterestedCustomersSection = ({
                 </div>
               </div>
 
-              <div className="border border-gray-200 rounded-lg p-4 max-h-96 overflow-auto bg-gray-50">
+              <div className="border border-gray-200 rounded-lg p-4 max-h-96 overflow-auto bg-gray-50 dark:bg-dk-raised dark:border-dk-border">
                 {isLoadingInterestedCourses ? (
                   <div className="text-center py-8">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-2"></div>
-                    <p className="text-sm text-gray-500">{t('nodeConfig.loadingCourses')}</p>
+                    <p className="text-sm text-gray-500 dark:text-dk-text2">{t('nodeConfig.loadingCourses')}</p>
                   </div>
                 ) : interestedCourseOptions.length === 0 ? (
                   <div className="text-center py-8">
                     <HiOutlineDocumentText className="w-12 h-12 text-gray-300 mx-auto mb-2" />
-                    <p className="text-sm text-gray-500">{t('nodeConfig.noCourses')}</p>
+                    <p className="text-sm text-gray-500 dark:text-dk-text2">{t('nodeConfig.noCourses')}</p>
                   </div>
                 ) : (
                   (() => {
@@ -451,7 +451,7 @@ export const NodeConfigReadInterestedCustomersSection = ({
                       return (
                         <div className="text-center py-8">
                           <HiOutlineDocumentText className="w-12 h-12 text-gray-300 mx-auto mb-2" />
-                          <p className="text-sm text-gray-500">
+                          <p className="text-sm text-gray-500 dark:text-dk-text2">
                             {t('nodeConfig.noCoursesMatch')}
                           </p>
                         </div>
@@ -471,22 +471,22 @@ export const NodeConfigReadInterestedCustomersSection = ({
                             <label
                               key={`${item.courseId || 'none'}-${idx}`}
                               className={`flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
-                                checked ? 'bg-primary-50 border border-primary-200' : 'bg-white border border-gray-200 hover:bg-gray-50'
+                                checked ? 'bg-primary-50 border border-primary-200 dark:bg-primary-950/40 dark:border-primary-800' : 'bg-white border border-gray-200 hover:bg-gray-50 dark:bg-dk-surface dark:border-dk-border dark:hover:bg-dk-raised'
                               }`}
                             >
                               <input
                                 type="checkbox"
-                                className="mt-1 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                                className="mt-1 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dk-border-strong dark:text-primary-400"
                                 checked={checked}
                                 onChange={(e) => toggleCourse(courseId, e.target.checked)}
                                 disabled={!Number.isFinite(courseId)}
                               />
                               <div className="flex-1 min-w-0">
-                                <div className="text-sm font-medium text-gray-900">
+                                <div className="text-sm font-medium text-gray-900 dark:text-dk-text">
                                   {courseName}
-                                  {courseCode && <span className="text-gray-500 ml-1">({courseCode})</span>}
+                                  {courseCode && <span className="text-gray-500 ml-1 dark:text-dk-text2">({courseCode})</span>}
                                 </div>
-                                <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-2">
+                                <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-2 dark:text-dk-text2">
                                   <span>{t('nodeConfig.customers', { count: totalItems, defaultValue: `${totalItems} khách hàng` })}</span>
                                   <span>•</span>
                                   <span className={getCourseStatusClassName(courseStatus)}>
@@ -502,13 +502,13 @@ export const NodeConfigReadInterestedCustomersSection = ({
                   })()
                 )}
               </div>
-              <p className="text-xs text-gray-500 mt-2">
+              <p className="text-xs text-gray-500 mt-2 dark:text-dk-text2">
                 <strong>{t('nodeConfig.note')}</strong> {t('nodeConfig.noCoursesFilter')}
               </p>
             </div>
 
-            <div className="bg-amber-50 p-3 rounded-lg">
-              <p className="text-sm text-amber-700">
+            <div className="bg-amber-50 p-3 rounded-lg dark:bg-amber-950/40">
+              <p className="text-sm text-amber-700 dark:text-amber-300">
                 <strong>{t('nodeConfig.tip')}</strong> {t('nodeConfig.filterTip')}
               </p>
             </div>
@@ -616,21 +616,21 @@ export const NodeConfigReadInterestedCustomersSection = ({
                 disabled={isLoadingTestPreview}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                   isLoadingTestPreview
-                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed dark:bg-dk-strong dark:text-dk-text2'
                     : 'bg-primary-600 text-white hover:bg-primary-700'
                 }`}
               >
                 {isLoadingTestPreview ? t('nodeConfig.loading') : testPreviewItems.length > 0 ? t('nodeConfig.reload') : t('nodeConfig.loadTestData')}
               </button>
               {testPreviewItems.length > 0 && (
-                <span className="text-sm text-gray-500">
+                <span className="text-sm text-gray-500 dark:text-dk-text2">
                   {t('nodeConfig.records', { count: testPreviewItems.length })} · {t('nodeConfig.selected')}{' '}
                   {interestedSelectionMode === 'fixed' ? (
-                    <strong className="text-primary-700">{selectedTestIds.length}</strong>
+                    <strong className="text-primary-700 dark:text-primary-300">{selectedTestIds.length}</strong>
                   ) : interestedSelectionMode === 'all_exclude' ? (
-                    <strong className="text-red-600">{excludedTestIds.length}</strong>
+                    <strong className="text-red-600 dark:text-red-400">{excludedTestIds.length}</strong>
                   ) : (
-                    <strong className="text-primary-700">{t('nodeConfig.all')}</strong>
+                    <strong className="text-primary-700 dark:text-primary-300">{t('nodeConfig.all')}</strong>
                   )}
                 </span>
               )}
@@ -645,15 +645,15 @@ export const NodeConfigReadInterestedCustomersSection = ({
                   key={option.value}
                   className={`p-3 rounded-lg border cursor-pointer transition-colors ${
                     interestedSelectionMode === option.value
-                      ? 'bg-primary-50 border-primary-400'
-                      : 'bg-white border-gray-200 hover:bg-gray-50'
-                  }`}
+                      ? 'bg-primary-50 border-primary-400 dark:bg-primary-950/40'
+                      : 'bg-white border-gray-200 hover:bg-gray-50 dark:bg-dk-surface dark:border-dk-border dark:hover:bg-dk-raised'
+                  } dark:border-dk-border`}
                 >
                   <div className="flex items-start gap-2">
                     <input
                       type="radio"
                       name="interestedSelectionMode"
-                      className="mt-0.5 text-primary-600 focus:ring-primary-500"
+                      className="mt-0.5 text-primary-600 focus:ring-primary-500 dark:text-primary-400"
                       checked={interestedSelectionMode === option.value}
                       onChange={() => {
                         setFormData((prev) => ({
@@ -668,26 +668,26 @@ export const NodeConfigReadInterestedCustomersSection = ({
                       }}
                     />
                     <div>
-                      <p className="text-sm font-medium text-gray-900">{option.label}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">{option.desc}</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-dk-text">{option.label}</p>
+                      <p className="text-xs text-gray-500 mt-0.5 dark:text-dk-text2">{option.desc}</p>
                     </div>
                   </div>
                 </label>
               ))}
             </div>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-gray-500 dark:text-dk-text2">
               {t('nodeConfig.testPreviewNote')}
             </p>
 
             {isLoadingTestPreview ? (
-              <div className="border-2 border-dashed border-gray-200 rounded-lg p-10 text-center">
+              <div className="border-2 border-dashed border-gray-200 rounded-lg p-10 text-center dark:border-dk-border">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-2"></div>
-                <p className="text-sm text-gray-500">{t('nodeConfig.loadingData')}</p>
+                <p className="text-sm text-gray-500 dark:text-dk-text2">{t('nodeConfig.loadingData')}</p>
               </div>
             ) : testPreviewItems.length === 0 ? (
-              <div className="border-2 border-dashed border-gray-200 rounded-lg p-10 text-center">
+              <div className="border-2 border-dashed border-gray-200 rounded-lg p-10 text-center dark:border-dk-border">
                 <HiOutlineDocumentText className="w-12 h-12 text-gray-300 mx-auto mb-2" />
-                <p className="text-sm text-gray-500">{t('nodeConfig.noData')}</p>
+                <p className="text-sm text-gray-500 dark:text-dk-text2">{t('nodeConfig.noData')}</p>
                 <p className="text-xs text-gray-400 mt-1">{t('nodeConfig.loadTestDataHint')}</p>
               </div>
             ) : (
@@ -698,13 +698,13 @@ export const NodeConfigReadInterestedCustomersSection = ({
                     placeholder={t('nodeConfig.searchByName')}
                     value={testPreviewSearchQuery}
                     onChange={(e) => setTestPreviewSearchQuery(e.target.value)}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                   />
                   <button
                     type="button"
                     onClick={toggleAllFiltered}
                     disabled={interestedSelectionMode === 'all'}
-                    className="px-3 py-2 text-xs rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition-colors whitespace-nowrap"
+                    className="px-3 py-2 text-xs rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition-colors whitespace-nowrap dark:bg-dk-raised dark:hover:bg-dk-strong dark:text-dk-text"
                   >
                     {interestedSelectionMode === 'all'
                       ? t('nodeConfig.takingAll')
@@ -712,11 +712,11 @@ export const NodeConfigReadInterestedCustomersSection = ({
                   </button>
                 </div>
 
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <div className="border border-gray-200 rounded-lg overflow-hidden dark:border-dk-border">
                   <div className="max-h-96 overflow-y-auto">
                     {filteredPreview.length === 0 ? (
                       <div className="p-6 text-center">
-                        <p className="text-sm text-gray-500">{t('nodeConfig.noResults')}</p>
+                        <p className="text-sm text-gray-500 dark:text-dk-text2">{t('nodeConfig.noResults')}</p>
                       </div>
                     ) : (
                       filteredPreview.map((item, idx) => {
@@ -726,25 +726,25 @@ export const NodeConfigReadInterestedCustomersSection = ({
                           <label
                             key={`${cid}-${idx}`}
                             className={`flex items-start gap-3 px-4 py-3 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors ${
-                              checked ? 'bg-primary-50' : 'bg-white hover:bg-gray-50'
-                            }`}
+                              checked ? 'bg-primary-50 dark:bg-primary-950/40' : 'bg-white hover:bg-gray-50 dark:bg-dk-surface dark:hover:bg-dk-raised'
+                            } dark:border-dk-border`}
                           >
                             <input
                               type="checkbox"
-                              className="mt-0.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                              className="mt-0.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dk-border-strong dark:text-primary-400"
                               checked={!!checked}
                               onChange={() => toggleTestCustomer(cid)}
                               disabled={!cid || interestedSelectionMode === 'all'}
                             />
                             <div className="flex-1 min-w-0">
-                              <div className="text-sm font-medium text-gray-900 truncate">
+                              <div className="text-sm font-medium text-gray-900 truncate dark:text-dk-text">
                                 {item.fullName || t('nodeConfig.noName')}
                               </div>
-                              <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                              <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-2 flex-wrap dark:text-dk-text2">
                                 {item.email && <span>{item.email}</span>}
                                 {item.phone && <span>· {item.phone}</span>}
                                 {item.courseName && (
-                                  <span className="px-1.5 py-0.5 bg-gray-100 rounded text-gray-600 truncate max-w-[160px]">
+                                  <span className="px-1.5 py-0.5 bg-gray-100 rounded text-gray-600 truncate max-w-[160px] dark:bg-dk-raised dark:text-dk-text2">
                                     {item.courseName}
                                   </span>
                                 )}
@@ -752,8 +752,8 @@ export const NodeConfigReadInterestedCustomersSection = ({
                               <div className="mt-1">
                                 <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${
                                   item.orderStatus === 'on-hold' || item.itemStatus === 'interested'
-                                    ? 'bg-yellow-100 text-yellow-700'
-                                    : 'bg-green-100 text-green-700'
+                                    ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950/40 dark:text-yellow-300'
+                                    : 'bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300'
                                 }`}>
                                   {item.orderStatus === 'on-hold' || item.itemStatus === 'interested'
                                     ? t('nodeConfig.interested')
@@ -769,8 +769,8 @@ export const NodeConfigReadInterestedCustomersSection = ({
                 </div>
 
                 {interestedSelectionMode !== 'all' && activeTestIds.length > 0 && (
-                  <div className="mt-2 p-2 bg-primary-50 rounded-lg flex items-center justify-between">
-                    <p className={`text-xs ${interestedSelectionMode === 'all_exclude' ? 'text-red-700' : 'text-primary-700'}`}>
+                  <div className="mt-2 p-2 bg-primary-50 rounded-lg flex items-center justify-between dark:bg-primary-950/40">
+                    <p className={`text-xs ${interestedSelectionMode === 'all_exclude' ? 'text-red-700 dark:text-red-300' : 'text-primary-700 dark:text-primary-300'}`}>
                       {interestedSelectionMode === 'fixed'
                         ? <>{t('nodeConfig.selectedCount', { count: selectedTestIds.length, defaultValue: `Đã chọn ${selectedTestIds.length} khách hàng. Khi chạy node sẽ chỉ lấy những khách hàng này.` })}</>
                         : <>{t('nodeConfig.excludedCount', { count: excludedTestIds.length, defaultValue: `Đã loại trừ ${excludedTestIds.length} khách hàng. Continuous vẫn lấy khách mới nhưng bỏ qua danh sách loại trừ.` })}</>}
@@ -783,7 +783,7 @@ export const NodeConfigReadInterestedCustomersSection = ({
                           ? { interestedSelectedCustomerIds: [] }
                           : { interestedExcludedCustomerIds: [] }),
                       }))}
-                      className="text-xs text-gray-500 hover:text-red-500 ml-3 flex-shrink-0"
+                      className="text-xs text-gray-500 hover:text-red-500 ml-3 flex-shrink-0 dark:text-dk-text2"
                     >
                       {t('nodeConfig.clearSelection')}
                     </button>
@@ -792,8 +792,8 @@ export const NodeConfigReadInterestedCustomersSection = ({
               </div>
             )}
 
-            <div className="bg-green-50 p-3 rounded-lg">
-              <p className="text-sm text-green-700">
+            <div className="bg-green-50 p-3 rounded-lg dark:bg-green-950/40">
+              <p className="text-sm text-green-700 dark:text-green-300">
                 <strong>{t('nodeConfig.note')}</strong>{' '}
                 {interestedSelectionMode === 'all'
                   ? t('nodeConfig.allModeNote')
@@ -813,9 +813,9 @@ export const NodeConfigReadInterestedCustomersSection = ({
 
   return (
     <div className="flex" style={{ minHeight: '500px' }}>
-      <div className="w-64 border-r border-gray-200 flex flex-col">
-        <div className="p-3 border-b border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-700">{t('nodeConfig.settings')}</h3>
+      <div className="w-64 border-r border-gray-200 flex flex-col dark:border-dk-border">
+        <div className="p-3 border-b border-gray-200 dark:border-dk-border">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-dk-text">{t('nodeConfig.settings')}</h3>
         </div>
         <div className="flex-1 overflow-y-auto">
           {readInterestedCustomersSections.map((section) => {
@@ -826,14 +826,14 @@ export const NodeConfigReadInterestedCustomersSection = ({
                 onClick={() => setSelectedReadInterestedCustomersSection(section.id)}
                 className={`px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors ${
                   selectedReadInterestedCustomersSection === section.id
-                    ? 'bg-primary-50 border-l-4 border-primary-600'
+                    ? 'bg-primary-50 border-l-4 border-primary-600 dark:bg-primary-950/40'
                     : 'border-l-4 border-transparent'
-                }`}
+                } dark:hover:bg-dk-raised`}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Icon className={`w-4 h-4 ${selectedReadInterestedCustomersSection === section.id ? 'text-primary-600' : 'text-gray-500'}`} />
-                    <span className={`text-sm ${selectedReadInterestedCustomersSection === section.id ? 'font-medium text-primary-900' : 'text-gray-700'}`}>
+                    <Icon className={`w-4 h-4 ${selectedReadInterestedCustomersSection === section.id ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-dk-text2'}`} />
+                    <span className={`text-sm ${selectedReadInterestedCustomersSection === section.id ? 'font-medium text-primary-900 dark:text-primary-300' : 'text-gray-700 dark:text-dk-text'}`}>
                       {section.name}
                     </span>
                   </div>

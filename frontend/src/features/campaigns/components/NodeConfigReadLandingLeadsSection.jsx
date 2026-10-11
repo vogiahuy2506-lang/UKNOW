@@ -15,12 +15,12 @@ import NumberInput from '../../../components/common/NumberInput';
  */
 const FilterCheckboxRow = memo(function FilterCheckboxRow({ value, label, checked, onToggle }) {
   return (
-    <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+    <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700 dark:text-dk-text">
       <input
         type="checkbox"
         checked={checked}
         onChange={() => onToggle(value)}
-        className="h-4 w-4 shrink-0 rounded border-gray-300"
+        className="h-4 w-4 shrink-0 rounded border-gray-300 dark:border-dk-border-strong"
       />
       <span className="min-w-0 break-words">{label}</span>
     </label>
@@ -69,26 +69,26 @@ function LandingLeadsMultiFilterBlock({ title, options, fieldKey, selected, setF
   return (
     <div>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <span className="text-sm font-medium text-gray-700">{title}</span>
+        <span className="text-sm font-medium text-gray-700 dark:text-dk-text">{title}</span>
         <div className="flex flex-wrap gap-1.5">
           <button
             type="button"
             onClick={selectAll}
-            className="rounded border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+            className="rounded border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 dark:bg-dk-raised dark:border-dk-border dark:text-dk-text dark:hover:bg-dk-strong"
           >
             {t('nodeConfig.selectAll')}
           </button>
           <button
             type="button"
             onClick={clearAll}
-            className="rounded border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+            className="rounded border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 dark:bg-dk-raised dark:border-dk-border dark:text-dk-text dark:hover:bg-dk-strong"
           >
             {t('nodeConfig.deselectAll')}
           </button>
         </div>
       </div>
       <div
-        className="max-h-40 space-y-2 overflow-y-auto rounded-lg border border-gray-200 p-3 [content-visibility:auto] [contain-intrinsic-size:120px]"
+        className="max-h-40 space-y-2 overflow-y-auto rounded-lg border border-gray-200 p-3 [content-visibility:auto] [contain-intrinsic-size:120px] dark:border-dk-border"
         style={{ contain: 'layout paint' }}
       >
         {options.map((opt) => (
@@ -187,10 +187,10 @@ export function NodeConfigReadLandingLeadsSection({ formData, setFormData }) {
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-gray-600">
+      <p className="text-sm text-gray-600 dark:text-dk-text2">
         {t('nodeConfigLanding.pageDescription')}
       </p>
-      <p className="rounded-lg border border-amber-100 bg-amber-50/90 p-3 text-sm text-amber-950">
+      <p className="rounded-lg border border-amber-100 bg-amber-50/90 p-3 text-sm text-amber-950 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300">
         <strong>{t('nodeConfigLanding.continuousCampaignNote')}</strong>
       </p>
 
@@ -200,9 +200,9 @@ export function NodeConfigReadLandingLeadsSection({ formData, setFormData }) {
           type="checkbox"
           checked={Boolean(formData.landingLeadsUseDateRange)}
           onChange={(e) => setFormData((prev) => ({ ...prev, landingLeadsUseDateRange: e.target.checked }))}
-          className="h-4 w-4 rounded border-gray-300 text-primary-600"
+          className="h-4 w-4 rounded border-gray-300 text-primary-600 dark:border-dk-border-strong dark:text-primary-400"
         />
-        <label htmlFor="landing-use-dates" className="text-sm font-medium text-gray-800">
+        <label htmlFor="landing-use-dates" className="text-sm font-medium text-gray-800 dark:text-dk-text">
           {t('nodeConfigLanding.limitByDate')}
         </label>
       </div>
@@ -210,31 +210,31 @@ export function NodeConfigReadLandingLeadsSection({ formData, setFormData }) {
       {formData.landingLeadsUseDateRange ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">{t('nodeConfigLanding.fromDate')}</label>
+            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-dk-text">{t('nodeConfigLanding.fromDate')}</label>
             <input
               type="date"
               value={formData.landingLeadsDateFrom || ''}
               onChange={(e) => setFormData((prev) => ({ ...prev, landingLeadsDateFrom: e.target.value }))}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">{t('nodeConfigLanding.toDate')}</label>
+            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-dk-text">{t('nodeConfigLanding.toDate')}</label>
             <input
               type="date"
               value={formData.landingLeadsDateTo || ''}
               onChange={(e) => setFormData((prev) => ({ ...prev, landingLeadsDateTo: e.target.value }))}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
             />
           </div>
         </div>
       ) : (
-        <p className="text-xs text-gray-500">{t('nodeConfigLanding.takingAllLeads')}</p>
+        <p className="text-xs text-gray-500 dark:text-dk-text2">{t('nodeConfigLanding.takingAllLeads')}</p>
       )}
 
       {excludedNoConsent > 0 ? (
-        <p className="flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50/90 p-3 text-sm text-amber-950">
-          <HiOutlineExclamation className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+        <p className="flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50/90 p-3 text-sm text-amber-950 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300">
+          <HiOutlineExclamation className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
           <span>
             {t('nodeConfigLanding.consentWarning', {
               count: excludedNoConsent,
@@ -243,7 +243,7 @@ export function NodeConfigReadLandingLeadsSection({ formData, setFormData }) {
           </span>
         </p>
       ) : null}
-      <p className="text-xs text-gray-500">
+      <p className="text-xs text-gray-500 dark:text-dk-text2">
         {t('nodeConfigLanding.consentInfo', {
           defaultValue: 'Tự động bỏ qua người chưa đồng ý nhận tin tiếp thị.',
         })}
@@ -275,17 +275,17 @@ export function NodeConfigReadLandingLeadsSection({ formData, setFormData }) {
 
       {customDefs.length > 0 ? (
         <div className="space-y-3">
-          <span className="text-sm font-medium text-gray-700">{t('leadFormConfig.customFields')}</span>
+          <span className="text-sm font-medium text-gray-700 dark:text-dk-text">{t('leadFormConfig.customFields')}</span>
           {customDefs.map((field) => {
             const filters = Array.isArray(formData.landingLeadsCustomFilters) ? formData.landingLeadsCustomFilters : [];
             const current = filters.find((f) => f.key === field.key) || null;
             const isChoice = field.type === 'select' || field.type === 'radio' || field.type === 'checkbox';
             return (
-              <div key={field.key} className="rounded-lg border border-gray-200 p-3 space-y-2">
-                <div className="text-sm text-gray-800">{field.labelVi || field.key}</div>
+              <div key={field.key} className="rounded-lg border border-gray-200 p-3 space-y-2 dark:border-dk-border">
+                <div className="text-sm text-gray-800 dark:text-dk-text">{field.labelVi || field.key}</div>
                 {isChoice ? (
                   <select
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
                     value={current?.values?.[0] || current?.value || ''}
                     onChange={(e) => {
                       const value = e.target.value;
@@ -313,7 +313,7 @@ export function NodeConfigReadLandingLeadsSection({ formData, setFormData }) {
                   </select>
                 ) : (
                   <input
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                     placeholder={field.labelVi}
                     value={current?.value || ''}
                     onChange={(e) => {
@@ -337,7 +337,7 @@ export function NodeConfigReadLandingLeadsSection({ formData, setFormData }) {
       ) : null}
 
       <div>
-        <label className="mb-1 block text-sm font-medium text-gray-700">
+        <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-dk-text">
           {t('nodeConfigLanding.maxRecords', { max: LANDING_LEADS_MAX_RECORDS.toLocaleString('vi-VN') })}
         </label>
         <NumberInput
@@ -350,7 +350,7 @@ export function NodeConfigReadLandingLeadsSection({ formData, setFormData }) {
               landingLeadsLimit: clampLandingLeadsLimitUi(v, 1000),
             }))
           }
-          className="w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          className="w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
         />
       </div>
 

@@ -589,7 +589,7 @@ const CampaignBuilder = () => {
     event.dataTransfer.setData('application/reactflow', JSON.stringify({ nodeType, nodeData }));
     event.dataTransfer.effectAllowed = 'move';
     const dragPreview = document.createElement('div');
-    dragPreview.className = 'rounded-md border border-primary-200 bg-white px-2 py-1 text-xs text-gray-700 shadow-sm';
+    dragPreview.className = 'rounded-md border border-primary-200 bg-white px-2 py-1 text-xs text-gray-700 shadow-sm dark:bg-dk-surface dark:border-primary-800 dark:text-dk-text';
     dragPreview.textContent = nodeData?.name || 'Node';
     document.body.appendChild(dragPreview);
     event.dataTransfer.setDragImage(dragPreview, 60, 16);
@@ -1336,8 +1336,8 @@ const CampaignBuilder = () => {
         confirmLabel={t('campaignBuilder.saveBeforeRunConfirm')}
         cancelLabel={t('campaignBuilder.stay')}
         confirmButtonClassName="bg-primary-500 text-white hover:bg-primary-600"
-        iconClassName="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0"
-        iconColorClassName="w-6 h-6 text-amber-600"
+        iconClassName="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0 dark:bg-amber-950/40"
+        iconColorClassName="w-6 h-6 text-amber-600 dark:text-amber-400"
       />
       <CampaignShareModal
         campaign={campaignForServerActions}
@@ -1359,8 +1359,8 @@ const CampaignBuilder = () => {
         confirmLabel={t('campaignBuilder.openDuplicate')}
         cancelLabel={t('campaignBuilder.stay')}
         confirmButtonClassName="bg-primary-500 text-white hover:bg-primary-600"
-        iconClassName="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0"
-        iconColorClassName="w-6 h-6 text-emerald-600"
+        iconClassName="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0 dark:bg-emerald-950/40"
+        iconColorClassName="w-6 h-6 text-emerald-600 dark:text-emerald-400"
       />
     </>
   );

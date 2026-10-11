@@ -95,16 +95,16 @@ const ChannelStepsEditor = ({
           <div
             key={index}
             data-testid={`channel-step-${index + 1}`}
-            className={isMulti ? 'space-y-3 border border-gray-200 rounded-lg p-3' : 'space-y-4'}
+            className={isMulti ? 'space-y-3 border border-gray-200 rounded-lg p-3 dark:border-dk-border' : 'space-y-4'}
           >
             {isMulti && (
               <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-gray-800">{t('channelSteps.stepTitle', { n: index + 1 })}</p>
+                <p className="text-sm font-semibold text-gray-800 dark:text-dk-text">{t('channelSteps.stepTitle', { n: index + 1 })}</p>
                 {index > 0 && (
                   <button
                     type="button"
                     onClick={() => handleRemoveStep(index)}
-                    className="text-xs font-medium text-red-600 hover:text-red-700"
+                    className="text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                   >
                     {t('channelSteps.removeStep')}
                   </button>
@@ -113,7 +113,7 @@ const ChannelStepsEditor = ({
             )}
 
             {index > 0 && (
-              <div className="flex flex-wrap items-center gap-2 text-sm text-gray-700" data-testid={`channel-step-delay-${index + 1}`}>
+              <div className="flex flex-wrap items-center gap-2 text-sm text-gray-700 dark:text-dk-text" data-testid={`channel-step-delay-${index + 1}`}>
                 <span>{t('channelSteps.sendAfter')}</span>
                 <input
                   type="number"
@@ -121,13 +121,13 @@ const ChannelStepsEditor = ({
                   aria-label={t('channelSteps.delayValueLabel', { n: index + 1 })}
                   value={step?.delayValue ?? 0}
                   onChange={(e) => handleDelayChange(index, 'delayValue', e.target.value)}
-                  className="w-20 px-2 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  className="w-20 px-2 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                 />
                 <select
                   aria-label={t('channelSteps.delayUnitLabel', { n: index + 1 })}
                   value={step?.delayUnit || 'minutes'}
                   onChange={(e) => handleDelayChange(index, 'delayUnit', e.target.value)}
-                  className="px-2 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  className="px-2 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
                 >
                   <option value="minutes">{t('channelSteps.unitMinutes')}</option>
                   <option value="hours">{t('channelSteps.unitHours')}</option>
@@ -148,7 +148,7 @@ const ChannelStepsEditor = ({
             />
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">
                 {t(`${i18nPrefix}.messageRequired`)} <span className="text-red-500">*</span>
               </label>
               <textarea
@@ -156,23 +156,23 @@ const ChannelStepsEditor = ({
                 value={messageValue}
                 onChange={(e) => handleMessageChange(index, e.target.value)}
                 maxLength={messageMax}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                 placeholder={t(`${i18nPrefix}.messagePlaceholder`)}
               />
-              <div className="mt-1 flex items-center justify-between text-xs text-gray-500">
+              <div className="mt-1 flex items-center justify-between text-xs text-gray-500 dark:text-dk-text2">
                 <span>{t(`${i18nPrefix}.variableHint`)}</span>
                 <span>{messageValue.length}/{messageMax}</span>
               </div>
               {columnVariableKeys.length > 0 && (
                 <div className="mt-2" data-testid={index === 0 ? 'whatsapp-column-variables' : `whatsapp-column-variables-${index + 1}`}>
-                  <p className="text-xs text-gray-500 mb-1">{t('whatsappNodeSend.columnVariablesHint')}</p>
+                  <p className="text-xs text-gray-500 mb-1 dark:text-dk-text2">{t('whatsappNodeSend.columnVariablesHint')}</p>
                   <div className="flex flex-wrap gap-1">
                     {columnVariableKeys.map((key) => (
                       <button
                         key={key}
                         type="button"
                         onClick={() => handleInsertColumnVariable(index, key)}
-                        className="px-2 py-0.5 text-xs font-mono bg-gray-100 border border-gray-200 rounded hover:bg-gray-200"
+                        className="px-2 py-0.5 text-xs font-mono bg-gray-100 border border-gray-200 rounded hover:bg-gray-200 dark:bg-dk-raised dark:border-dk-border dark:hover:bg-dk-strong"
                       >
                         {`{{${key}}}`}
                       </button>
@@ -191,11 +191,11 @@ const ChannelStepsEditor = ({
           onClick={handleAddStep}
           disabled={list.length >= MAX_CHANNEL_STEPS}
           data-testid="channel-step-add"
-          className="px-3 py-1.5 text-sm font-semibold bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-60"
+          className="px-3 py-1.5 text-sm font-semibold bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-60 dark:bg-dk-raised dark:border-dk-border-strong dark:text-dk-text dark:hover:bg-dk-strong"
         >
           {t('channelSteps.addStep')}
         </button>
-        <p className="mt-1 text-xs text-gray-500">
+        <p className="mt-1 text-xs text-gray-500 dark:text-dk-text2">
           {list.length >= MAX_CHANNEL_STEPS
             ? t('channelSteps.maxReached', { max: MAX_CHANNEL_STEPS })
             : t('channelSteps.addHint', { max: MAX_CHANNEL_STEPS })}

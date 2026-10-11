@@ -83,9 +83,9 @@ const ChannelTemplateAttachmentPicker = ({
 
   return (
     <div className="space-y-2" data-testid="channel-template-attachment-picker">
-      <label className="block text-sm font-medium text-gray-700">{t('channelAttachments.templateLabel')}</label>
+      <label className="block text-sm font-medium text-gray-700 dark:text-dk-text">{t('channelAttachments.templateLabel')}</label>
       {status === 'error' ? (
-        <p role="alert" className="text-xs text-amber-700">{t('channelAttachments.templatesLoadFailed')}</p>
+        <p role="alert" className="text-xs text-amber-700 dark:text-amber-300">{t('channelAttachments.templatesLoadFailed')}</p>
       ) : (
         <TemplateSearchSelect
           value={templateId || ''}
@@ -100,24 +100,24 @@ const ChannelTemplateAttachmentPicker = ({
         <button
           type="button"
           onClick={() => onApply?.(null)}
-          className="text-xs text-gray-500 hover:text-red-500 underline"
+          className="text-xs text-gray-500 hover:text-red-500 underline dark:text-dk-text2"
         >
           {t('channelAttachments.clearTemplate')}
         </button>
       )}
-      {isApplying && <p role="status" className="text-xs text-gray-500">{t('channelAttachments.applying')}</p>}
-      <p className="text-xs text-gray-500">{t('channelAttachments.templateHint')}</p>
+      {isApplying && <p role="status" className="text-xs text-gray-500 dark:text-dk-text2">{t('channelAttachments.applying')}</p>}
+      <p className="text-xs text-gray-500 dark:text-dk-text2">{t('channelAttachments.templateHint')}</p>
 
       {attachments.length > 0 && (
         <div data-testid="channel-attachment-list">
-          <p className="text-xs font-medium text-gray-700 mb-1">
+          <p className="text-xs font-medium text-gray-700 mb-1 dark:text-dk-text">
             {t('channelAttachments.attachmentsTitle', { count: attachments.length })}
           </p>
           <div className="flex flex-wrap gap-2">
             {attachments.map((attachment, index) => (
               <span
                 key={attachment?.key || index}
-                className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 bg-gray-50 rounded-lg border border-gray-200 text-xs text-gray-700"
+                className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 bg-gray-50 rounded-lg border border-gray-200 text-xs text-gray-700 dark:bg-dk-raised dark:border-dk-border dark:text-dk-text"
               >
                 <HiOutlinePaperClip className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                 <span className="truncate max-w-[180px] font-medium">{getAttachmentDisplayName(attachment)}</span>
@@ -138,7 +138,7 @@ const ChannelTemplateAttachmentPicker = ({
               </span>
             ))}
           </div>
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="mt-1 text-xs text-gray-500 dark:text-dk-text2">
             {t('channelAttachments.sendOrderHint', {
               images: CHANNEL_ATTACHMENT_LIMITS.maxImages,
               documents: CHANNEL_ATTACHMENT_LIMITS.maxDocuments,
@@ -148,7 +148,7 @@ const ChannelTemplateAttachmentPicker = ({
         </div>
       )}
       {problemText && (
-        <p role="alert" data-testid="channel-attachment-problem" className="text-xs text-red-600">{problemText}</p>
+        <p role="alert" data-testid="channel-attachment-problem" className="text-xs text-red-600 dark:text-red-400">{problemText}</p>
       )}
     </div>
   );

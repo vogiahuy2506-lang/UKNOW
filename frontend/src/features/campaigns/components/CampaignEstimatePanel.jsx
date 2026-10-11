@@ -19,7 +19,7 @@ const CampaignEstimatePanel = ({ status = 'ready', estimate = null, t }) => {
   if (status === 'idle') return null;
   if (status === 'loading') {
     return (
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-500" data-testid="campaign-estimate-loading">
+      <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-500 dark:bg-dk-raised dark:border-dk-border dark:text-dk-text2" data-testid="campaign-estimate-loading">
         {t('campaignEstimate.loading')}
       </div>
     );
@@ -27,7 +27,7 @@ const CampaignEstimatePanel = ({ status = 'ready', estimate = null, t }) => {
   const view = status === 'ready' ? buildEstimateView(estimate) : null;
   if (!view) {
     return (
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-500" data-testid="campaign-estimate-unavailable">
+      <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-500 dark:bg-dk-raised dark:border-dk-border dark:text-dk-text2" data-testid="campaign-estimate-unavailable">
         {t('campaignEstimate.unavailable')}
       </div>
     );
@@ -40,37 +40,37 @@ const CampaignEstimatePanel = ({ status = 'ready', estimate = null, t }) => {
   const showTable = view.perDay.length > 0 && view.perDay.some((day) => day.rows.length > 0);
 
   return (
-    <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 space-y-2" data-testid="campaign-estimate">
-      <p className="text-sm font-semibold text-sky-900">{t('campaignEstimate.title')}</p>
+    <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 space-y-2 dark:bg-sky-950/40 dark:border-sky-800" data-testid="campaign-estimate">
+      <p className="text-sm font-semibold text-sky-900 dark:text-sky-300">{t('campaignEstimate.title')}</p>
       {showFinish && (
-        <div className="text-sm text-gray-800">
+        <div className="text-sm text-gray-800 dark:text-dk-text">
           <p>
             <span className="font-medium">{t('campaignEstimate.expectedFinish')}:</span>{' '}
             <span className="font-semibold" data-testid="campaign-estimate-finish">{formatEstimateDateTime(view.finishAtLatest)}</span>
-            {durationText && <span className="text-gray-600"> ({durationText})</span>}
+            {durationText && <span className="text-gray-600 dark:text-dk-text2"> ({durationText})</span>}
           </p>
           {view.hasRange && (
-            <p className="text-xs text-gray-600" data-testid="campaign-estimate-range">
+            <p className="text-xs text-gray-600 dark:text-dk-text2" data-testid="campaign-estimate-range">
               {t('campaignEstimate.range', {
                 from: formatEstimateDateTime(view.finishAtEarliest),
                 to: formatEstimateDateTime(view.finishAtLatest),
               })}
             </p>
           )}
-          <p className="text-xs text-gray-600">{t('campaignEstimate.totalActions', { count: view.totalActions })}</p>
+          <p className="text-xs text-gray-600 dark:text-dk-text2">{t('campaignEstimate.totalActions', { count: view.totalActions })}</p>
         </div>
       )}
       {showTable && (
         <div className="overflow-x-auto">
           <table className="w-full text-xs" data-testid="campaign-estimate-table">
             <thead>
-              <tr className="text-left text-gray-500">
+              <tr className="text-left text-gray-500 dark:text-dk-text2">
                 <th className="py-1 pr-3 font-medium">{t('campaignEstimate.colDate')}</th>
                 <th className="py-1 pr-3 font-medium">{t('campaignEstimate.colAccount')}</th>
                 <th className="py-1 font-medium text-right">{t('campaignEstimate.colActions')}</th>
               </tr>
             </thead>
-            <tbody className="text-gray-800">
+            <tbody className="text-gray-800 dark:text-dk-text">
               {view.perDay.flatMap((day) => day.rows.map((row) => (
                 <tr key={`${day.date}-${row.key}`}>
                   <td className="py-0.5 pr-3">{formatEstimateDay(day.date)}</td>
@@ -87,14 +87,14 @@ const CampaignEstimatePanel = ({ status = 'ready', estimate = null, t }) => {
           {warnings.map((warning, index) => (
             <li
               key={`${warning.code}-${index}`}
-              className={`text-xs ${warning.tone === 'warn' ? 'text-amber-700' : 'text-gray-600'}`}
+              className={`text-xs ${warning.tone === 'warn' ? 'text-amber-700 dark:text-amber-300' : 'text-gray-600 dark:text-dk-text2'}`}
             >
               {warning.text}
             </li>
           ))}
         </ul>
       )}
-      {showFinish && <p className="text-[11px] text-gray-500">{t('campaignEstimate.longerNote')}</p>}
+      {showFinish && <p className="text-[11px] text-gray-500 dark:text-dk-text2">{t('campaignEstimate.longerNote')}</p>}
     </div>
   );
 };

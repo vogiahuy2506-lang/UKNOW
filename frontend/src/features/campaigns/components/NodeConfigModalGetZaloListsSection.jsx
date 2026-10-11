@@ -275,41 +275,41 @@ export const NodeConfigGetAllFriendsSection = ({
   const renderBasicSection = () => (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{t('zaloGetLists.nodeName')}</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">{t('zaloGetLists.nodeName')}</label>
         <input
           type="text"
           value={formData.label}
           onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
           placeholder={t('zaloGetLists.nodeNamePlaceholder')}
         />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">{t('zaloGetLists.pageSize')}</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">{t('zaloGetLists.pageSize')}</label>
           <NumberInput
             min={1}
             max={20000}
             value={formData.zaloFriendsCount || 200}
             onChange={(v) => setFormData((prev) => ({ ...prev, zaloFriendsCount: String(v) }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">{t('zaloGetLists.page')}</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">{t('zaloGetLists.page')}</label>
           <input
             type="number"
             min={1}
             value={formData.zaloFriendsPage || 1}
             onChange={(e) => setFormData((prev) => ({ ...prev, zaloFriendsPage: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
           />
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{t('zaloGetLists.zaloAccountNode')}</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">{t('zaloGetLists.zaloAccountNode')}</label>
         {accountSourceNodes.length > 0 ? (
           <select
             value={selectedAccountSourceNodeId}
@@ -322,7 +322,7 @@ export const NodeConfigGetAllFriendsSection = ({
                 zaloAccountId: nextNode?.accountId || prev.zaloAccountId || '',
               }));
             }}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
           >
             {accountSourceNodes.map((item) => (
               <option key={item.nodeId} value={item.nodeId}>
@@ -332,13 +332,13 @@ export const NodeConfigGetAllFriendsSection = ({
             ))}
           </select>
         ) : (
-          <div className="px-3 py-2 border border-dashed border-amber-300 rounded-lg bg-amber-50 text-amber-700 text-sm">
+          <div className="px-3 py-2 border border-dashed border-amber-300 rounded-lg bg-amber-50 text-amber-700 text-sm dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300">
             {t('zaloGetLists.noZaloAccountNode')}
           </div>
         )}
       </div>
 
-      <div className="bg-amber-50 p-3 rounded-lg text-sm text-amber-700">
+      <div className="bg-amber-50 p-3 rounded-lg text-sm text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
         <strong>{t('zaloGetLists.testAccount')}</strong>{' '}
         {resolvePreviewAccountId()
           ? `${t('zaloGetLists.accountIdPrefix')} ${resolvePreviewAccountId()}${selectedAccountSourceNode?.nodeName ? ` ${t('zaloGetLists.fromNode')} "${selectedAccountSourceNode.nodeName}"` : ''}`
@@ -356,23 +356,23 @@ export const NodeConfigGetAllFriendsSection = ({
           disabled={isLoadingPreview}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
             isLoadingPreview
-              ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+              ? 'bg-gray-200 text-gray-500 cursor-not-allowed dark:bg-dk-strong dark:text-dk-text2'
               : 'bg-primary-600 text-white hover:bg-primary-700'
           }`}
         >
           {isLoadingPreview ? t('zaloGetLists.loading') : previewItems.length > 0 ? t('zaloGetLists.reload') : t('zaloGetLists.loadTestData')}
         </button>
         {previewItems.length > 0 && (
-          <span className="text-sm text-gray-500">
+          <span className="text-sm text-gray-500 dark:text-dk-text2">
             {previewItems.length} {t('zaloGetLists.friends')}
             {friendSelectionMode === 'fixed' && (
               <>
-                {' '}· {t('zaloGetLists.selected')} <strong className="text-primary-700">{selectedFriendIds.length}</strong>
+                {' '}· {t('zaloGetLists.selected')} <strong className="text-primary-700 dark:text-primary-300">{selectedFriendIds.length}</strong>
               </>
             )}
             {friendSelectionMode === 'all_exclude' && (
               <>
-                {' '}· {t('zaloGetLists.excluded')} <strong className="text-red-600">{excludedFriendIds.length}</strong>
+                {' '}· {t('zaloGetLists.excluded')} <strong className="text-red-600 dark:text-red-400">{excludedFriendIds.length}</strong>
               </>
             )}
           </span>
@@ -388,15 +388,15 @@ export const NodeConfigGetAllFriendsSection = ({
             key={option.value}
             className={`p-3 rounded-lg border cursor-pointer transition-colors ${
               friendSelectionMode === option.value
-                ? 'bg-primary-50 border-primary-400'
-                : 'bg-white border-gray-200 hover:bg-gray-50'
-            }`}
+                ? 'bg-primary-50 border-primary-400 dark:bg-primary-950/40'
+                : 'bg-white border-gray-200 hover:bg-gray-50 dark:bg-dk-surface dark:border-dk-border dark:hover:bg-dk-raised'
+            } dark:border-dk-border`}
           >
             <div className="flex items-start gap-2">
               <input
                 type="radio"
                 name="zaloFriendSelectionMode"
-                className="mt-0.5 text-primary-600 focus:ring-primary-500"
+                className="mt-0.5 text-primary-600 focus:ring-primary-500 dark:text-primary-400"
                 checked={friendSelectionMode === option.value}
                 onChange={() => {
                   setFormData((prev) => ({
@@ -411,26 +411,26 @@ export const NodeConfigGetAllFriendsSection = ({
                 }}
               />
               <div>
-                <p className="text-sm font-medium text-gray-900">{option.label}</p>
-                <p className="text-xs text-gray-500 mt-0.5">{option.desc}</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-dk-text">{option.label}</p>
+                <p className="text-xs text-gray-500 mt-0.5 dark:text-dk-text2">{option.desc}</p>
               </div>
             </div>
           </label>
         ))}
       </div>
-      <p className="text-xs text-gray-500">
+      <p className="text-xs text-gray-500 dark:text-dk-text2">
         {t('zaloGetLists.previewNote')}
       </p>
 
       {isLoadingPreview ? (
-        <div className="border-2 border-dashed border-gray-200 rounded-lg p-10 text-center">
+        <div className="border-2 border-dashed border-gray-200 rounded-lg p-10 text-center dark:border-dk-border">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-2"></div>
-          <p className="text-sm text-gray-500">{t('zaloGetLists.loadingFriends')}</p>
+          <p className="text-sm text-gray-500 dark:text-dk-text2">{t('zaloGetLists.loadingFriends')}</p>
         </div>
       ) : previewItems.length === 0 ? (
-        <div className="border-2 border-dashed border-gray-200 rounded-lg p-10 text-center">
+        <div className="border-2 border-dashed border-gray-200 rounded-lg p-10 text-center dark:border-dk-border">
           <HiOutlineDocumentText className="w-12 h-12 text-gray-300 mx-auto mb-2" />
-          <p className="text-sm text-gray-500">{t('zaloGetLists.noData')}</p>
+          <p className="text-sm text-gray-500 dark:text-dk-text2">{t('zaloGetLists.noData')}</p>
           <p className="text-xs text-gray-400 mt-1">{t('zaloGetLists.loadPreviewHint')}</p>
         </div>
       ) : (
@@ -441,13 +441,13 @@ export const NodeConfigGetAllFriendsSection = ({
               placeholder={t('zaloGetLists.searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
             />
             <button
               type="button"
               onClick={toggleAllFiltered}
               disabled={friendSelectionMode === 'all'}
-              className="px-3 py-2 text-xs rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition-colors whitespace-nowrap"
+              className="px-3 py-2 text-xs rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition-colors whitespace-nowrap dark:bg-dk-raised dark:hover:bg-dk-strong dark:text-dk-text"
             >
               {friendSelectionMode === 'all'
                 ? t('zaloGetLists.takingAll')
@@ -455,11 +455,11 @@ export const NodeConfigGetAllFriendsSection = ({
             </button>
           </div>
 
-          <div className="border border-gray-200 rounded-lg overflow-hidden">
+          <div className="border border-gray-200 rounded-lg overflow-hidden dark:border-dk-border">
             <div className="max-h-96 overflow-y-auto">
               {filteredPreviewItems.length === 0 ? (
                 <div className="p-6 text-center">
-                  <p className="text-sm text-gray-500">{t('zaloGetLists.noFriendsFound')}</p>
+                  <p className="text-sm text-gray-500 dark:text-dk-text2">{t('zaloGetLists.noFriendsFound')}</p>
                 </div>
               ) : (
                 filteredPreviewItems.map((item, idx) => {
@@ -471,21 +471,21 @@ export const NodeConfigGetAllFriendsSection = ({
                     <label
                       key={`${friendId || 'friend'}-${idx}`}
                       className={`flex items-start gap-3 px-4 py-3 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors ${
-                        checked ? 'bg-primary-50' : 'bg-white hover:bg-gray-50'
-                      }`}
+                        checked ? 'bg-primary-50 dark:bg-primary-950/40' : 'bg-white hover:bg-gray-50 dark:bg-dk-surface dark:hover:bg-dk-raised'
+                      } dark:border-dk-border`}
                     >
                       <input
                         type="checkbox"
-                        className="mt-0.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                        className="mt-0.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dk-border-strong dark:text-primary-400"
                         checked={!!checked}
                         onChange={() => toggleFriend(friendId)}
                         disabled={!friendId || friendSelectionMode === 'all'}
                       />
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-gray-900 truncate">
+                        <div className="text-sm font-medium text-gray-900 truncate dark:text-dk-text">
                           {displayName || t('zaloGetLists.noDisplayName')}
                         </div>
-                        <div className="text-xs text-gray-500 mt-0.5 truncate">
+                        <div className="text-xs text-gray-500 mt-0.5 truncate dark:text-dk-text2">
                           {t('zaloGetLists.uidPrefix')} {friendId || t('zaloGetLists.undefined')}
                           {phoneNumber ? ` · ${phoneNumber}` : ''}
                         </div>
@@ -498,8 +498,8 @@ export const NodeConfigGetAllFriendsSection = ({
           </div>
 
           {friendSelectionMode !== 'all' && activeFriendIds.length > 0 && (
-            <div className="mt-2 p-2 bg-primary-50 rounded-lg flex items-center justify-between">
-              <p className={`text-xs ${friendSelectionMode === 'all_exclude' ? 'text-red-700' : 'text-primary-700'}`}>
+            <div className="mt-2 p-2 bg-primary-50 rounded-lg flex items-center justify-between dark:bg-primary-950/40">
+              <p className={`text-xs ${friendSelectionMode === 'all_exclude' ? 'text-red-700 dark:text-red-300' : 'text-primary-700 dark:text-primary-300'}`}>
                 {friendSelectionMode === 'fixed'
                   ? <>{t('zaloGetLists.friendsSelected', { count: selectedFriendIds.length })}</>
                   : <>{t('zaloGetLists.friendsExcluded', { count: excludedFriendIds.length })}</>}
@@ -512,7 +512,7 @@ export const NodeConfigGetAllFriendsSection = ({
                     ? { zaloSelectedFriendIds: [] }
                     : { zaloExcludedFriendIds: [] }),
                 }))}
-                className="text-xs text-gray-500 hover:text-red-500 ml-3 flex-shrink-0"
+                className="text-xs text-gray-500 hover:text-red-500 ml-3 flex-shrink-0 dark:text-dk-text2"
               >
                 {t('zaloGetLists.clearSelection')}
               </button>
@@ -521,8 +521,8 @@ export const NodeConfigGetAllFriendsSection = ({
         </div>
       )}
 
-      <div className="bg-green-50 p-3 rounded-lg">
-        <p className="text-sm text-green-700">
+      <div className="bg-green-50 p-3 rounded-lg dark:bg-green-950/40">
+        <p className="text-sm text-green-700 dark:text-green-300">
           <strong>{t('campaignNodeConfig.trigger.note')}:</strong>{' '}
           {friendSelectionMode === 'all'
             ? t('zaloGetLists.allModeNote')
@@ -536,9 +536,9 @@ export const NodeConfigGetAllFriendsSection = ({
 
   return (
     <div className="flex" style={{ minHeight: '500px' }}>
-      <div className="w-64 border-r border-gray-200 flex flex-col">
-        <div className="p-3 border-b border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-700">{t('zaloGetLists.settings')}</h3>
+      <div className="w-64 border-r border-gray-200 flex flex-col dark:border-dk-border">
+        <div className="p-3 border-b border-gray-200 dark:border-dk-border">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-dk-text">{t('zaloGetLists.settings')}</h3>
         </div>
         <div className="flex-1 overflow-y-auto">
           {sections.map((section) => {
@@ -549,14 +549,14 @@ export const NodeConfigGetAllFriendsSection = ({
                 onClick={() => setSelectedSection(section.id)}
                 className={`px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors ${
                   selectedSection === section.id
-                    ? 'bg-primary-50 border-l-4 border-primary-600'
+                    ? 'bg-primary-50 border-l-4 border-primary-600 dark:bg-primary-950/40'
                     : 'border-l-4 border-transparent'
-                }`}
+                } dark:hover:bg-dk-raised`}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Icon className={`w-4 h-4 ${selectedSection === section.id ? 'text-primary-600' : 'text-gray-500'}`} />
-                    <span className={`text-sm ${selectedSection === section.id ? 'font-medium text-primary-900' : 'text-gray-700'}`}>
+                    <Icon className={`w-4 h-4 ${selectedSection === section.id ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-dk-text2'}`} />
+                    <span className={`text-sm ${selectedSection === section.id ? 'font-medium text-primary-900 dark:text-primary-300' : 'text-gray-700 dark:text-dk-text'}`}>
                       {section.name}
                     </span>
                   </div>
@@ -742,22 +742,22 @@ export const NodeConfigGetAllGroupsSection = ({
   const renderBasicSection = () => (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{t2('zaloGetLists.nodeName')}</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">{t2('zaloGetLists.nodeName')}</label>
         <input
           type="text"
           value={formData.label}
           onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
           placeholder={t2('zaloGetLists.groupNodeNamePlaceholder')}
         />
       </div>
 
-      <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700">
+      <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
         {t2('zaloGetLists.nodeInfoGroup')}
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{t2('zaloGetLists.zaloAccountNode')}</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">{t2('zaloGetLists.zaloAccountNode')}</label>
         {accountSourceNodes.length > 0 ? (
           <select
             value={selectedAccountSourceNodeId}
@@ -770,7 +770,7 @@ export const NodeConfigGetAllGroupsSection = ({
                 zaloAccountId: nextNode?.accountId || prev.zaloAccountId || '',
               }));
             }}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
           >
             {accountSourceNodes.map((item) => (
               <option key={item.nodeId} value={item.nodeId}>
@@ -780,13 +780,13 @@ export const NodeConfigGetAllGroupsSection = ({
             ))}
           </select>
         ) : (
-          <div className="px-3 py-2 border border-dashed border-amber-300 rounded-lg bg-amber-50 text-amber-700 text-sm">
+          <div className="px-3 py-2 border border-dashed border-amber-300 rounded-lg bg-amber-50 text-amber-700 text-sm dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300">
             {t2('zaloGetLists.noZaloAccountNode')}
           </div>
         )}
       </div>
 
-      <div className="bg-amber-50 p-3 rounded-lg text-sm text-amber-700">
+      <div className="bg-amber-50 p-3 rounded-lg text-sm text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
         <strong>{t2('zaloGetLists.testAccount')}</strong>{' '}
         {resolvePreviewAccountId()
           ? `${t2('zaloGetLists.accountIdPrefix')} ${resolvePreviewAccountId()}${selectedAccountSourceNode?.nodeName ? ` ${t2('zaloGetLists.fromNode')} "${selectedAccountSourceNode.nodeName}"` : ''}`
@@ -804,31 +804,31 @@ export const NodeConfigGetAllGroupsSection = ({
           disabled={isLoadingPreview}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
             isLoadingPreview
-              ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+              ? 'bg-gray-200 text-gray-500 cursor-not-allowed dark:bg-dk-strong dark:text-dk-text2'
               : 'bg-primary-600 text-white hover:bg-primary-700'
           }`}
         >
           {isLoadingPreview ? t2('zaloGetLists.loading') : previewItems.length > 0 ? t2('zaloGetLists.reload') : t2('zaloGetLists.loadTestData')}
         </button>
         {previewItems.length > 0 && (
-          <span className="text-sm text-gray-500">
-            {previewItems.length} {t2('zaloGetLists.groups')} · {t2('zaloGetLists.selected')} <strong className="text-primary-700">{selectedGroupIds.length}</strong>
+          <span className="text-sm text-gray-500 dark:text-dk-text2">
+            {previewItems.length} {t2('zaloGetLists.groups')} · {t2('zaloGetLists.selected')} <strong className="text-primary-700 dark:text-primary-300">{selectedGroupIds.length}</strong>
           </span>
         )}
       </div>
-      <p className="text-xs text-gray-500">
+      <p className="text-xs text-gray-500 dark:text-dk-text2">
         {t2('zaloGetLists.previewNote')}
       </p>
 
       {isLoadingPreview ? (
-        <div className="border-2 border-dashed border-gray-200 rounded-lg p-10 text-center">
+        <div className="border-2 border-dashed border-gray-200 rounded-lg p-10 text-center dark:border-dk-border">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-2"></div>
-          <p className="text-sm text-gray-500">{t2('zaloGetLists.loadingGroups')}</p>
+          <p className="text-sm text-gray-500 dark:text-dk-text2">{t2('zaloGetLists.loadingGroups')}</p>
         </div>
       ) : previewItems.length === 0 ? (
-        <div className="border-2 border-dashed border-gray-200 rounded-lg p-10 text-center">
+        <div className="border-2 border-dashed border-gray-200 rounded-lg p-10 text-center dark:border-dk-border">
           <HiOutlineDocumentText className="w-12 h-12 text-gray-300 mx-auto mb-2" />
-          <p className="text-sm text-gray-500">{t2('zaloGetLists.noData')}</p>
+          <p className="text-sm text-gray-500 dark:text-dk-text2">{t2('zaloGetLists.noData')}</p>
           <p className="text-xs text-gray-400 mt-1">{t2('zaloGetLists.loadPreviewHintGroup')}</p>
         </div>
       ) : (
@@ -839,22 +839,22 @@ export const NodeConfigGetAllGroupsSection = ({
               placeholder={t2('zaloGetLists.searchGroupPlaceholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
             />
             <button
               type="button"
               onClick={toggleAllFiltered}
-              className="px-3 py-2 text-xs rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition-colors whitespace-nowrap"
+              className="px-3 py-2 text-xs rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition-colors whitespace-nowrap dark:bg-dk-raised dark:hover:bg-dk-strong dark:text-dk-text"
             >
               {allSelected ? t2('zaloGetLists.deselectAll') : t2('zaloGetLists.selectAll')}
             </button>
           </div>
 
-          <div className="border border-gray-200 rounded-lg overflow-hidden">
+          <div className="border border-gray-200 rounded-lg overflow-hidden dark:border-dk-border">
             <div className="max-h-96 overflow-y-auto">
               {filteredPreviewItems.length === 0 ? (
                 <div className="p-6 text-center">
-                  <p className="text-sm text-gray-500">{t2('zaloGetLists.noGroupsFound')}</p>
+                  <p className="text-sm text-gray-500 dark:text-dk-text2">{t2('zaloGetLists.noGroupsFound')}</p>
                 </div>
               ) : (
                 filteredPreviewItems.map((item, idx) => {
@@ -865,21 +865,21 @@ export const NodeConfigGetAllGroupsSection = ({
                     <label
                       key={`${groupId || 'group'}-${idx}`}
                       className={`flex items-start gap-3 px-4 py-3 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors ${
-                        checked ? 'bg-primary-50' : 'bg-white hover:bg-gray-50'
-                      }`}
+                        checked ? 'bg-primary-50 dark:bg-primary-950/40' : 'bg-white hover:bg-gray-50 dark:bg-dk-surface dark:hover:bg-dk-raised'
+                      } dark:border-dk-border`}
                     >
                       <input
                         type="checkbox"
-                        className="mt-0.5 border-gray-300 text-primary-600 focus:ring-primary-500"
+                        className="mt-0.5 border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dk-border-strong dark:text-primary-400"
                         checked={!!checked}
                         onChange={() => toggleGroup(groupId)}
                         disabled={!groupId}
                       />
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-gray-900 truncate">
+                        <div className="text-sm font-medium text-gray-900 truncate dark:text-dk-text">
                           {groupName || t2('zaloGetLists.noGroupName')}
                         </div>
-                        <div className="text-xs text-gray-500 mt-0.5 truncate">
+                        <div className="text-xs text-gray-500 mt-0.5 truncate dark:text-dk-text2">
                           {t2('zaloGetLists.groupIdPrefix')}: {groupId || t2('zaloGetLists.undefined')}
                         </div>
                       </div>
@@ -891,8 +891,8 @@ export const NodeConfigGetAllGroupsSection = ({
           </div>
 
           {selectedGroupIds.length > 0 && (
-            <div className="mt-2 p-2 bg-primary-50 rounded-lg flex items-center justify-between">
-              <p className="text-xs text-primary-700">
+            <div className="mt-2 p-2 bg-primary-50 rounded-lg flex items-center justify-between dark:bg-primary-950/40">
+              <p className="text-xs text-primary-700 dark:text-primary-300">
                 {t2('zaloGetLists.groupsSelected', { count: selectedGroupIds.length })}
                 {isGroupSelectionSnapshotLocked ? ` ${t2('zaloGetLists.snapshotLocked')}` : ''}
               </p>
@@ -903,7 +903,7 @@ export const NodeConfigGetAllGroupsSection = ({
                   zaloSelectedGroupIds: [],
                   zaloGroupSelectionSnapshotLocked: false,
                 }))}
-                className="text-xs text-gray-500 hover:text-red-500 ml-3 flex-shrink-0"
+                className="text-xs text-gray-500 hover:text-red-500 ml-3 flex-shrink-0 dark:text-dk-text2"
               >
                 {t2('zaloGetLists.clearSelection')}
               </button>
@@ -912,8 +912,8 @@ export const NodeConfigGetAllGroupsSection = ({
         </div>
       )}
 
-      <div className="bg-green-50 p-3 rounded-lg">
-        <p className="text-sm text-green-700">
+      <div className="bg-green-50 p-3 rounded-lg dark:bg-green-950/40">
+        <p className="text-sm text-green-700 dark:text-green-300">
           <strong>{t2('campaignNodeConfig.trigger.note')}:</strong> {t2('zaloGetLists.selectAtLeastOneGroup')}
         </p>
       </div>
@@ -922,9 +922,9 @@ export const NodeConfigGetAllGroupsSection = ({
 
   return (
     <div className="flex" style={{ minHeight: '500px' }}>
-      <div className="w-64 border-r border-gray-200 flex flex-col">
-        <div className="p-3 border-b border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-700">{t2('zaloGetLists.settings')}</h3>
+      <div className="w-64 border-r border-gray-200 flex flex-col dark:border-dk-border">
+        <div className="p-3 border-b border-gray-200 dark:border-dk-border">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-dk-text">{t2('zaloGetLists.settings')}</h3>
         </div>
         <div className="flex-1 overflow-y-auto">
           {sections.map((section) => {
@@ -935,14 +935,14 @@ export const NodeConfigGetAllGroupsSection = ({
                 onClick={() => setSelectedSection(section.id)}
                 className={`px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors ${
                   selectedSection === section.id
-                    ? 'bg-primary-50 border-l-4 border-primary-600'
+                    ? 'bg-primary-50 border-l-4 border-primary-600 dark:bg-primary-950/40'
                     : 'border-l-4 border-transparent'
-                }`}
+                } dark:hover:bg-dk-raised`}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Icon className={`w-4 h-4 ${selectedSection === section.id ? 'text-primary-600' : 'text-gray-500'}`} />
-                    <span className={`text-sm ${selectedSection === section.id ? 'font-medium text-primary-900' : 'text-gray-700'}`}>
+                    <Icon className={`w-4 h-4 ${selectedSection === section.id ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-dk-text2'}`} />
+                    <span className={`text-sm ${selectedSection === section.id ? 'font-medium text-primary-900 dark:text-primary-300' : 'text-gray-700 dark:text-dk-text'}`}>
                       {section.name}
                     </span>
                   </div>

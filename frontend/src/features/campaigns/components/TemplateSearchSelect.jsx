@@ -72,17 +72,17 @@ const TemplateSearchSelect = ({
           <button
             type="button"
             onClick={handleToggleOpen}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm bg-white flex items-center justify-between"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm bg-white flex items-center justify-between dark:bg-dk-inset dark:border-dk-border-strong"
           >
-            <span className={`truncate text-left ${selectedOption ? 'text-gray-800' : 'text-gray-500'}`}>
+            <span className={`truncate text-left ${selectedOption ? 'text-gray-800 dark:text-dk-text' : 'text-gray-500 dark:text-dk-text2'}`}>
               {selectedOption?.label || placeholder}
             </span>
-            <HiOutlineChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            <HiOutlineChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${isOpen ? 'rotate-180' : ''} dark:text-dk-text2`} />
           </button>
 
           {isOpen && (
-            <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg">
-              <div className="p-2 border-b border-gray-100">
+            <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg dark:bg-dk-surface dark:border-dk-border">
+              <div className="p-2 border-b border-gray-100 dark:border-dk-border">
                 <div className="relative">
                   <HiOutlineSearch className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
@@ -91,7 +91,7 @@ const TemplateSearchSelect = ({
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder={searchPlaceholder}
-                    className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-md focus:ring-2 focus:ring-primary-500"
+                    className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-md focus:ring-2 focus:ring-primary-500 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                   />
                 </div>
               </div>
@@ -101,8 +101,8 @@ const TemplateSearchSelect = ({
                   type="button"
                   onClick={() => handleSelect('')}
                   className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${
-                    !normalizedValue ? 'bg-primary-50 text-primary-700' : 'text-gray-600'
-                  }`}
+                    !normalizedValue ? 'bg-primary-50 text-primary-700 dark:bg-primary-950/40 dark:text-primary-300' : 'text-gray-600 dark:text-dk-text2'
+                  } dark:hover:bg-dk-raised`}
                 >
                   {placeholder}
                 </button>
@@ -117,18 +117,18 @@ const TemplateSearchSelect = ({
                         type="button"
                         onClick={() => handleSelect(optionId)}
                         className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${
-                          isSelected ? 'bg-primary-50 text-primary-700' : 'text-gray-800'
-                        }`}
+                          isSelected ? 'bg-primary-50 text-primary-700 dark:bg-primary-950/40 dark:text-primary-300' : 'text-gray-800 dark:text-dk-text'
+                        } dark:hover:bg-dk-raised`}
                       >
                         <div className="truncate">{item.label}</div>
                         {item.description && (
-                          <div className="text-xs text-gray-500 truncate mt-0.5">{item.description}</div>
+                          <div className="text-xs text-gray-500 truncate mt-0.5 dark:text-dk-text2">{item.description}</div>
                         )}
                       </button>
                     );
                   })
                 ) : (
-                  <div className="px-3 py-4 text-sm text-gray-500 text-center">{emptyText}</div>
+                  <div className="px-3 py-4 text-sm text-gray-500 text-center dark:text-dk-text2">{emptyText}</div>
                 )}
               </div>
             </div>
@@ -142,8 +142,8 @@ const TemplateSearchSelect = ({
             disabled={!normalizedValue}
             className={`inline-flex items-center gap-1 px-3 py-2 text-xs rounded-lg transition-colors ${
               normalizedValue
-                ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                ? 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-dk-raised dark:text-dk-text dark:hover:bg-dk-strong'
+                : 'bg-gray-100 text-gray-400 cursor-not-allowed dark:bg-dk-raised'
             }`}
           >
             <HiOutlineEye className="w-4 h-4" />

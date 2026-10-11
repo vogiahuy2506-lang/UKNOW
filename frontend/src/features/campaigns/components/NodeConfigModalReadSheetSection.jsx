@@ -75,30 +75,30 @@ export const NodeConfigReadSheetSection = ({
         return (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('nodeName')}</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">{t('nodeName')}</label>
               <input
                 type="text"
                 value={formData.label}
                 onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                 placeholder={t('readSheetPlaceholder')}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">
                 {t('sheetUrl')} <span className="text-red-500">*</span>
               </label>
               <input
                 type="url"
                 value={formData.sheetUrl}
                 onChange={(e) => setFormData((prev) => ({ ...prev, sheetUrl: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                 placeholder={t('sheetUrlPlaceholder')}
               />
-              <p className="text-xs text-gray-500 mt-1">{t('sharePermission')}</p>
+              <p className="text-xs text-gray-500 mt-1 dark:text-dk-text2">{t('sharePermission')}</p>
             </div>
-            <div className="bg-blue-50 p-3 rounded-lg">
-              <p className="text-sm text-blue-700">
+            <div className="bg-blue-50 p-3 rounded-lg dark:bg-blue-950/40">
+              <p className="text-sm text-blue-700 dark:text-blue-300">
                 <strong>{t('campaignNodeConfig.trigger.note')}:</strong> {t('readSheetNote')}
               </p>
             </div>
@@ -110,52 +110,52 @@ export const NodeConfigReadSheetSection = ({
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('sheetName')}</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">{t('sheetName')}</label>
                 <input
                   type="text"
                   value={formData.sheetName}
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, sheetName: e.target.value, sheetNameSource: undefined }))
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                   placeholder={t('sheetNamePlaceholder')}
                 />
                 {formData.sheetNameSource === 'auto' && (
-                  <p className="text-xs text-primary-600 mt-1">{t('sheetNameAutoFilled')}</p>
+                  <p className="text-xs text-primary-600 mt-1 dark:text-primary-400">{t('sheetNameAutoFilled')}</p>
                 )}
-                <p className="text-xs text-gray-500 mt-1">{t('sheetNameHint')}</p>
+                <p className="text-xs text-gray-500 mt-1 dark:text-dk-text2">{t('sheetNameHint')}</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('headerRow')}</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">{t('headerRow')}</label>
                 <input
                   type="number"
                   min={1}
                   value={formData.headerRow}
                   onChange={(e) => setFormData((prev) => ({ ...prev, headerRow: parseInt(e.target.value, 10) }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                 />
-                <p className="text-xs text-gray-500 mt-1">{t('headerRowHint')}</p>
+                <p className="text-xs text-gray-500 mt-1 dark:text-dk-text2">{t('headerRowHint')}</p>
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('dataStartRow')}</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">{t('dataStartRow')}</label>
               <input
                 type="number"
                 min={1}
                 value={formData.dataStartRow}
                 onChange={(e) => setFormData((prev) => ({ ...prev, dataStartRow: parseInt(e.target.value, 10) }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
               />
-              <p className="text-xs text-gray-500 mt-1">{t('dataStartRowHint')}</p>
+              <p className="text-xs text-gray-500 mt-1 dark:text-dk-text2">{t('dataStartRowHint')}</p>
             </div>
-            <div className="bg-amber-50 p-3 rounded-lg">
-              <p className="text-sm text-amber-700">
+            <div className="bg-amber-50 p-3 rounded-lg dark:bg-amber-950/40">
+              <p className="text-sm text-amber-700 dark:text-amber-300">
                 <strong>{t('tip') || 'Tip'}:</strong> {t('tipHeaderRow')}
               </p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">
                 {t('builderPreviewLimit')}
               </label>
               <select
@@ -170,7 +170,7 @@ export const NodeConfigReadSheetSection = ({
                     builderSheetPreviewRowLimit: e.target.value,
                   }))
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm bg-white"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm bg-white dark:bg-dk-inset dark:border-dk-border-strong dark:text-dk-text"
               >
                 <option value="">
                   {t('builderPreviewNote')}
@@ -182,7 +182,7 @@ export const NodeConfigReadSheetSection = ({
                 <option value="10000">{t('rows10000')}</option>
                 <option value="all">{t('allRows')}</option>
               </select>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 mt-1 dark:text-dk-text2">
                 {t('builderPreviewHint')}
               </p>
             </div>
@@ -199,26 +199,26 @@ export const NodeConfigReadSheetSection = ({
                 disabled={isCheckingSheet}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                   isCheckingSheet
-                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed dark:bg-dk-strong dark:text-dk-text2'
                     : 'bg-primary-600 text-white hover:bg-primary-700'
                 }`}
               >
                 {isCheckingSheet ? t('checkingConnection') : t('checkConnection')}
               </button>
             </div>
-            <p className="text-xs text-gray-500">{t('checkConnectionHint')}</p>
+            <p className="text-xs text-gray-500 dark:text-dk-text2">{t('checkConnectionHint')}</p>
 
             {Array.isArray(formData.columns) && formData.columns.length > 0 ? (
-              <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+              <div className="border border-gray-200 rounded-lg p-4 bg-gray-50 dark:bg-dk-raised dark:border-dk-border">
                 <div className="flex items-center gap-2 mb-3">
-                  <HiOutlineTable className="w-5 h-5 text-green-600" />
-                  <span className="text-sm font-medium text-gray-700">{t('columnList', { count: formData.columns.length })}</span>
+                  <HiOutlineTable className="w-5 h-5 text-green-600 dark:text-green-400" />
+                  <span className="text-sm font-medium text-gray-700 dark:text-dk-text">{t('columnList', { count: formData.columns.length })}</span>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {formData.columns.map((col, idx) => (
                     <span
                       key={`${col}-${idx}`}
-                      className="inline-flex items-center px-3 py-1.5 rounded-lg text-sm bg-white border border-gray-200 text-gray-700 font-medium"
+                      className="inline-flex items-center px-3 py-1.5 rounded-lg text-sm bg-white border border-gray-200 text-gray-700 font-medium dark:bg-dk-surface dark:border-dk-border dark:text-dk-text"
                     >
                       {col}
                     </span>
@@ -226,9 +226,9 @@ export const NodeConfigReadSheetSection = ({
                 </div>
               </div>
             ) : (
-              <div className="border-2 border-dashed border-gray-200 rounded-lg p-8 text-center">
+              <div className="border-2 border-dashed border-gray-200 rounded-lg p-8 text-center dark:border-dk-border">
                 <HiOutlineTable className="w-12 h-12 text-gray-300 mx-auto mb-2" />
-                <p className="text-sm text-gray-500">{t('noColumnsLoaded')}</p>
+                <p className="text-sm text-gray-500 dark:text-dk-text2">{t('noColumnsLoaded')}</p>
                 <p className="text-xs text-gray-400 mt-1">{t('pressToLoadColumns')}</p>
               </div>
             )}
@@ -245,8 +245,8 @@ export const NodeConfigReadSheetSection = ({
               hint={t('columnHint')}
             />
 
-            <div className="bg-green-50 p-3 rounded-lg">
-              <p className="text-sm text-green-700">
+            <div className="bg-green-50 p-3 rounded-lg dark:bg-green-950/40">
+              <p className="text-sm text-green-700 dark:text-green-300">
                 <strong>{t('common.success')}:</strong> {t('connectionSuccess')}
               </p>
             </div>
@@ -260,9 +260,9 @@ export const NodeConfigReadSheetSection = ({
 
   return (
     <div className="flex" style={{ minHeight: '500px' }}>
-      <div className="w-64 border-r border-gray-200 flex flex-col">
-        <div className="p-3 border-b border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-700">{t('settings')}</h3>
+      <div className="w-64 border-r border-gray-200 flex flex-col dark:border-dk-border">
+        <div className="p-3 border-b border-gray-200 dark:border-dk-border">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-dk-text">{t('settings')}</h3>
         </div>
         <div className="flex-1 overflow-y-auto">
           {readSheetSections.map((section) => {
@@ -273,14 +273,14 @@ export const NodeConfigReadSheetSection = ({
                 onClick={() => setSelectedReadSheetSection(section.id)}
                 className={`px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors ${
                   selectedReadSheetSection === section.id
-                    ? 'bg-primary-50 border-l-4 border-primary-600'
+                    ? 'bg-primary-50 border-l-4 border-primary-600 dark:bg-primary-950/40'
                     : 'border-l-4 border-transparent'
-                }`}
+                } dark:hover:bg-dk-raised`}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Icon className={`w-4 h-4 ${selectedReadSheetSection === section.id ? 'text-primary-600' : 'text-gray-500'}`} />
-                    <span className={`text-sm ${selectedReadSheetSection === section.id ? 'font-medium text-primary-900' : 'text-gray-700'}`}>
+                    <Icon className={`w-4 h-4 ${selectedReadSheetSection === section.id ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-dk-text2'}`} />
+                    <span className={`text-sm ${selectedReadSheetSection === section.id ? 'font-medium text-primary-900 dark:text-primary-300' : 'text-gray-700 dark:text-dk-text'}`}>
                       {section.name}
                     </span>
                   </div>

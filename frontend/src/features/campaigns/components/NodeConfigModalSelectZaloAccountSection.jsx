@@ -71,21 +71,21 @@ export const NodeConfigSelectZaloAccountSection = ({
   return (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{t('zaloAccount.nodeName')}</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">{t('zaloAccount.nodeName')}</label>
         <input
           type="text"
           value={formData.label}
           onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
           placeholder={t('zaloAccount.nodeNamePlaceholder')}
         />
       </div>
 
-      <div className="rounded-lg border border-gray-200 p-3 space-y-3">
+      <div className="rounded-lg border border-gray-200 p-3 space-y-3 dark:border-dk-border">
         <label className="flex items-start gap-2 cursor-pointer">
           <input
             type="checkbox"
-            className="mt-1 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            className="mt-1 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dk-border-strong dark:text-primary-400"
             checked={poolEnabled}
             onChange={(e) => {
               const on = e.target.checked;
@@ -112,9 +112,9 @@ export const NodeConfigSelectZaloAccountSection = ({
               });
             }}
           />
-          <span className="text-sm text-gray-800">
-            <span className="font-medium text-gray-900">{t('zaloAccount.poolMode')}</span>
-            <span className="block mt-1 text-gray-600 leading-snug">
+          <span className="text-sm text-gray-800 dark:text-dk-text">
+            <span className="font-medium text-gray-900 dark:text-dk-text">{t('zaloAccount.poolMode')}</span>
+            <span className="block mt-1 text-gray-600 leading-snug dark:text-dk-text2">
               {t('zaloAccount.poolModeDescription')}
             </span>
           </span>
@@ -122,16 +122,16 @@ export const NodeConfigSelectZaloAccountSection = ({
 
         {poolEnabled ? (
           <div className="space-y-2 pl-1">
-            <div className="text-sm font-medium text-gray-700">{t('zaloAccount.selectAccountsForCampaign')}</div>
-            <div className="max-h-44 overflow-y-auto space-y-2 border border-gray-100 rounded p-2">
+            <div className="text-sm font-medium text-gray-700 dark:text-dk-text">{t('zaloAccount.selectAccountsForCampaign')}</div>
+            <div className="max-h-44 overflow-y-auto space-y-2 border border-gray-100 rounded p-2 dark:border-dk-border">
               {sortedAccounts.map((acc) => {
                 const idStr = String(acc.id || '');
                 const selected = poolIds.includes(idStr);
                 return (
-                  <label key={idStr} className="flex items-center gap-2 text-sm text-gray-700">
+                  <label key={idStr} className="flex items-center gap-2 text-sm text-gray-700 dark:text-dk-text">
                     <input
                       type="checkbox"
-                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dk-border-strong dark:text-primary-400"
                       checked={selected}
                       onChange={(e) => togglePoolAccount(idStr, e.target.checked)}
                     />
@@ -142,21 +142,21 @@ export const NodeConfigSelectZaloAccountSection = ({
               })}
             </div>
             {isEmptyAfterSuccess && (
-              <p className="text-xs text-amber-700">{t('zaloAccount.noAccounts')}</p>
+              <p className="text-xs text-amber-700 dark:text-amber-300">{t('zaloAccount.noAccounts')}</p>
             )}
-            <p className="text-xs text-amber-800 bg-amber-50 p-2 rounded">
+            <p className="text-xs text-amber-800 bg-amber-50 p-2 rounded dark:bg-amber-950/40 dark:text-amber-300">
               {t('zaloAccount.poolModeNote')}
             </p>
           </div>
         ) : (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">
               {t('zaloAccount.zaloAccountRequired')} <span className="text-red-500">*</span>
             </label>
             <select
               value={formData.zaloAccountId || ''}
               onChange={(e) => handleSingleAccountChange(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
             >
               <option value="">-- {t('zaloAccount.selectAccount')} --</option>
               {sortedAccounts.map((account) => (
@@ -171,18 +171,18 @@ export const NodeConfigSelectZaloAccountSection = ({
       </div>
 
       {zaloAccountsStatus === 'loading' && (
-        <p role="status" className="text-sm text-gray-500">{t('zaloAccount.loadingAccounts')}</p>
+        <p role="status" className="text-sm text-gray-500 dark:text-dk-text2">{t('zaloAccount.loadingAccounts')}</p>
       )}
 
       {zaloAccountsStatus === 'error' && (
-        <div role="alert" className="bg-red-50 border border-red-200 p-3 rounded-lg text-sm text-red-700 space-y-2">
+        <div role="alert" className="bg-red-50 border border-red-200 p-3 rounded-lg text-sm text-red-700 space-y-2 dark:bg-red-950/40 dark:border-red-800 dark:text-red-300">
           <p className="font-medium">{t('zaloAccount.loadFailed')}</p>
           {zaloAccountsError && <p className="text-xs break-words">{zaloAccountsError}</p>}
           {onRetryZaloAccounts && (
             <button
               type="button"
               onClick={onRetryZaloAccounts}
-              className="px-3 py-1.5 text-xs font-semibold bg-white border border-red-300 text-red-700 rounded-lg hover:bg-red-100"
+              className="px-3 py-1.5 text-xs font-semibold bg-white border border-red-300 text-red-700 rounded-lg hover:bg-red-100 dark:bg-dk-raised dark:border-red-800 dark:text-red-300 dark:hover:bg-red-900/40"
             >
               {t('zaloAccount.retry')}
             </button>
@@ -191,13 +191,13 @@ export const NodeConfigSelectZaloAccountSection = ({
       )}
 
       {isEmptyAfterSuccess && (
-        <div className="bg-amber-50 p-3 rounded-lg text-sm text-amber-700">
+        <div className="bg-amber-50 p-3 rounded-lg text-sm text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
           {isEmployeeContext ? t('zaloAccount.noAccountsAssigned') : t('zaloAccount.noAccountsAvailable')}
         </div>
       )}
 
       {!poolEnabled && formData.zaloAccountId && (
-        <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700">
+        <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
           {t('zaloAccount.selectedAccountNote')}
         </div>
       )}

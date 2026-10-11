@@ -176,22 +176,22 @@ export function NodeConfigReadFormSubmissionsSection({ formData, setFormData }) 
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-gray-600">{t('nodeConfigFormSubmissions.pageDescription')}</p>
+      <p className="text-sm text-gray-600 dark:text-dk-text2">{t('nodeConfigFormSubmissions.pageDescription')}</p>
 
       <div>
-        <label htmlFor="form-submissions-select-form" className="mb-1 block text-sm font-medium text-gray-700">
+        <label htmlFor="form-submissions-select-form" className="mb-1 block text-sm font-medium text-gray-700 dark:text-dk-text">
           {t('nodeConfigFormSubmissions.selectFormLabel')}
         </label>
         {isLoadingForms ? (
-          <p className="text-sm text-gray-500">{t('nodeConfigFormSubmissions.loadingForms')}</p>
+          <p className="text-sm text-gray-500 dark:text-dk-text2">{t('nodeConfigFormSubmissions.loadingForms')}</p>
         ) : formsForbidden ? (
-          <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/40 dark:border-red-800 dark:text-red-300">
             {t('nodeConfigFormSubmissions.forbiddenError')}
           </p>
         ) : formsLoadError ? (
-          <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{formsLoadError}</p>
+          <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/40 dark:border-red-800 dark:text-red-300">{formsLoadError}</p>
         ) : forms.length === 0 ? (
-          <p className="rounded-lg border border-amber-100 bg-amber-50/90 p-3 text-sm text-amber-950">
+          <p className="rounded-lg border border-amber-100 bg-amber-50/90 p-3 text-sm text-amber-950 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300">
             {t('nodeConfigFormSubmissions.noFormsYet')}{' '}
             <Link to="/app/forms/new" className="font-medium underline">
               {t('nodeConfigFormSubmissions.createFormLink')}
@@ -202,7 +202,7 @@ export function NodeConfigReadFormSubmissionsSection({ formData, setFormData }) 
             id="form-submissions-select-form"
             value={formData.formId || ''}
             onChange={(e) => handleSelectForm(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
           >
             <option value="">{t('nodeConfigFormSubmissions.selectFormPlaceholder')}</option>
             {forms.map((form) => (
@@ -215,20 +215,20 @@ export function NodeConfigReadFormSubmissionsSection({ formData, setFormData }) 
       </div>
 
       {columnsLoadError ? (
-        <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{columnsLoadError}</p>
+        <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/40 dark:border-red-800 dark:text-red-300">{columnsLoadError}</p>
       ) : null}
 
       {formData.formId && !formData.formConsentEnabled ? (
-        <p className="flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50/90 p-3 text-sm text-amber-950">
-          <HiOutlineExclamation className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+        <p className="flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50/90 p-3 text-sm text-amber-950 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300">
+          <HiOutlineExclamation className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
           <span>{t('nodeConfigFormSubmissions.consentWarning')}</span>
         </p>
       ) : null}
-      <p className="text-xs text-gray-500">{t('nodeConfigFormSubmissions.consentInfo')}</p>
+      <p className="text-xs text-gray-500 dark:text-dk-text2">{t('nodeConfigFormSubmissions.consentInfo')}</p>
 
       {formData.formId ? (
-        <div className="space-y-3 rounded-lg border border-gray-200 p-4">
-          <span className="text-sm font-medium text-gray-700">{t('nodeConfigFormSubmissions.fieldMapTitle')}</span>
+        <div className="space-y-3 rounded-lg border border-gray-200 p-4 dark:border-dk-border">
+          <span className="text-sm font-medium text-gray-700 dark:text-dk-text">{t('nodeConfigFormSubmissions.fieldMapTitle')}</span>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             {[
               { field: 'nameKey', label: t('nodeConfigFormSubmissions.nameFieldLabel') },
@@ -238,7 +238,7 @@ export function NodeConfigReadFormSubmissionsSection({ formData, setFormData }) 
               <div key={field}>
                 <label
                   htmlFor={`form-submissions-field-map-${field}`}
-                  className="mb-1 block text-xs font-medium text-gray-700"
+                  className="mb-1 block text-xs font-medium text-gray-700 dark:text-dk-text"
                 >
                   {label}
                 </label>
@@ -246,7 +246,7 @@ export function NodeConfigReadFormSubmissionsSection({ formData, setFormData }) 
                   id={`form-submissions-field-map-${field}`}
                   value={fieldMap[field] || ''}
                   onChange={(e) => handleFieldMapChange(field, e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
                 >
                   <option value="">{t('nodeConfigFormSubmissions.byRoleOption')}</option>
                   {columnsSnapshot.map((c) => (
@@ -271,26 +271,26 @@ export function NodeConfigReadFormSubmissionsSection({ formData, setFormData }) 
       />
 
       {formData.formId ? (
-        <div className="space-y-2 rounded-lg border border-gray-200 p-4">
+        <div className="space-y-2 rounded-lg border border-gray-200 p-4 dark:border-dk-border">
           <div>
-            <span className="text-sm font-medium text-gray-700">
+            <span className="text-sm font-medium text-gray-700 dark:text-dk-text">
               {t('nodeConfigFormSubmissions.variablesTableTitle')}
             </span>
-            <p className="text-xs text-gray-500">{t('nodeConfigFormSubmissions.variablesTableHint')}</p>
+            <p className="text-xs text-gray-500 dark:text-dk-text2">{t('nodeConfigFormSubmissions.variablesTableHint')}</p>
           </div>
           <div className="max-h-56 space-y-1.5 overflow-y-auto">
             {variableRows.map((row) => (
               <div
                 key={row.key}
-                className="flex items-center justify-between gap-2 rounded-md border border-gray-100 bg-gray-50 px-2.5 py-1.5"
+                className="flex items-center justify-between gap-2 rounded-md border border-gray-100 bg-gray-50 px-2.5 py-1.5 dark:bg-dk-raised dark:border-dk-border"
               >
-                <span className="min-w-0 truncate text-xs text-gray-700" title={row.label}>
+                <span className="min-w-0 truncate text-xs text-gray-700 dark:text-dk-text" title={row.label}>
                   {row.label}
                 </span>
                 <button
                   type="button"
                   onClick={() => handleCopyVariable(row.key)}
-                  className="inline-flex shrink-0 items-center gap-1 rounded border border-gray-300 bg-white px-2 py-1 font-mono text-[11px] text-primary-700 hover:bg-primary-50"
+                  className="inline-flex shrink-0 items-center gap-1 rounded border border-gray-300 bg-white px-2 py-1 font-mono text-[11px] text-primary-700 hover:bg-primary-50 dark:bg-dk-raised dark:border-dk-border-strong dark:text-primary-300 dark:hover:bg-primary-900/40"
                   title={t('nodeConfigFormSubmissions.copyButton')}
                 >
                   <HiOutlineDuplicate className="h-3.5 w-3.5" />
@@ -306,7 +306,7 @@ export function NodeConfigReadFormSubmissionsSection({ formData, setFormData }) 
       ) : null}
 
       <div>
-        <label className="mb-1 block text-sm font-medium text-gray-700">
+        <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-dk-text">
           {t('nodeConfigFormSubmissions.maxRecords', { max: FORM_SUBMISSIONS_MAX_RECORDS.toLocaleString('vi-VN') })}
         </label>
         <NumberInput
@@ -319,7 +319,7 @@ export function NodeConfigReadFormSubmissionsSection({ formData, setFormData }) 
               formSubmissionsLimit: clampFormSubmissionsLimitUi(v, 1000),
             }))
           }
-          className="w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          className="w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
         />
       </div>
     </div>

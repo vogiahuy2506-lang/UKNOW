@@ -78,9 +78,9 @@ export const NodeConfigSaveCustomerSection = ({
     const selectedNodeId = mapping.nodeId || formData.saveCustomerNodeId || '';
     const schema = getSaveCustomerSchema(selectedNodeId);
     return (
-      <div className="border border-gray-200 rounded-lg p-3 space-y-2 bg-gray-50">
+      <div className="border border-gray-200 rounded-lg p-3 space-y-2 bg-gray-50 dark:bg-dk-raised dark:border-dk-border">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-gray-700">{label}</span>
+          <span className="text-sm font-medium text-gray-700 dark:text-dk-text">{label}</span>
           <div className="flex gap-4">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
@@ -91,7 +91,7 @@ export const NodeConfigSaveCustomerSection = ({
                 onChange={() => updateFieldMap(fieldKey, { mode: 'manual' })}
                 className="text-primary-500 focus:ring-primary-500"
               />
-              <span className="text-sm text-gray-700">{t('campaignNodeConfig.saveCustomer.manualInput')}</span>
+              <span className="text-sm text-gray-700 dark:text-dk-text">{t('campaignNodeConfig.saveCustomer.manualInput')}</span>
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
               <input
@@ -102,7 +102,7 @@ export const NodeConfigSaveCustomerSection = ({
                 onChange={() => updateFieldMap(fieldKey, { mode: 'node', nodeId: mapping.nodeId || formData.saveCustomerNodeId || '' })}
                 className="text-primary-500 focus:ring-primary-500"
               />
-              <span className="text-sm text-gray-700">{t('campaignNodeConfig.saveCustomer.fromPreviousNode')}</span>
+              <span className="text-sm text-gray-700 dark:text-dk-text">{t('campaignNodeConfig.saveCustomer.fromPreviousNode')}</span>
             </label>
           </div>
         </div>
@@ -112,7 +112,7 @@ export const NodeConfigSaveCustomerSection = ({
             <select
               value={mapping.value || ''}
               onChange={(e) => updateFieldMap(fieldKey, { value: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
             >
               <option value="">{t('campaignNodeConfig.saveCustomer.selectGender')}</option>
               <option value="male">{t('campaignNodeConfig.saveCustomer.male')}</option>
@@ -124,7 +124,7 @@ export const NodeConfigSaveCustomerSection = ({
               type="text"
               value={mapping.value || ''}
               onChange={(e) => updateFieldMap(fieldKey, { value: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
               placeholder={placeholder}
             />
           )
@@ -134,7 +134,7 @@ export const NodeConfigSaveCustomerSection = ({
               <select
                 value={selectedNodeId}
                 onChange={(e) => updateFieldMap(fieldKey, { nodeId: e.target.value, field: '' })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
               >
                 <option value="">{t('campaignNodeConfig.saveCustomer.selectDataNode')}</option>
                 {upstreamNodes.map((n) => (
@@ -149,7 +149,7 @@ export const NodeConfigSaveCustomerSection = ({
                 <select
                   value={mapping.field || ''}
                   onChange={(e) => updateFieldMap(fieldKey, { field: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
                 >
                   <option value="">{t('campaignNodeConfig.saveCustomer.selectColumn')}</option>
                   {schema.map((f) => (
@@ -161,7 +161,7 @@ export const NodeConfigSaveCustomerSection = ({
                   type="text"
                   value={mapping.field || ''}
                   onChange={(e) => updateFieldMap(fieldKey, { field: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                   placeholder={t('campaignNodeConfig.saveCustomer.columnPlaceholder')}
                 />
               )}
@@ -179,18 +179,18 @@ export const NodeConfigSaveCustomerSection = ({
         return (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('campaignNodeConfig.saveCustomer.nodeName')}</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">{t('campaignNodeConfig.saveCustomer.nodeName')}</label>
               <input
                 type="text"
                 value={formData.label}
                 onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                 placeholder={t('campaignNodeConfig.saveCustomer.nodeNamePlaceholder')}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('campaignNodeConfig.saveCustomer.defaultDataNode')}</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">{t('campaignNodeConfig.saveCustomer.defaultDataNode')}</label>
               <select
                 value={formData.saveCustomerNodeId || ''}
                 onChange={(e) => {
@@ -210,7 +210,7 @@ export const NodeConfigSaveCustomerSection = ({
                     }, {}),
                   }));
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong"
               >
                 <option value="">{t('campaignNodeConfig.saveCustomer.selectPreviousNode')}</option>
                 {upstreamNodes.map((n) => (
@@ -223,17 +223,17 @@ export const NodeConfigSaveCustomerSection = ({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">{t('campaignNodeConfig.saveCustomer.updateMode')}</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-dk-text">{t('campaignNodeConfig.saveCustomer.updateMode')}</label>
               <select
                 value={formData.saveCustomerUpsertBy || 'email_or_phone'}
                 onChange={(e) => setFormData((prev) => ({ ...prev, saveCustomerUpsertBy: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
               >
                 <option value="email_or_phone">{t('campaignNodeConfig.saveCustomer.byEmailOrPhone')}</option>
                 <option value="email">{t('campaignNodeConfig.saveCustomer.byEmail')}</option>
                 <option value="phone">{t('campaignNodeConfig.saveCustomer.byPhone')}</option>
               </select>
-              <p className="text-xs text-gray-500 mt-2">
+              <p className="text-xs text-gray-500 mt-2 dark:text-dk-text2">
                 {t('campaignNodeConfig.saveCustomer.updateModeHint')}
               </p>
             </div>
@@ -243,7 +243,7 @@ export const NodeConfigSaveCustomerSection = ({
       case 'fields':
         return (
           <div className="space-y-3">
-            <h4 className="font-medium text-gray-900 mb-3">{t('campaignNodeConfig.saveCustomer.mapFields')}</h4>
+            <h4 className="font-medium text-gray-900 mb-3 dark:text-dk-text">{t('campaignNodeConfig.saveCustomer.mapFields')}</h4>
             {renderMapRow(t('saveCustomer.email'), 'email', t('saveCustomer.columnPlaceholder'))}
             {renderMapRow(t('saveCustomer.phone'), 'phone', '09xxxxxxxx')}
             {renderMapRow(t('saveCustomer.fullName'), 'fullName', t('register.fullNamePlaceholder'))}
@@ -253,8 +253,8 @@ export const NodeConfigSaveCustomerSection = ({
             {renderMapRow(t('saveCustomer.zaloIdLabel'), 'zaloId', 'zalo_id')}
             {renderMapRow(t('saveCustomer.zaloPhoneLabel'), 'zaloPhone', '09xxxxxxxx')}
 
-            <div className="bg-blue-50 p-3 rounded-lg mt-4">
-              <p className="text-sm text-blue-700">
+            <div className="bg-blue-50 p-3 rounded-lg mt-4 dark:bg-blue-950/40">
+              <p className="text-sm text-blue-700 dark:text-blue-300">
                 <strong>{t('campaignNodeConfig.trigger.note')}:</strong> {t('campaignNodeConfig.saveCustomer.noteFieldsEmpty')}
               </p>
             </div>
@@ -265,11 +265,11 @@ export const NodeConfigSaveCustomerSection = ({
         return (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h4 className="font-medium text-gray-900">{t('campaignNodeConfig.saveCustomer.customFields')}</h4>
+              <h4 className="font-medium text-gray-900 dark:text-dk-text">{t('campaignNodeConfig.saveCustomer.customFields')}</h4>
               <button
                 type="button"
                 onClick={handleAddCustomField}
-                className="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700"
+                className="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
               >
                 <HiOutlinePlus className="w-4 h-4" />
                 {t('campaignNodeConfig.saveCustomer.addField')}
@@ -277,15 +277,15 @@ export const NodeConfigSaveCustomerSection = ({
             </div>
 
             {(formData.saveCustomerCustomFields || []).length === 0 ? (
-              <div className="text-center py-8 text-sm text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
+              <div className="text-center py-8 text-sm text-gray-500 border-2 border-dashed border-gray-200 rounded-lg dark:text-dk-text2 dark:border-dk-border">
                 {t('campaignNodeConfig.saveCustomer.noCustomField')}
               </div>
             ) : (
               <div className="space-y-3">
                 {(formData.saveCustomerCustomFields || []).map((item, index) => (
-                  <div key={index} className="border border-gray-200 rounded-lg p-4 bg-gray-50 space-y-3">
+                  <div key={index} className="border border-gray-200 rounded-lg p-4 bg-gray-50 space-y-3 dark:bg-dk-raised dark:border-dk-border">
                     <div className="flex items-center justify-between">
-                      <label className="text-sm font-semibold text-gray-800">{t('campaignNodeConfig.emailSend.emailNumber', { n: index + 1 })}</label>
+                      <label className="text-sm font-semibold text-gray-800 dark:text-dk-text">{t('campaignNodeConfig.emailSend.emailNumber', { n: index + 1 })}</label>
                       <button
                         type="button"
                         onClick={() => handleRemoveCustomField(index)}
@@ -297,12 +297,12 @@ export const NodeConfigSaveCustomerSection = ({
                     </div>
 
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.saveCustomer.fieldName')}</label>
+                      <label className="block text-xs text-gray-500 mb-1 dark:text-dk-text2">{t('campaignNodeConfig.saveCustomer.fieldName')}</label>
                       <input
                         type="text"
                         value={item.key || ''}
                         onChange={(e) => handleCustomFieldChange(index, { key: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                         placeholder={t('campaignNodeConfig.saveCustomer.fieldNamePlaceholder')}
                       />
                     </div>
@@ -317,7 +317,7 @@ export const NodeConfigSaveCustomerSection = ({
                           onChange={() => handleCustomFieldChange(index, { mode: 'manual' })}
                           className="text-primary-500 focus:ring-primary-500"
                         />
-                        <span className="text-sm text-gray-700">{t('campaignNodeConfig.saveCustomer.manualInput')}</span>
+                        <span className="text-sm text-gray-700 dark:text-dk-text">{t('campaignNodeConfig.saveCustomer.manualInput')}</span>
                       </label>
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input
@@ -328,29 +328,29 @@ export const NodeConfigSaveCustomerSection = ({
                           onChange={() => handleCustomFieldChange(index, { mode: 'node' })}
                           className="text-primary-500 focus:ring-primary-500"
                         />
-                        <span className="text-sm text-gray-700">{t('campaignNodeConfig.saveCustomer.fromPreviousNode')}</span>
+                        <span className="text-sm text-gray-700 dark:text-dk-text">{t('campaignNodeConfig.saveCustomer.fromPreviousNode')}</span>
                       </label>
                     </div>
 
                     {item.mode === 'manual' ? (
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.saveCustomer.value')}</label>
+                        <label className="block text-xs text-gray-500 mb-1 dark:text-dk-text2">{t('campaignNodeConfig.saveCustomer.value')}</label>
                         <input
                           type="text"
                           value={item.value || ''}
                           onChange={(e) => handleCustomFieldChange(index, { value: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                           placeholder={t('campaignNodeConfig.saveCustomer.valuePlaceholder')}
                         />
                       </div>
                     ) : (
                       <div className="space-y-2">
                         <div>
-                          <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.saveCustomer.selectDataNode')}</label>
+                          <label className="block text-xs text-gray-500 mb-1 dark:text-dk-text2">{t('campaignNodeConfig.saveCustomer.selectDataNode')}</label>
                           <select
                             value={item.nodeId || formData.saveCustomerNodeId || ''}
                             onChange={(e) => handleCustomFieldChange(index, { nodeId: e.target.value, field: '' })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
                           >
                             <option value="">{t('campaignNodeConfig.emailSend.selectNode')}</option>
                             {upstreamNodes.map((n) => (
@@ -361,12 +361,12 @@ export const NodeConfigSaveCustomerSection = ({
                           </select>
                         </div>
                         <div>
-                          <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.saveCustomer.selectColumnData')}</label>
+                          <label className="block text-xs text-gray-500 mb-1 dark:text-dk-text2">{t('campaignNodeConfig.saveCustomer.selectColumnData')}</label>
                           {getSaveCustomerSchema(item.nodeId || formData.saveCustomerNodeId).length ? (
                             <select
                               value={item.field || ''}
                               onChange={(e) => handleCustomFieldChange(index, { field: e.target.value })}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
                             >
                               <option value="">{t('campaignNodeConfig.saveCustomer.selectColumn')}</option>
                               {getSaveCustomerSchema(item.nodeId || formData.saveCustomerNodeId).map((f) => (
@@ -378,7 +378,7 @@ export const NodeConfigSaveCustomerSection = ({
                               type="text"
                               value={item.field || ''}
                               onChange={(e) => handleCustomFieldChange(index, { field: e.target.value })}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                               placeholder={t('campaignNodeConfig.saveCustomer.fieldNamePlaceholder')}
                             />
                           )}
@@ -391,8 +391,8 @@ export const NodeConfigSaveCustomerSection = ({
               </div>
             )}
 
-            <div className="bg-amber-50 p-3 rounded-lg">
-              <p className="text-sm text-amber-700">
+            <div className="bg-amber-50 p-3 rounded-lg dark:bg-amber-950/40">
+              <p className="text-sm text-amber-700 dark:text-amber-300">
                 <strong>{t('campaignNodeConfig.trigger.note')}:</strong> {t('campaignNodeConfig.saveCustomer.noteCustomFields')}
               </p>
             </div>
@@ -406,9 +406,9 @@ export const NodeConfigSaveCustomerSection = ({
 
   return (
     <div className="flex" style={{ minHeight: '500px' }}>
-      <div className="w-64 border-r border-gray-200 flex flex-col">
-        <div className="p-3 border-b border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-700">{t('campaignNodeConfig.saveCustomer.settings')}</h3>
+      <div className="w-64 border-r border-gray-200 flex flex-col dark:border-dk-border">
+        <div className="p-3 border-b border-gray-200 dark:border-dk-border">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-dk-text">{t('campaignNodeConfig.saveCustomer.settings')}</h3>
         </div>
         <div className="flex-1 overflow-y-auto">
           {saveCustomerSections.map((section) => {
@@ -419,14 +419,14 @@ export const NodeConfigSaveCustomerSection = ({
                 onClick={() => setSelectedSaveCustomerSection(section.id)}
                 className={`px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors ${
                   selectedSaveCustomerSection === section.id
-                    ? 'bg-primary-50 border-l-4 border-primary-600'
+                    ? 'bg-primary-50 border-l-4 border-primary-600 dark:bg-primary-950/40'
                     : 'border-l-4 border-transparent'
-                }`}
+                } dark:hover:bg-dk-raised`}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Icon className={`w-4 h-4 ${selectedSaveCustomerSection === section.id ? 'text-primary-600' : 'text-gray-500'}`} />
-                    <span className={`text-sm ${selectedSaveCustomerSection === section.id ? 'font-medium text-primary-900' : 'text-gray-700'}`}>
+                    <Icon className={`w-4 h-4 ${selectedSaveCustomerSection === section.id ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-dk-text2'}`} />
+                    <span className={`text-sm ${selectedSaveCustomerSection === section.id ? 'font-medium text-primary-900 dark:text-primary-300' : 'text-gray-700 dark:text-dk-text'}`}>
                       {section.name}
                     </span>
                   </div>

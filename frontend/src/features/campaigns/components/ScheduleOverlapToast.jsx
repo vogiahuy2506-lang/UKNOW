@@ -15,7 +15,7 @@ export const showScheduleOverlapToast = ({ message, suggestions, t }) => {
       <div
         role="alert"
         data-testid="schedule-overlap-toast"
-        className="max-w-md rounded-lg border border-red-200 bg-white px-4 py-3 text-sm text-red-700 shadow-lg"
+        className="max-w-md rounded-lg border border-red-200 bg-white px-4 py-3 text-sm text-red-700 shadow-lg dark:bg-dk-surface dark:border-red-800 dark:text-red-300"
         style={{ opacity: tst.visible ? 1 : 0 }}
       >
         <div className="flex items-start gap-3">
@@ -23,7 +23,7 @@ export const showScheduleOverlapToast = ({ message, suggestions, t }) => {
           <button
             type="button"
             onClick={() => toast.dismiss(tst.id)}
-            className="text-xs font-semibold text-gray-500 hover:text-gray-700"
+            className="text-xs font-semibold text-gray-500 hover:text-gray-700 dark:text-dk-text2 dark:hover:text-dk-text"
           >
             {t('common.close')}
           </button>

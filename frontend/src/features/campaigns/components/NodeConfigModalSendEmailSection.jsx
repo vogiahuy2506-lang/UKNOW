@@ -159,24 +159,24 @@ export const NodeConfigSendEmailSection = ({
         return (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('campaignNodeConfig.emailSend.nodeName')}</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">{t('campaignNodeConfig.emailSend.nodeName')}</label>
               <input
                 type="text"
                 value={formData.label}
                 onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                 placeholder={t('campaignNodeConfig.emailSend.nodeNamePlaceholder')}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">
                 {t('campaignNodeConfig.emailSend.fromEmail')} <span className="text-red-500">*</span>
               </label>
               <select
                 value={formData.fromEmailId || ''}
                 onChange={(e) => setFormData((prev) => ({ ...prev, fromEmailId: parseInt(e.target.value, 10) || '' }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
               >
                 <option value="">{t('campaignNodeConfig.emailSend.selectFromEmail')}</option>
                 {emailSettings.map((s) => (
@@ -186,7 +186,7 @@ export const NodeConfigSendEmailSection = ({
                 ))}
               </select>
               {emailSettings.length === 0 && (
-                <p className="text-xs text-amber-600 mt-1">
+                <p className="text-xs text-amber-600 mt-1 dark:text-amber-400">
                   {t('campaignNodeConfig.emailSend.noActiveSmtp')}
                 </p>
               )}
@@ -198,9 +198,9 @@ export const NodeConfigSendEmailSection = ({
                 id="saveMessageLog"
                 checked={formData.saveMessageLog}
                 onChange={(e) => setFormData((prev) => ({ ...prev, saveMessageLog: e.target.checked }))}
-                className="rounded border-gray-300 text-primary-500 focus:ring-primary-500"
+                className="rounded border-gray-300 text-primary-500 focus:ring-primary-500 dark:border-dk-border-strong"
               />
-              <label htmlFor="saveMessageLog" className="text-sm text-gray-700">
+              <label htmlFor="saveMessageLog" className="text-sm text-gray-700 dark:text-dk-text">
                 {t('campaignNodeConfig.emailSend.saveMessageHistory')}
               </label>
             </div>
@@ -210,7 +210,7 @@ export const NodeConfigSendEmailSection = ({
       case 'recipient':
         return (
           <div className="space-y-4">
-            <h4 className="font-medium text-gray-900">{t('campaignNodeConfig.emailSend.recipientEmailLabel')} <span className="text-red-500">*</span></h4>
+            <h4 className="font-medium text-gray-900 dark:text-dk-text">{t('campaignNodeConfig.emailSend.recipientEmailLabel')} <span className="text-red-500">*</span></h4>
 
             <div className="flex gap-4">
               <label className="flex items-center gap-2 cursor-pointer">
@@ -222,7 +222,7 @@ export const NodeConfigSendEmailSection = ({
                   onChange={(e) => setFormData((prev) => ({ ...prev, recipientSource: e.target.value }))}
                   className="text-primary-500 focus:ring-primary-500"
                 />
-                <span className="text-sm text-gray-700">{t('campaignNodeConfig.emailSend.manualInput')}</span>
+                <span className="text-sm text-gray-700 dark:text-dk-text">{t('campaignNodeConfig.emailSend.manualInput')}</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -233,17 +233,17 @@ export const NodeConfigSendEmailSection = ({
                   onChange={(e) => setFormData((prev) => ({ ...prev, recipientSource: e.target.value }))}
                   className="text-primary-500 focus:ring-primary-500"
                 />
-                <span className="text-sm text-gray-700">{t('campaignNodeConfig.emailSend.fromPreviousNode')}</span>
+                <span className="text-sm text-gray-700 dark:text-dk-text">{t('campaignNodeConfig.emailSend.fromPreviousNode')}</span>
               </label>
             </div>
 
             {formData.recipientSource === 'manual' ? (
               <div>
-                <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.emailSend.emailListLabel')}</label>
+                <label className="block text-xs text-gray-500 mb-1 dark:text-dk-text2">{t('campaignNodeConfig.emailSend.emailListLabel')}</label>
                 <textarea
                   value={formData.recipientEmails}
                   onChange={(e) => setFormData((prev) => ({ ...prev, recipientEmails: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                   rows={6}
                   placeholder={t('campaignNodeConfig.emailSend.emailListPlaceholder')}
                 />
@@ -252,11 +252,11 @@ export const NodeConfigSendEmailSection = ({
             ) : (
               <div className="space-y-3">
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.emailSend.selectDataNode')}</label>
+                  <label className="block text-xs text-gray-500 mb-1 dark:text-dk-text2">{t('campaignNodeConfig.emailSend.selectDataNode')}</label>
                   <select
                     value={formData.recipientNodeId}
                     onChange={(e) => setFormData((prev) => ({ ...prev, recipientNodeId: e.target.value, recipientField: '' }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
                   >
                     <option value="">{t('campaignNodeConfig.emailSend.selectPreviousNode')}</option>
                     {upstreamNodes.map((n) => (
@@ -267,12 +267,12 @@ export const NodeConfigSendEmailSection = ({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.emailSend.selectEmailColumn')}</label>
+                  <label className="block text-xs text-gray-500 mb-1 dark:text-dk-text2">{t('campaignNodeConfig.emailSend.selectEmailColumn')}</label>
                   {sourceSchema.length ? (
                     <select
                       value={formData.recipientField}
                       onChange={(e) => setFormData((prev) => ({ ...prev, recipientField: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
                     >
                       <option value="">{t('campaignNodeConfig.emailSend.selectColumn')}</option>
                       {sourceSchema.map((f) => (
@@ -284,7 +284,7 @@ export const NodeConfigSendEmailSection = ({
                       type="text"
                       value={formData.recipientField}
                       onChange={(e) => setFormData((prev) => ({ ...prev, recipientField: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                       placeholder={t('campaignNodeConfig.emailSend.emailPlaceholder')}
                     />
                   )}
@@ -299,11 +299,11 @@ export const NodeConfigSendEmailSection = ({
         return (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h4 className="font-medium text-gray-900">{t('campaignNodeConfig.emailSend.cc')} (Carbon Copy)</h4>
+              <h4 className="font-medium text-gray-900 dark:text-dk-text">{t('campaignNodeConfig.emailSend.cc')} (Carbon Copy)</h4>
               <button
                 type="button"
                 onClick={() => setFormData((prev) => ({ ...prev, ccEnabled: !prev.ccEnabled }))}
-                className={`px-3 py-1.5 text-xs rounded-lg ${formData.ccEnabled ? 'bg-primary-50 text-primary-700' : 'bg-gray-100 text-gray-600'}`}
+                className={`px-3 py-1.5 text-xs rounded-lg ${formData.ccEnabled ? 'bg-primary-50 text-primary-700 dark:bg-primary-950/40 dark:text-primary-300' : 'bg-gray-100 text-gray-600 dark:bg-dk-raised dark:text-dk-text2'}`}
               >
                 {formData.ccEnabled ? t('campaignNodeConfig.emailSend.ccEnabled') : t('campaignNodeConfig.emailSend.ccDisabled')}
               </button>
@@ -321,7 +321,7 @@ export const NodeConfigSendEmailSection = ({
                       onChange={(e) => setFormData((prev) => ({ ...prev, ccSource: e.target.value }))}
                       className="text-primary-500 focus:ring-primary-500"
                     />
-                    <span className="text-sm text-gray-700">{t('campaignNodeConfig.emailSend.manualInput')}</span>
+                    <span className="text-sm text-gray-700 dark:text-dk-text">{t('campaignNodeConfig.emailSend.manualInput')}</span>
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -332,17 +332,17 @@ export const NodeConfigSendEmailSection = ({
                       onChange={(e) => setFormData((prev) => ({ ...prev, ccSource: e.target.value }))}
                       className="text-primary-500 focus:ring-primary-500"
                     />
-                    <span className="text-sm text-gray-700">{t('campaignNodeConfig.emailSend.fromPreviousNode')}</span>
+                    <span className="text-sm text-gray-700 dark:text-dk-text">{t('campaignNodeConfig.emailSend.fromPreviousNode')}</span>
                   </label>
                 </div>
 
                 {formData.ccSource === 'manual' ? (
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.emailSend.ccEmailList')}</label>
+                    <label className="block text-xs text-gray-500 mb-1 dark:text-dk-text2">{t('campaignNodeConfig.emailSend.ccEmailList')}</label>
                     <textarea
                       value={formData.ccEmails}
                       onChange={(e) => setFormData((prev) => ({ ...prev, ccEmails: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                       rows={4}
                       placeholder={t('campaignNodeConfig.emailSend.ccEmailPlaceholder')}
                     />
@@ -350,11 +350,11 @@ export const NodeConfigSendEmailSection = ({
                 ) : (
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.emailSend.selectDataNode')}</label>
+                      <label className="block text-xs text-gray-500 mb-1 dark:text-dk-text2">{t('campaignNodeConfig.emailSend.selectDataNode')}</label>
                       <select
                         value={formData.ccNodeId}
                         onChange={(e) => setFormData((prev) => ({ ...prev, ccNodeId: e.target.value, ccField: '' }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
                       >
                         <option value="">{t('campaignNodeConfig.emailSend.selectPreviousNode')}</option>
                         {upstreamNodes.map((n) => (
@@ -365,12 +365,12 @@ export const NodeConfigSendEmailSection = ({
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.emailSend.selectEmailColumn')}</label>
+                      <label className="block text-xs text-gray-500 mb-1 dark:text-dk-text2">{t('campaignNodeConfig.emailSend.selectEmailColumn')}</label>
                       {getSchemaForNodeId(formData.ccNodeId).length ? (
                         <select
                           value={formData.ccField}
                           onChange={(e) => setFormData((prev) => ({ ...prev, ccField: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
                         >
                           <option value="">{t('campaignNodeConfig.emailSend.selectColumn')}</option>
                           {getSchemaForNodeId(formData.ccNodeId).map((f) => (
@@ -382,7 +382,7 @@ export const NodeConfigSendEmailSection = ({
                           type="text"
                           value={formData.ccField}
                           onChange={(e) => setFormData((prev) => ({ ...prev, ccField: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                           placeholder={t('campaignNodeConfig.emailSend.emailPlaceholder')}
                         />
                       )}
@@ -391,7 +391,7 @@ export const NodeConfigSendEmailSection = ({
                 )}
               </>
             ) : (
-              <div className="text-xs text-gray-500">
+              <div className="text-xs text-gray-500 dark:text-dk-text2">
                 {t('campaignNodeConfig.emailSend.ccEnabledHint')}
               </div>
             )}
@@ -402,11 +402,11 @@ export const NodeConfigSendEmailSection = ({
         return (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h4 className="font-medium text-gray-900">{t('campaignNodeConfig.emailSend.bcc')} (Blind Carbon Copy)</h4>
+              <h4 className="font-medium text-gray-900 dark:text-dk-text">{t('campaignNodeConfig.emailSend.bcc')} (Blind Carbon Copy)</h4>
               <button
                 type="button"
                 onClick={() => setFormData((prev) => ({ ...prev, bccEnabled: !prev.bccEnabled }))}
-                className={`px-3 py-1.5 text-xs rounded-lg ${formData.bccEnabled ? 'bg-primary-50 text-primary-700' : 'bg-gray-100 text-gray-600'}`}
+                className={`px-3 py-1.5 text-xs rounded-lg ${formData.bccEnabled ? 'bg-primary-50 text-primary-700 dark:bg-primary-950/40 dark:text-primary-300' : 'bg-gray-100 text-gray-600 dark:bg-dk-raised dark:text-dk-text2'}`}
               >
                 {formData.bccEnabled ? t('campaignNodeConfig.emailSend.bccEnabled') : t('campaignNodeConfig.emailSend.bccDisabled')}
               </button>
@@ -424,7 +424,7 @@ export const NodeConfigSendEmailSection = ({
                       onChange={(e) => setFormData((prev) => ({ ...prev, bccSource: e.target.value }))}
                       className="text-primary-500 focus:ring-primary-500"
                     />
-                    <span className="text-sm text-gray-700">{t('campaignNodeConfig.emailSend.manualInput')}</span>
+                    <span className="text-sm text-gray-700 dark:text-dk-text">{t('campaignNodeConfig.emailSend.manualInput')}</span>
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -435,17 +435,17 @@ export const NodeConfigSendEmailSection = ({
                       onChange={(e) => setFormData((prev) => ({ ...prev, bccSource: e.target.value }))}
                       className="text-primary-500 focus:ring-primary-500"
                     />
-                    <span className="text-sm text-gray-700">{t('campaignNodeConfig.emailSend.fromPreviousNode')}</span>
+                    <span className="text-sm text-gray-700 dark:text-dk-text">{t('campaignNodeConfig.emailSend.fromPreviousNode')}</span>
                   </label>
                 </div>
 
                 {formData.bccSource === 'manual' ? (
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.emailSend.bccEmailList')}</label>
+                    <label className="block text-xs text-gray-500 mb-1 dark:text-dk-text2">{t('campaignNodeConfig.emailSend.bccEmailList')}</label>
                     <textarea
                       value={formData.bccEmails}
                       onChange={(e) => setFormData((prev) => ({ ...prev, bccEmails: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                       rows={4}
                       placeholder={t('campaignNodeConfig.emailSend.bccEmailPlaceholder')}
                     />
@@ -453,11 +453,11 @@ export const NodeConfigSendEmailSection = ({
                 ) : (
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.emailSend.selectDataNode')}</label>
+                      <label className="block text-xs text-gray-500 mb-1 dark:text-dk-text2">{t('campaignNodeConfig.emailSend.selectDataNode')}</label>
                       <select
                         value={formData.bccNodeId}
                         onChange={(e) => setFormData((prev) => ({ ...prev, bccNodeId: e.target.value, bccField: '' }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
                       >
                         <option value="">{t('campaignNodeConfig.emailSend.selectPreviousNode')}</option>
                         {upstreamNodes.map((n) => (
@@ -468,12 +468,12 @@ export const NodeConfigSendEmailSection = ({
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.emailSend.selectEmailColumn')}</label>
+                      <label className="block text-xs text-gray-500 mb-1 dark:text-dk-text2">{t('campaignNodeConfig.emailSend.selectEmailColumn')}</label>
                       {getSchemaForNodeId(formData.bccNodeId).length ? (
                         <select
                           value={formData.bccField}
                           onChange={(e) => setFormData((prev) => ({ ...prev, bccField: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
                         >
                           <option value="">{t('campaignNodeConfig.emailSend.selectColumn')}</option>
                           {getSchemaForNodeId(formData.bccNodeId).map((f) => (
@@ -485,7 +485,7 @@ export const NodeConfigSendEmailSection = ({
                           type="text"
                           value={formData.bccField}
                           onChange={(e) => setFormData((prev) => ({ ...prev, bccField: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                           placeholder={t('campaignNodeConfig.emailSend.emailPlaceholder')}
                         />
                       )}
@@ -494,7 +494,7 @@ export const NodeConfigSendEmailSection = ({
                 )}
               </>
             ) : (
-              <div className="text-xs text-gray-500">
+              <div className="text-xs text-gray-500 dark:text-dk-text2">
                 {t('campaignNodeConfig.emailSend.bccEnabledHint')}
               </div>
             )}
@@ -504,10 +504,10 @@ export const NodeConfigSendEmailSection = ({
       case 'sendMode':
         return (
           <div className="space-y-4">
-            <h4 className="font-medium text-gray-900">{t('campaignNodeConfig.emailSend.sendModeLabel')}</h4>
+            <h4 className="font-medium text-gray-900 dark:text-dk-text">{t('campaignNodeConfig.emailSend.sendModeLabel')}</h4>
 
             <div className="flex flex-col gap-3">
-              <label className="flex items-start gap-3 cursor-pointer p-3 border rounded-lg hover:bg-gray-50">
+              <label className="flex items-start gap-3 cursor-pointer p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-dk-raised dark:border-dk-border">
                 <input
                   type="radio"
                   name="sendMode"
@@ -517,11 +517,11 @@ export const NodeConfigSendEmailSection = ({
                   className="mt-1 text-primary-500 focus:ring-primary-500"
                 />
                 <div>
-                  <div className="text-sm font-medium text-gray-900">{t('campaignNodeConfig.emailSend.sendSimultaneously')}</div>
-                  <div className="text-xs text-gray-500 mt-1">{t('campaignNodeConfig.emailSend.sendSimultaneouslyDesc')}</div>
+                  <div className="text-sm font-medium text-gray-900 dark:text-dk-text">{t('campaignNodeConfig.emailSend.sendSimultaneously')}</div>
+                  <div className="text-xs text-gray-500 mt-1 dark:text-dk-text2">{t('campaignNodeConfig.emailSend.sendSimultaneouslyDesc')}</div>
                 </div>
               </label>
-              <label className="flex items-start gap-3 cursor-pointer p-3 border rounded-lg hover:bg-gray-50">
+              <label className="flex items-start gap-3 cursor-pointer p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-dk-raised dark:border-dk-border">
                 <input
                   type="radio"
                   name="sendMode"
@@ -547,14 +547,14 @@ export const NodeConfigSendEmailSection = ({
                   className="mt-1 text-primary-500 focus:ring-primary-500"
                 />
                 <div>
-                  <div className="text-sm font-medium text-gray-900">{t('campaignNodeConfig.emailSend.sendSchedule')}</div>
-                  <div className="text-xs text-gray-500 mt-1">{t('campaignNodeConfig.emailSend.sendScheduleDesc')}</div>
+                  <div className="text-sm font-medium text-gray-900 dark:text-dk-text">{t('campaignNodeConfig.emailSend.sendSchedule')}</div>
+                  <div className="text-xs text-gray-500 mt-1 dark:text-dk-text2">{t('campaignNodeConfig.emailSend.sendScheduleDesc')}</div>
                 </div>
               </label>
             </div>
 
             {formData.sendMode === 'schedule' && (!formData.emailSteps || formData.emailSteps.length === 0) && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300">
                 <strong>{t('campaignNodeConfig.trigger.note')}:</strong> {t('campaignNodeConfig.emailSend.scheduleNote')}
               </div>
             )}
@@ -565,11 +565,11 @@ export const NodeConfigSendEmailSection = ({
         return (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h4 className="font-medium text-gray-900">{t('campaignNodeConfig.emailSend.emailList')}</h4>
+              <h4 className="font-medium text-gray-900 dark:text-dk-text">{t('campaignNodeConfig.emailSend.emailList')}</h4>
               <button
                 type="button"
                 onClick={handleAddEmailStep}
-                className="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700"
+                className="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
               >
                 <HiOutlinePlus className="w-4 h-4" />
                 {t('campaignNodeConfig.emailSend.addEmail')}
@@ -577,21 +577,21 @@ export const NodeConfigSendEmailSection = ({
             </div>
 
             {(formData.emailSteps || []).length === 0 && (
-              <div className="text-center py-8 text-sm text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
+              <div className="text-center py-8 text-sm text-gray-500 border-2 border-dashed border-gray-200 rounded-lg dark:text-dk-text2 dark:border-dk-border">
                 {t('campaignNodeConfig.emailSend.noEmailYet')}
               </div>
             )}
 
             <div className="space-y-3">
               {(formData.emailSteps || []).map((step, idx) => (
-                <div key={step.id || idx} className="border border-gray-200 rounded-lg p-4 space-y-4">
+                <div key={step.id || idx} className="border border-gray-200 rounded-lg p-4 space-y-4 dark:border-dk-border">
                   <div className="flex items-center justify-between">
-                    <div className="text-sm font-semibold text-gray-800">{t('campaignNodeConfig.emailSend.emailNumber', { n: idx + 1 })}</div>
+                    <div className="text-sm font-semibold text-gray-800 dark:text-dk-text">{t('campaignNodeConfig.emailSend.emailNumber', { n: idx + 1 })}</div>
                     {(formData.emailSteps || []).length > 1 && (
                       <button
                         type="button"
                         onClick={() => handleRemoveEmailStep(idx)}
-                        className="text-xs text-red-600 hover:text-red-700 flex items-center gap-1"
+                        className="text-xs text-red-600 hover:text-red-700 flex items-center gap-1 dark:text-red-400 dark:hover:text-red-300"
                       >
                         <HiOutlineTrash className="w-3.5 h-3.5" />
                         {t('campaignNodeConfig.emailSend.delete')}
@@ -602,21 +602,21 @@ export const NodeConfigSendEmailSection = ({
                   {formData.sendMode === 'schedule' && (
                     <div className="grid grid-cols-3 gap-3">
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.emailSend.howLongToSend')}</label>
+                        <label className="block text-xs text-gray-500 mb-1 dark:text-dk-text2">{t('campaignNodeConfig.emailSend.howLongToSend')}</label>
                         <input
                           type="number"
                           min={0}
                           value={step.delayValue || 0}
                           onChange={(e) => handleEmailStepChange(idx, 'delayValue', parseInt(e.target.value, 10) || 0)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                         />
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.emailSend.unit')}</label>
+                        <label className="block text-xs text-gray-500 mb-1 dark:text-dk-text2">{t('campaignNodeConfig.emailSend.unit')}</label>
                         <select
                           value={step.delayUnit || 'minutes'}
                           onChange={(e) => handleEmailStepChange(idx, 'delayUnit', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
                         >
                           <option value="minutes">{t('campaignNodeConfig.emailSend.minutes')}</option>
                           <option value="hours">{t('campaignNodeConfig.emailSend.hours')}</option>
@@ -624,11 +624,11 @@ export const NodeConfigSendEmailSection = ({
                         </select>
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.emailSend.calculateFrom')}</label>
+                        <label className="block text-xs text-gray-500 mb-1 dark:text-dk-text2">{t('campaignNodeConfig.emailSend.calculateFrom')}</label>
                         <select
                           value={step.delayFrom || 'start'}
                           onChange={(e) => handleEmailStepChange(idx, 'delayFrom', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
                         >
                           <option value="start">{t('campaignNodeConfig.emailSend.atRunTime')}</option>
                           <option value="prev">{t('campaignNodeConfig.emailSend.fromPreviousEmail')}</option>
@@ -638,7 +638,7 @@ export const NodeConfigSendEmailSection = ({
                   )}
 
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.emailSend.emailTemplate')}</label>
+                    <label className="block text-xs text-gray-500 mb-1 dark:text-dk-text2">{t('campaignNodeConfig.emailSend.emailTemplate')}</label>
                     <TemplateSearchSelect
                       value={step.templateId || ''}
                       options={emailTemplateOptions}
@@ -655,19 +655,19 @@ export const NodeConfigSendEmailSection = ({
                       type="checkbox"
                       checked={step.enableLinkTracking !== false}
                       onChange={(e) => handleEmailStepChange(idx, 'enableLinkTracking', e.target.checked)}
-                      className="rounded border-gray-300 text-primary-500 focus:ring-primary-500"
+                      className="rounded border-gray-300 text-primary-500 focus:ring-primary-500 dark:border-dk-border-strong"
                     />
-                    <span className="text-xs text-gray-700">
+                    <span className="text-xs text-gray-700 dark:text-dk-text">
                       {t('campaignNodeConfig.emailSend.linkTracking')}
                     </span>
                   </label>
 
                   {(step.templateMappings || []).length > 0 && (
                     <div className="space-y-3">
-                      <div className="text-xs font-medium text-gray-700">{t('campaignNodeConfig.emailSend.templateVariableMapping')}</div>
+                      <div className="text-xs font-medium text-gray-700 dark:text-dk-text">{t('campaignNodeConfig.emailSend.templateVariableMapping')}</div>
                       {(step.templateMappings || []).map((m, mIdx) => (
-                        <div key={m.key || mIdx} className="bg-gray-50 rounded-lg p-3 space-y-3">
-                          <div className="text-xs font-medium text-gray-800">{m.key}</div>
+                        <div key={m.key || mIdx} className="bg-gray-50 rounded-lg p-3 space-y-3 dark:bg-dk-raised">
+                          <div className="text-xs font-medium text-gray-800 dark:text-dk-text">{m.key}</div>
                           <div className="flex gap-3">
                             <label className="flex items-center gap-2 cursor-pointer">
                               <input
@@ -678,7 +678,7 @@ export const NodeConfigSendEmailSection = ({
                                 onChange={(e) => handleEmailStepMappingChange(idx, mIdx, 'sourceType', e.target.value)}
                                 className="text-primary-500 focus:ring-primary-500"
                               />
-                              <span className="text-xs text-gray-700">{t('campaignNodeConfig.emailSend.manual')}</span>
+                              <span className="text-xs text-gray-700 dark:text-dk-text">{t('campaignNodeConfig.emailSend.manual')}</span>
                             </label>
                             <label className="flex items-center gap-2 cursor-pointer">
                               <input
@@ -689,7 +689,7 @@ export const NodeConfigSendEmailSection = ({
                                 onChange={(e) => handleEmailStepMappingChange(idx, mIdx, 'sourceType', e.target.value)}
                                 className="text-primary-500 focus:ring-primary-500"
                               />
-                              <span className="text-xs text-gray-700">{t('campaignNodeConfig.emailSend.fromNode')}</span>
+                              <span className="text-xs text-gray-700 dark:text-dk-text">{t('campaignNodeConfig.emailSend.fromNode')}</span>
                             </label>
                           </div>
 
@@ -698,7 +698,7 @@ export const NodeConfigSendEmailSection = ({
                               type="text"
                               value={m.value || ''}
                               onChange={(e) => handleEmailStepMappingChange(idx, mIdx, 'value', e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                               placeholder={t('campaignNodeConfig.emailSend.enterValue')}
                             />
                           ) : (
@@ -706,7 +706,7 @@ export const NodeConfigSendEmailSection = ({
                               <select
                                 value={m.nodeId || ''}
                                 onChange={(e) => handleEmailStepMappingChange(idx, mIdx, 'nodeId', e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
                               >
                                 <option value="">{t('campaignNodeConfig.emailSend.selectNode')}</option>
                                 {upstreamNodes.map((n) => (
@@ -719,7 +719,7 @@ export const NodeConfigSendEmailSection = ({
                                 <select
                                   value={m.field || ''}
                                   onChange={(e) => handleEmailStepMappingChange(idx, mIdx, 'field', e.target.value)}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
                                 >
                                   <option value="">{t('campaignNodeConfig.emailSend.selectColumnData')}</option>
                                   {getSchemaForNodeId(m.nodeId || '').map((f) => (
@@ -731,7 +731,7 @@ export const NodeConfigSendEmailSection = ({
                                   type="text"
                                   value={m.field || ''}
                                   onChange={(e) => handleEmailStepMappingChange(idx, mIdx, 'field', e.target.value)}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                                   placeholder={t('campaignNodeConfig.emailSend.emailPlaceholder')}
                                 />
                               )}
@@ -745,8 +745,8 @@ export const NodeConfigSendEmailSection = ({
               ))}
             </div>
 
-            <div className="bg-blue-50 p-3 rounded-lg">
-              <p className="text-xs text-blue-700">
+            <div className="bg-blue-50 p-3 rounded-lg dark:bg-blue-950/40">
+              <p className="text-xs text-blue-700 dark:text-blue-300">
                 <strong>{t('campaignNodeConfig.trigger.note')}:</strong> {t('campaignNodeConfig.emailSend.templateMappingNote')}
               </p>
             </div>
@@ -765,7 +765,7 @@ export const NodeConfigSendEmailSection = ({
         return (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h4 className="font-medium text-gray-900">{t('campaignNodeConfig.emailSend.maxSendLimit')}</h4>
+              <h4 className="font-medium text-gray-900 dark:text-dk-text">{t('campaignNodeConfig.emailSend.maxSendLimit')}</h4>
               <button
                 type="button"
                 onClick={() => setFormData((prev) => ({
@@ -773,7 +773,7 @@ export const NodeConfigSendEmailSection = ({
                   maxSendEnabled: !prev.maxSendEnabled,
                   maxSendCount: prev.maxSendCount || 100,
                 }))}
-                className={`px-3 py-1.5 text-xs rounded-lg ${formData.maxSendEnabled ? 'bg-primary-50 text-primary-700' : 'bg-gray-100 text-gray-600'}`}
+                className={`px-3 py-1.5 text-xs rounded-lg ${formData.maxSendEnabled ? 'bg-primary-50 text-primary-700 dark:bg-primary-950/40 dark:text-primary-300' : 'bg-gray-100 text-gray-600 dark:bg-dk-raised dark:text-dk-text2'}`}
               >
                 {formData.maxSendEnabled ? t('campaignNodeConfig.emailSend.ccEnabled') : t('campaignNodeConfig.emailSend.ccDisabled')}
               </button>
@@ -781,19 +781,19 @@ export const NodeConfigSendEmailSection = ({
 
             {formData.maxSendEnabled ? (
               <div>
-                <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.emailSend.maxMessagesPerRun')}</label>
+                <label className="block text-xs text-gray-500 mb-1 dark:text-dk-text2">{t('campaignNodeConfig.emailSend.maxMessagesPerRun')}</label>
                 <NumberInput
                   min={1}
                   value={formData.maxSendCount}
                   onChange={(v) => setFormData((prev) => ({ ...prev, maxSendCount: parseInt(v, 10) || 1 }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                 />
-                <p className="text-xs text-gray-500 mt-2">
+                <p className="text-xs text-gray-500 mt-2 dark:text-dk-text2">
                   {t('campaignNodeConfig.emailSend.maxSendNote')}
                 </p>
               </div>
             ) : (
-              <div className="text-xs text-gray-500">
+              <div className="text-xs text-gray-500 dark:text-dk-text2">
                 {t('campaignNodeConfig.emailSend.unlimitedByDefault')}
               </div>
             )}
@@ -807,9 +807,9 @@ export const NodeConfigSendEmailSection = ({
 
   return (
     <div className="flex" style={{ minHeight: '500px' }}>
-      <div className="w-64 border-r border-gray-200 flex flex-col">
-        <div className="p-3 border-b border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-700">{t('campaignNodeConfig.emailSend.settings')}</h3>
+      <div className="w-64 border-r border-gray-200 flex flex-col dark:border-dk-border">
+        <div className="p-3 border-b border-gray-200 dark:border-dk-border">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-dk-text">{t('campaignNodeConfig.emailSend.settings')}</h3>
         </div>
         <div className="flex-1 overflow-y-auto">
           {emailSections.map((section) => {
@@ -820,14 +820,14 @@ export const NodeConfigSendEmailSection = ({
                 onClick={() => setSelectedEmailSection(section.id)}
                 className={`px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors ${
                   selectedEmailSection === section.id
-                    ? 'bg-primary-50 border-l-4 border-primary-600'
+                    ? 'bg-primary-50 border-l-4 border-primary-600 dark:bg-primary-950/40'
                     : 'border-l-4 border-transparent'
-                }`}
+                } dark:hover:bg-dk-raised`}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Icon className={`w-4 h-4 ${selectedEmailSection === section.id ? 'text-primary-600' : 'text-gray-500'}`} />
-                    <span className={`text-sm ${selectedEmailSection === section.id ? 'font-medium text-primary-900' : 'text-gray-700'}`}>
+                    <Icon className={`w-4 h-4 ${selectedEmailSection === section.id ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-dk-text2'}`} />
+                    <span className={`text-sm ${selectedEmailSection === section.id ? 'font-medium text-primary-900 dark:text-primary-300' : 'text-gray-700 dark:text-dk-text'}`}>
                       {section.name}
                     </span>
                   </div>

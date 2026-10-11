@@ -26,9 +26,9 @@ const CampaignRunLogsPanel = ({
 
   return (
     <div className="card">
-      <div className="p-6 border-b border-gray-200">
-        <h2 className="text-lg font-semibold text-gray-900">Log chạy chiến dịch</h2>
-        <p className="text-sm text-gray-500 mt-1">
+      <div className="p-6 border-b border-gray-200 dark:border-dk-border">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-dk-text">Log chạy chiến dịch</h2>
+        <p className="text-sm text-gray-500 mt-1 dark:text-dk-text2">
           Theo dõi log theo từng node và xem tracking hiệu quả theo lượt chạy.
         </p>
       </div>
@@ -38,7 +38,7 @@ const CampaignRunLogsPanel = ({
             <div className="spinner w-8 h-8"></div>
           </div>
         ) : !selectedRunDetail ? (
-          <div className="text-sm text-gray-500">
+          <div className="text-sm text-gray-500 dark:text-dk-text2">
             {selectedCampaignForLogs
               ? `Chiến dịch "${selectedCampaignForLogs.campaignName}" chưa có lượt chạy.`
               : 'Chọn Xem log ở bất kỳ chiến dịch nào để xem chi tiết.'}
@@ -46,8 +46,8 @@ const CampaignRunLogsPanel = ({
         ) : (
           <>
             {activePause && (
-              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-                <span className="text-sm font-medium text-amber-900">
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 dark:bg-amber-950/40 dark:border-amber-800">
+                <span className="text-sm font-medium text-amber-900 dark:text-amber-300">
                   {t(getRunPauseI18nKey(activePause), {
                     until: formatCampaignDateTime(activePause.untilIso),
                     account: activePause.accountName || t('campaignRun.zaloAccountFallback'),
@@ -56,7 +56,7 @@ const CampaignRunLogsPanel = ({
                 {activePause.kind === 'plan_quota' && (
                   <Link
                     to="/app/topup"
-                    className="text-sm font-medium text-primary-600 hover:text-primary-800 hover:underline"
+                    className="text-sm font-medium text-primary-600 hover:text-primary-800 hover:underline dark:text-primary-400 dark:hover:text-primary-300"
                   >
                     {t('campaignRun.buyTopup')}
                   </Link>
@@ -64,40 +64,40 @@ const CampaignRunLogsPanel = ({
               </div>
             )}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-              <div className="p-3 rounded-lg bg-gray-50">
-                <p className="text-xs text-gray-500">Chiến dịch / lần chạy</p>
-                <p className="text-sm font-semibold text-gray-900">
+              <div className="p-3 rounded-lg bg-gray-50 dark:bg-dk-raised">
+                <p className="text-xs text-gray-500 dark:text-dk-text2">Chiến dịch / lần chạy</p>
+                <p className="text-sm font-semibold text-gray-900 dark:text-dk-text">
                   {selectedRunDetail.campaignName}
                   {selectedRunDetail.runName ? ` / ${selectedRunDetail.runName}` : ''}
                 </p>
               </div>
-              <div className="p-3 rounded-lg bg-gray-50">
-                <p className="text-xs text-gray-500">Trạng thái</p>
-                <p className="text-sm font-semibold text-gray-900">{getRunStatusLabel(t, selectedRunDetail.status)}</p>
+              <div className="p-3 rounded-lg bg-gray-50 dark:bg-dk-raised">
+                <p className="text-xs text-gray-500 dark:text-dk-text2">Trạng thái</p>
+                <p className="text-sm font-semibold text-gray-900 dark:text-dk-text">{getRunStatusLabel(t, selectedRunDetail.status)}</p>
                 {isContinuousMode && (
-                  <p className="text-xs text-emerald-600 mt-1">
+                  <p className="text-xs text-emerald-600 mt-1 dark:text-emerald-400">
                     Đang chạy liên tục{pollIntervalMinutes ? ` • ${pollIntervalMinutes} phút/lần` : ''}
                   </p>
                 )}
               </div>
-              <div className="p-3 rounded-lg bg-gray-50">
-                <p className="text-xs text-gray-500">Tracking link click</p>
-                <p className="text-sm font-semibold text-gray-900">
+              <div className="p-3 rounded-lg bg-gray-50 dark:bg-dk-raised">
+                <p className="text-xs text-gray-500 dark:text-dk-text2">Tracking link click</p>
+                <p className="text-sm font-semibold text-gray-900 dark:text-dk-text">
                   {selectedRunDetail.linkClickCount || 0} lượt click
                 </p>
               </div>
-              <div className="p-3 rounded-lg bg-gray-50">
-                <p className="text-xs text-gray-500">Tracking đơn hàng</p>
-                <p className="text-sm font-semibold text-gray-900">
+              <div className="p-3 rounded-lg bg-gray-50 dark:bg-dk-raised">
+                <p className="text-xs text-gray-500 dark:text-dk-text2">Tracking đơn hàng</p>
+                <p className="text-sm font-semibold text-gray-900 dark:text-dk-text">
                   {selectedRunDetail.pendingCount || 0} chờ / {selectedRunDetail.purchaseCount || 0} đã đặt
                 </p>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-gray-500 mt-1 dark:text-dk-text2">
                   {selectedRunDetail.customerWithOrderCount || 0} khách có đơn
                 </p>
               </div>
             </div>
 
-            <div className="border rounded-lg p-3 h-[420px] min-h-[420px] overflow-hidden">
+            <div className="border rounded-lg p-3 h-[420px] min-h-[420px] overflow-hidden dark:border-dk-border">
               <div className="h-full overflow-auto">
                 <CampaignExecutionLogWorkspace
                   logs={workspaceLogs}
@@ -112,38 +112,38 @@ const CampaignRunLogsPanel = ({
               </div>
             </div>
 
-            <div className="overflow-x-auto border rounded-lg">
+            <div className="overflow-x-auto border rounded-lg dark:border-dk-border">
               <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
+                <thead className="bg-gray-50 border-b border-gray-200 dark:bg-dk-raised dark:border-dk-border">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Run ID</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tên lần chạy</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Bắt đầu</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trạng thái</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase dark:text-dk-text2">Run ID</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase dark:text-dk-text2">Tên lần chạy</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase dark:text-dk-text2">Bắt đầu</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase dark:text-dk-text2">Trạng thái</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 bg-white">
+                <tbody className="divide-y divide-gray-100 bg-white dark:bg-dk-surface dark:divide-dk-border">
                   {campaignRunHistory.map((run) => (
                     <tr
                       key={run.id}
                       className={`cursor-pointer hover:bg-gray-50 ${
-                        selectedRunDetail?.id === run.id ? 'bg-primary-50' : ''
-                      }`}
+                        selectedRunDetail?.id === run.id ? 'bg-primary-50 dark:bg-primary-950/40' : ''
+                      } dark:hover:bg-dk-raised`}
                       onClick={() => onViewRunDetail(run.id, run.campaignId)}
                     >
-                      <td className="px-4 py-3 text-sm text-gray-900">#{run.id}</td>
-                      <td className="px-4 py-3 text-sm text-gray-700">
+                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-dk-text">#{run.id}</td>
+                      <td className="px-4 py-3 text-sm text-gray-700 dark:text-dk-text">
                         {run.runName || run.campaignName || '-'}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-700">
+                      <td className="px-4 py-3 text-sm text-gray-700 dark:text-dk-text">
                         {formatCampaignDateTime(run.startedAt)}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-700">{getRunStatusLabel(t, run.status)}</td>
+                      <td className="px-4 py-3 text-sm text-gray-700 dark:text-dk-text">{getRunStatusLabel(t, run.status)}</td>
                     </tr>
                   ))}
                   {campaignRunHistory.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="px-4 py-6 text-center text-sm text-gray-500">
+                      <td colSpan={4} className="px-4 py-6 text-center text-sm text-gray-500 dark:text-dk-text2">
                         Chưa có lịch sử chạy.
                       </td>
                     </tr>

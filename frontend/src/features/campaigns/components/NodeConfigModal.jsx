@@ -827,7 +827,7 @@ const NodeConfigModal = ({
                 type="text"
                 value={formData.label}
                 onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-raised text-gray-900 dark:text-dk-text rounded-lg focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-raised text-gray-900 dark:text-dk-text rounded-lg focus:ring-2 focus:ring-primary-500 dark:placeholder-dk-muted"
                 maxLength={255}
               />
             </div>
@@ -868,7 +868,7 @@ const NodeConfigModal = ({
             onClick={handleSaveClick}
             disabled={isCheckingSheet}
             className={`px-4 py-2 rounded-lg transition-colors ${
-              isCheckingSheet ? 'bg-gray-300 text-gray-600 cursor-not-allowed' : 'bg-primary-500 text-white hover:bg-primary-600'
+              isCheckingSheet ? 'bg-gray-300 text-gray-600 cursor-not-allowed dark:bg-dk-strong dark:text-dk-text2' : 'bg-primary-500 text-white hover:bg-primary-600'
             }`}
           >
             Lưu

@@ -147,38 +147,38 @@ const CampaignMarketplaceModal = ({ open, campaign, onClose, onSuccess }) => {
         role="dialog"
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden"
+        className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden dark:bg-dk-surface"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-orange-50">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-orange-50 dark:bg-orange-950/40 dark:border-dk-border">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
-              <HiOutlineMail className="w-5 h-5 text-orange-600" />
+            <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center dark:bg-orange-900/40">
+              <HiOutlineMail className="w-5 h-5 text-orange-600 dark:text-orange-400" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Đăng lên Marketplace</h3>
-              <p className="text-sm text-gray-500">Chia sẻ chiến dịch với cộng đồng</p>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-dk-text">Đăng lên Marketplace</h3>
+              <p className="text-sm text-gray-500 dark:text-dk-text2">Chia sẻ chiến dịch với cộng đồng</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-orange-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-orange-100 rounded-lg transition-colors dark:hover:bg-orange-900/40"
             aria-label="Đóng"
           >
-            <HiOutlineX className="w-5 h-5 text-gray-500" />
+            <HiOutlineX className="w-5 h-5 text-gray-500 dark:text-dk-text2" />
           </button>
         </div>
 
         {/* Body */}
         <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
           {/* Campaign preview */}
-          <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
-            <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center">
-              <HiOutlineMail className="w-5 h-5 text-orange-600" />
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100 dark:bg-dk-raised dark:border-dk-border">
+            <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center dark:bg-orange-950/40">
+              <HiOutlineMail className="w-5 h-5 text-orange-600 dark:text-orange-400" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="font-semibold text-gray-900 truncate">{campaign?.campaignName}</p>
-              <p className="text-xs text-gray-500 truncate">
+              <p className="font-semibold text-gray-900 truncate dark:text-dk-text">{campaign?.campaignName}</p>
+              <p className="text-xs text-gray-500 truncate dark:text-dk-text2">
                 {CAMPAIGN_TYPE_LABELS[campaign?.campaignType] || campaign?.campaignType}
                 {campaign?.totalCustomers ? ` • ${campaign.totalCustomers} khách hàng` : ''}
               </p>
@@ -186,18 +186,18 @@ const CampaignMarketplaceModal = ({ open, campaign, onClose, onSuccess }) => {
           </div>
 
           {/* Info box */}
-          <div className="flex items-start gap-3 p-3 rounded-xl bg-amber-50 border border-amber-100">
-            <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-              <HiOutlineLightBulb className="w-4 h-4 text-amber-600" />
+          <div className="flex items-start gap-3 p-3 rounded-xl bg-amber-50 border border-amber-100 dark:bg-amber-950/40 dark:border-amber-800">
+            <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0 mt-0.5 dark:bg-amber-900/40">
+              <HiOutlineLightBulb className="w-4 h-4 text-amber-600 dark:text-amber-400" />
             </div>
-            <p className="text-sm text-gray-700">
+            <p className="text-sm text-gray-700 dark:text-dk-text">
               Chiến dịch của bạn sẽ được đóng gói thành template để người khác có thể sử dụng làm mẫu cho chiến dịch của họ.
             </p>
           </div>
 
           {/* Title */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            <label className="block text-sm font-medium text-gray-700 mb-1.5 dark:text-dk-text">
               Tiêu đề <span className="text-red-500">*</span>
             </label>
             <input
@@ -206,14 +206,14 @@ const CampaignMarketplaceModal = ({ open, campaign, onClose, onSuccess }) => {
               onChange={(e) => updateForm('title', e.target.value)}
               placeholder="Tên template của bạn"
               maxLength={255}
-              className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all"
+              className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all dark:bg-dk-inset dark:border-dk-border dark:text-dk-text dark:placeholder-dk-muted"
             />
             <p className="text-xs text-gray-400 mt-1">{form.title.length}/255</p>
           </div>
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            <label className="block text-sm font-medium text-gray-700 mb-1.5 dark:text-dk-text">
               Mô tả
             </label>
             <textarea
@@ -221,14 +221,14 @@ const CampaignMarketplaceModal = ({ open, campaign, onClose, onSuccess }) => {
               onChange={(e) => updateForm('description', e.target.value)}
               placeholder="Mô tả ngắn về template chiến dịch..."
               rows={3}
-              className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all resize-none"
+              className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all resize-none dark:bg-dk-inset dark:border-dk-border dark:text-dk-text dark:placeholder-dk-muted"
             />
             <p className="text-xs text-gray-400 mt-1">{form.description.length}/2000</p>
           </div>
 
           {/* Tags */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            <label className="block text-sm font-medium text-gray-700 mb-1.5 dark:text-dk-text">
               Tags <span className="font-normal text-gray-400">(tối đa 5)</span>
             </label>
             <TagInput
@@ -236,50 +236,50 @@ const CampaignMarketplaceModal = ({ open, campaign, onClose, onSuccess }) => {
               onChange={(tags) => updateForm('tags', tags)}
               placeholder="Nhấn Enter để thêm..."
             />
-            <p className="text-xs text-gray-500 mt-1.5">
+            <p className="text-xs text-gray-500 mt-1.5 dark:text-dk-text2">
               Giúp người khác tìm thấy template dễ hơn
             </p>
           </div>
 
           {/* Price */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            <label className="block text-sm font-medium text-gray-700 mb-1.5 dark:text-dk-text">
               Giá (credits)
             </label>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => updateForm('priceCredits', Math.max(0, parseInt(form.priceCredits, 10) - 10))}
-                className="w-10 h-10 rounded-xl border border-gray-200 hover:border-orange-300 hover:bg-orange-50 text-gray-700 font-semibold transition-colors"
+                className="w-10 h-10 rounded-xl border border-gray-200 hover:border-orange-300 hover:bg-orange-50 text-gray-700 font-semibold transition-colors dark:border-dk-border dark:hover:border-orange-800 dark:hover:bg-orange-900/40 dark:text-dk-text"
               >
                 −
               </button>
               <NumberInput
                 value={form.priceCredits}
                 onChange={(v) => updateForm('priceCredits', Math.max(0, parseInt(v, 10) || 0))}
-                className="flex-1 px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all text-center font-semibold"
+                className="flex-1 px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all text-center font-semibold dark:bg-dk-inset dark:border-dk-border dark:text-dk-text dark:placeholder-dk-muted"
               />
               <button
                 type="button"
                 onClick={() => updateForm('priceCredits', parseInt(form.priceCredits, 10) + 10)}
-                className="w-10 h-10 rounded-xl border border-gray-200 hover:border-orange-300 hover:bg-orange-50 text-gray-700 font-semibold transition-colors"
+                className="w-10 h-10 rounded-xl border border-gray-200 hover:border-orange-300 hover:bg-orange-50 text-gray-700 font-semibold transition-colors dark:border-dk-border dark:hover:border-orange-800 dark:hover:bg-orange-900/40 dark:text-dk-text"
               >
                 +
               </button>
             </div>
-            <p className="text-xs text-gray-500 mt-2">
+            <p className="text-xs text-gray-500 mt-2 dark:text-dk-text2">
               Đặt <strong>0 credits</strong> để chia sẻ miễn phí
             </p>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex items-center justify-end gap-2.5">
+        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex items-center justify-end gap-2.5 dark:bg-dk-raised dark:border-dk-border">
           <button
             type="button"
             onClick={onClose}
             disabled={isSubmitting}
-            className="px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-200 rounded-xl transition-colors disabled:opacity-50"
+            className="px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-200 rounded-xl transition-colors disabled:opacity-50 dark:text-dk-text2 dark:hover:bg-dk-strong"
           >
             Hủy
           </button>

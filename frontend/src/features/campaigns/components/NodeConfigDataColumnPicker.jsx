@@ -47,20 +47,20 @@ export function NodeConfigDataColumnPicker({
   const selectListed = () => setKeys(options.map((o) => o.key).filter(Boolean));
 
   return (
-    <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
+    <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:bg-dk-raised dark:border-dk-border">
       <div className="flex items-center gap-2">
-        <HiOutlineTable className="h-5 w-5 text-green-600" />
-        <span className="text-sm font-medium text-gray-800">{title}</span>
-        <span className="text-xs text-gray-500">
+        <HiOutlineTable className="h-5 w-5 text-green-600 dark:text-green-400" />
+        <span className="text-sm font-medium text-gray-800 dark:text-dk-text">{title}</span>
+        <span className="text-xs text-gray-500 dark:text-dk-text2">
           ({t('selectedCount', { count: normalizedSelected.length, total: options.length || '—' })})
         </span>
       </div>
-      <p className="text-xs text-gray-600">{hint}</p>
+      <p className="text-xs text-gray-600 dark:text-dk-text2">{hint}</p>
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
           onClick={selectAllMeaningClear}
-          className="rounded border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+          className="rounded border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:bg-dk-raised dark:border-dk-border-strong dark:text-dk-text dark:hover:bg-dk-strong"
         >
           {t('useAllColumns')}
         </button>
@@ -68,7 +68,7 @@ export function NodeConfigDataColumnPicker({
           <button
             type="button"
             onClick={selectListed}
-            className="rounded border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            className="rounded border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:bg-dk-raised dark:border-dk-border-strong dark:text-dk-text dark:hover:bg-dk-strong"
           >
             {t('selectAll')}
           </button>
@@ -76,13 +76,13 @@ export function NodeConfigDataColumnPicker({
       </div>
 
       {normalizedSelected.length > 0 ? (
-        <div className="flex flex-wrap gap-2 rounded-md border border-dashed border-gray-300 bg-white p-2">
+        <div className="flex flex-wrap gap-2 rounded-md border border-dashed border-gray-300 bg-white p-2 dark:bg-dk-surface dark:border-dk-border-strong">
           {normalizedSelected.map((k) => (
             <button
               key={k}
               type="button"
               onClick={() => toggleKey(k)}
-              className="inline-flex items-center rounded-lg border border-primary-200 bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-800 hover:bg-primary-100"
+              className="inline-flex items-center rounded-lg border border-primary-200 bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-800 hover:bg-primary-100 dark:bg-primary-950/40 dark:border-primary-800 dark:text-primary-300 dark:hover:bg-primary-900/40"
               title={t('pressToDeselect')}
             >
               {k}
@@ -93,30 +93,30 @@ export function NodeConfigDataColumnPicker({
       ) : null}
 
       {options.length === 0 ? (
-        <p className="text-sm text-amber-700">{t('noColumnsHint')}</p>
+        <p className="text-sm text-amber-700 dark:text-amber-300">{t('noColumnsHint')}</p>
       ) : (
         <div
-          className="max-h-48 space-y-2 overflow-y-auto rounded-md border border-gray-200 bg-white p-3"
+          className="max-h-48 space-y-2 overflow-y-auto rounded-md border border-gray-200 bg-white p-3 dark:bg-dk-surface dark:border-dk-border"
           style={{ contain: 'layout paint' }}
         >
           {options.map((opt) => (
-            <label key={opt.key} className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+            <label key={opt.key} className="flex cursor-pointer items-center gap-2 text-sm text-gray-700 dark:text-dk-text">
               <input
                 type="checkbox"
-                className="h-4 w-4 rounded border-gray-300 text-primary-600"
+                className="h-4 w-4 rounded border-gray-300 text-primary-600 dark:border-dk-border-strong dark:text-primary-400"
                 checked={selectedSet.has(opt.key)}
                 onChange={() => toggleKey(opt.key)}
               />
-              <span className="font-mono text-xs text-gray-800">{opt.key}</span>
+              <span className="font-mono text-xs text-gray-800 dark:text-dk-text">{opt.key}</span>
               {opt.label && opt.label !== opt.key ? (
-                <span className="text-xs text-gray-500">— {opt.label}</span>
+                <span className="text-xs text-gray-500 dark:text-dk-text2">— {opt.label}</span>
               ) : null}
             </label>
           ))}
         </div>
       )}
 
-      <p className="text-[11px] text-gray-500">
+      <p className="text-[11px] text-gray-500 dark:text-dk-text2">
         {t('batchSizeNote')}
       </p>
     </div>

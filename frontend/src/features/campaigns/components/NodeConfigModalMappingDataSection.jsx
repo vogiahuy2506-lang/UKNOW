@@ -45,24 +45,24 @@ export const NodeConfigMappingDataSection = ({
   return (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{t('campaignNodeConfig.mappingData.nodeName')}</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">{t('campaignNodeConfig.mappingData.nodeName')}</label>
         <input
           type="text"
           value={formData.label}
           onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
           placeholder={t('campaignNodeConfig.mappingData.nodeNamePlaceholder')}
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">
           {t('campaignNodeConfig.mappingData.templateToApply')} <span className="text-red-500">*</span>
         </label>
         <select
           value={formData.mappingTemplateId || ''}
           onChange={(e) => handleMappingTemplateSelect(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
         >
           <option value="">{t('campaignNodeConfig.mappingData.selectTemplate')}</option>
           {emailTemplates.length > 0 && (
@@ -85,7 +85,7 @@ export const NodeConfigMappingDataSection = ({
           )}
         </select>
         {mappingTemplate && (
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-gray-500 mt-1 dark:text-dk-text2">
             {t('campaignNodeConfig.mappingData.templateLoaded', { name: mappingTemplate.templateName })}
           </p>
         )}
@@ -93,33 +93,33 @@ export const NodeConfigMappingDataSection = ({
 
       <div>
         <div className="flex items-center justify-between mb-2">
-          <label className="block text-sm font-medium text-gray-700">{t('campaignNodeConfig.mappingData.variableDefinitions')}</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-dk-text">{t('campaignNodeConfig.mappingData.variableDefinitions')}</label>
           <button
             type="button"
             onClick={handleAddMapping}
-            className="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700"
+            className="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
           >
             <HiOutlinePlus className="w-4 h-4" />
             {t('campaignNodeConfig.mappingData.addVariable')}
           </button>
         </div>
-        <p className="text-xs text-gray-500 mb-3">
+        <p className="text-xs text-gray-500 mb-3 dark:text-dk-text2">
           {t('campaignNodeConfig.mappingData.mappingHint')}
         </p>
 
         <div className="space-y-3">
           {formData.mappings.map((mapping, index) => (
-            <div key={index} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+            <div key={index} className="border border-gray-200 rounded-lg p-3 bg-gray-50 dark:bg-dk-raised dark:border-dk-border">
               <div className="flex items-start gap-2">
                 <div className="flex-1">
-                  <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.mappingData.variableName')}</label>
+                  <label className="block text-xs text-gray-500 mb-1 dark:text-dk-text2">{t('campaignNodeConfig.mappingData.variableName')}</label>
                   <div className="flex items-center gap-1">
                     <span className="text-gray-400 text-sm">{'{{'}</span>
                     <input
                       type="text"
                       value={mapping.variableName}
                       onChange={(e) => handleMappingFieldChange(index, 'variableName', e.target.value)}
-                      className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-primary-500"
+                      className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                       placeholder={t('campaignNodeConfig.mappingData.variableNamePlaceholder')}
                     />
                     <span className="text-gray-400 text-sm">{'}}'}</span>
@@ -137,11 +137,11 @@ export const NodeConfigMappingDataSection = ({
               </div>
 
               <div className="mt-2">
-                <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.mappingData.dataSource')}</label>
+                <label className="block text-xs text-gray-500 mb-1 dark:text-dk-text2">{t('campaignNodeConfig.mappingData.dataSource')}</label>
                 <select
                   value={mapping.sourceType}
                   onChange={(e) => handleMappingFieldChange(index, 'sourceType', e.target.value)}
-                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
                 >
                   <option value="column">{t('campaignNodeConfig.mappingData.fromSheetColumn')}</option>
                   <option value="formula">{t('campaignNodeConfig.mappingData.formulaFunction')}</option>
@@ -151,12 +151,12 @@ export const NodeConfigMappingDataSection = ({
 
               {mapping.sourceType === 'column' && (
                 <div className="mt-2">
-                  <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.mappingData.columnName')}</label>
+                  <label className="block text-xs text-gray-500 mb-1 dark:text-dk-text2">{t('campaignNodeConfig.mappingData.columnName')}</label>
                   <input
                     type="text"
                     value={mapping.columnName}
                     onChange={(e) => handleMappingFieldChange(index, 'columnName', e.target.value)}
-                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-primary-500"
+                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                     placeholder={t('campaignNodeConfig.mappingData.columnPlaceholder')}
                   />
                   <p className="text-xs text-gray-400 mt-1">{t('campaignNodeConfig.mappingData.columnHint')}</p>
@@ -165,12 +165,12 @@ export const NodeConfigMappingDataSection = ({
 
               {mapping.sourceType === 'formula' && (
                 <div className="mt-2">
-                  <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.mappingData.formulaFunction')}</label>
+                  <label className="block text-xs text-gray-500 mb-1 dark:text-dk-text2">{t('campaignNodeConfig.mappingData.formulaFunction')}</label>
                   <input
                     type="text"
                     value={mapping.formula}
                     onChange={(e) => handleMappingFieldChange(index, 'formula', e.target.value)}
-                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm font-mono focus:ring-2 focus:ring-primary-500"
+                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm font-mono focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                     placeholder={t('campaignNodeConfig.mappingData.formulaPlaceholder')}
                   />
                   <p className="text-xs text-gray-400 mt-1">{t('campaignNodeConfig.mappingData.formulaHint')}</p>
@@ -179,12 +179,12 @@ export const NodeConfigMappingDataSection = ({
 
               {mapping.sourceType === 'static' && (
                 <div className="mt-2">
-                  <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.mappingData.fixedValue')}</label>
+                  <label className="block text-xs text-gray-500 mb-1 dark:text-dk-text2">{t('campaignNodeConfig.mappingData.fixedValue')}</label>
                   <input
                     type="text"
                     value={mapping.formula}
                     onChange={(e) => handleMappingFieldChange(index, 'formula', e.target.value)}
-                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-primary-500"
+                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                     placeholder={t('campaignNodeConfig.mappingData.fixedValuePlaceholder')}
                   />
                 </div>
@@ -194,14 +194,14 @@ export const NodeConfigMappingDataSection = ({
         </div>
       </div>
 
-      <div className="bg-amber-50 p-3 rounded-lg">
-        <p className="text-sm text-amber-700">
+      <div className="bg-amber-50 p-3 rounded-lg dark:bg-amber-950/40">
+        <p className="text-sm text-amber-700 dark:text-amber-300">
           <strong>{t('campaignNodeConfig.mappingData.example')}</strong>
         </p>
-        <ul className="text-xs text-amber-600 mt-1 space-y-1 list-disc list-inside">
-          <li><code className="bg-amber-100 px-1 rounded">ten_khach</code> → {t('campaignNodeConfig.mappingData.exampleMapping', { column: 'Tên khách hàng' })}</li>
-          <li><code className="bg-amber-100 px-1 rounded">ho_ten_day_du</code> → {t('campaignNodeConfig.mappingData.exampleFunction')}</li>
-          <li><code className="bg-amber-100 px-1 rounded">ngay_gui</code> → {t('campaignNodeConfig.mappingData.exampleNow')}</li>
+        <ul className="text-xs text-amber-600 mt-1 space-y-1 list-disc list-inside dark:text-amber-400">
+          <li><code className="bg-amber-100 px-1 rounded dark:bg-amber-900/40">ten_khach</code> → {t('campaignNodeConfig.mappingData.exampleMapping', { column: 'Tên khách hàng' })}</li>
+          <li><code className="bg-amber-100 px-1 rounded dark:bg-amber-900/40">ho_ten_day_du</code> → {t('campaignNodeConfig.mappingData.exampleFunction')}</li>
+          <li><code className="bg-amber-100 px-1 rounded dark:bg-amber-900/40">ngay_gui</code> → {t('campaignNodeConfig.mappingData.exampleNow')}</li>
         </ul>
       </div>
     </div>

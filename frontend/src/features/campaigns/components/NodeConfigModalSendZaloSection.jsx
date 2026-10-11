@@ -70,13 +70,13 @@ const DataSourceSelector = ({
 }) => {
   const { t } = useI18n();
   return (
-    <div className="space-y-3 rounded-lg border border-gray-200 p-3">
+    <div className="space-y-3 rounded-lg border border-gray-200 p-3 dark:border-dk-border">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{t('zaloNodeSend.dataSource')}</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">{t('zaloNodeSend.dataSource')}</label>
         <select
           value={sourceMode}
           onChange={(e) => onSourceModeChange(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
         >
           <option value="manual">{t('zaloNodeSend.manualInput')}</option>
           <option value="node">{t('zaloNodeSend.getFromPreviousNode')}</option>
@@ -85,23 +85,23 @@ const DataSourceSelector = ({
 
       {sourceMode === 'manual' ? (
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">{manualLabel}</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">{manualLabel}</label>
           <textarea
             rows={4}
             value={manualValue}
             onChange={(e) => onManualValueChange(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
             placeholder={manualPlaceholder}
           />
         </div>
       ) : (
         <>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t('zaloNodeSend.dataNode')}</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">{t('zaloNodeSend.dataNode')}</label>
             <select
               value={selectedNodeId}
               onChange={(e) => onNodeIdChange(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
             >
               <option value="">{t('zaloNodeSend.selectNode')}</option>
               {upstreamNodes.map((node) => (
@@ -112,11 +112,11 @@ const DataSourceSelector = ({
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">{fieldLabel}</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">{fieldLabel}</label>
             <select
               value={selectedField}
               onChange={(e) => onFieldChange(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
             >
               <option value="">{t('zaloNodeSend.selectColumn')}</option>
               {nodeSchema.map((column) => (
@@ -158,10 +158,10 @@ const ZaloSendModeSection = ({ formData, setFormData, sendModeKey = 'all', steps
 
   return (
     <div className="space-y-4">
-      <h4 className="font-medium text-gray-900">{t('zaloNodeSend.sendMode')}</h4>
+      <h4 className="font-medium text-gray-900 dark:text-dk-text">{t('zaloNodeSend.sendMode')}</h4>
 
       <div className="flex flex-col gap-3">
-        <label className="flex items-start gap-3 cursor-pointer p-3 border rounded-lg hover:bg-gray-50">
+        <label className="flex items-start gap-3 cursor-pointer p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-dk-raised dark:border-dk-border">
           <input
             type="radio"
             name={`${sendModeKey}-${stepsKey}`}
@@ -171,11 +171,11 @@ const ZaloSendModeSection = ({ formData, setFormData, sendModeKey = 'all', steps
             className="mt-1 text-primary-500 focus:ring-primary-500"
           />
           <div>
-            <div className="text-sm font-medium text-gray-900">{t('zaloNodeSend.sendSimultaneously')}</div>
-            <div className="text-xs text-gray-500 mt-1">{t('zaloNodeSend.sendSimultaneouslyDesc')}</div>
+            <div className="text-sm font-medium text-gray-900 dark:text-dk-text">{t('zaloNodeSend.sendSimultaneously')}</div>
+            <div className="text-xs text-gray-500 mt-1 dark:text-dk-text2">{t('zaloNodeSend.sendSimultaneouslyDesc')}</div>
           </div>
         </label>
-        <label className="flex items-start gap-3 cursor-pointer p-3 border rounded-lg hover:bg-gray-50">
+        <label className="flex items-start gap-3 cursor-pointer p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-dk-raised dark:border-dk-border">
           <input
             type="radio"
             name={`${sendModeKey}-${stepsKey}`}
@@ -185,14 +185,14 @@ const ZaloSendModeSection = ({ formData, setFormData, sendModeKey = 'all', steps
             className="mt-1 text-primary-500 focus:ring-primary-500"
           />
           <div>
-            <div className="text-sm font-medium text-gray-900">{t('zaloNodeSend.bySchedule')}</div>
-            <div className="text-xs text-gray-500 mt-1">{t('zaloNodeSend.byScheduleDesc')}</div>
+            <div className="text-sm font-medium text-gray-900 dark:text-dk-text">{t('zaloNodeSend.bySchedule')}</div>
+            <div className="text-xs text-gray-500 mt-1 dark:text-dk-text2">{t('zaloNodeSend.byScheduleDesc')}</div>
           </div>
         </label>
       </div>
 
       {formData[sendModeKey] === 'schedule' && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300">
           {t('zaloNodeSend.scheduleNote')}
         </div>
       )}
@@ -422,11 +422,11 @@ const ZaloTemplateListSection = ({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h4 className="font-medium text-gray-900">{title}</h4>
+        <h4 className="font-medium text-gray-900 dark:text-dk-text">{title}</h4>
         <button
           type="button"
           onClick={handleAddStep}
-          className="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700"
+          className="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
         >
           <HiOutlinePlus className="w-4 h-4" />
           {addLabel}
@@ -434,21 +434,21 @@ const ZaloTemplateListSection = ({
       </div>
 
       {steps.length === 0 && (
-        <div className="text-center py-8 text-sm text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
+        <div className="text-center py-8 text-sm text-gray-500 border-2 border-dashed border-gray-200 rounded-lg dark:text-dk-text2 dark:border-dk-border">
           {t('zaloNodeSend.noTemplateYet')}
         </div>
       )}
 
       <div className="space-y-3">
         {steps.map((step, idx) => (
-          <div key={step.id || idx} className="border border-gray-200 rounded-lg p-4 space-y-4">
+          <div key={step.id || idx} className="border border-gray-200 rounded-lg p-4 space-y-4 dark:border-dk-border">
             <div className="flex items-center justify-between">
-              <div className="text-sm font-semibold text-gray-800">{t('zaloNodeSend.templateNumber', { number: idx + 1 })}</div>
+              <div className="text-sm font-semibold text-gray-800 dark:text-dk-text">{t('zaloNodeSend.templateNumber', { number: idx + 1 })}</div>
               {steps.length > 1 && (
                 <button
                   type="button"
                   onClick={() => handleRemoveStep(idx)}
-                  className="text-xs text-red-600 hover:text-red-700 flex items-center gap-1"
+                  className="text-xs text-red-600 hover:text-red-700 flex items-center gap-1 dark:text-red-400 dark:hover:text-red-300"
                 >
                   <HiOutlineTrash className="w-3.5 h-3.5" />
                   {t('zaloNodeSend.delete')}
@@ -459,21 +459,21 @@ const ZaloTemplateListSection = ({
             {sendMode === 'schedule' && (
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">{t('zaloNodeSend.afterHowLong')}</label>
+                  <label className="block text-xs text-gray-500 mb-1 dark:text-dk-text2">{t('zaloNodeSend.afterHowLong')}</label>
                   <input
                     type="number"
                     min={0}
                     value={step.delayValue || 0}
                     onChange={(e) => handleStepChange(idx, 'delayValue', parseInt(e.target.value, 10) || 0)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">{t('zaloNodeSend.unit')}</label>
+                  <label className="block text-xs text-gray-500 mb-1 dark:text-dk-text2">{t('zaloNodeSend.unit')}</label>
                   <select
                     value={step.delayUnit || 'minutes'}
                     onChange={(e) => handleStepChange(idx, 'delayUnit', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
                   >
                     <option value="minutes">{t('zaloNodeSend.minutes')}</option>
                     <option value="hours">{t('zaloNodeSend.hours')}</option>
@@ -481,11 +481,11 @@ const ZaloTemplateListSection = ({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">{t('zaloNodeSend.calculatedFrom')}</label>
+                  <label className="block text-xs text-gray-500 mb-1 dark:text-dk-text2">{t('zaloNodeSend.calculatedFrom')}</label>
                   <select
                     value={step.delayFrom || 'start'}
                     onChange={(e) => handleStepChange(idx, 'delayFrom', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
                   >
                     <option value="start">{t('zaloNodeSend.atStart')}</option>
                     <option value="prev">{t('zaloNodeSend.fromPreviousTemplate')}</option>
@@ -495,7 +495,7 @@ const ZaloTemplateListSection = ({
             )}
 
             <div>
-              <label className="block text-xs text-gray-500 mb-1">{t('zaloNodeSend.zaloTemplate')}</label>
+              <label className="block text-xs text-gray-500 mb-1 dark:text-dk-text2">{t('zaloNodeSend.zaloTemplate')}</label>
               <TemplateSearchSelect
                 value={step.templateId || ''}
                 options={templateOptions}
@@ -512,16 +512,16 @@ const ZaloTemplateListSection = ({
                 type="checkbox"
                 checked={step.enableLinkTracking !== false}
                 onChange={(e) => handleStepChange(idx, 'enableLinkTracking', e.target.checked)}
-                className="rounded border-gray-300 text-primary-500 focus:ring-primary-500"
+                className="rounded border-gray-300 text-primary-500 focus:ring-primary-500 dark:border-dk-border-strong"
               />
-              <span className="text-xs text-gray-700">
+              <span className="text-xs text-gray-700 dark:text-dk-text">
                 {t('zaloNodeSend.sendTrackingLink')}
               </span>
             </label>
 
             {(step.templateMappings || []).length > 0 && (
               <div className="space-y-3">
-                <div className="text-xs font-medium text-gray-700">{t('zaloNodeSend.mappingVariables')}</div>
+                <div className="text-xs font-medium text-gray-700 dark:text-dk-text">{t('zaloNodeSend.mappingVariables')}</div>
                 {(step.templateMappings || []).map((mapping, mappingIndex) => {
                   const selectedNodeId = String(mapping?.nodeId || defaultSourceNodeId || '').trim();
                   const schema = selectedNodeId && typeof getSchemaForNodeId === 'function'
@@ -529,8 +529,8 @@ const ZaloTemplateListSection = ({
                     : [];
                   const mappingSourceType = normalizeMappingSourceType(mapping?.sourceType);
                   return (
-                    <div key={`${mapping.key || mappingIndex}-${mappingIndex}`} className="bg-gray-50 rounded-lg p-3 space-y-3">
-                      <div className="text-xs font-medium text-gray-800">{mapping.key}</div>
+                    <div key={`${mapping.key || mappingIndex}-${mappingIndex}`} className="bg-gray-50 rounded-lg p-3 space-y-3 dark:bg-dk-raised">
+                      <div className="text-xs font-medium text-gray-800 dark:text-dk-text">{mapping.key}</div>
                       <div className="flex gap-3">
                         <label className="flex items-center gap-2 cursor-pointer">
                           <input
@@ -541,7 +541,7 @@ const ZaloTemplateListSection = ({
                             onChange={(e) => handleStepMappingChange(idx, mappingIndex, 'sourceType', e.target.value)}
                             className="text-primary-500 focus:ring-primary-500"
                           />
-                          <span className="text-xs text-gray-700">{t('zaloNodeSend.manual')}</span>
+                          <span className="text-xs text-gray-700 dark:text-dk-text">{t('zaloNodeSend.manual')}</span>
                         </label>
                         <label className="flex items-center gap-2 cursor-pointer">
                           <input
@@ -552,7 +552,7 @@ const ZaloTemplateListSection = ({
                             onChange={(e) => handleStepMappingChange(idx, mappingIndex, 'sourceType', e.target.value)}
                             className="text-primary-500 focus:ring-primary-500"
                           />
-                          <span className="text-xs text-gray-700">{t('zaloNodeSend.fromNode')}</span>
+                          <span className="text-xs text-gray-700 dark:text-dk-text">{t('zaloNodeSend.fromNode')}</span>
                         </label>
                       </div>
                       {mappingSourceType === 'manual' ? (
@@ -560,7 +560,7 @@ const ZaloTemplateListSection = ({
                           type="text"
                           value={mapping?.value || ''}
                           onChange={(e) => handleStepMappingChange(idx, mappingIndex, 'value', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                           placeholder={t('zaloNodeSend.enterManualValue')}
                         />
                       ) : (
@@ -568,7 +568,7 @@ const ZaloTemplateListSection = ({
                           <select
                             value={selectedNodeId}
                             onChange={(e) => handleStepMappingChange(idx, mappingIndex, 'nodeId', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
                           >
                             <option value="">{t('zaloNodeSend.selectNode')}</option>
                             {upstreamNodes.map((upstreamNode) => (
@@ -580,7 +580,7 @@ const ZaloTemplateListSection = ({
                           <select
                             value={mapping?.field || ''}
                             onChange={(e) => handleStepMappingChange(idx, mappingIndex, 'field', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
                           >
                             <option value="">{t('zaloNodeSend.selectColumn')}</option>
                             {schema.map((column) => (
@@ -600,8 +600,8 @@ const ZaloTemplateListSection = ({
         ))}
       </div>
 
-      <div className="bg-blue-50 p-3 rounded-lg">
-        <p className="text-xs text-blue-700">
+      <div className="bg-blue-50 p-3 rounded-lg dark:bg-blue-950/40">
+        <p className="text-xs text-blue-700 dark:text-blue-300">
           {t('zaloNodeSend.templateNote')}
         </p>
       </div>
@@ -695,18 +695,18 @@ export const NodeConfigSendZaloPersonalSection = ({
     return (
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">{t('zaloNodeSend.nodeName')}</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">{t('zaloNodeSend.nodeName')}</label>
           <input
             type="text"
             value={formData.label}
             onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
             placeholder={t('zaloNodeSend.placeholderNodeName')}
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">{t('zaloNodeSend.recipientType')}</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">{t('zaloNodeSend.recipientType')}</label>
           <select
             value={recipientType}
             onChange={(e) => setFormData((prev) => ({
@@ -714,7 +714,7 @@ export const NodeConfigSendZaloPersonalSection = ({
               zaloRecipientType: e.target.value,
               zaloRecipientField: '',
             }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
           >
             <option value="phone">{t('zaloNodeSend.phoneNumber')}</option>
             <option value="uid">{t('zaloNodeSend.uidZalo')}</option>
@@ -737,7 +737,7 @@ export const NodeConfigSendZaloPersonalSection = ({
           nodeSchema={phoneSourceSchema}
         />
 
-        <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700">
+        <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
           {t('zaloNodeSend.accountNote')}
         </div>
       </div>
@@ -746,9 +746,9 @@ export const NodeConfigSendZaloPersonalSection = ({
 
   return (
     <div className="flex" style={{ minHeight: '500px' }}>
-      <div className="w-64 border-r border-gray-200 flex flex-col">
-        <div className="p-3 border-b border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-700">{t('zaloNodeSend.settings')}</h3>
+      <div className="w-64 border-r border-gray-200 flex flex-col dark:border-dk-border">
+        <div className="p-3 border-b border-gray-200 dark:border-dk-border">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-dk-text">{t('zaloNodeSend.settings')}</h3>
         </div>
         <div className="flex-1 overflow-y-auto">
           {sections.map((section) => {
@@ -759,13 +759,13 @@ export const NodeConfigSendZaloPersonalSection = ({
                 onClick={() => setSelectedSection(section.id)}
                 className={`px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors ${
                   selectedSection === section.id
-                    ? 'bg-primary-50 border-l-4 border-primary-600'
+                    ? 'bg-primary-50 border-l-4 border-primary-600 dark:bg-primary-950/40'
                     : 'border-l-4 border-transparent'
-                }`}
+                } dark:hover:bg-dk-raised`}
               >
                 <div className="flex items-center gap-2">
-                  <Icon className={`w-4 h-4 ${selectedSection === section.id ? 'text-primary-600' : 'text-gray-500'}`} />
-                  <span className={`text-sm ${selectedSection === section.id ? 'font-medium text-primary-900' : 'text-gray-700'}`}>
+                  <Icon className={`w-4 h-4 ${selectedSection === section.id ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-dk-text2'}`} />
+                  <span className={`text-sm ${selectedSection === section.id ? 'font-medium text-primary-900 dark:text-primary-300' : 'text-gray-700 dark:text-dk-text'}`}>
                     {section.name}
                   </span>
                 </div>
@@ -835,17 +835,17 @@ export const NodeConfigSendZaloFriendRequestSection = ({
   return (
   <div className="space-y-4">
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{t('zaloNodeSend.nodeName')}</label>
+      <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">{t('zaloNodeSend.nodeName')}</label>
       <input
         type="text"
         value={formData.label}
         onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
         placeholder={t('zaloNodeSend.sendZaloFriendRequestPlaceholder')}
       />
     </div>
 
-    <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700">
+    <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
       {t('zaloNodeSend.accountNote')}
     </div>
 
@@ -866,13 +866,13 @@ export const NodeConfigSendZaloFriendRequestSection = ({
     />
 
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
+      <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">
         {t('zaloNodeSend.contentSource')} <span className="text-red-500">*</span>
       </label>
       <select
         value={formData.zaloFriendContentMode || 'manual'}
         onChange={(e) => setFormData((prev) => ({ ...prev, zaloFriendContentMode: e.target.value }))}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
       >
         <option value="manual">{t('zaloNodeSend.manualInvite')}</option>
         <option value="template">{t('zaloNodeSend.fromTemplate')}</option>
@@ -881,27 +881,27 @@ export const NodeConfigSendZaloFriendRequestSection = ({
 
     {(formData.zaloFriendContentMode || 'manual') === 'manual' ? (
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">
           {t('zaloNodeSend.friendRequestMessage')} <span className="text-red-500">*</span>
         </label>
         <textarea
           rows={3}
           value={formData.zaloFriendRequestMessage || ''}
           onChange={(e) => setFormData((prev) => ({ ...prev, zaloFriendRequestMessage: e.target.value }))}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
           placeholder={t('zaloNodeSend.friendRequestPlaceholder')}
         />
       </div>
     ) : (
-      <div className="space-y-3 rounded-lg border border-gray-200 p-3">
+      <div className="space-y-3 rounded-lg border border-gray-200 p-3 dark:border-dk-border">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">
             {t('zaloNodeSend.selectZaloTemplate')} <span className="text-red-500">*</span>
           </label>
           <select
             value={formData.zaloFriendTemplateId || ''}
             onChange={(e) => handleTemplateChange(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
           >
             <option value="">{t('zaloNodeSend.selectTemplate')}</option>
             {zaloTemplates.map((template) => (
@@ -914,14 +914,14 @@ export const NodeConfigSendZaloFriendRequestSection = ({
 
         {templateVariables.length > 0 && (
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">{t('zaloNodeSend.mappingVariables')}</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-dk-text">{t('zaloNodeSend.mappingVariables')}</label>
             {(formData.zaloFriendTemplateMappings || []).map((mapping, idx) => (
               <div key={`${mapping.key}-${idx}`} className="grid grid-cols-1 md:grid-cols-3 gap-2">
                 <input
                   type="text"
                   value={mapping.key}
                   disabled
-                  className="px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-600"
+                  className="px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-600 dark:bg-dk-raised dark:border-dk-border dark:text-dk-text2 dark:placeholder-dk-muted"
                 />
                 <select
                   value={mapping.sourceType === 'recipient_field' ? 'node' : (mapping.sourceType || 'manual')}
@@ -933,7 +933,7 @@ export const NodeConfigSendZaloFriendRequestSection = ({
                     };
                     return { ...prev, zaloFriendTemplateMappings: next };
                   })}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
                 >
                   <option value="manual">{t('zaloNodeSend.manualValue')}</option>
                   <option value="node">{t('zaloNodeSend.getFromPrevious')}</option>
@@ -951,7 +951,7 @@ export const NodeConfigSendZaloFriendRequestSection = ({
                         };
                         return { ...prev, zaloFriendTemplateMappings: next };
                       })}
-                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
                     >
                       <option value="">{t('zaloNodeSend.selectNode')}</option>
                       {upstreamNodes.map((node) => (
@@ -970,7 +970,7 @@ export const NodeConfigSendZaloFriendRequestSection = ({
                         };
                         return { ...prev, zaloFriendTemplateMappings: next };
                       })}
-                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
                     >
                       <option value="">{t('zaloNodeSend.selectColumn')}</option>
                       {(mapping.nodeId
@@ -995,7 +995,7 @@ export const NodeConfigSendZaloFriendRequestSection = ({
                       };
                       return { ...prev, zaloFriendTemplateMappings: next };
                     })}
-                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
                     placeholder={t('zaloNodeSend.manualValue')}
                   />
                 )}
@@ -1072,12 +1072,12 @@ export const NodeConfigSendZaloGroupSection = ({
     return (
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">{t('zaloNodeSend.nodeName')}</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">{t('zaloNodeSend.nodeName')}</label>
           <input
             type="text"
             value={formData.label}
             onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
             placeholder={t('zaloNodeSend.sendZaloGroupPlaceholder')}
           />
         </div>
@@ -1098,7 +1098,7 @@ export const NodeConfigSendZaloGroupSection = ({
           nodeSchema={groupSourceSchema}
         />
 
-        <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700">
+        <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
           {selectedGroupCount > 0
             ? t('zaloNodeSend.sendingGroupCount', { count: selectedGroupCount })
             : t('zaloNodeSend.getGroupIdHint')}
@@ -1109,9 +1109,9 @@ export const NodeConfigSendZaloGroupSection = ({
 
   return (
     <div className="flex" style={{ minHeight: '500px' }}>
-      <div className="w-64 border-r border-gray-200 flex flex-col">
-        <div className="p-3 border-b border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-700">{t('zaloNodeSend.settings')}</h3>
+      <div className="w-64 border-r border-gray-200 flex flex-col dark:border-dk-border">
+        <div className="p-3 border-b border-gray-200 dark:border-dk-border">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-dk-text">{t('zaloNodeSend.settings')}</h3>
         </div>
         <div className="flex-1 overflow-y-auto">
           {sections.map((section) => {
@@ -1122,13 +1122,13 @@ export const NodeConfigSendZaloGroupSection = ({
                 onClick={() => setSelectedSection(section.id)}
                 className={`px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors ${
                   selectedSection === section.id
-                    ? 'bg-primary-50 border-l-4 border-primary-600'
+                    ? 'bg-primary-50 border-l-4 border-primary-600 dark:bg-primary-950/40'
                     : 'border-l-4 border-transparent'
-                }`}
+                } dark:hover:bg-dk-raised`}
               >
                 <div className="flex items-center gap-2">
-                  <Icon className={`w-4 h-4 ${selectedSection === section.id ? 'text-primary-600' : 'text-gray-500'}`} />
-                  <span className={`text-sm ${selectedSection === section.id ? 'font-medium text-primary-900' : 'text-gray-700'}`}>
+                  <Icon className={`w-4 h-4 ${selectedSection === section.id ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-dk-text2'}`} />
+                  <span className={`text-sm ${selectedSection === section.id ? 'font-medium text-primary-900 dark:text-primary-300' : 'text-gray-700 dark:text-dk-text'}`}>
                     {section.name}
                   </span>
                 </div>
