@@ -857,7 +857,7 @@ export default function DiagnosticPage() {
                     step={1}
                     value={delaySeconds}
                     onChange={(e) => setDelaySeconds(Number(e.target.value))}
-                    className="w-full accent-primary-500 dark:[color-scheme:dark] mt-1"
+                    className="w-full accent-primary-500 mt-1"
                   />
                   <div className="flex justify-between text-xs text-gray-400 dark:text-dk-muted mt-1">
                     <span>1s</span>
@@ -940,7 +940,7 @@ export default function DiagnosticPage() {
             <div className="px-5 py-4 border-b border-gray-100 dark:border-dk-border flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5 min-w-0">
                 <span className="font-semibold text-gray-900 dark:text-dk-text shrink-0">{t('diagnostic.runTitle', { id: activeRun.id })}</span>
-                <span className="text-gray-200 dark:text-dk-border">|</span>
+                <span className="text-gray-200 dark:text-dk-muted">|</span>
                 <span className="text-sm text-gray-500 dark:text-dk-text2 truncate">{t(`diagnostic.channels.${activeRun.channel}`, CHANNEL_LABELS[activeRun.channel] ?? activeRun.channel)}</span>
                 <RunStatusBadge status={activeRun.status} t={t} />
               </div>
