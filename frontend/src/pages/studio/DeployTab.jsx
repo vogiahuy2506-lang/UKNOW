@@ -17,7 +17,9 @@ import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import { ChannelModal } from './ChannelModals';
 import ShareChatbotModal from '../../components/marketplace/ShareChatbotModal';
 import MarketplaceListingModal from '../../components/marketplace/MarketplaceListingModal';
-import { useChannelEntitlements } from '../../hooks/queries/useChannelEntitlements';
+import { useChannelAvailability } from '../../hooks/queries/useChannelAvailability';
+import ChannelUnavailableModal from '../../components/common/ChannelUnavailableModal';
+import ChannelLockBadge from '../../components/common/ChannelLockBadge';
 import { useAuthStore } from '../../stores/authStore';
 import { useI18n } from '../../i18n';
 
@@ -65,6 +67,7 @@ const CHANNEL_TILES = [
     icon: 'Z',
     iconClass: 'bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400',
     countField: 'zalo_personal_count',
+    availabilityKey: 'zalo',
   },
   {
     key: 'whatsapp',
@@ -73,6 +76,7 @@ const CHANNEL_TILES = [
     icon: 'W',
     iconClass: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400',
     countField: 'whatsapp_count',
+    availabilityKey: 'whatsapp',
   },
   {
     key: 'telegram_personal',
@@ -81,20 +85,26 @@ const CHANNEL_TILES = [
     icon: 'T',
     iconClass: 'bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400',
     countField: 'telegram_count',
+    availabilityKey: 'telegram',
   },
 ];
 
-function SquareTile({ onClick, iconBg, children, tooltip, label, sublabel, sublabelOn = false, disabled = false }) {
+// `locked` (11/10/2026): kênh chưa có trong gói / gói hết hạn — ô VẪN hiện nhưng mờ + ổ khoá, bấm mở modal gợi ý mua
+// (không dùng `disabled` thật vì phải nhận lượt bấm). Khác `disabled` (đã đăng bán, chỉ đọc).
+function SquareTile({ onClick, iconBg, children, tooltip, label, sublabel, sublabelOn = false, disabled = false, locked = false, testId }) {
   return (
     <button
       type="button"
       onClick={onClick}
       title={tooltip}
       disabled={disabled}
+      data-testid={testId}
+      aria-disabled={locked ? 'true' : undefined}
       className={`group relative w-full min-h-[78px] bg-white dark:bg-dk-raised rounded-xl border border-slate-200 dark:border-dk-border transition-all flex flex-col items-center justify-center gap-1 px-1.5 py-2 ${
         disabled ? 'opacity-70 cursor-default' : 'hover:border-primary-300 dark:hover:border-primary-500/50 hover:bg-primary-50/30 dark:hover:bg-primary-950/20'
-      }`}
+      } ${locked ? 'opacity-60' : ''}`}
     >
+      {locked && <ChannelLockBadge className="absolute top-1.5 right-1.5" />}
       <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold transition-transform ${disabled ? '' : 'group-hover:scale-110'} ${iconBg}`}>
         {children}
       </div>
@@ -116,8 +126,12 @@ export default function DeployTab({
   onUpdate,
 }) {
   const { t } = useI18n();
-  // P9 — gói không có Telegram/WhatsApp (trần 0) thì ẩn ô kênh đó (không còn tài khoản nào dùng được để gán chatbot).
-  const entitlements = useChannelEntitlements();
+  // 11/10/2026 (PLAN_KENH_KHONG_AN_KHOA_VA_GOI_Y_MUA) — gói không có Zalo/Telegram/WhatsApp (trần tài khoản 0) hoặc gói hết hạn:
+  // ô kênh đó VẪN hiện nhưng mờ + khoá, bấm mở modal gợi ý mua slot / gia hạn (trước đây ẩn hẳn nên khách không biết có kênh).
+  // Chỉ khoá vì "không có kênh" / "hết hạn": hết lượt GỬI trong kỳ không chặn việc kết nối tài khoản cho chatbot nên không khoá.
+  // KHÔNG dùng `visible`: ô kênh ở đây xưa nay không phụ thuộc cờ hệ thống của chiến dịch (không truyền fetchAdapterChannels).
+  const channelAvailability = useChannelAvailability();
+  const [lockedChannelModal, setLockedChannelModal] = useState(null);
   const [embedModal, setEmbedModal] = useState(null); // 'script' | 'iframe' | 'public_link' | null
   const [channelModal, setChannelModal] = useState(null); // 'zalo_personal' | 'whatsapp' | 'telegram_personal' | null
   const [shareModal, setShareModal] = useState(false);
@@ -155,11 +169,11 @@ export default function DeployTab({
   }
 
   const listingStatus = chatbot.marketplace_listing_status || null;
-  const channelTiles = CHANNEL_TILES.filter((tile) => (
-    !(tile.key === 'whatsapp' && !entitlements.whatsapp)
-    && !(tile.key === 'telegram_personal' && !entitlements.telegram)
-    && !(tile.key === 'zalo_personal' && !entitlements.zalo)
-  ));
+  const isTileLocked = (tile) => {
+    const reason = tile.availabilityKey ? channelAvailability[tile.availabilityKey]?.reason : null;
+    return reason === 'not_in_plan' || reason === 'plan_expired';
+  };
+  const channelTiles = CHANNEL_TILES;
 
   return (
     <div className="flex flex-col h-full">
@@ -215,15 +229,21 @@ export default function DeployTab({
             <div className="grid grid-cols-2 gap-2">
               {channelTiles.map((tile) => {
                 const count = Number(chatbot[tile.countField]) || 0;
+                const locked = isTileLocked(tile);
+                const tileLabel = tile.titleKey ? t(tile.titleKey) : tile.title;
                 return (
                   <SquareTile
                     key={tile.key}
-                    onClick={() => setChannelModal(tile.key)}
+                    testId={`deploy-channel-${tile.key}`}
+                    locked={locked}
+                    onClick={() => (locked ? setLockedChannelModal(tile.availabilityKey) : setChannelModal(tile.key))}
                     iconBg={tile.iconClass}
-                    tooltip={t(tile.tooltipKey)}
-                    label={tile.titleKey ? t(tile.titleKey) : tile.title}
-                    sublabel={count > 0 ? t('chatbot.studio.tileOn', { count }) : t('chatbot.studio.tileOff')}
-                    sublabelOn={count > 0}
+                    tooltip={locked ? t('channelUnavailable.lockedTip', { channel: tileLabel }) : t(tile.tooltipKey)}
+                    label={tileLabel}
+                    sublabel={locked
+                      ? t('channelUnavailable.lockedBadge')
+                      : (count > 0 ? t('chatbot.studio.tileOn', { count }) : t('chatbot.studio.tileOff'))}
+                    sublabelOn={!locked && count > 0}
                   >
                     <span className="text-base">{tile.icon}</span>
                   </SquareTile>
@@ -279,6 +299,15 @@ export default function DeployTab({
             setEmbedModal(null);
             onOpenWidgetSettings?.(k);
           }}
+        />
+      )}
+
+      {/* Kênh chưa dùng được: giải thích + gợi ý mua */}
+      {lockedChannelModal && (
+        <ChannelUnavailableModal
+          channel={lockedChannelModal}
+          info={channelAvailability[lockedChannelModal]}
+          onClose={() => setLockedChannelModal(null)}
         />
       )}
 
