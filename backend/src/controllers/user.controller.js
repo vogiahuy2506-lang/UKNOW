@@ -46,6 +46,7 @@ import { acceptMembershipInvite, declineMembershipInvite } from '../services/use
 import { logWorkspace, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 import { getRequestAuditContext } from '../utils/auditContext.util.js';
 import { getChannelEntitlements } from '../services/campaign/channelEntitlement.service.js';
+import { getEnabledAdapterChannelsForBuilder } from '../services/campaign/campaignChannelRegistry.service.js';
 
 const AI_HANDOFF_AUTO_RESUME_ALLOWED = new Set([5, 15, 30, 60]);
 
@@ -238,10 +239,22 @@ class UserController {
    * GET /api/users/channel-entitlements
    * P9 — quyền dùng kênh Telegram/WhatsApp theo gói của CHỦ workspace: { telegram, whatsapp, limits }.
    * `true` = trần null (không giới hạn) hoặc > 0; `limits` là trần thật (null = không giới hạn) để FE hiện thông báo.
+   *
+   * PLAN_KENH_KHONG_AN_KHOA_VA_GOI_Y_MUA_2026-10-11: thêm `enabledAdapterChannels: [{ key, label }]` = kênh adapter
+   * (Telegram/WhatsApp) mà HỆ THỐNG đang bật, KHÔNG lọc theo gói — để giao diện vẫn hiện thẻ kênh (khoá + gợi ý mua) khi
+   * gói không có kênh hoặc gói hết hạn (GET /campaigns/channels bị requireActivePlan chặn nên trả rỗng/403 trong hai
+   * trường hợp đó). Kênh hệ thống TẮT thì không có trong danh sách -> giao diện vẫn ẩn (không bán được).
+   * Lỗi đọc registry thì bỏ trường (FE coi là backend cũ và dùng GET /campaigns/channels như trước) chứ không làm hỏng quyền kênh.
    */
   async getChannelEntitlements(req, res) {
     try {
-      const data = await getChannelEntitlements(req.user);
+      const entitlements = await getChannelEntitlements(req.user);
+      const data = { ...entitlements };
+      try {
+        data.enabledAdapterChannels = getEnabledAdapterChannelsForBuilder().map((c) => ({ key: c.key, label: c.label }));
+      } catch (registryError) {
+        console.error('getChannelEntitlements: không đọc được danh sách kênh adapter đang bật:', registryError?.message);
+      }
       return res.json({ success: true, data });
     } catch (error) {
       const status = error?.statusCode || error?.status;
