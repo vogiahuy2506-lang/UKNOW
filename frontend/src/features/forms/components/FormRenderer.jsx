@@ -338,7 +338,7 @@ export default function FormRenderer({
   if (submittedSuccess) {
     return (
       <div
-        className={`w-full ${cardWidthClass} mx-auto p-6 bg-white rounded-2xl ${cardSurfaceClass} text-center`}
+        className={`w-full ${cardWidthClass} mx-auto p-6 bg-white text-slate-800 rounded-2xl ${cardSurfaceClass} text-center`}
         style={themeRootStyle}
       >
         <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-50 text-green-600 flex items-center justify-center text-3xl font-bold">
@@ -378,9 +378,11 @@ export default function FormRenderer({
     );
   }
 
+  // giữ sáng: biểu mẫu khách điền luôn nền trắng. text-slate-800 (= màu chữ body sáng #1e293b) để xem trước trong app
+  // chế độ tối không kế thừa chữ sáng của body → chữ trắng trên ô trắng.
   return (
     <div
-      className={`w-full ${cardWidthClass} mx-auto bg-white rounded-2xl ${cardSurfaceClass} overflow-hidden overflow-x-hidden box-border`}
+      className={`w-full ${cardWidthClass} mx-auto bg-white text-slate-800 rounded-2xl ${cardSurfaceClass} overflow-hidden overflow-x-hidden box-border`}
       style={themeRootStyle}
     >
       {/* Banner: full-bleed (tràn hết chiều rộng thẻ, không theo padding nội dung bên dưới) —
