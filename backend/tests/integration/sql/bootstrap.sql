@@ -4220,3 +4220,14 @@ CREATE TABLE IF NOT EXISTS email_suppressions (
   created_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   CONSTRAINT email_suppressions_workspace_email_key UNIQUE (workspace_owner_id, email_lower)
 );
+
+-- --- Migration 297: landing_page_forms (PLAN_BIEU_MAU_TUY_BIEN_AI_LANDING PR-6: chi muc landing <-> bieu mau nhieu-nhieu) ---
+CREATE TABLE IF NOT EXISTS landing_page_forms (
+  landing_page_id BIGINT      NOT NULL REFERENCES landing_pages(id) ON DELETE CASCADE,
+  form_id         BIGINT      NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
+  position        INT         NOT NULL,
+  kind            VARCHAR(20),
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (landing_page_id, form_id)
+);
+CREATE INDEX IF NOT EXISTS idx_landing_page_forms_form_id ON landing_page_forms (form_id);
