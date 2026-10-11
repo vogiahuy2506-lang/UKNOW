@@ -9,8 +9,8 @@
  *   1. nhánh đó **RENDER** một màn hình — KHÔNG điều hướng đi đâu cả (đổi lại thành Navigate là đỏ);
  *   2. màn hình ấy nói được cho người ta biết chuyện gì đang xảy ra và có lối đi tiếp.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 
 vi.mock('../../i18n', async () => (await import('../../test/realI18n.js')).realI18nModule());
@@ -49,7 +49,15 @@ const moTrangApp = () => render(
   </MemoryRouter>
 );
 
-beforeEach(() => { vi.clearAllMocks(); });
+const retrySessionCheckGoc = useAuthStore.getState().retrySessionCheck;
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  // Các ca "phiên chưa kiểm tra được" đọc token trong storage + cờ trong store — dọn để ca nào cũng bắt đầu sạch.
+  localStorage.clear();
+  sessionStorage.clear();
+  useAuthStore.setState({ sessionCheckFailed: false, retrySessionCheck: retrySessionCheckGoc });
+});
 
 describe('ProtectedRoute — không gian cá nhân khi chưa có gói', () => {
   it('KHÔNG đá ra trang bán hàng công khai, và vẫn đứng nguyên ở /app', () => {
@@ -105,5 +113,116 @@ describe('ProtectedRoute — không gian cá nhân khi chưa có gói', () => {
     moTrangApp();
 
     expect(screen.getByTestId('trang-dang-nhap')).toBeInTheDocument();
+  });
+});
+
+/**
+ * PLAN_429_PHIEN_VA_CHUOI_SAN_PHAM_2026-10-11 việc 1: initialize() gặp 429/5xx/mất mạng ở /auth/me (đã thử lại
+ * hết lượt) thì giữ token và bật sessionCheckFailed. Cổng PHẢI **RENDER** màn "Thử lại" ở trường hợp đó — không
+ * `Navigate` ra /login (người dùng chưa bị đăng xuất, máy chủ chỉ đang bận). Chưa đăng nhập thật (không token)
+ * thì /login như cũ.
+ */
+describe('ProtectedRoute — phiên chưa kiểm tra được (429/5xx/mất mạng)', () => {
+  const seedChuaKiemTraDuoc = ({ coToken = true, sessionCheckFailed = true } = {}) => {
+    if (coToken) localStorage.setItem('accessToken', 'fake-access-token');
+    useAuthStore.setState({
+      isAuthenticated: false,
+      isLoading: false,
+      user: null,
+      activeContext: { type: 'self' },
+      sessionCheckFailed,
+    });
+  };
+
+  it('còn token + sessionCheckFailed → hiện màn Thử lại, KHÔNG điều hướng ra /login', () => {
+    seedChuaKiemTraDuoc();
+    moTrangApp();
+
+    expect(screen.getByText('Không kiểm tra được phiên đăng nhập')).toBeInTheDocument();
+    expect(screen.getByText(/Bạn vẫn đang đăng nhập/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Thử lại' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Đăng nhập lại' })).toBeInTheDocument();
+    expect(screen.queryByTestId('trang-dang-nhap')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('noi-dung-app')).not.toBeInTheDocument();
+    expect(screen.getByTestId('vi-tri')).toHaveTextContent('/app');
+  });
+
+  it('KHÔNG còn token → chưa đăng nhập thật, vẫn chuyển sang /login', () => {
+    seedChuaKiemTraDuoc({ coToken: false });
+    moTrangApp();
+
+    expect(screen.getByTestId('trang-dang-nhap')).toBeInTheDocument();
+    expect(screen.queryByText('Không kiểm tra được phiên đăng nhập')).not.toBeInTheDocument();
+  });
+
+  it('còn token nhưng không có cờ sessionCheckFailed → /login (cờ mới là thứ phân biệt lỗi tạm thời)', () => {
+    seedChuaKiemTraDuoc({ sessionCheckFailed: false });
+    moTrangApp();
+
+    expect(screen.getByTestId('trang-dang-nhap')).toBeInTheDocument();
+  });
+
+  it('bấm Thử lại → gọi retrySessionCheck đúng một lần', async () => {
+    const retrySessionCheck = vi.fn().mockResolvedValue(undefined);
+    seedChuaKiemTraDuoc();
+    useAuthStore.setState({ retrySessionCheck });
+    moTrangApp();
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Thử lại' })); });
+
+    expect(retrySessionCheck).toHaveBeenCalledTimes(1);
+  });
+
+  it('thử lại thành công (store chuyển sang đã đăng nhập) → màn Thử lại biến mất, vào nội dung app', async () => {
+    seedChuaKiemTraDuoc();
+    moTrangApp();
+    expect(screen.queryByTestId('noi-dung-app')).not.toBeInTheDocument();
+
+    act(() => {
+      useAuthStore.setState({
+        isAuthenticated: true,
+        sessionCheckFailed: false,
+        user: { id: 7, username: 'u', role: 'user', active_plan_id: 3, memberships: [] },
+      });
+    });
+
+    expect(screen.getByTestId('noi-dung-app')).toBeInTheDocument();
+    expect(screen.queryByText('Không kiểm tra được phiên đăng nhập')).not.toBeInTheDocument();
+  });
+
+  describe('hẹn giờ 15 giây khi isLoading kéo dài', () => {
+    beforeEach(() => { vi.useFakeTimers(); });
+    afterEach(() => { vi.useRealTimers(); });
+
+    const seedDangTai = ({ coToken }) => {
+      if (coToken) localStorage.setItem('accessToken', 'fake-access-token');
+      useAuthStore.setState({
+        isAuthenticated: false,
+        isLoading: true,
+        user: null,
+        activeContext: { type: 'self' },
+        sessionCheckFailed: false,
+      });
+    };
+
+    it('còn token → quá 15 giây rơi vào màn Thử lại, không phải /login', () => {
+      seedDangTai({ coToken: true });
+      moTrangApp();
+      expect(screen.queryByText('Không kiểm tra được phiên đăng nhập')).not.toBeInTheDocument();
+
+      act(() => { vi.advanceTimersByTime(15000); });
+
+      expect(screen.getByText('Không kiểm tra được phiên đăng nhập')).toBeInTheDocument();
+      expect(screen.queryByTestId('trang-dang-nhap')).not.toBeInTheDocument();
+    });
+
+    it('không còn token → quá 15 giây vẫn sang /login như cũ', () => {
+      seedDangTai({ coToken: false });
+      moTrangApp();
+
+      act(() => { vi.advanceTimersByTime(15000); });
+
+      expect(screen.getByTestId('trang-dang-nhap')).toBeInTheDocument();
+    });
   });
 });

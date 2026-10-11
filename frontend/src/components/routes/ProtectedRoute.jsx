@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { useAuthStore } from '../../stores/authStore';
+import { useAuthStore, hasStoredAccessToken } from '../../stores/authStore';
 import LoadingScreen from '../LoadingScreen';
+import SessionCheckFailedScreen from './SessionCheckFailedScreen';
 import NoPlanScreen from '../../pages/auth/NoPlanScreen';
 
 /**
@@ -17,15 +18,21 @@ import NoPlanScreen from '../../pages/auth/NoPlanScreen';
  *      `navigate('/app')`, cú `Navigate` ở đây chạy ngược lại, hai bên giẫm chân nhau và React dựng
  *      ra cây rỗng. Không một lỗi JS nào; đo trên production thì `#root` chỉ còn thẻ toast.
  * Render thẳng thì không còn cuộc đua nào để thua.
+ *
+ * "KHÔNG KIỂM TRA ĐƯỢC PHIÊN" CŨNG PHẢI **RENDER**. `initialize()` gặp 429/5xx/mất mạng ở /auth/me (sau khi đã
+ * thử lại) thì giữ token và bật `sessionCheckFailed` — người dùng CHƯA bị đăng xuất. Đá họ ra /login trong
+ * lúc máy chủ chỉ đang bận (đo 11/10/2026: ~230 lượt tải trang dính 429) là sai; hiện màn "Thử lại". Không còn
+ * token thì mới là chưa đăng nhập thật → /login.
  */
 const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated, isLoading, user, activeContext } = useAuthStore();
+  const { isAuthenticated, isLoading, user, activeContext, sessionCheckFailed } = useAuthStore();
   const location = useLocation();
 
   useEffect(() => {
     if (isLoading) {
       const timeout = setTimeout(() => {
-        useAuthStore.setState({ isLoading: false, isAuthenticated: false });
+        // Còn token = phiên chưa kiểm tra xong, không phải chưa đăng nhập → rơi vào màn Thử lại, không ra /login.
+        useAuthStore.setState({ isLoading: false, isAuthenticated: false, sessionCheckFailed: hasStoredAccessToken() });
       }, 15000);
       return () => clearTimeout(timeout);
     }
@@ -33,6 +40,7 @@ const ProtectedRoute = ({ children }) => {
 
   if (isLoading) return <LoadingScreen />;
   if (!isAuthenticated) {
+    if (sessionCheckFailed && hasStoredAccessToken()) return <SessionCheckFailedScreen />;
     const redirect = encodeURIComponent(`${location.pathname}${location.search || ''}`);
     return <Navigate to={`/login?redirect=${redirect}`} replace />;
   }

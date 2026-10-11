@@ -58,6 +58,54 @@ const removeToken = (key) => {
   safeRemoveItem(window.sessionStorage, key);
 };
 
+/** Máy này còn lưu access token không? Cổng route dùng để phân biệt "phiên chưa kiểm tra được" với "chưa đăng nhập". */
+export const hasStoredAccessToken = () => Boolean(getStoredToken('accessToken'));
+
+// Kiểm tra phiên (GET /auth/me) gặp lỗi TẠM THỜI thì thử lại thay vì bỏ cuộc ngay: quét 11/10/2026 trên
+// production cho thấy ~230 lượt tải trang bị 429 ở đúng request này rồi bị đẩy ra /login. Chỉ thử lại trong
+// initialize() — KHÔNG làm ở api.js cho mọi request (POST có thể bị gửi đôi).
+const SESSION_CHECK_RETRY_DELAYS_MS = [1500, 4000];
+const SESSION_CHECK_RETRY_AFTER_CAP_MS = 8000;
+// Trần tổng thời gian CHỜ giữa các lượt (không tính thời gian request) — hẹn giờ 15s của ProtectedRoute không
+// nên bị chạm bởi riêng việc chờ. Retry-After 8s + 8s sẽ vượt, nên lượt sau bị cắt cho vừa ngân sách.
+const SESSION_CHECK_TOTAL_WAIT_CAP_MS = 12000;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// 429 (hạn mức), 5xx, hoặc không có response (mất mạng / timeout / bị huỷ) là tạm thời. 401/403 là phiên hỏng
+// thật; 4xx khác (400, 404…) không phải thứ thử lại sẽ chữa được.
+const isTransientSessionError = (error) => {
+  const status = error?.response?.status;
+  return !error?.response || status === 429 || status >= 500;
+};
+
+// Retry-After dạng giây nguyên → ms, chặn trần. Dạng ngày HTTP, rỗng, hoặc "0" (thử lại ngay lập tức chính
+// là cách đập tiếp vào hạn mức vừa chặn mình) → null để dùng độ trễ mặc định.
+const readRetryAfterMs = (error) => {
+  const headers = error?.response?.headers;
+  const raw = headers?.get?.('retry-after') ?? headers?.['retry-after'] ?? headers?.['Retry-After'];
+  const text = String(raw ?? '').trim();
+  if (!/^\d+$/.test(text) || Number(text) === 0) return null;
+  return Math.min(Number(text) * 1000, SESSION_CHECK_RETRY_AFTER_CAP_MS);
+};
+
+const fetchSessionUserWithRetry = async () => {
+  let waitedMs = 0;
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await api.get('/auth/me');
+    } catch (error) {
+      if (!isTransientSessionError(error) || attempt >= SESSION_CHECK_RETRY_DELAYS_MS.length) throw error;
+      const wantedMs = readRetryAfterMs(error) ?? SESSION_CHECK_RETRY_DELAYS_MS[attempt];
+      const delayMs = Math.min(wantedMs, SESSION_CHECK_TOTAL_WAIT_CAP_MS - waitedMs);
+      waitedMs += delayMs;
+      await sleep(delayMs);
+      // Token biến mất trong lúc chờ (đăng xuất ở nơi khác) → thôi, đừng gọi tiếp bằng phiên đã bỏ.
+      if (!getStoredToken('accessToken')) throw error;
+    }
+  }
+};
+
 /**
  * Khôi phục activeContext từ sessionStorage (mất khi đóng tab, không persist qua logout).
  * Trả về null nếu không có hoặc đã stale.
@@ -210,6 +258,10 @@ const EMPTY_SEND_USAGE = {
 // StrictMode double-invoke) thành một request thay vì bắn trùng.
 let refreshCurrentUserInFlight = null;
 
+// Single-flight cho initialize(): lúc app khởi động, "Thử lại" và hẹn giờ của route có thể chồng lên một lượt
+// kiểm tra phiên đang thử lại — dùng chung MỘT promise để không bắn song song vài request /auth/me.
+let initializeInFlight = null;
+
 // Single-flight + cache cho fetchPhoneOtpEnabled() (PR-2, xác thực SĐT). Khác
 // refreshCurrentUserInFlight: KHÔNG reset về null khi thành công — cờ tính năng gần như
 // tĩnh (chỉ đổi khi backend restart với PHONE_OTP_PROVIDER khác), không cần fetch lại mỗi
@@ -296,66 +348,85 @@ export const useAuthStore = create((set, get) => ({
 
   /**
    * Khởi tạo trạng thái auth từ storage khi load app.
+   * Lỗi tạm thời của /auth/me (429/5xx/mất mạng) được thử lại tối đa 2 lần ngay trong lúc `isLoading` còn
+   * true; hết lượt mới rơi về `sessionCheckFailed`. Single-flight: gọi chồng nhau dùng chung một promise.
    */
-  initialize: async () => {
-    const token = getStoredToken('accessToken');
-    if (token) {
-      try {
-        const response = await api.get('/auth/me');
-        const rawUser = response.data.data.user;
-        const normalizedUser = normalizeUser(rawUser);
+  initialize: () => {
+    if (initializeInFlight) return initializeInFlight;
+    initializeInFlight = (async () => {
+      const token = getStoredToken('accessToken');
+      if (token) {
+        try {
+          const response = await fetchSessionUserWithRetry();
+          const rawUser = response.data.data.user;
+          const normalizedUser = normalizeUser(rawUser);
 
-        // Khôi phục context đã lưu (nếu vẫn còn trong memberships); nếu không, chọn default thông minh
-        const storedCtx = loadStoredContext();
-        let activeContext = null;
-        if (storedCtx?.type === 'employee' && normalizedUser?.memberships) {
-          const membership = normalizedUser.memberships.find(
-            (m) => String(m.ownerId) === String(storedCtx.ownerId)
-          );
-          if (membership) {
-            activeContext = buildEmployeeContext(membership);
+          // Khôi phục context đã lưu (nếu vẫn còn trong memberships); nếu không, chọn default thông minh
+          const storedCtx = loadStoredContext();
+          let activeContext = null;
+          if (storedCtx?.type === 'employee' && normalizedUser?.memberships) {
+            const membership = normalizedUser.memberships.find(
+              (m) => String(m.ownerId) === String(storedCtx.ownerId)
+            );
+            if (membership) {
+              activeContext = buildEmployeeContext(membership);
+            }
           }
-        }
-        if (!activeContext) {
-          activeContext = pickDefaultContext(normalizedUser);
-          saveContext(activeContext);
-        }
+          if (!activeContext) {
+            activeContext = pickDefaultContext(normalizedUser);
+            saveContext(activeContext);
+          }
 
-        set({
-          user: normalizedUser,
-          isAuthenticated: true,
-          isLoading: false,
-          activeContext,
-          sessionCheckFailed: false,
-        });
-      } catch (error) {
-        console.error('Auth initialization failed:', error);
-        // PLAN_SUA_SAU_NGHIEM_THU_2026-09-29 mục 1.F — chỉ đăng xuất khi token THẬT SỰ không hợp lệ
-        // (401) hoặc tài khoản bị khoá/vô hiệu hoá (403). Lỗi tạm thời (429 hạn mức, 5xx, mất mạng —
-        // không có response) phải GIỮ token: F5 lúc dính 429 không được biến thành đăng xuất.
-        const status = error?.response?.status;
-        if (status === 401 || status === 403) {
-          removeToken('accessToken');
-          removeToken('refreshToken');
-          safeRemoveItem(window.sessionStorage, CONTEXT_STORAGE_KEY);
           set({
-            user: null,
-            isAuthenticated: false,
+            user: normalizedUser,
+            isAuthenticated: true,
             isLoading: false,
-            aiCredits: { used: 0, limit: null },
-            sendUsage: { ...EMPTY_SEND_USAGE },
-            addons: null,
-            billingStatus: null,
-            activeContext: { type: 'self' },
+            activeContext,
             sessionCheckFailed: false,
           });
-        } else {
-          set({ isLoading: false, isAuthenticated: false, sessionCheckFailed: true });
+        } catch (error) {
+          console.error('Auth initialization failed:', error);
+          // PLAN_SUA_SAU_NGHIEM_THU_2026-09-29 mục 1.F — chỉ đăng xuất khi token THẬT SỰ không hợp lệ
+          // (401) hoặc tài khoản bị khoá/vô hiệu hoá (403). Lỗi tạm thời (429 hạn mức, 5xx, mất mạng —
+          // không có response) phải GIỮ token: F5 lúc dính 429 không được biến thành đăng xuất.
+          const status = error?.response?.status;
+          if (status === 401 || status === 403) {
+            removeToken('accessToken');
+            removeToken('refreshToken');
+            safeRemoveItem(window.sessionStorage, CONTEXT_STORAGE_KEY);
+            set({
+              user: null,
+              isAuthenticated: false,
+              isLoading: false,
+              aiCredits: { used: 0, limit: null },
+              sendUsage: { ...EMPTY_SEND_USAGE },
+              addons: null,
+              billingStatus: null,
+              activeContext: { type: 'self' },
+              sessionCheckFailed: false,
+            });
+          } else {
+            // Token bị xoá giữa chừng (đăng xuất ở nơi khác) thì không còn gì để "kiểm tra lại" — đừng bật cờ.
+            set({ isLoading: false, isAuthenticated: false, sessionCheckFailed: Boolean(getStoredToken('accessToken')) });
+          }
         }
+      } else {
+        set({ isLoading: false, isAuthenticated: false, sessionCheckFailed: false });
       }
-    } else {
-      set({ isLoading: false, isAuthenticated: false });
-    }
+    })().finally(() => {
+      initializeInFlight = null;
+    });
+    return initializeInFlight;
+  },
+
+  /**
+   * Nút "Thử lại" của màn SessionCheckFailedScreen. KHÔNG bật `isLoading` và KHÔNG xoá `sessionCheckFailed`
+   * trước: cổng route đang hiện màn Thử lại nhờ cặp (chưa đăng nhập + sessionCheckFailed + còn token); bật
+   * `isLoading` thì màn bị gỡ khỏi cây (đổi sang LoadingScreen) làm nút mất trạng thái "đang thử", còn xoá cờ
+   * mà không bật `isLoading` thì cổng đá thẳng ra /login. initialize() tự cập nhật cờ khi có kết quả.
+   */
+  retrySessionCheck: async () => {
+    await get().initialize();
   },
 
   /**
@@ -516,6 +587,9 @@ export const useAuthStore = create((set, get) => ({
         addons: null,
         billingStatus: null,
         activeContext: { type: 'self' },
+        // Chủ động đăng xuất (vd "Đăng nhập lại" ở màn Thử lại) — trang đăng nhập không được còn băng
+        // "không kiểm tra được phiên" của phiên vừa bỏ.
+        sessionCheckFailed: false,
       });
     }
   },

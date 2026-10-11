@@ -10096,6 +10096,15 @@ Feel free to ask me anything!`,
     logout: 'Logout',
   },
 
+  // Session check failed screen (route gate when /auth/me fails temporarily but a token is still stored)
+  sessionCheck: {
+    title: "Couldn't check your session",
+    description: "The server is busy or your connection is unstable. You're still signed in — press Retry in a few seconds.",
+    retry: 'Retry',
+    retrying: 'Retrying...',
+    relogin: 'Log in again',
+  },
+
   // App loading
   app: {
     loading: 'Loading...',

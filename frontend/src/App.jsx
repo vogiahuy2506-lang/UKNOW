@@ -118,6 +118,7 @@ const AdminSupportTicketDetailPage = lazyWithRetry(() => import('./pages/admin/A
 import UnauthorizedScreen from './pages/auth/UnauthorizedScreen';
 import LoadingScreen from './components/LoadingScreen';
 import ProtectedRoute from './components/routes/ProtectedRoute';
+import AdminRoute from './components/routes/AdminRoute';
 import PermissionRoute from './components/routes/PermissionRoute';
 const ActivatePage = lazyWithRetry(() => import('./pages/auth/ActivatePage'));
 const ForgotPasswordPage = lazyWithRetry(() => import('./pages/auth/ForgotPasswordPage'));
@@ -146,17 +147,6 @@ const OwnerRoute = ({ children }) => {
 // Gác route bằng cờ tính năng (Feature flag)
 const FeatureFlagRoute = ({ flag, children }) => {
   if (import.meta.env[flag] !== 'true') return <UnauthorizedScreen />;
-  return children;
-};
-
-// Bảo vệ /admin/* — chỉ super_admin được vào, role khác thấy màn hình unauthorized
-const AdminRoute = ({ children }) => {
-  const { isAuthenticated, isLoading, user } = useAuthStore();
-
-  if (isLoading) return <LoadingScreen />;
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
-  if (user?.role !== 'admin') return <UnauthorizedScreen />;
-
   return children;
 };
 

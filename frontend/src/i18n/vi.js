@@ -10108,6 +10108,15 @@ export default {
     logout: 'Đăng xuất',
   },
 
+  // Session check failed screen (cổng route khi /auth/me lỗi tạm thời nhưng máy còn token)
+  sessionCheck: {
+    title: 'Không kiểm tra được phiên đăng nhập',
+    description: 'Máy chủ đang bận hoặc mạng chập chờn. Bạn vẫn đang đăng nhập — bấm Thử lại sau vài giây.',
+    retry: 'Thử lại',
+    retrying: 'Đang thử lại...',
+    relogin: 'Đăng nhập lại',
+  },
+
   // App loading
   app: {
     loading: 'Loading...',
