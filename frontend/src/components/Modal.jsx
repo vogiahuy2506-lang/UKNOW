@@ -25,6 +25,10 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md' }) => {
   const titleId = useId();
   const contentRef = useRef(null);
   const previouslyFocusedRef = useRef(null);
+  // onClose thường là hàm viết thẳng trong JSX của trang cha → đổi danh tính mỗi lần cha vẽ lại. Để nó trong deps thì
+  // effect chạy lại mỗi lần cha vẽ lại: rAF kéo focus về phần tử đầu modal GIỮA lúc người dùng đang gõ. Giữ qua ref.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -48,7 +52,7 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md' }) => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key !== 'Tab' || !contentRef.current) return;
@@ -83,7 +87,7 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md' }) => {
         prev.focus();
       }
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
