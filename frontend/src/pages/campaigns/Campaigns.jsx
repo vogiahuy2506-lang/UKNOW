@@ -197,6 +197,9 @@ const Campaigns = () => {
     if (!location.state?.openCreateCampaignModal) return;
     openCreateModal();
     navigate(location.pathname, { replace: true, state: {} });
+    // openCreateModal giờ đọc trạng thái kênh (chọn sẵn loại dùng được) nên đổi mỗi lần vẽ; thêm vào deps sẽ chạy lại effect
+    // khi chưa kịp xoá location.state. Chỉ cần chạy khi điều hướng mang cờ mở modal.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname, location.state, navigate]);
 
   const fetchCampaigns = async () => {
