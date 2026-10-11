@@ -483,7 +483,7 @@ const OrderDetailDrawer = ({ order, onClose, onNavigateCustomer }) => {
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-40" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40" onClick={onClose} />
 
       {/* Drawer */}
       <div className="fixed inset-y-0 right-0 w-full sm:w-[440px] bg-white dark:bg-dk-surface dark:border-l dark:border-dk-border shadow-2xl z-50 flex flex-col">

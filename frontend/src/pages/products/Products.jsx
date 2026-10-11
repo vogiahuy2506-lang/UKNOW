@@ -226,7 +226,7 @@ function ProductDetailModal({ product, funnel, canViewFunnel, onClose, onEdit })
   return createPortal(
     <div className={MODAL_OVERLAY} role="dialog" aria-modal="true" data-testid="product-detail-modal">
       <div
-        className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity"
+        className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
         onClick={onClose}
         aria-hidden="true"
         tabIndex={-1}
@@ -1241,7 +1241,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
         createPortal(
           <div className={MODAL_OVERLAY} role="dialog" aria-modal="true">
             <div
-              className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity"
+              className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
               onClick={closeFormModal}
               aria-hidden="true"
               tabIndex={-1}
@@ -1650,7 +1650,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
         createPortal(
           <div className={MODAL_OVERLAY} role="dialog" aria-modal="true">
             <div
-              className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity"
+              className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
               onClick={() => !isDeleting && setDeleteTarget(null)}
               aria-hidden="true"
               tabIndex={-1}

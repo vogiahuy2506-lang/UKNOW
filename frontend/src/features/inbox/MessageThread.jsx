@@ -424,7 +424,7 @@ const MessageThread = ({
     return (
       <div className="h-full min-h-0 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-14 h-14 border-3 border-primary-500 border-t-transparent rounded-full mx-auto mb-4 animate-spin"></div>
+          <div className="w-14 h-14 border-[3px] border-primary-500 border-t-transparent rounded-full mx-auto mb-4 animate-spin"></div>
           <p className="text-gray-500 font-medium">{t('inbox.loadingMessages')}</p>
         </div>
       </div>

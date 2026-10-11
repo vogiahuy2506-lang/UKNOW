@@ -224,7 +224,7 @@ const EmailTemplateListSection = ({
                 </div>
 
                 {/* Quick Action Overlay on Hover */}
-                <div className="opacity-0 group-hover:opacity-100 transition-all duration-150 flex items-center gap-1 bg-white/95 dark:bg-dk-raised/95 backdrop-blur-xs shadow-xs rounded-lg p-1 border border-gray-200 dark:border-dk-border">
+                <div className="opacity-0 group-hover:opacity-100 transition-all duration-150 flex items-center gap-1 bg-white/95 dark:bg-dk-raised/95 backdrop-blur-sm shadow-xs rounded-lg p-1 border border-gray-200 dark:border-dk-border">
                   <button
                     type="button"
                     onClick={() => handlePreview(template)}

@@ -754,7 +754,7 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
         createPortal(
           // Render ra document.body để overlay luôn phủ full viewport,
           // tránh bị giới hạn bởi layout cha có overflow/transform.
-          <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-xs flex items-center justify-center px-4">
+          <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center px-4">
             <div className="bg-white dark:bg-dk-surface border border-gray-200 dark:border-dk-border rounded-xl shadow-xl w-full max-w-sm">
               <div className="px-4 py-3 border-b border-gray-200 dark:border-dk-border flex items-center justify-between">
                 <h3 className="font-semibold text-gray-900 dark:text-dk-text">{t('zaloSettings.qrModalTitle')}</h3>
@@ -799,7 +799,7 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
 
       {/* Custom Domain Guide Modal */}
       {showHelp && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-dk-surface border border-slate-100 dark:border-dk-border rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] overflow-auto">
             <div className="sticky top-0 bg-white dark:bg-dk-bg border-b border-slate-100 dark:border-dk-border/80 p-6 pb-4">
               <div className="flex items-center justify-between">

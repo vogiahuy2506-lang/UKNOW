@@ -1148,7 +1148,7 @@ const Campaigns = () => {
 
       {showCreateModal && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200"
           onKeyDown={(e) => {
             if (e.key === 'Escape' && !isCreatingCampaign) closeCreateModal();
           }}
@@ -1297,7 +1297,7 @@ const Campaigns = () => {
       {approveModal.show && approveModal.campaign && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-xs"
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => !isApproving && setApproveModal({ show: false, campaign: null })}
           />
           <div className="relative bg-white dark:bg-dk-surface rounded-xl shadow-xl max-w-md w-full p-6 space-y-4 border border-transparent dark:border-dk-border">
@@ -1365,7 +1365,7 @@ const Campaigns = () => {
       {rejectModal.show && rejectModal.campaign && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-xs"
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => !isRejecting && setRejectModal({ show: false, campaign: null, reason: '' })}
           />
           <div className="relative bg-white dark:bg-dk-surface rounded-xl shadow-xl max-w-md w-full p-6 space-y-4 border border-transparent dark:border-dk-border">

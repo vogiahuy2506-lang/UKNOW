@@ -146,7 +146,7 @@ function QrModal({ open, onClose, qrPayload, qrStatus, qrError, onCancel, onNewQ
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
-                      <div className="w-8 h-8 border-3 border-orange-400 border-t-transparent rounded-full animate-spin" />
+                      <div className="w-8 h-8 border-[3px] border-orange-400 border-t-transparent rounded-full animate-spin" />
                     </div>
                   )}
                 </div>

@@ -346,7 +346,7 @@ const DashboardFilterPanel = ({
 
       {/* Slide-over panel */}
       <div
-        className={`fixed top-0 right-0 h-screen w-[400px] bg-white dark:bg-dk-surface dark:border-l dark:border-dk-border shadow-2xl z-50 flex flex-col transition-transform duration-250 ease-out ${
+        className={`fixed top-0 right-0 h-screen w-[400px] bg-white dark:bg-dk-surface dark:border-l dark:border-dk-border shadow-2xl z-50 flex flex-col transition-transform duration-[250ms] ease-out ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >

@@ -275,7 +275,7 @@ export const TestEmailModal = ({ isOpen, onClose, onSend, isSending, t }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="bg-white dark:bg-dk-surface border border-transparent dark:border-dk-border rounded-2xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
         <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100 dark:border-dk-border/80">
           <div className="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-950/40 flex items-center justify-center">

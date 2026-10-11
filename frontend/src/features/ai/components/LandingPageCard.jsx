@@ -260,7 +260,7 @@ const LandingPageCard = ({
         {/* Busy Overlay */}
         {isBusy && (
           <div className="absolute inset-0 bg-white/80 backdrop-blur-[1px] z-20 flex flex-col items-center justify-center gap-2">
-            <div className="w-8 h-8 border-3 border-orange-500 border-t-transparent rounded-full animate-spin" />
+            <div className="w-8 h-8 border-[3px] border-orange-500 border-t-transparent rounded-full animate-spin" />
             <p className="text-xs font-bold text-slate-700">{t('editing')}</p>
           </div>
         )}

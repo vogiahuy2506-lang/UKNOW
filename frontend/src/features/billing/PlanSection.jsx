@@ -166,7 +166,7 @@ export default function PlanSection({ data, t }) {
           )}
         </div>
         {data.planMaxEmployees !== null && (
-          <div className="text-right shrink-0 bg-white/90 backdrop-blur-xs px-4 py-2.5 rounded-xl border border-amber-100 shadow-2xs dark:bg-dk-surface/90 dark:border-amber-500/20">
+          <div className="text-right shrink-0 bg-white/90 backdrop-blur-sm px-4 py-2.5 rounded-xl border border-amber-100 shadow-2xs dark:bg-dk-surface/90 dark:border-amber-500/20">
             <p className="text-[11px] font-medium text-gray-500 dark:text-dk-text2 uppercase tracking-wider">{t('accountProfileModal.maxEmployees')}</p>
             <p className="text-sm font-bold text-gray-900 dark:text-dk-text mt-0.5">
               {data.planMaxEmployees === -1 ? t('accountProfileModal.unlimited') : t('accountProfileModal.people', { count: data.planMaxEmployees })}
