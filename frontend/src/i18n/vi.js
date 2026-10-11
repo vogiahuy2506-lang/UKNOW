@@ -90,8 +90,8 @@ export default {
     common: {
       loadError: 'Không thể tải danh sách',
       updateError: 'Không thể cập nhật',
-      // Hai khoá dưới đây bị dùng ở MarketplaceContent/MyFavorites mà chưa hề khai báo ở ĐÂY.
-      // Chúng giải được ở GỐC từ điển nên test cũ cho qua, nhưng hai trang đó dùng
+      // Hai khoá dưới đây bị dùng ở MarketplaceContent mà chưa hề khai báo ở ĐÂY.
+      // Chúng giải được ở GỐC từ điển nên test cũ cho qua, nhưng trang đó dùng
       // useI18n('marketplace') nên lúc chạy luôn thêm tiền tố và không bao giờ tra gốc — nút hiện
       // chữ "common.view".
       view: 'Xem',

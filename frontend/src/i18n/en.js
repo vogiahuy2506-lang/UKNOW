@@ -90,7 +90,7 @@ export default {
     common: {
       loadError: 'Failed to load listings',
       updateError: 'Failed to update',
-      // Used by MarketplaceContent/MyFavorites but never declared: t() returns the key itself, so
+      // Used by MarketplaceContent but never declared: t() returns the key itself, so
       // the button rendered the literal text "common.view", and because that string is truthy the
       // `|| 'Xem'` fallback at the call site never ran.
       view: 'View',
