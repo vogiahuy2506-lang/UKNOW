@@ -38,7 +38,9 @@ import {
 } from '../../features/campaigns/utils/campaignDateTime.helpers';
 import { getActiveRunPause, getRunPauseI18nKey } from '../../features/campaigns/utils/campaignQuotaPause.helpers';
 import { useAuthStore } from '../../stores/authStore';
-import { useChannelEntitlements } from '../../hooks/queries/useChannelEntitlements';
+import { useChannelAvailability } from '../../hooks/queries/useChannelAvailability';
+import ChannelUnavailableModal from '../../components/common/ChannelUnavailableModal';
+import ChannelLockBadge from '../../components/common/ChannelLockBadge';
 import campaignApiService from '../../features/campaigns/services/campaignApi.service';
 import CampaignMarketplaceModal from '../../components/campaigns/CampaignMarketplaceModal';
 import CampaignShareModal from '../../features/campaigns/components/CampaignShareModal';
@@ -110,17 +112,18 @@ const Campaigns = () => {
     campaignName: '',
     campaignType: 'email',
   });
-  // PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 4 — nguồn cờ: gọi 1 lần khi mở trang danh
-  // sách chiến dịch. Lỗi/404 (BE cũ) -> coi như tắt (mặc định false, không có nút Telegram).
-  const [telegramChannelEnabled, setTelegramChannelEnabled] = useState(false);
-  // PLAN_WHATSAPP_DAY_DU_2026-09-29 PR-W4b — cùng nguồn cờ /campaigns/channels (key 'whatsapp').
-  const [whatsappChannelEnabled, setWhatsappChannelEnabled] = useState(false);
-  // P12 — gói không có kênh Zalo: modal tạo chiến dịch bỏ 2 lựa chọn Zalo (bộ lọc loại vẫn giữ để tìm chiến dịch cũ).
-  const { zalo: zaloEntitled } = useChannelEntitlements();
+  // 11/10/2026 — KHÔNG ẩn loại chiến dịch theo gói nữa: mọi loại có kênh `visible` đều vẽ ra, loại có kênh chưa dùng được
+  // (gói không có kênh / hết hạn / hết lượt) mờ + khoá, bấm mở modal giải thích + gợi ý mua. Telegram/WhatsApp chỉ ẩn khi cờ
+  // HỆ THỐNG tắt (không bán được); backend cũ thiếu trường thì hook gọi GET /campaigns/channels như trước (lỗi/404 -> ẩn).
+  const channelAvailability = useChannelAvailability({ fetchAdapterChannels: () => campaignApiService.getChannels() });
+  const telegramChannelEnabled = channelAvailability.telegram.visible;
+  const whatsappChannelEnabled = channelAvailability.whatsapp.visible;
+  const [lockedChannelModal, setLockedChannelModal] = useState(null);
 
   const createCampaignChannels = [
     {
       id: 'email',
+      channel: 'email',
       name: t('campaigns.email'),
       icon: HiOutlineMail,
       iconBg: 'bg-blue-50 text-blue-600 border border-blue-100/80',
@@ -129,22 +132,25 @@ const Campaigns = () => {
     },
     {
       id: 'zalo',
+      channel: 'zalo',
       name: t('campaigns.zaloPersonal'),
       icon: HiOutlineChat,
       iconBg: 'bg-sky-50 text-sky-600 border border-sky-100/80',
       selectedIconBg: 'bg-sky-600 text-white',
-      visible: zaloEntitled,
+      visible: true,
     },
     {
       id: 'zalo_group',
+      channel: 'zalo',
       name: t('campaigns.zaloGroup'),
       icon: HiOutlineUserGroup,
       iconBg: 'bg-violet-50 text-violet-600 border border-violet-100/80',
       selectedIconBg: 'bg-violet-600 text-white',
-      visible: zaloEntitled,
+      visible: true,
     },
     {
       id: 'telegram',
+      channel: 'telegram',
       name: t('campaigns.telegram'),
       icon: FaTelegramPlane,
       iconBg: 'bg-sky-50 text-sky-500 border border-sky-100/80',
@@ -153,6 +159,7 @@ const Campaigns = () => {
     },
     {
       id: 'telegram_group',
+      channel: 'telegram',
       name: t('campaigns.telegramGroup'),
       icon: FaTelegramPlane,
       iconBg: 'bg-indigo-50 text-indigo-600 border border-indigo-100/80',
@@ -161,6 +168,7 @@ const Campaigns = () => {
     },
     {
       id: 'whatsapp',
+      channel: 'whatsapp',
       name: t('campaigns.whatsapp'),
       icon: FaWhatsapp,
       iconBg: 'bg-emerald-50 text-emerald-600 border border-emerald-100/80',
@@ -190,24 +198,6 @@ const Campaigns = () => {
     openCreateModal();
     navigate(location.pathname, { replace: true, state: {} });
   }, [location.pathname, location.state, navigate]);
-
-  useEffect(() => {
-    let cancelled = false;
-    campaignApiService.getChannels()
-      .then((res) => {
-        if (cancelled) return;
-        const channels = res?.data?.data?.channels;
-        setTelegramChannelEnabled(Array.isArray(channels) && channels.some((c) => c.key === 'telegram'));
-        setWhatsappChannelEnabled(Array.isArray(channels) && channels.some((c) => c.key === 'whatsapp'));
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setTelegramChannelEnabled(false);
-          setWhatsappChannelEnabled(false);
-        }
-      });
-    return () => { cancelled = true; };
-  }, []);
 
   const fetchCampaigns = async () => {
     setIsLoading(true);
@@ -381,9 +371,12 @@ const Campaigns = () => {
   };
 
   const openCreateModal = () => {
+    // Loại mặc định = loại đầu tiên có kênh dùng được (Email khoá vì hết lượt thì chọn sẵn Zalo...); không có loại nào
+    // dùng được (vd gói hết hạn) thì giữ 'email' — bấm tạo sẽ mở modal giải thích thay vì tạo.
+    const firstUsable = createCampaignChannels.find((c) => channelAvailability[c.channel]?.available !== false);
     setCreateCampaignForm({
       campaignName: '',
-      campaignType: 'email',
+      campaignType: firstUsable?.id || 'email',
     });
     setShowCreateModal(true);
   };
@@ -395,6 +388,13 @@ const Campaigns = () => {
   const handleCreateCampaign = async () => {
     if (!createCampaignForm.campaignName.trim()) {
       toast.error(t('campaigns.enterCampaignName'));
+      return;
+    }
+
+    // Chặn tạo chiến dịch loại có kênh đang khoá (vd mọi kênh đều khoá nên loại mặc định vẫn là khoá) — nói rõ vì sao.
+    const selectedType = createCampaignChannels.find((c) => c.id === createCampaignForm.campaignType);
+    if (selectedType && channelAvailability[selectedType.channel]?.available === false) {
+      setLockedChannelModal(selectedType.channel);
       return;
     }
 
@@ -1217,18 +1217,28 @@ const Campaigns = () => {
 
                 <div className={`grid gap-2.5 ${createCampaignChannels.length <= 2 ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3'}`}>
                   {createCampaignChannels.map((ch) => {
+                    const isLocked = channelAvailability[ch.channel]?.available === false;
                     const isSelected = createCampaignForm.campaignType === ch.id;
                     const Icon = ch.icon;
                     return (
                       <button
                         key={ch.id}
                         type="button"
-                        onClick={() => setCreateCampaignForm((prev) => ({ ...prev, campaignType: ch.id }))}
+                        data-testid={`create-campaign-type-${ch.id}`}
+                        aria-disabled={isLocked ? 'true' : undefined}
+                        title={isLocked ? t('channelUnavailable.lockedTip', { channel: ch.name }) : undefined}
+                        onClick={() => {
+                          if (isLocked) {
+                            setLockedChannelModal(ch.channel);
+                            return;
+                          }
+                          setCreateCampaignForm((prev) => ({ ...prev, campaignType: ch.id }));
+                        }}
                         className={`group relative flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border text-left transition-all ${
-                          isSelected
+                          isSelected && !isLocked
                             ? 'border-orange-500 bg-orange-50/70 dark:bg-orange-950/40 shadow-sm shadow-orange-500/10 ring-1 ring-orange-500/30 text-orange-950 dark:text-orange-200 font-semibold'
                             : 'border-slate-200 dark:border-dk-border bg-white dark:bg-dk-bg hover:border-slate-300 dark:hover:border-dk-border hover:bg-slate-50/80 dark:hover:bg-dk-surface text-slate-700 dark:text-dk-text shadow-xs'
-                        }`}
+                        } ${isLocked ? 'opacity-60' : ''}`}
                       >
                         <span
                           className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors shadow-xs ${
@@ -1241,7 +1251,9 @@ const Campaigns = () => {
                         <span className="text-sm font-medium leading-snug whitespace-nowrap">
                           {ch.name}
                         </span>
-                        {isSelected && (
+                        {isLocked ? (
+                          <ChannelLockBadge className="absolute top-2 right-2" />
+                        ) : isSelected && (
                           <span
                             className="absolute top-2 right-2 w-4 h-4 rounded-full bg-orange-500 text-white flex items-center justify-center shadow-xs"
                             aria-hidden="true"
@@ -1285,6 +1297,14 @@ const Campaigns = () => {
           </div>
         </div>,
         document.body
+      )}
+
+      {lockedChannelModal && (
+        <ChannelUnavailableModal
+          channel={lockedChannelModal}
+          info={channelAvailability[lockedChannelModal]}
+          onClose={() => setLockedChannelModal(null)}
+        />
       )}
 
       <CampaignShareModal
