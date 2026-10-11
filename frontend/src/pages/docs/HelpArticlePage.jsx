@@ -45,13 +45,13 @@ export default function HelpArticlePage() {
   };
 
   if (isLoading) {
-    return <p className="text-sm text-slate-400">{t('common.loading')}</p>;
+    return <p className="text-sm text-slate-400 dark:text-dk-muted">{t('common.loading')}</p>;
   }
 
   if (notFound || !article) {
     return (
-      <div className="flex flex-col items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-6 py-14 text-center text-slate-500">
-        <HiOutlineExclamationCircle className="h-8 w-8 text-slate-400" />
+      <div className="flex flex-col items-center gap-3 rounded-xl border border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-surface px-6 py-14 text-center text-slate-500 dark:text-dk-text2">
+        <HiOutlineExclamationCircle className="h-8 w-8 text-slate-400 dark:text-dk-muted" />
         <p>{t('helpDocs.articleNotFound')}</p>
       </div>
     );
@@ -60,8 +60,8 @@ export default function HelpArticlePage() {
   return (
     <article className="space-y-6">
       <header className="space-y-2">
-        <h1 className="text-3xl font-bold text-slate-900">{article.title}</h1>
-        {article.summary && <p className="text-slate-500">{article.summary}</p>}
+        <h1 className="text-3xl font-bold text-slate-900 dark:text-dk-text">{article.title}</h1>
+        {article.summary && <p className="text-slate-500 dark:text-dk-text2">{article.summary}</p>}
       </header>
 
       <button
@@ -74,7 +74,7 @@ export default function HelpArticlePage() {
       </button>
 
       <div
-        className={`border-t border-slate-100 pt-6 ${HELP_ARTICLE_BODY_RICH_CLASS}`}
+        className={`border-t border-slate-100 dark:border-dk-border pt-6 ${HELP_ARTICLE_BODY_RICH_CLASS}`}
       >
         {/* Bài chỉ có bodyMd cũng đi qua miniMarkdownToHtml — cùng bộ render với
             nút "Chuyển sang rich" bên admin, nên bảng / danh sách đánh số /
@@ -89,16 +89,16 @@ export default function HelpArticlePage() {
       </div>
 
       {Array.isArray(article.media) && article.media.length > 0 && (
-        <div className="space-y-4 border-t border-slate-100 pt-6">
+        <div className="space-y-4 border-t border-slate-100 dark:border-dk-border pt-6">
           {article.media.map((item) => (
             <figure key={item.id} className="space-y-2">
               {item.type === 'video' ? (
-                <video src={item.url} controls className="w-full rounded-lg border border-slate-200" />
+                <video src={item.url} controls className="w-full rounded-lg border border-slate-200 dark:border-dk-border" />
               ) : (
-                <img src={item.url} alt={item.caption || article.title} className="w-full rounded-lg border border-slate-200" />
+                <img src={item.url} alt={item.caption || article.title} className="w-full rounded-lg border border-slate-200 dark:border-dk-border" />
               )}
               {item.caption && (
-                <figcaption className="text-sm text-slate-500 text-center">{item.caption}</figcaption>
+                <figcaption className="text-sm text-slate-500 dark:text-dk-text2 text-center">{item.caption}</figcaption>
               )}
             </figure>
           ))}

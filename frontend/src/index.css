@@ -451,6 +451,55 @@ html.dark .modal-overlay {
   border-radius: 0.5rem;
 }
 
+/* Thân bài hướng dẫn — biến thể TỐI (11/10/2026). HELP_ARTICLE_BODY_RICH_CLASS (constants/helpArticleBodyStyle.js) tạo kiểu
+   bằng biến thể tuỳ ý `[&_p]:text-slate-700`, `[&_pre]:bg-slate-900`... nên không gắn `dark:` từng thẻ được; viết ở đây,
+   độ đặc hiệu (html.dark .help-article-body p) cao hơn nên thắng. Dùng chung cho /huong-dan/:slug, ô Xem trước và
+   trình soạn của admin. Giao diện SÁNG không đổi: mọi luật đều nằm dưới html.dark. */
+html.dark .help-article-body h2,
+html.dark .help-article-body h3,
+html.dark .help-article-body h4,
+html.dark .help-article-body strong,
+html.dark .help-article-body th {
+  color: rgb(var(--dk-text));
+}
+html.dark .help-article-body p,
+html.dark .help-article-body li,
+html.dark .help-article-body td,
+html.dark .help-article-body blockquote {
+  color: rgb(var(--dk-text2));
+}
+html.dark .help-article-body a {
+  color: theme('colors.primary.400');
+}
+html.dark .help-article-body blockquote {
+  border-left-color: rgb(var(--dk-border-strong));
+}
+html.dark .help-article-body img {
+  border-color: rgb(var(--dk-border));
+}
+html.dark .help-article-body hr {
+  border-color: rgb(var(--dk-border));
+}
+html.dark .help-article-body pre {
+  background-color: rgb(var(--dk-surface));
+  border: 1px solid rgb(var(--dk-border));
+  color: rgb(var(--dk-text));
+}
+html.dark .help-article-body code {
+  background-color: rgb(var(--dk-raised));
+  color: rgb(var(--dk-text));
+}
+html.dark .help-article-body pre code {
+  background-color: transparent;
+}
+html.dark .help-article-body th,
+html.dark .help-article-body td {
+  border-color: rgb(var(--dk-border));
+}
+html.dark .help-article-body th {
+  background-color: rgb(var(--dk-raised));
+}
+
 /* Modal share-chatbot animations */
 @keyframes fadeIn {
   from { opacity: 0; }

@@ -47,12 +47,12 @@ const ResetPasswordPage = () => {
           className="w-20 h-20 mx-auto rounded-2xl flex items-center justify-center mb-6"
           style={{ background: 'linear-gradient(135deg, rgba(239,68,68,0.1) 0%, rgba(239,68,68,0.2) 100%)' }}
         >
-          <svg className="w-10 h-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="w-10 h-10 text-red-500 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
           </svg>
         </div>
-        <h2 className="text-2xl font-bold text-slate-900 mb-3">{t('resetPassword.invalidLink')}</h2>
-        <p className="text-slate-500 text-sm mb-8">{t('resetPassword.pleaseRequestAgain')}</p>
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-dk-text mb-3">{t('resetPassword.invalidLink')}</h2>
+        <p className="text-slate-500 dark:text-dk-text2 text-sm mb-8">{t('resetPassword.pleaseRequestAgain')}</p>
         <Link 
           to="/forgot-password" 
           className="inline-block w-full py-4 text-center font-semibold rounded-xl text-white transition-all hover:shadow-lg hover:shadow-orange-500/25"
@@ -74,32 +74,32 @@ const ResetPasswordPage = () => {
           className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6"
           style={{ background: 'linear-gradient(135deg, rgba(249,115,22,0.1) 0%, rgba(239,68,68,0.1) 100%)' }}
         >
-          <HiOutlineShieldCheck className="w-8 h-8 text-orange-500" />
+          <HiOutlineShieldCheck className="w-8 h-8 text-orange-500 dark:text-orange-400" />
         </div>
-        <h1 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">{t('resetPassword.title')}</h1>
-        <p className="text-slate-500 leading-relaxed">{t('resetPassword.subtitle')}</p>
+        <h1 className="text-3xl font-bold text-slate-900 dark:text-dk-text tracking-tight mb-2">{t('resetPassword.title')}</h1>
+        <p className="text-slate-500 dark:text-dk-text2 leading-relaxed">{t('resetPassword.subtitle')}</p>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
         {/* New Password */}
         <div>
-          <label className="block text-sm font-semibold text-slate-700 mb-2">{t('resetPassword.newPasswordLabel')}</label>
+          <label className="block text-sm font-semibold text-slate-700 dark:text-dk-text mb-2">{t('resetPassword.newPasswordLabel')}</label>
           <div className="relative">
             <div 
               className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors duration-200 ${
-                focusedField === 'password' ? 'text-orange-500' : 'text-slate-400'
+                focusedField === 'password' ? 'text-orange-500 dark:text-orange-400' : 'text-slate-400 dark:text-dk-muted'
               }`}
             >
               <HiOutlineLockClosed className="w-5 h-5" />
             </div>
             <input
               type={showPassword ? 'text' : 'password'}
-              className={`w-full pl-12 pr-12 py-4 border rounded-xl outline-none transition-all duration-200 text-sm text-slate-900 bg-white placeholder:text-slate-400 ${
+              className={`w-full pl-12 pr-12 py-4 border rounded-xl outline-none transition-all duration-200 text-sm text-slate-900 dark:text-dk-text bg-white dark:bg-dk-inset placeholder:text-slate-400 dark:placeholder:text-dk-muted ${
                 errors.password 
                   ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' 
                   : focusedField === 'password'
                     ? 'border-orange-500 shadow-lg shadow-orange-500/10'
-                    : 'border-slate-200 hover:border-slate-300 focus:border-orange-500 focus:shadow-lg focus:shadow-orange-500/10'
+                    : 'border-slate-200 dark:border-dk-border hover:border-slate-300 dark:hover:border-dk-border-strong focus:border-orange-500 focus:shadow-lg focus:shadow-orange-500/10'
               }`}
               placeholder={t('resetPassword.newPasswordPlaceholder')}
               onFocus={() => setFocusedField('password')}
@@ -119,13 +119,13 @@ const ResetPasswordPage = () => {
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-orange-500 p-1 transition-colors"
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-dk-muted hover:text-orange-500 dark:hover:text-orange-400 p-1 transition-colors"
             >
               {showPassword ? <HiOutlineEyeOff className="w-5 h-5" /> : <HiOutlineEye className="w-5 h-5" />}
             </button>
           </div>
           {errors.password && (
-            <p className="text-xs text-red-500 mt-2 flex items-center gap-1">
+            <p className="text-xs text-red-500 dark:text-red-400 mt-2 flex items-center gap-1">
               <span className="inline-block w-1 h-1 rounded-full bg-red-500" />
               {errors.password.message}
             </p>
@@ -134,23 +134,23 @@ const ResetPasswordPage = () => {
 
         {/* Confirm Password */}
         <div>
-          <label className="block text-sm font-semibold text-slate-700 mb-2">{t('resetPassword.confirmPasswordLabel')}</label>
+          <label className="block text-sm font-semibold text-slate-700 dark:text-dk-text mb-2">{t('resetPassword.confirmPasswordLabel')}</label>
           <div className="relative">
             <div 
               className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors duration-200 ${
-                focusedField === 'confirmPassword' ? 'text-orange-500' : 'text-slate-400'
+                focusedField === 'confirmPassword' ? 'text-orange-500 dark:text-orange-400' : 'text-slate-400 dark:text-dk-muted'
               }`}
             >
               <HiOutlineLockClosed className="w-5 h-5" />
             </div>
             <input
               type={showConfirmPassword ? 'text' : 'password'}
-              className={`w-full pl-12 pr-12 py-4 border rounded-xl outline-none transition-all duration-200 text-sm text-slate-900 bg-white placeholder:text-slate-400 ${
+              className={`w-full pl-12 pr-12 py-4 border rounded-xl outline-none transition-all duration-200 text-sm text-slate-900 dark:text-dk-text bg-white dark:bg-dk-inset placeholder:text-slate-400 dark:placeholder:text-dk-muted ${
                 errors.confirmPassword 
                   ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' 
                   : focusedField === 'confirmPassword'
                     ? 'border-orange-500 shadow-lg shadow-orange-500/10'
-                    : 'border-slate-200 hover:border-slate-300 focus:border-orange-500 focus:shadow-lg focus:shadow-orange-500/10'
+                    : 'border-slate-200 dark:border-dk-border hover:border-slate-300 dark:hover:border-dk-border-strong focus:border-orange-500 focus:shadow-lg focus:shadow-orange-500/10'
               }`}
               placeholder={t('resetPassword.confirmPasswordPlaceholder')}
               onFocus={() => setFocusedField('confirmPassword')}
@@ -163,13 +163,13 @@ const ResetPasswordPage = () => {
             <button
               type="button"
               onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-orange-500 p-1 transition-colors"
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-dk-muted hover:text-orange-500 dark:hover:text-orange-400 p-1 transition-colors"
             >
               {showConfirmPassword ? <HiOutlineEyeOff className="w-5 h-5" /> : <HiOutlineEye className="w-5 h-5" />}
             </button>
           </div>
           {errors.confirmPassword && (
-            <p className="text-xs text-red-500 mt-2 flex items-center gap-1">
+            <p className="text-xs text-red-500 dark:text-red-400 mt-2 flex items-center gap-1">
               <span className="inline-block w-1 h-1 rounded-full bg-red-500" />
               {errors.confirmPassword.message}
             </p>
@@ -179,12 +179,12 @@ const ResetPasswordPage = () => {
         {/* Server Error */}
         {serverError && (
           <div 
-            className="p-4 rounded-xl bg-red-50 border border-red-200"
+            className="p-4 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800"
             style={{ animation: 'shake 0.5s ease' }}
           >
-            <p className="text-red-600 text-sm">{serverError}</p>
+            <p className="text-red-600 dark:text-red-400 text-sm">{serverError}</p>
             {serverError.includes(t('resetPassword.errorExpired').split(' ')[0]) && (
-              <Link to="/forgot-password" className="text-red-700 font-semibold text-sm hover:underline mt-2 block">
+              <Link to="/forgot-password" className="text-red-700 dark:text-red-300 font-semibold text-sm hover:underline mt-2 block">
                 {t('resetPassword.requestReset')}
               </Link>
             )}

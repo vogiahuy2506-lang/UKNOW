@@ -52,37 +52,37 @@ function UserMenu({ user, logout }) {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2.5 px-3 py-2 rounded-full hover:bg-slate-100 transition-all duration-200"
+        className="flex items-center gap-2.5 px-3 py-2 rounded-full hover:bg-slate-100 dark:hover:bg-dk-raised transition-all duration-200"
       >
         <div 
           className={`w-9 h-9 bg-gradient-to-br ${avatarGradient} rounded-full flex items-center justify-center shadow-md flex-shrink-0 ring-2 ring-white/50`}
         >
           <span className="text-white font-bold text-sm">{initial}</span>
         </div>
-        <span className="text-slate-700 font-medium text-sm max-w-[120px] truncate">{displayName}</span>
-        <HiOutlineChevronDown className={`w-4 h-4 text-slate-500 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+        <span className="text-slate-700 dark:text-dk-text font-medium text-sm max-w-[120px] truncate">{displayName}</span>
+        <HiOutlineChevronDown className={`w-4 h-4 text-slate-500 dark:text-dk-text2 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
         <div 
-          className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-100 py-1.5 z-50 opacity-0 scale-95 animate-fadeIn"
+          className="absolute right-0 mt-2 w-56 bg-white dark:bg-dk-surface rounded-xl shadow-xl border border-slate-100 dark:border-dk-border py-1.5 z-50 opacity-0 scale-95 animate-fadeIn"
           style={{ animation: 'scaleIn 0.2s ease forwards' }}
         >
-          <div className="px-4 py-3 border-b border-slate-100">
-            <p className="text-xs text-slate-400 leading-none mb-0.5">{t('navbar.account')}</p>
-            <p className="text-sm font-semibold text-slate-800 truncate">{user?.email || displayName}</p>
+          <div className="px-4 py-3 border-b border-slate-100 dark:border-dk-border">
+            <p className="text-xs text-slate-400 dark:text-dk-muted leading-none mb-0.5">{t('navbar.account')}</p>
+            <p className="text-sm font-semibold text-slate-800 dark:text-dk-text truncate">{user?.email || displayName}</p>
           </div>
           <Link
             to={dashboardPath}
             onClick={() => setOpen(false)}
-            className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+            className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 dark:text-dk-text hover:bg-slate-50 dark:hover:bg-dk-raised transition-colors"
           >
-            <HiOutlineViewGrid className="w-4 h-4 text-slate-500" />
+            <HiOutlineViewGrid className="w-4 h-4 text-slate-500 dark:text-dk-text2" />
             {t('navbar.adminDashboard')}
           </Link>
           <button
             onClick={handleLogout}
-            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/60 transition-colors"
           >
             <HiOutlineLogout className="w-4 h-4" />
             {t('common.logout')}
@@ -107,7 +107,7 @@ function MobileMenu({ isOpen, onClose }) {
     >
       <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
       <div 
-        className="absolute right-0 top-0 bottom-0 w-80 max-w-[85vw] bg-white shadow-2xl p-6"
+        className="absolute right-0 top-0 bottom-0 w-80 max-w-[85vw] bg-white dark:bg-dk-surface shadow-2xl p-6"
         style={{ animation: 'slideInRight 0.3s ease' }}
       >
         <div className="flex items-center justify-between mb-8">
@@ -115,12 +115,12 @@ function MobileMenu({ isOpen, onClose }) {
             <img src={founderaiLogo} alt="Founder AI" className="h-8 w-auto" />
             <span className="text-lg font-bold">
               <span className="bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">Founder</span>
-              <span className="text-slate-800">AI</span>
+              <span className="text-slate-800 dark:text-dk-text">AI</span>
             </span>
           </Link>
           <button 
             onClick={onClose}
-            className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-200 transition-colors"
+            className="w-10 h-10 rounded-full bg-slate-100 dark:bg-dk-raised flex items-center justify-center text-slate-600 dark:text-dk-text2 hover:bg-slate-200 dark:hover:bg-dk-strong transition-colors"
           >
             <HiX className="w-5 h-5" />
           </button>
@@ -132,30 +132,30 @@ function MobileMenu({ isOpen, onClose }) {
               key={item.to}
               to={item.to}
               onClick={onClose}
-              className="block px-4 py-3 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition-colors"
+              className="block px-4 py-3 text-slate-700 dark:text-dk-text font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-dk-raised transition-colors"
             >
               {t(item.labelKey)}
             </Link>
           ))}
         </nav>
 
-        <div className="mt-8 pt-6 border-t border-slate-100">
+        <div className="mt-8 pt-6 border-t border-slate-100 dark:border-dk-border">
           {isAuthenticated ? (
             <div className="space-y-1">
-              <div className="px-4 py-2 text-sm text-slate-500">
-                {t('common.hello') || 'Xin chào'}, <span className="font-semibold text-slate-700">{user?.fullName || user?.username}</span>
+              <div className="px-4 py-2 text-sm text-slate-500 dark:text-dk-text2">
+                {t('common.hello') || 'Xin chào'}, <span className="font-semibold text-slate-700 dark:text-dk-text">{user?.fullName || user?.username}</span>
               </div>
               <Link
                 to={user?.role === 'admin' ? '/admin' : '/app'}
                 onClick={onClose}
-                className="flex items-center gap-2 px-4 py-2.5 text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
+                className="flex items-center gap-2 px-4 py-2.5 text-slate-700 dark:text-dk-text hover:bg-slate-50 dark:hover:bg-dk-raised rounded-lg transition-colors"
               >
                 <HiOutlineViewGrid className="w-5 h-5" />
                 Dashboard
               </Link>
               <button
                 onClick={async () => { await logout(); onClose(); navigate('/login'); }}
-                className="w-full flex items-center gap-2 px-4 py-2.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                className="w-full flex items-center gap-2 px-4 py-2.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/60 rounded-lg transition-colors"
               >
                 <HiOutlineLogout className="w-5 h-5" />
                 {t('common.logout') || 'Đăng xuất'}
@@ -166,7 +166,7 @@ function MobileMenu({ isOpen, onClose }) {
               <Link
                 to="/login"
                 onClick={onClose}
-                className="block w-full text-center px-5 py-3 border-2 border-orange-500 text-orange-600 rounded-xl font-bold hover:bg-orange-50 transition-all"
+                className="block w-full text-center px-5 py-3 border-2 border-orange-500 text-orange-600 dark:text-orange-400 rounded-xl font-bold hover:bg-orange-50 dark:hover:bg-orange-950/60 transition-all"
               >
                 {t('common.login') || 'Đăng nhập'}
               </Link>
@@ -195,7 +195,7 @@ export default function Navbar() {
 
   return (
     <>
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-b border-slate-100/50">
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-dk-surface/80 backdrop-blur-xl border-b border-slate-100/50 dark:border-dk-border/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-[72px]">
             {/* Logo */}
@@ -207,7 +207,7 @@ export default function Navbar() {
               />
               <span className="text-xl font-black tracking-tight hidden sm:block">
                 <span className="bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">Founder</span>
-                <span className="text-slate-800 ml-1">AI</span>
+                <span className="text-slate-800 dark:text-dk-text ml-1">AI</span>
               </span>
             </Link>
 
@@ -220,7 +220,7 @@ export default function Navbar() {
                     key={item.to}
                     to={item.to}
                     className={`font-semibold transition-all duration-200 relative group ${
-                      active ? 'text-orange-600' : 'text-slate-600 hover:text-orange-600'
+                      active ? 'text-orange-600 dark:text-orange-400' : 'text-slate-600 dark:text-dk-text2 hover:text-orange-600 dark:hover:text-orange-400'
                     }`}
                   >
                     {t(item.labelKey)}
@@ -242,7 +242,7 @@ export default function Navbar() {
                 <>
                   <Link
                     to="/login"
-                    className="px-5 py-2.5 border-2 border-orange-500 text-orange-600 rounded-full font-bold hover:bg-orange-50 transition-all duration-200"
+                    className="px-5 py-2.5 border-2 border-orange-500 text-orange-600 dark:text-orange-400 rounded-full font-bold hover:bg-orange-50 dark:hover:bg-orange-950/60 transition-all duration-200"
                   >
                     {t('common.login') || 'Đăng nhập'}
                   </Link>
@@ -259,7 +259,7 @@ export default function Navbar() {
             {/* Mobile Menu Button */}
             <button
               onClick={() => setMobileMenuOpen(true)}
-              className="lg:hidden w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-200 transition-colors"
+              className="lg:hidden w-10 h-10 rounded-full bg-slate-100 dark:bg-dk-raised flex items-center justify-center text-slate-600 dark:text-dk-text2 hover:bg-slate-200 dark:hover:bg-dk-strong transition-colors"
             >
               <HiMenu className="w-5 h-5" />
             </button>

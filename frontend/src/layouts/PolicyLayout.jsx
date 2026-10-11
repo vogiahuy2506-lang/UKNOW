@@ -15,7 +15,7 @@ export default function PolicyLayout() {
     }, [pathname, hash]);
 
     return (
-        <div className="min-h-screen bg-white overflow-x-hidden">
+        <div className="min-h-screen bg-white dark:bg-dk-bg dark:text-dk-text overflow-x-hidden">
             <main>
                 <Outlet />
             </main>

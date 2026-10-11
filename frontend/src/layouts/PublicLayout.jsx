@@ -10,7 +10,7 @@ export default function PublicLayout() {
   }, [pathname, hash]);
 
   return (
-    <div style={{ fontFamily: 'Inter, system-ui, sans-serif' }} className="relative min-h-screen text-slate-900 transition-colors">
+    <div style={{ fontFamily: 'Inter, system-ui, sans-serif' }} className="relative min-h-screen text-slate-900 dark:text-dk-text transition-colors">
       <video
         className="fixed inset-0 w-full h-full object-cover pointer-events-none"
         style={{ zIndex: -1 }}
@@ -35,7 +35,7 @@ export function PublicLayoutLite() {
   }, [pathname, hash]);
 
   return (
-    <div style={{ fontFamily: 'Inter, system-ui, sans-serif' }} className="relative min-h-screen bg-slate-50 text-slate-900 transition-colors">
+    <div style={{ fontFamily: 'Inter, system-ui, sans-serif' }} className="relative min-h-screen bg-slate-50 dark:bg-dk-bg text-slate-900 dark:text-dk-text transition-colors">
       <HeroNavbar />
 
       <main>

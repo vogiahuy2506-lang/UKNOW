@@ -38,7 +38,7 @@ const ForgotPasswordPage = () => {
       {/* Back link */}
       <Link 
         to="/login" 
-        className="inline-flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-700 mb-8 transition-colors group"
+        className="inline-flex items-center gap-2 text-sm font-medium text-slate-500 dark:text-dk-text2 hover:text-slate-700 dark:hover:text-dk-text mb-8 transition-colors group"
       >
         <HiOutlineArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
         {t('forgotPassword.backToLogin')}
@@ -48,7 +48,7 @@ const ForgotPasswordPage = () => {
       {submitted ? (
         <div className="space-y-6">
           <div 
-            className="p-8 rounded-2xl bg-gradient-to-br from-emerald-50 to-green-50 border border-emerald-200 text-center space-y-4"
+            className="p-8 rounded-2xl bg-gradient-to-br from-emerald-50 dark:from-emerald-950/40 to-green-50 dark:to-green-950/40 border border-emerald-200 dark:border-emerald-800 text-center space-y-4"
             style={{ animation: 'scaleIn 0.4s ease' }}
           >
             <div 
@@ -60,14 +60,14 @@ const ForgotPasswordPage = () => {
               </svg>
             </div>
             <div>
-              <p className="text-xl font-bold text-slate-900">{t('forgotPassword.successTitle')}</p>
-              <p className="text-slate-600 text-sm mt-2 leading-relaxed">
-                {t('forgotPassword.successMessage')} <strong className="text-slate-800">{email}</strong> 
+              <p className="text-xl font-bold text-slate-900 dark:text-dk-text">{t('forgotPassword.successTitle')}</p>
+              <p className="text-slate-600 dark:text-dk-text2 text-sm mt-2 leading-relaxed">
+                {t('forgotPassword.successMessage')} <strong className="text-slate-800 dark:text-dk-text">{email}</strong> 
                 <br className="sm:hidden" />
-                {t('forgotPassword.successNote')} <strong className="text-slate-800">{t('forgotPassword.successHour')}</strong>.
+                {t('forgotPassword.successNote')} <strong className="text-slate-800 dark:text-dk-text">{t('forgotPassword.successHour')}</strong>.
               </p>
             </div>
-            <p className="text-slate-500 text-xs">{t('forgotPassword.successSpamNote')}</p>
+            <p className="text-slate-500 dark:text-dk-text2 text-xs">{t('forgotPassword.successSpamNote')}</p>
           </div>
           
           <Link 
@@ -88,10 +88,10 @@ const ForgotPasswordPage = () => {
               className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6"
               style={{ background: 'linear-gradient(135deg, rgba(249,115,22,0.1) 0%, rgba(239,68,68,0.1) 100%)' }}
             >
-              <HiOutlineMail className="w-8 h-8 text-orange-500" />
+              <HiOutlineMail className="w-8 h-8 text-orange-500 dark:text-orange-400" />
             </div>
-            <h1 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">{t('forgotPassword.title')}</h1>
-            <p className="text-slate-500 leading-relaxed">
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-dk-text tracking-tight mb-2">{t('forgotPassword.title')}</h1>
+            <p className="text-slate-500 dark:text-dk-text2 leading-relaxed">
               {t('forgotPassword.subtitle')}
             </p>
           </div>
@@ -99,23 +99,23 @@ const ForgotPasswordPage = () => {
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">{t('forgotPassword.emailLabel')}</label>
+              <label className="block text-sm font-semibold text-slate-700 dark:text-dk-text mb-2">{t('forgotPassword.emailLabel')}</label>
               <div className="relative">
                 <div 
                   className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors duration-200 ${
-                    focusedField === 'email' ? 'text-orange-500' : 'text-slate-400'
+                    focusedField === 'email' ? 'text-orange-500 dark:text-orange-400' : 'text-slate-400 dark:text-dk-muted'
                   }`}
                 >
                   <HiOutlineMail className="w-5 h-5" />
                 </div>
                 <input
                   type="email"
-                  className={`w-full pl-12 pr-4 py-4 border rounded-xl outline-none transition-all duration-200 text-sm text-slate-900 bg-white placeholder:text-slate-400 ${
+                  className={`w-full pl-12 pr-4 py-4 border rounded-xl outline-none transition-all duration-200 text-sm text-slate-900 dark:text-dk-text bg-white dark:bg-dk-inset placeholder:text-slate-400 dark:placeholder:text-dk-muted ${
                     error 
                       ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' 
                       : focusedField === 'email'
                         ? 'border-orange-500 shadow-lg shadow-orange-500/10'
-                        : 'border-slate-200 hover:border-slate-300 focus:border-orange-500 focus:shadow-lg focus:shadow-orange-500/10'
+                        : 'border-slate-200 dark:border-dk-border hover:border-slate-300 dark:hover:border-dk-border-strong focus:border-orange-500 focus:shadow-lg focus:shadow-orange-500/10'
                   }`}
                   placeholder={t('forgotPassword.emailPlaceholder')}
                   value={email}
@@ -128,7 +128,7 @@ const ForgotPasswordPage = () => {
                 />
               </div>
               {error && (
-                <p className="text-xs text-red-500 mt-2 flex items-center gap-1">
+                <p className="text-xs text-red-500 dark:text-red-400 mt-2 flex items-center gap-1">
                   <span className="inline-block w-1 h-1 rounded-full bg-red-500" />
                   {error}
                 </p>
@@ -151,9 +151,9 @@ const ForgotPasswordPage = () => {
               ) : t('forgotPassword.submitButton')}
             </button>
 
-            <p className="text-center text-sm text-slate-500">
+            <p className="text-center text-sm text-slate-500 dark:text-dk-text2">
               Nhớ mật khẩu?{' '}
-              <Link to="/login" className="font-semibold text-orange-500 hover:text-orange-600 hover:underline underline-offset-4 transition-colors">
+              <Link to="/login" className="font-semibold text-orange-500 dark:text-orange-400 hover:text-orange-600 dark:hover:text-orange-300 hover:underline underline-offset-4 transition-colors">
                 {t('forgotPassword.backToLogin')}
               </Link>
             </p>

@@ -42,32 +42,32 @@ function UserMenu({ user, logout, activeContext }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 px-2 py-1.5 rounded-full hover:bg-neutral-100 transition-colors"
+        className="flex items-center gap-2 px-2 py-1.5 rounded-full hover:bg-neutral-100 dark:hover:bg-dk-raised transition-colors"
       >
         <div className={`w-7 h-7 bg-gradient-to-br ${avatarGradient} rounded-full flex items-center justify-center flex-shrink-0`}>
           <span className="text-white font-bold text-[11px]">{initial}</span>
         </div>
-        <span className="text-neutral-700 font-medium text-[13px] max-w-[100px] truncate hidden sm:block">{displayName}</span>
-        <LuChevronDown className={`w-3.5 h-3.5 text-neutral-400 transition-transform hidden sm:block ${open ? 'rotate-180' : ''}`} />
+        <span className="text-neutral-700 dark:text-dk-text font-medium text-[13px] max-w-[100px] truncate hidden sm:block">{displayName}</span>
+        <LuChevronDown className={`w-3.5 h-3.5 text-neutral-400 dark:text-dk-muted transition-transform hidden sm:block ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl shadow-lg border border-gray-100 py-1.5 z-50">
-          <div className="px-4 py-2.5 border-b border-gray-100">
-            <p className="text-[11px] text-gray-400 leading-none mb-0.5">{t('navbar.account')}</p>
-            <p className="text-[13px] font-semibold text-gray-800 truncate">{user?.email || displayName}</p>
+        <div className="absolute right-0 top-full mt-2 w-52 bg-white dark:bg-dk-surface rounded-xl shadow-lg border border-gray-100 dark:border-dk-border py-1.5 z-50">
+          <div className="px-4 py-2.5 border-b border-gray-100 dark:border-dk-border">
+            <p className="text-[11px] text-gray-400 dark:text-dk-muted leading-none mb-0.5">{t('navbar.account')}</p>
+            <p className="text-[13px] font-semibold text-gray-800 dark:text-dk-text truncate">{user?.email || displayName}</p>
           </div>
           <Link
             to={dashboardPath}
             onClick={() => setOpen(false)}
-            className="flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-gray-700 hover:bg-gray-50 transition-colors"
+            className="flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-gray-700 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised transition-colors"
           >
-            <LuLayoutDashboard className="w-4 h-4 text-gray-400" />
+            <LuLayoutDashboard className="w-4 h-4 text-gray-400 dark:text-dk-muted" />
             {dashboardLabel}
           </Link>
           <button
             onClick={handleLogout}
-            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-red-600 hover:bg-red-50 transition-colors"
+            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/60 transition-colors"
           >
             <LuLogOut className="w-4 h-4" />
             {t('navbar.logout')}
@@ -94,7 +94,7 @@ export default function HeroNavbar() {
 
   return (
     <div className="relative z-50 flex justify-center pt-4 sm:pt-6 px-3 sm:px-4">
-      <div className="bg-white rounded-full shadow-sm border border-neutral-200 pl-3 pr-3 py-2 w-full max-w-[760px] relative z-50 transition-colors">
+      <div className="bg-white dark:bg-dk-surface rounded-full shadow-sm border border-neutral-200 dark:border-dk-border pl-3 pr-3 py-2 w-full max-w-[760px] relative z-50 transition-colors">
         <div className="flex items-center gap-3">
           {/* Logo */}
           <Link to="/" className="shrink-0 flex items-center gap-2">
@@ -109,8 +109,8 @@ export default function HeroNavbar() {
                 to={to}
                 className={`text-[14px] font-medium transition-colors ${
                   isActive(to)
-                    ? 'text-orange-500 font-semibold'
-                    : 'text-neutral-700 hover:text-neutral-900'
+                    ? 'text-orange-500 dark:text-orange-400 font-semibold'
+                    : 'text-neutral-700 dark:text-dk-text2 hover:text-neutral-900 dark:hover:text-dk-text'
                 }`}
               >
                 {label}
@@ -130,7 +130,7 @@ export default function HeroNavbar() {
               <div className="hidden md:flex items-center gap-1.5">
                 <Link
                   to="/login"
-                  className="text-[13px] font-medium text-neutral-700 hover:text-neutral-900 transition-colors px-3 py-2"
+                  className="text-[13px] font-medium text-neutral-700 dark:text-dk-text2 hover:text-neutral-900 dark:hover:text-dk-text transition-colors px-3 py-2"
                 >
                   {t('navbar.login')}
                 </Link>
@@ -149,7 +149,7 @@ export default function HeroNavbar() {
 
             {/* Hamburger */}
             <button
-              className="md:hidden p-2 text-neutral-600 hover:text-neutral-900 transition-colors"
+              className="md:hidden p-2 text-neutral-600 dark:text-dk-text2 hover:text-neutral-900 dark:hover:text-dk-text transition-colors"
               onClick={() => setOpen(!open)}
             >
               {open ? <LuX className="w-5 h-5" /> : <LuMenu className="w-5 h-5" />}
@@ -159,7 +159,7 @@ export default function HeroNavbar() {
 
         {/* Mobile dropdown */}
         {open && (
-          <div className="absolute top-full left-2 right-2 mt-2 bg-white rounded-2xl shadow-lg border border-neutral-200 p-3 z-20">
+          <div className="absolute top-full left-2 right-2 mt-2 bg-white dark:bg-dk-surface rounded-2xl shadow-lg border border-neutral-200 dark:border-dk-border p-3 z-20">
             {navLinks.map(({ label, to }) => (
               <Link
                 key={label}
@@ -167,19 +167,19 @@ export default function HeroNavbar() {
                 onClick={() => setOpen(false)}
                 className={`block px-4 py-2.5 text-[14px] font-medium rounded-xl transition-colors ${
                   isActive(to)
-                    ? 'text-orange-500 bg-orange-50 font-semibold'
-                    : 'text-neutral-700 hover:text-neutral-900 hover:bg-neutral-50'
+                    ? 'text-orange-500 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/40 font-semibold'
+                    : 'text-neutral-700 dark:text-dk-text2 hover:text-neutral-900 dark:hover:text-dk-text hover:bg-neutral-50 dark:hover:bg-dk-raised'
                 }`}
               >
                 {label}
               </Link>
             ))}
-            <div className="border-t border-neutral-100 mt-2 pt-2 flex flex-col gap-1">
+            <div className="border-t border-neutral-100 dark:border-dk-border mt-2 pt-2 flex flex-col gap-1">
               {isAuthenticated ? (
                 <Link
                   to={getPostAuthPath(user, activeContext)}
                   onClick={() => setOpen(false)}
-                  className="flex items-center gap-2 px-4 py-2.5 text-[14px] font-medium text-neutral-700 hover:bg-neutral-50 rounded-xl transition-colors"
+                  className="flex items-center gap-2 px-4 py-2.5 text-[14px] font-medium text-neutral-700 dark:text-dk-text hover:bg-neutral-50 dark:hover:bg-dk-raised rounded-xl transition-colors"
                 >
                   <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
                     style={{ backgroundColor: '#ef4d23' }}>
@@ -192,7 +192,7 @@ export default function HeroNavbar() {
                   <Link
                     to="/login"
                     onClick={() => setOpen(false)}
-                    className="block px-4 py-2.5 text-[14px] font-medium text-neutral-700 hover:bg-neutral-50 rounded-xl transition-colors"
+                    className="block px-4 py-2.5 text-[14px] font-medium text-neutral-700 dark:text-dk-text hover:bg-neutral-50 dark:hover:bg-dk-raised rounded-xl transition-colors"
                   >
                     {t('navbar.login')}
                   </Link>

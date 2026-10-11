@@ -13,21 +13,21 @@ export default function HelpIndexPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold text-slate-900">{t('helpDocs.title')}</h1>
-        <p className="mt-2 text-slate-500">{t('helpDocs.intro')}</p>
+        <h1 className="text-3xl font-bold text-slate-900 dark:text-dk-text">{t('helpDocs.title')}</h1>
+        <p className="mt-2 text-slate-500 dark:text-dk-text2">{t('helpDocs.intro')}</p>
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-slate-400">{t('common.loading')}</p>
+        <p className="text-sm text-slate-400 dark:text-dk-muted">{t('common.loading')}</p>
       ) : groups.length === 0 ? (
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-6 py-10 text-center text-slate-400">
+        <div className="rounded-xl border border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-surface px-6 py-10 text-center text-slate-400 dark:text-dk-muted">
           {t('helpDocs.noArticles')}
         </div>
       ) : (
         <div className="space-y-6">
           {groups.map((group) => (
             <div key={group.featureKey}>
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400 mb-2">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400 dark:text-dk-muted mb-2">
                 {t(`helpDocs.featureGroups.${group.featureKey}`) !== `helpDocs.featureGroups.${group.featureKey}`
                   ? t(`helpDocs.featureGroups.${group.featureKey}`)
                   : group.featureKey}
@@ -37,13 +37,13 @@ export default function HelpIndexPage() {
                   <Link
                     key={article.slug}
                     to={`/huong-dan/${article.slug}`}
-                    className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 hover:border-primary-300 hover:shadow-sm transition-all"
+                    className="flex items-start gap-3 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface p-4 hover:border-primary-300 dark:hover:border-primary-800 hover:shadow-sm transition-all"
                   >
-                    <HiOutlineDocumentText className="h-5 w-5 text-primary-500 shrink-0 mt-0.5" />
+                    <HiOutlineDocumentText className="h-5 w-5 text-primary-500 dark:text-primary-400 shrink-0 mt-0.5" />
                     <div className="min-w-0">
-                      <p className="font-medium text-slate-900">{article.title}</p>
+                      <p className="font-medium text-slate-900 dark:text-dk-text">{article.title}</p>
                       {article.summary && (
-                        <p className="mt-1 text-sm text-slate-500 line-clamp-2">{article.summary}</p>
+                        <p className="mt-1 text-sm text-slate-500 dark:text-dk-text2 line-clamp-2">{article.summary}</p>
                       )}
                     </div>
                   </Link>
@@ -54,7 +54,7 @@ export default function HelpIndexPage() {
         </div>
       )}
 
-      <div className="flex items-center gap-2 rounded-xl border border-primary-100 bg-primary-50 px-4 py-3 text-sm text-primary-700">
+      <div className="flex items-center gap-2 rounded-xl border border-primary-100 dark:border-primary-800 bg-primary-50 dark:bg-primary-950/40 px-4 py-3 text-sm text-primary-700 dark:text-primary-300">
         <HiOutlineSparkles className="h-5 w-5 shrink-0" />
         <span>{t('helpDocs.assistantHint')}</span>
       </div>

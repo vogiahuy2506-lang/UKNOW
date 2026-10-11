@@ -63,7 +63,7 @@ const UnauthorizedScreen = ({ reason = 'other' }) => {
 
         <main className="flex-1 flex items-center justify-center px-4 py-14 sm:py-20">
           <section 
-            className="w-full max-w-lg rounded-3xl border border-white/10 p-8 sm:p-10 text-center shadow-2xl"
+            className="w-full max-w-lg rounded-3xl border border-white/10 p-8 sm:p-10 text-center shadow-2xl dark:!bg-dk-surface"
             style={{
               background: 'rgba(255,255,255,0.98)',
               backdropFilter: 'blur(20px)'
@@ -74,16 +74,16 @@ const UnauthorizedScreen = ({ reason = 'other' }) => {
               className="mx-auto w-20 h-20 rounded-2xl flex items-center justify-center mb-6"
               style={{ background: 'linear-gradient(135deg, rgba(239,68,68,0.1) 0%, rgba(239,68,68,0.2) 100%)' }}
             >
-              <HiOutlineShieldExclamation className="w-10 h-10 text-red-500" />
+              <HiOutlineShieldExclamation className="w-10 h-10 text-red-500 dark:text-red-400" />
             </div>
 
-            <p className="text-xs font-bold uppercase tracking-wider text-orange-500 mb-2">
+            <p className="text-xs font-bold uppercase tracking-wider text-orange-500 dark:text-orange-400 mb-2">
               {t('unauthorized.badge')}
             </p>
-            <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
+            <h1 className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-dk-text tracking-tight">
               {t('unauthorized.title')}
             </h1>
-            <p className="mt-4 text-base leading-relaxed text-slate-600">
+            <p className="mt-4 text-base leading-relaxed text-slate-600 dark:text-dk-text2">
               {isPermissionDenied
                 ? t('unauthorized.employeeDescription', {
                     ownerName: activeContext.ownerName || t('workspaceNoPermissions.fallbackOwner'),
@@ -94,11 +94,11 @@ const UnauthorizedScreen = ({ reason = 'other' }) => {
             {/* User info */}
             {user && (
               <div 
-                className="mt-6 rounded-2xl px-5 py-4 text-left"
+                className="mt-6 rounded-2xl px-5 py-4 text-left dark:!bg-none dark:!bg-dk-raised dark:!border-dk-border"
                 style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', border: '1px solid #e2e8f0' }}
               >
-                <p className="text-xs text-slate-500 mb-1">{t('unauthorized.loginWith')}</p>
-                <p className="text-sm font-bold text-slate-800 truncate">
+                <p className="text-xs text-slate-500 dark:text-dk-text2 mb-1">{t('unauthorized.loginWith')}</p>
+                <p className="text-sm font-bold text-slate-800 dark:text-dk-text truncate">
                   {user.email || user.username}
                 </p>
               </div>
@@ -106,7 +106,7 @@ const UnauthorizedScreen = ({ reason = 'other' }) => {
 
             {isPermissionDenied && (
               <div className="mt-6">
-                <RecheckPermissionsButton buttonClassName="w-full rounded-xl border border-orange-200 bg-orange-50 px-6 py-3 text-sm font-bold text-orange-700 transition-all hover:bg-orange-100 disabled:opacity-60" />
+                <RecheckPermissionsButton buttonClassName="w-full rounded-xl border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/40 px-6 py-3 text-sm font-bold text-orange-700 dark:text-orange-300 transition-all hover:bg-orange-100 dark:hover:bg-orange-950/60 disabled:opacity-60" />
               </div>
             )}
 
@@ -125,7 +125,7 @@ const UnauthorizedScreen = ({ reason = 'other' }) => {
               </button>
               <button
                 onClick={handleLogout}
-                className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3.5 text-sm font-semibold text-slate-600 transition-all hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset px-6 py-3.5 text-sm font-semibold text-slate-600 dark:text-dk-text2 transition-all hover:border-red-200 dark:hover:border-red-800 hover:bg-red-50 dark:hover:bg-red-950/60 hover:text-red-600 dark:hover:text-red-400"
               >
                 <HiOutlineLogout className="w-4 h-4" />
                 {t('unauthorized.logout')}

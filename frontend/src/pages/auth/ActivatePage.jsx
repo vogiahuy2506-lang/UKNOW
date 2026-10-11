@@ -113,15 +113,15 @@ const ActivatePage = () => {
           className="w-16 h-16 mx-auto rounded-2xl flex items-center justify-center mb-5"
           style={{ background: 'linear-gradient(135deg, rgba(239,68,68,0.12) 0%, rgba(239,68,68,0.2) 100%)' }}
         >
-          <HiOutlineExclamationCircle className="w-8 h-8 text-red-500" />
+          <HiOutlineExclamationCircle className="w-8 h-8 text-red-500 dark:text-red-400" />
         </div>
-        <h2 className="text-2xl font-bold text-slate-900 tracking-tight mb-2">
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-dk-text tracking-tight mb-2">
           {t('activate.failedTitle')}
         </h2>
-        <p className="text-slate-500 text-sm leading-relaxed mb-6">
+        <p className="text-slate-500 dark:text-dk-text2 text-sm leading-relaxed mb-6">
           {t('activate.invalidLink')}
         </p>
-        <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 text-xs text-slate-600 mb-6 text-left leading-relaxed">
+        <div className="p-4 rounded-xl bg-slate-50 dark:bg-dk-raised border border-slate-200/80 dark:border-dk-border/80 text-xs text-slate-600 dark:text-dk-text2 mb-6 text-left leading-relaxed">
           {t('activate.contactManager')}
         </div>
         <Link 
@@ -151,14 +151,14 @@ const ActivatePage = () => {
         >
           <HiOutlineCheck className="w-9 h-9 text-white stroke-[2.5]" />
         </div>
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold mb-3">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs font-semibold mb-3">
           <HiOutlineSparkles className="w-3.5 h-3.5" />
           <span>Thành công</span>
         </div>
-        <h2 className="text-2xl font-bold text-slate-900 tracking-tight mb-2">
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-dk-text tracking-tight mb-2">
           {t('activate.successTitle')}
         </h2>
-        <p className="text-slate-500 text-sm leading-relaxed mb-8">
+        <p className="text-slate-500 dark:text-dk-text2 text-sm leading-relaxed mb-8">
           {t('activate.successMessage')}
         </p>
         <Link 
@@ -185,15 +185,15 @@ const ActivatePage = () => {
           className="w-16 h-16 mx-auto rounded-2xl flex items-center justify-center mb-5 shadow-md shadow-red-500/10"
           style={{ background: 'linear-gradient(135deg, rgba(239,68,68,0.12) 0%, rgba(239,68,68,0.2) 100%)' }}
         >
-          <HiOutlineExclamationCircle className="w-8 h-8 text-red-500" />
+          <HiOutlineExclamationCircle className="w-8 h-8 text-red-500 dark:text-red-400" />
         </div>
-        <h2 className="text-2xl font-bold text-slate-900 tracking-tight mb-2">
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-dk-text tracking-tight mb-2">
           {t('activate.failedTitle')}
         </h2>
-        <p className="text-slate-500 text-sm leading-relaxed mb-6">
+        <p className="text-slate-500 dark:text-dk-text2 text-sm leading-relaxed mb-6">
           {errorMessage}
         </p>
-        <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 text-xs text-slate-600 mb-6 text-left leading-relaxed">
+        <div className="p-4 rounded-xl bg-slate-50 dark:bg-dk-raised border border-slate-200/80 dark:border-dk-border/80 text-xs text-slate-600 dark:text-dk-text2 mb-6 text-left leading-relaxed">
           {t('activate.contactManager')}
         </div>
         <Link 
@@ -223,26 +223,26 @@ const ActivatePage = () => {
             className="w-10 h-10 rounded-xl flex items-center justify-center shadow-sm"
             style={{ background: 'linear-gradient(135deg, rgba(249,115,22,0.12) 0%, rgba(239,68,68,0.12) 100%)' }}
           >
-            <HiOutlineShieldCheck className="w-5 h-5 text-orange-500" />
+            <HiOutlineShieldCheck className="w-5 h-5 text-orange-500 dark:text-orange-400" />
           </div>
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-50 text-orange-600 border border-orange-200/60">
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 border border-orange-200/60 dark:border-orange-800">
             {t('activate.badge')}
           </span>
         </div>
 
-        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight mb-2">
+        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-dk-text tracking-tight mb-2">
           {t('activate.title')}
         </h1>
-        <p className="text-slate-500 text-sm leading-relaxed">
+        <p className="text-slate-500 dark:text-dk-text2 text-sm leading-relaxed">
           {t('activate.subtitle')}
         </p>
       </div>
 
       {/* Gợi ý đăng ký đầy đủ thông tin */}
-      <div className="mb-6 p-3.5 rounded-xl bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200/80 flex items-center justify-between gap-3 text-xs text-orange-950">
+      <div className="mb-6 p-3.5 rounded-xl bg-gradient-to-r from-orange-50 dark:from-orange-950/40 to-amber-50 dark:to-amber-950/40 border border-orange-200/80 dark:border-orange-800 flex items-center justify-between gap-3 text-xs text-orange-950 dark:text-orange-300">
         <div>
           <p className="font-semibold">Bạn muốn cập nhật đầy đủ thông tin cá nhân?</p>
-          <p className="text-orange-800/80 mt-0.5">Điền họ tên, tên đăng nhập, số điện thoại ngay từ đầu.</p>
+          <p className="text-orange-800/80 dark:text-orange-300 mt-0.5">Điền họ tên, tên đăng nhập, số điện thoại ngay từ đầu.</p>
         </div>
         <Link
           to={`/register?invite=${token}`}
@@ -254,8 +254,8 @@ const ActivatePage = () => {
 
       {/* Tùy chọn 1: Đăng nhập nhanh bằng Google (nếu dùng email Google) */}
       <div className="mb-6">
-        <div className="p-3.5 rounded-xl bg-orange-50/60 border border-orange-100 mb-3">
-          <p className="text-xs text-orange-800 leading-relaxed font-medium">
+        <div className="p-3.5 rounded-xl bg-orange-50/60 dark:bg-orange-950/40 border border-orange-100 dark:border-orange-800 mb-3">
+          <p className="text-xs text-orange-800 dark:text-orange-300 leading-relaxed font-medium">
             💡 {t('activate.googleSectionDesc')}
           </p>
         </div>
@@ -270,10 +270,10 @@ const ActivatePage = () => {
       {/* Phân cách */}
       <div className="relative my-6">
         <div className="absolute inset-0 flex items-center" aria-hidden="true">
-          <div className="w-full border-t border-slate-200/80" />
+          <div className="w-full border-t border-slate-200/80 dark:border-dk-border/80" />
         </div>
         <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-white px-3 text-slate-400 font-semibold tracking-wider">
+          <span className="bg-white dark:bg-dk-surface px-3 text-slate-400 dark:text-dk-muted font-semibold tracking-wider">
             {t('activate.orCreatePassword')}
           </span>
         </div>
@@ -283,18 +283,18 @@ const ActivatePage = () => {
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Mật khẩu mới */}
         <div>
-          <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
+          <label className="block text-xs font-semibold text-slate-700 dark:text-dk-text uppercase tracking-wider mb-2">
             {t('auth.newPassword')}
           </label>
           <div className="relative">
-            <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+            <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-dk-muted pointer-events-none">
               <HiOutlineLockClosed className="w-5 h-5" />
             </div>
             <input
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full pl-11 pr-11 py-3 text-sm text-slate-900 bg-white border border-slate-200 rounded-xl outline-none transition-all duration-150 placeholder:text-slate-400 hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10"
+              className="w-full pl-11 pr-11 py-3 text-sm text-slate-900 dark:text-dk-text bg-white dark:bg-dk-inset border border-slate-200 dark:border-dk-border rounded-xl outline-none transition-all duration-150 placeholder:text-slate-400 dark:placeholder:text-dk-muted hover:border-slate-300 dark:hover:border-dk-border-strong focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10"
               placeholder={t('auth.enterNewPassword')}
               minLength={8}
               required
@@ -303,7 +303,7 @@ const ActivatePage = () => {
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-1"
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-dk-muted hover:text-slate-600 dark:hover:text-dk-text2 transition-colors p-1"
               tabIndex={-1}
             >
               {showPassword ? <HiOutlineEyeOff className="w-4 h-4" /> : <HiOutlineEye className="w-4 h-4" />}
@@ -313,18 +313,18 @@ const ActivatePage = () => {
 
         {/* Xác nhận mật khẩu */}
         <div>
-          <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
+          <label className="block text-xs font-semibold text-slate-700 dark:text-dk-text uppercase tracking-wider mb-2">
             {t('auth.confirmPassword')}
           </label>
           <div className="relative">
-            <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+            <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-dk-muted pointer-events-none">
               <HiOutlineLockClosed className="w-5 h-5" />
             </div>
             <input
               type={showConfirmPassword ? 'text' : 'password'}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full pl-11 pr-11 py-3 text-sm text-slate-900 bg-white border border-slate-200 rounded-xl outline-none transition-all duration-150 placeholder:text-slate-400 hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10"
+              className="w-full pl-11 pr-11 py-3 text-sm text-slate-900 dark:text-dk-text bg-white dark:bg-dk-inset border border-slate-200 dark:border-dk-border rounded-xl outline-none transition-all duration-150 placeholder:text-slate-400 dark:placeholder:text-dk-muted hover:border-slate-300 dark:hover:border-dk-border-strong focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10"
               placeholder={t('auth.confirmNewPassword')}
               minLength={8}
               required
@@ -333,7 +333,7 @@ const ActivatePage = () => {
             <button
               type="button"
               onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-1"
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-dk-muted hover:text-slate-600 dark:hover:text-dk-text2 transition-colors p-1"
               tabIndex={-1}
             >
               {showConfirmPassword ? <HiOutlineEyeOff className="w-4 h-4" /> : <HiOutlineEye className="w-4 h-4" />}
@@ -343,8 +343,8 @@ const ActivatePage = () => {
 
         {/* Thông báo lỗi validation */}
         {validationError && (
-          <div className="p-3 rounded-xl bg-red-50 border border-red-200/80">
-            <p className="text-red-600 text-xs font-medium flex items-center gap-1.5">
+          <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200/80 dark:border-red-800">
+            <p className="text-red-600 dark:text-red-400 text-xs font-medium flex items-center gap-1.5">
               <HiOutlineExclamationCircle className="w-4 h-4 shrink-0" />
               <span>{validationError}</span>
             </p>
@@ -352,23 +352,23 @@ const ActivatePage = () => {
         )}
 
         {/* Checklist yêu cầu mật khẩu tương tác trực quan */}
-        <div className="p-3.5 rounded-xl bg-slate-50/80 border border-slate-200/80">
-          <p className="text-xs font-semibold text-slate-600 mb-2">Yêu cầu bảo mật:</p>
+        <div className="p-3.5 rounded-xl bg-slate-50/80 dark:bg-dk-raised/80 border border-slate-200/80 dark:border-dk-border/80">
+          <p className="text-xs font-semibold text-slate-600 dark:text-dk-text2 mb-2">Yêu cầu bảo mật:</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs">
-            <div className={`flex items-center gap-1.5 transition-colors ${hasMinLength ? 'text-emerald-600 font-medium' : 'text-slate-400'}`}>
-              <HiOutlineCheck className={`w-3.5 h-3.5 ${hasMinLength ? 'text-emerald-600' : 'text-slate-300'}`} />
+            <div className={`flex items-center gap-1.5 transition-colors ${hasMinLength ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-slate-400 dark:text-dk-muted'}`}>
+              <HiOutlineCheck className={`w-3.5 h-3.5 ${hasMinLength ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-300 dark:text-dk-border-strong'}`} />
               <span>Tối thiểu 8 ký tự</span>
             </div>
-            <div className={`flex items-center gap-1.5 transition-colors ${hasLetter ? 'text-emerald-600 font-medium' : 'text-slate-400'}`}>
-              <HiOutlineCheck className={`w-3.5 h-3.5 ${hasLetter ? 'text-emerald-600' : 'text-slate-300'}`} />
+            <div className={`flex items-center gap-1.5 transition-colors ${hasLetter ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-slate-400 dark:text-dk-muted'}`}>
+              <HiOutlineCheck className={`w-3.5 h-3.5 ${hasLetter ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-300 dark:text-dk-border-strong'}`} />
               <span>Ít nhất 1 chữ cái</span>
             </div>
-            <div className={`flex items-center gap-1.5 transition-colors ${hasNumber ? 'text-emerald-600 font-medium' : 'text-slate-400'}`}>
-              <HiOutlineCheck className={`w-3.5 h-3.5 ${hasNumber ? 'text-emerald-600' : 'text-slate-300'}`} />
+            <div className={`flex items-center gap-1.5 transition-colors ${hasNumber ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-slate-400 dark:text-dk-muted'}`}>
+              <HiOutlineCheck className={`w-3.5 h-3.5 ${hasNumber ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-300 dark:text-dk-border-strong'}`} />
               <span>Ít nhất 1 chữ số</span>
             </div>
-            <div className={`flex items-center gap-1.5 transition-colors ${passwordsMatch ? 'text-emerald-600 font-medium' : 'text-slate-400'}`}>
-              <HiOutlineCheck className={`w-3.5 h-3.5 ${passwordsMatch ? 'text-emerald-600' : 'text-slate-300'}`} />
+            <div className={`flex items-center gap-1.5 transition-colors ${passwordsMatch ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-slate-400 dark:text-dk-muted'}`}>
+              <HiOutlineCheck className={`w-3.5 h-3.5 ${passwordsMatch ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-300 dark:text-dk-border-strong'}`} />
               <span>Khớp mật khẩu</span>
             </div>
           </div>
@@ -397,7 +397,7 @@ const ActivatePage = () => {
         </button>
 
         {/* Ghi chú chân trang */}
-        <p className="text-center text-xs text-slate-400 leading-relaxed pt-1">
+        <p className="text-center text-xs text-slate-400 dark:text-dk-muted leading-relaxed pt-1">
           {t('activate.infoNote')}
         </p>
 
@@ -405,7 +405,7 @@ const ActivatePage = () => {
         <div className="pt-2 text-center">
           <Link 
             to="/login" 
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-orange-500 transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-dk-text2 hover:text-orange-500 dark:hover:text-orange-400 transition-colors"
           >
             <HiOutlineArrowLeft className="w-3.5 h-3.5" />
             <span>{t('activate.backToLogin')}</span>

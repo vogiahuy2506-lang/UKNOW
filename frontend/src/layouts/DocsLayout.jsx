@@ -82,27 +82,27 @@ export default function DocsLayout({ embedded = false }) {
 
   const sidebarContent = (
     <div className="flex h-full flex-col">
-      <div className="p-4 border-b border-slate-100">
-        <div className="flex items-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 focus-within:border-primary-400 focus-within:ring-1 focus-within:ring-primary-400">
-          <HiOutlineSearch className="h-4 w-4 text-slate-400 shrink-0" />
+      <div className="p-4 border-b border-slate-100 dark:border-dk-border">
+        <div className="flex items-center rounded-lg border border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-surface px-3 py-2 focus-within:border-primary-400 focus-within:ring-1 focus-within:ring-primary-400">
+          <HiOutlineSearch className="h-4 w-4 text-slate-400 dark:text-dk-muted shrink-0" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t('helpDocs.searchPlaceholder')}
-            className="ml-2 w-full bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+            className="ml-2 w-full bg-transparent text-sm text-slate-700 dark:text-dk-text outline-none placeholder:text-slate-400 dark:placeholder:text-dk-muted"
           />
         </div>
       </div>
       <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-4">
         {isLoading ? (
-          <p className="px-3 text-sm text-slate-400">{t('common.loading')}</p>
+          <p className="px-3 text-sm text-slate-400 dark:text-dk-muted">{t('common.loading')}</p>
         ) : groups.length === 0 ? (
-          <p className="px-3 text-sm text-slate-400">{t('helpDocs.noResults')}</p>
+          <p className="px-3 text-sm text-slate-400 dark:text-dk-muted">{t('helpDocs.noResults')}</p>
         ) : (
           groups.map((group) => (
             <div key={group.featureKey}>
-              <p className="px-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+              <p className="px-3 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-dk-muted">
                 {t(`helpDocs.featureGroups.${group.featureKey}`) !== `helpDocs.featureGroups.${group.featureKey}`
                   ? t(`helpDocs.featureGroups.${group.featureKey}`)
                   : group.featureKey}
@@ -115,8 +115,8 @@ export default function DocsLayout({ embedded = false }) {
                       className={({ isActive }) => (
                         `flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
                           isActive
-                            ? 'bg-primary-50 text-primary-700 font-medium'
-                            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                            ? 'bg-primary-50 dark:bg-primary-950/40 text-primary-700 dark:text-primary-300 font-medium'
+                            : 'text-slate-600 dark:text-dk-text2 hover:bg-slate-50 dark:hover:bg-dk-raised hover:text-slate-900 dark:hover:text-dk-text'
                         }`
                       )}
                     >
@@ -134,38 +134,38 @@ export default function DocsLayout({ embedded = false }) {
   );
 
   return (
-    <div className={`bg-white flex flex-col ${embedded ? 'h-full min-h-0' : 'min-h-screen'}`}>
+    <div className={`bg-white flex flex-col ${embedded ? 'h-full min-h-0 dark:bg-dk-inset' : 'min-h-screen dark:bg-dk-bg'}`}>
       {embedded ? (
-        <div className="lg:hidden flex h-11 shrink-0 items-center gap-2 border-b border-slate-100 px-3">
+        <div className="lg:hidden flex h-11 shrink-0 items-center gap-2 border-b border-slate-100 dark:border-dk-border px-3">
           <button
             type="button"
-            className="p-2 -ml-2 text-slate-500 hover:text-slate-800"
+            className="p-2 -ml-2 text-slate-500 dark:text-dk-text2 hover:text-slate-800 dark:hover:text-dk-text"
             onClick={() => setMobileSidebarOpen(true)}
             aria-label={t('helpDocs.openMenu')}
           >
             <HiOutlineMenu className="h-5 w-5" />
           </button>
-          <Link to="/huong-dan" className="text-sm font-semibold text-slate-900">
+          <Link to="/huong-dan" className="text-sm font-semibold text-slate-900 dark:text-dk-text">
             {t('helpDocs.title')}
           </Link>
         </div>
       ) : (
-      <header className="sticky top-0 z-40 border-b border-slate-100 bg-white/95 backdrop-blur">
+      <header className="sticky top-0 z-40 border-b border-slate-100 dark:border-dk-border bg-white/95 dark:bg-dk-surface/95 backdrop-blur">
         <div className="flex h-14 items-center gap-3 px-4 sm:px-6">
           <button
             type="button"
-            className="lg:hidden p-2 -ml-2 text-slate-500 hover:text-slate-800"
+            className="lg:hidden p-2 -ml-2 text-slate-500 dark:text-dk-text2 hover:text-slate-800 dark:hover:text-dk-text"
             onClick={() => setMobileSidebarOpen(true)}
             aria-label={t('helpDocs.openMenu')}
           >
             <HiOutlineMenu className="h-5 w-5" />
           </button>
-          <Link to="/" className="flex items-center gap-2 text-slate-500 hover:text-slate-800">
+          <Link to="/" className="flex items-center gap-2 text-slate-500 dark:text-dk-text2 hover:text-slate-800 dark:hover:text-dk-text">
             <HiOutlineHome className="h-4 w-4" />
             <span className="text-sm">{t('helpDocs.home')}</span>
           </Link>
           <span className="text-slate-300">/</span>
-          <Link to="/huong-dan" className="text-sm font-semibold text-slate-900">
+          <Link to="/huong-dan" className="text-sm font-semibold text-slate-900 dark:text-dk-text">
             {t('helpDocs.title')}
           </Link>
           <LanguageSwitcher className="ml-auto" showLabel />
@@ -175,7 +175,7 @@ export default function DocsLayout({ embedded = false }) {
 
       <div className="flex flex-1 min-h-0">
         {/* Desktop sidebar */}
-        <aside className={`hidden lg:block w-72 shrink-0 border-r border-slate-100 ${embedded ? 'overflow-auto' : ''}`}>
+        <aside className={`hidden lg:block w-72 shrink-0 border-r border-slate-100 dark:border-dk-border ${embedded ? 'overflow-auto' : ''}`}>
           {sidebarContent}
         </aside>
 
@@ -187,12 +187,12 @@ export default function DocsLayout({ embedded = false }) {
               onClick={() => setMobileSidebarOpen(false)}
               aria-hidden="true"
             />
-            <div className="relative z-10 w-72 max-w-[85vw] bg-white shadow-xl flex flex-col">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-                <span className="text-sm font-semibold text-slate-900">{t('helpDocs.title')}</span>
+            <div className="relative z-10 w-72 max-w-[85vw] bg-white dark:bg-dk-surface shadow-xl flex flex-col">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-dk-border">
+                <span className="text-sm font-semibold text-slate-900 dark:text-dk-text">{t('helpDocs.title')}</span>
                 <button
                   type="button"
-                  className="p-1.5 text-slate-400 hover:text-slate-700"
+                  className="p-1.5 text-slate-400 dark:text-dk-muted hover:text-slate-700 dark:hover:text-dk-text"
                   onClick={() => setMobileSidebarOpen(false)}
                   aria-label={t('common.close')}
                 >

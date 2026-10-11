@@ -126,7 +126,7 @@ const NoPlanScreen = () => {
 
             {/* Right: User info */}
             <aside 
-              className="rounded-3xl border border-slate-200/50 bg-white/95 p-6 sm:p-7 shadow-xl backdrop-blur-sm"
+              className="rounded-3xl border border-slate-200/50 dark:border-dk-border/50 bg-white/95 dark:bg-dk-surface/95 p-6 sm:p-7 shadow-xl backdrop-blur-sm"
               style={{ backdropFilter: 'blur(20px)' }}
             >
               <div className="flex items-start gap-4">
@@ -134,31 +134,31 @@ const NoPlanScreen = () => {
                   className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0"
                   style={{ background: 'linear-gradient(135deg, rgba(249,115,22,0.1) 0%, rgba(239,68,68,0.1) 100%)' }}
                 >
-                  <HiOutlineSparkles className="w-7 h-7 text-orange-500" />
+                  <HiOutlineSparkles className="w-7 h-7 text-orange-500 dark:text-orange-400" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs font-bold uppercase tracking-wider text-orange-500">
+                  <p className="text-xs font-bold uppercase tracking-wider text-orange-500 dark:text-orange-400">
                     {t('noPlan.signedInAs')}
                   </p>
-                  <h2 className="mt-1 text-xl font-bold text-slate-900 truncate">
+                  <h2 className="mt-1 text-xl font-bold text-slate-900 dark:text-dk-text truncate">
                     {user?.fullName || user?.username || user?.email}
                   </h2>
                   {user?.email && (
-                    <p className="mt-1 text-sm text-slate-500 truncate">{user.email}</p>
+                    <p className="mt-1 text-sm text-slate-500 dark:text-dk-text2 truncate">{user.email}</p>
                   )}
                 </div>
               </div>
 
               {memberships.length > 0 ? (
                 <div className="mt-7 space-y-3">
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-dk-muted">
                     {t('noPlan.enterWorkspace')}
                   </p>
                   {memberships.map((m) => (
                     <button
                       key={m.ownerId}
                       onClick={() => handleEnterWorkspace(m.ownerId)}
-                      className="w-full flex items-center gap-3 p-4 rounded-2xl border border-orange-100 bg-orange-50/50 hover:bg-orange-50 transition-all text-left group"
+                      className="w-full flex items-center gap-3 p-4 rounded-2xl border border-orange-100 dark:border-orange-800 bg-orange-50/50 dark:bg-orange-950/40 hover:bg-orange-50 dark:hover:bg-orange-950/60 transition-all text-left group"
                     >
                       <div 
                         className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0"
@@ -167,21 +167,21 @@ const NoPlanScreen = () => {
                         {(m.ownerName || m.ownerUsername || '?')[0].toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-slate-900 truncate">
+                        <p className="text-sm font-bold text-slate-900 dark:text-dk-text truncate">
                           {m.ownerName || m.ownerUsername}
                         </p>
-                        <p className="text-xs text-slate-500 flex items-center gap-1">
+                        <p className="text-xs text-slate-500 dark:text-dk-text2 flex items-center gap-1">
                           <HiOutlineOfficeBuilding className="w-3 h-3" />
                           {t('noPlan.employee')}
                         </p>
                       </div>
-                      <HiOutlineArrowRight className="w-4 h-4 text-orange-500 group-hover:translate-x-1 transition-transform" />
+                      <HiOutlineArrowRight className="w-4 h-4 text-orange-500 dark:text-orange-400 group-hover:translate-x-1 transition-transform" />
                     </button>
                   ))}
                 </div>
               ) : (
-                <div className="mt-7 rounded-2xl bg-slate-50 border border-slate-100 p-5">
-                  <p className="text-sm leading-relaxed text-slate-600">
+                <div className="mt-7 rounded-2xl bg-slate-50 dark:bg-dk-raised border border-slate-100 dark:border-dk-border p-5">
+                  <p className="text-sm leading-relaxed text-slate-600 dark:text-dk-text2">
                     {t('noPlan.homeHint')}
                   </p>
                 </div>
@@ -189,7 +189,7 @@ const NoPlanScreen = () => {
 
               <button
                 onClick={handleLogout}
-                className="mt-7 w-full inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-600 transition-all hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                className="mt-7 w-full inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset px-5 py-3 text-sm font-semibold text-slate-600 dark:text-dk-text2 transition-all hover:border-red-200 dark:hover:border-red-800 hover:bg-red-50 dark:hover:bg-red-950/60 hover:text-red-600 dark:hover:text-red-400"
               >
                 <HiOutlineLogout className="w-4 h-4" />
                 {t('noPlan.logout')}

@@ -177,7 +177,7 @@ const OtpStep = ({ email, formData, onBack }) => {
       <button 
         type="button" 
         onClick={onBack}
-        className="flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-700 mb-8 transition-colors duration-200 group"
+        className="flex items-center gap-2 text-sm font-medium text-slate-500 dark:text-dk-text2 hover:text-slate-700 dark:hover:text-dk-text mb-8 transition-colors duration-200 group"
       >
         <HiOutlineArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
         {t('register.back')}
@@ -189,11 +189,11 @@ const OtpStep = ({ email, formData, onBack }) => {
           className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6"
           style={{ background: 'linear-gradient(135deg, rgba(249,115,22,0.1) 0%, rgba(239,68,68,0.1) 100%)' }}
         >
-          <HiOutlineShieldCheck className="w-8 h-8 text-orange-500" />
+          <HiOutlineShieldCheck className="w-8 h-8 text-orange-500 dark:text-orange-400" />
         </div>
-        <h1 className="text-2xl font-bold text-slate-900 mb-2 tracking-tight">{t('register.verifyEmail')}</h1>
-        <p className="text-slate-500 text-sm leading-relaxed">{t('register.enterOtpCode')}</p>
-        <p className="font-bold text-slate-800 text-sm mt-1">{email}</p>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-dk-text mb-2 tracking-tight">{t('register.verifyEmail')}</h1>
+        <p className="text-slate-500 dark:text-dk-text2 text-sm leading-relaxed">{t('register.enterOtpCode')}</p>
+        <p className="font-bold text-slate-800 dark:text-dk-text text-sm mt-1">{email}</p>
       </div>
 
       {/* 6 ô OTP */}
@@ -209,7 +209,7 @@ const OtpStep = ({ email, formData, onBack }) => {
             onChange={(e) => handleChange(i, e.target.value)}
             onKeyDown={(e) => handleKeyDown(i, e)}
             onPaste={i === 0 ? handlePaste : undefined}
-            className="w-12 h-14 text-center text-xl font-bold border-2 rounded-xl outline-none transition-all duration-200 text-slate-900 bg-white border-slate-200 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10"
+            className="w-12 h-14 text-center text-xl font-bold border-2 rounded-xl outline-none transition-all duration-200 text-slate-900 dark:text-dk-text bg-white dark:bg-dk-inset border-slate-200 dark:border-dk-border focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10"
           />
         ))}
       </div>
@@ -233,16 +233,16 @@ const OtpStep = ({ email, formData, onBack }) => {
         ) : t('register.confirmButton')}
       </button>
 
-      <div className="mt-6 text-center text-sm text-slate-500">
+      <div className="mt-6 text-center text-sm text-slate-500 dark:text-dk-text2">
         {t('register.didntReceiveCode')}{' '}
         {countdown > 0 ? (
-          <span className="text-slate-400">{t('register.resendAfter', { n: countdown })}</span>
+          <span className="text-slate-400 dark:text-dk-muted">{t('register.resendAfter', { n: countdown })}</span>
         ) : (
           <button 
             type="button" 
             onClick={handleResend} 
             disabled={isResending}
-            className="font-bold text-orange-500 hover:text-orange-600 transition-colors disabled:opacity-50"
+            className="font-bold text-orange-500 dark:text-orange-400 hover:text-orange-600 dark:hover:text-orange-300 transition-colors disabled:opacity-50"
           >
             {isResending ? t('register.sending') : t('register.resendButton')}
           </button>
@@ -433,21 +433,21 @@ const Register = () => {
     <div className="w-full max-w-md mx-auto opacity-0 animate-fadeIn" style={{ animation: 'fadeIn 0.5s ease forwards' }}>
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-900 tracking-tight">{t('register.registerTitle')}</h1>
-        <p className="text-slate-500 mt-2 text-sm leading-relaxed">{t('register.registerSubtitle')}</p>
+        <h1 className="text-3xl font-bold text-slate-900 dark:text-dk-text tracking-tight">{t('register.registerTitle')}</h1>
+        <p className="text-slate-500 dark:text-dk-text2 mt-2 text-sm leading-relaxed">{t('register.registerSubtitle')}</p>
       </div>
 
       {/* Banner thông báo thành viên được mời */}
       {isInvite && (
-        <div className="mb-6 p-4 rounded-xl bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200/80 flex items-start gap-3 shadow-sm">
+        <div className="mb-6 p-4 rounded-xl bg-gradient-to-r from-orange-50 dark:from-orange-950/40 to-amber-50 dark:to-amber-950/40 border border-orange-200/80 dark:border-orange-800 flex items-start gap-3 shadow-sm">
           <div className="w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0 mt-0.5">
-            <HiOutlineShieldCheck className="w-5 h-5 text-orange-600" />
+            <HiOutlineShieldCheck className="w-5 h-5 text-orange-600 dark:text-orange-400" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-orange-950">
+            <h3 className="text-sm font-bold text-orange-950 dark:text-orange-300">
               Hoàn tất đăng ký thành viên được mời
             </h3>
-            <p className="text-xs text-orange-800/90 mt-1 leading-relaxed">
+            <p className="text-xs text-orange-800/90 dark:text-orange-300 mt-1 leading-relaxed">
               Bạn được mời tham gia nhóm làm việc{invitationInfo?.ownerName ? ` bởi ${invitationInfo.ownerName}` : ''}. Vui lòng hoàn tất thông tin tài khoản bên dưới để bắt đầu làm việc.
             </p>
           </div>
@@ -458,10 +458,10 @@ const Register = () => {
       {!isInvite && (
         <div className="flex items-center gap-2 mb-8">
           <div className="flex items-center justify-center w-6 h-6 rounded-full bg-orange-500 text-white text-xs font-bold">1</div>
-          <div className="flex-1 h-0.5 bg-slate-200 rounded">
+          <div className="flex-1 h-0.5 bg-slate-200 dark:bg-dk-strong rounded">
             <div className="h-full bg-orange-500 rounded" style={{ width: '0%' }} />
           </div>
-          <div className="flex items-center justify-center w-6 h-6 rounded-full bg-slate-200 text-slate-500 text-xs font-bold">2</div>
+          <div className="flex items-center justify-center w-6 h-6 rounded-full bg-slate-200 dark:bg-dk-strong text-slate-500 dark:text-dk-text2 text-xs font-bold">2</div>
         </div>
       )}
 
@@ -469,18 +469,18 @@ const Register = () => {
         {/* Username & Email */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <label className="block text-sm font-semibold text-slate-700">
-              {t('auth.usernameLabel')} <span className="text-red-500">*</span>
+            <label className="block text-sm font-semibold text-slate-700 dark:text-dk-text">
+              {t('auth.usernameLabel')} <span className="text-red-500 dark:text-red-400">*</span>
             </label>
             <div className="relative group">
-              <HiOutlineUser className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
+              <HiOutlineUser className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 dark:text-dk-muted group-focus-within:text-orange-500 transition-colors" />
               <input 
                 type="text" 
                 {...register('username')}
-                className={`w-full pl-12 pr-4 py-3.5 border rounded-xl outline-none transition-all duration-200 text-sm text-slate-900 bg-white placeholder:text-slate-400 ${
+                className={`w-full pl-12 pr-4 py-3.5 border rounded-xl outline-none transition-all duration-200 text-sm text-slate-900 dark:text-dk-text bg-white dark:bg-dk-inset placeholder:text-slate-400 dark:placeholder:text-dk-muted ${
                   errors.username 
                     ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' 
-                    : 'border-slate-200 hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10'
+                    : 'border-slate-200 dark:border-dk-border hover:border-slate-300 dark:hover:border-dk-border-strong focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10'
                 }`}
                 placeholder={t('register.usernamePlaceholder')}
                 autoCapitalize="none"
@@ -488,7 +488,7 @@ const Register = () => {
               />
             </div>
             {errors.username && (
-              <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+              <p className="text-xs text-red-500 dark:text-red-400 mt-1 flex items-center gap-1">
                 <span className="inline-block w-1 h-1 rounded-full bg-red-500" />
                 {errors.username.message}
               </p>
@@ -496,21 +496,21 @@ const Register = () => {
           </div>
 
           <div className="space-y-2">
-            <label className="block text-sm font-semibold text-slate-700">
-              {t('common.email')} <span className="text-red-500">*</span>
+            <label className="block text-sm font-semibold text-slate-700 dark:text-dk-text">
+              {t('common.email')} <span className="text-red-500 dark:text-red-400">*</span>
             </label>
             <div className="relative group">
-              <HiOutlineMail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
+              <HiOutlineMail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 dark:text-dk-muted group-focus-within:text-orange-500 transition-colors" />
               <input 
                 type="email" 
                 {...register('email')}
                 readOnly={Boolean(isInvite && (emailFromUrl || invitationInfo?.email))}
                 className={`w-full pl-12 pr-4 py-3.5 border rounded-xl outline-none transition-all duration-200 text-sm ${
                   isInvite && (emailFromUrl || invitationInfo?.email)
-                    ? 'bg-slate-100 text-slate-600 border-slate-200 cursor-not-allowed'
-                    : 'text-slate-900 bg-white placeholder:text-slate-400 ' + (errors.email 
+                    ? 'bg-slate-100 dark:bg-dk-raised text-slate-600 dark:text-dk-text2 border-slate-200 dark:border-dk-border cursor-not-allowed'
+                    : 'text-slate-900 dark:text-dk-text bg-white dark:bg-dk-inset placeholder:text-slate-400 dark:placeholder:text-dk-muted ' + (errors.email 
                         ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' 
-                        : 'border-slate-200 hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10')
+                        : 'border-slate-200 dark:border-dk-border hover:border-slate-300 dark:hover:border-dk-border-strong focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10')
                 }`}
                 placeholder={t('register.emailPlaceholder')}
                 autoCapitalize="none"
@@ -518,7 +518,7 @@ const Register = () => {
               />
             </div>
             {errors.email && (
-              <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+              <p className="text-xs text-red-500 dark:text-red-400 mt-1 flex items-center gap-1">
                 <span className="inline-block w-1 h-1 rounded-full bg-red-500" />
                 {errors.email.message}
               </p>
@@ -529,13 +529,13 @@ const Register = () => {
         {/* Full Name & Phone */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <label className="block text-sm font-semibold text-slate-700">{t('register.fullName')}</label>
+            <label className="block text-sm font-semibold text-slate-700 dark:text-dk-text">{t('register.fullName')}</label>
             <div className="relative group">
-              <HiOutlineUser className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
+              <HiOutlineUser className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 dark:text-dk-muted group-focus-within:text-orange-500 transition-colors" />
               <input 
                 type="text" 
                 {...register('fullName')} 
-                className="w-full pl-12 pr-4 py-3.5 border border-slate-200 rounded-xl outline-none transition-all duration-200 text-sm text-slate-900 bg-white placeholder:text-slate-400 hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10"
+                className="w-full pl-12 pr-4 py-3.5 border border-slate-200 dark:border-dk-border rounded-xl outline-none transition-all duration-200 text-sm text-slate-900 dark:text-dk-text bg-white dark:bg-dk-inset placeholder:text-slate-400 dark:placeholder:text-dk-muted hover:border-slate-300 dark:hover:border-dk-border-strong focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10"
                 placeholder={t('register.fullNamePlaceholder')} 
               />
             </div>
@@ -545,24 +545,24 @@ const Register = () => {
               PhoneRequiredModal (OTP). Cờ tắt/chưa xong → giữ nguyên như hôm nay. */}
           {!phoneOtpEnabled && (
             <div className="space-y-2">
-              <label className="block text-sm font-semibold text-slate-700">
-                {t('register.phone')} <span className="text-red-500">*</span>
+              <label className="block text-sm font-semibold text-slate-700 dark:text-dk-text">
+                {t('register.phone')} <span className="text-red-500 dark:text-red-400">*</span>
               </label>
               <div className="relative group">
-                <HiOutlinePhone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
+                <HiOutlinePhone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 dark:text-dk-muted group-focus-within:text-orange-500 transition-colors" />
                 <input
                   type="tel"
                   {...register('phone')}
-                  className={`w-full pl-12 pr-4 py-3.5 border rounded-xl outline-none transition-all duration-200 text-sm text-slate-900 bg-white placeholder:text-slate-400 ${
+                  className={`w-full pl-12 pr-4 py-3.5 border rounded-xl outline-none transition-all duration-200 text-sm text-slate-900 dark:text-dk-text bg-white dark:bg-dk-inset placeholder:text-slate-400 dark:placeholder:text-dk-muted ${
                     errors.phone
                       ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-500/10'
-                      : 'border-slate-200 hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10'
+                      : 'border-slate-200 dark:border-dk-border hover:border-slate-300 dark:hover:border-dk-border-strong focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10'
                   }`}
                   placeholder={t('register.phonePlaceholder')}
                 />
               </div>
               {errors.phone && (
-                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                <p className="text-xs text-red-500 dark:text-red-400 mt-1 flex items-center gap-1">
                   <span className="inline-block w-1 h-1 rounded-full bg-red-500" />
                   {errors.phone.message}
                 </p>
@@ -574,31 +574,31 @@ const Register = () => {
         {/* Password & Confirm */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <label className="block text-sm font-semibold text-slate-700">
-              {t('auth.password')} <span className="text-red-500">*</span>
+            <label className="block text-sm font-semibold text-slate-700 dark:text-dk-text">
+              {t('auth.password')} <span className="text-red-500 dark:text-red-400">*</span>
             </label>
             <div className="relative group">
-              <HiOutlineLockClosed className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
+              <HiOutlineLockClosed className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 dark:text-dk-muted group-focus-within:text-orange-500 transition-colors" />
               <input 
                 type={showPassword ? 'text' : 'password'} 
                 {...register('password')}
-                className={`w-full pl-12 pr-12 py-3.5 border rounded-xl outline-none transition-all duration-200 text-sm text-slate-900 bg-white placeholder:text-slate-400 ${
+                className={`w-full pl-12 pr-12 py-3.5 border rounded-xl outline-none transition-all duration-200 text-sm text-slate-900 dark:text-dk-text bg-white dark:bg-dk-inset placeholder:text-slate-400 dark:placeholder:text-dk-muted ${
                   errors.password 
                     ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' 
-                    : 'border-slate-200 hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10'
+                    : 'border-slate-200 dark:border-dk-border hover:border-slate-300 dark:hover:border-dk-border-strong focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10'
                 }`}
                 placeholder="••••••••"
               />
               <button 
                 type="button" 
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-orange-500 transition-colors p-1"
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-dk-muted hover:text-orange-500 dark:hover:text-orange-400 transition-colors p-1"
               >
                 {showPassword ? <HiOutlineEyeOff className="w-5 h-5" /> : <HiOutlineEye className="w-5 h-5" />}
               </button>
             </div>
             {errors.password && (
-              <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+              <p className="text-xs text-red-500 dark:text-red-400 mt-1 flex items-center gap-1">
                 <span className="inline-block w-1 h-1 rounded-full bg-red-500" />
                 {errors.password.message}
               </p>
@@ -606,31 +606,31 @@ const Register = () => {
           </div>
 
           <div className="space-y-2">
-            <label className="block text-sm font-semibold text-slate-700">
-              {t('auth.confirmPassword')} <span className="text-red-500">*</span>
+            <label className="block text-sm font-semibold text-slate-700 dark:text-dk-text">
+              {t('auth.confirmPassword')} <span className="text-red-500 dark:text-red-400">*</span>
             </label>
             <div className="relative group">
-              <HiOutlineLockClosed className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
+              <HiOutlineLockClosed className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 dark:text-dk-muted group-focus-within:text-orange-500 transition-colors" />
               <input 
                 type={showConfirmPassword ? 'text' : 'password'} 
                 {...register('confirmPassword')}
-                className={`w-full pl-12 pr-12 py-3.5 border rounded-xl outline-none transition-all duration-200 text-sm text-slate-900 bg-white placeholder:text-slate-400 ${
+                className={`w-full pl-12 pr-12 py-3.5 border rounded-xl outline-none transition-all duration-200 text-sm text-slate-900 dark:text-dk-text bg-white dark:bg-dk-inset placeholder:text-slate-400 dark:placeholder:text-dk-muted ${
                   errors.confirmPassword 
                     ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' 
-                    : 'border-slate-200 hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10'
+                    : 'border-slate-200 dark:border-dk-border hover:border-slate-300 dark:hover:border-dk-border-strong focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10'
                 }`}
                 placeholder="••••••••"
               />
               <button 
                 type="button" 
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-orange-500 transition-colors p-1"
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-dk-muted hover:text-orange-500 dark:hover:text-orange-400 transition-colors p-1"
               >
                 {showConfirmPassword ? <HiOutlineEyeOff className="w-5 h-5" /> : <HiOutlineEye className="w-5 h-5" />}
               </button>
             </div>
             {errors.confirmPassword && (
-              <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+              <p className="text-xs text-red-500 dark:text-red-400 mt-1 flex items-center gap-1">
                 <span className="inline-block w-1 h-1 rounded-full bg-red-500" />
                 {errors.confirmPassword.message}
               </p>
@@ -640,15 +640,15 @@ const Register = () => {
 
         {/* Referral Code (optional) */}
         <div className="space-y-2">
-          <label className="block text-sm font-semibold text-slate-700">
+          <label className="block text-sm font-semibold text-slate-700 dark:text-dk-text">
             {t('register.referralCode')}
           </label>
           <div className="relative group">
-            <HiOutlineTag className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
+            <HiOutlineTag className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 dark:text-dk-muted group-focus-within:text-orange-500 transition-colors" />
             <input 
               type="text" 
               {...register('referralCode')}
-              className="w-full pl-12 pr-4 py-3.5 border border-slate-200 rounded-xl outline-none transition-all duration-200 text-sm text-slate-900 bg-white uppercase hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10 font-mono tracking-wider placeholder:text-slate-400"
+              className="w-full pl-12 pr-4 py-3.5 border border-slate-200 dark:border-dk-border rounded-xl outline-none transition-all duration-200 text-sm text-slate-900 dark:text-dk-text bg-white dark:bg-dk-inset uppercase hover:border-slate-300 dark:hover:border-dk-border-strong focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10 font-mono tracking-wider placeholder:text-slate-400 dark:placeholder:text-dk-muted"
               placeholder={t('register.referralCodePlaceholder')}
               maxLength={16}
             />
@@ -665,13 +665,13 @@ const Register = () => {
                 onChange={(e) => setTermsChecked(e.target.checked)}
                 className="sr-only peer"
               />
-              <div className="w-5 h-5 border-2 border-slate-300 bg-white rounded-md peer-checked:bg-orange-500 peer-checked:border-orange-500 transition-all duration-200 flex items-center justify-center">
+              <div className="w-5 h-5 border-2 border-slate-300 dark:border-dk-border-strong bg-white dark:bg-dk-inset rounded-md peer-checked:bg-orange-500 peer-checked:border-orange-500 transition-all duration-200 flex items-center justify-center">
                 {termsChecked && <HiOutlineCheckCircle className="w-3.5 h-3.5 text-white" />}
               </div>
             </div>
-            <span className="text-xs text-slate-600 font-medium leading-relaxed group-hover:text-slate-700 transition-colors">
+            <span className="text-xs text-slate-600 dark:text-dk-text2 font-medium leading-relaxed group-hover:text-slate-700 dark:group-hover:text-dk-text transition-colors">
               {t('auth.termsAgree')}{' '}
-              <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:text-orange-700 font-bold hover:underline underline-offset-2 transition-colors">{t('auth.terms')}</a>
+              <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 font-bold hover:underline underline-offset-2 transition-colors">{t('auth.terms')}</a>
             </span>
           </label>
 
@@ -683,13 +683,13 @@ const Register = () => {
                 onChange={(e) => setPrivacyChecked(e.target.checked)}
                 className="sr-only peer"
               />
-              <div className="w-5 h-5 border-2 border-slate-300 bg-white rounded-md peer-checked:bg-orange-500 peer-checked:border-orange-500 transition-all duration-200 flex items-center justify-center">
+              <div className="w-5 h-5 border-2 border-slate-300 dark:border-dk-border-strong bg-white dark:bg-dk-inset rounded-md peer-checked:bg-orange-500 peer-checked:border-orange-500 transition-all duration-200 flex items-center justify-center">
                 {privacyChecked && <HiOutlineCheckCircle className="w-3.5 h-3.5 text-white" />}
               </div>
             </div>
-            <span className="text-xs text-slate-600 font-medium leading-relaxed group-hover:text-slate-700 transition-colors">
+            <span className="text-xs text-slate-600 dark:text-dk-text2 font-medium leading-relaxed group-hover:text-slate-700 dark:group-hover:text-dk-text transition-colors">
               {t('auth.termsAgree')}{' '}
-              <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:text-orange-700 font-bold hover:underline underline-offset-2 transition-colors">{t('auth.privacyPolicy')}</a>
+              <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 font-bold hover:underline underline-offset-2 transition-colors">{t('auth.privacyPolicy')}</a>
             </span>
           </label>
 
@@ -701,13 +701,13 @@ const Register = () => {
                 onChange={(e) => setDpaChecked(e.target.checked)}
                 className="sr-only peer"
               />
-              <div className="w-5 h-5 border-2 border-slate-300 bg-white rounded-md peer-checked:bg-orange-500 peer-checked:border-orange-500 transition-all duration-200 flex items-center justify-center">
+              <div className="w-5 h-5 border-2 border-slate-300 dark:border-dk-border-strong bg-white dark:bg-dk-inset rounded-md peer-checked:bg-orange-500 peer-checked:border-orange-500 transition-all duration-200 flex items-center justify-center">
                 {dpaChecked && <HiOutlineCheckCircle className="w-3.5 h-3.5 text-white" />}
               </div>
             </div>
-            <span className="text-xs text-slate-600 font-medium leading-relaxed group-hover:text-slate-700 transition-colors">
+            <span className="text-xs text-slate-600 dark:text-dk-text2 font-medium leading-relaxed group-hover:text-slate-700 dark:group-hover:text-dk-text transition-colors">
               {t('auth.termsAgree')}{' '}
-              <a href="/public-dpa" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:text-orange-700 font-bold hover:underline underline-offset-2 transition-colors">{t('auth.publicDPA')}</a>
+              <a href="/public-dpa" target="_blank" rel="noopener noreferrer" className="text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 font-bold hover:underline underline-offset-2 transition-colors">{t('auth.publicDPA')}</a>
             </span>
           </label>
         </div>
@@ -735,9 +735,9 @@ const Register = () => {
       {import.meta.env.VITE_GOOGLE_CLIENT_ID && (
         <>
           <div className="flex items-center my-6">
-            <div className="flex-1 h-px bg-slate-200" />
-            <span className="px-4 text-xs text-slate-400 font-medium uppercase tracking-wider">{t('common.or')}</span>
-            <div className="flex-1 h-px bg-slate-200" />
+            <div className="flex-1 h-px bg-slate-200 dark:bg-dk-strong" />
+            <span className="px-4 text-xs text-slate-400 dark:text-dk-muted font-medium uppercase tracking-wider">{t('common.or')}</span>
+            <div className="flex-1 h-px bg-slate-200 dark:bg-dk-strong" />
           </div>
 
           <GoogleAuthButton
@@ -749,11 +749,11 @@ const Register = () => {
         </>
       )}
 
-      <p className="mt-8 text-center text-sm text-slate-600">
+      <p className="mt-8 text-center text-sm text-slate-600 dark:text-dk-text2">
         {t('auth.alreadyHaveAccount')}{' '}
         <Link
           to="/login"
-          className="text-orange-500 hover:text-orange-600 font-bold hover:underline underline-offset-4 transition-colors"
+          className="text-orange-500 dark:text-orange-400 hover:text-orange-600 dark:hover:text-orange-300 font-bold hover:underline underline-offset-4 transition-colors"
         >
           {t('auth.loginHere')}
         </Link>

@@ -158,7 +158,7 @@ const AuthLayout = ({ children }) => {
 
           {/* Right panel: Form */}
           <div
-            className="flex-1 p-8 sm:p-10 xl:p-12 flex flex-col justify-center overflow-y-auto max-h-[calc(100vh-3rem)] bg-white/95 text-slate-900 backdrop-blur-2xl transition-colors duration-200"
+            className="flex-1 p-8 sm:p-10 xl:p-12 flex flex-col justify-center overflow-y-auto max-h-[calc(100vh-3rem)] bg-white/95 dark:bg-dk-surface/95 text-slate-900 dark:text-dk-text backdrop-blur-2xl transition-colors duration-200"
             style={{
               scrollbarWidth: 'none',
               msOverflowStyle: 'none'
@@ -174,7 +174,7 @@ const AuthLayout = ({ children }) => {
                   alt="Founder AI" 
                   className="w-10 h-10 object-contain drop-shadow-sm" 
                 />
-                <span className="text-slate-800 font-extrabold text-[18px] tracking-tight">Founder AI</span>
+                <span className="text-slate-800 dark:text-dk-text font-extrabold text-[18px] tracking-tight">Founder AI</span>
               </Link>
               <div className="flex items-center gap-2">
                 <LanguageSwitcher />

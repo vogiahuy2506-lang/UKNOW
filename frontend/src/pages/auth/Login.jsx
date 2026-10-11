@@ -132,24 +132,24 @@ const Login = () => {
           mạng) khi kiểm tra phiên cũ; token vẫn còn, không phải bị đăng xuất thật. */}
       {sessionCheckFailed && (
         <div
-          className="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-200 opacity-0 animate-slideDown"
+          className="mb-6 p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 opacity-0 animate-slideDown"
           style={{ animation: 'slideDown 0.4s ease forwards' }}
         >
-          <p className="text-amber-700 text-sm leading-relaxed">{t('auth.sessionCheckFailed')}</p>
+          <p className="text-amber-700 dark:text-amber-300 text-sm leading-relaxed">{t('auth.sessionCheckFailed')}</p>
         </div>
       )}
 
       {/* Banner đặt lại mật khẩu */}
       {isPasswordReset && (
         <div 
-          className="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 opacity-0 animate-slideDown"
+          className="mb-6 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 opacity-0 animate-slideDown"
           style={{ animation: 'slideDown 0.4s ease forwards' }}
         >
           <div className="flex items-start gap-3">
-            <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-              <HiOutlineShieldCheck className="w-4 h-4 text-emerald-600" />
+            <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center shrink-0">
+              <HiOutlineShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
             </div>
-            <p className="text-emerald-700 font-medium text-sm leading-relaxed">{t('auth.passwordChanged')}</p>
+            <p className="text-emerald-700 dark:text-emerald-300 font-medium text-sm leading-relaxed">{t('auth.passwordChanged')}</p>
           </div>
         </div>
       )}
@@ -157,11 +157,11 @@ const Login = () => {
       {/* Banner kích hoạt */}
       {isActivated && (
         <div 
-          className="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-200 opacity-0 animate-slideDown"
+          className="mb-6 p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 opacity-0 animate-slideDown"
           style={{ animation: 'slideDown 0.4s ease forwards' }}
         >
-          <p className="text-amber-700 font-medium text-sm">{t('auth.accountActivated')}</p>
-          <p className="text-amber-600 text-xs mt-1">
+          <p className="text-amber-700 dark:text-amber-300 font-medium text-sm">{t('auth.accountActivated')}</p>
+          <p className="text-amber-600 dark:text-amber-400 text-xs mt-1">
             {t('auth.email')}: <strong>{activatedUsername}</strong> · {t('auth.checkEmailForPassword')}
           </p>
         </div>
@@ -169,21 +169,21 @@ const Login = () => {
 
       {/* Header */}
       <div className="mb-8 text-center lg:text-left">
-        <h1 className="text-3xl font-bold text-slate-900 tracking-tight">{t('auth.login')}</h1>
-        <p className="text-slate-500 mt-2 text-sm leading-relaxed">{t('auth.loginSubtitle')}</p>
+        <h1 className="text-3xl font-bold text-slate-900 dark:text-dk-text tracking-tight">{t('auth.login')}</h1>
+        <p className="text-slate-500 dark:text-dk-text2 mt-2 text-sm leading-relaxed">{t('auth.loginSubtitle')}</p>
       </div>
 
       {/* Form */}
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
         {/* Username */}
         <div>
-          <label className="block text-sm font-semibold text-slate-700 mb-2">
+          <label className="block text-sm font-semibold text-slate-700 dark:text-dk-text mb-2">
             {t('auth.usernameLabel')}
           </label>
           <div className="relative">
             <div 
               className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors duration-200 ${
-                focusedField === 'username' ? 'text-orange-500' : 'text-slate-400'
+                focusedField === 'username' ? 'text-orange-500 dark:text-orange-400' : 'text-slate-400 dark:text-dk-muted'
               }`}
             >
               <HiOutlineUser className="w-5 h-5" />
@@ -193,12 +193,12 @@ const Login = () => {
               {...register('username')}
               onFocus={() => setFocusedField('username')}
               onBlur={() => setFocusedField(null)}
-              className={`w-full pl-12 pr-4 py-3.5 border rounded-xl outline-none transition-all duration-200 text-sm text-slate-900 bg-white placeholder:text-slate-400 ${
+              className={`w-full pl-12 pr-4 py-3.5 border rounded-xl outline-none transition-all duration-200 text-sm text-slate-900 dark:text-dk-text bg-white dark:bg-dk-inset placeholder:text-slate-400 dark:placeholder:text-dk-muted ${
                 errors.username 
                   ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' 
                   : focusedField === 'username'
                     ? 'border-orange-500 shadow-lg shadow-orange-500/10'
-                    : 'border-slate-200 hover:border-slate-300 focus:border-orange-500 focus:shadow-lg focus:shadow-orange-500/10'
+                    : 'border-slate-200 dark:border-dk-border hover:border-slate-300 dark:hover:border-dk-border-strong focus:border-orange-500 focus:shadow-lg focus:shadow-orange-500/10'
               }`}
               placeholder={t('auth.usernameLabel')}
               autoComplete="username"
@@ -207,15 +207,15 @@ const Login = () => {
             />
           </div>
           {errors.username && (
-            <p className="text-xs text-red-500 mt-2 flex items-center gap-1">
+            <p className="text-xs text-red-500 dark:text-red-400 mt-2 flex items-center gap-1">
               <span className="inline-block w-1 h-1 rounded-full bg-red-500" />
               {errors.username.message}
             </p>
           )}
           {/* Gợi ý mềm khi gõ ký tự @ */}
           {isTypingEmail && (
-            <div className="mt-2.5 p-2.5 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-2 text-xs text-amber-800 animate-fadeIn">
-              <HiOutlineInformationCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div className="mt-2.5 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 flex items-start gap-2 text-xs text-amber-800 dark:text-amber-300 animate-fadeIn">
+              <HiOutlineInformationCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
               <span>{t('auth.typingEmailHint')}</span>
             </div>
           )}
@@ -223,13 +223,13 @@ const Login = () => {
 
         {/* Password */}
         <div>
-          <label className="block text-sm font-semibold text-slate-700 mb-2">
+          <label className="block text-sm font-semibold text-slate-700 dark:text-dk-text mb-2">
             {t('auth.password')}
           </label>
           <div className="relative">
             <div 
               className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors duration-200 ${
-                focusedField === 'password' ? 'text-orange-500' : 'text-slate-400'
+                focusedField === 'password' ? 'text-orange-500 dark:text-orange-400' : 'text-slate-400 dark:text-dk-muted'
               }`}
             >
               <HiOutlineLockClosed className="w-5 h-5" />
@@ -239,12 +239,12 @@ const Login = () => {
               {...register('password')}
               onFocus={() => setFocusedField('password')}
               onBlur={() => setFocusedField(null)}
-              className={`w-full pl-12 pr-12 py-3.5 border rounded-xl outline-none transition-all duration-200 text-sm text-slate-900 bg-white placeholder:text-slate-400 ${
+              className={`w-full pl-12 pr-12 py-3.5 border rounded-xl outline-none transition-all duration-200 text-sm text-slate-900 dark:text-dk-text bg-white dark:bg-dk-inset placeholder:text-slate-400 dark:placeholder:text-dk-muted ${
                 errors.password 
                   ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' 
                   : focusedField === 'password'
                     ? 'border-orange-500 shadow-lg shadow-orange-500/10'
-                    : 'border-slate-200 hover:border-slate-300 focus:border-orange-500 focus:shadow-lg focus:shadow-orange-500/10'
+                    : 'border-slate-200 dark:border-dk-border hover:border-slate-300 dark:hover:border-dk-border-strong focus:border-orange-500 focus:shadow-lg focus:shadow-orange-500/10'
               }`}
               placeholder={t('auth.password')}
               autoComplete="current-password"
@@ -252,14 +252,14 @@ const Login = () => {
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-orange-500 p-1 transition-colors duration-200"
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-dk-muted hover:text-orange-500 dark:hover:text-orange-400 p-1 transition-colors duration-200"
               aria-label={showPassword ? 'Hide password' : 'Show password'}
             >
               {showPassword ? <HiOutlineEyeOff className="w-5 h-5" /> : <HiOutlineEye className="w-5 h-5" />}
             </button>
           </div>
           {errors.password && (
-            <p className="text-xs text-red-500 mt-2 flex items-center gap-1">
+            <p className="text-xs text-red-500 dark:text-red-400 mt-2 flex items-center gap-1">
               <span className="inline-block w-1 h-1 rounded-full bg-red-500" />
               {errors.password.message}
             </p>
@@ -275,14 +275,14 @@ const Login = () => {
                 {...register('rememberMe')}
                 className="sr-only peer"
               />
-              <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:bg-orange-500 transition-colors duration-200 cursor-pointer" />
+              <div className="w-9 h-5 bg-slate-200 dark:bg-dk-strong rounded-full peer peer-checked:bg-orange-500 transition-colors duration-200 cursor-pointer" />
               <div className="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 peer-checked:translate-x-4 cursor-pointer" />
             </div>
-            <span className="ml-3 text-slate-600 group-hover:text-slate-700 transition-colors">{t('auth.rememberMe')}</span>
+            <span className="ml-3 text-slate-600 dark:text-dk-text2 group-hover:text-slate-700 dark:group-hover:text-dk-text transition-colors">{t('auth.rememberMe')}</span>
           </label>
           <Link 
             to="/forgot-password" 
-            className="text-orange-500 hover:text-orange-600 font-semibold hover:underline underline-offset-4 transition-colors"
+            className="text-orange-500 dark:text-orange-400 hover:text-orange-600 dark:hover:text-orange-300 font-semibold hover:underline underline-offset-4 transition-colors"
           >
             {t('auth.forgotPassword')}?
           </Link>
@@ -312,9 +312,9 @@ const Login = () => {
         <>
           {/* Divider */}
           <div className="flex items-center my-6">
-            <div className="flex-1 h-px bg-slate-200" />
-            <span className="px-4 text-xs text-slate-400 font-medium uppercase tracking-wider">{t('auth.orContinueWith')}</span>
-            <div className="flex-1 h-px bg-slate-200" />
+            <div className="flex-1 h-px bg-slate-200 dark:bg-dk-strong" />
+            <span className="px-4 text-xs text-slate-400 dark:text-dk-muted font-medium uppercase tracking-wider">{t('auth.orContinueWith')}</span>
+            <div className="flex-1 h-px bg-slate-200 dark:bg-dk-strong" />
           </div>
 
           {/* Google Login */}
@@ -324,18 +324,18 @@ const Login = () => {
             text={t('auth.continueWithGoogle')}
             disabled={isLoading}
           />
-          <p className="mt-2.5 text-center text-xs text-slate-400">
+          <p className="mt-2.5 text-center text-xs text-slate-400 dark:text-dk-muted">
             {t('auth.googleAuthHint')}
           </p>
         </>
       )}
 
       {/* Register link */}
-      <p className="mt-8 text-center text-sm text-slate-600">
+      <p className="mt-8 text-center text-sm text-slate-600 dark:text-dk-text2">
         {t('auth.dontHaveAccount')}{' '}
         <Link 
           to="/register" 
-          className="text-orange-500 hover:text-orange-600 font-bold hover:underline underline-offset-4 transition-colors"
+          className="text-orange-500 dark:text-orange-400 hover:text-orange-600 dark:hover:text-orange-300 font-bold hover:underline underline-offset-4 transition-colors"
         >
           {t('auth.registerHere')}
         </Link>

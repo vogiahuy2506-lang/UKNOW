@@ -4,7 +4,7 @@ export default function PublicFooter() {
   const { t } = useI18n();
 
   return (
-    <footer className="bg-slate-900 text-white">
+    <footer className="bg-slate-900 dark:bg-dk-inset dark:border-t dark:border-dk-border text-white">
       <div className="max-w-6xl mx-auto px-6 py-16">
         <div className="grid md:grid-cols-4 gap-12">
           {/* Brand & Company Info */}
@@ -67,7 +67,7 @@ export default function PublicFooter() {
         </div>
       </div>
 
-      <div className="border-t border-slate-800">
+      <div className="border-t border-slate-800 dark:border-dk-border">
         <div className="max-w-6xl mx-auto px-6 py-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-slate-500">
             <p>{t('footer.publicBottomCopyright')}</p>
