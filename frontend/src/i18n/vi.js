@@ -11380,6 +11380,8 @@ export default {
     hasEn: 'Có bản EN',
     enStale: 'EN đang cũ',
     noEn: 'Chưa có EN',
+    missingVi: 'Thiếu VI',
+    missingViTitle: 'Lỗi: Bài viết này bị mất bản gốc tiếng Việt!',
     translateEn: 'Tạo/Cập nhật bản tiếng Anh',
     translating: 'Đang dịch...',
     translateSuccess: 'Đã tạo/cập nhật bản tiếng Anh',

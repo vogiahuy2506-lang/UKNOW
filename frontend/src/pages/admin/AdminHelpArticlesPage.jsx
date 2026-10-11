@@ -203,8 +203,8 @@ export default function AdminHelpArticlesPage() {
                               {t('adminHelp.localeVi')}
                             </span>
                           ) : (
-                            <span className="whitespace-nowrap rounded bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 px-1.5 py-0.5 text-xs text-red-600 dark:text-red-400 font-medium" title="Lỗi: Bài viết này bị mất bản gốc tiếng Việt!">
-                              Thiếu VI
+                            <span className="whitespace-nowrap rounded bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 px-1.5 py-0.5 text-xs text-red-600 dark:text-red-400 font-medium" title={t('adminHelp.missingViTitle')}>
+                              {t('adminHelp.missingVi')}
                             </span>
                           )}
                           {article._hasEn ? (
