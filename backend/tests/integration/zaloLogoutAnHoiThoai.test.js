@@ -327,6 +327,8 @@ describe('sau khi đăng xuất: hội thoại / tin của tài khoản ẨN ở
   it('hộp thư đi: danh sách, tổng, thống kê, chi tiết, gửi lại — đều không thấy tin gửi đi của tài khoản đã đăng xuất', async () => {
     const ctx = await setup();
     await logout(ctx);
+    const sendState = async () => (await db.query(`SELECT metadata->'send' AS send FROM zalo_personal_messages WHERE id = $1`, [ctx.outbound])).rows[0].send;
+    const sendBefore = await sendState();
 
     const outbox = await own(request(app).get(`${BASE}/inbox/outbox`), ctx);
     expect(outbox.status).toBe(200);
@@ -336,6 +338,8 @@ describe('sau khi đăng xuất: hội thoại / tin của tài khoản ẨN ở
     expect(outbox.body.data.statsByChannel.zalo_personal).toBeUndefined();
     expect((await own(request(app).get(`${BASE}/inbox/outbox/${ctx.outbound}`), ctx)).status).toBe(404);
     expect((await own(request(app).post(`${BASE}/inbox/messages/${ctx.outbound}/retry`).send(Q), ctx)).status).toBe(404);
+    // Gửi lại bị chặn NGAY ở bước tìm tin: tin không bị "nhận gửi lại" (retrying) rồi ghi failed + tăng số lần thử.
+    expect(await sendState()).toEqual(sendBefore);
   });
 
   it('liên hệ khách để lại: liên hệ qua tài khoản đã đăng xuất ẩn (cả tổng và số chưa xử lý); liên hệ Web vẫn còn; "đã xử lý" của liên hệ ẩn giữ nguyên', async () => {
