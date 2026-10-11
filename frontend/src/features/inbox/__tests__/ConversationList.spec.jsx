@@ -198,3 +198,57 @@ describe('trạng thái rỗng (H-10)', () => {
     expect(screen.queryByText('Chưa có cuộc trò chuyện nào')).not.toBeInTheDocument();
   });
 });
+
+describe('trạng thái rỗng riêng của kênh chưa nối (emptyState)', () => {
+  const emptyState = {
+    title: 'Chưa kết nối Telegram',
+    hint: 'Kết nối Telegram ở Cài đặt kênh để nhận và trả lời tin nhắn ngay tại đây.',
+    actionLabel: 'Kết nối Telegram',
+  };
+
+  it('có emptyState → hiện đúng chữ đó thay cho hai giọng mặc định; bấm nút gọi onAction', () => {
+    const onAction = vi.fn();
+    renderList([], { emptyState: { ...emptyState, onAction } });
+
+    expect(screen.getByText('Chưa kết nối Telegram')).toBeInTheDocument();
+    expect(screen.getByText(/Kết nối Telegram ở Cài đặt kênh/)).toBeInTheDocument();
+    expect(screen.queryByText('Chưa có cuộc trò chuyện nào')).not.toBeInTheDocument();
+    expect(onAction).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Kết nối Telegram' }));
+    expect(onAction).toHaveBeenCalledTimes(1);
+  });
+
+  it('emptyState được ưu tiên hơn giọng "không khớp" dù đang có bộ lọc/từ khoá', () => {
+    renderList([], { hasActiveFilters: true, emptyState: { ...emptyState, onAction: vi.fn() } });
+
+    expect(screen.getByText('Chưa kết nối Telegram')).toBeInTheDocument();
+    expect(screen.queryByText('Không có cuộc trò chuyện nào khớp')).not.toBeInTheDocument();
+  });
+
+  it('emptyState chỉ có chữ (không actionLabel/onAction) → không vẽ nút', () => {
+    renderList([], { emptyState: { title: emptyState.title, hint: emptyState.hint } });
+
+    expect(screen.getByText('Chưa kết nối Telegram')).toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('có nhãn nút nhưng thiếu onAction → không vẽ nút chết', () => {
+    renderList([], { emptyState });
+
+    expect(screen.queryByRole('button', { name: 'Kết nối Telegram' })).not.toBeInTheDocument();
+  });
+
+  it('có hội thoại thì không hiện emptyState', () => {
+    renderList([baseConv()], { emptyState: { ...emptyState, onAction: vi.fn() } });
+
+    expect(screen.getByText('Hải')).toBeInTheDocument();
+    expect(screen.queryByText('Chưa kết nối Telegram')).not.toBeInTheDocument();
+  });
+
+  it('không truyền emptyState → giọng cũ nguyên vẹn', () => {
+    renderList([]);
+    expect(screen.getByText('Chưa có cuộc trò chuyện nào')).toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+});

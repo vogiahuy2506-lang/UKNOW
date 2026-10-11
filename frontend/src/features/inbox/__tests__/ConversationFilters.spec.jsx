@@ -1,5 +1,6 @@
 /**
- * H-12 (tab kênh chỉ hiện kênh user có, không Facebook, icon Telegram riêng, từ 5 kênh thành ô chọn),
+ * H-12 (không Facebook, icon Telegram riêng, từ 5 kênh thành ô chọn) và sửa 11/10: bốn kênh Web / Zalo / WhatsApp /
+ * Telegram LUÔN có tab, kênh chưa nối chỉ đánh dấu "Chưa kết nối" (không giấu); Zalo OA chỉ hiện khi tài khoản còn kênh đó.
  * H-13 (chip Chưa đọc / Cá nhân / Nhóm + Thời gian; bỏ Trạng thái và Sắp xếp).
  */
 import { describe, it, expect, vi } from 'vitest';
@@ -29,24 +30,36 @@ describe('ConversationFilters — tab kênh (H-12)', () => {
     expect(container.querySelector('path').getAttribute('d')).not.toContain('M12 19l9 2-9-18-9 18 9-2zm0 0v-8');
   });
 
-  it('chỉ hiện tab của kênh user có: Web chat + Zalo → 3 nút (Tất cả, Web chat, Zalo), không OA/FB/WA/TG', () => {
+  it('bốn kênh cố định luôn hiện: có Web chat + Zalo thì vẫn thấy cả WA và TG, không OA/FB, không ô chọn', () => {
     renderFilters({ availableChannels: ['web', 'zalo_personal'] });
 
-    expect(screen.getByText('inbox.channelAllShort')).toBeInTheDocument();
-    expect(screen.getByText('inbox.webChatShort')).toBeInTheDocument();
-    expect(screen.getByText('inbox.zaloPersonalShort')).toBeInTheDocument();
-    for (const hidden of ['OA', 'FB', 'WA', 'TG']) {
+    const tabs = screen.getAllByRole('button').filter((b) => b.hasAttribute('title'));
+    expect(tabs.map((b) => b.textContent)).toEqual([
+      'inbox.channelAllShort', 'inbox.webChatShort', 'inbox.zaloPersonalShort', 'WA', 'TG',
+    ]);
+    for (const hidden of ['OA', 'FB']) {
       expect(screen.queryByText(hidden)).not.toBeInTheDocument();
     }
+    expect(screen.queryByText('inbox.channelFilterLabel:')).not.toBeInTheDocument();
   });
 
-  it('user chỉ có một kênh (hoặc chưa tải xong) → không hiện hàng tab kênh nào', () => {
-    const { container, rerender, onChange } = renderFilters({ availableChannels: ['zalo_personal'] });
-    expect(screen.queryByText('inbox.channelAllShort')).not.toBeInTheDocument();
+  it('chưa có kênh nào (hoặc server chưa trả) vẫn hiện đủ hàng tab: Tất cả + 4 kênh cố định', () => {
+    const { container } = renderFilters({ availableChannels: [] });
 
-    rerender(<ConversationFilters filters={BASE} onChange={onChange} availableChannels={[]} />);
-    expect(screen.queryByText('inbox.channelAllShort')).not.toBeInTheDocument();
-    expect(container.querySelectorAll('button[title]').length).toBe(0);
+    expect(container.querySelectorAll('button[title]').length).toBe(5);
+    expect(screen.getByText('TG')).toBeInTheDocument();
+    expect(screen.getByText('inbox.webChatShort')).toBeInTheDocument();
+  });
+
+  it('Zalo OA chỉ hiện khi tài khoản còn kênh đó; có OA → 5 kênh → gom thành ô chọn "Kênh"', () => {
+    const { rerender, onChange } = renderFilters({ availableChannels: ['telegram'] });
+    expect(screen.queryByText('OA')).not.toBeInTheDocument();
+    expect(screen.queryByText('inbox.channelFilterLabel:')).not.toBeInTheDocument();
+
+    rerender(<ConversationFilters filters={BASE} onChange={onChange} availableChannels={['zalo_oa']} />);
+    expect(screen.getByText('inbox.channelFilterLabel:')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('inbox.channelFilterLabel:'));
+    expect(screen.getByText('inbox.zaloOA')).toBeInTheDocument();
   });
 
   it('từ 5 kênh trở lên → gom thành ô chọn "Kênh", không còn hàng tab tràn ngang', () => {
@@ -54,6 +67,35 @@ describe('ConversationFilters — tab kênh (H-12)', () => {
 
     expect(screen.getByText('inbox.channelFilterLabel:')).toBeInTheDocument();
     expect(screen.queryByText('TG')).not.toBeInTheDocument();
+  });
+
+  it('kênh chưa nối: nút giữ nguyên nhưng có tooltip "Chưa kết nối" + chấm xám có nhãn; kênh đã nối và "Tất cả" thì không', () => {
+    renderFilters({ availableChannels: ['web', 'zalo_personal'] });
+
+    // chưa nối: WhatsApp, Telegram
+    expect(screen.getByTitle('WhatsApp — inbox.channelNotConnectedBadge')).toBeInTheDocument();
+    expect(screen.getByTitle('Telegram — inbox.channelNotConnectedBadge')).toBeInTheDocument();
+    expect(screen.getAllByRole('img', { name: 'inbox.channelNotConnectedBadge' })).toHaveLength(2);
+    // đã nối + "Tất cả": tooltip trơn, không chấm
+    expect(screen.getByTitle('inbox.webChat').querySelector('[role="img"]')).toBeNull();
+    expect(screen.getByTitle('inbox.zaloPersonal').querySelector('[role="img"]')).toBeNull();
+    expect(screen.getByTitle('inbox.allChannels').querySelector('[role="img"]')).toBeNull();
+  });
+
+  it('chưa biết kênh nào đã nối (channelsLoaded=false) → KHÔNG đánh dấu "Chưa kết nối" ở tab nào', () => {
+    const { container } = renderFilters({ availableChannels: [], channelsLoaded: false });
+
+    expect(container.querySelectorAll('button[title]').length).toBe(5);
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(screen.queryByTitle(/channelNotConnectedBadge/)).not.toBeInTheDocument();
+  });
+
+  it('bấm tab kênh chưa nối vẫn đổi bộ lọc sang kênh đó (để trang hiện lời mời kết nối)', () => {
+    const { onChange } = renderFilters({ availableChannels: ['web'] });
+
+    fireEvent.click(screen.getByText('TG'));
+
+    expect(onChange).toHaveBeenCalledWith({ ...BASE, channel: 'telegram' });
   });
 
   it('bấm tab Web chat lọc đúng kênh web, giữ các bộ lọc khác', () => {

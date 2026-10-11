@@ -237,12 +237,13 @@ describe('điện thoại (H-11)', () => {
   });
 });
 
-describe('tab kênh (H-12) và banner (H-31)', () => {
+describe('tab kênh (H-12, luôn hiện từ 11/10) và banner (H-31)', () => {
   it('truyền cho bộ lọc đúng danh sách kênh server trả về', async () => {
     chatbotApi.getInboxChannels.mockResolvedValue({ success: true, data: { channels: ['web', 'telegram'] } });
     renderPage();
 
     await waitFor(() => expect(ui.filtersProps.availableChannels).toEqual(['web', 'telegram']));
+    expect(ui.filtersProps.channelsLoaded).toBe(true);
   });
 
   it('lỗi tải danh sách kênh không chặn Hộp thư', async () => {
@@ -250,7 +251,11 @@ describe('tab kênh (H-12) và banner (H-31)', () => {
     renderPage();
 
     expect(await screen.findByTestId('conv-zalo_personal-41')).toBeInTheDocument();
+    await waitFor(() => expect(chatbotApi.getInboxChannels).toHaveBeenCalled());
+    await act(async () => { await Promise.resolve(); });
     expect(ui.filtersProps.availableChannels).toEqual([]);
+    // Lỗi ≠ "chưa nối": chưa biết kênh nào đã nối thì bộ lọc/trang không được nói "Chưa kết nối".
+    expect(ui.filtersProps.channelsLoaded).toBe(false);
   });
 
   it('không tài khoản nào đang kết nối → dòng xám trung tính có tên tài khoản + nút tới Cài đặt kênh', async () => {
