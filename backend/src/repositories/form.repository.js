@@ -1223,6 +1223,94 @@ class FormRepository {
   }
 
   /**
+   * Bài nộp của MỌI biểu mẫu trong một workspace (màn "Khách để lại thông tin" → tab "Từ biểu mẫu"),
+   * mới nhất trước. Cùng cách lọc/giờ VN với `listSubmissionsByForm` nhưng `form_id` là điều kiện
+   * TUỲ CHỌN, còn `workspace_owner_id` luôn bắt buộc — formId của workspace khác chỉ ra rỗng, không
+   * bao giờ lộ bài nộp của chủ khác.
+   *
+   * Cố ý KHÔNG trả `access_token`, mã/số tiền thanh toán, biên lai: màn gộp chỉ để xem khách, thao
+   * tác tiền/huỷ vẫn ở `/app/forms/:id/submissions`.
+   *
+   * @param {number} workspaceOwnerId
+   * @param {{
+   *   page?: number,
+   *   limit?: number,
+   *   formId?: number|null,
+   *   landingPageSlug?: string|null,
+   *   from?: string|null,
+   *   to?: string|null,
+   * }} options `from`/`to` là ngày YYYY-MM-DD (giờ VN, gồm cả hai đầu) — service đã kiểm định dạng
+   * @returns {Promise<{ items: Array<object>, total: number, page: number, limit: number }>}
+   */
+  async listSubmissionsByWorkspace(
+    workspaceOwnerId,
+    { page = 1, limit = 20, formId = null, landingPageSlug = null, from = null, to = null } = {}
+  ) {
+    const parsedPage = Math.max(1, Number.parseInt(page, 10) || 1);
+    const parsedLimit = Math.max(1, Math.min(50, Number.parseInt(limit, 10) || 20));
+    const offset = (parsedPage - 1) * parsedLimit;
+
+    const conditions = ['s.workspace_owner_id = $1'];
+    const params = [workspaceOwnerId];
+
+    if (formId != null) {
+      params.push(formId);
+      conditions.push(`s.form_id = $${params.length}`);
+    }
+    if (landingPageSlug) {
+      params.push(landingPageSlug);
+      conditions.push(`s.landing_page_slug = $${params.length}`);
+    }
+    if (from) {
+      params.push(getVietnamDayRange(from).startIso);
+      conditions.push(`s.created_at >= $${params.length}`);
+    }
+    if (to) {
+      // endIso = 00:00 giờ VN của NGÀY SAU → dùng `<` để gồm trọn ngày `to`.
+      params.push(getVietnamDayRange(to).endIso);
+      conditions.push(`s.created_at < $${params.length}`);
+    }
+    const where = conditions.join(' AND ');
+
+    const countResult = await db.query(
+      `SELECT COUNT(*)::int AS total FROM form_submissions s WHERE ${where}`,
+      params
+    );
+    const total = countResult.rows[0]?.total || 0;
+
+    const rowsResult = await db.query(
+      `SELECT
+         s.id,
+         s.form_id AS "formId",
+         f.title AS "formTitle",
+         s.respondent_name AS "respondentName",
+         s.respondent_email AS "respondentEmail",
+         s.respondent_phone AS "respondentPhone",
+         s.status,
+         s.hold_expires_at AS "holdExpiresAt",
+         s.marketing_consent AS "marketingConsent",
+         s.consent_withdrawn_at AS "consentWithdrawnAt",
+         s.landing_page_slug AS "landingPageSlug",
+         s.utm_source AS "utmSource",
+         s.created_at AS "createdAt",
+         s.answers
+       FROM form_submissions s
+       JOIN forms f ON f.id = s.form_id AND f.workspace_owner_id = s.workspace_owner_id
+       WHERE ${where}
+       ORDER BY s.created_at DESC, s.id DESC
+       LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, parsedLimit, offset]
+    );
+
+    return {
+      items: rowsResult.rows,
+      total,
+      page: parsedPage,
+      limit: parsedLimit,
+    };
+  }
+
+  /**
    * Đếm bài nộp Biểu mẫu theo slug landing nguồn, trong khoảng ngày, cùng phạm vi chủ workspace/
    * super admin — mẫu `lead.repository.js` `aggregateSubmitsBySlug` (PR-7a "Bổ sung 15/09 khi
    * soạn lệnh PR-7" mục 2: dashboard landing đang GÁN `cur.submitCount` từ MỘT nguồn (leads),

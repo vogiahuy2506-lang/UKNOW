@@ -643,6 +643,51 @@ class FormService {
   }
 
   /**
+   * Bài nộp của mọi biểu mẫu trong workspace (màn "Khách để lại thông tin" → tab "Từ biểu mẫu").
+   * Chuẩn hoá + kiểm định tham số rồi giao repository; phạm vi luôn là `workspaceOwnerId` (lấy từ
+   * ngữ cảnh đã xác thực, không bao giờ từ query) nên formId của workspace khác chỉ ra danh sách rỗng.
+   *
+   * @param {number} workspaceOwnerId
+   * @param {{ page?: unknown, limit?: unknown, formId?: unknown, landingPageSlug?: unknown, from?: unknown, to?: unknown }} query
+   * @returns {Promise<{ items: Array<object>, total: number, page: number, limit: number }>}
+   */
+  async listWorkspaceSubmissions(workspaceOwnerId, query = {}) {
+    const { page, limit, formId, landingPageSlug, from, to } = query;
+
+    let formIdFilter = null;
+    if (formId !== undefined && formId !== null && formId !== '') {
+      const parsed = Number.parseInt(String(formId), 10);
+      if (!Number.isInteger(parsed) || parsed <= 0 || String(parsed) !== String(formId).trim()) {
+        throw createHttpError('Tham số formId không hợp lệ', 400, 'INVALID_FORM_ID');
+      }
+      formIdFilter = parsed;
+    }
+
+    const fromDate = from === undefined || from === null || from === '' ? null : from;
+    const toDate = to === undefined || to === null || to === '' ? null : to;
+    if ((fromDate && !isValidDateParam(fromDate)) || (toDate && !isValidDateParam(toDate))) {
+      throw createHttpError('Tham số from/to không hợp lệ (định dạng YYYY-MM-DD)', 400, 'INVALID_DATE');
+    }
+    if (fromDate && toDate && fromDate > toDate) {
+      throw createHttpError('Ngày bắt đầu phải trước hoặc bằng ngày kết thúc', 400, 'INVALID_DATE_RANGE');
+    }
+
+    // Slug lưu ở bài nộp đã được canonical hoá lúc nộp (chữ thường, bỏ "/" đầu cuối) — lọc cũng phải
+    // qua cùng bước đó, không thì "/Khoa-Hoc" không bao giờ khớp.
+    const slugFilter =
+      typeof landingPageSlug === 'string' ? canonicalLandingPageSlug(landingPageSlug) : null;
+
+    return formRepository.listSubmissionsByWorkspace(workspaceOwnerId, {
+      page,
+      limit,
+      formId: formIdFilter,
+      landingPageSlug: slugFilter,
+      from: fromDate,
+      to: toDate,
+    });
+  }
+
+  /**
    * Huỷ một lượt đặt lịch/nộp bài (PR-2a việc 6b). Chỉ cho phép từ submitted/confirmed.
    * Bài không thuộc form này (kể cả form khác cùng chủ) hoặc form của chủ khác -> 404.
    *

@@ -294,6 +294,39 @@ class FormController {
     }
   }
 
+  /**
+   * GET /api/forms/submissions?page&limit&formId&landingPageSlug&from&to
+   * Bài nộp của MỌI biểu mẫu trong workspace — tab "Từ biểu mẫu" của màn "Khách để lại thông tin".
+   * Workspace lấy từ ngữ cảnh đã xác thực (nhân viên → workspace của chủ), không nhận từ query.
+   */
+  async listWorkspaceSubmissions(req, res) {
+    try {
+      const workspaceContext = getWorkspaceContext(req.user);
+      const { page, limit, formId, landingPageSlug, from, to } = req.query || {};
+      const result = await formService.listWorkspaceSubmissions(workspaceContext.workspaceOwnerId, {
+        page,
+        limit,
+        formId,
+        landingPageSlug,
+        from,
+        to,
+      });
+
+      return res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[FormController.listWorkspaceSubmissions]', error);
+      return res.status(status).json({
+        success: false,
+        message: error.message || 'Không thể tải danh sách khách để lại thông tin',
+        code: error.code || 'INTERNAL_ERROR',
+      });
+    }
+  }
+
   async submissions(req, res) {
     try {
       const workspaceContext = getWorkspaceContext(req.user);

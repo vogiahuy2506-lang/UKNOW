@@ -19,6 +19,8 @@ router.use(requirePermission('forms'));
 router.get('/', formController.list.bind(formController));
 router.post('/', formController.create.bind(formController));
 router.post('/assets', formController.uploadAsset.bind(formController));
+// PHẢI đứng TRƯỚC '/:id' — không thì 'submissions' bị hiểu là :id (parseInt → NaN → 400).
+router.get('/submissions', formController.listWorkspaceSubmissions.bind(formController));
 router.get('/:id', formController.get.bind(formController));
 router.put('/:id', formController.update.bind(formController));
 router.delete('/:id', formController.delete.bind(formController));
