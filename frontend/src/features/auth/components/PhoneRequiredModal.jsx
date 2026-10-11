@@ -198,19 +198,19 @@ const PhoneRequiredModal = ({ isOpen, onClose, onChanged }) => {
         className="modal-content modal-content-animate w-full max-w-md mx-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-2 px-6 py-4 border-b border-gray-100">
+        <div className="flex items-center gap-2 px-6 py-4 border-b border-gray-100 dark:border-dk-border">
           {step === 'code'
-            ? <HiOutlineShieldCheck className="w-5 h-5 text-primary-600" />
-            : <HiOutlinePhone className="w-5 h-5 text-primary-600" />}
-          <h2 className="text-base font-semibold text-gray-900">{t('phoneRequired.title')}</h2>
+            ? <HiOutlineShieldCheck className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+            : <HiOutlinePhone className="w-5 h-5 text-primary-600 dark:text-primary-400" />}
+          <h2 className="text-base font-semibold text-gray-900 dark:text-dk-text">{t('phoneRequired.title')}</h2>
         </div>
 
         {step === 'phone' && (
           <form onSubmit={handlePhoneSubmit} className="px-6 py-5 space-y-4">
-            <p className="text-sm text-gray-600">{t('phoneRequired.description')}</p>
+            <p className="text-sm text-gray-600 dark:text-dk-text2">{t('phoneRequired.description')}</p>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">
                 {t('phoneRequired.phoneLabel')}
               </label>
               <input
@@ -218,13 +218,13 @@ const PhoneRequiredModal = ({ isOpen, onClose, onChanged }) => {
                 value={phone}
                 onChange={handlePhoneChange}
                 autoFocus
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 placeholder={t('phoneRequired.phonePlaceholder')}
               />
             </div>
 
             {error && (
-              <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+              <p className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-100 dark:border-red-800 rounded-lg px-3 py-2">
                 {error}
               </p>
             )}
@@ -249,12 +249,12 @@ const PhoneRequiredModal = ({ isOpen, onClose, onChanged }) => {
 
         {step === 'code' && (
           <form onSubmit={handleCodeSubmit} className="px-6 py-5 space-y-4">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-600 dark:text-dk-text2">
               {t('phoneRequired.otpDescription', { phone: phone.trim() })}
             </p>
 
             <div>
-              <label htmlFor="phoneRequiredCode" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="phoneRequiredCode" className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">
                 {t('phoneRequired.codeLabel')}
               </label>
               <input
@@ -266,7 +266,7 @@ const PhoneRequiredModal = ({ isOpen, onClose, onChanged }) => {
                 onChange={handleCodeChange}
                 autoFocus
                 maxLength={6}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-center text-lg tracking-[0.4em] font-mono focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted rounded-lg text-center text-lg tracking-[0.4em] font-mono focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 placeholder="······"
               />
             </div>
@@ -274,7 +274,7 @@ const PhoneRequiredModal = ({ isOpen, onClose, onChanged }) => {
             <div className="flex items-center justify-between text-sm">
               <button
                 type="button"
-                className="text-gray-500 hover:text-gray-700 underline"
+                className="text-gray-500 dark:text-dk-text2 hover:text-gray-700 dark:hover:text-dk-text underline"
                 onClick={handleBackToPhone}
                 disabled={loading}
               >
@@ -282,7 +282,7 @@ const PhoneRequiredModal = ({ isOpen, onClose, onChanged }) => {
               </button>
               <button
                 type="button"
-                className="text-primary-600 hover:text-primary-700 font-medium disabled:text-gray-400 disabled:cursor-not-allowed"
+                className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium disabled:text-gray-400 dark:disabled:text-dk-muted disabled:cursor-not-allowed"
                 onClick={handleResend}
                 disabled={loading || countdown > 0}
               >
@@ -293,7 +293,7 @@ const PhoneRequiredModal = ({ isOpen, onClose, onChanged }) => {
             </div>
 
             {error && (
-              <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+              <p className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-100 dark:border-red-800 rounded-lg px-3 py-2">
                 {error}
               </p>
             )}

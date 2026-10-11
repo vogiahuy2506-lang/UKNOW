@@ -59,8 +59,8 @@ export const RecoveryCodesPanel = ({ codes, onDone }) => {
 
   return (
     <div className="px-6 py-5 space-y-4">
-      <p className="text-sm text-gray-600">{t('twoFactor.recoveryCodesHint')}</p>
-      <ul className="grid grid-cols-2 gap-2 bg-gray-50 border border-gray-200 rounded-lg p-3 font-mono text-sm text-gray-900">
+      <p className="text-sm text-gray-600 dark:text-dk-text2">{t('twoFactor.recoveryCodesHint')}</p>
+      <ul className="grid grid-cols-2 gap-2 bg-gray-50 dark:bg-dk-raised border border-gray-200 dark:border-dk-border rounded-lg p-3 font-mono text-sm text-gray-900 dark:text-dk-text">
         {codes.map((c) => (
           <li key={c} data-testid="recovery-code">{c}</li>
         ))}
@@ -73,7 +73,7 @@ export const RecoveryCodesPanel = ({ codes, onDone }) => {
           {t('twoFactor.downloadTxt')}
         </button>
       </div>
-      <label className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
+      <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-dk-text cursor-pointer">
         <input
           type="checkbox"
           checked={saved}
@@ -171,10 +171,10 @@ const TwoFactorSetupModal = ({ isOpen, onClose, onEnabled }) => {
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-dk-border">
           <div className="flex items-center gap-2">
-            <HiOutlineShieldCheck className="w-5 h-5 text-primary-600" />
-            <h2 className="text-base font-semibold text-gray-900">
+            <HiOutlineShieldCheck className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+            <h2 className="text-base font-semibold text-gray-900 dark:text-dk-text">
               {showingCodes ? t('twoFactor.recoveryCodesTitle') : t('twoFactor.setupTitle')}
             </h2>
           </div>
@@ -183,7 +183,7 @@ const TwoFactorSetupModal = ({ isOpen, onClose, onEnabled }) => {
               type="button"
               onClick={handleClose}
               aria-label={t('common.close')}
-              className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              className="p-1 rounded-lg text-gray-400 dark:text-dk-muted hover:text-gray-600 dark:hover:text-dk-text2 hover:bg-gray-100 dark:hover:bg-dk-strong transition-colors"
             >
               <HiOutlineX className="w-5 h-5" />
             </button>
@@ -194,7 +194,7 @@ const TwoFactorSetupModal = ({ isOpen, onClose, onEnabled }) => {
           <RecoveryCodesPanel codes={recoveryCodes} onDone={handleDone} />
         ) : loadError ? (
           <div className="px-6 py-5">
-            <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{loadError}</p>
+            <p className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-100 dark:border-red-800 rounded-lg px-3 py-2">{loadError}</p>
           </div>
         ) : !setup ? (
           <div className="py-14 flex justify-center">
@@ -205,24 +205,24 @@ const TwoFactorSetupModal = ({ isOpen, onClose, onEnabled }) => {
             {/* Nội dung cuộn; hàng nút ghim ở đáy để nút Xác nhận luôn thấy được trên màn thấp. */}
             <div className="px-6 py-5 space-y-4 overflow-y-auto">
               <section>
-                <h3 className="text-sm font-semibold text-gray-900">{t('twoFactor.setupStep1Title')}</h3>
-                <p className="text-sm text-gray-600 mt-1">{t('twoFactor.setupStep1Body')}</p>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-dk-text">{t('twoFactor.setupStep1Title')}</h3>
+                <p className="text-sm text-gray-600 dark:text-dk-text2 mt-1">{t('twoFactor.setupStep1Body')}</p>
               </section>
               <section>
-                <h3 className="text-sm font-semibold text-gray-900">{t('twoFactor.setupStep2Title')}</h3>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-dk-text">{t('twoFactor.setupStep2Title')}</h3>
                 <div className="flex justify-center my-3">
-                  <img src={setup.qrDataUrl} alt={t('twoFactor.qrAlt')} className="w-44 h-44 border border-gray-200 rounded-lg" />
+                  <img src={setup.qrDataUrl} alt={t('twoFactor.qrAlt')} className="w-44 h-44 border border-gray-200 dark:border-dk-border rounded-lg" />
                 </div>
-                <ul className="text-sm text-gray-600 space-y-1.5 list-disc pl-5">
+                <ul className="text-sm text-gray-600 dark:text-dk-text2 space-y-1.5 list-disc pl-5">
                   <li>{t('twoFactor.setupStep2Authenticator')}</li>
                   <li>{t('twoFactor.setupStep2Iphone')}</li>
                   <li>{t('twoFactor.setupStep2Manual')}</li>
                 </ul>
               </section>
               <div>
-                <p className="text-xs text-gray-500 mb-1">{t('twoFactor.manualKey')}</p>
+                <p className="text-xs text-gray-500 dark:text-dk-text2 mb-1">{t('twoFactor.manualKey')}</p>
                 <div className="flex items-center gap-2">
-                  <code className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono break-all">
+                  <code className="flex-1 bg-gray-50 dark:bg-dk-raised border border-gray-200 dark:border-dk-border rounded-lg px-3 py-2 text-sm font-mono break-all">
                     {setup.secret}
                   </code>
                   <button
@@ -232,16 +232,16 @@ const TwoFactorSetupModal = ({ isOpen, onClose, onEnabled }) => {
                       if (copyText(setup.secret)) toast.success(t('twoFactor.copied'));
                       else toast.error(t('twoFactor.copyFailed'));
                     }}
-                    className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                    className="p-2 rounded-lg text-gray-500 dark:text-dk-text2 hover:text-gray-700 dark:hover:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-strong"
                   >
                     <HiOutlineClipboardCopy className="w-5 h-5" />
                   </button>
                 </div>
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-gray-900">{t('twoFactor.setupStep3Title')}</h3>
-                <p className="text-sm text-gray-600 mt-1 mb-2">{t('twoFactor.setupStep3Body')}</p>
-                <label htmlFor="two-factor-setup-code" className="block text-sm font-medium text-gray-700 mb-1">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-dk-text">{t('twoFactor.setupStep3Title')}</h3>
+                <p className="text-sm text-gray-600 dark:text-dk-text2 mt-1 mb-2">{t('twoFactor.setupStep3Body')}</p>
+                <label htmlFor="two-factor-setup-code" className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">
                   {t('twoFactor.enterCodeToConfirm')}
                 </label>
                 <input
@@ -256,21 +256,21 @@ const TwoFactorSetupModal = ({ isOpen, onClose, onEnabled }) => {
                     setError('');
                   }}
                   placeholder="123456"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-center text-lg tracking-widest font-mono focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted rounded-lg text-center text-lg tracking-widest font-mono focus:outline-none focus:ring-2 focus:ring-primary-500"
                 />
               </div>
               {error && (
-                <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                <p role="alert" className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-100 dark:border-red-800 rounded-lg px-3 py-2">
                   {error}
                 </p>
               )}
             </div>
-            <div className="flex items-center justify-end gap-3 px-6 py-3 border-t border-gray-100">
+            <div className="flex items-center justify-end gap-3 px-6 py-3 border-t border-gray-100 dark:border-dk-border">
               <a
                 href="/huong-dan/xac-thuc-hai-lop"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mr-auto text-sm text-primary-600 hover:underline underline-offset-4"
+                className="mr-auto text-sm text-primary-600 dark:text-primary-400 hover:underline underline-offset-4"
               >
                 {t('twoFactor.setupHelpLink')}
               </a>

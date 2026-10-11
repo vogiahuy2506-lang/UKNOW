@@ -57,13 +57,13 @@ const CodePromptModal = ({ title, submitLabel, needPassword = false, onSubmit, o
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="text-base font-semibold text-gray-900">{title}</h2>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-dk-border">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-dk-text">{title}</h2>
           <button
             type="button"
             onClick={onClose}
             aria-label={t('common.close')}
-            className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+            className="p-1 rounded-lg text-gray-400 dark:text-dk-muted hover:text-gray-600 dark:hover:text-dk-text2 hover:bg-gray-100 dark:hover:bg-dk-strong"
           >
             <HiOutlineX className="w-5 h-5" />
           </button>
@@ -71,7 +71,7 @@ const CodePromptModal = ({ title, submitLabel, needPassword = false, onSubmit, o
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
           {needPassword && (
             <div>
-              <label htmlFor="two-factor-prompt-password" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="two-factor-prompt-password" className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">
                 {t('twoFactor.currentPassword')}
               </label>
               <input
@@ -83,12 +83,12 @@ const CodePromptModal = ({ title, submitLabel, needPassword = false, onSubmit, o
                   setPassword(e.target.value);
                   setError('');
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
             </div>
           )}
           <div>
-            <label htmlFor="two-factor-prompt-code" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="two-factor-prompt-code" className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">
               {t('twoFactor.codeOrRecovery')}
             </label>
             <input
@@ -100,11 +100,11 @@ const CodePromptModal = ({ title, submitLabel, needPassword = false, onSubmit, o
                 setCode(e.target.value);
                 setError('');
               }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </div>
           {error && (
-            <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+            <p role="alert" className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-100 dark:border-red-800 rounded-lg px-3 py-2">
               {error}
             </p>
           )}
@@ -156,7 +156,7 @@ const TwoFactorSecurityTab = () => {
 
   if (loadError) {
     return (
-      <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{loadError}</p>
+      <p className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-100 dark:border-red-800 rounded-lg px-3 py-2">{loadError}</p>
     );
   }
   if (!status) {
@@ -172,20 +172,20 @@ const TwoFactorSecurityTab = () => {
       <div className="flex items-start gap-3">
         <div
           className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-            status.enabled ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-100 text-gray-500'
+            status.enabled ? 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400' : 'bg-gray-100 dark:bg-dk-raised text-gray-500 dark:text-dk-text2'
           }`}
         >
           <HiOutlineShieldCheck className="w-5 h-5" />
         </div>
         <div>
-          <h3 className="text-sm font-semibold text-gray-900">{t('twoFactor.sectionTitle')}</h3>
-          <p className="text-sm text-gray-600 mt-1">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-dk-text">{t('twoFactor.sectionTitle')}</h3>
+          <p className="text-sm text-gray-600 dark:text-dk-text2 mt-1">
             {t('twoFactor.sectionDescription')}{' '}
             <a
               href="/huong-dan/xac-thuc-hai-lop"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-primary-600 hover:underline underline-offset-4"
+              className="text-primary-600 dark:text-primary-400 hover:underline underline-offset-4"
             >
               {t('twoFactor.setupHelpLink')}
             </a>
@@ -195,17 +195,17 @@ const TwoFactorSecurityTab = () => {
 
       {status.enabled ? (
         <div className="space-y-3">
-          <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
+          <p className="text-sm text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-800 rounded-lg px-3 py-2">
             {t('twoFactor.enabledSince', { date: formatDate(status.enabledAt) })}
           </p>
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-gray-600 dark:text-dk-text2">
             {t('twoFactor.recoveryCodesLeft', { count: status.recoveryCodesLeft })}
           </p>
           <div className="flex flex-wrap gap-2">
             <button type="button" className="btn btn-secondary" onClick={() => setPrompt('regenerate')}>
               {t('twoFactor.regenerateCodes')}
             </button>
-            <button type="button" className="btn btn-secondary text-red-600" onClick={() => setPrompt('disable')}>
+            <button type="button" className="btn btn-secondary text-red-600 dark:text-red-400" onClick={() => setPrompt('disable')}>
               {t('twoFactor.disable')}
             </button>
           </div>
@@ -253,8 +253,8 @@ const TwoFactorSecurityTab = () => {
         createPortal(
           <div className="modal-overlay">
             <div className="modal-content modal-content-animate w-full max-w-md mx-4" role="dialog" aria-modal="true">
-              <div className="px-6 py-4 border-b border-gray-100">
-                <h2 className="text-base font-semibold text-gray-900">{t('twoFactor.recoveryCodesTitle')}</h2>
+              <div className="px-6 py-4 border-b border-gray-100 dark:border-dk-border">
+                <h2 className="text-base font-semibold text-gray-900 dark:text-dk-text">{t('twoFactor.recoveryCodesTitle')}</h2>
               </div>
               <RecoveryCodesPanel
                 codes={newCodes}

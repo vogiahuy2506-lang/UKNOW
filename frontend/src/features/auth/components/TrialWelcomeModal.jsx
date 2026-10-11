@@ -54,7 +54,7 @@ const TrialWelcomeModal = ({ isOpen, trial, onClose }) => {
   return createPortal(
     <div className="modal-overlay z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm fixed inset-0" onClick={onClose}>
       <div
-        className="modal-content modal-content-animate relative w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden"
+        className="modal-content modal-content-animate relative w-full max-w-lg bg-white dark:bg-dk-surface rounded-2xl shadow-2xl border border-gray-100 dark:border-dk-border overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Decorative Top Accent Banner */}
@@ -63,7 +63,7 @@ const TrialWelcomeModal = ({ isOpen, trial, onClose }) => {
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 p-1.5 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+          className="absolute top-4 right-4 p-1.5 rounded-xl text-gray-400 dark:text-dk-muted hover:text-gray-600 dark:hover:text-dk-text2 hover:bg-gray-100 dark:hover:bg-dk-strong transition-colors"
           aria-label={t('common.close') || 'Đóng'}
         >
           <HiOutlineX className="w-5 h-5" />
@@ -72,33 +72,33 @@ const TrialWelcomeModal = ({ isOpen, trial, onClose }) => {
         <div className="p-6 md:p-8">
           {/* Header Icon + Title */}
           <div className="flex flex-col items-center text-center">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-orange-100 to-amber-100 border border-orange-200/60 flex items-center justify-center text-orange-600 mb-4 shadow-sm">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-orange-100 dark:from-orange-950/40 to-amber-100 dark:to-amber-950/40 border border-orange-200/60 dark:border-orange-800 flex items-center justify-center text-orange-600 dark:text-orange-400 mb-4 shadow-sm">
               <HiOutlineSparkles className="w-7 h-7 animate-pulse" />
             </div>
 
-            <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-1.5">
+            <h2 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-dk-text mb-1.5">
               {t('trialWelcome.title')}
             </h2>
-            <p className="text-sm text-gray-600 max-w-sm mb-5">
+            <p className="text-sm text-gray-600 dark:text-dk-text2 max-w-sm mb-5">
               {t('trialWelcome.subtitle')}
             </p>
 
             {/* Trial Plan Badge Card */}
-            <div className="w-full bg-gradient-to-br from-orange-50/80 via-amber-50/50 to-orange-50/30 border border-orange-200/80 rounded-xl p-4 mb-5 text-left">
+            <div className="w-full bg-gradient-to-br from-orange-50/80 dark:from-orange-950/40 via-amber-50/50 dark:via-amber-950/40 to-orange-50/30 dark:to-orange-950/30 border border-orange-200/80 dark:border-orange-800 rounded-xl p-4 mb-5 text-left">
               <div className="flex items-center justify-between gap-2 mb-2">
                 <div className="flex items-center gap-2">
                   <span className="px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider bg-orange-500 text-white rounded-full shadow-sm">
                     {trial.planName || t('trialWelcome.planLabel')}
                   </span>
-                  <span className="text-sm font-medium text-gray-900">
+                  <span className="text-sm font-medium text-gray-900 dark:text-dk-text">
                     {t('trialWelcome.duration', { days: durationDays })}
                   </span>
                 </div>
               </div>
 
               {expiresText && (
-                <div className="flex items-center gap-1.5 text-xs text-gray-600 mt-1">
-                  <HiOutlineCalendar className="w-4 h-4 text-orange-600 flex-shrink-0" />
+                <div className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-dk-text2 mt-1">
+                  <HiOutlineCalendar className="w-4 h-4 text-orange-600 dark:text-orange-400 flex-shrink-0" />
                   <span>{t('trialWelcome.expiresOn', { date: expiresText })}</span>
                 </div>
               )}
@@ -107,13 +107,13 @@ const TrialWelcomeModal = ({ isOpen, trial, onClose }) => {
             {/* Benefit Highlights List */}
             {benefits.length > 0 && (
               <div className="w-full text-left mb-6">
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-dk-text2 mb-3">
                   {t('trialWelcome.highlightTitle')}
                 </h4>
                 <ul className="space-y-2.5">
                   {benefits.map((benefit, idx) => (
-                    <li key={idx} className="flex items-start gap-2.5 text-sm text-gray-700">
-                      <HiOutlineCheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
+                    <li key={idx} className="flex items-start gap-2.5 text-sm text-gray-700 dark:text-dk-text">
+                      <HiOutlineCheckCircle className="w-5 h-5 text-emerald-500 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
                       <span>{benefit}</span>
                     </li>
                   ))}
@@ -126,10 +126,10 @@ const TrialWelcomeModal = ({ isOpen, trial, onClose }) => {
               <button
                 type="button"
                 onClick={handleViewPlans}
-                className="w-full sm:w-1/2 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors flex items-center justify-center gap-1.5"
+                className="w-full sm:w-1/2 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-dk-text bg-gray-100 dark:bg-dk-raised hover:bg-gray-200 dark:hover:bg-dk-strong rounded-xl transition-colors flex items-center justify-center gap-1.5"
               >
                 <span>{t('trialWelcome.viewPlans')}</span>
-                <HiOutlineArrowRight className="w-4 h-4 text-gray-500" />
+                <HiOutlineArrowRight className="w-4 h-4 text-gray-500 dark:text-dk-text2" />
               </button>
 
               <button

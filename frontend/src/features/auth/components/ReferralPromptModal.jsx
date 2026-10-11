@@ -76,29 +76,29 @@ const ReferralPromptModal = ({ isOpen, onClose, onSuccess }) => {
         className="modal-content modal-content-animate w-full max-w-md mx-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-2.5 px-6 py-4 border-b border-gray-100">
-          <div className="w-8 h-8 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0">
+        <div className="flex items-center gap-2.5 px-6 py-4 border-b border-gray-100 dark:border-dk-border">
+          <div className="w-8 h-8 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center flex-shrink-0">
             <HiOutlineGift className="w-5 h-5" />
           </div>
-          <h2 className="text-base font-semibold text-gray-900">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-dk-text">
             {t('referralPromptModal.title')}
           </h2>
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-gray-600 dark:text-dk-text2">
             {t('referralPromptModal.description')}
           </p>
 
-          <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-lg flex items-start gap-2.5 text-xs text-amber-800">
-            <HiOutlineInformationCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="p-3 bg-amber-50/70 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800 rounded-lg flex items-start gap-2.5 text-xs text-amber-800 dark:text-amber-300">
+            <HiOutlineInformationCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
             <p className="leading-relaxed">
               {t('referralPromptModal.warningNote')}
             </p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">
               {t('referralPromptModal.label')}
             </label>
             <input
@@ -107,14 +107,14 @@ const ReferralPromptModal = ({ isOpen, onClose, onSuccess }) => {
               onChange={handleCodeChange}
               autoFocus
               maxLength={20}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm uppercase tracking-wider font-mono focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted rounded-lg text-sm uppercase tracking-wider font-mono focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               placeholder={t('referralPromptModal.placeholder')}
               disabled={loading}
             />
           </div>
 
           {error && (
-            <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+            <p className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-100 dark:border-red-800 rounded-lg px-3 py-2">
               {error}
             </p>
           )}

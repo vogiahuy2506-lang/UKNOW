@@ -92,15 +92,15 @@ const ChangePasswordModal = ({ isOpen, onClose, forced = false, onChanged }) => 
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-dk-border">
           <div className="flex items-center gap-2">
-            <HiOutlineLockClosed className="w-5 h-5 text-primary-600" />
-            <h2 className="text-base font-semibold text-gray-900">{t('changePassword.title')}</h2>
+            <HiOutlineLockClosed className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+            <h2 className="text-base font-semibold text-gray-900 dark:text-dk-text">{t('changePassword.title')}</h2>
           </div>
           <button
             onClick={handleClose}
             hidden={forced}
-            className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+            className="p-1 rounded-lg text-gray-400 dark:text-dk-muted hover:text-gray-600 dark:hover:text-dk-text2 hover:bg-gray-100 dark:hover:bg-dk-strong transition-colors"
           >
             <HiOutlineX className="w-5 h-5" />
           </button>
@@ -110,20 +110,20 @@ const ChangePasswordModal = ({ isOpen, onClose, forced = false, onChanged }) => 
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
           {fields.map(({ key, label, showKey }) => (
             <div key={key}>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-1">{label}</label>
               <div className="relative">
                 <input
                   type={showPasswords[showKey] ? 'text' : 'password'}
                   value={form[key]}
                   onChange={handleChange(key)}
-                  className="w-full pr-10 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full pr-10 px-3 py-2 border border-gray-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                   placeholder={label}
                   autoComplete={key === 'currentPassword' ? 'current-password' : 'new-password'}
                 />
                 <button
                   type="button"
                   onClick={() => toggleShow(showKey)}
-                  className="absolute inset-y-0 right-3 flex items-center text-gray-400 hover:text-gray-600"
+                  className="absolute inset-y-0 right-3 flex items-center text-gray-400 dark:text-dk-muted hover:text-gray-600 dark:hover:text-dk-text2"
                   tabIndex={-1}
                 >
                   {showPasswords[showKey]
@@ -136,12 +136,12 @@ const ChangePasswordModal = ({ isOpen, onClose, forced = false, onChanged }) => 
           ))}
 
           {error && (
-            <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+            <p className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-100 dark:border-red-800 rounded-lg px-3 py-2">
               {error}
             </p>
           )}
           {success && (
-            <p className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2">
+            <p className="text-sm text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-950/40 border border-green-100 dark:border-green-800 rounded-lg px-3 py-2">
               {success}
             </p>
           )}

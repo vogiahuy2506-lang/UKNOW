@@ -53,28 +53,28 @@ function EmployeeContextTab({ activeContext, t }) {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-3 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
-        <HiOutlineShieldCheck className="w-5 h-5 text-blue-500 shrink-0" />
+      <div className="flex items-center gap-3 rounded-xl border border-blue-100 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 px-4 py-3">
+        <HiOutlineShieldCheck className="w-5 h-5 text-blue-500 dark:text-blue-400 shrink-0" />
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-blue-800">
+          <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">
             {t('accountProfileModal.workingAt', { name: activeContext?.ownerName })}
           </p>
-          <p className="text-xs text-blue-500 mt-0.5">
+          <p className="text-xs text-blue-500 dark:text-blue-400 mt-0.5">
             {t('accountProfileModal.permissionsGrantedByBusiness')}
           </p>
         </div>
       </div>
 
       <div>
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t('accountProfileModal.grantedPermissions')}</p>
+        <p className="text-xs font-semibold text-gray-400 dark:text-dk-muted uppercase tracking-wide mb-3">{t('accountProfileModal.grantedPermissions')}</p>
         {grantedPerms.length === 0 ? (
-          <p className="text-sm text-gray-400 italic">{t('accountProfileModal.noPermissionsGranted')}</p>
+          <p className="text-sm text-gray-400 dark:text-dk-muted italic">{t('accountProfileModal.noPermissionsGranted')}</p>
         ) : (
           <div className="flex flex-wrap gap-2">
             {grantedPerms.map(([key]) => (
               <span
                 key={key}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full bg-green-50 text-green-700 border border-green-200"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800"
               >
                 <HiOutlineCheckCircle className="w-3.5 h-3.5" />
                 {getPermLabel(key)}
@@ -87,7 +87,7 @@ function EmployeeContextTab({ activeContext, t }) {
             {deniedPerms.map(([key]) => (
               <span
                 key={key}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full bg-gray-50 text-gray-400 border border-gray-200"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full bg-gray-50 dark:bg-dk-raised text-gray-400 dark:text-dk-muted border border-gray-200 dark:border-dk-border"
               >
                 <HiOutlineBan className="w-3.5 h-3.5" />
                 {getPermLabel(key)}
@@ -98,9 +98,9 @@ function EmployeeContextTab({ activeContext, t }) {
       </div>
 
       <div>
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t('accountProfileModal.grantedSendLimits')}</p>
+        <p className="text-xs font-semibold text-gray-400 dark:text-dk-muted uppercase tracking-wide mb-3">{t('accountProfileModal.grantedSendLimits')}</p>
         {!hasAnyLimit ? (
-          <p className="text-sm text-gray-400 italic">{t('accountProfileModal.noSendLimits')}</p>
+          <p className="text-sm text-gray-400 dark:text-dk-muted italic">{t('accountProfileModal.noSendLimits')}</p>
         ) : (
           <div className="rounded-xl border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface p-4 space-y-2">
             {hasEmailLimit && (
@@ -221,12 +221,12 @@ function ConsentHistorySection({ consentHistory = [], t }) {
 
               <div className="shrink-0">
                 {isGranted ? (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-green-50 text-green-700 border border-green-200">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800">
                     <HiOutlineCheckCircle className="w-3.5 h-3.5" />
                     {t('accountProfileModal.consentGranted')}
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
                     <HiOutlineClock className="w-3.5 h-3.5" />
                     {t('accountProfileModal.consentPending')}
                   </span>
@@ -238,12 +238,12 @@ function ConsentHistorySection({ consentHistory = [], t }) {
       </div>
 
       {/* Thông điệp minh bạch về việc rút lại đồng ý */}
-      <div className="rounded-lg bg-amber-50/70 border border-amber-200/70 p-3 text-xs text-amber-900 leading-relaxed">
+      <div className="rounded-lg bg-amber-50/70 dark:bg-amber-950/40 border border-amber-200/70 dark:border-amber-800 p-3 text-xs text-amber-900 dark:text-amber-300 leading-relaxed">
         <p>
           {t('accountProfileModal.consentWithdrawalNotice')}{' '}
           <a
             href="mailto:info@digiso.vn"
-            className="font-semibold text-amber-950 underline hover:text-black"
+            className="font-semibold text-amber-950 dark:text-amber-300 underline hover:text-black dark:hover:text-amber-100"
           >
             info@digiso.vn
           </a>{' '}
@@ -252,7 +252,7 @@ function ConsentHistorySection({ consentHistory = [], t }) {
             href="/contact"
             target="_blank"
             rel="noopener noreferrer"
-            className="font-semibold text-amber-950 underline hover:text-black"
+            className="font-semibold text-amber-950 dark:text-amber-300 underline hover:text-black dark:hover:text-amber-100"
           >
             {t('accountProfileModal.contactPage')}
           </a>.
@@ -552,7 +552,7 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
                           </span>
                           <button
                             type="button"
-                            className="text-primary-600 dark:text-orange-400 hover:text-primary-700 font-medium underline"
+                            className="text-primary-600 dark:text-orange-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium underline"
                             onClick={() => setShowPhoneVerify(true)}
                           >
                             {t('accountProfileModal.phoneVerifyCta')}
@@ -597,10 +597,10 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
             )}
 
             {error && (
-              <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>
+              <p className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-100 dark:border-red-800 rounded-lg px-3 py-2">{error}</p>
             )}
             {success && (
-              <p className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2">{success}</p>
+              <p className="text-sm text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-950/40 border border-green-100 dark:border-green-800 rounded-lg px-3 py-2">{success}</p>
             )}
 
             <div className="flex justify-end gap-3 pt-1 shrink-0">
