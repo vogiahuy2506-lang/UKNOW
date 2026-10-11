@@ -82,7 +82,7 @@ describe('UserDeliveryMonitorPage — dự kiến xong của lượt đang chạ
 
     expect(getRunEstimate).toHaveBeenCalledTimes(1);
     expect(getRunEstimate).toHaveBeenCalledWith(7);
-    const line = within(screen.getByTestId('run-row-7')).getByTestId('run-estimate');
+    const line = await within(screen.getByTestId('run-row-7')).findByTestId('run-estimate');
     expect(line.textContent).toContain('Dự kiến xong: 02/01/2099 10:04');
     expect(line.textContent).toContain('còn khoảng');
   });
@@ -91,7 +91,7 @@ describe('UserDeliveryMonitorPage — dự kiến xong của lượt đang chạ
     const finish = new Date(Date.now() + (3 * 60 + 10) * 60_000).toISOString();
     getRunEstimate.mockResolvedValue(estimateBody({ finishAtLatest: finish, finishAtEarliest: finish }));
     await renderWith([buildRun({ runId: 7, status: 'running' })]);
-    expect(screen.getByTestId('run-estimate').textContent).toContain('(còn khoảng 3 giờ)');
+    expect((await screen.findByTestId('run-estimate')).textContent).toContain('(còn khoảng 3 giờ)');
   });
 
   it('lượt hoàn tất / đã dừng KHÔNG gọi API và không hiện dòng dự kiến', async () => {
@@ -130,14 +130,15 @@ describe('UserDeliveryMonitorPage — dự kiến xong của lượt đang chạ
   it('có cảnh báo tra số Zalo / email từng bị chặn → thêm dấu "có thể lâu hơn" (tooltip); không có thì không', async () => {
     getRunEstimate.mockResolvedValueOnce(estimateBody({ warnings: [{ code: 'zalo_phone_lookup_unmodeled', params: { nodes: ['3'] } }] }));
     await renderWith([buildRun({ runId: 7, status: 'running' })]);
-    const mark = screen.getByTestId('run-estimate-longer');
+    const mark = await screen.findByTestId('run-estimate-longer');
     expect(mark).toHaveAttribute('title', 'Có thể lâu hơn nếu Zalo khoá tra số hoặc máy chủ email chặn gửi.');
   });
 
   it('không có cảnh báo "không mô hình được" → không có dấu "có thể lâu hơn"', async () => {
     getRunEstimate.mockResolvedValueOnce(estimateBody({ warnings: [{ code: 'multi_day', params: { days: 2 } }] }));
     await renderWith([buildRun({ runId: 7, status: 'running' })]);
-    expect(screen.getByTestId('run-estimate')).toBeInTheDocument();
+    // findBy: renderWith chỉ chờ 1 microtask — máy tải nặng thì lời gọi ước tính chưa xong (full vitest 11/10 đỏ ca này).
+    expect(await screen.findByTestId('run-estimate')).toBeInTheDocument();
     expect(screen.queryByTestId('run-estimate-longer')).not.toBeInTheDocument();
   });
 });
