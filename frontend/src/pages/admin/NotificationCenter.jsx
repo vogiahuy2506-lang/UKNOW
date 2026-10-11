@@ -810,7 +810,7 @@ export default function NotificationCenter() {
       </>
     );
     primaryAction = isSuperAdmin ? (
-      <TopbarSaveButton onClick={openSaveAsModal} label={saveTemplateLabel} icon={HiOutlineBookmark} />
+      <TopbarSaveButton onClick={openSaveAsModal} label={saveTemplateLabel} icon={HiOutlineBookmark} title={t('notificationCenter.saveAsTemplateTitle')} />
     ) : (
       <TopbarButton icon={HiOutlineBookmark} disabled title={t('notificationCenter.studio.superAdminOnly')}>
         {saveTemplateLabel}

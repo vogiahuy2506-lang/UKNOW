@@ -11389,7 +11389,7 @@ Feel free to ask me anything!`,
     behaviorTitle: 'Applies to',
     behaviorNote: 'Applies to new registrations by email or Google. Previously sent emails are unchanged.',
     // 11/10/2026 — "Create landing page"-style layout: top bar + Settings (Reminder schedule, Info) + Tools.
-    topbarTitle: 'Automatic emails',
+    topbarTitle: 'Emails & reminder schedule',
     unsavedBadge: 'Unsaved',
     toolsRefreshPreviewDesc: 'Rebuild from what you are editing',
     toolsRestoreDefaultDesc: 'Drop customizations, use the original',

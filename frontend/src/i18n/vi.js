@@ -11401,7 +11401,7 @@ export default {
     behaviorTitle: 'Phạm vi áp dụng',
     behaviorNote: 'Áp dụng cho thành viên đăng ký mới bằng email hoặc Google. Các email đã gửi trước đây không thay đổi.',
     // 11/10/2026 — bố cục kiểu "Tạo landing page": thanh trên + Cài đặt (Lịch nhắc hạn, Thông tin) + Công cụ.
-    topbarTitle: 'Email tự động',
+    topbarTitle: 'Email & lịch nhắc hạn',
     unsavedBadge: 'Chưa lưu',
     toolsRefreshPreviewDesc: 'Tạo lại từ nội dung đang sửa',
     toolsRestoreDefaultDesc: 'Bỏ bản tùy chỉnh, dùng mẫu gốc',
