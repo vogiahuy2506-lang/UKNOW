@@ -83,7 +83,7 @@ const StatusBadge = ({ status, kind }) => {
 
 const FUNNEL_PERIODS = ['7d', '30d', '90d'];
 
-const formatMoney = (n) => `${Number(n || 0).toLocaleString('vi-VN')} đ`;
+const formatMoney = (n, t) => t('products.moneyAmount', { amount: Number(n || 0).toLocaleString('vi-VN') });
 
 const formatDate = (v) => {
   if (!v) return '--';
@@ -143,7 +143,7 @@ const FunnelCells = ({ funnel }) => {
       <td
         className={`px-3 py-4 whitespace-nowrap text-sm text-right ${awaiting > 0 ? 'font-semibold text-amber-600 dark:text-amber-400' : 'text-gray-900 dark:text-dk-text'}`}
         data-testid="funnel-awaiting"
-        title={awaiting > 0 ? t('products.funnel.awaitingConfirmTooltip', { amount: formatMoney(funnel?.awaitingAmount) }) : undefined}
+        title={awaiting > 0 ? t('products.funnel.awaitingConfirmTooltip', { amount: formatMoney(funnel?.awaitingAmount, t) }) : undefined}
       >
         {noMoney ? (
           '—'
@@ -180,7 +180,7 @@ const FunnelCells = ({ funnel }) => {
         className="px-3 py-4 whitespace-nowrap text-sm text-right font-semibold text-slate-900 dark:text-dk-text"
         data-testid="funnel-revenue"
       >
-        {noMoney ? '—' : formatMoney(funnel?.revenue)}
+        {noMoney ? '—' : formatMoney(funnel?.revenue, t)}
       </td>
     </>
   );
@@ -300,7 +300,7 @@ function ProductDetailModal({ product, funnel, canViewFunnel, onClose, onEdit })
                   </span>
                   {product.thumbnailUrl && (
                     <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800/60">
-                      Đã có ảnh
+                      {t('products.detailHasImage')}
                     </span>
                   )}
                 </div>
@@ -361,7 +361,7 @@ function ProductDetailModal({ product, funnel, canViewFunnel, onClose, onEdit })
                         className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-dk-text2 hover:text-slate-900 dark:hover:text-dk-text py-1 px-2.5 rounded-lg hover:bg-slate-100 dark:hover:bg-dk-raised transition-colors"
                       >
                         {copiedLink ? <HiOutlineCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> : <HiOutlineClipboardCopy className="w-3.5 h-3.5" />}
-                        <span>{copiedLink ? 'Đã sao chép' : t('products.copyProductUrl')}</span>
+                        <span>{copiedLink ? t('common.copied') : t('products.copyProductUrl')}</span>
                       </button>
                     </div>
                   </div>
@@ -373,7 +373,7 @@ function ProductDetailModal({ product, funnel, canViewFunnel, onClose, onEdit })
                       onClick={() => { onClose(); onEdit(product); }}
                       className="mt-1 text-xs font-semibold text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 hover:underline"
                     >
-                      + Thiết lập URL
+                      + {t('products.detailSetupUrl')}
                     </button>
                   </div>
                 )}
@@ -382,26 +382,26 @@ function ProductDetailModal({ product, funnel, canViewFunnel, onClose, onEdit })
               {/* Card Giá bán & Thông tin gốc */}
               <div className="bg-slate-50/70 dark:bg-dk-raised border border-slate-200/80 dark:border-dk-border rounded-2xl p-4 space-y-2.5">
                 <span className="text-xs font-bold text-slate-700 dark:text-dk-text uppercase tracking-wider block">
-                  Giá & Phân loại
+                  {t('products.detailPriceSection')}
                 </span>
                 <div className="bg-white dark:bg-dk-inset rounded-xl border border-slate-200 dark:border-dk-border p-3 space-y-2 text-sm">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-slate-500 dark:text-dk-text2">Giá hiển thị:</span>
+                    <span className="text-xs text-slate-500 dark:text-dk-text2">{t('products.detailDisplayPrice')}:</span>
                     <span className="font-bold text-slate-900 dark:text-dk-text">
                       {product.price || (product.kind === 'event' ? t('products.priceFreePlaceholder') : '—')}
                     </span>
                   </div>
                   {product.priceAmount != null && (
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-500 dark:text-dk-text2">Số tiền chuẩn:</span>
+                      <span className="text-xs text-slate-500 dark:text-dk-text2">{t('products.detailStandardAmount')}:</span>
                       <span className="font-semibold text-emerald-700 dark:text-emerald-300 font-mono text-xs bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-200/60 dark:border-emerald-800/60">
-                        {formatMoney(product.priceAmount)}
+                        {formatMoney(product.priceAmount, t)}
                       </span>
                     </div>
                   )}
                   {product.originalPrice && (
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-500 dark:text-dk-text2">Giá gốc:</span>
+                      <span className="text-xs text-slate-500 dark:text-dk-text2">{t('products.originalPrice')}:</span>
                       <span className="line-through text-xs text-slate-400 dark:text-dk-muted">{product.originalPrice}</span>
                     </div>
                   )}
@@ -424,7 +424,7 @@ function ProductDetailModal({ product, funnel, canViewFunnel, onClose, onEdit })
                     <div className="text-right shrink-0 whitespace-nowrap">
                       <span className="text-[11px] text-slate-500 dark:text-dk-text2 uppercase font-semibold mr-1.5">{t('products.funnel.revenue')}:</span>
                       <span className="text-base font-bold text-emerald-600 dark:text-emerald-400">
-                        {noMoney ? '—' : formatMoney(funnel?.revenue)}
+                        {noMoney ? '—' : formatMoney(funnel?.revenue, t)}
                       </span>
                     </div>
                   </div>
@@ -444,27 +444,27 @@ function ProductDetailModal({ product, funnel, canViewFunnel, onClose, onEdit })
                           : undefined
                       }
                     >
-                      <span className="text-[11px] font-semibold text-slate-500 dark:text-dk-text2 uppercase block">1. Quan tâm</span>
+                      <span className="text-[11px] font-semibold text-slate-500 dark:text-dk-text2 uppercase block">{`1. ${t('products.funnel.interested')}`}</span>
                       <div className="text-lg font-bold text-slate-900 dark:text-dk-text mt-0.5" data-testid="funnel-detail-interested">
                         {funnel?.interested ?? 0}
                       </div>
                       <span className="text-[10px] text-slate-400 dark:text-dk-muted block mt-0.5 truncate">
-                        {funnel?.landingViews ?? 0} view · {funnel?.campaignClicks ?? 0} click
+                        {t('products.funnel.landingViewsClicks', { views: funnel?.landingViews ?? 0, clicks: funnel?.campaignClicks ?? 0 })}
                       </span>
                     </div>
 
                     {/* 2. Để lại thông tin */}
                     <div className="bg-white dark:bg-dk-inset rounded-xl border border-slate-200 dark:border-dk-border p-3 shadow-2xs">
-                      <span className="text-[11px] font-semibold text-slate-500 dark:text-dk-text2 uppercase block">2. Để lại TT</span>
+                      <span className="text-[11px] font-semibold text-slate-500 dark:text-dk-text2 uppercase block">{`2. ${t('products.funnel.leftContactShort')}`}</span>
                       <div className="text-lg font-bold text-slate-900 dark:text-dk-text mt-0.5" data-testid="funnel-detail-left-contact">
                         {funnel?.leftContact ?? 0}
                       </div>
-                      <span className="text-[10px] text-slate-400 dark:text-dk-muted block mt-0.5">leads từ landing</span>
+                      <span className="text-[10px] text-slate-400 dark:text-dk-muted block mt-0.5">{t('products.funnel.leadsFromLanding')}</span>
                     </div>
 
                     {/* 3. Đăng ký */}
                     <div className="bg-white dark:bg-dk-inset rounded-xl border border-slate-200 dark:border-dk-border p-3 shadow-2xs">
-                      <span className="text-[11px] font-semibold text-slate-500 dark:text-dk-text2 uppercase block">3. Đăng ký</span>
+                      <span className="text-[11px] font-semibold text-slate-500 dark:text-dk-text2 uppercase block">{`3. ${t('products.funnel.registered')}`}</span>
                       <div className="text-lg font-bold text-slate-900 dark:text-dk-text mt-0.5" data-testid="funnel-detail-registered">
                         {formTarget ? (
                           <Link to={formTarget} className="text-primary-600 dark:text-primary-400 hover:underline">
@@ -474,12 +474,12 @@ function ProductDetailModal({ product, funnel, canViewFunnel, onClose, onEdit })
                           registered
                         )}
                       </div>
-                      <span className="text-[10px] text-slate-400 dark:text-dk-muted block mt-0.5">người nộp form</span>
+                      <span className="text-[10px] text-slate-400 dark:text-dk-muted block mt-0.5">{t('products.funnel.formSubmitters')}</span>
                     </div>
 
                     {/* 4. Chờ xác nhận */}
                     <div className={`rounded-xl border p-3 shadow-2xs ${awaiting > 0 ? 'border-amber-300 dark:border-amber-800/60 bg-amber-50/40 dark:bg-amber-950/30' : 'border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset'}`}>
-                      <span className="text-[11px] font-semibold text-slate-500 dark:text-dk-text2 uppercase block">4. Chờ xác nhận</span>
+                      <span className="text-[11px] font-semibold text-slate-500 dark:text-dk-text2 uppercase block">{`4. ${t('products.funnel.awaitingConfirm')}`}</span>
                       <div className={`text-lg font-bold mt-0.5 ${awaiting > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-900 dark:text-dk-text'}`} data-testid="funnel-detail-awaiting">
                         {noMoney ? (
                           '—'
@@ -492,7 +492,7 @@ function ProductDetailModal({ product, funnel, canViewFunnel, onClose, onEdit })
                         )}
                       </div>
                       <span className="text-[10px] text-slate-400 dark:text-dk-muted block mt-0.5 truncate">
-                        {awaiting > 0 ? `Chờ ${formatMoney(funnel?.awaitingAmount)}` : 'đã duyệt hết'}
+                        {awaiting > 0 ? t('products.funnel.awaitingAmountLine', { amount: formatMoney(funnel?.awaitingAmount, t) }) : t('products.funnel.allApproved')}
                       </span>
                     </div>
 
@@ -505,22 +505,22 @@ function ProductDetailModal({ product, funnel, canViewFunnel, onClose, onEdit })
                           : undefined
                       }
                     >
-                      <span className="text-[11px] font-semibold text-slate-500 dark:text-dk-text2 uppercase block">5. Đã trả</span>
+                      <span className="text-[11px] font-semibold text-slate-500 dark:text-dk-text2 uppercase block">{`5. ${t('products.funnel.paid')}`}</span>
                       <div className="text-lg font-bold text-slate-900 dark:text-dk-text mt-0.5" data-testid="funnel-detail-paid">
                         {noMoney ? '—' : paidPeople}
                       </div>
                       <span className="text-[10px] text-slate-400 dark:text-dk-muted block mt-0.5">
-                        {noMoney ? 'miễn phí' : `${paidOrders} đơn`}
+                        {noMoney ? t('products.funnel.freeLower') : t('products.funnel.ordersCount', { count: paidOrders })}
                       </span>
                     </div>
 
                     {/* 6. Doanh thu */}
                     <div className="bg-white dark:bg-dk-inset rounded-xl border border-slate-200 dark:border-dk-border p-3 shadow-2xs">
-                      <span className="text-[11px] font-semibold text-slate-500 dark:text-dk-text2 uppercase block">6. Doanh thu</span>
+                      <span className="text-[11px] font-semibold text-slate-500 dark:text-dk-text2 uppercase block">{`6. ${t('products.funnel.revenue')}`}</span>
                       <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400 mt-0.5" data-testid="funnel-detail-revenue">
-                        {noMoney ? '—' : formatMoney(funnel?.revenue)}
+                        {noMoney ? '—' : formatMoney(funnel?.revenue, t)}
                       </div>
-                      <span className="text-[10px] text-slate-400 dark:text-dk-muted block mt-0.5">tiền thực thu</span>
+                      <span className="text-[10px] text-slate-400 dark:text-dk-muted block mt-0.5">{t('products.funnel.revenueCaption')}</span>
                     </div>
                   </div>
                 </div>
@@ -537,15 +537,15 @@ function ProductDetailModal({ product, funnel, canViewFunnel, onClose, onEdit })
 
                 <div className="bg-white dark:bg-dk-inset rounded-xl border border-slate-200 dark:border-dk-border p-3.5 space-y-3 text-xs">
                   <div>
-                    <span className="font-semibold text-slate-700 dark:text-dk-text block mb-1">Mô tả sản phẩm:</span>
+                    <span className="font-semibold text-slate-700 dark:text-dk-text block mb-1">{t('products.detailDescription')}:</span>
                     <p className="text-slate-600 dark:text-dk-text2 whitespace-pre-line leading-relaxed">
-                      {product.description || <span className="italic text-slate-400 dark:text-dk-muted">Chưa có mô tả</span>}
+                      {product.description || <span className="italic text-slate-400 dark:text-dk-muted">{t('products.detailNoDescription')}</span>}
                     </p>
                   </div>
 
                   {product.usp && (
                     <div className="pt-2 border-t border-slate-100 dark:border-dk-border">
-                      <span className="font-semibold text-slate-700 dark:text-dk-text block mb-1">Điểm nổi bật (USP):</span>
+                      <span className="font-semibold text-slate-700 dark:text-dk-text block mb-1">{t('products.usp')}:</span>
                       <div className="space-y-1">
                         {product.usp.split('\n').filter(Boolean).map((line, idx) => (
                           <div key={idx} className="flex items-start gap-1.5 text-slate-600 dark:text-dk-text2">
@@ -559,7 +559,7 @@ function ProductDetailModal({ product, funnel, canViewFunnel, onClose, onEdit })
 
                   {product.targetAudience && (
                     <div className="pt-2 border-t border-slate-100 dark:border-dk-border">
-                      <span className="font-semibold text-slate-700 dark:text-dk-text block mb-1">Đối tượng mục tiêu:</span>
+                      <span className="font-semibold text-slate-700 dark:text-dk-text block mb-1">{t('products.detailTargetAudience')}:</span>
                       <p className="text-slate-600 dark:text-dk-text2">{product.targetAudience}</p>
                     </div>
                   )}
@@ -890,9 +890,9 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                       ? 'bg-white dark:bg-dk-surface text-slate-900 dark:text-dk-text shadow-xs'
                       : 'text-slate-500 dark:text-dk-text2 hover:text-slate-800 dark:hover:text-dk-text'
                   }`}
-                  title="Chế độ xem gọn gàng"
+                  title={t('products.viewCompactTip')}
                 >
-                  {t('products.viewCompact') || 'Bảng gọn'}
+                  {t('products.viewCompact')}
                 </button>
                 <button
                   type="button"
@@ -903,9 +903,9 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                       ? 'bg-white dark:bg-dk-surface text-slate-900 dark:text-dk-text shadow-xs'
                       : 'text-slate-500 dark:text-dk-text2 hover:text-slate-800 dark:hover:text-dk-text'
                   }`}
-                  title="Hiển thị đầy đủ 6 cột phễu"
+                  title={t('products.viewFullTip')}
                 >
-                  {t('products.viewFull') || 'Đầy đủ phễu'}
+                  {t('products.viewFull')}
                 </button>
               </div>
             )}
@@ -1089,7 +1089,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                                     rel="noopener noreferrer"
                                     onClick={(e) => e.stopPropagation()}
                                     className="inline-flex items-center gap-0.5 text-slate-400 dark:text-dk-muted hover:text-orange-600 dark:hover:text-orange-400 transition-colors ml-1"
-                                    title={`Mở URL: ${product.productUrl}`}
+                                    title={t('products.openUrlTitle', { url: product.productUrl })}
                                   >
                                     <HiOutlineExternalLink className="w-3.5 h-3.5" />
                                   </a>
@@ -1124,12 +1124,12 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                                 <span
                                   data-testid="funnel-awaiting"
                                   className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60"
-                                  title={t('products.funnel.awaitingConfirmTooltip', { amount: formatMoney(funnel?.awaitingAmount) })}
+                                  title={t('products.funnel.awaitingConfirmTooltip', { amount: formatMoney(funnel?.awaitingAmount, t) })}
                                 >
                                   {target ? (
-                                    <Link to={target} className="hover:underline">{awaiting} chờ duyệt</Link>
+                                    <Link to={target} className="hover:underline">{t('products.funnel.awaitingBadge', { count: awaiting })}</Link>
                                   ) : (
-                                    `${awaiting} chờ duyệt`
+                                    t('products.funnel.awaitingBadge', { count: awaiting })
                                   )}
                                 </span>
                               )}
@@ -1141,7 +1141,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-right">
                               <span className="font-bold text-slate-900 dark:text-dk-text text-sm" data-testid="funnel-revenue">
-                                {noMoney ? '—' : formatMoney(funnel?.revenue)}
+                                {noMoney ? '—' : formatMoney(funnel?.revenue, t)}
                               </span>
                             </td>
                           </>
@@ -1162,8 +1162,8 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                               type="button"
                               onClick={() => openDetail(product)}
                               className="p-1.5 text-slate-400 dark:text-dk-muted hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-950/40 rounded-lg transition-colors"
-                              title={t('products.viewDetail') || 'Xem chi tiết'}
-                              aria-label={t('products.viewDetail') || 'Xem chi tiết'}
+                              title={t('products.viewDetail')}
+                              aria-label={t('products.viewDetail')}
                             >
                               <HiOutlineEye className="w-4 h-4" />
                             </button>
@@ -1258,7 +1258,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                       {formModal.mode === 'create' ? t('products.addProduct') : t('products.editProduct')}
                     </h3>
                     <p className="text-xs text-slate-400 dark:text-dk-text mt-0.5">
-                      {formModal.mode === 'create' ? 'Tạo mới sản phẩm hoặc dịch vụ' : 'Chỉnh sửa thông tin sản phẩm'}
+                      {formModal.mode === 'create' ? t('products.formSubtitleCreate') : t('products.formSubtitleEdit')}
                     </p>
                   </div>
                 </div>
@@ -1280,7 +1280,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                     <span className="text-xs font-bold text-slate-700 dark:text-dk-text uppercase tracking-wider">
                       {t('products.kindLabel')}
                     </span>
-                    <span className="text-[11px] text-slate-500 dark:text-dk-text2 font-medium">Chọn phân loại phù hợp</span>
+                    <span className="text-[11px] text-slate-500 dark:text-dk-text2 font-medium">{t('products.kindPickHint')}</span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     {PRODUCT_KIND_OPTIONS.map((k) => {
@@ -1307,7 +1307,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                               {k === 'sale' ? t('products.kindSale') : t('products.kindEvent')}
                             </span>
                             <span className="text-[11px] text-slate-500 dark:text-dk-text2 mt-0.5 block leading-relaxed">
-                              {k === 'sale' ? 'Có giá bán hoặc thu phí giao dịch' : 'Sự kiện, hội thảo, buổi họp miễn phí'}
+                              {k === 'sale' ? t('products.kindSaleHint') : t('products.kindEventHint')}
                             </span>
                           </div>
                         </label>
@@ -1338,7 +1338,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                     <div className="flex items-center gap-2 pb-1 border-b border-slate-100 dark:border-dk-border">
                       <HiOutlineTag className="w-4 h-4 text-orange-500" />
                       <span className="text-xs font-bold text-slate-800 dark:text-dk-text uppercase tracking-wider">
-                        Thông tin cơ bản
+                        {t('common.basicInfo')}
                       </span>
                     </div>
 
@@ -1351,7 +1351,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                         required
                         value={formData.productName}
                         onChange={(e) => setField('productName', e.target.value)}
-                        placeholder="VD: Khóa học AI Marketing Thực Chiến"
+                        placeholder={t('products.productNamePlaceholder')}
                         className="w-full px-3.5 py-2 text-sm bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 placeholder:dark:text-dk-muted text-slate-800 dark:text-dk-text font-medium"
                       />
                     </div>
@@ -1365,7 +1365,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                           type="text"
                           value={formData.productCode}
                           onChange={(e) => setField('productCode', e.target.value)}
-                          placeholder="VD: AI-01"
+                          placeholder={t('products.productCodePlaceholder')}
                           className="w-full px-3.5 py-2 text-sm bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 placeholder:dark:text-dk-muted text-slate-800 dark:text-dk-text font-mono"
                         />
                       </div>
@@ -1412,7 +1412,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                       <div className="flex items-center gap-1.5">
                         <HiOutlineCurrencyDollar className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                         <span className="text-xs font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wider">
-                          Giá bán & Thanh toán
+                          {t('products.sectionPricing')}
                         </span>
                       </div>
 
@@ -1437,7 +1437,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                             type="text"
                             value={formData.originalPrice}
                             onChange={(e) => setField('originalPrice', e.target.value)}
-                            placeholder="VD: 5.000.000"
+                            placeholder={t('products.originalPricePlaceholder')}
                             className="w-full px-3 py-1.5 text-sm bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 placeholder:dark:text-dk-muted text-slate-800 dark:text-dk-text"
                           />
                         </div>
@@ -1464,7 +1464,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                             data-testid="product-price-amount-suggest"
                             className="mt-1.5 flex items-center justify-between text-xs bg-white/80 dark:bg-dk-raised p-2 rounded-lg border border-amber-200/80 dark:border-amber-900/50 text-amber-800 dark:text-amber-300"
                           >
-                            <span>{t('products.priceAmountSuggest', { amount: `${suggestedPriceAmount.toLocaleString('vi-VN')} đ` })}</span>
+                            <span>{t('products.priceAmountSuggest', { amount: formatMoney(suggestedPriceAmount, t) })}</span>
                             <button
                               type="button"
                               onClick={() => setField('priceAmount', String(suggestedPriceAmount))}
@@ -1486,7 +1486,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                     <div className="flex items-center gap-2 pb-1 border-b border-slate-100 dark:border-dk-border">
                       <HiOutlineSparkles className="w-4 h-4 text-orange-500" />
                       <span className="text-xs font-bold text-slate-800 dark:text-dk-text uppercase tracking-wider">
-                        Tiếp thị & Trợ lý AI
+                        {t('products.sectionMarketing')}
                       </span>
                     </div>
 
@@ -1498,7 +1498,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                         rows={3}
                         value={formData.description}
                         onChange={(e) => setField('description', e.target.value)}
-                        placeholder="Mô tả tóm tắt giá trị, nội dung chính của sản phẩm/dịch vụ..."
+                        placeholder={t('products.descriptionPlaceholder')}
                         className="w-full px-3.5 py-2 text-sm bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 placeholder:dark:text-dk-muted text-slate-800 dark:text-dk-text resize-none leading-relaxed"
                       />
                     </div>
@@ -1555,7 +1555,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                             className="inline-flex items-center gap-1 text-[11px] text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 underline mt-1"
                           >
                             <HiOutlineExternalLink className="w-3.5 h-3.5" />
-                            <span>{t('products.openProductUrl') || 'Thử mở liên kết'}</span>
+                            <span>{t('products.openProductUrl')}</span>
                           </a>
                         )}
                       </div>
@@ -1570,7 +1570,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                             type="url"
                             value={formData.thumbnailUrl}
                             onChange={(e) => setField('thumbnailUrl', e.target.value)}
-                            placeholder="https://... hoặc tải ảnh lên"
+                            placeholder={t('products.thumbnailUrlPlaceholder')}
                             className="flex-1 min-w-0 px-3.5 py-2 text-sm bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400 placeholder:dark:text-dk-muted text-slate-800 dark:text-dk-text"
                           />
                           <label className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised hover:bg-slate-50 dark:hover:bg-dk-strong text-xs font-semibold text-slate-700 dark:text-dk-text cursor-pointer transition-colors shadow-2xs shrink-0">
@@ -1601,7 +1601,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                                 className="text-xs text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 hover:underline mt-1 inline-flex items-center gap-1"
                               >
                                 <HiOutlineTrash className="w-3.5 h-3.5" />
-                                <span>Gỡ ảnh</span>
+                                <span>{t('products.removeImage')}</span>
                               </button>
                             </div>
                           </div>
