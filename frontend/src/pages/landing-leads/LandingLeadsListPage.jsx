@@ -1,551 +1,80 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import toast from 'react-hot-toast';
-import {
-  HiOutlineRefresh,
-  HiOutlineMail,
-  HiOutlinePhone,
-  HiOutlineExternalLink,
-  HiOutlineSearch,
-  HiOutlineClipboard,
-  HiOutlineCalendar,
-  HiOutlineX,
-  HiOutlineUsers,
-  HiOutlineChevronLeft,
-  HiOutlineChevronRight,
-  HiOutlineEye,
-} from 'react-icons/hi';
-import PageHeader from '../../components/common/PageHeader';
-import useLandingLeadsList from '../../features/landing/hooks/useLandingLeadsList.js';
-import { LandingLeadsAdminFilters } from '../../features/landing/components/LandingLeadsAdminFilters.jsx';
-import { fetchLandingLeadsCustomFieldDefinitions } from '../../features/landing/services/landingLeadsAdminApi.service.js';
-import LandingLeadConsentBadge from '../../features/landing/components/LandingLeadConsentBadge.jsx';
-import LandingLeadDetailModal from '../../features/landing/components/LandingLeadDetailModal.jsx';
-import {
-  formatLeadExtraEntries,
-  getLeadExtraEntries,
-  getLeadFullName,
-  getLeadInitials,
-} from '../../features/landing/utils/leadFields.js';
+import { useSearchParams } from 'react-router-dom';
+import { HiOutlineUsers } from 'react-icons/hi';
+import PageContainer from '../../components/common/PageContainer';
+import { useAuthStore } from '../../stores/authStore';
 import { useI18n } from '../../i18n';
+import LandingLeadsTab from './LandingLeadsTab.jsx';
+import FormLeadsTab from './FormLeadsTab.jsx';
 
-// eslint-disable-next-line no-unused-vars
-const PAGE_SIZE = 20;
-
-// Ô "Thông tin thêm" của bảng chỉ có một dòng: hiện tối đa ngần này trường, phần còn lại gom vào "+N"
-// (đọc đủ trong modal chi tiết khách).
-const EXTRA_INLINE_FIELD_LIMIT = 2;
+// Mỗi tab cần một quyền nhân viên riêng: khách từ landing page → `leads`, bài nộp biểu mẫu → `forms`.
+// Chủ tài khoản (ngữ cảnh self) luôn thấy cả hai.
+const TABS = [
+  { key: 'landing', permission: 'leads', labelKey: 'landingLeads.tabLanding' },
+  { key: 'forms', permission: 'forms', labelKey: 'landingLeads.tabForms' },
+];
 
 /**
- * Trang quản lý Lead đổ về từ form landing (/embed/lead-form, snippet HTML, form trong landing page).
+ * `/app/landing-leads` — màn "Khách để lại thông tin": gom khách từ MỌI nguồn vào một chỗ, hai tab con vì một
+ * landing page có thể có cả form viết trong HTML (bảng `leads`) lẫn nhiều biểu mẫu (bảng `form_submissions`).
  *
- * Đồng bộ với:
- *  - Lead Form (LeadFormConfigPanel / useFounderLandingForm) — payload POST /api/public/leads.
- *  - Custom field definitions endpoint `/leads/custom-field-definitions` — để hiển thị label + options.
+ *  - "Từ landing page" (mặc định, `leads`): nội dung của trang cũ, giữ nguyên.
+ *  - "Từ biểu mẫu" (`forms`): bài nộp của mọi biểu mẫu trong workspace.
+ *
+ * Tab nằm trên URL (`?tab=forms`) để F5 / chia sẻ link giữ nguyên. Thiếu quyền tab nào thì ẩn tab đó, và
+ * `?tab=` trỏ vào tab không được phép thì rơi về tab đầu tiên còn xem được (cổng route chỉ cần MỘT trong hai quyền).
  */
 export default function LandingLeadsListPage() {
   const { t } = useI18n();
-  const {
-    draftFilters,
-    setDraftFilters,
-    appliedFilters,
-    applyFilters,
-    resetFilters,
-    exportExcel,
-    isExporting,
-    page,
-    setPage,
-    items,
-    pagination,
-    isLoading,
-    errorMessage,
-    reload,
-  } = useLandingLeadsList();
+  const activeContext = useAuthStore((state) => state.activeContext);
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const [customDefs, setCustomDefs] = useState([]);
-  // Dòng đang xem trong modal chi tiết (null = đóng).
-  const [selectedLead, setSelectedLead] = useState(null);
-  const closeLeadDetail = useCallback(() => setSelectedLead(null), []);
+  const isEmployee = activeContext?.type === 'employee';
+  const visibleTabs = TABS.filter((tab) => !isEmployee || activeContext?.permissions?.[tab.permission] === true);
+  const requestedTab = searchParams.get('tab');
+  const activeTab = (visibleTabs.find((tab) => tab.key === requestedTab) || visibleTabs[0] || null)?.key ?? null;
 
-  // Quick search trong trang hiện tại (FE-only, không gọi lại API).
-  // Backend chưa hỗ trợ filter theo text nên search chỉ áp dụng cho items đã load.
-  const [quickSearch, setQuickSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-
-  useEffect(() => {
-    const id = setTimeout(() => setDebouncedSearch(quickSearch.trim().toLowerCase()), 250);
-    return () => clearTimeout(id);
-  }, [quickSearch]);
-
-  // Đếm số bộ lọc đang áp dụng (dùng cho badge trên trigger button).
-  const appliedCount = useMemo(() => {
-    let n = 0;
-    if (appliedFilters.landingLeadsUseDateRange) n += 1;
-    if (Array.isArray(appliedFilters.landingLeadsSlugs) && appliedFilters.landingLeadsSlugs.length > 0) n += 1;
-    if (Array.isArray(appliedFilters.landingLeadsCustomFilters) && appliedFilters.landingLeadsCustomFilters.length > 0) {
-      n += appliedFilters.landingLeadsCustomFilters.length;
-    }
-    return n;
-  }, [appliedFilters]);
-
-  // Lấy definitions để render label + options cho customFields trong từng dòng.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const items = await fetchLandingLeadsCustomFieldDefinitions();
-        if (!cancelled) setCustomDefs(Array.isArray(items) ? items : []);
-      } catch {
-        if (!cancelled) setCustomDefs([]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const totalPages = pagination.totalPages || 1;
-  const total = pagination.total ?? 0;
-
-  const visibleItems = useMemo(() => {
-    if (!debouncedSearch) return items;
-    const q = debouncedSearch;
-    return items.filter((row) => {
-      const fullName = String(getLeadFullName(row) || '').toLowerCase();
-      const email = String(row.email || '').toLowerCase();
-      const phone = String(row.phone || '').toLowerCase();
-      return fullName.includes(q) || email.includes(q) || phone.includes(q);
-    });
-  }, [items, debouncedSearch]);
-
-  const handleExport = useCallback(async () => {
-    try {
-      const result = await exportExcel();
-      if (result?.truncated) {
-        toast(t('landingLeads.exportTruncated'));
-      } else {
-        toast.success(t('landingLeads.exportSuccess'));
-      }
-    } catch (e) {
-      toast.error(e?.response?.data?.message || e?.message || t('landingLeads.exportFailed'));
-    }
-  }, [exportExcel, t]);
-
-  const handleCopy = useCallback(
-    async (text, label) => {
-      try {
-        await navigator.clipboard.writeText(text);
-        toast.success(`Đã copy ${label}`);
-      } catch {
-        toast.error('Không thể copy');
-      }
-    },
-    []
-  );
-
-  const dateRangeText = useMemo(() => {
-    if (!appliedFilters.landingLeadsUseDateRange) return null;
-    const from = appliedFilters.landingLeadsDateFrom;
-    const to = appliedFilters.landingLeadsDateTo;
-    if (!from && !to) return null;
-    return `${from || '...'} → ${to || '...'}`;
-  }, [appliedFilters.landingLeadsUseDateRange, appliedFilters.landingLeadsDateFrom, appliedFilters.landingLeadsDateTo]);
-
-  const appliedChips = useMemo(() => buildAppliedChips(appliedFilters, customDefs, t), [appliedFilters, customDefs, t]);
+  const selectTab = (key) => {
+    setSearchParams(key === TABS[0].key ? {} : { tab: key }, { replace: true });
+  };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <PageHeader
-        icon={HiOutlineUsers}
-        title={t('landingLeads.pageTitle')}
-        subtitle={t('landingLeads.pageDescription')}
-        actions={
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <HiOutlineSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-dk-muted" />
-              <input
-                type="search"
-                value={quickSearch}
-                onChange={(e) => setQuickSearch(e.target.value)}
-                placeholder={t('landingLeads.quickSearchPlaceholder')}
-                className="w-full sm:w-64 rounded-xl border border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-inset hover:bg-slate-100/70 dark:hover:bg-dk-raised/50 focus:bg-white dark:focus:bg-dk-inset py-2 pl-9 pr-8 text-xs placeholder:text-slate-400 dark:placeholder:text-dk-muted text-slate-800 dark:text-dk-text focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20 transition-all"
-              />
-              {quickSearch ? (
-                <button
-                  type="button"
-                  onClick={() => setQuickSearch('')}
-                  aria-label={t('landingLeads.clearSearch')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-dk-text"
-                >
-                  <HiOutlineX className="w-3.5 h-3.5" />
-                </button>
-              ) : null}
-            </div>
+    <PageContainer
+      icon={HiOutlineUsers}
+      title={t('landingLeads.pageTitle')}
+      subtitle={t('landingLeads.pageDescription')}
+    >
+      {visibleTabs.length > 1 ? (
+        <div
+          className="flex gap-1 border-b border-slate-200 dark:border-dk-border"
+          role="tablist"
+          aria-label={t('landingLeads.tabsLabel')}
+        >
+          {visibleTabs.map((tab) => (
             <button
+              key={tab.key}
+              id={`leads-tab-${tab.key}`}
               type="button"
-              onClick={() => reload()}
-              disabled={isLoading}
-              className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised hover:bg-slate-50 dark:hover:bg-dk-surface text-xs font-semibold text-slate-700 dark:text-dk-text transition-colors shadow-2xs disabled:opacity-50"
+              role="tab"
+              aria-selected={activeTab === tab.key}
+              aria-controls={`leads-tabpanel-${tab.key}`}
+              onClick={() => selectTab(tab.key)}
+              className={`-mb-px border-b-2 px-4 py-2 text-sm font-semibold transition-colors ${
+                activeTab === tab.key
+                  ? 'border-orange-500 text-orange-600 dark:text-orange-400'
+                  : 'border-transparent text-slate-500 dark:text-dk-text2 hover:text-slate-700 dark:hover:text-dk-text'
+              }`}
             >
-              <HiOutlineRefresh className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-              <span>{t('landingLeads.refresh')}</span>
+              {t(tab.labelKey)}
             </button>
-          </div>
-        }
-      />
-
-      {/* Filter trigger (drawer) + Export Excel */}
-      <div className="flex flex-wrap items-center gap-2">
-        <LandingLeadsAdminFilters
-          draftFilters={draftFilters}
-          setDraftFilters={setDraftFilters}
-          onApply={applyFilters}
-          onReset={resetFilters}
-          onExportExcel={handleExport}
-          isExporting={isExporting}
-          appliedCount={appliedCount}
-        />
-      </div>
-
-      {/* Applied filters summary */}
-      {appliedChips.length > 0 || dateRangeText ? (
-        <div className="flex flex-wrap items-center gap-2 -mt-2">
-          <span className="text-xs font-medium text-gray-500 dark:text-dk-text2 uppercase tracking-wide">Đang lọc:</span>
-          {appliedChips.map((chip) => (
-            <span
-              key={chip.id}
-              className="inline-flex items-center gap-1 rounded-full border border-orange-200 dark:border-orange-900/50 bg-orange-50 dark:bg-orange-950/30 px-2.5 py-1 text-xs text-orange-700 dark:text-orange-300"
-            >
-              <span className="font-medium">{chip.label}:</span>
-              <span className="truncate max-w-[180px]">{chip.value}</span>
-            </span>
           ))}
-          {dateRangeText ? (
-            <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 dark:border-blue-900/50 bg-blue-50 dark:bg-blue-950/30 px-2.5 py-1 text-xs text-blue-700 dark:text-blue-300">
-              <HiOutlineCalendar className="w-3 h-3" />
-              {dateRangeText}
-            </span>
-          ) : null}
-          <button
-            type="button"
-            onClick={resetFilters}
-            className="text-xs text-gray-500 dark:text-dk-text2 hover:text-red-600 dark:hover:text-red-400 underline-offset-2 hover:underline"
-          >
-            Xoá tất cả
-          </button>
         </div>
       ) : null}
 
-      {/* Error banner */}
-      {errorMessage ? (
-        <div className="rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-800 dark:text-red-300">
-          {errorMessage}
+      {activeTab ? (
+        <div role="tabpanel" id={`leads-tabpanel-${activeTab}`} aria-labelledby={visibleTabs.length > 1 ? `leads-tab-${activeTab}` : undefined}>
+          {activeTab === 'forms' ? <FormLeadsTab /> : <LandingLeadsTab />}
         </div>
       ) : null}
-
-      {/* Table card */}
-      <div className="rounded-2xl border border-slate-200/90 dark:border-dk-border bg-white dark:bg-dk-surface shadow-2xs overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 dark:border-dk-border flex items-center justify-between gap-3 bg-slate-50/50 dark:bg-dk-raised/30">
-          <p className="text-xs sm:text-sm text-slate-600 dark:text-dk-text2">
-            <span className="font-bold text-slate-900 dark:text-dk-text">{total.toLocaleString('vi-VN')}</span> {t('landingLeads.records')}
-            {debouncedSearch && visibleItems.length !== items.length ? (
-              <span className="ml-2 text-xs text-slate-500 dark:text-dk-text2">
-                · {t('landingLeads.showingOf', { shown: visibleItems.length, total: items.length })}
-              </span>
-            ) : null}
-          </p>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-dk-text2 font-medium">
-            {t('landingLeads.pageOf', { page, total: totalPages })}
-          </p>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-100 dark:divide-dk-border">
-            <thead className="bg-slate-50/80 dark:bg-dk-raised/50">
-              <tr>
-                <th className="pl-6 pr-3 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">
-                  {t('landingLeads.fullName')}
-                </th>
-                <th className="px-3 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">
-                  {t('landingLeads.email')}
-                </th>
-                <th className="px-3 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">
-                  {t('landingLeads.phone')}
-                </th>
-                <th className="px-3 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">
-                  {t('landingLeads.landingSlug')}
-                </th>
-                <th className="px-3 py-3.5 text-center text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap">
-                  {t('forms.submissionsPage.colConsent', { defaultValue: 'Đồng ý tiếp thị' })}
-                </th>
-                <th className="px-3 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">
-                  {t('landingLeads.extraInfo')}
-                </th>
-                <th className="w-px pl-1 pr-5 py-3.5">
-                  <span className="sr-only">{t('landingLeads.viewDetail')}</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white dark:bg-dk-surface divide-y divide-slate-100 dark:divide-dk-border">
-              {isLoading && items.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-sm text-slate-500 dark:text-dk-text2">
-                    <span className="inline-block w-4 h-4 mr-2 align-[-2px] border-2 border-slate-300 dark:border-dk-border-strong border-t-orange-500 rounded-full animate-spin" />
-                    {t('landingLeads.loading')}
-                  </td>
-                </tr>
-              ) : null}
-
-              {!isLoading && visibleItems.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-6 py-16 text-center">
-                    <HiOutlineSearch className="w-10 h-10 text-slate-300 dark:text-dk-muted mx-auto mb-2" />
-                    {debouncedSearch ? (
-                      <>
-                        <p className="text-sm text-slate-500 dark:text-dk-text2">
-                          {t('landingLeads.noMatchInPage', { query: debouncedSearch })}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => setQuickSearch('')}
-                          className="mt-3 text-xs font-semibold text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 hover:underline"
-                        >
-                          {t('landingLeads.clearSearch')}
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-sm text-slate-500 dark:text-dk-text2">{t('landingLeads.noRecords')}</p>
-                        {appliedChips.length > 0 ? (
-                          <button
-                            type="button"
-                            onClick={resetFilters}
-                            className="mt-3 text-xs font-semibold text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 hover:underline"
-                          >
-                            Xoá bộ lọc để thấy tất cả
-                          </button>
-                        ) : null}
-                      </>
-                    )}
-                  </td>
-                </tr>
-              ) : null}
-
-              {visibleItems.map((row) => {
-                const fullName = getLeadFullName(row);
-                const initials = getLeadInitials(row);
-                const extraEntries = getLeadExtraEntries(row, customDefs, 'vi');
-                const extraSummary = formatLeadExtraEntries(extraEntries);
-                const extraInlineSummary = formatLeadExtraEntries(extraEntries.slice(0, EXTRA_INLINE_FIELD_LIMIT));
-                const extraHiddenCount = Math.max(0, extraEntries.length - EXTRA_INLINE_FIELD_LIMIT);
-                const publicUrl = row.landingPageSlug
-                  ? `${window.location.origin}/${row.landingPageSlug}`
-                  : null;
-                return (
-                  <tr
-                    key={row.id ?? row.leadId}
-                    tabIndex={0}
-                    onClick={(event) => {
-                      // Bấm vào link/nút trong dòng (trang nguồn, sao chép, xem) thì để chúng tự xử lý.
-                      if (event.target.closest('a, button')) return;
-                      setSelectedLead(row);
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.target !== event.currentTarget) return;
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        setSelectedLead(row);
-                      }
-                    }}
-                    className="cursor-pointer hover:bg-slate-50/70 dark:hover:bg-dk-raised/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-500/40 transition-colors"
-                  >
-                    <td className="pl-6 pr-3 py-4 text-xs sm:text-sm whitespace-nowrap max-w-[210px]">
-                      <div className="flex items-center gap-2.5">
-                        <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gradient-to-br from-orange-400 to-amber-500 text-white text-[11px] font-semibold shrink-0 shadow-2xs">
-                          {initials}
-                        </span>
-                        <div className="min-w-0">
-                          <p className="text-slate-900 dark:text-dk-text font-semibold truncate">{fullName || '—'}</p>
-                          {row.registrationTime || row.createdAt ? (
-                            <p className="text-[11px] text-slate-400 dark:text-dk-muted truncate">
-                              {formatRelativeTime(row.registrationTime || row.createdAt)}
-                            </p>
-                          ) : null}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-3 py-4 text-xs sm:text-sm text-slate-700 dark:text-dk-text max-w-[200px]">
-                      {row.email ? (
-                        <div className="flex items-center gap-1.5 group">
-                          <HiOutlineMail className="w-3.5 h-3.5 text-slate-400 dark:text-dk-muted shrink-0" />
-                          <span className="truncate font-medium text-slate-800 dark:text-dk-text" title={row.email}>{row.email}</span>
-                          <button
-                            type="button"
-                            onClick={() => handleCopy(row.email, 'email')}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-slate-400 hover:text-orange-600 dark:hover:text-orange-400"
-                            title="Copy email"
-                          >
-                            <HiOutlineClipboard className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td className="px-3 py-4 text-xs sm:text-sm text-slate-700 dark:text-dk-text whitespace-nowrap">
-                      {row.phone ? (
-                        <div className="flex items-center gap-1.5 group">
-                          <HiOutlinePhone className="w-3.5 h-3.5 text-slate-400 dark:text-dk-muted shrink-0" />
-                          <span className="font-medium text-slate-800 dark:text-dk-text">{row.phone}</span>
-                          <button
-                            type="button"
-                            onClick={() => handleCopy(row.phone, 'SĐT')}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-slate-400 hover:text-orange-600 dark:hover:text-orange-400"
-                            title="Copy SĐT"
-                          >
-                            <HiOutlineClipboard className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td className="px-3 py-4 text-xs sm:text-sm text-slate-700 dark:text-dk-text whitespace-nowrap max-w-[180px]">
-                      {row.landingPageSlug ? (
-                        <a
-                          href={publicUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex max-w-full items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-dk-raised hover:bg-orange-50 dark:hover:bg-orange-950/30 hover:text-orange-700 dark:hover:text-orange-400 border border-slate-200/60 dark:border-dk-border transition-colors font-medium text-xs text-slate-700 dark:text-dk-text"
-                          title={publicUrl}
-                        >
-                          <span className="min-w-0 truncate">/{row.landingPageSlug}</span>
-                          <HiOutlineExternalLink className="w-3 h-3 shrink-0 opacity-60" />
-                        </a>
-                      ) : (
-                        <span className="text-slate-400 dark:text-dk-muted">—</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-4 text-xs sm:text-sm text-center whitespace-nowrap">
-                      <LandingLeadConsentBadge row={row} />
-                    </td>
-                    <td className="px-3 py-4 text-xs sm:text-sm text-slate-600 dark:text-dk-text max-w-[210px]">
-                      {extraEntries.length > 0 ? (
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <p className="truncate min-w-0" title={extraSummary}>{extraInlineSummary}</p>
-                          {extraHiddenCount > 0 ? (
-                            <span
-                              className="shrink-0 rounded-full bg-slate-100 dark:bg-dk-raised px-1.5 py-0.5 text-[10px] font-semibold text-slate-500 dark:text-dk-text2"
-                              title={t('landingLeads.moreFieldsTitle', { count: extraHiddenCount })}
-                            >
-                              +{extraHiddenCount}
-                            </span>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <span className="text-slate-400 dark:text-dk-muted italic text-xs">{t('landingLeads.extraEmpty')}</span>
-                      )}
-                    </td>
-                    <td className="w-px pl-1 pr-5 py-4 whitespace-nowrap text-right">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedLead(row)}
-                        className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface text-slate-500 dark:text-dk-text2 hover:text-orange-600 dark:hover:text-orange-400 hover:bg-slate-50 dark:hover:bg-dk-raised transition-colors"
-                        title={t('landingLeads.viewDetail')}
-                        aria-label={t('landingLeads.viewDetail')}
-                      >
-                        <HiOutlineEye className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        {totalPages > 1 ? (
-          <div className="px-6 py-4 border-t border-slate-100 dark:border-dk-border bg-slate-50/50 dark:bg-dk-raised/30 flex items-center justify-between gap-3">
-            <button
-              type="button"
-              disabled={page <= 1 || isLoading}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised hover:bg-slate-50 dark:hover:bg-dk-surface text-xs font-semibold text-slate-700 dark:text-dk-text disabled:opacity-40 transition-colors shadow-2xs"
-            >
-              <HiOutlineChevronLeft className="w-4 h-4" />
-              {t('landingLeads.previousPage')}
-            </button>
-            <span className="text-xs sm:text-sm font-semibold text-slate-600 dark:text-dk-text2">
-              {page} / {totalPages}
-            </span>
-            <button
-              type="button"
-              disabled={page >= totalPages || isLoading}
-              onClick={() => setPage((p) => p + 1)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised hover:bg-slate-50 dark:hover:bg-dk-surface text-xs font-semibold text-slate-700 dark:text-dk-text disabled:opacity-40 transition-colors shadow-2xs"
-            >
-              {t('landingLeads.nextPage')}
-              <HiOutlineChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        ) : null}
-      </div>
-
-      <LandingLeadDetailModal
-        lead={selectedLead}
-        customDefs={customDefs}
-        onClose={closeLeadDetail}
-        onCopy={handleCopy}
-      />
-    </div>
+    </PageContainer>
   );
-}
-
-/* ───────── helpers ───────── */
-
-function formatRelativeTime(raw) {
-  try {
-    const d = new Date(raw);
-    if (Number.isNaN(d.getTime())) return '';
-    const now = Date.now();
-    const diff = Math.floor((now - d.getTime()) / 1000);
-    if (diff < 60) return 'vừa xong';
-    if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
-    if (diff < 86400 * 7) return `${Math.floor(diff / 86400)} ngày trước`;
-    return d.toLocaleDateString('vi-VN');
-  } catch {
-    return '';
-  }
-}
-
-/**
- * Tạo chip tóm tắt bộ lọc đang áp dụng (hiển thị pill trên header để dễ kiểm tra).
- */
-function buildAppliedChips(filters, customDefs, t) {
-  const chips = [];
-  const slugs = Array.isArray(filters.landingLeadsSlugs) ? filters.landingLeadsSlugs : [];
-  if (slugs.length > 0) {
-    chips.push({
-      id: 'slugs',
-      label: t('landingLeads.slugSourceLabel'),
-      value: slugs.map((s) => `/${s}`).join(', '),
-    });
-  }
-  const cfs = Array.isArray(filters.landingLeadsCustomFilters) ? filters.landingLeadsCustomFilters : [];
-  for (const cf of cfs) {
-    const def = customDefs.find((d) => d.key === cf.key);
-    const label = def?.labelVi || cf.key;
-    let display = String(cf.value ?? '');
-    if (def && (def.type === 'select' || def.type === 'radio') && Array.isArray(def.options)) {
-      const opt = def.options.find((o) => o.value === cf.value);
-      if (opt) display = opt.labelVi || opt.value;
-    } else if (cf.value === 'true') {
-      display = t('landingLeads.yes');
-    } else if (cf.value === 'false') {
-      display = t('landingLeads.no');
-    }
-    chips.push({ id: `cf-${cf.key}`, label, value: display });
-  }
-  return chips;
 }

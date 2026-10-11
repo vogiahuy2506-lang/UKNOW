@@ -442,7 +442,7 @@ function AppContent() {
             {/* Courses */}
             <Route path="courses" element={<FeatureFlagRoute flag="VITE_FEATURE_COURSES"><PermissionRoute permission="courses"><Courses /></PermissionRoute></FeatureFlagRoute>} />
             <Route path="products" element={<FeatureFlagRoute flag="VITE_FEATURE_PRODUCTS"><PermissionRoute permission="courses"><Products /></PermissionRoute></FeatureFlagRoute>} />
-            <Route path="landing-leads" element={<PermissionRoute permission="leads"><LandingLeadsListPage /></PermissionRoute>} />
+            <Route path="landing-leads" element={<PermissionRoute permission={['leads', 'forms']}><LandingLeadsListPage /></PermissionRoute>} />
 
             {/* Forms */}
             <Route path="forms" element={<PermissionRoute permission="forms"><FormsListPage /></PermissionRoute>} />

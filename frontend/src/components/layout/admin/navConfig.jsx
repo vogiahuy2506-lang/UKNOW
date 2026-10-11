@@ -95,7 +95,7 @@ export const userMenuItems = (t) => [
   { key: 'campaign_management', name: t('nav.campaignManagement'), defaultCategory: 'campaigns', path: '/app/campaigns', icon: HiOutlineViewList, permission: ['campaigns_view'], end: true },
   { key: 'delivery_monitor', name: t('nav.deliveryMonitor'), defaultCategory: 'campaigns', path: '/app/delivery-monitor', icon: HiOutlineServer, permission: ['campaigns_view'] },
   { key: 'customers', name: t('nav.customers'), defaultCategory: 'campaigns', path: '/app/customers', icon: HiOutlineUsers, permission: ['customers'] },
-  { key: 'lead_list', name: t('nav.leadList'), defaultCategory: 'landing_page', path: '/app/landing-leads', icon: HiOutlineUsers, permission: ['leads'] },
+  { key: 'lead_list', name: t('nav.leadList'), defaultCategory: 'landing_page', path: '/app/landing-leads', icon: HiOutlineUsers, permission: ['leads', 'forms'] },
   { key: 'html_pages', name: t('nav.htmlPages'), defaultCategory: 'landing_page', path: '/app/settings/landing-pages', icon: HiOutlineGlobeAlt, permission: ['landing_pages'] },
   { key: 'forms', name: t('nav.forms'), defaultCategory: 'landing_page', path: '/app/forms', icon: HiOutlineClipboardList, permission: ['forms'] },
   { key: 'billing_overview', name: t('nav.billingOverview'), defaultCategory: 'billing', path: '/app/billing', icon: HiOutlineClipboardList, ownerOnly: true },

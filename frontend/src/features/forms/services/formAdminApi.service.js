@@ -42,6 +42,23 @@ export async function fetchFormSubmissions(id, { page = 1, pageSize = 20, date }
   return res.data?.data || { submissions: [], total: 0, page: 1, pageSize: 20, totalPages: 1 };
 }
 
+/**
+ * Bài nộp của MỌI biểu mẫu trong workspace (tab "Từ biểu mẫu" của màn "Khách để lại thông tin").
+ * `from`/`to` là ngày `YYYY-MM-DD` (giờ VN, gồm cả hai đầu). Mỗi dòng kèm `formTitle`.
+ *
+ * @param {{ page?: number, limit?: number, formId?: number|string, landingPageSlug?: string, from?: string, to?: string }} [options]
+ * @returns {Promise<{ items: Array<object>, total: number, page: number, limit: number }>}
+ */
+export async function fetchWorkspaceSubmissions({ page = 1, limit = 20, formId, landingPageSlug, from, to } = {}) {
+  const params = { page, limit };
+  if (formId) params.formId = formId;
+  if (landingPageSlug) params.landingPageSlug = landingPageSlug;
+  if (from) params.from = from;
+  if (to) params.to = to;
+  const res = await api.get('/forms/submissions', { params });
+  return res.data?.data || { items: [], total: 0, page: 1, limit: 20 };
+}
+
 export async function cancelSubmission(id, submissionId) {
   const res = await api.post(`/forms/${id}/submissions/${submissionId}/cancel`);
   return res.data?.data;
