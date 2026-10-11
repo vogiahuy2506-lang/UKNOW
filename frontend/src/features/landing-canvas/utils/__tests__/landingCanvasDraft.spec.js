@@ -39,14 +39,16 @@ describe('landingCanvasDraft — khoá', () => {
 });
 
 describe('landingCanvasDraft — form', () => {
-  it('chỉ giữ trường lưu được, không có leadFormFieldErrors/persistedMeta/linkedFormId (trường chỉ-server)', () => {
+  it('chỉ giữ trường lưu được, không có leadFormFieldErrors/persistedMeta/linkedForms (trường chỉ-server)', () => {
     const picked = pickDraftForm({
       title: 'a',
       htmlContent: '<p/>',
       leadFormFieldErrors: { x: 1 },
       leadFormPersistedMeta: { keys: [] },
+      linkedForms: [{ id: 3, publicKey: 'K3' }],
       linkedFormId: 3,
       linkedFormSource: 'chosen',
+      linkedFormChoice: { mode: 'linked', formId: 7 }, // khoá cũ trước PR-6: nháp cũ còn giữ → bị bỏ
     });
     expect(Object.keys(picked).sort()).toEqual([
       'customDomainHostname',
@@ -55,21 +57,22 @@ describe('landingCanvasDraft — form', () => {
       'htmlContent',
       'isPublished',
       'leadFormConfig',
-      'linkedFormChoice',
+      'linkedFormsPending',
       'slug',
       'title',
     ]);
   });
-  it('lựa chọn "Dùng biểu mẫu đã tạo" chờ lưu (linkedFormChoice) vào nháp và làm bẩn; null = không đổi', () => {
-    const base = { title: 't', htmlContent: 'h', linkedFormChoice: null };
+  it('biểu mẫu CÓ SẴN chờ gắn (linkedFormsPending) vào nháp và làm bẩn; null / thiếu / [] = không đổi', () => {
+    const base = { title: 't', htmlContent: 'h', linkedFormsPending: [] };
     const snap = snapshotDraftForm(base);
     expect(isDraftFormDirty({ ...base }, snap)).toBe(false);
-    expect(isDraftFormDirty({ ...base, linkedFormChoice: { mode: 'linked', formId: 7 } }, snap)).toBe(true);
-    expect(isDraftFormDirty({ ...base, linkedFormChoice: { mode: 'basic' } }, snap)).toBe(true);
-    expect(pickDraftForm({ ...base, linkedFormChoice: { mode: 'linked', formId: 7 } }).linkedFormChoice).toEqual({
-      mode: 'linked',
-      formId: 7,
-    });
+    expect(isDraftFormDirty({ ...base, linkedFormsPending: null }, snap)).toBe(false);
+    const withoutKey = { title: 't', htmlContent: 'h' };
+    expect(isDraftFormDirty(withoutKey, snap)).toBe(false);
+    expect(isDraftFormDirty({ ...base, linkedFormsPending: [{ formId: 7, publicKey: 'K7', title: 'X' }] }, snap)).toBe(true);
+    expect(
+      pickDraftForm({ ...base, linkedFormsPending: [{ formId: 7, publicKey: 'K7', title: 'X' }] }).linkedFormsPending
+    ).toEqual([{ formId: 7, publicKey: 'K7', title: 'X' }]);
   });
   it('bẩn: đổi htmlContent / title / leadFormConfig đều bẩn; thứ tự khoá leadFormConfig thì không', () => {
     const base = { title: 't', htmlContent: 'h', leadFormConfig: { a: 1, b: { c: 2, d: 3 } } };

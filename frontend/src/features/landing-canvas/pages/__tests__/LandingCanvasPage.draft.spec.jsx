@@ -136,7 +136,7 @@ const serverPage = (over = {}) => ({
   customDomainHostname: null,
   customDomainIsApex: false,
   leadFormConfig: null,
-  linkedFormId: null,
+  linkedForms: [],
   updatedAt: 'T1',
   ...over,
 });

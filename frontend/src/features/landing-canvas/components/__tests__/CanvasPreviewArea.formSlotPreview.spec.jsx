@@ -37,4 +37,22 @@ describe('CanvasPreviewArea — PR-5b-2b xem trước chỗ trống không rò v
     );
     expect(setForm).not.toHaveBeenCalled();
   });
+
+  // PR-6 — chỗ trống CÓ LOẠI cũng chỉ là chuyện xem trước; không được rò vào form state.
+  it('PR-6: mount với chỗ trống có loại (booking/payment) → setForm KHÔNG được gọi', () => {
+    const setForm = vi.fn();
+    const html =
+      '<!DOCTYPE html><html><head><script src="https://cdn.tailwindcss.com"></script></head>' +
+      '<body><div data-founderai-form-slot="booking"></div><div data-founderai-form-slot="payment"></div></body></html>';
+    render(
+      <CanvasPreviewArea
+        form={{ htmlContent: html, title: 'Landing test', slug: 'slot-kinds-preview-test' }}
+        setForm={setForm}
+        onOpenImportHtml={vi.fn()}
+        onOpenTemplateGallery={vi.fn()}
+        onFocusChat={vi.fn()}
+      />
+    );
+    expect(setForm).not.toHaveBeenCalled();
+  });
 });

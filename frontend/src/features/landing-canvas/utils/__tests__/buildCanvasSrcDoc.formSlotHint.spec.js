@@ -22,6 +22,26 @@ describe('buildCanvasSrcDoc — formSlotHint (PR-5b-2b)', () => {
     expect(srcDoc).toContain('Biểu mẫu đăng ký sẽ hiện ở đây sau khi lưu');
   });
 
+  // PR-6 — chỗ trống có LOẠI hiện đúng loại lúc xem trước (formSlotKindHints); chỗ trống trần vẫn dùng chữ chung.
+  it('PR-6: chỗ trống có loại hiện chữ theo loại (formSlotKindHints), chỗ trống trần vẫn hiện formSlotHint chung', () => {
+    const html =
+      '<!DOCTYPE html><html><head><script src="https://cdn.tailwindcss.com"></script></head><body>' +
+      '<div data-founderai-form-slot="booking"></div>' +
+      '<div data-founderai-form-slot></div>' +
+      '<div data-founderai-form-slot="payment"></div></body></html>';
+    const srcDoc = buildCanvasSrcDoc({
+      html,
+      title: 'Landing test',
+      slug: 'slot-kind-hint-test',
+      formSlotHint: 'CHUNG',
+      formSlotKindHints: { booking: 'ĐẶT LỊCH', payment: 'THU TIỀN', consult: 'TƯ VẤN' },
+    });
+    expect(srcDoc).not.toContain('data-founderai-form-slot');
+    expect(srcDoc.indexOf('ĐẶT LỊCH')).toBeLessThan(srcDoc.indexOf('CHUNG'));
+    expect(srcDoc.indexOf('CHUNG')).toBeLessThan(srcDoc.indexOf('THU TIỀN'));
+    expect(srcDoc).not.toContain('TƯ VẤN'); // chỗ trống TRẦN không dùng chữ theo loại
+  });
+
   it('html không có chỗ trống → formSlotHint không có tác dụng gì (không xuất hiện trong srcDoc)', () => {
     const html = '<!DOCTYPE html><html><body><section><p>Nội dung thường</p></section></body></html>';
     const srcDoc = buildCanvasSrcDoc({

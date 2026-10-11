@@ -8,10 +8,12 @@ import {
   fetchLandingPageAdminById,
   updateLandingPageAdmin,
 } from '../../../landing-pages/services/landingPagesAdminApi.service.js';
+import { addFormSlot, addPendingForm } from '../../utils/landingFormLink.js';
 
 /**
- * PR-F — lưu "Dùng biểu mẫu đã tạo" qua trình soạn thật (LandingCanvasPage → LandingCanvasEditor.saveLanding):
- * lựa chọn chờ lưu → body PUT có `linkedFormId` + HTML có đúng MỘT chỗ trống; không có lựa chọn → body/HTML như cũ.
+ * PR-6 (thay PR-F "một biểu mẫu") — lưu danh sách NHIỀU biểu mẫu qua trình soạn thật (LandingCanvasPage →
+ * LandingCanvasEditor.saveLanding): HTML đang soạn đã mang đủ khối nhúng / chỗ trống có loại nên gửi NGUYÊN VĂN; chỉ biểu mẫu CÓ
+ * SẴN vừa chọn (`linkedFormsPending`) gửi thêm `linkedFormIds`. Không có thay đổi biểu mẫu → body/HTML như cũ.
  */
 vi.mock('../../../landing-pages/services/landingPagesAdminApi.service.js', () => ({
   fetchLandingPageAdminById: vi.fn(),
@@ -42,7 +44,7 @@ vi.mock('../../../landing-pages/components/SaveTemplateModal.jsx', () => ({ defa
 vi.mock('../../../landing-pages/components/VisualBlockEditor.jsx', () => ({ default: () => null }));
 vi.mock('../../../landing-pages/components/LandingVersionModal.jsx', () => ({ default: () => null }));
 
-// Layout giả: lộ state form ra DOM + nút đặt lựa chọn / lưu.
+// Layout giả: lộ state form ra DOM + nút mô phỏng thao tác của danh sách biểu mẫu (cùng hàm thuần mà LandingFormsList dùng).
 vi.mock('../../components/LandingCanvasLayout.jsx', () => ({
   default: function FakeLayout({ form, setForm, onSave }) {
     return (
@@ -50,17 +52,19 @@ vi.mock('../../components/LandingCanvasLayout.jsx', () => ({
         <div data-testid="html">{form.htmlContent}</div>
         <div data-testid="linked">
           {JSON.stringify({
-            id: form.linkedFormId,
-            title: form.linkedFormTitle,
-            key: form.linkedFormPublicKey,
-            source: form.linkedFormSource,
-            choice: form.linkedFormChoice ?? null,
+            ids: (form.linkedForms || []).map((f) => f.id),
+            keys: (form.linkedForms || []).map((f) => f.publicKey),
+            pending: form.linkedFormsPending ?? null,
           })}
         </div>
-        <button onClick={() => setForm((p) => ({ ...p, linkedFormChoice: { mode: 'linked', formId: 9, publicKey: 'XKEY', title: 'Biểu mẫu X' } }))}>
-          choose-x
+        <button onClick={() => setForm((p) => ({ ...p, linkedFormsPending: addPendingForm(p.linkedFormsPending, { id: 9, publicKey: 'XKEY', title: 'Biểu mẫu X' }) }))}>
+          add-existing-x
         </button>
-        <button onClick={() => setForm((p) => ({ ...p, linkedFormChoice: { mode: 'basic' } }))}>choose-basic</button>
+        <button onClick={() => setForm((p) => ({ ...p, linkedFormsPending: addPendingForm(p.linkedFormsPending, { id: 10, publicKey: 'YKEY', title: 'Biểu mẫu Y' }) }))}>
+          add-existing-y
+        </button>
+        <button onClick={() => setForm((p) => ({ ...p, htmlContent: addFormSlot(p.htmlContent, 'booking') }))}>add-slot-booking</button>
+        <button onClick={() => setForm((p) => ({ ...p, htmlContent: addFormSlot(p.htmlContent, 'payment') }))}>add-slot-payment</button>
         <button onClick={onSave}>save</button>
       </div>
     );
@@ -76,16 +80,16 @@ const serverPage = (over = {}) => ({
   id: 5,
   slug: 'abc',
   title: 'Trang đã lưu',
-  htmlContent: `<html><body><h1>Trang</h1>${EMBED('AUTOKEY')}</body></html>`,
+  htmlContent: `<html><body><h1>Trang</h1>${EMBED('AUTOKEY')}${EMBED('SECONDKEY')}</body></html>`,
   isPublished: true,
   domainType: 'system',
   customDomainHostname: null,
   customDomainIsApex: false,
   leadFormConfig: null,
-  linkedFormId: 7,
-  linkedFormTitle: 'Form cơ bản tự sinh',
-  linkedFormPublicKey: 'AUTOKEY',
-  linkedFormSource: 'basic',
+  linkedForms: [
+    { id: 7, title: 'Form tư vấn', publicKey: 'AUTOKEY', isPublished: true, kind: 'consult', position: 0, needsPaymentSetup: false },
+    { id: 8, title: 'Form thu cọc', publicKey: 'SECONDKEY', isPublished: true, kind: 'payment', position: 1, needsPaymentSetup: true },
+  ],
   updatedAt: 'T1',
   ...over,
 });
@@ -106,9 +110,9 @@ function renderEditor() {
 
 const linkedState = () => JSON.parse(screen.getByTestId('linked').textContent);
 const lastBody = () => updateLandingPageAdmin.mock.calls.at(-1)[1];
-const slotCount = (html) => (String(html).match(/data-founderai-form-slot/g) || []).length;
+const slotKinds = (html) => [...String(html).matchAll(/data-founderai-form-slot(?:="([a-z]*)")?/g)].map((m) => m[1] ?? 'bare');
 
-describe('LandingCanvasPage — lưu biểu mẫu đã chọn', () => {
+describe('LandingCanvasPage — lưu danh sách biểu mẫu của trang', () => {
   beforeEach(() => {
     localStorage.clear();
     useAuthStore.setState({ user: { id: 1 }, activeContext: { type: 'self' } });
@@ -117,104 +121,94 @@ describe('LandingCanvasPage — lưu biểu mẫu đã chọn', () => {
   });
   afterEach(() => cleanup());
 
-  it('đọc từ server: tên / khoá / nguồn của biểu mẫu đang gắn vào state, chưa có lựa chọn chờ lưu', async () => {
+  it('đọc từ server: TẤT CẢ biểu mẫu đang nhúng vào state (linkedForms), chưa có biểu mẫu nào chờ gắn', async () => {
     renderEditor();
-    await waitFor(() => expect(linkedState().id).toBe(7));
-    expect(linkedState()).toEqual({ id: 7, title: 'Form cơ bản tự sinh', key: 'AUTOKEY', source: 'basic', choice: null });
+    await waitFor(() => expect(linkedState().ids).toEqual([7, 8]));
+    expect(linkedState()).toEqual({ ids: [7, 8], keys: ['AUTOKEY', 'SECONDKEY'], pending: [] });
   });
 
-  it('chọn biểu mẫu X rồi Lưu → body có linkedFormId=9, khối nhúng cũ được đổi thành ĐÚNG MỘT chỗ trống (backend sẽ nhúng X vào đó)', async () => {
+  it('server cũ chỉ trả khoá đơn linkedFormId (deploy lệch) → vẫn dựng danh sách 1 biểu mẫu', async () => {
+    fetchLandingPageAdminById.mockResolvedValue(
+      serverPage({
+        linkedForms: undefined,
+        linkedFormId: 7,
+        linkedFormTitle: 'Form cơ bản tự sinh',
+        linkedFormPublicKey: 'AUTOKEY',
+        linkedFormSource: 'basic',
+      })
+    );
+    renderEditor();
+    await waitFor(() => expect(linkedState().ids).toEqual([7]));
+  });
+
+  it('thêm biểu mẫu CÓ SẴN X và Y rồi Lưu → body có linkedFormIds=[9,10] (đúng thứ tự thêm), HTML gửi đi nguyên văn, KHÔNG có khoá linkedFormId cũ', async () => {
     updateLandingPageAdmin.mockResolvedValue({ id: 5, updatedAt: 'T2' });
     renderEditor();
-    await waitFor(() => expect(linkedState().id).toBe(7));
+    await waitFor(() => expect(linkedState().ids).toEqual([7, 8]));
+    const htmlBefore = screen.getByTestId('html').textContent;
 
-    fireEvent.click(screen.getByText('choose-x'));
+    fireEvent.click(screen.getByText('add-existing-x'));
+    fireEvent.click(screen.getByText('add-existing-y'));
+    fireEvent.click(screen.getByText('add-existing-x')); // thêm trùng → bỏ qua
+    expect(linkedState().pending.map((p) => p.formId)).toEqual([9, 10]);
     fireEvent.click(screen.getByText('save'));
 
     await waitFor(() => expect(updateLandingPageAdmin).toHaveBeenCalledTimes(1));
     expect(updateLandingPageAdmin.mock.calls[0][0]).toBe(5);
-    expect(lastBody().linkedFormId).toBe(9);
-    expect(slotCount(lastBody().htmlContent)).toBe(1);
-    expect(lastBody().htmlContent).not.toContain('AUTOKEY');
-    expect(lastBody().htmlContent).not.toContain('data-founderai-form-section');
-    // phần còn lại của trang giữ nguyên
-    expect(lastBody().htmlContent).toContain('<h1>Trang</h1>');
+    expect(lastBody().linkedFormIds).toEqual([9, 10]);
+    expect('linkedFormId' in lastBody()).toBe(false);
+    expect(lastBody().htmlContent).toBe(htmlBefore); // chưa đụng HTML: backend nối khối nhúng vào cuối trang
+    expect(lastBody().htmlContent).toContain('AUTOKEY');
+    expect(lastBody().htmlContent).toContain('SECONDKEY');
   });
 
-  it('trang chưa có khối nhúng nào + chọn biểu mẫu X → chỗ trống được chèn trước </body>', async () => {
-    fetchLandingPageAdminById.mockResolvedValue(
-      serverPage({
-        htmlContent: '<html><body><h1>Trang</h1><form data-founderai-capture></form></body></html>',
-        linkedFormId: null,
-        linkedFormTitle: null,
-        linkedFormPublicKey: null,
-        linkedFormSource: null,
-      })
-    );
+  it('thêm biểu mẫu MỚI theo mẫu (booking, payment) rồi Lưu → HTML gửi đi có đúng 2 chỗ trống có loại, đủ khối nhúng cũ, KHÔNG gửi linkedFormIds', async () => {
     updateLandingPageAdmin.mockResolvedValue({ id: 5, updatedAt: 'T2' });
     renderEditor();
-    await waitFor(() => expect(screen.getByTestId('html').textContent).toContain('data-founderai-capture'));
+    await waitFor(() => expect(linkedState().ids).toEqual([7, 8]));
 
-    fireEvent.click(screen.getByText('choose-x'));
+    fireEvent.click(screen.getByText('add-slot-booking'));
+    fireEvent.click(screen.getByText('add-slot-payment'));
     fireEvent.click(screen.getByText('save'));
 
     await waitFor(() => expect(updateLandingPageAdmin).toHaveBeenCalledTimes(1));
-    expect(lastBody().linkedFormId).toBe(9);
-    expect(slotCount(lastBody().htmlContent)).toBe(1);
-    // form đăng ký có sẵn của trang KHÔNG bị xoá
-    expect(lastBody().htmlContent).toContain('data-founderai-capture');
-    expect(lastBody().htmlContent.indexOf('data-founderai-form-slot')).toBeLessThan(lastBody().htmlContent.lastIndexOf('</body>'));
+    expect(slotKinds(lastBody().htmlContent)).toEqual(['booking', 'payment']);
+    expect(lastBody().htmlContent).toContain('data-founderai-form="AUTOKEY"');
+    expect(lastBody().htmlContent).toContain('data-founderai-form="SECONDKEY"');
+    expect('linkedFormIds' in lastBody()).toBe(false);
+    expect('linkedFormId' in lastBody()).toBe(false);
+    // chỗ trống nằm SAU khối nhúng cuối cùng (các biểu mẫu nằm gần nhau)
+    expect(lastBody().htmlContent.indexOf('"booking"')).toBeGreaterThan(lastBody().htmlContent.indexOf('SECONDKEY'));
   });
 
-  it('KHÔNG có lựa chọn → body PUT không có khoá linkedFormId và HTML gửi đi y nguyên bản đang soạn', async () => {
+  it('KHÔNG đổi gì về biểu mẫu → body PUT không có linkedFormIds / linkedFormId và HTML y nguyên bản đang soạn', async () => {
     updateLandingPageAdmin.mockResolvedValue({ id: 5, updatedAt: 'T2' });
     renderEditor();
-    await waitFor(() => expect(linkedState().id).toBe(7));
+    await waitFor(() => expect(linkedState().ids).toEqual([7, 8]));
     const htmlBefore = screen.getByTestId('html').textContent;
 
     fireEvent.click(screen.getByText('save'));
     await waitFor(() => expect(updateLandingPageAdmin).toHaveBeenCalledTimes(1));
 
+    expect('linkedFormIds' in lastBody()).toBe(false);
     expect('linkedFormId' in lastBody()).toBe(false);
     expect(lastBody().htmlContent).toBe(htmlBefore);
   });
 
-  it('chọn quay về Form cơ bản rồi Lưu → body có linkedFormId=null; chỗ trống thay khối nhúng của biểu mẫu đang gắn', async () => {
-    fetchLandingPageAdminById.mockResolvedValue(
-      serverPage({
-        htmlContent: `<html><body>${EMBED('XKEY')}</body></html>`,
-        linkedFormId: 9,
-        linkedFormTitle: 'Biểu mẫu X',
-        linkedFormPublicKey: 'XKEY',
-        linkedFormSource: 'chosen',
-      })
-    );
-    updateLandingPageAdmin.mockResolvedValue({ id: 5, updatedAt: 'T2' });
+  it('lưu thất bại → GIỮ biểu mẫu chờ gắn và HTML đang soạn, không báo đã lưu', async () => {
+    updateLandingPageAdmin.mockRejectedValue({ response: { data: { message: 'Biểu mẫu này đang bị quản trị viên khoá nên không dùng được.' } } });
     renderEditor();
-    await waitFor(() => expect(linkedState().id).toBe(9));
+    await waitFor(() => expect(linkedState().ids).toEqual([7, 8]));
 
-    fireEvent.click(screen.getByText('choose-basic'));
-    fireEvent.click(screen.getByText('save'));
-
-    await waitFor(() => expect(updateLandingPageAdmin).toHaveBeenCalledTimes(1));
-    expect(lastBody()).toHaveProperty('linkedFormId', null);
-    expect(slotCount(lastBody().htmlContent)).toBe(1);
-    expect(lastBody().htmlContent).not.toContain('XKEY');
-  });
-
-  it('lưu thất bại (vd 409 biểu mẫu đang dùng ở trang khác) → GIỮ lựa chọn chờ lưu và HTML đang soạn, không báo đã lưu', async () => {
-    updateLandingPageAdmin.mockRejectedValue({ response: { data: { message: 'Biểu mẫu đang dùng ở trang Trang Beta.' } } });
-    renderEditor();
-    await waitFor(() => expect(linkedState().id).toBe(7));
-    const htmlBefore = screen.getByTestId('html').textContent;
-
-    fireEvent.click(screen.getByText('choose-x'));
+    fireEvent.click(screen.getByText('add-existing-x'));
+    fireEvent.click(screen.getByText('add-slot-booking'));
+    const htmlAfterAdd = screen.getByTestId('html').textContent;
     fireEvent.click(screen.getByText('save'));
     await waitFor(() => expect(updateLandingPageAdmin).toHaveBeenCalledTimes(1));
     await Promise.resolve();
 
-    expect(linkedState().choice).toMatchObject({ mode: 'linked', formId: 9 });
-    expect(linkedState().id).toBe(7);
-    expect(screen.getByTestId('html').textContent).toBe(htmlBefore);
+    expect(linkedState().pending.map((p) => p.formId)).toEqual([9]);
+    expect(linkedState().ids).toEqual([7, 8]);
+    expect(screen.getByTestId('html').textContent).toBe(htmlAfterAdd);
   });
 });

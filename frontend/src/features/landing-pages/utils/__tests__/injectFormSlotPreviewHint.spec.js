@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { injectFormSlotPreviewHint } from '../injectLandingEnhancements.js';
+import { injectFormSlotPreviewHint, listFormSlotMatches, parseFormSlotKind } from '../injectLandingEnhancements.js';
 
 /**
  * PR-5b-2b mục 2 — CHỈ ở chế độ xem trước: thay chỗ trống `data-founderai-form-slot` bằng khung
@@ -45,6 +45,42 @@ describe('injectFormSlotPreviewHint (PR-5b-2b)', () => {
     const out = injectFormSlotPreviewHint(html, 'x');
     expect(out).not.toContain('data-founderai-form-slot');
     expect((out.match(/border:2px dashed/g) || []).length).toBe(2);
+  });
+
+  // PR-6 — chỗ trống CÓ LOẠI hiện đúng loại.
+  it('PR-6: chỗ trống có loại dùng kindHints[loại]; loại không có hint hoặc chỗ trống TRẦN hoặc loại LẠ dùng hintText chung', () => {
+    const html =
+      '<div data-founderai-form-slot="booking"></div>' +
+      '<div data-founderai-form-slot="payment"></div>' +
+      '<div data-founderai-form-slot></div>' +
+      '<div data-founderai-form-slot="contact"></div>' +
+      '<div DATA-FOUNDERAI-FORM-SLOT=" Booking "></div>';
+    const out = injectFormSlotPreviewHint(html, 'CHUNG', { booking: 'ĐẶT LỊCH', consult: 'TƯ VẤN' });
+    const texts = [...out.matchAll(/font-size:14px;">([^<]*)<\/div>/g)].map((m) => m[1]);
+    expect(texts).toEqual(['ĐẶT LỊCH', 'CHUNG', 'CHUNG', 'CHUNG', 'ĐẶT LỊCH']);
+    expect(out).not.toContain('data-founderai-form-slot');
+  });
+
+  it('PR-6: không truyền kindHints → mọi chỗ trống (kể cả có loại) dùng hintText chung như trước PR-6', () => {
+    const out = injectFormSlotPreviewHint('<div data-founderai-form-slot="survey"></div>', 'CHUNG');
+    expect(out).toContain('CHUNG');
+  });
+
+  it('PR-6: parseFormSlotKind / listFormSlotMatches khớp quy tắc backend (trần=consult, hoa/thường, nháy đơn/không nháy, loại lạ)', () => {
+    expect(parseFormSlotKind('<div data-founderai-form-slot></div>')).toMatchObject({ kind: 'consult', bare: true, valid: true });
+    expect(parseFormSlotKind('<div data-founderai-form-slot=""></div>')).toMatchObject({ kind: 'consult', bare: true, valid: true });
+    expect(parseFormSlotKind("<div data-founderai-form-slot='survey'></div>")).toMatchObject({ kind: 'survey', bare: false, valid: true });
+    expect(parseFormSlotKind('<div data-founderai-form-slot=blank></div>')).toMatchObject({ kind: 'blank', valid: true });
+    expect(parseFormSlotKind('<div class="a" DATA-FOUNDERAI-FORM-SLOT="PAYMENT"></div>')).toMatchObject({ kind: 'payment', valid: true });
+    expect(parseFormSlotKind('<div data-founderai-form-slot="x"></div>')).toMatchObject({ valid: false, rawKind: 'x' });
+    // thuộc tính khác bắt đầu bằng cùng tiền tố không bị đọc làm loại
+    expect(parseFormSlotKind('<div data-founderai-form-slot data-founderai-form-slot-note="payment"></div>')).toMatchObject({
+      kind: 'consult',
+      bare: true,
+    });
+    const matches = listFormSlotMatches('a<div data-founderai-form-slot="booking"></div>b<div data-founderai-form-slot></div>');
+    expect(matches.map((m) => m.kind)).toEqual(['booking', 'consult']);
+    expect(matches.map((m) => m.start)).toEqual([1, 'a<div data-founderai-form-slot="booking"></div>b'.length]);
   });
 
   // PR-5b-2c (đính chính 16/09) — chú thích HTML bên trong chỗ trống giờ coi như khoảng trắng,
