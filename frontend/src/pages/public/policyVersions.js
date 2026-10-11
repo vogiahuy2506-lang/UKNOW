@@ -111,7 +111,7 @@ export const POLICY_VERSIONS = {
     titleVi: 'Hình thức hỗ trợ trực tuyến',
     titleEn: 'Online Support',
     files: ['Support.jsx'],
-    currentHash: '1551a36162dc4d989a3a1f554012ec16663a28aba05ab96c4b5403b3039d4b8d',
+    currentHash: '8caa8bddc0e495956f0cfbae20e05901105e5aacb3f8142c89baca915ad2a527',
     versions: ['2026-09-29'],
   },
 };
