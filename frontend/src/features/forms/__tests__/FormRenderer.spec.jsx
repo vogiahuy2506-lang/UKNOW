@@ -42,6 +42,17 @@ describe('FormRenderer component', () => {
     vi.restoreAllMocks();
   });
 
+  it('review PR-3 11/10: gốc biểu mẫu ghim color-scheme light (xem trước trong app giao diện tối không bị tô tối ô nhập/radio)', () => {
+    render(
+      <I18nProvider>
+        <FormRenderer form={baseForm} onSubmit={vi.fn()} />
+      </I18nProvider>
+    );
+    const root = screen.getByText('Khảo sát khách hàng').closest('[style*="color-scheme"]');
+    expect(root).not.toBeNull();
+    expect(root.style.colorScheme).toBe('light');
+  });
+
   it('chặn bấm đúp (double submit) bằng useRef khi submit nhiều lần liên tiếp', async () => {
     let resolveSubmit;
     const slowSubmitPromise = new Promise((resolve) => {

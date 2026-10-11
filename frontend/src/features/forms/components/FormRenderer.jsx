@@ -96,7 +96,11 @@ export default function FormRenderer({
   // truyền primaryColor qua props. Fallback trong var(...) giữ ĐÚNG màu/chữ mặc định hiện tại khi
   // không set (phrase "biến CSS trên gốc" — phản biện PR-4b điểm 1, chọn vì tránh prop-drilling
   // primaryColor xuống BookingSlotPicker và các nút lặp lại nhiều chỗ).
+  // Biểu mẫu LUÔN sáng (trang công khai, bản nhúng, xem trước trong trình soạn). `html.dark` đặt
+  // `color-scheme: dark` → ô nhập/radio/checkbox không đặt nền sẽ bị trình duyệt tô tối khi xem trước
+  // trong app đang ở giao diện tối (review PR-3 11/10). Ghim lại `light` ngay trên gốc.
   const themeRootStyle = {
+    colorScheme: 'light',
     ...(primaryColor ? { '--form-primary': primaryColor } : {}),
     ...(primaryTextColor ? { '--form-primary-text': primaryTextColor } : {}),
     ...(primaryTintColor ? { '--form-primary-tint': primaryTintColor } : {}),
