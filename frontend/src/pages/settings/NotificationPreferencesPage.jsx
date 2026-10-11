@@ -90,12 +90,12 @@ export default function NotificationPreferencesPage() {
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[560px] text-left text-sm">
+          <table className="w-full sm:min-w-[560px] text-left text-sm">
             <thead className="border-b border-slate-100 dark:border-dk-border bg-slate-50 dark:bg-dk-raised text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-dk-text2">
               <tr>
-                <th scope="col" className="px-4 py-3">{t('notifications.preferences.columnEvent')}</th>
-                <th scope="col" className="w-36 px-4 py-3">{t('notifications.preferences.columnBell')}</th>
-                <th scope="col" className="w-36 px-4 py-3">{t('notifications.preferences.columnEmail')}</th>
+                <th scope="col" className="px-3 sm:px-4 py-3">{t('notifications.preferences.columnEvent')}</th>
+                <th scope="col" className="w-24 sm:w-36 px-3 sm:px-4 py-3">{t('notifications.preferences.columnBell')}</th>
+                <th scope="col" className="w-[4.5rem] sm:w-36 px-3 sm:px-4 py-3">{t('notifications.preferences.columnEmail')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-dk-border">
@@ -111,7 +111,7 @@ export default function NotificationPreferencesPage() {
                 const saving = update.isPending && update.variables?.eventType === row.eventType;
                 return (
                   <tr key={row.eventType} data-testid={`preference-row-${row.eventType}`}>
-                    <td className="px-4 py-3.5 align-top">
+                    <td className="px-3 sm:px-4 py-3.5 align-top">
                       <p className="font-medium text-slate-900 dark:text-dk-text">{label}</p>
                       {row.description && <p className="mt-0.5 text-xs text-slate-500 dark:text-dk-text2">{row.description}</p>}
                       {locked && (
@@ -120,7 +120,7 @@ export default function NotificationPreferencesPage() {
                         </p>
                       )}
                     </td>
-                    <td className="px-4 py-3.5 align-top">
+                    <td className="px-3 sm:px-4 py-3.5 align-top">
                       <span
                         className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
                           row.inAppEnabled ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-dk-raised text-slate-500 dark:text-dk-text2'
@@ -129,7 +129,7 @@ export default function NotificationPreferencesPage() {
                         {row.inAppEnabled ? t('notifications.preferences.bellAlwaysOn') : t('notifications.preferences.bellOffBySystem')}
                       </span>
                     </td>
-                    <td className="px-4 py-3.5 align-top">
+                    <td className="px-3 sm:px-4 py-3.5 align-top">
                       <EmailSwitch
                         checked={Boolean(row.emailEnabled)}
                         disabled={locked || saving}
