@@ -16,6 +16,7 @@ import {
   HiOutlineX,
 } from 'react-icons/hi';
 import PageContainer from '../../components/common/PageContainer';
+import { HeaderActions, PrimaryActionButton, RefreshButton } from '../../components/common/HeaderActionButtons';
 import ConfirmModal from '../../components/common/ConfirmModal';
 import { AccountListSkeleton } from '../../components/common/Skeleton';
 import { FaTelegramPlane } from 'react-icons/fa';
@@ -620,19 +621,11 @@ export default function TelegramSettings({ readOnly = false } = {}) {
       title={t('telegramSettings.title')}
       subtitle={t('telegramSettings.subtitle')}
       actions={
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised px-3.5 py-2 text-xs font-semibold text-slate-600 dark:text-dk-text hover:bg-slate-50 dark:hover:bg-dk-strong hover:border-slate-300 dark:hover:border-dk-border-strong transition-all disabled:opacity-50"
-          >
-            <HiOutlineRefresh className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-            {refreshing ? t('telegramSettings.loading') : t('telegramSettings.refresh')}
-          </button>
+        <HeaderActions>
+          <RefreshButton onClick={handleRefresh} loading={refreshing} />
           {!readOnly && (
-            <button
-              type="button"
+            <PrimaryActionButton
+              icon={HiOutlineQrcode}
               onClick={handleStartQrLogin}
               disabled={!canOpenQr}
               title={
@@ -642,13 +635,11 @@ export default function TelegramSettings({ readOnly = false } = {}) {
                     ? t('telegramSettings.gatewayNotConfigured')
                     : undefined
               }
-              className="inline-flex items-center gap-1.5 rounded-xl bg-primary-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <HiOutlineQrcode className="w-3.5 h-3.5" />
               {t('telegramSettings.scanQr')}
-            </button>
+            </PrimaryActionButton>
           )}
-        </div>
+        </HeaderActions>
       }
     >
 

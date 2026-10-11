@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
 import PageHeader from '../../components/common/PageHeader';
 import NumberInput from '../../components/common/NumberInput';
+import { HeaderActions, PrimaryActionButton, RefreshButton } from '../../components/common/HeaderActionButtons';
 import emailSettingsApiService from '../../features/settings/services/emailSettingsApi.service';
 import { resolveActionIdempotencyKey } from '../../utils/idempotency.util';
 import {
@@ -11,7 +12,6 @@ import {
   HiOutlineTrash,
   HiOutlineCheckCircle,
   HiOutlineReply,
-  HiOutlineRefresh,
   HiOutlineSparkles,
   HiOutlineLockClosed,
   HiOutlineQuestionMarkCircle,
@@ -979,25 +979,12 @@ const EmailSettings = () => {
         title={t('emailSettings.title')}
         subtitle={t('emailSettings.subtitle')}
         actions={
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={refresh}
-              disabled={isRefreshing}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface px-3 py-2 text-sm text-slate-700 dark:text-dk-text transition hover:border-orange-200 dark:hover:border-orange-800 hover:text-orange-700 dark:hover:text-orange-300 disabled:opacity-70"
-            >
-              <HiOutlineRefresh className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-              {t('common.refresh')}
-            </button>
-            <button
-              type="button"
-              onClick={openNew}
-              className="inline-flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700"
-            >
-              <HiOutlinePlus className="h-4 w-4" />
+          <HeaderActions>
+            <RefreshButton onClick={refresh} loading={isRefreshing} />
+            <PrimaryActionButton icon={HiOutlinePlus} onClick={openNew}>
               {t('emailSettings.addNewEmail')}
-            </button>
-          </div>
+            </PrimaryActionButton>
+          </HeaderActions>
         }
       />
 

@@ -2871,6 +2871,7 @@ export default {
     backendConnectionFailed: 'Không thể kết nối API Zalo. Vui lòng kiểm tra backend.',
     loginByQr: 'Đăng nhập tài khoản Zalo bằng QR',
     createQrLogin: 'Tạo QR đăng nhập',
+    scanQr: 'Quét QR',
     creatingQr: 'Đang tạo QR...',
     reconnectQr: 'Kết nối lại',
     reconnectQrHint: 'Quét QR bằng đúng tài khoản để cập nhật lại phiên đăng nhập.',

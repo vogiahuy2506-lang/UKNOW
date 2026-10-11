@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
 import PageHeader from '../../components/common/PageHeader';
 import NumberInput from '../../components/common/NumberInput';
+import { HeaderActions, PrimaryActionButton, RefreshButton } from '../../components/common/HeaderActionButtons';
 import {
   HiOutlineChatAlt2,
   HiOutlineCheckCircle,
@@ -465,15 +466,15 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
         title={t('zaloSettings.title')}
         subtitle={t('zaloSettings.description')}
         actions={
-          <button
-            type="button"
-            onClick={handleRefreshStatus}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface hover:bg-slate-50 dark:hover:bg-dk-raised text-xs font-semibold text-slate-700 dark:text-dk-text transition-colors shadow-2xs disabled:opacity-50"
-            disabled={isRefreshing}
-          >
-            <HiOutlineRefresh className={`w-4 h-4 text-slate-500 dark:text-dk-text2 ${isRefreshing ? 'animate-spin' : ''}`} />
-            {isRefreshing ? t('zaloSettings.refreshing') : t('zaloSettings.refresh')}
-          </button>
+          <HeaderActions>
+            <RefreshButton onClick={handleRefreshStatus} loading={isRefreshing} />
+            {/* Cùng handler với nút "Tạo QR đăng nhập" trong thẻ bên dưới; cùng điều kiện hiện (gói có kênh Zalo). */}
+            {!readOnly && (
+              <PrimaryActionButton icon={HiOutlineQrcode} onClick={handleConnectByQr} disabled={isCreatingQr}>
+                {isCreatingQr ? t('zaloSettings.creatingQr') : t('zaloSettings.scanQr')}
+              </PrimaryActionButton>
+            )}
+          </HeaderActions>
         }
       />
 

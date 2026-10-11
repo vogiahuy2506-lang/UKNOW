@@ -14,9 +14,9 @@ import {
   HiOutlineIdentification,
   HiOutlineKey,
   HiOutlineUserCircle,
-  HiOutlineChat,
 } from 'react-icons/hi';
 import PageContainer from '../../components/common/PageContainer';
+import { HeaderActions, PrimaryActionButton, RefreshButton } from '../../components/common/HeaderActionButtons';
 import { FaWhatsapp } from 'react-icons/fa';
 import whatsappSettingsApiService from '../../features/settings/services/whatsappSettingsApi.service';
 import ChannelAccountSendSettings from '../../features/settings/components/ChannelAccountSendSettings';
@@ -217,32 +217,18 @@ export default function WhatsAppSettings({ readOnly = false } = {}) {
 
   return (
     <PageContainer
-      icon={HiOutlineChat}
+      icon={FaWhatsapp}
       title="WhatsApp"
       subtitle={t('whatsAppSettings.subtitle')}
       actions={
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised px-3 py-2 text-sm text-slate-700 dark:text-dk-text transition hover:border-primary-200 dark:hover:border-primary-700 hover:text-primary-700 dark:hover:text-primary-400 disabled:opacity-70"
-          >
-            <HiOutlineRefresh className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-            {t('whatsAppSettings.refresh')}
-          </button>
+        <HeaderActions>
+          <RefreshButton onClick={handleRefresh} loading={refreshing} />
           {!readOnly && (
-            <button
-              type="button"
-              onClick={handleOpenQr}
-              disabled={connecting}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              <HiOutlineQrcode className="h-4 w-4" />
+            <PrimaryActionButton icon={HiOutlineQrcode} onClick={handleOpenQr} disabled={connecting}>
               {connecting ? t('whatsAppSettings.opening') : t('whatsAppSettings.scanQr')}
-            </button>
+            </PrimaryActionButton>
           )}
-        </div>
+        </HeaderActions>
       }
     >
 

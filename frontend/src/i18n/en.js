@@ -2868,6 +2868,7 @@ export default {
     backendConnectionFailed: 'Cannot connect to Zalo API. Please check backend.',
     loginByQr: 'Login Zalo Account via QR',
     createQrLogin: 'Create QR Login',
+    scanQr: 'Scan QR',
     creatingQr: 'Creating QR...',
     reconnectQr: 'Reconnect',
     reconnectQrHint: 'Scan QR with the correct account to update the login session.',

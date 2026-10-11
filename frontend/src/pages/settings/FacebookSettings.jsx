@@ -5,9 +5,10 @@ import {
   HiOutlineRefresh,
   HiOutlineExclamation,
   HiOutlineExternalLink,
-  HiOutlineGlobeAlt,
 } from 'react-icons/hi';
+import { FaFacebookF } from 'react-icons/fa';
 import PageContainer from '../../components/common/PageContainer';
+import { HeaderActions, PrimaryActionButton, RefreshButton } from '../../components/common/HeaderActionButtons';
 import toast from 'react-hot-toast';
 import facebookSettingsApiService from '../../features/settings/services/facebookSettingsApi.service';
 import { useI18n } from '../../i18n';
@@ -65,6 +66,7 @@ export default function FacebookSettings() {
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
   const [refreshingId, setRefreshingId] = useState(null);
+  const [reloadingList, setReloadingList] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
 
   const loadConnections = useCallback(async () => {
@@ -104,6 +106,16 @@ export default function FacebookSettings() {
     }
     loadConnections();
   }, [loadConnections, t]);
+
+  // "Làm mới" ở đầu trang = tải lại DANH SÁCH kết nối. Khác nút làm mới token trên từng dòng (handleRefresh bên dưới).
+  const handleReloadList = async () => {
+    setReloadingList(true);
+    try {
+      await loadConnections();
+    } finally {
+      setReloadingList(false);
+    }
+  };
 
   const handleConnect = async () => {
     setConnecting(true);
@@ -164,19 +176,16 @@ export default function FacebookSettings() {
 
   return (
     <PageContainer
-      icon={HiOutlineGlobeAlt}
+      icon={FaFacebookF}
       title={t('facebookSettings.title')}
       subtitle={t('facebookSettings.subtitle')}
       actions={
-        <button
-          type="button"
-          onClick={handleConnect}
-          disabled={connecting}
-          className="inline-flex items-center gap-2 shrink-0 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
-        >
-          <HiOutlineLink className="w-4 h-4" />
-          {connecting ? t('facebookSettings.connecting') : t('facebookSettings.connectAccount')}
-        </button>
+        <HeaderActions>
+          <RefreshButton onClick={handleReloadList} loading={reloadingList} />
+          <PrimaryActionButton icon={HiOutlineLink} onClick={handleConnect} disabled={connecting}>
+            {connecting ? t('facebookSettings.connecting') : t('facebookSettings.connectAccount')}
+          </PrimaryActionButton>
+        </HeaderActions>
       }
     >
 
