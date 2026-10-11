@@ -38,6 +38,9 @@ class CampaignEmailSenderRepository {
    *    bảng nay được so chung, một bài nộp Biểu mẫu mới sẽ làm lead đã rút ở landing nhận tin trở lại.
    *    `GREATEST` bỏ qua NULL nên bản ghi chưa từng rút vẫn xếp theo `created_at` như trước.
    *  - Hoà thời điểm (cực hiếm): ưu tiên bản ghi Biểu mẫu, rồi id lớn hơn.
+   *  - Bản ghi `marketing_consent IS NULL` (form không hỏi đồng ý) KHÔNG tham gia xếp hạng: nó không mang thông tin
+   *    đồng ý nào nên không được xoá một lời TỪ CHỐI trước đó (review PR-2 11/10, NĐ 330). Người chỉ có bản ghi NULL
+   *    → không còn dòng nào → không chặn, giữ đúng chốt 19/09 "chưa hỏi vẫn gửi".
    *
    * `leadMatch` / `formMatch` là mảnh SQL TĨNH do chính lớp này truyền (không bao giờ là input người dùng); giá trị
    * khớp luôn đi qua tham số `$2`.
@@ -58,6 +61,7 @@ class CampaignEmailSenderRepository {
                   id
              FROM leads
             WHERE (COALESCE(workspace_owner_id, id_user) = $1 OR id_user = $1)
+              AND marketing_consent IS NOT NULL
               AND ${leadMatch}
            UNION ALL
            SELECT marketing_consent,
@@ -66,6 +70,7 @@ class CampaignEmailSenderRepository {
                   id
              FROM form_submissions
             WHERE workspace_owner_id = $1
+              AND marketing_consent IS NOT NULL
               AND ${formMatch}
          ) AS consent_records
         ORDER BY decided_at DESC, source_rank DESC, id DESC

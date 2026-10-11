@@ -204,6 +204,43 @@ describe('PR-2 — chốt đồng ý đọc cả Biểu mẫu', () => {
       expect(await emailRefused(owner.id, 'n2@test.local')).toBe(false);
       expect(await phoneRefused(owner.id, '0977777777')).toBe(false);
     });
+
+    // Review PR-2 11/10: bản ghi NULL không mang thông tin đồng ý → không được xoá lời TỪ CHỐI cũ hơn.
+    it('lead TỪ CHỐI cũ → bài nộp Biểu mẫu MỚI HƠN chưa hỏi (NULL) → VẪN CHẶN', async () => {
+      const owner = await createUser({ username: 'cg_owner_3c' });
+      const formId = await createForm(owner.id);
+      await insertLead(owner.id, { email: 'n3@test.local', phone: '0978787878', consent: false, createdAt: HOURS_AGO(3) });
+      await insertSubmission(formId, owner.id, {
+        email: 'n3@test.local', phone: '0978787878', consent: null, createdAt: HOURS_AGO(1),
+      });
+
+      expect(await emailRefused(owner.id, 'n3@test.local')).toBe(true);
+      expect(await phoneRefused(owner.id, '0978787878')).toBe(true);
+    });
+
+    it('bài nộp Biểu mẫu TỪ CHỐI cũ → lead MỚI HƠN chưa hỏi (NULL) → VẪN CHẶN', async () => {
+      const owner = await createUser({ username: 'cg_owner_3d' });
+      const formId = await createForm(owner.id);
+      await insertSubmission(formId, owner.id, {
+        email: 'n4@test.local', phone: '0979797979', consent: false, createdAt: HOURS_AGO(3),
+      });
+      await insertLead(owner.id, { email: 'n4@test.local', phone: '0979797979', consent: null, createdAt: HOURS_AGO(1) });
+
+      expect(await emailRefused(owner.id, 'n4@test.local')).toBe(true);
+      expect(await phoneRefused(owner.id, '0979797979')).toBe(true);
+    });
+
+    it('ĐỒNG Ý cũ → bản ghi MỚI HƠN chưa hỏi (NULL) → không chặn', async () => {
+      const owner = await createUser({ username: 'cg_owner_3e' });
+      const formId = await createForm(owner.id);
+      await insertLead(owner.id, { email: 'n5@test.local', phone: '0970707070', consent: true, createdAt: HOURS_AGO(3) });
+      await insertSubmission(formId, owner.id, {
+        email: 'n5@test.local', phone: '0970707070', consent: null, createdAt: HOURS_AGO(1),
+      });
+
+      expect(await emailRefused(owner.id, 'n5@test.local')).toBe(false);
+      expect(await phoneRefused(owner.id, '0970707070')).toBe(false);
+    });
   });
 
   describe('4. Workspace khác không ảnh hưởng', () => {
