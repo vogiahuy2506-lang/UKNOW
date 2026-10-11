@@ -257,8 +257,15 @@ async function insertLanding(ownerId, slug) {
   return Number(rows[0].id);
 }
 
+// PR-6: nguồn ĐỌC là bảng chỉ mục landing_page_forms (migration 297); cột đơn cũ forms.landing_page_id không còn được đọc.
 async function attachFormToLanding(formId, landingId) {
-  await db.query('UPDATE forms SET landing_page_id = $1 WHERE id = $2', [landingId, formId]);
+  await db.query('UPDATE forms SET landing_page_id = COALESCE(landing_page_id, $1) WHERE id = $2', [landingId, formId]);
+  await db.query(
+    `INSERT INTO landing_page_forms (landing_page_id, form_id, position)
+     SELECT $1, $2, COALESCE(MAX(position) + 1, 0) FROM landing_page_forms WHERE landing_page_id = $1
+     ON CONFLICT (landing_page_id, form_id) DO NOTHING`,
+    [landingId, formId]
+  );
 }
 
 async function insertView(slug, daysAgo = 1) {

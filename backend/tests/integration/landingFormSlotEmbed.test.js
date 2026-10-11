@@ -131,7 +131,10 @@ describe('POST /api/admin/landing-pages — PR-5b-2a chỗ trống Biểu mẫu'
     expect(formRows.rows).toHaveLength(0);
   });
 
-  it('HTML có 2 chỗ trống → 400, không tạo form, không lưu landing', async () => {
+  // PR-6 ĐỔI KỲ VỌNG CÓ CHỦ ĐÍCH: trước đây (PR-5b-2a) 2+ chỗ trống → 400 "chỉ được đúng 1" vì mỗi landing đúng 1 biểu mẫu.
+  // PLAN_BIEU_MAU_TUY_BIEN_AI_LANDING_2026-10-11 QĐ3: KHÔNG giới hạn nghiệp vụ số biểu mẫu / landing (user chốt 11/10), chỉ trần kỹ thuật 20
+  // (kiểm ở landingFormsMulti.test.js: 21 chỗ trống → 400). Nay 2 chỗ trống → 2 biểu mẫu, mỗi chỗ một khối nhúng.
+  it('HTML có 2 chỗ trống → tạo 2 biểu mẫu (PR-6 bỏ chặn "đúng 1"), mỗi chỗ trống thành một khối nhúng khác nhau', async () => {
     const me = await createUserWithPlan({ userOverrides: { username: 'lp-slot-c3' } });
     const token = await loginAs(me);
 
@@ -139,12 +142,14 @@ describe('POST /api/admin/landing-pages — PR-5b-2a chỗ trống Biểu mẫu'
       .post('/api/admin/landing-pages')
       .set('Authorization', `Bearer ${token}`)
       .send({ slug: 'two-slots', title: 'Landing 2 chỗ trống', htmlContent: TWO_SLOTS_HTML });
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(201);
 
-    const formRows = await db.query('SELECT * FROM forms WHERE workspace_owner_id = $1', [me.id]);
-    expect(formRows.rows).toHaveLength(0);
-    const lpRows = await db.query('SELECT * FROM landing_pages WHERE slug = $1', ['two-slots']);
-    expect(lpRows.rows).toHaveLength(0);
+    const formRows = await db.query('SELECT * FROM forms WHERE workspace_owner_id = $1 ORDER BY id', [me.id]);
+    expect(formRows.rows).toHaveLength(2);
+    const lpRow = await db.query('SELECT html_content FROM landing_pages WHERE id = $1', [res.body.data.id]);
+    const savedHtml = lpRow.rows[0].html_content;
+    expect(savedHtml).not.toContain('data-founderai-form-slot');
+    for (const form of formRows.rows) expect(savedHtml).toContain(`data-founderai-form="${form.public_key}"`);
   });
 
   it('nhân viên lưu landing có chỗ trống → form thuộc workspace_owner_id của CHỦ, created_by_user_id = nhân viên', async () => {
@@ -464,7 +469,9 @@ describe('PUT /api/admin/landing-pages/:id — PR-5b-2a chỗ trống Biểu m�
     expect(publicRes.status).toBe(200);
   });
 
-  it('HTML có 2 chỗ trống lúc update → 400, không đổi form/landing hiện có', async () => {
+  // PR-6 ĐỔI KỲ VỌNG CÓ CHỦ ĐÍCH (xem ca create 2 chỗ trống ở trên): 2 chỗ trống không còn là lỗi; ca "vượt giới hạn → 400, không
+  // đổi gì" giờ canh ở TRẦN KỸ THUẬT 20 (ca tương ứng của create/update khác nằm ở landingFormsMulti.test.js).
+  it('HTML có 21 chỗ trống lúc update (vượt trần kỹ thuật 20) → 400, không đổi form/landing hiện có', async () => {
     const me = await createUserWithPlan({ userOverrides: { username: 'lp-slot-u3' } });
     const token = await loginAs(me);
 
@@ -482,7 +489,11 @@ describe('PUT /api/admin/landing-pages/:id — PR-5b-2a chỗ trống Biểu m�
     const updateRes = await request(app)
       .put(`/api/admin/landing-pages/${landingId}`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ slug: 'slot-update-3', title: 'Landing', htmlContent: TWO_SLOTS_HTML });
+      .send({
+        slug: 'slot-update-3',
+        title: 'Landing',
+        htmlContent: Array.from({ length: 21 }, () => SLOT_HTML).join(''),
+      });
     expect(updateRes.status).toBe(400);
 
     const formRows = await db.query('SELECT * FROM forms WHERE workspace_owner_id = $1', [me.id]);

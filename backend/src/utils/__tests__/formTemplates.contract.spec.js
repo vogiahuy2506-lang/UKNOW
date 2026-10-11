@@ -24,6 +24,12 @@ import {
   normalizeBookingConfig,
   normalizePaymentConfig,
 } from '../formDefinition.util.js';
+import {
+  FORM_STARTER_TEMPLATES,
+  FORM_STARTER_KIND_LABELS,
+  buildStarterFormDraft,
+} from '../formStarterTemplates.util.js';
+import { FORM_SLOT_KINDS } from '../landingHtmlInjection.util.js';
 
 const WEEKDAY_KEYS = ['0', '1', '2', '3', '4', '5', '6'];
 
@@ -163,5 +169,76 @@ describe.each([
     expect(normalized).not.toBeNull();
     expect(normalized.amount).toBe(500000);
     expect(normalized.accountName).toBe('NGUYEN VAN A');
+  });
+});
+
+/**
+ * PR-6 (PLAN_BIEU_MAU_TUY_BIEN_AI_LANDING_2026-10-11) — chỗ trống có loại trong HTML landing được thay bằng biểu mẫu thật ngay lúc
+ * LƯU landing, không qua trình soạn, nên backend có bản mẫu riêng (`formStarterTemplates.util.js`). Bản đó PHẢI bằng mẫu
+ * frontend (bản vi): cùng trường / loại / role / bắt buộc / lựa chọn / cài đặt / khung giờ đặt lịch. Lệch là đỏ ở đây.
+ */
+describe('mẫu backend (formStarterTemplates.util) == mẫu frontend bản tiếng Việt', () => {
+  const t = tFor(viDictionary);
+
+  it('cùng tập loại: id mẫu frontend == FORM_SLOT_KINDS == khoá mẫu backend (không loại nào mồ côi một phía)', () => {
+    const frontendIds = FORM_TEMPLATES.map((tpl) => tpl.id).sort();
+    expect(frontendIds).toEqual([...FORM_SLOT_KINDS].sort());
+    expect(Object.keys(FORM_STARTER_TEMPLATES).sort()).toEqual([...FORM_SLOT_KINDS].sort());
+    expect(Object.keys(FORM_STARTER_KIND_LABELS).sort()).toEqual([...FORM_SLOT_KINDS].sort());
+  });
+
+  it.each(FORM_TEMPLATES.map((tpl) => [tpl.id, tpl]))(
+    'mẫu "%s": trường (nhãn, loại, role, bắt buộc, lựa chọn) + cài đặt + khung giờ + cờ thanh toán giống hệt frontend',
+    (_id, template) => {
+      const built = buildFormFromTemplate(template, t);
+      const backend = FORM_STARTER_TEMPLATES[template.id];
+
+      expect(backend.fields).toEqual(
+        built.fields.map((f) => ({ label: f.label, type: f.type, role: f.role, required: f.required, options: f.options }))
+      );
+      // Frontend: mẫu không đụng cài đặt (blank) cho {} ; backend: null.
+      expect(backend.settings || {}).toEqual(built.settings);
+      expect(backend.bookingWeeklySlots ? { ...backend.bookingWeeklySlots } : null).toEqual(built.bookingWeeklySlots);
+      expect(backend.payment).toBe(built.enablePayment);
+    }
+  );
+
+  it.each([...FORM_SLOT_KINDS])('buildStarterFormDraft("%s") đi qua bộ chuẩn hoá thật, consent + thông báo chủ luôn bật', (kind) => {
+    const draft = buildStarterFormDraft(kind);
+
+    const fields = normalizeFormFields(draft.fields);
+    expect(fields.length).toBe(FORM_STARTER_TEMPLATES[kind].fields.length);
+    for (const f of fields) {
+      if (['select', 'radio', 'checkbox'].includes(f.type)) expect(f.options.length).toBeGreaterThan(0);
+    }
+
+    const settings = normalizeFormSettings(draft.settings);
+    expect(settings.consentEnabled).toBe(true);
+    expect(settings.notifyOwner).toBe(true);
+
+    const booking = normalizeBookingConfig(draft.bookingConfig);
+    if (kind === 'booking') {
+      expect(booking).not.toBeNull();
+      expect(WEEKDAY_KEYS.reduce((n, k) => n + booking.weeklySlots[k].length, 0)).toBeGreaterThan(0);
+      // thư xác nhận / nhắc hẹn cần Email bắt buộc + sendConfirmation
+      expect(fields.find((f) => f.role === 'email').required).toBe(true);
+      expect(settings.sendConfirmation).toBe(true);
+    } else {
+      expect(draft.bookingConfig).toBeNull();
+      expect(booking).toBeNull();
+    }
+  });
+
+  it('QĐ4: mẫu payment KHÔNG BAO GIỜ có paymentConfig (không tự điền tiền / tài khoản) — chỉ đánh dấu cần bổ sung', () => {
+    for (const kind of FORM_SLOT_KINDS) {
+      const draft = buildStarterFormDraft(kind);
+      expect(draft.paymentConfig).toBeNull();
+      expect(normalizePaymentConfig(draft.paymentConfig)).toBeNull();
+      expect(draft.needsPaymentSetup).toBe(kind === 'payment');
+    }
+  });
+
+  it('loại ngoài danh sách bị từ chối (không đoán ý)', () => {
+    expect(() => buildStarterFormDraft('contact')).toThrow(/Loại biểu mẫu không hợp lệ/);
   });
 });

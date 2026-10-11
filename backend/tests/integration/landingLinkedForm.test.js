@@ -181,13 +181,15 @@ describe('PUT /api/admin/landing-pages/:id — PR-F linkedFormId', () => {
     expect((await loadLanding(landingId)).html_content).toBe(htmlBefore);
   });
 
-  it('(3) biểu mẫu đang gắn landing KHÁC → 409 nêu tên trang đó, không đổi gì', async () => {
+  // PR-6 ĐỔI KỲ VỌNG CÓ CHỦ ĐÍCH: trước đây (PR-F) biểu mẫu đang gắn landing khác → 409 "đang dùng ở trang X" vì mỗi landing đúng 1
+  // biểu mẫu và cột đơn forms.landing_page_id. PLAN_BIEU_MAU_TUY_BIEN_AI_LANDING_2026-10-11 QĐ2: landing ↔ biểu mẫu là NHIỀU–NHIỀU,
+  // một biểu mẫu dùng được cho nhiều landing → không còn 409; cả hai trang đều có biểu mẫu đó (đọc qua chỉ mục landing_page_forms).
+  it('(3) biểu mẫu đang gắn landing KHÁC → KHÔNG còn 409: gắn được, cả hai trang cùng có biểu mẫu đó (PR-6)', async () => {
     const me = await createUserWithPlan({ userOverrides: { username: 'lf-link-3' } });
     const token = await loginAs(me);
     const landingA = await createLandingWithAutoForm(token, 'lf-link-3a', 'Trang Alpha');
     const landingB = await createLandingWithAutoForm(token, 'lf-link-3b', 'Trang Beta');
     const formOfB = (await formsOfLanding(landingB))[0];
-    const aBefore = await formsOfLanding(landingA);
 
     const res = await putLanding(token, landingA, {
       slug: 'lf-link-3a',
@@ -195,11 +197,15 @@ describe('PUT /api/admin/landing-pages/:id — PR-F linkedFormId', () => {
       htmlContent: SLOT_HTML,
       linkedFormId: formOfB.id,
     });
-    expect(res.status).toBe(409);
-    expect(res.body.message).toContain('Trang Beta');
+    expect(res.status).toBe(200);
+    expect(res.body.data.linkedFormId).toBe(formOfB.id);
 
-    expect((await formsOfLanding(landingA)).map((f) => f.id)).toEqual(aBefore.map((f) => f.id));
-    expect((await formsOfLanding(landingB)).map((f) => f.id)).toEqual([formOfB.id]);
+    const indexOf = async (landingId) =>
+      (await db.query('SELECT form_id FROM landing_page_forms WHERE landing_page_id = $1', [landingId])).rows.map((r) => r.form_id);
+    expect(await indexOf(landingA)).toEqual([formOfB.id]);
+    expect(await indexOf(landingB)).toEqual([formOfB.id]); // trang Beta vẫn có biểu mẫu của nó
+    expect((await loadLanding(landingA)).html_content).toContain(`data-founderai-form="${formOfB.public_key}"`);
+    expect((await loadLanding(landingB)).html_content).toContain(`data-founderai-form="${formOfB.public_key}"`);
   });
 
   it('(4) null khi đang dùng biểu mẫu khách chọn → gỡ gắn X (X + bài nộp còn nguyên), tạo form cơ bản MỚI, HTML nhúng khoá mới', async () => {

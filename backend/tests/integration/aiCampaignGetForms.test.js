@@ -164,8 +164,18 @@ async function insertLanding(owner, { slug, title = 'Landing', idUserOverride = 
   return Number(result.rows[0].id);
 }
 
+/**
+ * PR-6: nguồn ĐỌC "landing nào có biểu mẫu nào" là bảng chỉ mục landing_page_forms (migration 297). Cột đơn cũ
+ * forms.landing_page_id vẫn ghi cho tương thích nhưng code mới không đọc — test chỉ gắn cột cũ sẽ không thấy form.
+ */
 async function attachFormToLanding(formId, landingId) {
-  await db.query('UPDATE forms SET landing_page_id = $1 WHERE id = $2', [landingId, formId]);
+  await db.query('UPDATE forms SET landing_page_id = COALESCE(landing_page_id, $1) WHERE id = $2', [landingId, formId]);
+  await db.query(
+    `INSERT INTO landing_page_forms (landing_page_id, form_id, position)
+     SELECT $1, $2, COALESCE(MAX(position) + 1, 0) FROM landing_page_forms WHERE landing_page_id = $1
+     ON CONFLICT (landing_page_id, form_id) DO NOTHING`,
+    [landingId, formId]
+  );
 }
 
 /**
