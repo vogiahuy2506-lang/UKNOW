@@ -35,15 +35,15 @@ const ViewSwitcher = ({
   };
 
   return (
-    <div className={`flex items-center bg-gray-100 rounded-lg ${sizeClasses[size]}`}>
+    <div className={`flex items-center bg-gray-100 dark:bg-dk-raised rounded-lg ${sizeClasses[size]}`}>
       {views.map(({ type, icon: Icon, label }) => (
         <button
           key={type}
           onClick={() => onViewChange(type)}
           className={`p-1.5 rounded-md transition-all ${
             currentView === type
-              ? 'bg-white shadow-sm text-gray-900'
-              : 'text-gray-500 hover:text-gray-700'
+              ? 'bg-white dark:bg-dk-surface shadow-sm text-gray-900 dark:text-dk-text'
+              : 'text-gray-500 dark:text-dk-text2 hover:text-gray-700 dark:hover:text-dk-text'
           }`}
           title={label}
         >

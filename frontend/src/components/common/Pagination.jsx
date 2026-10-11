@@ -31,7 +31,7 @@ const Pagination = ({
       <button
         onClick={() => onPageChange?.(currentPage - 1)}
         disabled={currentPage === 1}
-        className="p-2 rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        className="p-2 rounded-lg border border-gray-300 dark:border-dk-border-strong bg-white dark:bg-dk-surface text-gray-600 dark:text-dk-text2 hover:bg-gray-50 dark:hover:bg-dk-raised disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         aria-label={t('pagination.previous')}
       >
         <HiOutlineChevronLeft className="w-5 h-5" />
@@ -45,13 +45,13 @@ const Pagination = ({
             className={`w-10 h-10 rounded-lg border text-sm font-medium transition-colors ${
               currentPage === 1
                 ? 'bg-blue-600 text-white border-blue-600'
-                : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                : 'border-gray-300 dark:border-dk-border-strong bg-white dark:bg-dk-surface text-gray-700 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised'
             }`}
           >
             1
           </button>
           {pages[0] > 2 && (
-            <span className="px-2 text-gray-400">...</span>
+            <span className="px-2 text-gray-400 dark:text-dk-muted">...</span>
           )}
         </>
       )}
@@ -64,7 +64,7 @@ const Pagination = ({
           className={`w-10 h-10 rounded-lg border text-sm font-medium transition-colors ${
             currentPage === page
               ? 'bg-blue-600 text-white border-blue-600'
-              : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+              : 'border-gray-300 dark:border-dk-border-strong bg-white dark:bg-dk-surface text-gray-700 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised'
           }`}
         >
           {page}
@@ -75,14 +75,14 @@ const Pagination = ({
       {pages[pages.length - 1] < totalPages && (
         <>
           {pages[pages.length - 1] < totalPages - 1 && (
-            <span className="px-2 text-gray-400">...</span>
+            <span className="px-2 text-gray-400 dark:text-dk-muted">...</span>
           )}
           <button
             onClick={() => onPageChange?.(totalPages)}
             className={`w-10 h-10 rounded-lg border text-sm font-medium transition-colors ${
               currentPage === totalPages
                 ? 'bg-blue-600 text-white border-blue-600'
-                : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                : 'border-gray-300 dark:border-dk-border-strong bg-white dark:bg-dk-surface text-gray-700 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised'
             }`}
           >
             {totalPages}
@@ -94,7 +94,7 @@ const Pagination = ({
       <button
         onClick={() => onPageChange?.(currentPage + 1)}
         disabled={currentPage === totalPages}
-        className="p-2 rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        className="p-2 rounded-lg border border-gray-300 dark:border-dk-border-strong bg-white dark:bg-dk-surface text-gray-600 dark:text-dk-text2 hover:bg-gray-50 dark:hover:bg-dk-raised disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         aria-label={t('pagination.next')}
       >
         <HiOutlineChevronRight className="w-5 h-5" />
@@ -102,7 +102,7 @@ const Pagination = ({
 
       {/* Page info */}
       {showInfo && (
-        <span className="ml-4 text-sm text-gray-500 hidden sm:inline">
+        <span className="ml-4 text-sm text-gray-500 dark:text-dk-text2 hidden sm:inline">
           {t('pagination.pageInfo', { current: currentPage, total: totalPages })}
         </span>
       )}

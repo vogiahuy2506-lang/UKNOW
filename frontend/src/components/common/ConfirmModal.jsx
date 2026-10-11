@@ -57,22 +57,22 @@ export default function ConfirmModal({
 
   const iconConfig = {
     danger: {
-      bg: 'bg-rose-50 border-rose-100 text-rose-600',
+      bg: 'bg-rose-50 dark:bg-rose-950/40 border-rose-100 dark:border-rose-800 text-rose-600 dark:text-rose-400',
       icon: HiOutlineTrash,
       btn: 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/20',
     },
     warning: {
-      bg: 'bg-amber-50 border-amber-100 text-amber-600',
+      bg: 'bg-amber-50 dark:bg-amber-950/40 border-amber-100 dark:border-amber-800 text-amber-600 dark:text-amber-400',
       icon: HiOutlineExclamation,
       btn: 'bg-amber-600 hover:bg-amber-700 text-white shadow-amber-600/20',
     },
     primary: {
-      bg: 'bg-primary-50 border-primary-100 text-primary-600',
+      bg: 'bg-primary-50 dark:bg-primary-950/40 border-primary-100 dark:border-primary-800 text-primary-600 dark:text-primary-400',
       icon: HiOutlineInformationCircle,
       btn: 'bg-primary-600 hover:bg-primary-700 text-white shadow-primary-600/20',
     },
   }[variant] || {
-    bg: 'bg-rose-50 border-rose-100 text-rose-600',
+    bg: 'bg-rose-50 dark:bg-rose-950/40 border-rose-100 dark:border-rose-800 text-rose-600 dark:text-rose-400',
     icon: HiOutlineTrash,
     btn: 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/20',
   };
@@ -94,7 +94,7 @@ export default function ConfirmModal({
       <div
         ref={modalRef}
         tabIndex={-1}
-        className="relative bg-white rounded-2xl shadow-2xl border border-slate-200/90 w-full max-w-md overflow-hidden z-10 animate-in fade-in zoom-in-95 duration-150 outline-none"
+        className="relative bg-white dark:bg-dk-surface rounded-2xl shadow-2xl border border-slate-200/90 dark:border-dk-border/90 w-full max-w-md overflow-hidden z-10 animate-in fade-in zoom-in-95 duration-150 outline-none"
       >
         <div className="p-6">
           <div className="flex items-start gap-4">
@@ -104,11 +104,11 @@ export default function ConfirmModal({
               <IconComponent className="w-6 h-6" />
             </div>
             <div className="min-w-0 flex-1 pt-0.5">
-              <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
+              <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-dk-text leading-snug">
                 {title}
               </h3>
               {message && (
-                <div className="mt-2 text-sm text-slate-600 leading-relaxed whitespace-pre-line">
+                <div className="mt-2 text-sm text-slate-600 dark:text-dk-text2 leading-relaxed whitespace-pre-line">
                   {message}
                 </div>
               )}
@@ -116,12 +116,12 @@ export default function ConfirmModal({
           </div>
         </div>
 
-        <div className="px-6 py-4 bg-slate-50/80 border-t border-slate-100 flex items-center justify-end gap-2.5">
+        <div className="px-6 py-4 bg-slate-50/80 dark:bg-dk-raised/80 border-t border-slate-100 dark:border-dk-border flex items-center justify-end gap-2.5">
           <button
             type="button"
             onClick={onCancel}
             disabled={isLoading}
-            className="px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition-colors shadow-2xs disabled:opacity-50 cursor-pointer"
+            className="px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-700 dark:text-dk-text bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border hover:bg-slate-50 dark:hover:bg-dk-raised transition-colors shadow-2xs disabled:opacity-50 cursor-pointer"
           >
             {cancelText || defaultCancel}
           </button>

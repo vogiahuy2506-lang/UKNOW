@@ -7,10 +7,10 @@ import { useI18n } from '../i18n';
 const LoadingScreen = () => {
   const { t } = useI18n();
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-dk-bg">
       <div className="text-center">
         <div className="spinner w-10 h-10 mx-auto mb-4"></div>
-        <p className="text-gray-500">{t('app.loading')}</p>
+        <p className="text-gray-500 dark:text-dk-text2">{t('app.loading')}</p>
       </div>
     </div>
   );

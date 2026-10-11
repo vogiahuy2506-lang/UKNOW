@@ -72,16 +72,16 @@ function AttachmentImage({ data, isFromAgent }) {
         href={data.url || undefined}
         target="_blank"
         rel="noopener noreferrer"
-        className="flex items-center gap-3 p-3 bg-white/80 border border-gray-200 rounded-2xl max-w-[280px] hover:bg-white transition-all shadow-sm"
+        className="flex items-center gap-3 p-3 bg-white/80 dark:bg-dk-surface/80 border border-gray-200 dark:border-dk-border rounded-2xl max-w-[280px] hover:bg-white dark:hover:bg-dk-raised transition-all shadow-sm"
       >
-        <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-slate-50 border border-slate-100 shrink-0">
+        <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-slate-50 dark:bg-dk-raised border border-slate-100 dark:border-dk-border shrink-0">
           <FaFileImage className="w-7 h-7" style={{ color: '#7C3AED' }} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-gray-900 truncate">{name}</p>
-          <p className="text-xs text-gray-500">Không xem trước được — mở ảnh</p>
+          <p className="text-sm font-semibold text-gray-900 dark:text-dk-text truncate">{name}</p>
+          <p className="text-xs text-gray-500 dark:text-dk-text2">Không xem trước được — mở ảnh</p>
         </div>
-        <HiExternalLink className="w-5 h-5 text-gray-400 shrink-0" />
+        <HiExternalLink className="w-5 h-5 text-gray-400 dark:text-dk-muted shrink-0" />
       </a>
     );
   }
@@ -172,18 +172,18 @@ export default function MessageAttachments({ attachments, messageRole }) {
               download={fileName}
               target="_blank"
               rel="noopener noreferrer"
-              className={`flex items-center gap-3 p-3 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-2xl max-w-[280px] hover:bg-white transition-all shadow-sm ${
-                isFromAgent ? 'border-primary-200/50' : ''
+              className={`flex items-center gap-3 p-3 bg-white/80 dark:bg-dk-surface/80 backdrop-blur-sm border border-gray-200 dark:border-dk-border rounded-2xl max-w-[280px] hover:bg-white dark:hover:bg-dk-raised transition-all shadow-sm ${
+                isFromAgent ? 'border-primary-200/50 dark:border-primary-800' : ''
               }`}
             >
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-slate-50 border border-slate-100 shrink-0">
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-slate-50 dark:bg-dk-raised border border-slate-100 dark:border-dk-border shrink-0">
                 <FileTypeIcon fileName={fileName} className="w-7 h-7" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-gray-900 truncate">{fileName}</p>
-                {fileSize && <p className="text-xs text-gray-500">{fileSize}</p>}
+                <p className="text-sm font-semibold text-gray-900 dark:text-dk-text truncate">{fileName}</p>
+                {fileSize && <p className="text-xs text-gray-500 dark:text-dk-text2">{fileSize}</p>}
               </div>
-              <HiDownload className="w-5 h-5 text-gray-400" />
+              <HiDownload className="w-5 h-5 text-gray-400 dark:text-dk-muted" />
             </a>
           );
         }

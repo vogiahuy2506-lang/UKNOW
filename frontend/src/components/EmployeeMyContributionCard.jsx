@@ -43,32 +43,32 @@ const EmployeeMyContributionCard = () => {
   if (!isEmployee) return null;
   if (error) {
     return (
-      <div className="card p-4 text-sm text-red-500">{error}</div>
+      <div className="card p-4 text-sm text-red-500 dark:text-red-400">{error}</div>
     );
   }
   if (data === undefined) {
-    return <div className="card p-4 text-sm text-gray-400">{t('employee.myContribution.loading')}</div>;
+    return <div className="card p-4 text-sm text-gray-400 dark:text-dk-muted">{t('employee.myContribution.loading')}</div>;
   }
   if (!data) return null;
 
   return (
     <div className="card p-5">
       <div className="mb-3">
-        <h2 className="text-base font-semibold text-gray-800">{t('employee.myContribution.title')}</h2>
-        <p className="text-xs text-gray-400 mt-0.5">{formatPeriodNote(data.aiCycle, t)}</p>
+        <h2 className="text-base font-semibold text-gray-800 dark:text-dk-text">{t('employee.myContribution.title')}</h2>
+        <p className="text-xs text-gray-400 dark:text-dk-muted mt-0.5">{formatPeriodNote(data.aiCycle, t)}</p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
         <div>
-          <p className="text-gray-500">{t('employee.teamColRunning')}</p>
-          <p className="text-xl font-bold text-gray-900">{formatRunningCampaigns(data, t)}</p>
+          <p className="text-gray-500 dark:text-dk-text2">{t('employee.teamColRunning')}</p>
+          <p className="text-xl font-bold text-gray-900 dark:text-dk-text">{formatRunningCampaigns(data, t)}</p>
         </div>
         <div>
-          <p className="text-gray-500">{t('employee.teamColSent')}</p>
-          <p className="text-xl font-bold text-gray-900">{formatSentThisMonth(data, t)}</p>
+          <p className="text-gray-500 dark:text-dk-text2">{t('employee.teamColSent')}</p>
+          <p className="text-xl font-bold text-gray-900 dark:text-dk-text">{formatSentThisMonth(data, t)}</p>
         </div>
         <div>
-          <p className="text-gray-500">{t('employee.teamColAi')}</p>
-          <p className="text-xl font-bold text-gray-900">{formatAiCredits(data)}</p>
+          <p className="text-gray-500 dark:text-dk-text2">{t('employee.teamColAi')}</p>
+          <p className="text-xl font-bold text-gray-900 dark:text-dk-text">{formatAiCredits(data)}</p>
         </div>
       </div>
     </div>

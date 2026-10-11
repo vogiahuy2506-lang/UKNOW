@@ -34,10 +34,10 @@ class ErrorBoundary extends React.Component {
           {(context) => {
             const t = context?.t || ((key) => lookupFallback(key));
             return (
-              <div className="min-h-screen flex items-center justify-center bg-gray-50">
+              <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-dk-bg">
                 <div className="text-center p-8">
-                  <h1 className="text-2xl font-bold text-red-600 mb-4">{t('errorBoundary.title')}</h1>
-                  <p className="text-gray-600 mb-4">{this.state.error?.message || t('errorBoundary.message')}</p>
+                  <h1 className="text-2xl font-bold text-red-600 dark:text-red-400 mb-4">{t('errorBoundary.title')}</h1>
+                  <p className="text-gray-600 dark:text-dk-text2 mb-4">{this.state.error?.message || t('errorBoundary.message')}</p>
                   <button
                     onClick={() => {
                       this.setState({ hasError: false, error: null });

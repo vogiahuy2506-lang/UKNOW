@@ -266,14 +266,14 @@ const CreditWarningBanner = ({ placement = 'page' }) => {
           : 'sticky top-0 z-20 mb-4 rounded-md px-3 py-2 text-sm'
       } ${
         alertState.isEmpty
-          ? 'border-red-200 bg-red-50 text-red-800'
-          : 'border-amber-200 bg-amber-50 text-amber-900'
+          ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-300'
+          : 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-300'
       }`}
       role="status"
     >
       <div className="flex min-w-0 items-center gap-2">
         <HiOutlineExclamation
-          className={`shrink-0 ${isComposer ? 'h-4 w-4' : 'h-5 w-5'} ${alertState.isEmpty ? 'text-red-500' : 'text-amber-500'}`}
+          className={`shrink-0 ${isComposer ? 'h-4 w-4' : 'h-5 w-5'} ${alertState.isEmpty ? 'text-red-500 dark:text-red-400' : 'text-amber-500 dark:text-amber-400'}`}
         />
         <span className="min-w-0">{alertState.message}</span>
       </div>
@@ -284,8 +284,8 @@ const CreditWarningBanner = ({ placement = 'page' }) => {
             onClick={() => navigate('/app/topup')}
             className={`rounded px-2.5 py-1 text-xs font-semibold transition-colors ${
               alertState.isEmpty
-                ? 'border border-red-600 bg-white text-red-700 hover:bg-red-50'
-                : 'border border-amber-500 bg-white text-amber-800 hover:bg-amber-50'
+                ? 'border border-red-600 bg-white dark:bg-dk-surface text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/60'
+                : 'border border-amber-500 bg-white dark:bg-dk-surface text-amber-800 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/60'
             }`}
           >
             {t('creditBanner.buyTopup')}
@@ -295,7 +295,7 @@ const CreditWarningBanner = ({ placement = 'page' }) => {
           <button
             type="button"
             onClick={() => navigate('/app/settings/media-library')}
-            className="rounded border border-amber-500 bg-white px-2.5 py-1 text-xs font-semibold text-amber-800 transition-colors hover:bg-amber-50"
+            className="rounded border border-amber-500 bg-white dark:bg-dk-surface px-2.5 py-1 text-xs font-semibold text-amber-800 dark:text-amber-300 transition-colors hover:bg-amber-50 dark:hover:bg-amber-950/60"
           >
             {t('creditBanner.cleanFiles')}
           </button>
@@ -315,7 +315,7 @@ const CreditWarningBanner = ({ placement = 'page' }) => {
           <button
             type="button"
             onClick={handleDismiss}
-            className="rounded p-1 text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900"
+            className="rounded p-1 text-amber-700 dark:text-amber-300 transition-colors hover:bg-amber-100 dark:hover:bg-amber-950/60 hover:text-amber-900 dark:hover:text-amber-300"
             aria-label={t('creditBanner.dismiss')}
           >
             <HiOutlineX className="h-4 w-4" />

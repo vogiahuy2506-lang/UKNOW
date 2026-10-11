@@ -47,7 +47,7 @@ const QuickTaskBar = ({ className = '' }) => {
 
   return (
     <>
-      <div className={`sticky top-0 z-20 bg-white/90 backdrop-blur-md border-b border-gray-200 ${className}`}>
+      <div className={`sticky top-0 z-20 bg-white/90 dark:bg-dk-surface/90 backdrop-blur-md border-b border-gray-200 dark:border-dk-border ${className}`}>
         <div className="flex items-center justify-end h-8 px-2 gap-1">
           {quickItems.map((item) => {
             const accentClass =
@@ -55,7 +55,7 @@ const QuickTaskBar = ({ className = '' }) => {
                 ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white hover:from-orange-600 hover:to-red-600 shadow-sm hover:shadow-md'
                 : item.accent
                 ? 'bg-orange-600 text-white hover:bg-orange-700'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100';
+                : 'text-gray-600 dark:text-dk-text2 hover:text-gray-900 dark:hover:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-strong';
             return (
               <button
                 key={item.key}
@@ -68,14 +68,14 @@ const QuickTaskBar = ({ className = '' }) => {
             );
           })}
 
-          <div className="w-px h-4 bg-gray-200 mx-0.5" />
+          <div className="w-px h-4 bg-gray-200 dark:bg-dk-strong mx-0.5" />
 
           <div className="relative" ref={profileRef}>
             <button
               type="button"
               onClick={() => setProfileOpen(o => !o)}
               title={user?.fullName || user?.username || 'User'}
-              className="inline-flex items-center gap-1 h-7 px-2 rounded-md text-xs font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+              className="inline-flex items-center gap-1 h-7 px-2 rounded-md text-xs font-medium text-gray-700 dark:text-dk-text hover:text-gray-900 dark:hover:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-strong transition-colors"
             >
               <div className="w-5 h-5 bg-primary-500 rounded-full flex items-center justify-center flex-shrink-0">
                 <span className="text-white font-medium text-[9px] leading-none">
@@ -87,22 +87,22 @@ const QuickTaskBar = ({ className = '' }) => {
             </button>
 
             {profileOpen && (
-              <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-50">
-                <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
-                  <p className="text-sm font-semibold text-gray-900 truncate">{user?.fullName || user?.username}</p>
-                  <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+              <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-dk-surface rounded-xl shadow-xl border border-gray-200 dark:border-dk-border overflow-hidden z-50">
+                <div className="px-4 py-3 bg-gray-50 dark:bg-dk-raised border-b border-gray-100 dark:border-dk-border">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-dk-text truncate">{user?.fullName || user?.username}</p>
+                  <p className="text-xs text-gray-500 dark:text-dk-text2 truncate">{user?.email}</p>
                 </div>
 
-                <div className="p-2 border-b border-gray-100">
-                  <p className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                <div className="p-2 border-b border-gray-100 dark:border-dk-border">
+                  <p className="px-3 py-1 text-[10px] font-bold text-gray-400 dark:text-dk-muted uppercase tracking-wider">
                     {t('header.activeContext')}
                   </p>
                   <button
                     onClick={async () => { setProfileOpen(false); await switchContext(null); }}
                     className={`w-full flex items-center justify-between px-3 py-1.5 text-sm rounded-lg transition-colors ${
                       activeContext.type === 'self'
-                        ? 'bg-primary-50 text-primary-600 font-medium'
-                        : 'text-gray-700 hover:bg-gray-50'
+                        ? 'bg-primary-50 dark:bg-primary-950/40 text-primary-600 dark:text-primary-400 font-medium'
+                        : 'text-gray-700 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised'
                     }`}
                   >
                     <div className="flex items-center gap-2.5">
@@ -118,8 +118,8 @@ const QuickTaskBar = ({ className = '' }) => {
                       className={`w-full flex items-center justify-between px-3 py-1.5 text-sm rounded-lg transition-colors mt-0.5 ${
 
                         activeContext.type === 'employee' && activeContext.ownerId === m.ownerId
-                          ? 'bg-primary-50 text-primary-600 font-medium'
-                          : 'text-gray-700 hover:bg-gray-50'
+                          ? 'bg-primary-50 dark:bg-primary-950/40 text-primary-600 dark:text-primary-400 font-medium'
+                          : 'text-gray-700 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised'
                       }`}
                     >
                       <div className="flex items-center gap-2.5">
@@ -136,21 +136,21 @@ const QuickTaskBar = ({ className = '' }) => {
                 <div className="p-1.5">
                   <button
                     onClick={() => { setShowAccountProfile(true); setProfileOpen(false); }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised rounded-lg transition-colors"
                   >
-                    <HiOutlineUserCircle className="w-4 h-4 text-gray-400" />
+                    <HiOutlineUserCircle className="w-4 h-4 text-gray-400 dark:text-dk-muted" />
                     {t('sidebar.accountInfo')}
                   </button>
                   <button
                     onClick={() => { setShowChangePassword(true); setProfileOpen(false); }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised rounded-lg transition-colors"
                   >
-                    <HiOutlineLockClosed className="w-4 h-4 text-gray-400" />
+                    <HiOutlineLockClosed className="w-4 h-4 text-gray-400 dark:text-dk-muted" />
                     {t('sidebar.changePassword')}
                   </button>
 
                   <div className="flex items-center justify-between px-3 py-1.5">
-                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-dk-text2">
                       <HiOutlineGlobeAlt className="w-4 h-4" />
                       {t('sidebar.language')}
                     </div>
@@ -168,10 +168,10 @@ const QuickTaskBar = ({ className = '' }) => {
                   </div>
                 </div>
 
-                <div className="p-1.5 border-t border-gray-100">
+                <div className="p-1.5 border-t border-gray-100 dark:border-dk-border">
                   <button
                     onClick={async () => { await logout(); navigate('/login'); }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/60 rounded-lg transition-colors"
                   >
                     <HiOutlineLogout className="w-4 h-4" />
                     {t('sidebar.logout')}

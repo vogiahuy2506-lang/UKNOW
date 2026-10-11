@@ -16,16 +16,16 @@ const WorkspaceNoPermissionsCard = () => {
     <div className="flex h-full items-center justify-center p-6">
       <section
         data-testid="workspace-no-permissions"
-        className="w-full max-w-lg rounded-2xl border border-amber-200 bg-white p-8 text-center shadow-sm"
+        className="w-full max-w-lg rounded-2xl border border-amber-200 dark:border-amber-800 bg-white dark:bg-dk-surface p-8 text-center shadow-sm"
       >
-        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50">
-          <HiOutlineShieldExclamation className="h-7 w-7 text-amber-500" />
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 dark:bg-amber-950/40">
+          <HiOutlineShieldExclamation className="h-7 w-7 text-amber-500 dark:text-amber-400" />
         </div>
-        <h2 className="text-lg font-bold text-gray-900">{t('workspaceNoPermissions.title')}</h2>
-        <p className="mt-3 text-sm leading-relaxed text-gray-600">
+        <h2 className="text-lg font-bold text-gray-900 dark:text-dk-text">{t('workspaceNoPermissions.title')}</h2>
+        <p className="mt-3 text-sm leading-relaxed text-gray-600 dark:text-dk-text2">
           {t('workspaceNoPermissions.intro', { ownerName: ownerName || t('workspaceNoPermissions.fallbackOwner') })}
         </p>
-        <p className="mt-2 text-sm leading-relaxed text-gray-600">{t('workspaceNoPermissions.steps')}</p>
+        <p className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-dk-text2">{t('workspaceNoPermissions.steps')}</p>
         <div className="mt-6">
           <RecheckPermissionsButton />
         </div>
