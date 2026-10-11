@@ -67,8 +67,8 @@ const StatusBadge = ({ status, kind }) => {
     <span
       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors shadow-2xs ${
         isActive
-          ? 'bg-emerald-50 text-emerald-700 border-emerald-200/80'
-          : 'bg-slate-100 text-slate-600 border-slate-200'
+          ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200/80 dark:border-emerald-800/60'
+          : 'bg-slate-100 dark:bg-dk-raised text-slate-600 dark:text-dk-text2 border-slate-200 dark:border-dk-border'
       }`}
     >
       <span
@@ -120,43 +120,43 @@ const FunnelCells = ({ funnel }) => {
             : undefined
         }
       >
-        <span className={funnel?.interested ? 'font-semibold text-slate-800' : 'text-slate-400 font-normal'}>
+        <span className={funnel?.interested ? 'font-semibold text-slate-800 dark:text-dk-text' : 'text-slate-400 dark:text-dk-muted font-normal'}>
           {funnel?.interested ?? 0}
         </span>
       </td>
       <td className="px-3 py-4 whitespace-nowrap text-sm text-right" data-testid="funnel-left-contact">
-        <span className={funnel?.leftContact ? 'font-semibold text-slate-800' : 'text-slate-400 font-normal'}>
+        <span className={funnel?.leftContact ? 'font-semibold text-slate-800 dark:text-dk-text' : 'text-slate-400 dark:text-dk-muted font-normal'}>
           {funnel?.leftContact ?? 0}
         </span>
       </td>
       <td className="px-3 py-4 whitespace-nowrap text-sm text-right" data-testid="funnel-registered">
         {target ? (
-          <Link to={target} className="font-semibold text-primary-600 hover:text-primary-700 hover:underline">
+          <Link to={target} className="font-semibold text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 hover:underline">
             {registered}
           </Link>
         ) : (
-          <span className={registered ? 'font-semibold text-slate-800' : 'text-slate-400 font-normal'}>
+          <span className={registered ? 'font-semibold text-slate-800 dark:text-dk-text' : 'text-slate-400 dark:text-dk-muted font-normal'}>
             {registered}
           </span>
         )}
       </td>
       <td
-        className={`px-3 py-4 whitespace-nowrap text-sm text-right ${awaiting > 0 ? 'font-semibold text-amber-600' : 'text-gray-900'}`}
+        className={`px-3 py-4 whitespace-nowrap text-sm text-right ${awaiting > 0 ? 'font-semibold text-amber-600 dark:text-amber-400' : 'text-gray-900 dark:text-dk-text'}`}
         data-testid="funnel-awaiting"
         title={awaiting > 0 ? t('products.funnel.awaitingConfirmTooltip', { amount: formatMoney(funnel?.awaitingAmount) }) : undefined}
       >
         {noMoney ? (
           '—'
         ) : target && awaiting > 0 ? (
-          <Link to={target} className="hover:underline inline-flex items-center px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200/80 text-amber-700">
+          <Link to={target} className="hover:underline inline-flex items-center px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/60 text-amber-700 dark:text-amber-300">
             {awaiting}
           </Link>
         ) : awaiting > 0 ? (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200/80 text-amber-700">
+          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/60 text-amber-700 dark:text-amber-300">
             {awaiting}
           </span>
         ) : (
-          <span className="text-slate-400 font-normal">0</span>
+          <span className="text-slate-400 dark:text-dk-muted font-normal">0</span>
         )}
       </td>
       <td
@@ -171,13 +171,13 @@ const FunnelCells = ({ funnel }) => {
         {noMoney ? (
           '—'
         ) : (
-          <span className={paidPeople ? 'font-semibold text-slate-800' : 'text-slate-400 font-normal'}>
+          <span className={paidPeople ? 'font-semibold text-slate-800 dark:text-dk-text' : 'text-slate-400 dark:text-dk-muted font-normal'}>
             {paidPeople}
           </span>
         )}
       </td>
       <td
-        className="px-3 py-4 whitespace-nowrap text-sm text-right font-semibold text-slate-900"
+        className="px-3 py-4 whitespace-nowrap text-sm text-right font-semibold text-slate-900 dark:text-dk-text"
         data-testid="funnel-revenue"
       >
         {noMoney ? '—' : formatMoney(funnel?.revenue)}
@@ -845,7 +845,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
       <div className="rounded-2xl border border-slate-200/90 dark:border-dk-border bg-white dark:bg-dk-surface p-3.5 shadow-2xs">
         <form onSubmit={handleSearch} className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           <div className="relative flex-1">
-            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-dk-muted">
               <HiOutlineSearch className="w-4 h-4" />
             </div>
             <input
@@ -863,7 +863,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                   setSearch('');
                   setPagination((p) => ({ ...p, page: 1 }));
                 }}
-                className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-600"
+                className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 dark:text-dk-muted hover:text-slate-600 dark:hover:text-dk-text"
               >
                 <HiOutlineX className="w-4 h-4" />
               </button>
@@ -960,39 +960,39 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                   <tr>
                     {/* Bảng không có phễu: hiện mã sản phẩm cột riêng */}
                     {!canViewFunnel && (
-                      <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                      <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">
                         {t('products.productCode')}
                       </th>
                     )}
-                    <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">
                       {t('products.productName')}
                     </th>
-                    <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">
                       {t('products.price')}
                     </th>
 
                     {/* Chế độ đầy đủ phễu */}
                     {canViewFunnel && viewMode === 'full' && (
                       <>
-                        <th className="px-3 py-3.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider" title={t('products.funnel.interestedHint')}>
+                        <th className="px-3 py-3.5 text-right text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider" title={t('products.funnel.interestedHint')}>
                           {t('products.funnel.interested')}
                         </th>
-                        <th className="px-3 py-3.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider" title={t('products.funnel.leftContactHint')}>
+                        <th className="px-3 py-3.5 text-right text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider" title={t('products.funnel.leftContactHint')}>
                           {t('products.funnel.leftContact')}
-                          <span className="block normal-case font-normal text-slate-400 text-[10px]">({t('products.funnel.peopleUnit')})</span>
+                          <span className="block normal-case font-normal text-slate-400 dark:text-dk-muted text-[10px]">({t('products.funnel.peopleUnit')})</span>
                         </th>
-                        <th className="px-3 py-3.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider" title={t('products.funnel.registeredHint')}>
+                        <th className="px-3 py-3.5 text-right text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider" title={t('products.funnel.registeredHint')}>
                           {t('products.funnel.registered')}
-                          <span className="block normal-case font-normal text-slate-400 text-[10px]">({t('products.funnel.peopleUnit')})</span>
+                          <span className="block normal-case font-normal text-slate-400 dark:text-dk-muted text-[10px]">({t('products.funnel.peopleUnit')})</span>
                         </th>
-                        <th className="px-3 py-3.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider" title={t('products.funnel.awaitingConfirmHint')}>
+                        <th className="px-3 py-3.5 text-right text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider" title={t('products.funnel.awaitingConfirmHint')}>
                           {t('products.funnel.awaitingConfirm')}
                         </th>
-                        <th className="px-3 py-3.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider" title={t('products.funnel.paidHint')}>
+                        <th className="px-3 py-3.5 text-right text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider" title={t('products.funnel.paidHint')}>
                           {t('products.funnel.paid')}
-                          <span className="block normal-case font-normal text-slate-400 text-[10px]">({t('products.funnel.peopleUnit')})</span>
+                          <span className="block normal-case font-normal text-slate-400 dark:text-dk-muted text-[10px]">({t('products.funnel.peopleUnit')})</span>
                         </th>
-                        <th className="px-3 py-3.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                        <th className="px-3 py-3.5 text-right text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">
                           {t('products.funnel.revenue')}
                         </th>
                       </>
@@ -1001,32 +1001,32 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                     {/* Chế độ bảng gọn: tách 3 cột rõ ràng Đăng ký, Đã mua, Doanh thu */}
                     {canViewFunnel && viewMode === 'compact' && (
                       <>
-                        <th className="px-4 py-3.5 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider" title={t('products.funnel.registeredHint')}>
+                        <th className="px-4 py-3.5 text-center text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider" title={t('products.funnel.registeredHint')}>
                           {t('products.funnel.registered')}
                         </th>
-                        <th className="px-4 py-3.5 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider" title={t('products.funnel.paidHint')}>
+                        <th className="px-4 py-3.5 text-center text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider" title={t('products.funnel.paidHint')}>
                           {t('products.funnel.paid')}
                         </th>
-                        <th className="px-6 py-3.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                        <th className="px-6 py-3.5 text-right text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">
                           {t('products.funnel.revenue')}
                         </th>
                       </>
                     )}
 
-                    <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">
                       {t('common.status')}
                     </th>
                     {!canViewFunnel && (
-                      <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                      <th className="px-6 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">
                         {t('products.lastUpdated')}
                       </th>
                     )}
-                    <th className="px-6 py-3.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    <th className="px-6 py-3.5 text-right text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">
                       {t('common.actions')}
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-slate-100">
+                <tbody className="bg-white dark:bg-dk-surface divide-y divide-slate-100 dark:divide-dk-border">
                   {products.map((product) => {
                     const funnel = funnelByProduct[product.id];
                     const noMoney = funnel?.paid === null && funnel?.revenue === null;
@@ -1037,9 +1037,9 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                     const target = formIds.length === 1 ? `/app/forms/${formIds[0]}/submissions` : formIds.length > 1 ? '/app/forms' : null;
 
                     return (
-                      <tr key={product.id} className="hover:bg-slate-50/70 transition-colors">
+                      <tr key={product.id} className="hover:bg-slate-50/70 dark:hover:bg-dk-raised transition-colors">
                         {!canViewFunnel && (
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 font-mono">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-dk-text2 font-mono">
                             {product.productCode || '—'}
                           </td>
                         )}
@@ -1049,10 +1049,10 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                               <img
                                 src={product.thumbnailUrl}
                                 alt={product.productName}
-                                className="w-10 h-10 rounded-xl object-cover border border-slate-200 shrink-0 shadow-2xs"
+                                className="w-10 h-10 rounded-xl object-cover border border-slate-200 dark:border-dk-border shrink-0 shadow-2xs"
                               />
                             ) : (
-                              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500/10 via-amber-500/10 to-orange-500/5 border border-orange-200/60 text-orange-600 shrink-0 shadow-2xs">
+                              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500/10 via-amber-500/10 to-orange-500/5 border border-orange-200/60 dark:border-orange-800/60 text-orange-600 dark:text-orange-400 shrink-0 shadow-2xs">
                                 <HiOutlineCube className="w-5 h-5" />
                               </div>
                             )}
@@ -1061,7 +1061,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                                 <button
                                   type="button"
                                   onClick={() => openDetail(product)}
-                                  className="text-left text-sm font-semibold text-slate-900 hover:text-orange-600 transition-colors cursor-pointer group truncate max-w-xs sm:max-w-md"
+                                  className="text-left text-sm font-semibold text-slate-900 dark:text-dk-text hover:text-orange-600 dark:hover:text-orange-400 transition-colors cursor-pointer group truncate max-w-xs sm:max-w-md"
                                   title="Nhấn để xem chi tiết sản phẩm"
                                 >
                                   <span className="group-hover:underline">{product.productName}</span>
@@ -1069,16 +1069,16 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                                 {product.kind === 'event' && (
                                   <span
                                     data-testid="product-kind-badge"
-                                    className="badge bg-purple-100 text-purple-700 align-middle shrink-0"
+                                    className="badge bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 align-middle shrink-0"
                                   >
                                     {t('products.kindEventBadge')}
                                   </span>
                                 )}
                               </div>
-                              <div className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap" data-testid="product-subline">
+                              <div className="text-xs text-slate-500 dark:text-dk-text2 mt-1 flex items-center gap-1.5 flex-wrap" data-testid="product-subline">
                                 {(canViewFunnel ? [product.productCode, product.category] : [product.category]).filter(Boolean).map((tag, idx) => (
-                                  <span key={idx} className="inline-flex items-center text-slate-500">
-                                    {idx > 0 && <span className="mx-1 text-slate-300">·</span>}
+                                  <span key={idx} className="inline-flex items-center text-slate-500 dark:text-dk-text2">
+                                    {idx > 0 && <span className="mx-1 text-slate-300 dark:text-dk-muted">·</span>}
                                     {tag}
                                   </span>
                                 ))}
@@ -1088,7 +1088,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     onClick={(e) => e.stopPropagation()}
-                                    className="inline-flex items-center gap-0.5 text-slate-400 hover:text-orange-600 transition-colors ml-1"
+                                    className="inline-flex items-center gap-0.5 text-slate-400 dark:text-dk-muted hover:text-orange-600 dark:hover:text-orange-400 transition-colors ml-1"
                                     title={`Mở URL: ${product.productUrl}`}
                                   >
                                     <HiOutlineExternalLink className="w-3.5 h-3.5" />
@@ -1098,7 +1098,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900 font-semibold">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900 dark:text-dk-text font-semibold">
                           {product.price || (product.kind === 'event' ? t('products.priceFreePlaceholder') : '—')}
                         </td>
 
@@ -1113,17 +1113,17 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                             <td className="px-4 py-4 whitespace-nowrap text-center">
                               <span data-testid="funnel-registered">
                                 {target ? (
-                                  <Link to={target} className="font-semibold text-primary-600 hover:underline">
+                                  <Link to={target} className="font-semibold text-primary-600 dark:text-primary-400 hover:underline">
                                     {registered}
                                   </Link>
                                 ) : (
-                                  <span className="font-semibold text-slate-700">{registered}</span>
+                                  <span className="font-semibold text-slate-700 dark:text-dk-text">{registered}</span>
                                 )}
                               </span>
                               {awaiting > 0 && (
                                 <span
                                   data-testid="funnel-awaiting"
-                                  className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200"
+                                  className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60"
                                   title={t('products.funnel.awaitingConfirmTooltip', { amount: formatMoney(funnel?.awaitingAmount) })}
                                 >
                                   {target ? (
@@ -1135,12 +1135,12 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                               )}
                             </td>
                             <td className="px-4 py-4 whitespace-nowrap text-center">
-                              <span data-testid="funnel-paid" className="font-semibold text-slate-700">
+                              <span data-testid="funnel-paid" className="font-semibold text-slate-700 dark:text-dk-text">
                                 {noMoney ? '—' : paidPeople}
                               </span>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-right">
-                              <span className="font-bold text-slate-900 text-sm" data-testid="funnel-revenue">
+                              <span className="font-bold text-slate-900 dark:text-dk-text text-sm" data-testid="funnel-revenue">
                                 {noMoney ? '—' : formatMoney(funnel?.revenue)}
                               </span>
                             </td>
@@ -1151,7 +1151,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                           <StatusBadge status={product.status} kind={product.kind} />
                         </td>
                         {!canViewFunnel && (
-                          <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500">
+                          <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500 dark:text-dk-text2">
                             {formatDate(product.updatedAt)}
                           </td>
                         )}
@@ -1161,7 +1161,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                             <button
                               type="button"
                               onClick={() => openDetail(product)}
-                              className="p-1.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                              className="p-1.5 text-slate-400 dark:text-dk-muted hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-950/40 rounded-lg transition-colors"
                               title={t('products.viewDetail') || 'Xem chi tiết'}
                               aria-label={t('products.viewDetail') || 'Xem chi tiết'}
                             >
@@ -1170,7 +1170,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                             <button
                               type="button"
                               onClick={() => openEdit(product)}
-                              className="p-1.5 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                              className="p-1.5 text-slate-400 dark:text-dk-muted hover:text-orange-600 dark:hover:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950/40 rounded-lg transition-colors"
                               title={t('common.edit')}
                             >
                               <HiOutlinePencil className="w-4 h-4" />
@@ -1178,7 +1178,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                             <button
                               type="button"
                               onClick={() => setDeleteTarget(product)}
-                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                              className="p-1.5 text-slate-400 dark:text-dk-muted hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors"
                               title={t('common.delete')}
                             >
                               <HiOutlineTrash className="w-4 h-4" />
@@ -1193,25 +1193,25 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
             </div>
 
             {pagination.totalPages > 1 && (
-              <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
-                <p className="text-xs text-slate-500 font-medium">{t('products.totalProducts', { total: pagination.total })}</p>
+              <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 dark:border-dk-border bg-slate-50/50 dark:bg-dk-raised/50">
+                <p className="text-xs text-slate-500 dark:text-dk-text2 font-medium">{t('products.totalProducts', { total: pagination.total })}</p>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setPagination((p) => ({ ...p, page: p.page - 1 }))}
                     disabled={pagination.page <= 1}
-                    className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    className="p-1.5 rounded-lg border border-slate-200 dark:border-dk-border text-slate-600 dark:text-dk-text2 hover:bg-slate-100 dark:hover:bg-dk-strong disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
                     <HiOutlineChevronLeft className="w-4 h-4" />
                   </button>
-                  <span className="text-xs font-semibold text-slate-700">
+                  <span className="text-xs font-semibold text-slate-700 dark:text-dk-text">
                     {pagination.page} / {pagination.totalPages}
                   </span>
                   <button
                     type="button"
                     onClick={() => setPagination((p) => ({ ...p, page: p.page + 1 }))}
                     disabled={pagination.page >= pagination.totalPages}
-                    className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    className="p-1.5 rounded-lg border border-slate-200 dark:border-dk-border text-slate-600 dark:text-dk-text2 hover:bg-slate-100 dark:hover:bg-dk-strong disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
                     <HiOutlineChevronRight className="w-4 h-4" />
                   </button>
@@ -1468,7 +1468,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                             <button
                               type="button"
                               onClick={() => setField('priceAmount', String(suggestedPriceAmount))}
-                              className="font-bold text-orange-600 dark:text-orange-400 hover:text-orange-700 underline text-xs ml-2 cursor-pointer shrink-0"
+                              className="font-bold text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 underline text-xs ml-2 cursor-pointer shrink-0"
                             >
                               {t('products.priceAmountUse')}
                             </button>
@@ -1536,7 +1536,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                           {t('products.productUrl')}
                         </label>
                         <div className="relative">
-                          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-dk-muted">
                             <HiOutlineLink className="w-4 h-4" />
                           </div>
                           <input
@@ -1552,7 +1552,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                             href={formData.productUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[11px] text-orange-600 dark:text-orange-400 hover:text-orange-700 underline mt-1"
+                            className="inline-flex items-center gap-1 text-[11px] text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 underline mt-1"
                           >
                             <HiOutlineExternalLink className="w-3.5 h-3.5" />
                             <span>{t('products.openProductUrl') || 'Thử mở liên kết'}</span>
@@ -1598,7 +1598,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                               <button
                                 type="button"
                                 onClick={() => setField('thumbnailUrl', '')}
-                                className="text-xs text-rose-600 dark:text-rose-400 hover:text-rose-700 hover:underline mt-1 inline-flex items-center gap-1"
+                                className="text-xs text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 hover:underline mt-1 inline-flex items-center gap-1"
                               >
                                 <HiOutlineTrash className="w-3.5 h-3.5" />
                                 <span>Gỡ ảnh</span>
@@ -1655,14 +1655,14 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
               aria-hidden="true"
               tabIndex={-1}
             />
-            <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 overflow-hidden border border-slate-100 z-10 animate-in fade-in zoom-in-95 duration-150">
-              <div className="flex items-center gap-3.5 text-rose-600 mb-3">
-                <div className="w-10 h-10 rounded-2xl bg-rose-50 flex items-center justify-center shrink-0 border border-rose-100">
+            <div className="relative bg-white dark:bg-dk-surface rounded-3xl shadow-2xl w-full max-w-md p-6 overflow-hidden border border-slate-100 dark:border-dk-border z-10 animate-in fade-in zoom-in-95 duration-150">
+              <div className="flex items-center gap-3.5 text-rose-600 dark:text-rose-400 mb-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-50 dark:bg-rose-950/40 flex items-center justify-center shrink-0 border border-rose-100 dark:border-rose-900/50">
                   <HiOutlineTrash className="w-5 h-5" />
                 </div>
-                <h3 className="font-bold text-slate-900 text-base">{t('products.confirmDeleteTitle')}</h3>
+                <h3 className="font-bold text-slate-900 dark:text-dk-text text-base">{t('products.confirmDeleteTitle')}</h3>
               </div>
-              <p className="text-sm text-slate-600 leading-relaxed mb-6">
+              <p className="text-sm text-slate-600 dark:text-dk-text2 leading-relaxed mb-6">
                 {t('products.confirmDeleteMessage', { name: deleteTarget.productName })}
               </p>
               <div className="flex items-center justify-end gap-2.5">
@@ -1670,7 +1670,7 @@ export default function Products({ defaultViewMode = 'compact' } = {}) {
                   type="button"
                   disabled={isDeleting}
                   onClick={() => setDeleteTarget(null)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors disabled:opacity-50 shadow-2xs"
+                  className="px-4 py-2 text-xs font-semibold text-slate-700 dark:text-dk-text bg-white dark:bg-dk-raised border border-slate-200 dark:border-dk-border hover:bg-slate-50 dark:hover:bg-dk-strong rounded-xl transition-colors disabled:opacity-50 shadow-2xs"
                 >
                   {t('common.cancel')}
                 </button>
