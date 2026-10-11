@@ -109,7 +109,7 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md' }) => {
       >
         <div className="flex items-center justify-between mb-4">
           {title ? (
-            <h3 id={titleId} className="text-xl font-bold text-gray-900">
+            <h3 id={titleId} className="text-xl font-bold text-gray-900 dark:text-dk-text">
               {title}
             </h3>
           ) : (
@@ -119,7 +119,7 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md' }) => {
             type="button"
             onClick={onClose}
             aria-label="Close dialog"
-            className="p-1 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-500 transition-colors"
+            className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-dk-strong text-gray-400 dark:text-dk-muted hover:text-gray-500 dark:hover:text-dk-text transition-colors"
           >
             <HiOutlineX className="w-6 h-6" />
           </button>
