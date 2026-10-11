@@ -479,7 +479,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           <span>{message}</span>
           <button
             type="button"
-            className="self-start font-semibold text-orange-600 underline"
+            className="self-start font-semibold text-orange-600 dark:text-orange-400 underline"
             onClick={() => {
               toast.dismiss(toastInstance.id);
               navigate('/pricing');
@@ -1063,16 +1063,16 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const fileChipMeta = (f) => {
     const ext = (f.originalName || '').split('.').pop().toLowerCase();
     if (f.previewUrl || ['jpg','jpeg','png','webp','gif'].includes(ext))
-      return { label: 'Ảnh', icon: null, bg: 'bg-blue-50 border-blue-200', text: 'text-blue-600' };
+      return { label: 'Ảnh', icon: null, bg: 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800', text: 'text-blue-600 dark:text-blue-400' };
     if (['xlsx','xls','csv'].includes(ext))
-      return { label: 'Excel', icon: null, bg: 'bg-green-50 border-green-200', text: 'text-green-600' };
+      return { label: 'Excel', icon: null, bg: 'bg-green-50 dark:bg-green-950/40 border-green-200 dark:border-green-800', text: 'text-green-600 dark:text-green-400' };
     if (ext === 'pdf')
-      return { label: 'PDF', icon: null, bg: 'bg-red-50 border-red-200', text: 'text-red-500' };
+      return { label: 'PDF', icon: null, bg: 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800', text: 'text-red-500 dark:text-red-400' };
     if (['doc','docx'].includes(ext))
-      return { label: 'Word', icon: null, bg: 'bg-sky-50 border-sky-200', text: 'text-sky-600' };
+      return { label: 'Word', icon: null, bg: 'bg-sky-50 dark:bg-sky-950/40 border-sky-200 dark:border-sky-800', text: 'text-sky-600 dark:text-sky-400' };
     if (['pptx','ppt'].includes(ext))
-      return { label: 'PPTX', icon: null, bg: 'bg-orange-50 border-orange-200', text: 'text-orange-600' };
-    return { label: 'File', icon: null, bg: 'bg-slate-100 border-slate-200', text: 'text-slate-500' };
+      return { label: 'PPTX', icon: null, bg: 'bg-orange-50 dark:bg-orange-950/40 border-orange-200 dark:border-orange-800', text: 'text-orange-600 dark:text-orange-400' };
+    return { label: 'File', icon: null, bg: 'bg-slate-100 dark:bg-dk-raised border-slate-200 dark:border-dk-border', text: 'text-slate-500 dark:text-dk-text2' };
   };
 
   // URL tải file về (ép attachment, như Zalo/Messenger). Chỉ có khi tin đã lưu:
@@ -3480,7 +3480,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     <div className={centered ? 'w-full' : `flex-shrink-0 ${isFullscreen ? 'px-4 pb-6 bg-gray-50 dark:bg-dk-surface' : 'px-4 pt-3 pb-4 border-t border-slate-100 dark:border-dk-border bg-white dark:bg-dk-surface'}`}>
       <div className={isFullscreen ? 'max-w-3xl mx-auto w-full' : 'w-full'}>
         {isFullscreen && <CreditWarningBanner placement="composer" />}
-        <div className={`rounded-2xl border transition-all outline-none shadow-sm ${centered ? 'bg-white dark:bg-dk-surface border-slate-200 dark:border-dk-border' : ''} ${isDragging ? 'border-orange-300 bg-orange-50/40 dark:bg-orange-950/20' : centered ? '' : 'border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-surface focus-within:bg-white dark:focus-within:bg-dk-raised'}`}>
+        <div className={`rounded-2xl border transition-all outline-none shadow-sm ${centered ? 'bg-white dark:bg-dk-surface border-slate-200 dark:border-dk-border' : ''} ${isDragging ? 'border-orange-300 dark:border-orange-700 bg-orange-50/40 dark:bg-orange-950/20' : centered ? '' : 'border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-surface focus-within:bg-white dark:focus-within:bg-dk-raised'}`}>
           {uploadedFiles.length > 0 && !cardShowingFiles && (
             <div className="flex flex-wrap gap-1.5 px-3 pt-3">
               {uploadedFiles.map(f => {
@@ -3493,7 +3493,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                     }
                     <span className="truncate max-w-[100px] text-xs font-medium text-slate-700 dark:text-dk-text ml-1">{f.originalName}</span>
                     <button onClick={() => setUploadedFiles(p => p.filter(x => x.tempId !== f.tempId))}
-                      className="p-0.5 ml-0.5 text-slate-400 hover:text-red-500 transition-colors shrink-0">
+                      className="p-0.5 ml-0.5 text-slate-400 dark:text-dk-muted hover:text-red-500 dark:hover:text-red-400 transition-colors shrink-0">
                       <HiOutlineX className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -3515,7 +3515,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           />
           <div className={`flex items-center justify-between ${centered ? 'px-3 pb-3' : 'px-2 pb-2'}`}>
             <button onClick={() => fileInputRef.current?.click()} disabled={isUploading || isTyping}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-slate-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-950/40 rounded-xl transition-all disabled:opacity-50">
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-slate-400 dark:text-dk-muted hover:text-orange-500 dark:hover:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950/40 rounded-xl transition-all disabled:opacity-50">
               {isUploading
                 ? <div className="w-3.5 h-3.5 border-2 border-orange-500/30 border-t-orange-500 rounded-full animate-spin" />
                 : <HiOutlinePaperClip className="w-3.5 h-3.5" />}
@@ -3527,6 +3527,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                 title={isTyping ? t('aiChatbot.processingPreviousTitle') : undefined}
                 className={`flex items-center justify-center bg-slate-800 dark:bg-dk-strong text-white rounded-xl hover:bg-orange-500 disabled:bg-slate-200 dark:disabled:bg-dk-raised disabled:text-slate-400 dark:disabled:text-dk-muted transition-all ${centered ? 'w-9 h-9' : 'w-8 h-8'}`}>
                 {isTyping ? (
+                  // giữ sáng: vòng xoay (ring slate-400, đỉnh trắng) nằm trên nút nền đậm slate-800/dk-strong ở cả hai chế độ
                   <div className="w-3.5 h-3.5 border-2 border-slate-400 border-t-white rounded-full animate-spin" />
                 ) : (
                   <HiOutlineChevronRight className="w-4 h-4" />
@@ -3572,7 +3573,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       {/* Drag handle — chỉ trên desktop panel */}
       {!isFullscreen && !isMobile && isOpen && (
         <div
-          className={`absolute left-0 top-0 h-full w-1.5 cursor-col-resize z-50 transition-colors ${isResizingPanel ? 'bg-orange-300' : 'hover:bg-orange-200'}`}
+          className={`absolute left-0 top-0 h-full w-1.5 cursor-col-resize z-50 transition-colors ${isResizingPanel ? 'bg-orange-300' : 'hover:bg-orange-200 dark:hover:bg-orange-900/50'}`}
           onMouseDown={handlePanelResizeStart}
         />
       )}
@@ -3594,14 +3595,14 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
             {!isFullscreen && (
               <div className="flex items-center gap-1">
                 <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{t('aiChatbot.ready')}</span>
+                <span className="text-[10px] text-slate-400 dark:text-dk-muted font-bold uppercase tracking-wider">{t('aiChatbot.ready')}</span>
               </div>
             )}
           </div>
         </div>
         <div className="flex items-center gap-2">
           {!isFullscreen && (
-            <button onClick={onToggle} className="p-2 hover:bg-slate-50 rounded-xl text-slate-400 hover:text-slate-600">
+            <button onClick={onToggle} className="p-2 hover:bg-slate-50 dark:hover:bg-dk-raised rounded-xl text-slate-400 dark:text-dk-muted hover:text-slate-600 dark:hover:text-dk-text2">
               <HiOutlineArrowRight className="w-5 h-5" />
             </button>
           )}
@@ -3668,8 +3669,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           title={t('aiChatbot.newConversation')}
           className={`shrink-0 flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-semibold transition-all ${
             !currentSessionId
-              ? 'bg-orange-50 dark:bg-orange-950/40 text-orange-500 border border-orange-200 dark:border-orange-800/60'
-              : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-dk-raised hover:text-orange-500'
+              ? 'bg-orange-50 dark:bg-orange-950/40 text-orange-500 dark:text-orange-400 border border-orange-200 dark:border-orange-800/60'
+              : 'text-slate-400 dark:text-dk-muted hover:bg-slate-100 dark:hover:bg-dk-raised hover:text-orange-500 dark:hover:text-orange-400'
           }`}
         >
           <HiOutlinePlus className="w-3 h-3 shrink-0" />
@@ -3679,10 +3680,10 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
       {/* Gói hết hạn / hết credit AI — ở fullscreen đã có banner ngay trên khung nhập */}
       {!isSuperAdmin && !isFullscreen && aiBillingBlock && (
-        <div className="flex-shrink-0 mx-4 mt-3 flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5">
-          <HiOutlineExclamation className="w-4 h-4 shrink-0 text-red-500 mt-0.5" />
+        <div className="flex-shrink-0 mx-4 mt-3 flex items-start gap-2.5 rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-3.5 py-2.5">
+          <HiOutlineExclamation className="w-4 h-4 shrink-0 text-red-500 dark:text-red-400 mt-0.5" />
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium text-red-800 leading-snug">
+            <p className="text-xs font-medium text-red-800 dark:text-red-300 leading-snug">
               {aiBillingBlock.type === 'expired'
                 ? t('aiChatbot.planExpiredBanner')
                 : t('aiChatbot.creditsEmptyBanner')}
@@ -3692,7 +3693,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                 <button
                   type="button"
                   onClick={() => navigate('/app/topup')}
-                  className="text-xs font-semibold text-red-700 underline hover:text-red-900"
+                  className="text-xs font-semibold text-red-700 dark:text-red-300 underline hover:text-red-900 dark:hover:text-red-200"
                 >
                   {t('creditBanner.buyTopup')}
                 </button>
@@ -3700,7 +3701,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
               <button
                 type="button"
                 onClick={() => navigate('/pricing')}
-                className="text-xs font-semibold text-red-700 underline hover:text-red-900"
+                className="text-xs font-semibold text-red-700 dark:text-red-300 underline hover:text-red-900 dark:hover:text-red-200"
               >
                 {t('aiChatbot.upgradePlan')}
               </button>
@@ -3712,14 +3713,14 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       {/* Banner hồ sơ doanh nghiệp — chỉ hiện cho user_admin */}
       {!isSuperAdmin && !showHomeHero && (
         <div className={`flex-shrink-0 mx-4 mt-3 flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 ${hasProfile ? 'bg-slate-50 dark:bg-dk-raised border border-slate-200 dark:border-dk-border' : 'bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-900/50'}`}>
-          <HiOutlineSparkles className={`w-3.5 h-3.5 shrink-0 ${hasProfile ? 'text-slate-400' : 'text-orange-500'}`} />
+          <HiOutlineSparkles className={`w-3.5 h-3.5 shrink-0 ${hasProfile ? 'text-slate-400 dark:text-dk-muted' : 'text-orange-500 dark:text-orange-400'}`} />
           <p className={`flex-1 text-xs ${hasProfile ? 'text-slate-500 dark:text-dk-text2' : 'text-orange-700 dark:text-orange-300 font-medium'}`}>
             {hasProfile ? t('aiChatbot.usingBusinessProfile') : t('aiChatbot.noProfile')}
           </p>
           <Link
             to="/app/settings/ai-profile"
             onClick={() => { if (!isFullscreen) onToggle?.(); }}
-            className={`shrink-0 text-xs font-semibold whitespace-nowrap ${hasProfile ? 'text-slate-500 dark:text-dk-text2 hover:text-orange-500' : 'text-orange-600 dark:text-orange-400 hover:text-orange-700'}`}
+            className={`shrink-0 text-xs font-semibold whitespace-nowrap ${hasProfile ? 'text-slate-500 dark:text-dk-text2 hover:text-orange-500 dark:hover:text-orange-400' : 'text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300'}`}
           >
             {hasProfile ? t('aiChatbot.view') : t('aiChatbot.setup')}
           </Link>
@@ -3733,8 +3734,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
             onClick={() => setQuickActionsOpen(o => !o)}
             className="flex items-center justify-between w-full group"
           >
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider group-hover:text-slate-500 transition-colors">{t('aiChatbot.quickActions')}</p>
-            <HiOutlineChevronDown className={`w-3.5 h-3.5 text-slate-400 group-hover:text-slate-500 transition-all duration-200 ${quickActionsOpen ? 'rotate-180' : ''}`} />
+            <p className="text-[10px] font-bold text-slate-400 dark:text-dk-muted uppercase tracking-wider group-hover:text-slate-500 dark:group-hover:text-dk-text2 transition-colors">{t('aiChatbot.quickActions')}</p>
+            <HiOutlineChevronDown className={`w-3.5 h-3.5 text-slate-400 dark:text-dk-muted group-hover:text-slate-500 dark:group-hover:text-dk-text2 transition-all duration-200 ${quickActionsOpen ? 'rotate-180' : ''}`} />
           </button>
           {quickActionsOpen && (
             <div className="grid grid-cols-3 gap-1.5 mt-1.5">
@@ -3801,14 +3802,14 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
               <button
                 type="button"
                 onClick={() => setInputText('Lập kịch bản chiến dịch marketing cho [tên sản phẩm/dịch vụ], gửi qua Email và Zalo')}
-                className="rounded-full border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised px-4 py-2 text-sm text-slate-600 dark:text-dk-text hover:bg-slate-50 hover:border-slate-300 dark:hover:bg-dk-strong transition-colors"
+                className="rounded-full border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised px-4 py-2 text-sm text-slate-600 dark:text-dk-text hover:bg-slate-50 hover:border-slate-300 dark:hover:border-dk-border-strong dark:hover:bg-dk-strong transition-colors"
               >
                 {t('aiChatbot.homeSuggestionCampaign')}
               </button>
               <button
                 type="button"
                 onClick={() => setInputText('Viết template email chào mừng khách hàng mới')}
-                className="rounded-full border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised px-4 py-2 text-sm text-slate-600 dark:text-dk-text hover:bg-slate-50 hover:border-slate-300 dark:hover:bg-dk-strong transition-colors"
+                className="rounded-full border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised px-4 py-2 text-sm text-slate-600 dark:text-dk-text hover:bg-slate-50 hover:border-slate-300 dark:hover:border-dk-border-strong dark:hover:bg-dk-strong transition-colors"
               >
                 {t('aiChatbot.homeSuggestionEmail')}
               </button>
@@ -3818,14 +3819,14 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   setInputText('Tạo landing page thu thập lead cho sản phẩm [tên sản phẩm]');
                   setPendingLandingPrompt('Tạo landing page thu thập lead cho sản phẩm [tên sản phẩm]');
                 }}
-                className="rounded-full border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised px-4 py-2 text-sm text-slate-600 dark:text-dk-text hover:bg-slate-50 hover:border-slate-300 dark:hover:bg-dk-strong transition-colors"
+                className="rounded-full border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised px-4 py-2 text-sm text-slate-600 dark:text-dk-text hover:bg-slate-50 hover:border-slate-300 dark:hover:border-dk-border-strong dark:hover:bg-dk-strong transition-colors"
               >
                 {t('aiChatbot.homeSuggestionLanding')}
               </button>
             </div>
           )}
           {!isSuperAdmin && (
-            <p className="mt-3 max-w-3xl text-center text-xs text-slate-400">
+            <p className="mt-3 max-w-3xl text-center text-xs text-slate-400 dark:text-dk-muted">
               {t('aiChatbot.landingPasteHint')}
             </p>
           )}
@@ -3846,10 +3847,10 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
             <div className={`max-w-[92%] min-w-0 break-words ${msg.role === 'user' ? 'bg-slate-100 dark:bg-dk-raised text-slate-800 dark:text-dk-text rounded-2xl px-4 py-3' : ''}`}>
               {msg.role === 'assistant' && (
                 <div className="flex items-center gap-2 mb-1.5">
-                  <div className="w-5 h-5 bg-orange-100 rounded-md flex items-center justify-center">
-                    <HiOutlineSparkles className="w-3 h-3 text-orange-500" />
+                  <div className="w-5 h-5 bg-orange-100 dark:bg-orange-950/40 rounded-md flex items-center justify-center">
+                    <HiOutlineSparkles className="w-3 h-3 text-orange-500 dark:text-orange-400" />
                   </div>
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">AI</span>
+                  <span className="text-[10px] font-black text-slate-400 dark:text-dk-muted uppercase tracking-widest">AI</span>
                 </div>
               )}
               <AiContent text={userDisplayText} />
@@ -3858,12 +3859,12 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   chính thức: backend đặt data.unanswered=true (helpAssistant.service.js), FE chỉ
                   hiển thị gợi ý, không gọi API mới. */}
               {msg.role === 'assistant' && msg.data?.unanswered === true && (
-                <div className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-slate-400">
+                <div className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-slate-400 dark:text-dk-muted">
                   <span>{t('aiChatbot.unansweredHint')}</span>
                   <Link
                     to="/huong-dan"
                     onClick={() => { if (!isFullscreen) onToggle?.(); }}
-                    className="font-semibold text-slate-500 hover:text-orange-500"
+                    className="font-semibold text-slate-500 dark:text-dk-text2 hover:text-orange-500 dark:hover:text-orange-400"
                   >
                     {t('aiChatbot.unansweredHelpLink')}
                   </Link>
@@ -3871,7 +3872,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   <Link
                     to="/contact"
                     onClick={() => { if (!isFullscreen) onToggle?.(); }}
-                    className="font-semibold text-slate-500 hover:text-orange-500"
+                    className="font-semibold text-slate-500 dark:text-dk-text2 hover:text-orange-500 dark:hover:text-orange-400"
                   >
                     {t('aiChatbot.unansweredContactLink')}
                   </Link>
@@ -3891,7 +3892,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                           ? <img src={f.previewUrl || f.url} alt="" className="w-7 h-7 object-cover rounded-lg shrink-0 ml-1" />
                           : <span className={`ml-2 text-[10px] font-bold uppercase ${text}`}>{fileChipMeta(f).label}</span>
                         }
-                        <span className="truncate max-w-[100px] text-[11px] font-medium text-slate-700 ml-0.5">{f.displayName || f.originalName}</span>
+                        <span className="truncate max-w-[100px] text-[11px] font-medium text-slate-700 dark:text-dk-text ml-0.5">{f.displayName || f.originalName}</span>
                       </>
                     );
                     if (dl) {
@@ -4070,8 +4071,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                     t={t}
                   />
                   {shouldShowContentPlanActions(idx) && (
-                    <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
-                      <p className="mb-3 text-xs leading-relaxed text-slate-600">
+                    <div className="mt-3 rounded-xl border border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-raised px-3 py-3">
+                      <p className="mb-3 text-xs leading-relaxed text-slate-600 dark:text-dk-text2">
                         {t('aiChatbot.planApprovalHint')}
                       </p>
                       <ContentPlanActionsCard
@@ -4090,8 +4091,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
               )}
 
               {msg.type === 'suggest_content_plan' && msg.data?.userPrompt && (
-                <div className="mt-3 rounded-xl border border-orange-200 bg-orange-50 px-3 py-3">
-                  <p className="mb-2 text-xs leading-relaxed text-orange-800">
+                <div className="mt-3 rounded-xl border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/40 px-3 py-3">
+                  <p className="mb-2 text-xs leading-relaxed text-orange-800 dark:text-orange-300">
                     {t('aiChatbot.suggestContentPlanHint')}
                   </p>
                   <button
@@ -4141,7 +4142,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                       if (dayItem) openTemplatePickerForDay(dayItem);
                     }}
                     disabled={generatingDay !== null}
-                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-700 transition-all hover:border-orange-300 hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-xl border border-slate-300 dark:border-dk-border-strong bg-white dark:bg-dk-surface px-3 py-2 text-xs font-black text-slate-700 dark:text-dk-text transition-all hover:border-orange-300 dark:hover:border-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950/60 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {t('aiChatbot.useExistingTemplate') || 'Dùng mẫu có sẵn'}
                   </button>
@@ -4170,7 +4171,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                     disabled={isSavingAllTemplates || !getUnsavedPlanDrafts().length}
                     className={`rounded-xl px-3 py-2 text-xs font-black transition-all disabled:cursor-not-allowed ${
                       !isSavingAllTemplates && !getUnsavedPlanDrafts().length
-                        ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
+                        ? 'border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
                         : 'bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-60'
                     }`}
                   >
@@ -4229,12 +4230,12 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
         {isTyping && (
           <div className="flex justify-start">
-            <div className="flex items-center gap-1.5 px-4 py-3 bg-slate-50 rounded-2xl">
-              <span className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-bounce" />
-              <span className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-bounce [animation-delay:0.2s]" />
-              <span className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-bounce [animation-delay:0.4s]" />
+            <div className="flex items-center gap-1.5 px-4 py-3 bg-slate-50 dark:bg-dk-raised rounded-2xl">
+              <span className="w-1.5 h-1.5 bg-slate-300 dark:bg-dk-border-strong rounded-full animate-bounce" />
+              <span className="w-1.5 h-1.5 bg-slate-300 dark:bg-dk-border-strong rounded-full animate-bounce [animation-delay:0.2s]" />
+              <span className="w-1.5 h-1.5 bg-slate-300 dark:bg-dk-border-strong rounded-full animate-bounce [animation-delay:0.4s]" />
               {LANDING_STAGES.includes(landingStage) ? (
-                <span className="ml-2 text-xs text-slate-500" data-testid="landing-stage">{t(`aiChatbot.landingStage_${landingStage}`)}</span>
+                <span className="ml-2 text-xs text-slate-500 dark:text-dk-text2" data-testid="landing-stage">{t(`aiChatbot.landingStage_${landingStage}`)}</span>
               ) : null}
             </div>
           </div>

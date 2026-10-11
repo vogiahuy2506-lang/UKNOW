@@ -256,37 +256,37 @@ const LandingPageCard = ({
 
   return (
     <>
-      <div className="mt-4 bg-slate-50 rounded-2xl p-4 border border-slate-200 overflow-hidden relative">
+      <div className="mt-4 bg-slate-50 dark:bg-dk-raised rounded-2xl p-4 border border-slate-200 dark:border-dk-border overflow-hidden relative">
         {/* Busy Overlay */}
         {isBusy && (
-          <div className="absolute inset-0 bg-white/80 backdrop-blur-[1px] z-20 flex flex-col items-center justify-center gap-2">
+          <div className="absolute inset-0 bg-white/80 dark:bg-dk-surface/80 backdrop-blur-[1px] z-20 flex flex-col items-center justify-center gap-2">
             <div className="w-8 h-8 border-[3px] border-orange-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-xs font-bold text-slate-700">{t('editing')}</p>
+            <p className="text-xs font-bold text-slate-700 dark:text-dk-text">{t('editing')}</p>
           </div>
         )}
 
         {/* Header */}
-        <div className="flex items-center gap-2 mb-3 text-slate-600">
-          <HiOutlineSparkles className="w-4 h-4 text-orange-500" />
+        <div className="flex items-center gap-2 mb-3 text-slate-600 dark:text-dk-text2">
+          <HiOutlineSparkles className="w-4 h-4 text-orange-500 dark:text-orange-400" />
           <span className="font-black text-[10px] uppercase tracking-widest">{t('label')}</span>
           {page.templateName && (
-            <span className="ml-auto text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
+            <span className="ml-auto text-[10px] bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-full">
               {page.templateName}
             </span>
           )}
         </div>
 
         {/* Title */}
-        <p className="text-sm font-bold text-slate-800 mb-3">{page.title || t('untitled')}</p>
+        <p className="text-sm font-bold text-slate-800 dark:text-dk-text mb-3">{page.title || t('untitled')}</p>
 
         {/* View Mode Toggle */}
-        <div className="flex items-center gap-1 mb-3 bg-white rounded-lg p-1 border border-slate-200">
+        <div className="flex items-center gap-1 mb-3 bg-white dark:bg-dk-surface rounded-lg p-1 border border-slate-200 dark:border-dk-border">
           <button
             onClick={() => setViewMode('preview')}
             className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-md transition-all ${
               viewMode === 'preview'
-                ? 'bg-slate-800 text-white'
-                : 'text-slate-500 hover:text-slate-700'
+                ? 'bg-slate-800 dark:bg-dk-strong text-white'
+                : 'text-slate-500 dark:text-dk-text2 hover:text-slate-700 dark:hover:text-dk-text'
             }`}
           >
             <HiOutlineEye className="w-3.5 h-3.5" />
@@ -296,8 +296,8 @@ const LandingPageCard = ({
             onClick={() => setViewMode('code')}
             className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-md transition-all ${
               viewMode === 'code'
-                ? 'bg-slate-800 text-white'
-                : 'text-slate-500 hover:text-slate-700'
+                ? 'bg-slate-800 dark:bg-dk-strong text-white'
+                : 'text-slate-500 dark:text-dk-text2 hover:text-slate-700 dark:hover:text-dk-text'
             }`}
           >
             <HiOutlineCode className="w-3.5 h-3.5" />
@@ -314,8 +314,8 @@ const LandingPageCard = ({
                 onClick={() => setDevice('desktop')}
                 className={`p-1.5 rounded-md transition-all ${
                   device === 'desktop'
-                    ? 'bg-slate-800 text-white'
-                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                    ? 'bg-slate-800 dark:bg-dk-strong text-white'
+                    : 'bg-slate-100 dark:bg-dk-raised text-slate-500 dark:text-dk-text2 hover:bg-slate-200 dark:hover:bg-dk-strong'
                 }`}
                 title={t('desktop')}
               >
@@ -325,8 +325,8 @@ const LandingPageCard = ({
                 onClick={() => setDevice('mobile')}
                 className={`p-1.5 rounded-md transition-all ${
                   device === 'mobile'
-                    ? 'bg-slate-800 text-white'
-                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                    ? 'bg-slate-800 dark:bg-dk-strong text-white'
+                    : 'bg-slate-100 dark:bg-dk-raised text-slate-500 dark:text-dk-text2 hover:bg-slate-200 dark:hover:bg-dk-strong'
                 }`}
                 title={t('mobile')}
               >
@@ -336,8 +336,9 @@ const LandingPageCard = ({
 
             {/* Preview Frame */}
             <div className={`mx-auto transition-all ${deviceWidth}`}>
-              <div className={`bg-white rounded-xl border border-slate-200 overflow-hidden ${device === 'mobile' ? 'shadow-lg' : ''}`}>
-                <div className="h-6 bg-slate-100 border-b border-slate-200 flex items-center px-3 gap-1.5">
+              {/* giữ sáng: iframe xem trước là trang HTML của khách (bg-white, không dark:); chỉ viền + thanh tiêu đề khung theo chế độ tối */}
+              <div className={`bg-white rounded-xl border border-slate-200 dark:border-dk-border overflow-hidden ${device === 'mobile' ? 'shadow-lg' : ''}`}>
+                <div className="h-6 bg-slate-100 dark:bg-dk-raised border-b border-slate-200 dark:border-dk-border flex items-center px-3 gap-1.5">
                   <div className="w-2.5 h-2.5 rounded-full bg-red-400" />
                   <div className="w-2.5 h-2.5 rounded-full bg-yellow-400" />
                   <div className="w-2.5 h-2.5 rounded-full bg-green-400" />
@@ -364,14 +365,14 @@ const LandingPageCard = ({
             <div className="flex gap-2">
               <button
                 onClick={handleCopy}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-slate-800 text-white text-xs font-semibold rounded-lg hover:bg-slate-700 transition"
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-slate-800 dark:bg-dk-strong text-white text-xs font-semibold rounded-lg hover:bg-slate-700 dark:hover:bg-dk-border-strong transition"
               >
                 {copied ? <HiOutlineCheck className="w-3.5 h-3.5" /> : <HiOutlineClipboard className="w-3.5 h-3.5" />}
                 {copied ? t('copied') : t('copyCode')}
               </button>
               <button
                 onClick={handleDownload}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-200 transition"
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-slate-100 dark:bg-dk-raised text-slate-700 dark:text-dk-text text-xs font-semibold rounded-lg hover:bg-slate-200 dark:hover:bg-dk-strong transition"
               >
                 <HiOutlineDownload className="w-3.5 h-3.5" />
                 Download
@@ -382,9 +383,9 @@ const LandingPageCard = ({
 
         {/* AI Inline Edit Box */}
         {showEditBox && (
-          <div className="mt-3 bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl p-3 border border-orange-200 space-y-2">
-            <div className="flex items-center gap-1.5 text-orange-800 font-bold text-xs">
-              <HiOutlineSparkles className="w-3.5 h-3.5 text-orange-500" />
+          <div className="mt-3 bg-gradient-to-br from-orange-50 dark:from-orange-950/40 to-amber-50 dark:to-amber-950/40 rounded-xl p-3 border border-orange-200 dark:border-orange-800 space-y-2">
+            <div className="flex items-center gap-1.5 text-orange-800 dark:text-orange-300 font-bold text-xs">
+              <HiOutlineSparkles className="w-3.5 h-3.5 text-orange-500 dark:text-orange-400" />
               <span>{t('editBoxTitle')}</span>
             </div>
             <textarea
@@ -392,7 +393,7 @@ const LandingPageCard = ({
               onChange={(e) => setEditInstruction(e.target.value)}
               placeholder={t('editBoxPlaceholder')}
               rows={2}
-              className="w-full text-xs rounded-lg border border-orange-200 bg-white p-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-300 resize-none"
+              className="w-full text-xs rounded-lg border border-orange-200 dark:border-orange-800 bg-white dark:bg-dk-surface p-2 text-slate-800 dark:text-dk-text placeholder-slate-400 dark:placeholder-dk-muted focus:outline-none focus:ring-2 focus:ring-orange-300 dark:focus:ring-orange-700 resize-none"
               disabled={isBusy}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -408,7 +409,7 @@ const LandingPageCard = ({
                   setEditInstruction('');
                 }}
                 disabled={isBusy}
-                className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-800 rounded-lg transition"
+                className="px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-dk-text2 hover:text-slate-800 dark:hover:text-dk-text rounded-lg transition"
               >
                 {t('cancelEdit')}
               </button>
@@ -429,10 +430,10 @@ const LandingPageCard = ({
         {!isSaved && showSaveForm && (
           <form
             onSubmit={handleSubmitSave}
-            className="mt-3 bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-3 border border-slate-200 space-y-2"
+            className="mt-3 bg-gradient-to-br from-slate-50 dark:from-dk-raised to-slate-100 dark:to-dk-raised rounded-xl p-3 border border-slate-200 dark:border-dk-border space-y-2"
           >
             <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">
+              <label className="block text-[10px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wide mb-1">
                 {t('save.title')}
               </label>
               <input
@@ -440,11 +441,11 @@ const LandingPageCard = ({
                 value={saveTitle}
                 onChange={handleTitleChange}
                 disabled={saveBusy === 'create'}
-                className="w-full text-xs rounded-lg border border-slate-200 bg-white p-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                className="w-full text-xs rounded-lg border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset p-2 text-slate-800 dark:text-dk-text dark:placeholder-dk-muted focus:outline-none focus:ring-2 focus:ring-slate-300 dark:focus:ring-dk-border-strong"
               />
             </div>
             <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">
+              <label className="block text-[10px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wide mb-1">
                 {t('save.slug')}
               </label>
               <input
@@ -453,13 +454,13 @@ const LandingPageCard = ({
                 onChange={handleSlugChange}
                 placeholder={t('save.slugPlaceholder')}
                 disabled={saveBusy === 'create'}
-                className="w-full text-xs rounded-lg border border-slate-200 bg-white p-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                className="w-full text-xs rounded-lg border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset p-2 text-slate-800 dark:text-dk-text dark:placeholder-dk-muted focus:outline-none focus:ring-2 focus:ring-slate-300 dark:focus:ring-dk-border-strong"
               />
               {saveSlug && (
-                <p className="mt-1 text-[10px] text-slate-400 truncate">{getPublicUrlFromSlug(saveSlug)}</p>
+                <p className="mt-1 text-[10px] text-slate-400 dark:text-dk-muted truncate">{getPublicUrlFromSlug(saveSlug)}</p>
               )}
             </div>
-            <label className="flex items-center gap-2 text-xs text-slate-600">
+            <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-dk-text2">
               <input
                 type="checkbox"
                 checked={savePublishNow}
@@ -468,20 +469,20 @@ const LandingPageCard = ({
               />
               {t('save.publishNow')}
             </label>
-            {saveError && <p className="text-xs text-red-600">{saveError}</p>}
+            {saveError && <p className="text-xs text-red-600 dark:text-red-400">{saveError}</p>}
             <div className="flex items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setShowSaveForm(false)}
                 disabled={saveBusy === 'create'}
-                className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-800 rounded-lg transition"
+                className="px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-dk-text2 hover:text-slate-800 dark:hover:text-dk-text rounded-lg transition"
               >
                 {t('save.cancel')}
               </button>
               <button
                 type="submit"
                 disabled={saveBusy === 'create'}
-                className="px-4 py-1.5 text-xs font-bold bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white rounded-lg transition"
+                className="px-4 py-1.5 text-xs font-bold bg-slate-800 dark:bg-dk-strong hover:bg-slate-900 dark:hover:bg-dk-border-strong disabled:opacity-50 text-white rounded-lg transition"
               >
                 {saveBusy === 'create' ? t('save.saving') : t('save.submit')}
               </button>
@@ -490,8 +491,8 @@ const LandingPageCard = ({
         )}
 
         {isSaved && (
-          <div className="mt-3 bg-emerald-50 rounded-xl p-3 border border-emerald-200 space-y-2">
-            <div className="flex items-center gap-1.5 text-emerald-800 font-bold text-xs">
+          <div className="mt-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl p-3 border border-emerald-200 dark:border-emerald-800 space-y-2">
+            <div className="flex items-center gap-1.5 text-emerald-800 dark:text-emerald-300 font-bold text-xs">
               <HiOutlineCheck className="w-3.5 h-3.5" />
               <span>{t('save.saved')}</span>
             </div>
@@ -500,7 +501,7 @@ const LandingPageCard = ({
                 href={publicUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center gap-1 text-xs text-emerald-700 hover:text-emerald-900 underline truncate"
+                className="flex items-center gap-1 text-xs text-emerald-700 dark:text-emerald-300 hover:text-emerald-900 dark:hover:text-emerald-200 underline truncate"
               >
                 <HiOutlineGlobeAlt className="w-3.5 h-3.5 shrink-0" />
                 {publicUrl}
@@ -509,7 +510,7 @@ const LandingPageCard = ({
             <div className="flex items-center gap-2 flex-wrap">
               <Link
                 to={`/app/settings/landing-pages/${page.landingPageId}/edit`}
-                className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-emerald-200 text-emerald-700 text-[10px] font-bold rounded-lg hover:bg-emerald-100 transition"
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-white dark:bg-dk-surface border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-950/60 transition"
               >
                 <HiOutlinePencilAlt className="w-3 h-3" />
                 {t('save.openEditor')}
@@ -519,7 +520,7 @@ const LandingPageCard = ({
                   type="button"
                   onClick={handleTogglePublish}
                   disabled={Boolean(saveBusy)}
-                  className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-emerald-200 text-emerald-700 text-[10px] font-bold rounded-lg hover:bg-emerald-100 transition disabled:opacity-50"
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-white dark:bg-dk-surface border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-950/60 transition disabled:opacity-50"
                 >
                   {saveBusy === 'toggle' ? t('save.saving') : (page.isPublished ? t('save.unpublish') : t('save.publish'))}
                 </button>
@@ -529,7 +530,7 @@ const LandingPageCard = ({
                   type="button"
                   onClick={handleUpdateSaved}
                   disabled={Boolean(saveBusy)}
-                  className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-emerald-200 text-emerald-700 text-[10px] font-bold rounded-lg hover:bg-emerald-100 transition disabled:opacity-50"
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-white dark:bg-dk-surface border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-950/60 transition disabled:opacity-50"
                 >
                   <HiOutlineRefresh className="w-3 h-3" />
                   {saveBusy === 'update' ? t('save.updating') : t('save.updateButton')}
@@ -543,27 +544,27 @@ const LandingPageCard = ({
         {(layoutStatus === 'checking' || (okStatus && !okStripHidden) || stillBroken || canRevert) && (
           <div className="mt-3 space-y-2" data-testid="landing-layout-strip">
             {layoutStatus === 'checking' && (
-              <div role="status" className="flex items-center gap-2 text-[11px] text-slate-500">
-                <span className="w-3 h-3 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+              <div role="status" className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-dk-text2">
+                <span className="w-3 h-3 border-2 border-slate-400 dark:border-dk-border-strong border-t-transparent rounded-full animate-spin" />
                 {t('layoutChecking')}
               </div>
             )}
             {okStatus && !okStripHidden && (
-              <div role="status" className="text-[11px] font-semibold text-emerald-700">
+              <div role="status" className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
                 {t('layoutOk')}
               </div>
             )}
             {stillBroken && (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
-                <p className="flex items-start gap-1.5 text-xs text-amber-900">
-                  <HiOutlineExclamation className="w-4 h-4 flex-shrink-0 text-amber-600" />
+              <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-3 space-y-2">
+                <p className="flex items-start gap-1.5 text-xs text-amber-900 dark:text-amber-300">
+                  <HiOutlineExclamation className="w-4 h-4 flex-shrink-0 text-amber-600 dark:text-amber-400" />
                   <span>{describeFindingsForUser(layoutFindings, t)}</span>
                 </p>
                 <button
                   type="button"
                   onClick={handleRelayout}
                   disabled={isBusy}
-                  className="w-full py-2 bg-white border border-amber-300 text-amber-800 text-[11px] font-bold rounded-lg hover:bg-amber-100 transition disabled:opacity-50 flex items-center justify-center gap-1.5"
+                  className="w-full py-2 bg-white dark:bg-dk-surface border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 text-[11px] font-bold rounded-lg hover:bg-amber-100 dark:hover:bg-amber-950/60 transition disabled:opacity-50 flex items-center justify-center gap-1.5"
                 >
                   <HiOutlineRefresh className="w-3.5 h-3.5" />
                   {t('relayoutSection')}
@@ -575,7 +576,7 @@ const LandingPageCard = ({
                 type="button"
                 onClick={handleRevert}
                 disabled={isBusy || isReverting}
-                className="flex items-center gap-1 text-[11px] font-semibold text-slate-500 hover:text-slate-800 transition disabled:opacity-50"
+                className="flex items-center gap-1 text-[11px] font-semibold text-slate-500 dark:text-dk-text2 hover:text-slate-800 dark:hover:text-dk-text transition disabled:opacity-50"
               >
                 <HiOutlineReply className="w-3.5 h-3.5" />
                 {t('undo')}
@@ -588,7 +589,7 @@ const LandingPageCard = ({
         <div className="mt-4 space-y-2">
           <button
             onClick={handlePreview}
-            className="w-full py-2.5 bg-slate-800 text-white font-black text-[11px] uppercase tracking-widest rounded-xl hover:bg-slate-900 flex items-center justify-center gap-2"
+            className="w-full py-2.5 bg-slate-800 dark:bg-dk-strong text-white font-black text-[11px] uppercase tracking-widest rounded-xl hover:bg-slate-900 dark:hover:bg-dk-border-strong flex items-center justify-center gap-2"
           >
             <HiOutlineExternalLink className="w-4 h-4 text-orange-400" />
             {t('viewFullscreen')}
@@ -599,7 +600,7 @@ const LandingPageCard = ({
               className={`py-2.5 border font-black text-[10px] uppercase tracking-widest rounded-xl flex items-center justify-center gap-1 transition-all ${
                 showEditBox
                   ? 'bg-orange-500 border-orange-500 text-white shadow-sm'
-                  : 'bg-white border-orange-200 text-orange-700 hover:bg-orange-50'
+                  : 'bg-white dark:bg-dk-surface border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-300 hover:bg-orange-50 dark:hover:bg-orange-950/60'
               }`}
             >
               <HiOutlineSparkles className="w-3.5 h-3.5" />
@@ -608,15 +609,15 @@ const LandingPageCard = ({
             {showSaveButton && (
               <button
                 onClick={handleOpenSaveForm}
-                className="py-2.5 bg-white border border-slate-200 text-slate-700 font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-slate-50 flex items-center justify-center gap-1"
+                className="py-2.5 bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border text-slate-700 dark:text-dk-text font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-slate-50 dark:hover:bg-dk-raised flex items-center justify-center gap-1"
               >
-                <HiOutlinePencilAlt className="w-3.5 h-3.5 text-slate-500" />
+                <HiOutlinePencilAlt className="w-3.5 h-3.5 text-slate-500 dark:text-dk-text2" />
                 {t('save.button')}
               </button>
             )}
             <button
               onClick={() => onGenerateNew?.()}
-              className="py-2.5 bg-slate-50 border border-slate-200 text-slate-600 font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-slate-100 flex items-center justify-center gap-1"
+              className="py-2.5 bg-slate-50 dark:bg-dk-raised border border-slate-200 dark:border-dk-border text-slate-600 dark:text-dk-text2 font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-slate-100 dark:hover:bg-dk-strong flex items-center justify-center gap-1"
             >
               <HiOutlineSparkles className="w-3.5 h-3.5" />
               {t('createNew')}
@@ -627,6 +628,7 @@ const LandingPageCard = ({
 
       {/* Fullscreen Modal */}
       {showFullscreen && (
+        // giữ sáng: lớp xem toàn màn hình luôn nền đen (bg-black/slate-900); khung + iframe là trang của khách (bg-white), không dark:
         <div className="fixed inset-0 bg-black z-50 flex flex-col">
           <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 bg-slate-900">
             <span className="text-white font-bold text-sm">{page.title || 'Landing Page Preview'}</span>
