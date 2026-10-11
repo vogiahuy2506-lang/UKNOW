@@ -11,7 +11,7 @@ function PaymentPolicy() {
   const lc = getLangClass;
 
   return (
-    <div className="min-h-screen bg-slate-100/90 text-slate-900 antialiased">
+    <div className="min-h-screen bg-slate-100/90 dark:bg-dk-bg text-slate-900 dark:text-dk-text antialiased">
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
         .pp-body { font-family: 'Be Vietnam Pro', system-ui, sans-serif; line-height: 1.7; font-size: 15px; }
@@ -34,7 +34,7 @@ function PaymentPolicy() {
       `}</style>
       <div className="pp-body">
         {/* Header */}
-        <header className="relative border-b border-slate-800/80 bg-slate-950 text-white">
+        <header className="relative border-b border-slate-800/80 dark:border-dk-border bg-slate-950 dark:bg-dk-inset text-white">
           <div className="h-1 bg-gradient-to-r from-orange-500 via-red-500 to-pink-500" aria-hidden />
           <div
             className="pointer-events-none absolute inset-0 opacity-[0.35]"
@@ -75,7 +75,7 @@ function PaymentPolicy() {
                 onClick={() => setLanguage('vi')}
                 className={`flex-1 rounded-md px-4 py-2.5 text-[13px] font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
                   language === 'vi'
-                    ? 'bg-white text-slate-900 shadow-sm'
+                    ? 'bg-white text-slate-900 shadow-sm dark:bg-dk-strong dark:text-dk-text'
                     : 'text-slate-400 hover:bg-slate-800/80 hover:text-white'
                 }`}
               >
@@ -86,7 +86,7 @@ function PaymentPolicy() {
                 onClick={() => setLanguage('en')}
                 className={`flex-1 rounded-md px-4 py-2.5 text-[13px] font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
                   language === 'en'
-                    ? 'bg-white text-slate-900 shadow-sm'
+                    ? 'bg-white text-slate-900 shadow-sm dark:bg-dk-strong dark:text-dk-text'
                     : 'text-slate-400 hover:bg-slate-800/80 hover:text-white'
                 }`}
               >
@@ -98,21 +98,21 @@ function PaymentPolicy() {
 
         <div className="mx-auto max-w-4xl px-5 pb-24 pt-10 sm:px-8">
           {/* Meta info */}
-          <div className="mb-8 flex flex-wrap items-start gap-x-4 gap-y-3 rounded-xl border border-slate-200/90 bg-white px-5 py-4 shadow-sm">
+          <div className="mb-8 flex flex-wrap items-start gap-x-4 gap-y-3 rounded-xl border border-slate-200/90 dark:border-dk-border bg-white dark:bg-dk-surface px-5 py-4 shadow-sm">
             <span
               className="mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full bg-orange-500 ring-4 ring-orange-500/15"
               aria-hidden
             />
-            <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600">
+            <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600 dark:text-dk-text2">
               <span className={lc(language, 'vi')}>
                 Cập nhật ngày <strong>29/09/2026</strong> — Áp dụng từ <strong>29/09/2026</strong>
-                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 hover:underline">Các phiên bản đã lưu trữ</a>
+                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 dark:text-primary-400 hover:underline">Các phiên bản đã lưu trữ</a>
                 {'\u00a0'}|{'\u00a0'}
                 Áp dụng cho: founderai.biz
               </span>
               <span className={lc(language, 'en')}>
                 Last updated on <strong>September 29, 2026</strong> — Effective from <strong>September 29, 2026</strong>
-                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 hover:underline">Archived versions</a>
+                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 dark:text-primary-400 hover:underline">Archived versions</a>
                 {'\u00a0'}|{'\u00a0'}
                 Applies to: founderai.biz
               </span>
@@ -121,20 +121,20 @@ function PaymentPolicy() {
           <PolicyChangeNotice language={language} lc={lc} />
 
           {/* Section 1 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               1. Phương thức Thanh toán
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               1. Payment Methods
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               DIGISO áp dụng hai phương thức thanh toán sau. Hai phương thức này đều được thực hiện trên trang thanh toán của đơn hàng:
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               DIGISO applies the following two payment methods. Both are carried out on the order's payment page:
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
                 <strong>Thanh toán qua mã QR (cổng PayOS):</strong> Hệ thống hiển thị mã QR của đơn hàng; bạn mở ứng dụng ngân hàng (hoặc ứng dụng khác có hỗ trợ quét mã VietQR), quét mã và xác nhận thanh toán. Số tiền và nội dung chuyển khoản được điền sẵn theo đơn hàng; hệ thống tự động ghi nhận khi giao dịch thành công.
               </li>
@@ -148,29 +148,29 @@ function PaymentPolicy() {
                 <strong>Bank transfer:</strong> The receiving account information (bank, account number, account holder), the amount and the transfer content are displayed on the payment page during checkout. Please transfer the exact amount with the exact transfer content shown so that the order is identified and activated automatically.
               </li>
             </ul>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               Bạn có thể chọn phương thức thuận tiện nhất cho mình; mỗi đơn hàng chỉ cần thanh toán một lần theo một trong hai cách trên.
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               You may choose whichever method is most convenient; each order only needs to be paid once, using one of the two methods above.
             </p>
           </section>
 
           {/* Section 2 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               2. Bảo mật Thanh toán
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               2. Payment Security
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               DIGISO cam kết đảm bảo an toàn cho mọi giao dịch thanh toán:
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               DIGISO is committed to the safety of every payment transaction:
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
                 <strong>Mã hóa SSL/TLS:</strong> Thông tin trao đổi giữa bạn và nền tảng được mã hóa trên đường truyền.
               </li>
@@ -193,20 +193,20 @@ function PaymentPolicy() {
           </section>
 
           {/* Section 3 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               3. Quy trình Thanh toán
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               3. Payment Process
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               Quy trình thanh toán trên founderai.biz:
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               The payment process on founderai.biz:
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
                 <strong>Bước 1:</strong> Chọn gói dịch vụ phù hợp với nhu cầu.
               </li>
@@ -247,20 +247,20 @@ function PaymentPolicy() {
           </section>
 
           {/* Section 4 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               4. Xác nhận Thanh toán
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               4. Payment Confirmation
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               Sau khi thanh toán thành công, bạn sẽ nhận được:
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               After a successful payment, you will receive:
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
                 Email xác nhận thanh toán từ DIGISO.
               </li>
@@ -280,29 +280,29 @@ function PaymentPolicy() {
                 An e-invoice (if invoicing was requested).
               </li>
             </ul>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               <strong>Lưu ý:</strong> Thời gian xử lý thanh toán thông thường là vài giây đến vài phút. Trong một số trường hợp đặc biệt (ngân hàng bảo trì, lỗi mạng), thời gian có thể kéo dài hơn.
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               <strong>Note:</strong> Payment processing normally takes a few seconds to a few minutes. In special cases (bank maintenance, network errors) it may take longer.
             </p>
           </section>
 
           {/* Section 5 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               5. Hóa đơn điện tử
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               5. E-invoice
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               DIGISO thực hiện xuất hóa đơn theo đúng quy định của pháp luật:
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               DIGISO issues invoices in accordance with the law:
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
                 Hóa đơn được xuất ngay khi thanh toán thành công.
               </li>
@@ -331,20 +331,20 @@ function PaymentPolicy() {
           </section>
 
           {/* Section 6 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               6. Xử lý sự cố Thanh toán
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               6. Handling Payment Issues
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               Nếu gặp sự cố trong quá trình thanh toán:
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               If you encounter a problem during payment:
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
                 Kiểm tra kết nối internet và thử lại.
               </li>
@@ -373,20 +373,20 @@ function PaymentPolicy() {
           </section>
 
           {/* Section 7 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               7. Trường hợp thanh toán sai số tiền hoặc sai thông tin chuyển khoản
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               7. Incorrect Payment Amount or Transfer Information
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               Với chuyển khoản ngân hàng, khách hàng có trách nhiệm thanh toán đúng số tiền và đúng thông tin do founderai.biz hiển thị. Trường hợp Người dùng chuyển khoản sai số tiền, sai nội dung, sai tài khoản thụ hưởng hoặc gửi nhầm giao dịch, DIGISO xử lý như sau:
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               For bank transfers, the customer is responsible for paying the exact amount and using the exact information displayed by founderai.biz. If the User transfers the wrong amount, uses wrong content, uses a wrong beneficiary account or sends a transaction by mistake, DIGISO handles it as follows:
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
                 Người dùng thông báo ngay cho DIGISO qua email info@digiso.vn hoặc hotline 0877909606, cung cấp thông tin giao dịch, kèm ảnh chụp sao kê giao dịch, để DIGISO kiểm tra, đối soát và hướng dẫn xử lý.
               </li>
@@ -421,20 +421,20 @@ function PaymentPolicy() {
           </section>
 
           {/* Section 8 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               8. Phương thức hoàn tiền trong trường hợp chấm dứt dịch vụ hoặc đổi trả
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               8. Refund Method upon Service Termination or Return
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              Nếu đủ điều kiện hoàn tiền theo <a href="/refund-policy" className="text-orange-600 hover:underline">Chính sách chấm dứt dịch vụ và hoàn tiền</a>, khoản hoàn được thực hiện như sau:
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
+              Nếu đủ điều kiện hoàn tiền theo <a href="/refund-policy" className="text-orange-600 dark:text-primary-400 hover:underline">Chính sách chấm dứt dịch vụ và hoàn tiền</a>, khoản hoàn được thực hiện như sau:
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              If the conditions for a refund under the <a href="/refund-policy" className="text-orange-600 hover:underline">Service Termination and Refund Policy</a> are met, the refund is made as follows:
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
+              If the conditions for a refund under the <a href="/refund-policy" className="text-orange-600 dark:text-primary-400 hover:underline">Service Termination and Refund Policy</a> are met, the refund is made as follows:
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
                 <strong>Hình thức hoàn tiền:</strong> chuyển khoản ngân hàng về tài khoản đã dùng để thanh toán ban đầu hoặc tài khoản do Người dùng cung cấp (hoặc phương thức khác theo thỏa thuận).
               </li>
@@ -454,50 +454,50 @@ function PaymentPolicy() {
                 <strong>Bank transaction fees</strong> arising from the refund are borne by the User (if any).
               </li>
             </ul>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               Toàn bộ điều kiện, phạm vi và mức hoàn tiền được quy định tại Chính sách chấm dứt dịch vụ và hoàn tiền công khai tại founderai.biz.
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               All conditions, scope and amounts of refunds are set out in the Service Termination and Refund Policy published at founderai.biz.
             </p>
           </section>
 
           {/* Section 9 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               9. Cơ chế điểm thưởng, ưu đãi quy đổi
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               9. Reward Points and Redeemable Offers
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               Founder AI hiện không áp dụng cơ chế tích điểm, hoàn điểm hoặc ưu đãi quy đổi điểm khi thanh toán. Nếu áp dụng trong tương lai, DIGISO sẽ công khai cách hình thành và sử dụng điểm, phạm vi, điều kiện, tỷ lệ, giới hạn quy đổi và trách nhiệm của các bên; điểm không được quy đổi để rút tiền mặt.
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               Founder AI does not currently apply any points accrual, points refund or points-redemption offers for payments. If introduced in the future, DIGISO will publish how points are earned and used, their scope, conditions, rates, redemption limits and the parties' responsibilities; points cannot be exchanged for cash.
             </p>
           </section>
 
           {/* Section 10 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               10. Liên hệ
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               10. Contact
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               Nếu bạn có câu hỏi về Chính sách về thanh toán, vui lòng liên hệ:
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               If you have questions about the Payment Policy, please contact:
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
+                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 dark:text-primary-400 hover:underline">info@digiso.vn</a>
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
+                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 dark:text-primary-400 hover:underline">info@digiso.vn</a>
               </li>
               <li className={lc(language, 'vi')}>
                 <strong>Điện thoại:</strong> 0877909606
@@ -506,16 +506,16 @@ function PaymentPolicy() {
                 <strong>Phone:</strong> 0877909606
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Website:</strong> <a href="https://founderai.biz" className="text-orange-600 hover:underline">founderai.biz</a>
+                <strong>Website:</strong> <a href="https://founderai.biz" className="text-orange-600 dark:text-primary-400 hover:underline">founderai.biz</a>
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Website:</strong> <a href="https://founderai.biz" className="text-orange-600 hover:underline">founderai.biz</a>
+                <strong>Website:</strong> <a href="https://founderai.biz" className="text-orange-600 dark:text-primary-400 hover:underline">founderai.biz</a>
               </li>
             </ul>
           </section>
 
           {/* Contact Block */}
-          <div className="mt-10 overflow-hidden rounded-2xl border border-slate-700/30 bg-gradient-to-b from-slate-900 to-slate-950 px-5 py-8 text-white shadow-xl sm:px-8 sm:py-10">
+          <div className="mt-10 overflow-hidden rounded-2xl border border-slate-700/30 dark:border-dk-border bg-gradient-to-b from-slate-900 dark:from-dk-surface to-slate-950 dark:to-dk-inset px-5 py-8 text-white shadow-xl sm:px-8 sm:py-10">
             <div className="mb-6 max-w-2xl">
               <h2 className={`text-lg font-bold tracking-tight text-white sm:text-xl ${lc(language, 'vi')}`}>
                 Liên hệ hỗ trợ
@@ -539,7 +539,7 @@ function PaymentPolicy() {
           </div>
         </div>
 
-        <footer className="border-t border-slate-200 bg-white px-5 py-8 text-center text-[12px] text-slate-500">
+        <footer className="border-t border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface px-5 py-8 text-center text-[12px] text-slate-500 dark:text-dk-muted">
           <p className={lc(language, 'vi')}>
             © 2026 Công ty TNHH Giải pháp số DIGISO. Mọi quyền được bảo lưu.
           </p>

@@ -11,7 +11,7 @@ function ComplaintPolicy() {
   const lc = getLangClass;
 
   return (
-    <div className="min-h-screen bg-slate-100/90 text-slate-900 antialiased">
+    <div className="min-h-screen bg-slate-100/90 dark:bg-dk-bg text-slate-900 dark:text-dk-text antialiased">
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
         .pp-body { font-family: 'Be Vietnam Pro', system-ui, sans-serif; line-height: 1.7; font-size: 15px; }
@@ -34,7 +34,7 @@ function ComplaintPolicy() {
       `}</style>
       <div className="pp-body">
         {/* Header */}
-        <header className="relative border-b border-slate-800/80 bg-slate-950 text-white">
+        <header className="relative border-b border-slate-800/80 dark:border-dk-border bg-slate-950 dark:bg-dk-inset text-white">
           <div className="h-1 bg-gradient-to-r from-orange-500 via-red-500 to-pink-500" aria-hidden />
           <div
             className="pointer-events-none absolute inset-0 opacity-[0.35]"
@@ -75,7 +75,7 @@ function ComplaintPolicy() {
                 onClick={() => setLanguage('vi')}
                 className={`flex-1 rounded-md px-4 py-2.5 text-[13px] font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
                   language === 'vi'
-                    ? 'bg-white text-slate-900 shadow-sm'
+                    ? 'bg-white text-slate-900 shadow-sm dark:bg-dk-strong dark:text-dk-text'
                     : 'text-slate-400 hover:bg-slate-800/80 hover:text-white'
                 }`}
               >
@@ -86,7 +86,7 @@ function ComplaintPolicy() {
                 onClick={() => setLanguage('en')}
                 className={`flex-1 rounded-md px-4 py-2.5 text-[13px] font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
                   language === 'en'
-                    ? 'bg-white text-slate-900 shadow-sm'
+                    ? 'bg-white text-slate-900 shadow-sm dark:bg-dk-strong dark:text-dk-text'
                     : 'text-slate-400 hover:bg-slate-800/80 hover:text-white'
                 }`}
               >
@@ -98,21 +98,21 @@ function ComplaintPolicy() {
 
         <div className="mx-auto max-w-4xl px-5 pb-24 pt-10 sm:px-8">
           {/* Meta info */}
-          <div className="mb-8 flex flex-wrap items-start gap-x-4 gap-y-3 rounded-xl border border-slate-200/90 bg-white px-5 py-4 shadow-sm">
+          <div className="mb-8 flex flex-wrap items-start gap-x-4 gap-y-3 rounded-xl border border-slate-200/90 dark:border-dk-border bg-white dark:bg-dk-surface px-5 py-4 shadow-sm">
             <span
               className="mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full bg-orange-500 ring-4 ring-orange-500/15"
               aria-hidden
             />
-            <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600">
+            <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600 dark:text-dk-text2">
               <span className={lc(language, 'vi')}>
                 Cập nhật ngày <strong>29/09/2026</strong> — Áp dụng từ <strong>29/09/2026</strong>
-                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 hover:underline">Các phiên bản đã lưu trữ</a>
+                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 dark:text-primary-400 hover:underline">Các phiên bản đã lưu trữ</a>
                 {'\u00a0'}|{'\u00a0'}
                 Áp dụng cho: founderai.biz
               </span>
               <span className={lc(language, 'en')}>
                 Last updated on <strong>September 29, 2026</strong> — Effective from <strong>September 29, 2026</strong>
-                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 hover:underline">Archived versions</a>
+                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 dark:text-primary-400 hover:underline">Archived versions</a>
                 {'\u00a0'}|{'\u00a0'}
                 Applies to: founderai.biz
               </span>
@@ -121,41 +121,41 @@ function ComplaintPolicy() {
           <PolicyChangeNotice language={language} lc={lc} />
 
           {/* Section 1 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               1. Phạm vi áp dụng
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               1. Scope
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               Chính sách này quy định phương thức, quy trình tiếp nhận và giải quyết phản ánh, yêu cầu, khiếu nại của khách hàng đối với các dịch vụ cung cấp trên nền tảng founderai.biz do Công ty TNHH Giải pháp số DIGISO (DIGISO) là chủ quản, theo Điều 7 Nghị định 248/2026/NĐ-CP.
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               This policy sets out the methods and procedure for receiving and resolving feedback, requests and complaints from customers about the services provided on the founderai.biz platform operated by DIGISO Digital Solutions Co., Ltd. (DIGISO), in accordance with Article 7 of Decree 248/2026/NĐ-CP.
             </p>
           </section>
 
           {/* Section 2 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               2. Cách thức tiếp nhận
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               2. How to Submit
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               DIGISO tiếp nhận phản ánh, yêu cầu, khiếu nại qua các kênh sau (trong đó có phương thức liên hệ trực tuyến là email và trang liên hệ):
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               DIGISO receives feedback, requests and complaints through the following channels (including online contact by email and the contact page):
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
+                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 dark:text-primary-400 hover:underline">info@digiso.vn</a>
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
+                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 dark:text-primary-400 hover:underline">info@digiso.vn</a>
               </li>
               <li className={lc(language, 'vi')}>
                 <strong>Điện thoại:</strong> 0877909606 (8:00 - 22:00, Thứ 2 - Thứ 7)
@@ -164,29 +164,29 @@ function ComplaintPolicy() {
                 <strong>Phone:</strong> 0877909606 (8:00 AM - 10:00 PM, Monday - Saturday)
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Trang liên hệ:</strong> <a href="/contact" className="text-orange-600 hover:underline">founderai.biz/contact</a>
+                <strong>Trang liên hệ:</strong> <a href="/contact" className="text-orange-600 dark:text-primary-400 hover:underline">founderai.biz/contact</a>
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Contact page:</strong> <a href="/contact" className="text-orange-600 hover:underline">founderai.biz/contact</a>
+                <strong>Contact page:</strong> <a href="/contact" className="text-orange-600 dark:text-primary-400 hover:underline">founderai.biz/contact</a>
               </li>
             </ul>
           </section>
 
           {/* Section 3 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               3. Trình tự, thủ tục tiếp nhận và xử lý
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               3. Receiving and Handling Procedure
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               DIGISO giải quyết phản ánh, yêu cầu, khiếu nại theo các bước sau:
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               DIGISO handles feedback, requests and complaints through the following steps:
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
                 <strong>Bước 1 — Tiếp nhận:</strong> DIGISO tiếp nhận phản ánh, yêu cầu, khiếu nại qua các kênh được công bố tại mục 2.
               </li>
@@ -227,20 +227,20 @@ function ComplaintPolicy() {
           </section>
 
           {/* Section 4 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               4. Các loại khiếu nại được tiếp nhận và thông tin cần cung cấp
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               4. Types of Complaints Received and Information Required
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               DIGISO tiếp nhận các loại phản ánh, yêu cầu, khiếu nại sau:
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               DIGISO receives the following types of feedback, requests and complaints:
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
                 Chất lượng dịch vụ không đúng như công bố.
               </li>
@@ -278,13 +278,13 @@ function ComplaintPolicy() {
                 Other lawful rights and interests of the customer or as provided by law.
               </li>
             </ul>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               Để việc xử lý nhanh chóng, khi gửi phản ánh, yêu cầu, khiếu nại, vui lòng cung cấp:
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               For prompt handling, please provide the following when submitting:
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
                 Tên công ty, mã số thuế (đối với doanh nghiệp, tổ chức); họ và tên (đối với cá nhân).
               </li>
@@ -328,29 +328,29 @@ function ComplaintPolicy() {
                 Your desired resolution.
               </li>
             </ul>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               DIGISO cam kết bảo mật thông tin của người gửi và chỉ sử dụng thông tin đó để xác minh, xử lý vụ việc.
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               DIGISO undertakes to keep the sender's information confidential and to use it only to verify and handle the matter.
             </p>
           </section>
 
           {/* Section 5 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               5. Thời hạn phản hồi
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               5. Response Timeframes
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               DIGISO cam kết các thời hạn phản hồi ban đầu và thời hạn dự kiến giải quyết như sau:
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               DIGISO commits to the following initial response and expected resolution timeframes:
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
                 <strong>Xác nhận tiếp nhận (phản hồi ban đầu):</strong> trong vòng 24 giờ làm việc.
               </li>
@@ -370,29 +370,29 @@ function ComplaintPolicy() {
                 <strong>Complex complaints:</strong> resolved within 7 business days.
               </li>
             </ul>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               Thời hạn được tính từ ngày DIGISO nhận đủ thông tin và tài liệu cần thiết. Trường hợp cần kéo dài thời hạn, DIGISO thông báo cho khách hàng lý do và thời gian dự kiến giải quyết.
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               Timeframes are counted from the date DIGISO receives the complete information and documents required. If more time is needed, DIGISO will notify you of the reason and the expected resolution time.
             </p>
           </section>
 
           {/* Section 6 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               6. Biện pháp và công cụ hỗ trợ giải quyết
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               6. Measures and Tools Used to Support Resolution
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               Để hỗ trợ giải quyết, DIGISO áp dụng các biện pháp, công cụ sau:
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               To support resolution, DIGISO applies the following measures and tools:
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
                 Đối soát đơn hàng, lịch sử thanh toán và hóa đơn của tài khoản liên quan trên hệ thống.
               </li>
@@ -421,25 +421,25 @@ function ComplaintPolicy() {
           </section>
 
           {/* Section 7 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               7. Trường hợp không đạt được thỏa thuận
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               7. Where No Agreement Is Reached
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               Nếu không hài lòng với phương án giải quyết của DIGISO, khách hàng có thể yêu cầu DIGISO xem xét lại và cung cấp thêm tài liệu, thông tin. Trường hợp không giải quyết được bằng thương lượng, khách hàng có quyền:
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               If you are not satisfied with DIGISO's resolution, you may ask DIGISO to reconsider and provide additional documents and information. If the matter cannot be resolved by negotiation, you have the right to:
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                Yêu cầu chuyển lên cấp quản lý cao hơn của DIGISO qua email <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>.
+                Yêu cầu chuyển lên cấp quản lý cao hơn của DIGISO qua email <a href="mailto:info@digiso.vn" className="text-orange-600 dark:text-primary-400 hover:underline">info@digiso.vn</a>.
               </li>
               <li className={lc(language, 'en')}>
-                Request escalation to a higher level of DIGISO management via email <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>.
+                Request escalation to a higher level of DIGISO management via email <a href="mailto:info@digiso.vn" className="text-orange-600 dark:text-primary-400 hover:underline">info@digiso.vn</a>.
               </li>
               <li className={lc(language, 'vi')}>
                 Đề nghị cơ quan quản lý nhà nước có thẩm quyền, tổ chức bảo vệ quyền lợi người tiêu dùng hoặc Tòa án có thẩm quyền tại Việt Nam giải quyết theo quy định pháp luật, trong đó có Sở Công Thương nơi DIGISO đặt trụ sở (Thành phố Hồ Chí Minh).
@@ -457,25 +457,25 @@ function ComplaintPolicy() {
           </section>
 
           {/* Section 8 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               8. Liên hệ
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               8. Contact
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               Nếu bạn có câu hỏi hoặc cần hỗ trợ, vui lòng liên hệ:
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               If you have questions or need assistance, please contact:
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
+                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 dark:text-primary-400 hover:underline">info@digiso.vn</a>
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
+                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 dark:text-primary-400 hover:underline">info@digiso.vn</a>
               </li>
               <li className={lc(language, 'vi')}>
                 <strong>Điện thoại:</strong> 0877909606
@@ -484,16 +484,16 @@ function ComplaintPolicy() {
                 <strong>Phone:</strong> 0877909606
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Website:</strong> <a href="https://founderai.biz" className="text-orange-600 hover:underline">founderai.biz</a>
+                <strong>Website:</strong> <a href="https://founderai.biz" className="text-orange-600 dark:text-primary-400 hover:underline">founderai.biz</a>
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Website:</strong> <a href="https://founderai.biz" className="text-orange-600 hover:underline">founderai.biz</a>
+                <strong>Website:</strong> <a href="https://founderai.biz" className="text-orange-600 dark:text-primary-400 hover:underline">founderai.biz</a>
               </li>
             </ul>
           </section>
 
           {/* Contact Block */}
-          <div className="mt-10 overflow-hidden rounded-2xl border border-slate-700/30 bg-gradient-to-b from-slate-900 to-slate-950 px-5 py-8 text-white shadow-xl sm:px-8 sm:py-10">
+          <div className="mt-10 overflow-hidden rounded-2xl border border-slate-700/30 dark:border-dk-border bg-gradient-to-b from-slate-900 dark:from-dk-surface to-slate-950 dark:to-dk-inset px-5 py-8 text-white shadow-xl sm:px-8 sm:py-10">
             <div className="mb-6 max-w-2xl">
               <h2 className={`text-lg font-bold tracking-tight text-white sm:text-xl ${lc(language, 'vi')}`}>
                 Liên hệ hỗ trợ
@@ -517,7 +517,7 @@ function ComplaintPolicy() {
           </div>
         </div>
 
-        <footer className="border-t border-slate-200 bg-white px-5 py-8 text-center text-[12px] text-slate-500">
+        <footer className="border-t border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface px-5 py-8 text-center text-[12px] text-slate-500 dark:text-dk-muted">
           <p className={lc(language, 'vi')}>
             © 2026 Công ty TNHH Giải pháp số DIGISO. Mọi quyền được bảo lưu.
           </p>

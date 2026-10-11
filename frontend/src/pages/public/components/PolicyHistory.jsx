@@ -55,29 +55,29 @@ export default function PolicyHistory({ slug, language, lc }) {
     <section
       id="lich-su-cap-nhat"
       data-policy-history
-      className="mt-10 scroll-mt-6 rounded-xl border border-slate-200 bg-white px-5 py-5 shadow-sm sm:px-7 sm:py-6"
+      className="mt-10 scroll-mt-6 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface px-5 py-5 shadow-sm sm:px-7 sm:py-6"
       aria-label={language === 'vi' ? 'Lịch sử cập nhật' : 'Update history'}
     >
-      <h3 className={`mb-1.5 text-base font-semibold text-slate-800 ${lc(language, 'vi')}`}>
+      <h3 className={`mb-1.5 text-base font-semibold text-slate-800 dark:text-dk-text ${lc(language, 'vi')}`}>
         {labels.vi.title}
       </h3>
-      <h3 className={`mb-1.5 text-base font-semibold text-slate-800 ${lc(language, 'en')}`}>
+      <h3 className={`mb-1.5 text-base font-semibold text-slate-800 dark:text-dk-text ${lc(language, 'en')}`}>
         {labels.en.title}
       </h3>
-      <p className={`mb-4 text-[13px] text-slate-500 ${lc(language, 'vi')}`}>{labels.vi.hint}</p>
-      <p className={`mb-4 text-[13px] text-slate-500 ${lc(language, 'en')}`}>{labels.en.hint}</p>
+      <p className={`mb-4 text-[13px] text-slate-500 dark:text-dk-muted ${lc(language, 'vi')}`}>{labels.vi.hint}</p>
+      <p className={`mb-4 text-[13px] text-slate-500 dark:text-dk-muted ${lc(language, 'en')}`}>{labels.en.hint}</p>
       <ol className="space-y-2.5">
         {versions.map((date, idx) => {
           const label = formatPolicyDate(date);
           return (
             <li
               key={date}
-              className="flex flex-col gap-0.5 border-l-2 border-orange-400/70 pl-3 text-[13px] text-slate-600 sm:flex-row sm:gap-3"
+              className="flex flex-col gap-0.5 border-l-2 border-orange-400/70 pl-3 text-[13px] text-slate-600 dark:text-dk-text2 sm:flex-row sm:gap-3"
             >
               {idx === 0 ? (
                 <>
-                  <span className={`${dateClass} text-slate-700 ${lc(language, 'vi')}`}>{label.vi}</span>
-                  <span className={`${dateClass} text-slate-700 ${lc(language, 'en')}`}>{label.en}</span>
+                  <span className={`${dateClass} text-slate-700 dark:text-dk-text2 ${lc(language, 'vi')}`}>{label.vi}</span>
+                  <span className={`${dateClass} text-slate-700 dark:text-dk-text2 ${lc(language, 'en')}`}>{label.en}</span>
                   <span className={lc(language, 'vi')}>{labels.vi.current}</span>
                   <span className={lc(language, 'en')}>{labels.en.current}</span>
                 </>
@@ -85,13 +85,13 @@ export default function PolicyHistory({ slug, language, lc }) {
                 <>
                   <Link
                     to={`/policy-versions/${slug}/${date}`}
-                    className={`${dateClass} text-orange-600 hover:underline ${lc(language, 'vi')}`}
+                    className={`${dateClass} text-orange-600 dark:text-primary-400 hover:underline ${lc(language, 'vi')}`}
                   >
                     {label.vi}
                   </Link>
                   <Link
                     to={`/policy-versions/${slug}/${date}`}
-                    className={`${dateClass} text-orange-600 hover:underline ${lc(language, 'en')}`}
+                    className={`${dateClass} text-orange-600 dark:text-primary-400 hover:underline ${lc(language, 'en')}`}
                   >
                     {label.en}
                   </Link>

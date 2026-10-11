@@ -10,7 +10,7 @@ function PricingPolicy() {
   const lc = getLangClass;
 
   return (
-    <div className="min-h-screen bg-slate-100/90 text-slate-900 antialiased">
+    <div className="min-h-screen bg-slate-100/90 dark:bg-dk-bg text-slate-900 dark:text-dk-text antialiased">
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
         .pp-body { font-family: 'Be Vietnam Pro', system-ui, sans-serif; line-height: 1.7; font-size: 15px; }
@@ -33,7 +33,7 @@ function PricingPolicy() {
       `}</style>
       <div className="pp-body">
         {/* Header */}
-        <header className="relative border-b border-slate-800/80 bg-slate-950 text-white">
+        <header className="relative border-b border-slate-800/80 dark:border-dk-border bg-slate-950 dark:bg-dk-inset text-white">
           <div className="h-1 bg-gradient-to-r from-orange-500 via-red-500 to-pink-500" aria-hidden />
           <div
             className="pointer-events-none absolute inset-0 opacity-[0.35]"
@@ -74,7 +74,7 @@ function PricingPolicy() {
                 onClick={() => setLanguage('vi')}
                 className={`flex-1 rounded-md px-4 py-2.5 text-[13px] font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
                   language === 'vi'
-                    ? 'bg-white text-slate-900 shadow-sm'
+                    ? 'bg-white text-slate-900 shadow-sm dark:bg-dk-strong dark:text-dk-text'
                     : 'text-slate-400 hover:bg-slate-800/80 hover:text-white'
                 }`}
               >
@@ -85,7 +85,7 @@ function PricingPolicy() {
                 onClick={() => setLanguage('en')}
                 className={`flex-1 rounded-md px-4 py-2.5 text-[13px] font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
                   language === 'en'
-                    ? 'bg-white text-slate-900 shadow-sm'
+                    ? 'bg-white text-slate-900 shadow-sm dark:bg-dk-strong dark:text-dk-text'
                     : 'text-slate-400 hover:bg-slate-800/80 hover:text-white'
                 }`}
               >
@@ -97,21 +97,21 @@ function PricingPolicy() {
 
         <div className="mx-auto max-w-4xl px-5 pb-24 pt-10 sm:px-8">
           {/* Meta info */}
-          <div className="mb-8 flex flex-wrap items-start gap-x-4 gap-y-3 rounded-xl border border-slate-200/90 bg-white px-5 py-4 shadow-sm">
+          <div className="mb-8 flex flex-wrap items-start gap-x-4 gap-y-3 rounded-xl border border-slate-200/90 dark:border-dk-border bg-white dark:bg-dk-surface px-5 py-4 shadow-sm">
             <span
               className="mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full bg-orange-500 ring-4 ring-orange-500/15"
               aria-hidden
             />
-            <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600">
+            <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600 dark:text-dk-text2">
               <span className={lc(language, 'vi')}>
                 Cập nhật ngày <strong>29/09/2026</strong> — Áp dụng từ <strong>29/09/2026</strong>
-                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 hover:underline">Các phiên bản đã lưu trữ</a>
+                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 dark:text-primary-400 hover:underline">Các phiên bản đã lưu trữ</a>
                 {'\u00a0'}|{'\u00a0'}
                 Áp dụng cho: founderai.biz
               </span>
               <span className={lc(language, 'en')}>
                 Last updated on <strong>September 29, 2026</strong> — Effective from <strong>September 29, 2026</strong>
-                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 hover:underline">Archived versions</a>
+                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 dark:text-primary-400 hover:underline">Archived versions</a>
                 {'\u00a0'}|{'\u00a0'}
                 Applies to: founderai.biz
               </span>
@@ -119,20 +119,20 @@ function PricingPolicy() {
           </div>
 
           {/* Section 1 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               1. Quy định chung về Giá
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               1. General Pricing Regulations
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               DIGISO cam kết minh bạch trong việc công bố giá dịch vụ. Tất cả các mức giá được hiển thị trên nền tảng founderai.biz là giá cuối cùng bạn thanh toán. Dịch vụ phần mềm của Founder AI thuộc đối tượng <strong>không chịu thuế giá trị gia tăng (GTGT)</strong> theo Luật Thuế GTGT, nên không có khoản thuế cộng thêm; hoá đơn điện tử ghi thuế suất KCT.
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               DIGISO commits to transparency in service pricing. All prices displayed on the founderai.biz platform are the final amount you pay. Founder AI's software service is <strong>not subject to value-added tax (VAT)</strong> under Vietnam's VAT Law, so no tax is added; the e-invoice shows the tax rate as KCT (not subject to VAT).
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
                 <strong>Thuế GTGT:</strong> Dịch vụ không chịu thuế GTGT, hoá đơn ghi KCT, không có khoản thuế cộng thêm.
               </li>
@@ -167,20 +167,20 @@ function PricingPolicy() {
           </section>
 
           {/* Section 2 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               2. Các gói dịch vụ và Bảng giá
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               2. Service Packages and Pricing
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              Biểu giá các gói dịch vụ được công bố công khai tại trang <a href="/pricing" className="text-orange-600 hover:underline">Bảng giá</a> của nền tảng. Gói dịch vụ có thời hạn theo tháng hoặc theo năm; giá theo tháng và giá theo năm của từng gói được niêm yết riêng trên trang Bảng giá.
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
+              Biểu giá các gói dịch vụ được công bố công khai tại trang <a href="/pricing" className="text-orange-600 dark:text-primary-400 hover:underline">Bảng giá</a> của nền tảng. Gói dịch vụ có thời hạn theo tháng hoặc theo năm; giá theo tháng và giá theo năm của từng gói được niêm yết riêng trên trang Bảng giá.
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              The price list of service packages is published on the platform's <a href="/pricing" className="text-orange-600 hover:underline">Pricing</a> page. Packages have a monthly or yearly term; the monthly and yearly price of each package are listed separately on the Pricing page.
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
+              The price list of service packages is published on the platform's <a href="/pricing" className="text-orange-600 dark:text-primary-400 hover:underline">Pricing</a> page. Packages have a monthly or yearly term; the monthly and yearly price of each package are listed separately on the Pricing page.
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
                 <strong>Gói Dùng thử:</strong> Trải nghiệm nền tảng với hạn mức giới hạn, không thu phí.
               </li>
@@ -218,29 +218,29 @@ function PricingPolicy() {
                 <strong>Custom package:</strong> The customer chooses the number of Zalo messages, emails, AI usage, accounts, etc. and pays immediately. The price is determined by the configuration chosen, and is displayed and confirmed by the customer before placing the order.
               </li>
             </ul>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               Cách tính giá: giá của từng gói là mức phí trọn gói cho một kỳ (một tháng hoặc một năm), thu một lần khi đặt mua; giá áp dụng là mức hiển thị trên nền tảng tại thời điểm khách hàng xác nhận đặt hàng và bắt đầu áp dụng từ thời điểm gói được kích hoạt.
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               How prices are calculated: the price of each package is an all-inclusive fee for one term (one month or one year), collected once at purchase; the applicable price is the one displayed on the platform when the customer confirms the order, and applies from the time the package is activated.
             </p>
           </section>
 
           {/* Section 3 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               3. Phương thức Thanh toán
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               3. Payment Methods
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              DIGISO hỗ trợ các phương thức thanh toán sau (chi tiết xem <a href="/payment-policy" className="text-orange-600 hover:underline">Chính sách về thanh toán</a>):
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
+              DIGISO hỗ trợ các phương thức thanh toán sau (chi tiết xem <a href="/payment-policy" className="text-orange-600 dark:text-primary-400 hover:underline">Chính sách về thanh toán</a>):
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              DIGISO supports the following payment methods (see the <a href="/payment-policy" className="text-orange-600 hover:underline">Payment Policy</a> for details):
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
+              DIGISO supports the following payment methods (see the <a href="/payment-policy" className="text-orange-600 dark:text-primary-400 hover:underline">Payment Policy</a> for details):
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
                 <strong>Thanh toán qua mã QR (cổng PayOS):</strong> Sử dụng ứng dụng ngân hàng để quét mã QR.
               </li>
@@ -257,20 +257,20 @@ function PricingPolicy() {
           </section>
 
           {/* Section 4 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               4. Chu kỳ Thanh toán
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               4. Billing Cycles
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               DIGISO cung cấp các chu kỳ thanh toán sau:
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               DIGISO offers the following billing cycles:
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
                 <strong>Gói theo tháng:</strong> thời hạn 30 ngày kể từ ngày gói được kích hoạt. Phí được thu một lần khi đặt mua; Founder AI không tự động trừ tiền để gia hạn — khi hết hạn, bạn chủ động đặt mua gia hạn.
               </li>
@@ -290,35 +290,35 @@ function PricingPolicy() {
                 <strong>Usage quotas:</strong> the package quotas (messages, AI usage, etc.) are refreshed every 30 days counted from the package activation date.
               </li>
             </ul>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               <strong>Khi chuyển đổi gói:</strong> Nâng lên gói cao hơn: gói mới có hiệu lực ngay, thời hạn tính lại từ ngày nâng cấp; thời gian còn lại của gói cũ không được quy đổi hay hoàn tiền. Chuyển xuống gói thấp hơn: bạn thanh toán trước cho gói mới, gói hiện tại được dùng hết chu kỳ và gói mới tự kích hoạt khi chu kỳ kết thúc; lệnh hẹn này không huỷ được và không hoàn tiền.
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               <strong>When changing packages:</strong> Upgrading to a higher-tier package: the new package takes effect immediately and its term restarts from the upgrade date; the remaining time on the old package cannot be converted or refunded. Downgrading to a lower-tier package: you prepay for the new package, the current package continues until the end of its cycle and the new package activates automatically when that cycle ends; this scheduled change cannot be cancelled and is not refundable.
             </p>
           </section>
 
           {/* Section 5 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               5. Khuyến mại, ưu đãi và điều chỉnh Giá
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               5. Promotions, Offers and Price Adjustments
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               Khi có chương trình khuyến mại, ưu đãi (bao gồm mã giảm giá), DIGISO công khai mức giá áp dụng, điều kiện, phạm vi và thời gian áp dụng của từng đợt trên nền tảng, và thông tin đầy đủ hoặc tóm tắt về hình thức khuyến mại được hiển thị cho người mua trước khi đặt hàng.
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               When a promotion or offer (including discount codes) is available, DIGISO publishes on the platform the applicable price, conditions, scope and period of each campaign, and full or summary information on the promotion is shown to the buyer before ordering.
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               DIGISO có thể điều chỉnh giá dịch vụ trong các trường hợp sau:
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               DIGISO may adjust service prices in the following cases:
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
                 Thay đổi thuế suất VAT theo quy định của pháp luật.
               </li>
@@ -344,40 +344,40 @@ function PricingPolicy() {
                 Application of promotional programs.
               </li>
             </ul>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               DIGISO thông báo cho người dùng về việc điều chỉnh giá ít nhất 30 ngày trước khi áp dụng bằng email và thông báo trên nền tảng (không ít hơn 20 ngày công khai theo Điều 8 Nghị định 248/2026/NĐ-CP), trừ trường hợp thay đổi để tuân thủ quy định pháp luật về thuế hoặc theo thời gian của chương trình khuyến mại. Việc điều chỉnh giá không làm thay đổi khoản phí đã thanh toán cho thời hạn gói đã mua, trừ khi có thỏa thuận khác.
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               DIGISO notifies users of price adjustments at least 30 days before they apply, by email and platform notification (in any case no less than the 20 days' public notice required by Article 8 of Decree 248/2026/NĐ-CP), except for changes made to comply with tax law or in line with the duration of a promotion. A price adjustment does not change the fee already paid for the term of a purchased package, unless otherwise agreed.
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               Đối với dịch vụ cung cấp liên tục, định kỳ, người dùng có quyền ngừng sử dụng hoặc chấm dứt dịch vụ nếu không đồng ý với mức phí mới trước ngày mức phí đó có hiệu lực; việc tiếp tục sử dụng sau ngày hiệu lực được xem là chấp nhận mức phí mới.
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               For continuously or periodically provided services, users may stop using or terminate the service if they do not agree to the new fee before it takes effect; continued use after the effective date is deemed acceptance of the new fee.
             </p>
           </section>
 
           {/* Section 6 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               6. Liên hệ
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               6. Contact
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               Nếu bạn có câu hỏi về Chính sách về giá, vui lòng liên hệ:
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               If you have questions about the Pricing Policy, please contact:
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
+                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 dark:text-primary-400 hover:underline">info@digiso.vn</a>
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
+                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 dark:text-primary-400 hover:underline">info@digiso.vn</a>
               </li>
               <li className={lc(language, 'vi')}>
                 <strong>Điện thoại:</strong> 0877909606
@@ -386,16 +386,16 @@ function PricingPolicy() {
                 <strong>Phone:</strong> 0877909606
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Website:</strong> <a href="https://founderai.biz" className="text-orange-600 hover:underline">founderai.biz</a>
+                <strong>Website:</strong> <a href="https://founderai.biz" className="text-orange-600 dark:text-primary-400 hover:underline">founderai.biz</a>
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Website:</strong> <a href="https://founderai.biz" className="text-orange-600 hover:underline">founderai.biz</a>
+                <strong>Website:</strong> <a href="https://founderai.biz" className="text-orange-600 dark:text-primary-400 hover:underline">founderai.biz</a>
               </li>
             </ul>
           </section>
 
           {/* Contact Block */}
-          <div className="mt-10 overflow-hidden rounded-2xl border border-slate-700/30 bg-gradient-to-b from-slate-900 to-slate-950 px-5 py-8 text-white shadow-xl sm:px-8 sm:py-10">
+          <div className="mt-10 overflow-hidden rounded-2xl border border-slate-700/30 dark:border-dk-border bg-gradient-to-b from-slate-900 dark:from-dk-surface to-slate-950 dark:to-dk-inset px-5 py-8 text-white shadow-xl sm:px-8 sm:py-10">
             <div className="mb-6 max-w-2xl">
               <h2 className={`text-lg font-bold tracking-tight text-white sm:text-xl ${lc(language, 'vi')}`}>
                 Liên hệ hỗ trợ
@@ -419,7 +419,7 @@ function PricingPolicy() {
           </div>
         </div>
 
-        <footer className="border-t border-slate-200 bg-white px-5 py-8 text-center text-[12px] text-slate-500">
+        <footer className="border-t border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface px-5 py-8 text-center text-[12px] text-slate-500 dark:text-dk-muted">
           <p className={lc(language, 'vi')}>
             © 2026 Công ty TNHH Giải pháp số DIGISO. Mọi quyền được bảo lưu.
           </p>

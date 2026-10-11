@@ -240,8 +240,8 @@ const SECTIONS = [
 ];
 
 function Block({ block, language }) {
-  const subBar = 'mb-3 mt-[18px] flex items-center gap-2.5 text-sm font-semibold text-slate-800';
-  const body = 'mb-[10px] text-slate-600 leading-relaxed';
+  const subBar = 'mb-3 mt-[18px] flex items-center gap-2.5 text-sm font-semibold text-slate-800 dark:text-dk-text';
+  const body = 'mb-[10px] text-slate-600 dark:text-dk-text2 leading-relaxed';
   const renderItem = (it, i) => {
     const bold = language === 'vi' ? it.bvi : it.ben;
     return (
@@ -262,27 +262,27 @@ function Block({ block, language }) {
   if (block.k === 'p') return <p className={body}>{block[language]}</p>;
   if (block.k === 'n') {
     return (
-      <div className="mt-[14px] rounded-lg border border-slate-200/90 border-l-4 border-l-orange-500 bg-slate-50 px-[18px] py-[14px] text-[13.5px] text-slate-800 shadow-sm">
+      <div className="mt-[14px] rounded-lg border border-slate-200/90 dark:border-dk-border border-l-4 border-l-orange-500 bg-slate-50 dark:bg-dk-raised px-[18px] py-[14px] text-[13.5px] text-slate-800 dark:text-dk-text shadow-sm">
         {block[language]}
       </div>
     );
   }
   if (block.k === 'ol') {
-    return <ol className="list-decimal space-y-[7px] pl-5 text-slate-600 leading-relaxed mb-[10px]">{block.items.map(renderItem)}</ol>;
+    return <ol className="list-decimal space-y-[7px] pl-5 text-slate-600 dark:text-dk-text2 leading-relaxed mb-[10px]">{block.items.map(renderItem)}</ol>;
   }
-  return <ul className="mb-[10px] list-disc space-y-[7px] pl-5 text-slate-600 leading-relaxed">{block.items.map(renderItem)}</ul>;
+  return <ul className="mb-[10px] list-disc space-y-[7px] pl-5 text-slate-600 dark:text-dk-text2 leading-relaxed">{block.items.map(renderItem)}</ul>;
 }
 
 export default function PrivacyPolicyControllerPanel({ language }) {
   return (
     <div className="space-y-6">
       {SECTIONS.map((s) => (
-        <section key={s.num} className="pp-section px-5 py-6 sm:px-8 sm:py-8">
-          <div className="mb-5 flex items-start gap-4 border-b border-slate-100 pb-4">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-[13px] font-semibold tabular-nums text-slate-800 shadow-sm">
+        <section key={s.num} className="pp-section dark:bg-dk-surface dark:border-dk-border px-5 py-6 sm:px-8 sm:py-8">
+          <div className="mb-5 flex items-start gap-4 border-b border-slate-100 dark:border-dk-border pb-4">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-raised text-[13px] font-semibold tabular-nums text-slate-800 dark:text-dk-text shadow-sm">
               {s.num}
             </div>
-            <h3 className="pt-0.5 text-lg font-bold tracking-tight text-slate-900 sm:text-xl">{s.title[language]}</h3>
+            <h3 className="pt-0.5 text-lg font-bold tracking-tight text-slate-900 dark:text-dk-text sm:text-xl">{s.title[language]}</h3>
           </div>
           {s.blocks.map((b, i) => (
             <Block key={i} block={b} language={language} />

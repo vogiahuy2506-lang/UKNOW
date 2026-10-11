@@ -254,8 +254,8 @@ const ARTICLES = [
 ];
 
 function Block({ block, language }) {
-  const subBar = 'mb-3 mt-[18px] flex items-center gap-2.5 text-sm font-semibold text-slate-800';
-  const body = 'mb-3 text-slate-700 leading-relaxed';
+  const subBar = 'mb-3 mt-[18px] flex items-center gap-2.5 text-sm font-semibold text-slate-800 dark:text-dk-text';
+  const body = 'mb-3 text-slate-700 dark:text-dk-text2 leading-relaxed';
   const renderItem = (it, i) => {
     const bold = language === 'vi' ? it.bvi : it.ben;
     return (
@@ -271,15 +271,15 @@ function Block({ block, language }) {
   if (block.k === 'p') return <p className={body}>{block[language]}</p>;
   if (block.k === 'n') {
     return (
-      <div className="mt-3 rounded-lg border border-slate-200/90 border-l-4 border-l-orange-500 bg-slate-50 px-[18px] py-[14px] text-[13.5px] text-slate-800 shadow-sm">
+      <div className="mt-3 rounded-lg border border-slate-200/90 dark:border-dk-border border-l-4 border-l-orange-500 bg-slate-50 dark:bg-dk-raised px-[18px] py-[14px] text-[13.5px] text-slate-800 dark:text-dk-text shadow-sm">
         {block[language]}
       </div>
     );
   }
   if (block.k === 'ol') {
-    return <ol className="mb-3 list-decimal space-y-2 pl-6 text-slate-700 leading-relaxed">{block.items.map(renderItem)}</ol>;
+    return <ol className="mb-3 list-decimal space-y-2 pl-6 text-slate-700 dark:text-dk-text2 leading-relaxed">{block.items.map(renderItem)}</ol>;
   }
-  return <ul className="mb-3 list-disc space-y-2 pl-6 text-slate-700 leading-relaxed">{block.items.map(renderItem)}</ul>;
+  return <ul className="mb-3 list-disc space-y-2 pl-6 text-slate-700 dark:text-dk-text2 leading-relaxed">{block.items.map(renderItem)}</ul>;
 }
 
 /**
@@ -291,7 +291,7 @@ function PublicDPA() {
   const lc = getLangClass;
 
   return (
-    <div className="min-h-screen bg-slate-100/90 text-slate-900 antialiased">
+    <div className="min-h-screen bg-slate-100/90 dark:bg-dk-bg text-slate-900 dark:text-dk-text antialiased">
       <style>
         {`
           @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
@@ -309,7 +309,7 @@ function PublicDPA() {
       </style>
       <div className="pp-body">
         {/* Header */}
-        <header className="relative border-b border-slate-800/80 bg-slate-950 text-white">
+        <header className="relative border-b border-slate-800/80 dark:border-dk-border bg-slate-950 dark:bg-dk-inset text-white">
           <div className="h-1 bg-gradient-to-r from-orange-500 via-red-500 to-pink-500" aria-hidden />
           <div
             className="pointer-events-none absolute inset-0 opacity-[0.35]"
@@ -354,7 +354,7 @@ function PublicDPA() {
                 onClick={() => setLanguage('vi')}
                 className={`flex-1 rounded-md px-4 py-2.5 text-[13px] font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
                   language === 'vi'
-                    ? 'bg-white text-slate-900 shadow-sm'
+                    ? 'bg-white text-slate-900 shadow-sm dark:bg-dk-strong dark:text-dk-text'
                     : 'text-slate-400 hover:bg-slate-800/80 hover:text-white'
                 }`}
               >
@@ -365,7 +365,7 @@ function PublicDPA() {
                 onClick={() => setLanguage('en')}
                 className={`flex-1 rounded-md px-4 py-2.5 text-[13px] font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
                   language === 'en'
-                    ? 'bg-white text-slate-900 shadow-sm'
+                    ? 'bg-white text-slate-900 shadow-sm dark:bg-dk-strong dark:text-dk-text'
                     : 'text-slate-400 hover:bg-slate-800/80 hover:text-white'
                 }`}
               >
@@ -377,21 +377,21 @@ function PublicDPA() {
 
         <div className="mx-auto max-w-4xl px-5 pb-24 pt-10 sm:px-8">
           {/* Meta info */}
-          <div className="mb-8 flex flex-wrap items-start gap-x-4 gap-y-3 rounded-xl border border-slate-200/90 bg-white px-5 py-4 shadow-sm">
+          <div className="mb-8 flex flex-wrap items-start gap-x-4 gap-y-3 rounded-xl border border-slate-200/90 dark:border-dk-border bg-white dark:bg-dk-surface px-5 py-4 shadow-sm">
             <span
               className="mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full bg-orange-500 ring-4 ring-orange-500/15"
               aria-hidden
             />
-            <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600">
+            <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600 dark:text-dk-text2">
               <span className={lc(language, 'vi')}>
                 Cập nhật ngày <strong>29/09/2026</strong> — Áp dụng từ <strong>29/09/2026</strong>
-                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 hover:underline">Các phiên bản đã lưu trữ</a>
+                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 dark:text-primary-400 hover:underline">Các phiên bản đã lưu trữ</a>
                 {' '}|{' '}
                 Luật 91/2025/QH15 · Nghị định 356/2025/NĐ-CP
               </span>
               <span className={lc(language, 'en')}>
                 Updated on <strong>29/09/2026</strong> — Effective from <strong>29/09/2026</strong>
-                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 hover:underline">Archived versions</a>
+                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 dark:text-primary-400 hover:underline">Archived versions</a>
                 {' '}|{' '}
                 Law 91/2025/QH15 · Decree 356/2025/NĐ-CP
               </span>
@@ -399,13 +399,13 @@ function PublicDPA() {
           </div>
 
           {/* Mục lục */}
-          <nav className="pp-section mb-6 p-6" aria-label={language === 'vi' ? 'Mục lục' : 'Contents'}>
-            <h2 className="mb-3 text-base font-bold text-slate-900">{language === 'vi' ? 'Mục lục' : 'Contents'}</h2>
+          <nav className="pp-section dark:bg-dk-surface dark:border-dk-border mb-6 p-6" aria-label={language === 'vi' ? 'Mục lục' : 'Contents'}>
+            <h2 className="mb-3 text-base font-bold text-slate-900 dark:text-dk-text">{language === 'vi' ? 'Mục lục' : 'Contents'}</h2>
             <ol className="grid gap-x-6 gap-y-1.5 text-[14px] sm:grid-cols-2">
               {ARTICLES.map((a) => (
                 <li key={a.num}>
-                  <a href={`#dieu-${a.num}`} className="text-slate-700 no-underline hover:text-orange-600 hover:underline">
-                    <span className="mr-1.5 font-semibold text-orange-600">
+                  <a href={`#dieu-${a.num}`} className="text-slate-700 dark:text-dk-text2 no-underline hover:text-orange-600 dark:hover:text-primary-400 hover:underline">
+                    <span className="mr-1.5 font-semibold text-orange-600 dark:text-primary-400">
                       {language === 'vi' ? 'Điều' : 'Art.'} {a.num}.
                     </span>
                     {a.title[language]}
@@ -417,8 +417,8 @@ function PublicDPA() {
 
           <div className="space-y-6">
             {ARTICLES.map((a) => (
-              <section key={a.num} id={`dieu-${a.num}`} className="pp-section scroll-mt-6 p-6">
-                <h2 className="mb-4 text-xl font-bold text-slate-900">
+              <section key={a.num} id={`dieu-${a.num}`} className="pp-section dark:bg-dk-surface dark:border-dk-border scroll-mt-6 p-6">
+                <h2 className="mb-4 text-xl font-bold text-slate-900 dark:text-dk-text">
                   {language === 'vi' ? 'Điều' : 'Article'} {a.num}. {a.title[language]}
                 </h2>
                 {a.blocks.map((b, i) => (
@@ -429,7 +429,7 @@ function PublicDPA() {
           </div>
 
           {/* Contact */}
-          <div className="mt-10 rounded-2xl border border-slate-700/30 bg-gradient-to-b from-slate-900 to-slate-950 px-5 py-8 text-white shadow-xl sm:px-8">
+          <div className="mt-10 rounded-2xl border border-slate-700/30 dark:border-dk-border bg-gradient-to-b from-slate-900 dark:from-dk-surface to-slate-950 dark:to-dk-inset px-5 py-8 text-white shadow-xl sm:px-8">
             <h2 className={`text-lg font-bold tracking-tight text-white sm:text-xl ${lc(language, 'vi')}`}>
               Thông tin liên hệ
             </h2>
@@ -457,7 +457,7 @@ function PublicDPA() {
           </div>
         </div>
 
-        <footer className="border-t border-slate-200 bg-white px-5 py-8 text-center text-[12px] text-slate-500">
+        <footer className="border-t border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface px-5 py-8 text-center text-[12px] text-slate-500 dark:text-dk-muted">
           <p className={lc(language, 'vi')}>
             © 2026 Công ty TNHH Giải pháp số DIGISO. Mọi quyền được bảo lưu. Thỏa thuận này được cập nhật và có hiệu lực từ ngày 29/09/2026.
           </p>

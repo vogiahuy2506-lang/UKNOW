@@ -10,7 +10,7 @@ function ServiceTerms() {
   const lc = getLangClass;
 
   return (
-    <div className="min-h-screen bg-slate-100/90 text-slate-900 antialiased">
+    <div className="min-h-screen bg-slate-100/90 dark:bg-dk-bg text-slate-900 dark:text-dk-text antialiased">
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
         .pp-body { font-family: 'Be Vietnam Pro', system-ui, sans-serif; line-height: 1.7; font-size: 15px; }
@@ -22,7 +22,7 @@ function ServiceTerms() {
         }
       `}</style>
       <div className="pp-body">
-        <header className="relative border-b border-slate-800/80 bg-slate-950 text-white">
+        <header className="relative border-b border-slate-800/80 dark:border-dk-border bg-slate-950 dark:bg-dk-inset text-white">
           <div className="h-1 bg-gradient-to-r from-orange-500 via-red-500 to-pink-500" aria-hidden />
           <div
             className="pointer-events-none absolute inset-0 opacity-[0.35]"
@@ -49,25 +49,25 @@ function ServiceTerms() {
             <p className={`mt-3 text-center text-sm text-slate-400 ${lc(language, 'vi')}`}>Công ty TNHH Giải pháp số DIGISO</p>
             <p className={`mt-3 text-center text-sm text-slate-400 ${lc(language, 'en')}`}>DIGISO Digital Solutions Co., Ltd.</p>
             <div className="mx-auto mt-8 flex w-full max-w-xs justify-center rounded-lg border border-slate-600/60 bg-slate-900/40 p-1 shadow-inner">
-              <button type="button" onClick={() => setLanguage('vi')} className={`flex-1 rounded-md px-4 py-2.5 text-[13px] font-semibold transition-colors ${language === 'vi' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:bg-slate-800/80 hover:text-white'}`}>Tiếng Việt</button>
-              <button type="button" onClick={() => setLanguage('en')} className={`flex-1 rounded-md px-4 py-2.5 text-[13px] font-semibold transition-colors ${language === 'en' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:bg-slate-800/80 hover:text-white'}`}>English</button>
+              <button type="button" onClick={() => setLanguage('vi')} className={`flex-1 rounded-md px-4 py-2.5 text-[13px] font-semibold transition-colors ${language === 'vi' ? 'bg-white text-slate-900 shadow-sm dark:bg-dk-strong dark:text-dk-text' : 'text-slate-400 hover:bg-slate-800/80 hover:text-white'}`}>Tiếng Việt</button>
+              <button type="button" onClick={() => setLanguage('en')} className={`flex-1 rounded-md px-4 py-2.5 text-[13px] font-semibold transition-colors ${language === 'en' ? 'bg-white text-slate-900 shadow-sm dark:bg-dk-strong dark:text-dk-text' : 'text-slate-400 hover:bg-slate-800/80 hover:text-white'}`}>English</button>
             </div>
           </div>
         </header>
 
         <div className="mx-auto max-w-4xl px-5 pb-24 pt-10 sm:px-8">
-          <div className="mb-8 flex flex-wrap items-start gap-x-4 gap-y-3 rounded-xl border border-slate-200/90 bg-white px-5 py-4 shadow-sm">
+          <div className="mb-8 flex flex-wrap items-start gap-x-4 gap-y-3 rounded-xl border border-slate-200/90 dark:border-dk-border bg-white dark:bg-dk-surface px-5 py-4 shadow-sm">
             <span className="mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full bg-orange-500 ring-4 ring-orange-500/15" aria-hidden />
-            <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600">
+            <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600 dark:text-dk-text2">
               <span className={lc(language, 'vi')}>
                 Cập nhật ngày <strong>29/09/2026</strong> — Áp dụng từ <strong>29/09/2026</strong>
-                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 hover:underline">Các phiên bản đã lưu trữ</a>
+                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 dark:text-primary-400 hover:underline">Các phiên bản đã lưu trữ</a>
                 {'\u00a0'}|{'\u00a0'}
                 Áp dụng cho: founderai.biz
               </span>
               <span className={lc(language, 'en')}>
                 Last updated on <strong>September 29, 2026</strong> — Effective from <strong>September 29, 2026</strong>
-                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 hover:underline">Archived versions</a>
+                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 dark:text-primary-400 hover:underline">Archived versions</a>
                 {'\u00a0'}|{'\u00a0'}
                 Applies to: founderai.biz
               </span>
@@ -75,26 +75,26 @@ function ServiceTerms() {
           </div>
 
           {/* Section 1 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               1. Phạm vi dịch vụ và hạn chế sử dụng
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               1. Service Scope and Usage Restrictions
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               DIGISO cung cấp nền tảng Marketing Automation tên founderai.biz bao gồm: Landing Page Builder, Email Marketing, Zalo Marketing, CRM, AI Chatbot, Analytics & Reports. Khách hàng chỉ được sử dụng dịch vụ trong phạm vi dịch vụ đã đăng ký hoặc đã thỏa thuận với DIGISO.
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               DIGISO provides the founderai.biz Marketing Automation platform including: Landing Page Builder, Email Marketing, Zalo Marketing, CRM, AI Chatbot, Analytics & Reports. Customers may use the service only within the scope of the services registered or agreed with DIGISO.
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               Người dùng không được:
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               Users must not:
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
                 Chia sẻ, cho thuê, chuyển nhượng tài khoản hoặc quyền sử dụng dịch vụ trái phép.
               </li>
@@ -141,20 +141,20 @@ function ServiceTerms() {
           </section>
 
           {/* Section 2 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               2. Điều kiện cung cấp
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               2. Conditions of Provision
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               Để được cung cấp dịch vụ, người dùng cần đáp ứng các điều kiện sau:
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               To be provided with the service, users must meet the following conditions:
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
                 <strong>Đối tượng:</strong> từ đủ 18 tuổi và có năng lực hành vi dân sự đầy đủ (đối với tổ chức, người đại diện đáp ứng điều kiện này).
               </li>
@@ -201,20 +201,20 @@ function ServiceTerms() {
           </section>
 
           {/* Section 3 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               3. Giới hạn của dịch vụ
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               3. Service Limits
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               Dịch vụ được cung cấp có giới hạn theo từng gói, gồm:
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               The service is provided subject to limits that depend on the package, including:
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
                 Số lượng lượt AI (credits).
               </li>
@@ -264,29 +264,29 @@ function ServiceTerms() {
                 <strong>Time limits:</strong> the online service runs continuously, except during maintenance or interruptions described in section 4. In particular, Zalo messages are not sent during the quiet hours from 23:00 to 06:00 (Vietnam time); running campaigns pause and resume from 06:00.
               </li>
             </ul>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              Phạm vi tính năng, dung lượng, số nhân viên, thời hạn và giới hạn kỹ thuật khác được xác định theo gói tại trang <a href="/pricing" className="text-orange-600 hover:underline">Bảng giá</a>, đơn đặt hàng, tự cấu hình hạn mức, hợp đồng hoặc thỏa thuận. Không sử dụng dịch vụ cho mục đích spam, lừa đảo, vi phạm pháp luật. Hành vi tạo nhiều tài khoản giả mạo để lạm dụng chính sách dùng thử hoặc khuyến mãi là hành vi vi phạm chính sách, điều kiện sử dụng.
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
+              Phạm vi tính năng, dung lượng, số nhân viên, thời hạn và giới hạn kỹ thuật khác được xác định theo gói tại trang <a href="/pricing" className="text-orange-600 dark:text-primary-400 hover:underline">Bảng giá</a>, đơn đặt hàng, tự cấu hình hạn mức, hợp đồng hoặc thỏa thuận. Không sử dụng dịch vụ cho mục đích spam, lừa đảo, vi phạm pháp luật. Hành vi tạo nhiều tài khoản giả mạo để lạm dụng chính sách dùng thử hoặc khuyến mãi là hành vi vi phạm chính sách, điều kiện sử dụng.
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              The scope of features, storage, number of employees, term and other technical limits are determined by the package on the <a href="/pricing" className="text-orange-600 hover:underline">Pricing</a> page, the order, self-configured quotas, the contract or the agreement. The service must not be used for spam, fraud or unlawful purposes. Creating multiple fake accounts to abuse the trial or promotion policies is a violation of the policy and conditions of use.
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
+              The scope of features, storage, number of employees, term and other technical limits are determined by the package on the <a href="/pricing" className="text-orange-600 dark:text-primary-400 hover:underline">Pricing</a> page, the order, self-configured quotas, the contract or the agreement. The service must not be used for spam, fraud or unlawful purposes. Creating multiple fake accounts to abuse the trial or promotion policies is a violation of the policy and conditions of use.
             </p>
           </section>
 
           {/* Section 4 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               4. Các điều kiện về tính khả dụng của dịch vụ
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               4. Service Availability Conditions
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               Dịch vụ có thể bị ngừng tạm thời hoặc gián đoạn trong các trường hợp sau:
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               The service may be temporarily suspended or interrupted in the following cases:
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
                 Bảo trì, nâng cấp theo kế hoạch hoặc đột xuất để khắc phục lỗ hổng an ninh.
               </li>
@@ -312,35 +312,35 @@ function ServiceTerms() {
                 Force majeure events or objective obstacles.
               </li>
             </ul>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               <strong>Sự kiện bất khả kháng</strong> là sự kiện xảy ra một cách khách quan, không thể lường trước và không thể khắc phục được dù đã áp dụng mọi biện pháp cần thiết và khả năng cho phép, gồm thiên tai, hỏa hoạn, lũ lụt, động đất, dịch bệnh, chiến tranh, bạo loạn, đình công diện rộng, đứt cáp quang quốc tế, sự cố hạ tầng Internet diện rộng ngoài tầm kiểm soát hợp lý của DIGISO…
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               <strong>A force majeure event</strong> is an event that occurs objectively, cannot be foreseen and cannot be remedied despite all necessary measures and capabilities, including natural disasters, fires, floods, earthquakes, epidemics, war, riots, widespread strikes, international submarine cable cuts, and large-scale Internet infrastructure failures beyond DIGISO's reasonable control.
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               Đối với bảo trì theo kế hoạch có ảnh hưởng đáng kể đến việc sử dụng, DIGISO thông báo trước ít nhất 24 giờ trên giao diện website hoặc qua email, trừ trường hợp bảo trì khẩn cấp vì lý do an ninh mạng.
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               For scheduled maintenance that significantly affects use, DIGISO gives at least 24 hours' prior notice on the website interface or by email, except for emergency maintenance for cybersecurity reasons.
             </p>
           </section>
 
           {/* Section 5 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               5. Quyền từ chối cung cấp dịch vụ
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               5. Right to Refuse Service
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               DIGISO có quyền từ chối cung cấp hoặc chấm dứt cung cấp dịch vụ khi:
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               DIGISO has the right to refuse or stop providing the service when:
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
                 Người dùng cung cấp thông tin giả mạo, sai lệch khi đăng ký hoặc giao dịch.
               </li>
@@ -360,29 +360,29 @@ function ServiceTerms() {
                 There is fraud, a cyberattack or unauthorised exploitation that affects the operation of the platform or the rights of other users.
               </li>
             </ul>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               Trường hợp hủy dịch vụ do lỗi từ phía DIGISO, khách hàng được thông báo cụ thể và được hoàn trả toàn bộ số tiền tương ứng với phần dịch vụ chưa sử dụng.
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               Where a service is cancelled due to DIGISO's fault, the customer will be notified specifically and refunded in full the amount corresponding to the unused portion of the service.
             </p>
           </section>
 
           {/* Section 6 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               6. Chấm dứt dịch vụ
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               6. Service Termination
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               DIGISO có quyền tạm ngừng hoặc chấm dứt cung cấp dịch vụ khi:
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               DIGISO has the right to suspend or terminate the service when:
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
                 Người dùng vi phạm điều khoản.
               </li>
@@ -426,28 +426,28 @@ function ServiceTerms() {
                 By DIGISO's decision, with at least 30 days' prior notice.
               </li>
             </ul>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              DIGISO thông báo phù hợp cho khách hàng, trừ trường hợp xử lý khẩn cấp để bảo vệ hệ thống, dữ liệu, người sử dụng hoặc theo yêu cầu của cơ quan có thẩm quyền. Các trường hợp chấm dứt dịch vụ, hậu quả và việc hoàn tiền được quy định chi tiết tại <a href="/refund-policy" className="text-orange-600 hover:underline">Chính sách chấm dứt dịch vụ và hoàn tiền</a>.
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
+              DIGISO thông báo phù hợp cho khách hàng, trừ trường hợp xử lý khẩn cấp để bảo vệ hệ thống, dữ liệu, người sử dụng hoặc theo yêu cầu của cơ quan có thẩm quyền. Các trường hợp chấm dứt dịch vụ, hậu quả và việc hoàn tiền được quy định chi tiết tại <a href="/refund-policy" className="text-orange-600 dark:text-primary-400 hover:underline">Chính sách chấm dứt dịch vụ và hoàn tiền</a>.
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              DIGISO gives appropriate notice to the customer, except where emergency action is needed to protect the system, data or users, or at the request of a competent authority. The cases of termination, their consequences and refunds are set out in detail in the <a href="/refund-policy" className="text-orange-600 hover:underline">Service Termination and Refund Policy</a>.
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
+              DIGISO gives appropriate notice to the customer, except where emergency action is needed to protect the system, data or users, or at the request of a competent authority. The cases of termination, their consequences and refunds are set out in detail in the <a href="/refund-policy" className="text-orange-600 dark:text-primary-400 hover:underline">Service Termination and Refund Policy</a>.
             </p>
           </section>
 
           {/* Section 7 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               7. Liên hệ
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               7. Contact
             </h2>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
+                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 dark:text-primary-400 hover:underline">info@digiso.vn</a>
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
+                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 dark:text-primary-400 hover:underline">info@digiso.vn</a>
               </li>
               <li className={lc(language, 'vi')}>
                 <strong>Điện thoại:</strong> 0877909606
@@ -460,7 +460,7 @@ function ServiceTerms() {
 
         </div>
 
-        <footer className="border-t border-slate-200 bg-white px-5 py-8 text-center text-[12px] text-slate-500">
+        <footer className="border-t border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface px-5 py-8 text-center text-[12px] text-slate-500 dark:text-dk-muted">
           <p className={lc(language, 'vi')}>© 2026 Công ty TNHH Giải pháp số DIGISO. Mọi quyền được bảo lưu.</p>
           <p className={lc(language, 'en')}>© 2026 DIGISO Digital Solutions Co., Ltd. All rights reserved.</p>
           <p className={`mt-2 text-slate-400 ${lc(language, 'vi')}`}>

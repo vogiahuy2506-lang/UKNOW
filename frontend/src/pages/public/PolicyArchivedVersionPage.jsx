@@ -16,9 +16,9 @@ function fmt(iso) {
 function NotFound({ currentPath }) {
   return (
     <div className="mx-auto max-w-2xl px-5 py-20 text-center">
-      <h1 className="mb-2 text-xl font-semibold text-slate-800">Không tìm thấy phiên bản này</h1>
-      <p className="mb-6 text-sm text-slate-500">Version not found</p>
-      <Link to={currentPath} className="font-medium text-orange-600 hover:underline">
+      <h1 className="mb-2 text-xl font-semibold text-slate-800 dark:text-dk-text">Không tìm thấy phiên bản này</h1>
+      <p className="mb-6 text-sm text-slate-500 dark:text-dk-muted">Version not found</p>
+      <Link to={currentPath} className="font-medium text-orange-600 dark:text-primary-400 hover:underline">
         Xem phiên bản hiện hành / View current version
       </Link>
     </div>
@@ -51,7 +51,7 @@ export default function PolicyArchivedVersionPage() {
     <div>
       <div
         data-policy-archive-banner
-        className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-center text-[13px] leading-relaxed text-amber-900"
+        className="border-b border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-5 py-3 text-center text-[13px] leading-relaxed text-amber-900 dark:text-amber-300"
       >
         <p>
           Đây là phiên bản lưu trữ của {entry.titleVi}, có hiệu lực từ {own.vi} và đã được thay thế bởi phiên bản có
@@ -62,12 +62,12 @@ export default function PolicyArchivedVersionPage() {
           effective from {next.en}.
         </p>
         <p className="mt-1">
-          <Link to={entry.path} className="font-medium text-orange-600 hover:underline">
+          <Link to={entry.path} className="font-medium text-orange-600 dark:text-primary-400 hover:underline">
             Xem phiên bản hiện hành / View current version
           </Link>
         </p>
       </div>
-      <Suspense fallback={<div className="px-5 py-20 text-center text-sm text-slate-500">...</div>}>
+      <Suspense fallback={<div className="px-5 py-20 text-center text-sm text-slate-500 dark:text-dk-muted">...</div>}>
         <Archived />
       </Suspense>
     </div>

@@ -235,8 +235,8 @@ const PART_I_SECTIONS = [
 ];
 
 function Block({ block, language }) {
-  const subBar = 'mb-3 mt-[18px] flex items-center gap-2.5 text-sm font-semibold text-slate-800';
-  const body = 'mb-[10px] text-slate-600 leading-relaxed';
+  const subBar = 'mb-3 mt-[18px] flex items-center gap-2.5 text-sm font-semibold text-slate-800 dark:text-dk-text';
+  const body = 'mb-[10px] text-slate-600 dark:text-dk-text2 leading-relaxed';
   const renderItem = (it, i) => {
     const bold = language === 'vi' ? it.bvi : it.ben;
     return (
@@ -257,15 +257,15 @@ function Block({ block, language }) {
   if (block.k === 'p') return <p className={body}>{block[language]}</p>;
   if (block.k === 'n') {
     return (
-      <div className="mt-[14px] rounded-lg border border-slate-200/90 border-l-4 border-l-orange-500 bg-slate-50 px-[18px] py-[14px] text-[13.5px] text-slate-800 shadow-sm">
+      <div className="mt-[14px] rounded-lg border border-slate-200/90 dark:border-dk-border border-l-4 border-l-orange-500 bg-slate-50 dark:bg-dk-raised px-[18px] py-[14px] text-[13.5px] text-slate-800 dark:text-dk-text shadow-sm">
         {block[language]}
       </div>
     );
   }
   if (block.k === 'ol') {
-    return <ol className="mb-[10px] list-decimal space-y-[7px] pl-5 text-slate-600 leading-relaxed">{block.items.map(renderItem)}</ol>;
+    return <ol className="mb-[10px] list-decimal space-y-[7px] pl-5 text-slate-600 dark:text-dk-text2 leading-relaxed">{block.items.map(renderItem)}</ol>;
   }
-  return <ul className="mb-[10px] list-disc space-y-[7px] pl-5 text-slate-600 leading-relaxed">{block.items.map(renderItem)}</ul>;
+  return <ul className="mb-[10px] list-disc space-y-[7px] pl-5 text-slate-600 dark:text-dk-text2 leading-relaxed">{block.items.map(renderItem)}</ul>;
 }
 
 /** Tiêu đề lớn của từng phần (I)/(II)/(III), có id để mục lục nhảy tới. */
@@ -312,12 +312,12 @@ function PartHeading({ part, language }) {
   return (
     <div id={part.id} className="mb-5 mt-12 scroll-mt-6">
       <div className="flex items-start gap-3">
-        <span className="mt-1 inline-flex h-8 min-w-[2rem] shrink-0 items-center justify-center rounded-md bg-slate-900 px-2 text-sm font-bold text-white">
+        <span className="mt-1 inline-flex h-8 min-w-[2rem] shrink-0 items-center justify-center rounded-md bg-slate-900 dark:bg-dk-strong px-2 text-sm font-bold text-white">
           {part.roman}
         </span>
-        <h2 className="text-xl font-bold leading-snug tracking-tight text-slate-900 sm:text-2xl">{part.title[language]}</h2>
+        <h2 className="text-xl font-bold leading-snug tracking-tight text-slate-900 dark:text-dk-text sm:text-2xl">{part.title[language]}</h2>
       </div>
-      <p className="mt-3 text-[14px] leading-relaxed text-slate-600">{part.lead[language]}</p>
+      <p className="mt-3 text-[14px] leading-relaxed text-slate-600 dark:text-dk-text2">{part.lead[language]}</p>
     </div>
   );
 }
@@ -339,7 +339,7 @@ function PrivacyPolicy() {
   const lc = getLangClass;
 
   return (
-    <div className="min-h-screen bg-slate-100/90 text-slate-900 antialiased">
+    <div className="min-h-screen bg-slate-100/90 dark:bg-dk-bg text-slate-900 dark:text-dk-text antialiased">
       <style>
         {`
           @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
@@ -358,7 +358,7 @@ function PrivacyPolicy() {
       </style>
       <div className="pp-body">
         {/* Thanh nhấn mạnh pháp lý + header tối giản, uy tín */}
-        <header className="relative border-b border-slate-800/80 bg-slate-950 text-white">
+        <header className="relative border-b border-slate-800/80 dark:border-dk-border bg-slate-950 dark:bg-dk-inset text-white">
           <div className="h-1 bg-gradient-to-r from-orange-500 via-red-500 to-pink-500" aria-hidden />
           <div
             className="pointer-events-none absolute inset-0 opacity-[0.35]"
@@ -409,7 +409,7 @@ function PrivacyPolicy() {
                 onClick={() => setLanguage('vi')}
                 className={`flex-1 rounded-md px-4 py-2.5 text-[13px] font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
                   language === 'vi'
-                    ? 'bg-white text-slate-900 shadow-sm'
+                    ? 'bg-white text-slate-900 shadow-sm dark:bg-dk-strong dark:text-dk-text'
                     : 'text-slate-400 hover:bg-slate-800/80 hover:text-white'
                 }`}
               >
@@ -420,7 +420,7 @@ function PrivacyPolicy() {
                 onClick={() => setLanguage('en')}
                 className={`flex-1 rounded-md px-4 py-2.5 text-[13px] font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
                   language === 'en'
-                    ? 'bg-white text-slate-900 shadow-sm'
+                    ? 'bg-white text-slate-900 shadow-sm dark:bg-dk-strong dark:text-dk-text'
                     : 'text-slate-400 hover:bg-slate-800/80 hover:text-white'
                 }`}
               >
@@ -431,38 +431,38 @@ function PrivacyPolicy() {
         </header>
         <div className="mx-auto max-w-4xl px-5 pb-24 pt-10 sm:px-8">
           {/* Thanh meta: ngày cập nhật và áp dụng phải đúng thời điểm thực tế tải lên */}
-          <div className="mb-8 flex flex-wrap items-start gap-x-4 gap-y-3 rounded-xl border border-slate-200/90 bg-white px-5 py-4 shadow-sm">
+          <div className="mb-8 flex flex-wrap items-start gap-x-4 gap-y-3 rounded-xl border border-slate-200/90 dark:border-dk-border bg-white dark:bg-dk-surface px-5 py-4 shadow-sm">
             <span
               className="mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full bg-orange-500 ring-4 ring-orange-500/15"
               aria-hidden
             />
-            <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600">
+            <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600 dark:text-dk-text2">
               <span className={lc(language, 'vi')}>
                 Cập nhật ngày <strong>29/09/2026</strong> — Áp dụng từ <strong>29/09/2026</strong>
-                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 hover:underline">Các phiên bản đã lưu trữ</a>
+                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 dark:text-primary-400 hover:underline">Các phiên bản đã lưu trữ</a>
                 {' '}|{' '}
                 Áp dụng cho: founderai.biz
               </span>
               <span className={lc(language, 'en')}>
                 Updated on <strong>29/09/2026</strong> — Effective from <strong>29/09/2026</strong>
-                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 hover:underline">Archived versions</a>
+                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 dark:text-primary-400 hover:underline">Archived versions</a>
                 {' '}|{' '}
                 Applies to: founderai.biz
               </span>
             </p>
           </div>
 
-          <div className="pp-section px-5 py-6 sm:px-8 sm:py-7">
-            <p className={`mb-3 text-slate-600 leading-relaxed ${lc(language, 'vi')}`}>
+          <div className="pp-section dark:bg-dk-surface dark:border-dk-border px-5 py-6 sm:px-8 sm:py-7">
+            <p className={`mb-3 text-slate-600 dark:text-dk-text2 leading-relaxed ${lc(language, 'vi')}`}>
               Chính sách bảo mật này mô tả cách Công ty TNHH Giải pháp số DIGISO (&quot;chúng tôi&quot;) thu thập, sử dụng, lưu trữ và bảo vệ thông tin cá nhân của bạn khi sử dụng nền tảng Founder AI (founderai.biz), tuân thủ Luật Bảo vệ dữ liệu cá nhân số 91/2025/QH15, Nghị định số 356/2025/NĐ-CP, Luật Thương mại điện tử 2025, Nghị định số 248/2026/NĐ-CP, Luật Bảo vệ quyền lợi người tiêu dùng và các quy định pháp luật khác có liên quan.
             </p>
-            <p className={`mb-3 text-slate-600 leading-relaxed ${lc(language, 'en')}`}>
+            <p className={`mb-3 text-slate-600 dark:text-dk-text2 leading-relaxed ${lc(language, 'en')}`}>
               This Privacy Policy describes how DIGISO Digital Solutions Co., Ltd. (&quot;we&quot;) collects, uses, stores and protects your personal information when you use the Founder AI platform (founderai.biz), in compliance with Personal Data Protection Law No. 91/2025/QH15, Decree No. 356/2025/NĐ-CP, the 2025 E-Commerce Law, Decree No. 248/2026/NĐ-CP, the Consumer Protection Law and other relevant regulations.
             </p>
-            <p className={`text-slate-600 leading-relaxed ${lc(language, 'vi')}`}>
+            <p className={`text-slate-600 dark:text-dk-text2 leading-relaxed ${lc(language, 'vi')}`}>
               DIGISO có hai vai trò khác nhau tùy tình huống, nên chính sách được chia thành ba phần. Hãy chọn phần đúng với trường hợp của bạn:
             </p>
-            <p className={`text-slate-600 leading-relaxed ${lc(language, 'en')}`}>
+            <p className={`text-slate-600 dark:text-dk-text2 leading-relaxed ${lc(language, 'en')}`}>
               DIGISO plays two different roles depending on the situation, so this policy is divided into three parts. Choose the part that matches your situation:
             </p>
             <nav className="mt-4" aria-label={language === 'vi' ? 'Mục lục' : 'Contents'}>
@@ -471,9 +471,9 @@ function PrivacyPolicy() {
                   <li key={part.id}>
                     <a
                       href={`#${part.id}`}
-                      className="block rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 font-medium text-slate-800 no-underline transition-colors hover:border-orange-300 hover:bg-orange-50"
+                      className="block rounded-lg border border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-raised px-4 py-3 font-medium text-slate-800 dark:text-dk-text no-underline transition-colors hover:border-orange-300 dark:hover:border-primary-500/60 hover:bg-orange-50 dark:hover:bg-dk-strong"
                     >
-                      <span className="mr-2 font-bold text-orange-600">{part.roman}.</span>
+                      <span className="mr-2 font-bold text-orange-600 dark:text-primary-400">{part.roman}.</span>
                       {part.title[language]}
                     </a>
                   </li>
@@ -486,15 +486,15 @@ function PrivacyPolicy() {
           <PartHeading part={PARTS[0]} language={language} />
           <div className="space-y-6">
             {PART_I_SECTIONS.map((s) => (
-              <section key={s.id} id={s.id} className="pp-section scroll-mt-6 px-5 py-6 sm:px-8 sm:py-8">
-                <div className="mb-5 flex items-start gap-4 border-b border-slate-100 pb-4">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-[13px] font-semibold tabular-nums text-slate-800 shadow-sm">
+              <section key={s.id} id={s.id} className="pp-section dark:bg-dk-surface dark:border-dk-border scroll-mt-6 px-5 py-6 sm:px-8 sm:py-8">
+                <div className="mb-5 flex items-start gap-4 border-b border-slate-100 dark:border-dk-border pb-4">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-raised text-[13px] font-semibold tabular-nums text-slate-800 dark:text-dk-text shadow-sm">
                     {s.num}
                   </div>
                   <div>
-                    <h3 className="pt-0.5 text-lg font-bold tracking-tight text-slate-900 sm:text-xl">{s.title[language]}</h3>
+                    <h3 className="pt-0.5 text-lg font-bold tracking-tight text-slate-900 dark:text-dk-text sm:text-xl">{s.title[language]}</h3>
                     {s.ref ? (
-                      <p className="mt-0.5 text-[12px] text-slate-400">
+                      <p className="mt-0.5 text-[12px] text-slate-400 dark:text-dk-muted">
                         {language === 'vi' ? 'Điều 5 khoản 1 điểm ' : 'Article 5(1)(point '}
                         {s.ref}
                         {language === 'vi' ? ' Nghị định 248/2026/NĐ-CP' : ') of Decree 248/2026/NĐ-CP'}
@@ -518,7 +518,7 @@ function PrivacyPolicy() {
           <PrivacyPolicyControllerPanel language={language} lc={lc} />
 
           {/* Khối liên hệ: tông tối chừng mực, lưới thẻ rõ ràng */}
-          <div className="mt-10 overflow-hidden rounded-2xl border border-slate-700/30 bg-gradient-to-b from-slate-900 to-slate-950 px-5 py-8 text-white shadow-xl sm:px-8 sm:py-10">
+          <div className="mt-10 overflow-hidden rounded-2xl border border-slate-700/30 dark:border-dk-border bg-gradient-to-b from-slate-900 dark:from-dk-surface to-slate-950 dark:to-dk-inset px-5 py-8 text-white shadow-xl sm:px-8 sm:py-10">
             <div className="mb-6 max-w-2xl">
               <h2 className={`text-lg font-bold tracking-tight text-white sm:text-xl ${lc(language, 'vi')}`}>
                 Liên hệ về Quyền riêng tư
@@ -607,26 +607,26 @@ function PrivacyPolicy() {
           </div>
         </div>
 
-        <footer className="border-t border-slate-200 bg-white px-5 py-8 text-center text-[12px] text-slate-500">
+        <footer className="border-t border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface px-5 py-8 text-center text-[12px] text-slate-500 dark:text-dk-muted">
           <p className={lc(language, 'vi')}>
             © 2026 Công ty TNHH Giải pháp số DIGISO. Mọi quyền được bảo lưu.
             {'\u00a0'}|{'\u00a0'}
-            <a href="https://digiso.vn" className="font-medium text-slate-700 no-underline hover:underline">
+            <a href="https://digiso.vn" className="font-medium text-slate-700 dark:text-dk-text2 no-underline hover:underline">
               digiso.vn
             </a>
             {'\u00a0'}·{'\u00a0'}
-            <a href="https://founderai.biz" className="font-medium text-slate-700 no-underline hover:underline">
+            <a href="https://founderai.biz" className="font-medium text-slate-700 dark:text-dk-text2 no-underline hover:underline">
               founderai.biz
             </a>
           </p>
           <p className={lc(language, 'en')}>
             © 2026 DIGISO Digital Solutions Co., Ltd. All rights reserved.
             {'\u00a0'}|{'\u00a0'}
-            <a href="https://digiso.vn" className="font-medium text-slate-700 no-underline hover:underline">
+            <a href="https://digiso.vn" className="font-medium text-slate-700 dark:text-dk-text2 no-underline hover:underline">
               digiso.vn
             </a>
             {'\u00a0'}·{'\u00a0'}
-            <a href="https://founderai.biz" className="font-medium text-slate-700 no-underline hover:underline">
+            <a href="https://founderai.biz" className="font-medium text-slate-700 dark:text-dk-text2 no-underline hover:underline">
               founderai.biz
             </a>
           </p>

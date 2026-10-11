@@ -25,7 +25,7 @@ export default function PolicyChangeNotice({ language, lc }) {
       data-policy-change-notice
       role="note"
       aria-label={language === 'vi' ? 'Thông báo thay đổi giờ hỗ trợ' : 'Notice of change to support hours'}
-      className="-mt-4 mb-8 rounded-xl border border-amber-300 border-l-4 border-l-amber-500 bg-amber-50 px-5 py-4 text-[13px] leading-relaxed text-amber-950 shadow-sm"
+      className="-mt-4 mb-8 rounded-xl border border-amber-300 dark:border-amber-800 border-l-4 border-l-amber-500 dark:border-l-amber-500 bg-amber-50 dark:bg-amber-950/40 px-5 py-4 text-[13px] leading-relaxed text-amber-950 dark:text-amber-300 shadow-sm"
     >
       <p className={lc(language, 'vi')}>
         <strong>Thông báo thay đổi giờ hỗ trợ</strong> (đăng ngày 04/10/2026): Từ ngày <strong>19/10/2026</strong>, hotline

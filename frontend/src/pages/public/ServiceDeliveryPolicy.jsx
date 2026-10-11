@@ -10,7 +10,7 @@ function ServiceDeliveryPolicy() {
   const lc = getLangClass;
 
   return (
-    <div className="min-h-screen bg-slate-100/90 text-slate-900 antialiased">
+    <div className="min-h-screen bg-slate-100/90 dark:bg-dk-bg text-slate-900 dark:text-dk-text antialiased">
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
         .pp-body { font-family: 'Be Vietnam Pro', system-ui, sans-serif; line-height: 1.7; font-size: 15px; }
@@ -22,7 +22,7 @@ function ServiceDeliveryPolicy() {
         }
       `}</style>
       <div className="pp-body">
-        <header className="relative border-b border-slate-800/80 bg-slate-950 text-white">
+        <header className="relative border-b border-slate-800/80 dark:border-dk-border bg-slate-950 dark:bg-dk-inset text-white">
           <div className="h-1 bg-gradient-to-r from-orange-500 via-red-500 to-pink-500" aria-hidden />
           <div
             className="pointer-events-none absolute inset-0 opacity-[0.35]"
@@ -49,25 +49,25 @@ function ServiceDeliveryPolicy() {
             <p className={`mt-3 text-center text-sm text-slate-400 ${lc(language, 'vi')}`}>Công ty TNHH Giải pháp số DIGISO</p>
             <p className={`mt-3 text-center text-sm text-slate-400 ${lc(language, 'en')}`}>DIGISO Digital Solutions Co., Ltd.</p>
             <div className="mx-auto mt-8 flex w-full max-w-xs justify-center rounded-lg border border-slate-600/60 bg-slate-900/40 p-1 shadow-inner">
-              <button type="button" onClick={() => setLanguage('vi')} className={`flex-1 rounded-md px-4 py-2.5 text-[13px] font-semibold transition-colors ${language === 'vi' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:bg-slate-800/80 hover:text-white'}`}>Tiếng Việt</button>
-              <button type="button" onClick={() => setLanguage('en')} className={`flex-1 rounded-md px-4 py-2.5 text-[13px] font-semibold transition-colors ${language === 'en' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:bg-slate-800/80 hover:text-white'}`}>English</button>
+              <button type="button" onClick={() => setLanguage('vi')} className={`flex-1 rounded-md px-4 py-2.5 text-[13px] font-semibold transition-colors ${language === 'vi' ? 'bg-white text-slate-900 shadow-sm dark:bg-dk-strong dark:text-dk-text' : 'text-slate-400 hover:bg-slate-800/80 hover:text-white'}`}>Tiếng Việt</button>
+              <button type="button" onClick={() => setLanguage('en')} className={`flex-1 rounded-md px-4 py-2.5 text-[13px] font-semibold transition-colors ${language === 'en' ? 'bg-white text-slate-900 shadow-sm dark:bg-dk-strong dark:text-dk-text' : 'text-slate-400 hover:bg-slate-800/80 hover:text-white'}`}>English</button>
             </div>
           </div>
         </header>
 
         <div className="mx-auto max-w-4xl px-5 pb-24 pt-10 sm:px-8">
-          <div className="mb-8 flex flex-wrap items-start gap-x-4 gap-y-3 rounded-xl border border-slate-200/90 bg-white px-5 py-4 shadow-sm">
+          <div className="mb-8 flex flex-wrap items-start gap-x-4 gap-y-3 rounded-xl border border-slate-200/90 dark:border-dk-border bg-white dark:bg-dk-surface px-5 py-4 shadow-sm">
             <span className="mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full bg-orange-500 ring-4 ring-orange-500/15" aria-hidden />
-            <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600">
+            <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600 dark:text-dk-text2">
               <span className={lc(language, 'vi')}>
                 Cập nhật ngày <strong>29/09/2026</strong> — Áp dụng từ <strong>29/09/2026</strong>
-                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 hover:underline">Các phiên bản đã lưu trữ</a>
+                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 dark:text-primary-400 hover:underline">Các phiên bản đã lưu trữ</a>
                 {'\u00a0'}|{'\u00a0'}
                 Áp dụng cho: founderai.biz
               </span>
               <span className={lc(language, 'en')}>
                 Last updated on <strong>September 29, 2026</strong> — Effective from <strong>September 29, 2026</strong>
-                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 hover:underline">Archived versions</a>
+                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 dark:text-primary-400 hover:underline">Archived versions</a>
                 {'\u00a0'}|{'\u00a0'}
                 Applies to: founderai.biz
               </span>
@@ -75,42 +75,42 @@ function ServiceDeliveryPolicy() {
           </div>
 
           {/* Section 1 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               1. Phạm vi dịch vụ
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               1. Service Scope
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               Chính sách này áp dụng đối với dịch vụ cung cấp trên nền tảng founderai.biz do Công ty TNHH Giải pháp số DIGISO (DIGISO) làm chủ quản, theo Điều 15 Nghị định 248/2026/NĐ-CP.
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               This policy applies to services provided on the founderai.biz platform operated by DIGISO Digital Solutions Co., Ltd. (DIGISO), under Article 15 of Decree 248/2026/NĐ-CP.
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              founderai.biz là nền tảng AI dành cho founder, startup và doanh nhân, cung cấp công cụ trí tuệ nhân tạo, khóa học trực tuyến và tài nguyên hỗ trợ phát triển kinh doanh; đồng thời là nền tảng Marketing Automation gồm: Landing Page Builder, Email Marketing, Zalo Marketing, CRM, AI Chatbot, Analytics & Reports. Khách hàng chỉ được sử dụng dịch vụ trong phạm vi đã đăng ký; các hành vi không được thực hiện được nêu tại <a href="/service-terms" className="text-orange-600 hover:underline">Các điều kiện hoặc hạn chế trong việc cung cấp dịch vụ trên nền tảng</a>.
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
+              founderai.biz là nền tảng AI dành cho founder, startup và doanh nhân, cung cấp công cụ trí tuệ nhân tạo, khóa học trực tuyến và tài nguyên hỗ trợ phát triển kinh doanh; đồng thời là nền tảng Marketing Automation gồm: Landing Page Builder, Email Marketing, Zalo Marketing, CRM, AI Chatbot, Analytics & Reports. Khách hàng chỉ được sử dụng dịch vụ trong phạm vi đã đăng ký; các hành vi không được thực hiện được nêu tại <a href="/service-terms" className="text-orange-600 dark:text-primary-400 hover:underline">Các điều kiện hoặc hạn chế trong việc cung cấp dịch vụ trên nền tảng</a>.
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              founderai.biz is an AI platform for founders, startups and entrepreneurs, providing artificial intelligence tools, online courses and resources to support business development; it is also a Marketing Automation platform comprising: Landing Page Builder, Email Marketing, Zalo Marketing, CRM, AI Chatbot, Analytics & Reports. Customers may use the service only within the scope registered; prohibited conduct is set out in <a href="/service-terms" className="text-orange-600 hover:underline">Conditions and Restrictions on the Provision of Services on the Platform</a>.
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
+              founderai.biz is an AI platform for founders, startups and entrepreneurs, providing artificial intelligence tools, online courses and resources to support business development; it is also a Marketing Automation platform comprising: Landing Page Builder, Email Marketing, Zalo Marketing, CRM, AI Chatbot, Analytics & Reports. Customers may use the service only within the scope registered; prohibited conduct is set out in <a href="/service-terms" className="text-orange-600 dark:text-primary-400 hover:underline">Conditions and Restrictions on the Provision of Services on the Platform</a>.
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               Toàn bộ dịch vụ được sử dụng trực tiếp trên nền tảng. Nền tảng không cung cấp dịch vụ theo hình thức đặt hàng trước, sử dụng sau tại địa điểm cung cấp dịch vụ.
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               All services are used directly on the platform. The platform does not provide services on a pre-order, use-later basis at a service location.
             </p>
           </section>
 
           {/* Section 2 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               2. Thời hạn sử dụng, loại thiết bị và số lượng thiết bị sử dụng đồng thời
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               2. Term of Use, Device Types and Number of Concurrent Devices
             </h2>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
                 <strong>Thời hạn sử dụng dịch vụ:</strong> gói theo tháng có thời hạn 30 ngày, gói theo năm có thời hạn 12 tháng (365 ngày), tính từ thời điểm kích hoạt đăng ký thành công, hoặc theo hợp đồng, thỏa thuận riêng. Founder AI không tự động trừ tiền để gia hạn; hết thời hạn, khách hàng chủ động đặt mua gia hạn nếu tiếp tục sử dụng.
               </li>
@@ -133,20 +133,20 @@ function ServiceDeliveryPolicy() {
           </section>
 
           {/* Section 3 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               3. Mô tả cách sử dụng dịch vụ và các tính năng chính
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               3. How to Use the Service and Main Features
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               Founder AI cung cấp dịch vụ trực tuyến dưới dạng phần mềm (SaaS). Các bước sử dụng cơ bản:
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               Founder AI provides an online service as software (SaaS). The basic steps of use are:
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
                 <strong>Đăng ký tài khoản và đăng nhập</strong> tại founderai.biz, xác thực email; chọn gói dịch vụ và thanh toán (nếu gói có thu phí) — dịch vụ được kích hoạt tự động ngay khi thanh toán được xác nhận thành công.
               </li>
@@ -178,28 +178,28 @@ function ServiceDeliveryPolicy() {
                 <strong>Track and evaluate performance</strong> and test some content and options through the reports on the platform.
               </li>
             </ul>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              Một số tính năng được cung cấp theo từng gói, điều kiện sử dụng hoặc khả năng tích hợp tại từng thời điểm. Người dùng có trách nhiệm kiểm tra, rà soát nội dung do AI tạo ra trước khi sử dụng hoặc gửi tới bên thứ ba. Hướng dẫn sử dụng chi tiết có tại <a href="/huong-dan" className="text-orange-600 hover:underline">trang Hướng dẫn</a>.
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
+              Một số tính năng được cung cấp theo từng gói, điều kiện sử dụng hoặc khả năng tích hợp tại từng thời điểm. Người dùng có trách nhiệm kiểm tra, rà soát nội dung do AI tạo ra trước khi sử dụng hoặc gửi tới bên thứ ba. Hướng dẫn sử dụng chi tiết có tại <a href="/huong-dan" className="text-orange-600 dark:text-primary-400 hover:underline">trang Hướng dẫn</a>.
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              Some features are provided depending on the package, conditions of use or integration availability at any given time. Users are responsible for checking and reviewing AI-generated content before using it or sending it to third parties. Detailed instructions are available on the <a href="/huong-dan" className="text-orange-600 hover:underline">Help page</a>.
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
+              Some features are provided depending on the package, conditions of use or integration availability at any given time. Users are responsible for checking and reviewing AI-generated content before using it or sending it to third parties. Detailed instructions are available on the <a href="/huong-dan" className="text-orange-600 dark:text-primary-400 hover:underline">Help page</a>.
             </p>
           </section>
 
           {/* Section 4 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               4. Phương thức cung cấp
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               4. Method of Delivery
             </h2>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                <strong>Nền tảng trực tuyến (SaaS):</strong> dịch vụ được cung cấp dưới dạng phần mềm dịch vụ trên nền tảng web tại <a href="https://founderai.biz" className="text-orange-600 hover:underline">founderai.biz</a>; Người dùng truy cập qua trình duyệt và đăng nhập tài khoản để sử dụng.
+                <strong>Nền tảng trực tuyến (SaaS):</strong> dịch vụ được cung cấp dưới dạng phần mềm dịch vụ trên nền tảng web tại <a href="https://founderai.biz" className="text-orange-600 dark:text-primary-400 hover:underline">founderai.biz</a>; Người dùng truy cập qua trình duyệt và đăng nhập tài khoản để sử dụng.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Online platform (SaaS):</strong> the service is delivered as Software-as-a-Service on the web platform at <a href="https://founderai.biz" className="text-orange-600 hover:underline">founderai.biz</a>; Users access it through a browser after signing in.
+                <strong>Online platform (SaaS):</strong> the service is delivered as Software-as-a-Service on the web platform at <a href="https://founderai.biz" className="text-orange-600 dark:text-primary-400 hover:underline">founderai.biz</a>; Users access it through a browser after signing in.
               </li>
               <li className={lc(language, 'vi')}>
                 <strong>Tự phục vụ (self-service):</strong> Người dùng tự thao tác các chức năng trên giao diện nền tảng để tạo chiến dịch, quản lý khách hàng, gửi tin nhắn, nạp tiền và tải xuất dữ liệu.
@@ -214,10 +214,10 @@ function ServiceDeliveryPolicy() {
                 <strong>Automatic activation:</strong> after payment is successfully confirmed (via PayOS QR code or bank transfer), the service is activated automatically and Users can use it immediately.
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Hỗ trợ trực tuyến:</strong> DIGISO hỗ trợ Người dùng qua email, hotline và trang <a href="/support" className="text-orange-600 hover:underline">Hình thức hỗ trợ trực tuyến</a>.
+                <strong>Hỗ trợ trực tuyến:</strong> DIGISO hỗ trợ Người dùng qua email, hotline và trang <a href="/support" className="text-orange-600 dark:text-primary-400 hover:underline">Hình thức hỗ trợ trực tuyến</a>.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Online support:</strong> DIGISO supports Users by email, hotline and the <a href="/support" className="text-orange-600 hover:underline">Online Support</a> page.
+                <strong>Online support:</strong> DIGISO supports Users by email, hotline and the <a href="/support" className="text-orange-600 dark:text-primary-400 hover:underline">Online Support</a> page.
               </li>
               <li className={lc(language, 'vi')}>
                 <strong>Không giao nhận vật lý:</strong> toàn bộ dịch vụ là dịch vụ số; không có sản phẩm vật lý, không phát sinh chi phí vận chuyển.
@@ -229,14 +229,14 @@ function ServiceDeliveryPolicy() {
           </section>
 
           {/* Section 5 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               5. Các hạn chế trong quá trình sử dụng
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               5. Restrictions During Use
             </h2>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
                 Dịch vụ được cung cấp qua Internet nên khả năng truy cập và một số tính năng có thể bị ảnh hưởng bởi kết nối, thiết bị, tình trạng hệ thống hoặc phụ thuộc vào dịch vụ, giao diện lập trình (API), chính sách của bên thứ ba (nền tảng nhắn tin, thư điện tử được tích hợp).
               </li>
@@ -274,28 +274,28 @@ function ServiceDeliveryPolicy() {
                 DIGISO may temporarily restrict or interrupt part of the service for maintenance, upgrades, system safety or at the request of state authorities, and will give notice to an appropriate extent.
               </li>
             </ul>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'vi')}`}>
               Các hạn chế nêu trên không loại trừ quyền của người tiêu dùng và trách nhiệm của DIGISO theo quy định của pháp luật.
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+            <p className={`text-slate-700 dark:text-dk-text2 mb-4 ${lc(language, 'en')}`}>
               The above restrictions do not exclude consumers' rights or DIGISO's responsibilities under the law.
             </p>
           </section>
 
           {/* Section 6 */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+          <section className="mb-6 pp-section dark:bg-dk-surface dark:border-dk-border p-6">
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'vi')}`}>
               6. Liên hệ
             </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+            <h2 className={`text-xl font-bold text-slate-900 dark:text-dk-text mb-4 ${lc(language, 'en')}`}>
               6. Contact
             </h2>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 dark:text-dk-text2 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
+                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 dark:text-primary-400 hover:underline">info@digiso.vn</a>
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
+                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 dark:text-primary-400 hover:underline">info@digiso.vn</a>
               </li>
               <li className={lc(language, 'vi')}>
                 <strong>Điện thoại:</strong> 0877909606
@@ -308,7 +308,7 @@ function ServiceDeliveryPolicy() {
 
         </div>
 
-        <footer className="border-t border-slate-200 bg-white px-5 py-8 text-center text-[12px] text-slate-500">
+        <footer className="border-t border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface px-5 py-8 text-center text-[12px] text-slate-500 dark:text-dk-muted">
           <p className={lc(language, 'vi')}>© 2026 Công ty TNHH Giải pháp số DIGISO. Mọi quyền được bảo lưu.</p>
           <p className={lc(language, 'en')}>© 2026 DIGISO Digital Solutions Co., Ltd. All rights reserved.</p>
           <p className={`mt-2 text-slate-400 ${lc(language, 'vi')}`}>
