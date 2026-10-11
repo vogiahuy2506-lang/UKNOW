@@ -19,9 +19,14 @@
     <script>
       (function() {
         try {
+          // Giữ ĐÚNG chuỗi DARK_SCOPE_PATTERN_SOURCE trong src/stores/themeStore.js (test so khớp).
+          var DARK_SCOPE = '^/(?:$|(?:app|admin|pricing|contact|trial-demo|learning|login|register|forgot-password|reset-password|activate|support|huong-dan|privacy-policy|private-policy|public-dpa|terms|pricing-policy|payment-policy|complaint-policy|refund-policy|service-terms|service-delivery-policy|rights-and-duties|policy-versions)(?:/|$))';
+          // Tên miền riêng của khách (landing) luôn sáng — giống isPrimaryAppHostname (VITE_PRIMARY_APP_HOSTS).
+          var hostsRaw = '%VITE_PRIMARY_APP_HOSTS%';
+          var hosts = hostsRaw.charAt(0) === '%' ? ['localhost', '127.0.0.1'] : hostsRaw.toLowerCase().split(',').map(function (h) { return h.trim(); });
           var t = localStorage.getItem('uknow_theme');
           var p = window.location.pathname;
-          if (t === 'dark' && /^\/(app|admin)(\/|$)/.test(p)) {
+          if (t === 'dark' && new RegExp(DARK_SCOPE).test(p) && hosts.indexOf(window.location.hostname.toLowerCase()) !== -1) {
             document.documentElement.classList.add('dark');
           }
         } catch (e) {}

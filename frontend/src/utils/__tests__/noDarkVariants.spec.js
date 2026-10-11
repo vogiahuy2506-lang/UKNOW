@@ -10,12 +10,14 @@ const RULE1_ARBITRARY_RE = /dark:[\w:-]*-\[(#|rgb)/;
 const RULE2_NEUTRAL_RE = /dark:([\w-]+:)*(bg|text|border|divide|ring|placeholder|from|via|to)-(white|black|slate|gray|zinc|neutral|stone)(-\d+)?\b/;
 const RULE3_DARK_CLASS_RE = /\bdark:[a-zA-Z0-9[]/;
 
+// 11/10/2026: site Founder AI (trang chủ, bảng giá, chính sách, hướng dẫn, đăng nhập…) ĐƯỢC tối (xem
+// DARK_SCOPE_PATTERN_SOURCE trong stores/themeStore.js). Chỉ còn cấm `dark:` ở bề mặt LUÔN SÁNG: trang khách của khách
+// hàng mở (biểu mẫu, chatbot công khai, landing, nhúng biểu mẫu) và thanh toán — html.dark không bao giờ bật ở đó.
 const PUBLIC_SURFACE_PATTERNS = [
-  /^pages\/public\//,
-  /^pages\/auth\//,
-  /^pages\/docs\//,
-  /^layouts\/(PublicLayout|AuthLayout|CheckoutLayout|PolicyLayout|DocsLayout)\.jsx$/,
-  /^features\/hero\//,
+  /^pages\/public\/(EmbedLeadFormPage|LpRendererByHost|LpRendererPage|PublicChatbotPage)\.jsx$/,
+  /^pages\/checkout\//,
+  /^pages\/invoices\//,
+  /^layouts\/CheckoutLayout\.jsx$/,
   /^features\/checkout\//,
   /^features\/forms\/pages\/(PublicFormPage|FormSubmissionStatusPage)\.jsx$/,
 ];
