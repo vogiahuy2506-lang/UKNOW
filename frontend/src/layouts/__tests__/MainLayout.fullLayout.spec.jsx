@@ -72,3 +72,34 @@ describe('MainLayout — trình dựng chiến dịch là full-screen editor (is
     expect(screen.getByTestId('credit-banner')).toBeInTheDocument();
   });
 });
+
+describe('MainLayout — trình soạn Biểu mẫu là trang soạn tràn màn (isFormEditor)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it.each(['/app/forms/new', '/app/forms/12/edit', '/app/forms/12/edit/'])(
+    '%s → <main> không đệm, không bo góc / viền, không banner credit',
+    (path) => {
+      renderAt(path);
+
+      const classes = screen.getByRole('main').className.split(' ');
+      expect(classes).not.toContain('p-2');
+      expect(classes).toContain('rounded-none');
+      expect(classes).toContain('border-0');
+      expect(screen.queryByTestId('credit-banner')).not.toBeInTheDocument();
+    }
+  );
+
+  it.each(['/app/forms', '/app/forms/12/submissions', '/app/forms/new/extra'])(
+    '%s → trang thường: có đệm, bo góc và banner credit',
+    (path) => {
+      renderAt(path);
+
+      const classes = screen.getByRole('main').className.split(' ');
+      expect(classes).toContain('p-2');
+      expect(classes).not.toContain('rounded-none');
+      expect(screen.getByTestId('credit-banner')).toBeInTheDocument();
+    }
+  );
+});

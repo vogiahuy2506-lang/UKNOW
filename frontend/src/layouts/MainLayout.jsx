@@ -157,6 +157,9 @@ const MainLayout = ({ children = null }) => {
   );
   // 11/10/2026: trang SOẠN của quản trị dùng khung editor tràn màn (components/editor/AdminEditorShell) giống canvas landing.
   const isAdminEditor = /^\/admin\/(landing-customizer|welcome-email|notification-center)\/?$/.test(location.pathname);
+  // 11/10/2026: trình soạn Biểu mẫu (tạo mới / sửa) cũng là trang soạn tràn màn: danh sách trường bên trái, xem trước cố định
+  // bên phải, Cài đặt là modal (features/forms/pages/FormEditorPage.jsx) — không đệm, không bo góc, không banner credit.
+  const isFormEditor = /^\/app\/forms\/(new|[^/]+\/edit)\/?$/.test(location.pathname);
   const showAiSidePanel = aiPanelOpen && !isAiHomePage && !isLandingCanvas;
 
   useEffect(() => {
@@ -241,8 +244,8 @@ const MainLayout = ({ children = null }) => {
     return () => window.removeEventListener('app:collapse-sidebar', handleCollapseSidebar);
   }, [setSidebarOpen]);
 
-  const isBuilderPage = isFullLayout || isLandingCanvas;
-  const isSpecialPage = isFullLayout || isInboxPage || isAiHomePage || isChatbotStudio || isLandingCanvas || isAdminEditor;
+  const isBuilderPage = isFullLayout || isLandingCanvas || isFormEditor;
+  const isSpecialPage = isFullLayout || isInboxPage || isAiHomePage || isChatbotStudio || isLandingCanvas || isAdminEditor || isFormEditor;
 
   // Persist sidebar width for full-screen editors
   useEffect(() => {
@@ -358,7 +361,7 @@ const MainLayout = ({ children = null }) => {
         <main
           ref={mainContentRef}
           className={`flex-1 min-w-0 overflow-auto bg-white dark:bg-dk-inset ${
-            isLandingCanvas || isAdminEditor ? 'rounded-none border-0 shadow-none' : 'rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_12px_rgba(15,23,42,0.04)] border border-gray-200/70 dark:border-dk-border/80 text-slate-900 dark:text-dk-text'
+            isLandingCanvas || isAdminEditor || isFormEditor ? 'rounded-none border-0 shadow-none' : 'rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_12px_rgba(15,23,42,0.04)] border border-gray-200/70 dark:border-dk-border/80 text-slate-900 dark:text-dk-text'
           } relative ${isSpecialPage ? '' : 'p-2 md:p-3'}`}
         >
           <div className="relative h-full flex flex-col min-h-0">
