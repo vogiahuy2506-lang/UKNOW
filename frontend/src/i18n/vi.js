@@ -3284,7 +3284,7 @@ export default {
     chipPersonal: 'Cá nhân',
     chipGroup: 'Nhóm',
     channelAllShort: 'Tất cả',
-    webChat: 'Web Chat',
+    webChat: 'Web chat',
     webChatShort: 'Web chat',
     zaloOA: 'Zalo OA',
     facebook: 'Facebook',

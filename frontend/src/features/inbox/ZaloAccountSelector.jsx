@@ -132,7 +132,7 @@ const ZaloAccountSelector = ({
     return (
       <button
         type="button"
-        onClick={() => navigate('/app/settings/channels')}
+        onClick={() => navigate('/app/settings/channels#zalo')}
         className="w-full flex items-center gap-2 px-2 py-1.5 bg-orange-50 dark:bg-orange-950/30 rounded-lg border border-orange-200 dark:border-orange-900/50 hover:bg-orange-100 dark:hover:bg-orange-900/40 transition-colors text-left"
       >
         <HiExclamationCircle className="w-3.5 h-3.5 text-orange-500 dark:text-orange-400 shrink-0" />
@@ -199,7 +199,7 @@ const ZaloAccountSelector = ({
               {canManageChannels && (
                 <button
                   type="button"
-                  onClick={() => navigate('/app/settings/channels')}
+                  onClick={() => navigate('/app/settings/channels#zalo')}
                   className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-primary-700 dark:text-primary-400 border-t border-gray-100 dark:border-dk-border hover:bg-primary-50 dark:hover:bg-primary-950/40"
                 >
                   <HiExternalLink className="w-3.5 h-3.5" />

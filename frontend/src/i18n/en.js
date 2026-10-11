@@ -3281,7 +3281,7 @@ export default {
     chipPersonal: 'Personal',
     chipGroup: 'Groups',
     channelAllShort: 'All',
-    webChat: 'Web Chat',
+    webChat: 'Web chat',
     webChatShort: 'Web',
     zaloOA: 'Zalo OA',
     facebook: 'Facebook',
