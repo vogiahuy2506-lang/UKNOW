@@ -190,6 +190,24 @@ describe('FormLeadsTab — tab "Từ biểu mẫu"', () => {
     expect(lastCallArgs()).toMatchObject({ page: 2 });
   });
 
+  it('đang ở trang 2 mà đổi bộ lọc (biểu mẫu hoặc ngày) → quay về trang 1, không kẹt ở trang không còn tồn tại', async () => {
+    fetchWorkspaceSubmissions.mockResolvedValue({ items: [SUB_CONSULT], total: 45, page: 1, limit: 20 });
+    renderTab();
+    await screen.findByText('Nguyen Van A');
+    await screen.findByRole('option', { name: 'Đăng ký workshop' });
+
+    fireEvent.click(screen.getByRole('button', { name: /Trang sau/ }));
+    await waitFor(() => expect(lastCallArgs()).toMatchObject({ page: 2 }));
+
+    fireEvent.change(screen.getByLabelText('Biểu mẫu', { selector: 'select' }), { target: { value: '8' } });
+    await waitFor(() => expect(lastCallArgs()).toMatchObject({ page: 1, formId: '8' }));
+
+    fireEvent.click(screen.getByRole('button', { name: /Trang sau/ }));
+    await waitFor(() => expect(lastCallArgs()).toMatchObject({ page: 2, formId: '8' }));
+    fireEvent.change(screen.getByLabelText('Từ ngày'), { target: { value: '2026-10-01' } });
+    await waitFor(() => expect(lastCallArgs()).toMatchObject({ page: 1, from: '2026-10-01' }));
+  });
+
   it('chỉ một trang → không hiện thanh phân trang', async () => {
     renderTab();
     await screen.findByText('Nguyen Van A');
