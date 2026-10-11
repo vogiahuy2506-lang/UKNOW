@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { FaCheckCircle } from 'react-icons/fa';
 import founderaiLogo from '../assets/icons/founderai-logo.png';
 import LanguageSwitcher from '../components/LanguageSwitcher';
+import ThemeToggleButton from '../components/common/ThemeToggleButton';
 import { useI18n } from '../i18n';
 
 /**
@@ -93,6 +94,7 @@ const AuthLayout = ({ children }) => {
               </Link>
               <div className="flex items-center gap-2">
                 <LanguageSwitcher variant="dark" />
+                <ThemeToggleButton variant="onDark" />
               </div>
             </div>
 
@@ -178,6 +180,7 @@ const AuthLayout = ({ children }) => {
               </Link>
               <div className="flex items-center gap-2">
                 <LanguageSwitcher />
+                <ThemeToggleButton />
               </div>
             </div>
 

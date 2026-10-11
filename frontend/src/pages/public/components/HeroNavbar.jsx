@@ -4,6 +4,7 @@ import { LuChevronRight, LuChevronDown, LuMenu, LuX, LuLayoutDashboard, LuLogOut
 import { useAuthStore } from '../../../stores/authStore';
 import founderaiLogo from '../../../assets/icons/founderai-logo.png';
 import LanguageSwitcher from '../../../components/LanguageSwitcher';
+import ThemeToggleButton from '../../../components/common/ThemeToggleButton';
 import { useI18n } from '../../../i18n';
 import { getPostAuthPath } from '../../../utils/authRedirect';
 
@@ -121,6 +122,8 @@ export default function HeroNavbar() {
           {/* Right cluster */}
           <div className="ml-auto flex items-center gap-2">
             <LanguageSwitcher />
+            {/* Nút đổi sáng/tối: hiện cả trên mobile (như đổi ngôn ngữ), không giấu trong menu. */}
+            <ThemeToggleButton className="-ml-1" />
 
             {isAuthenticated ? (
               <div className="hidden md:block">

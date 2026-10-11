@@ -10,6 +10,7 @@ import {
 import { listHelpArticles } from '../services/help.service';
 import { useI18n } from '../i18n';
 import LanguageSwitcher from '../components/LanguageSwitcher';
+import ThemeToggleButton from '../components/common/ThemeToggleButton';
 
 /**
  * Layout công khai cho trung tâm hướng dẫn (/huong-dan).
@@ -162,13 +163,14 @@ export default function DocsLayout({ embedded = false }) {
           </button>
           <Link to="/" className="flex items-center gap-2 text-slate-500 dark:text-dk-text2 hover:text-slate-800 dark:hover:text-dk-text">
             <HiOutlineHome className="h-4 w-4" />
-            <span className="text-sm">{t('helpDocs.home')}</span>
+            <span className="hidden sm:inline text-sm">{t('helpDocs.home')}</span>
           </Link>
           <span className="text-slate-300">/</span>
-          <Link to="/huong-dan" className="text-sm font-semibold text-slate-900 dark:text-dk-text">
+          <Link to="/huong-dan" className="whitespace-nowrap text-sm font-semibold text-slate-900 dark:text-dk-text">
             {t('helpDocs.title')}
           </Link>
           <LanguageSwitcher className="ml-auto" showLabel />
+          <ThemeToggleButton />
         </div>
       </header>
       )}

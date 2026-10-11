@@ -17,14 +17,12 @@ import {
   HiOutlineMenu,
   HiOutlineBell,
   HiOutlineSupport,
-  HiOutlineSun,
-  HiOutlineMoon,
 } from 'react-icons/hi';
 import { useAuthStore } from '../../../stores/authStore';
-import { useThemeStore } from '../../../stores/themeStore';
 import { useI18n } from '../../../i18n';
 import { useMarketplaceModal } from '../../../contexts/useMarketplaceModal';
 import NotificationBell from '../NotificationBell';
+import ThemeToggleButton from '../../common/ThemeToggleButton';
 import { notificationsPagePath } from '../../../features/notifications/utils/notificationPaths';
 import { supportListPath } from '../../../features/support/utils/supportConstants';
 import AccountProfileModal from '../../../features/auth/components/AccountProfileModal';
@@ -40,7 +38,6 @@ const AVATAR_STYLES = {
 const Header = ({ onToggleSidebar }) => {
   const { t, locale, changeLocale } = useI18n();
   const { user, logout, activeContext, switchContext, refreshCurrentUser } = useAuthStore();
-  const { isDark, toggleTheme } = useThemeStore();
   const navigate = useNavigate();
   const { showMarketplace } = useMarketplaceModal();
 
@@ -193,20 +190,8 @@ const Header = ({ onToggleSidebar }) => {
         {/* Chuông thông báo — desktop lẫn mobile (mobile chỉ là icon), cả /app và /admin */}
         <NotificationBell />
 
-        {/* Theme Toggle Button (Light / Dark) */}
-        <button
-          type="button"
-          onClick={toggleTheme}
-          title={isDark ? t('header.switchToLight') : t('header.switchToDark')}
-          aria-label={isDark ? t('header.switchToLight') : t('header.switchToDark')}
-          className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 dark:text-dk-text dark:hover:text-amber-400 dark:hover:bg-dk-raised transition-colors mx-1 shrink-0"
-        >
-          {isDark ? (
-            <HiOutlineSun className="w-4 h-4 text-amber-400 transition-transform hover:rotate-45" />
-          ) : (
-            <HiOutlineMoon className="w-4 h-4 text-slate-600 transition-transform hover:-rotate-12" />
-          )}
-        </button>
+        {/* Theme Toggle Button (Light / Dark) — dùng chung với thanh điều hướng công khai */}
+        <ThemeToggleButton className="mx-1" />
 
         {/* Right: profile dropdown */}
         <div className="relative shrink-0" ref={profileRef}>

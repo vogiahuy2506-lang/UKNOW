@@ -4,6 +4,7 @@ import { HiOutlineLogout, HiOutlineChevronDown, HiOutlineViewGrid, HiMenu, HiX }
 import { useAuthStore } from '../../../stores/authStore';
 import { useI18n } from '../../../i18n';
 import founderaiLogo from '../../../assets/icons/founderai-logo.png';
+import ThemeToggleButton from '../../common/ThemeToggleButton';
 
 /**
  * Navbar - Refactored với Impeccable design principles:
@@ -236,6 +237,7 @@ export default function Navbar() {
 
             {/* Desktop Actions */}
             <div className="hidden lg:flex items-center gap-4">
+              <ThemeToggleButton />
               {isAuthenticated ? (
                 <UserMenu user={user} logout={logout} />
               ) : (
@@ -257,12 +259,15 @@ export default function Navbar() {
             </div>
 
             {/* Mobile Menu Button */}
-            <button
-              onClick={() => setMobileMenuOpen(true)}
-              className="lg:hidden w-10 h-10 rounded-full bg-slate-100 dark:bg-dk-raised flex items-center justify-center text-slate-600 dark:text-dk-text2 hover:bg-slate-200 dark:hover:bg-dk-strong transition-colors"
-            >
-              <HiMenu className="w-5 h-5" />
-            </button>
+            <div className="lg:hidden flex items-center gap-2">
+              <ThemeToggleButton />
+              <button
+                onClick={() => setMobileMenuOpen(true)}
+                className="w-10 h-10 rounded-full bg-slate-100 dark:bg-dk-raised flex items-center justify-center text-slate-600 dark:text-dk-text2 hover:bg-slate-200 dark:hover:bg-dk-strong transition-colors"
+              >
+                <HiMenu className="w-5 h-5" />
+              </button>
+            </div>
           </div>
         </div>
       </nav>
