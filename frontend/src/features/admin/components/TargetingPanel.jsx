@@ -255,7 +255,7 @@ export default function TargetingPanel({ criteria, onChange, onCountChange }) {
               <select
                 value={filterPlan}
                 onChange={(e) => setFilterPlan(e.target.value)}
-                className="px-3 py-1.5 text-sm border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-inset text-gray-900 dark:text-dk-text rounded-lg hover:border-orange-300 focus:border-orange-400 focus:ring-2 focus:ring-orange-100 transition-all"
+                className="px-3 py-1.5 text-sm border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-inset text-gray-900 dark:text-dk-text rounded-lg hover:border-orange-300 dark:hover:border-orange-700 focus:border-orange-400 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-800 transition-all"
               >
                 <option value="">{t('notificationCenter.targeting.allPlans', 'Tất cả gói')}</option>
                 {PLANS.map(plan => (
@@ -267,7 +267,7 @@ export default function TargetingPanel({ criteria, onChange, onCountChange }) {
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="px-3 py-1.5 text-sm border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-inset text-gray-900 dark:text-dk-text rounded-lg hover:border-orange-300 focus:border-orange-400 focus:ring-2 focus:ring-orange-100 transition-all"
+                className="px-3 py-1.5 text-sm border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-inset text-gray-900 dark:text-dk-text rounded-lg hover:border-orange-300 dark:hover:border-orange-700 focus:border-orange-400 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-800 transition-all"
               >
                 <option value="">{t('notificationCenter.targeting.allStatuses', 'Tất cả trạng thái')}</option>
                 {STATUSES.map(status => (

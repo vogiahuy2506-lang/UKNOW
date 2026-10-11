@@ -20,11 +20,11 @@ export default function UsageBar({
   if (serviceSuspended) {
     return (
       <div className="flex items-center justify-between py-2 px-1">
-        <span className="flex items-center gap-2 text-sm text-gray-600">
-          {Icon && <Icon className="w-4 h-4 text-gray-400 shrink-0" />}
+        <span className="flex items-center gap-2 text-sm text-gray-600 dark:text-dk-text2">
+          {Icon && <Icon className="w-4 h-4 text-gray-400 dark:text-dk-muted shrink-0" />}
           <span className="font-medium">{label}</span>
         </span>
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold text-red-700 bg-red-50 border border-red-200">
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800">
           {t('accountProfileModal.suspended')}
         </span>
       </div>
@@ -35,12 +35,12 @@ export default function UsageBar({
   if (!Number.isFinite(usedNumber)) {
     return (
       <div className="flex items-center justify-between py-2 px-1" data-testid="usage-bar-unavailable">
-        <span className="flex items-center gap-2 text-sm text-gray-600">
-          {Icon && <Icon className="w-4 h-4 text-gray-400 shrink-0" />}
+        <span className="flex items-center gap-2 text-sm text-gray-600 dark:text-dk-text2">
+          {Icon && <Icon className="w-4 h-4 text-gray-400 dark:text-dk-muted shrink-0" />}
           <span className="font-medium">{label}</span>
         </span>
         <span
-          className="text-xs font-medium text-gray-400 bg-gray-50 px-2.5 py-0.5 rounded-full border border-gray-100"
+          className="text-xs font-medium text-gray-400 dark:text-dk-muted bg-gray-50 dark:bg-dk-raised px-2.5 py-0.5 rounded-full border border-gray-100 dark:border-dk-border"
           title={t('accountProfileModal.meterUnavailable')}
         >
           —
@@ -57,7 +57,7 @@ export default function UsageBar({
           <span className="font-medium">{label}</span>
         </span>
         <span
-          className="inline-flex items-center text-xs font-medium text-gray-600 bg-gray-100/90 hover:bg-gray-100 px-2.5 py-0.5 rounded-full border border-gray-200/70 dark:bg-dk-raised dark:text-dk-text dark:border-dk-border transition-colors cursor-default"
+          className="inline-flex items-center text-xs font-medium text-gray-600 bg-gray-100/90 hover:bg-gray-100 dark:hover:bg-dk-strong px-2.5 py-0.5 rounded-full border border-gray-200/70 dark:bg-dk-raised dark:text-dk-text dark:border-dk-border transition-colors cursor-default"
           title={
             usedNumber > 0
               ? `Đang sử dụng: ${formatNumber(usedNumber)} · Hạn mức: ${t('accountProfileModal.unlimited')}`
@@ -95,7 +95,7 @@ export default function UsageBar({
         <div className={`h-full rounded-full transition-all duration-300 ${barColor}`} style={{ width: `${pct}%` }} />
       </div>
       {showAddonsHint && (
-        <p className="mt-1 text-[11px] text-amber-700 flex items-center gap-1 font-medium">
+        <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300 flex items-center gap-1 font-medium">
           <span>•</span> {t('accountProfileModal.usingAddonsHint')}
         </p>
       )}

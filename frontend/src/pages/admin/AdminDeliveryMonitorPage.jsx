@@ -441,7 +441,7 @@ export default function AdminDeliveryMonitorPage() {
           <input
             type="checkbox"
             data-testid="include-internal"
-            className="h-4 w-4 rounded border-gray-300"
+            className="h-4 w-4 rounded border-gray-300 dark:border-dk-border-strong"
             checked={includeInternal}
             disabled={Boolean(ownerFilter)}
             onChange={(event) => setIncludeInternal(event.target.checked)}

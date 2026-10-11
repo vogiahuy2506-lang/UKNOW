@@ -406,14 +406,14 @@ export default function CustomPlanBuilder({
               </div>
 
               {error && (
-                <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                <div className="flex items-start gap-2 rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-3 py-2 text-sm text-red-700 dark:text-red-300">
                   <HiOutlineExclamation className="w-5 h-5 shrink-0 mt-0.5" />
                   <span>{error}</span>
                 </div>
               )}
 
               {quote?.priceFloorApplied && (
-                <div className="flex items-start gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-900">
+                <div className="flex items-start gap-2 rounded-xl border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/40 px-3 py-2 text-sm text-violet-900 dark:text-violet-300">
                   <HiOutlineExclamation className="w-5 h-5 shrink-0 mt-0.5" />
                   <div>
                     <p className="font-semibold">{t('customPlan.priceFloorTitle')}</p>
@@ -426,7 +426,7 @@ export default function CustomPlanBuilder({
               )}
 
               {quote?.suggestedPlan && (
-                <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                <div className="flex items-start gap-2 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
                   <HiOutlineLightBulb className="w-5 h-5 shrink-0 mt-0.5" />
                   <div>
                     <p className="font-semibold">{t('customPlan.suggestedPlanTitle')}</p>
@@ -439,7 +439,7 @@ export default function CustomPlanBuilder({
                     </p>
                     <button
                       type="button"
-                      className="mt-1 text-orange-700 font-bold underline"
+                      className="mt-1 text-orange-700 dark:text-orange-300 font-bold underline"
                       onClick={() => navigate('/pricing')}
                     >
                       {t('customPlan.viewPublicPlans')}
@@ -448,55 +448,55 @@ export default function CustomPlanBuilder({
                 </div>
               )}
 
-              <div className="rounded-2xl border border-orange-200 bg-orange-50/60 p-4">
+              <div className="rounded-2xl border border-orange-200 dark:border-orange-800 bg-orange-50/60 dark:bg-orange-950/40 p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <h4 className="font-bold text-slate-800">{t('customPlan.priceBreakdown')}</h4>
-                  {quoting && <span className="text-xs text-slate-500">{t('customPlan.updating')}</span>}
+                  <h4 className="font-bold text-slate-800 dark:text-dk-text">{t('customPlan.priceBreakdown')}</h4>
+                  {quoting && <span className="text-xs text-slate-500 dark:text-dk-text2">{t('customPlan.updating')}</span>}
                 </div>
                 {hasQuantityIssues ? (
-                  <div className="flex items-start gap-2 text-sm text-red-700">
+                  <div className="flex items-start gap-2 text-sm text-red-700 dark:text-red-300">
                     <HiOutlineExclamation className="w-5 h-5 shrink-0 mt-0.5" />
                     <span>{t('customPlan.fixQtyToSeePrice')}</span>
                   </div>
                 ) : (
                 <div className="space-y-1.5 text-sm">
                   {(quote?.items || []).filter((i) => i.subtotal > 0 || i.itemKey === 'base_fee').map((line) => (
-                    <div key={line.itemKey} className="flex justify-between gap-3 text-slate-600">
+                    <div key={line.itemKey} className="flex justify-between gap-3 text-slate-600 dark:text-dk-text2">
                       <span className={line.itemKey === 'base_fee' ? '' : 'truncate'}>
                         {t(ITEM_LABEL_KEYS[line.itemKey] || line.itemKey)}
                         {line.itemKey === 'base_fee' && includedSummary.length > 0 && (
-                          <span className="block text-[11px] text-slate-400 font-normal mt-0.5">
+                          <span className="block text-[11px] text-slate-400 dark:text-dk-muted font-normal mt-0.5">
                             {t('customPlan.baseFeeIncludes', {
                               list: includedSummary.join(', '),
                             })}
                           </span>
                         )}
                         {line.itemKey !== 'base_fee' && (
-                          <span className="text-slate-400">
+                          <span className="text-slate-400 dark:text-dk-muted">
                             {' '}× {Number(line.qty).toLocaleString('vi-VN')}{' '}
                             {t(UNIT_LABEL_KEYS[line.itemKey] || 'customPlan.units.generic')}
                           </span>
                         )}
                       </span>
-                      <span className="font-medium text-slate-800 shrink-0">{fmtVnd(line.subtotal)}</span>
+                      <span className="font-medium text-slate-800 dark:text-dk-text shrink-0">{fmtVnd(line.subtotal)}</span>
                     </div>
                   ))}
-                  <div className="border-t border-orange-200 pt-2 mt-2 flex justify-between items-start">
+                  <div className="border-t border-orange-200 dark:border-orange-800 pt-2 mt-2 flex justify-between items-start">
                     <div>
-                      <span className="font-black text-slate-900 block">
+                      <span className="font-black text-slate-900 dark:text-dk-text block">
                         {billingPeriod === 'yearly' ? t('customPlan.yearlyTotal') : t('customPlan.monthlyTotal')}
                       </span>
                     </div>
-                    <span className="font-black text-orange-600 text-lg">
+                    <span className="font-black text-orange-600 dark:text-orange-400 text-lg">
                       {fmtVnd(quote?.total || 0)}
                     </span>
                   </div>
                   {billingPeriod === 'yearly' && quote?.monthlyTotal != null && (
                     <div className="space-y-0.5 text-right">
-                      <p className="text-xs text-emerald-700">
+                      <p className="text-xs text-emerald-700 dark:text-emerald-300">
                         {t('customPlan.equivMonthly', { amount: fmtVnd(Math.round((quote.total || 0) / 12)) })}
                       </p>
-                      <p className="text-[11px] text-slate-400">
+                      <p className="text-[11px] text-slate-400 dark:text-dk-muted">
                         {t('customPlan.storageNoYearlyDiscount')}
                       </p>
                     </div>

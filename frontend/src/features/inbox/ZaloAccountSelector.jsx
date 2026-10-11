@@ -112,9 +112,9 @@ const ZaloAccountSelector = ({
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 px-2 py-1.5 bg-gray-50 rounded-lg border border-gray-200">
+      <div className="flex items-center gap-2 px-2 py-1.5 bg-gray-50 dark:bg-dk-raised rounded-lg border border-gray-200 dark:border-dk-border">
         <div className="w-3.5 h-3.5 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
-        <span className="text-[11px] text-gray-500">{t('common.loading')}</span>
+        <span className="text-[11px] text-gray-500 dark:text-dk-text2">{t('common.loading')}</span>
       </div>
     );
   }
@@ -123,9 +123,9 @@ const ZaloAccountSelector = ({
     if (!showEmptyCta) return null;
     if (!canManageChannels) {
       return (
-        <div className="w-full flex items-center gap-2 px-2 py-1.5 bg-gray-50 rounded-lg border border-gray-200 text-left">
-          <HiExclamationCircle className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-          <span className="text-[11px] text-gray-600 flex-1">{t('inbox.noZaloAccount')}</span>
+        <div className="w-full flex items-center gap-2 px-2 py-1.5 bg-gray-50 dark:bg-dk-raised rounded-lg border border-gray-200 dark:border-dk-border text-left">
+          <HiExclamationCircle className="w-3.5 h-3.5 text-gray-400 dark:text-dk-muted shrink-0" />
+          <span className="text-[11px] text-gray-600 dark:text-dk-text2 flex-1">{t('inbox.noZaloAccount')}</span>
         </div>
       );
     }
@@ -135,9 +135,9 @@ const ZaloAccountSelector = ({
         onClick={() => navigate('/app/settings/channels')}
         className="w-full flex items-center gap-2 px-2 py-1.5 bg-orange-50 dark:bg-orange-950/30 rounded-lg border border-orange-200 dark:border-orange-900/50 hover:bg-orange-100 dark:hover:bg-orange-900/40 transition-colors text-left"
       >
-        <HiExclamationCircle className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+        <HiExclamationCircle className="w-3.5 h-3.5 text-orange-500 dark:text-orange-400 shrink-0" />
         <span className="text-[11px] text-orange-700 dark:text-orange-300 flex-1">{t('inbox.noZaloAccount')}</span>
-        <HiExternalLink className="w-3 h-3 text-orange-500 shrink-0" />
+        <HiExternalLink className="w-3 h-3 text-orange-500 dark:text-orange-400 shrink-0" />
       </button>
     );
   }
@@ -173,7 +173,7 @@ const ZaloAccountSelector = ({
                   }`}
                 >
                   <span className="flex-1 text-left text-xs font-medium text-gray-700 dark:text-dk-text">{t('inbox.allZaloAccounts')}</span>
-                  {selectedAccount == null && <HiCheck className="w-3.5 h-3.5 text-primary-500 shrink-0" />}
+                  {selectedAccount == null && <HiCheck className="w-3.5 h-3.5 text-primary-500 dark:text-primary-400 shrink-0" />}
                 </button>
                 {accounts.map((account) => (
                   <button
@@ -191,7 +191,7 @@ const ZaloAccountSelector = ({
                       {!account.hasSession && ` — ${t('inbox.accountNeedsRelogin')}`}
                     </span>
                     {String(account.id) === String(selectedAccountId) && (
-                      <HiCheck className="w-3.5 h-3.5 text-primary-500 shrink-0" />
+                      <HiCheck className="w-3.5 h-3.5 text-primary-500 dark:text-primary-400 shrink-0" />
                     )}
                   </button>
                 ))}
@@ -221,7 +221,7 @@ const ZaloAccountSelector = ({
           className="shrink-0 rounded-lg border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-raised p-2 text-gray-500 dark:text-dk-text2 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-gray-50 dark:hover:bg-dk-strong transition-colors disabled:opacity-50"
         >
           {isSyncing ? (
-            <div className="w-3.5 h-3.5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+            <div className="w-3.5 h-3.5 border-2 border-gray-400 dark:border-dk-border-strong border-t-transparent rounded-full animate-spin" />
           ) : (
             <HiRefresh className="w-3.5 h-3.5" />
           )}

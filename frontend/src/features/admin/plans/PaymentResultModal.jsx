@@ -82,7 +82,7 @@ export const PaymentResultModal = ({ qrCode, checkoutUrl, orderCode, planName, u
         <div className="flex flex-col items-center gap-3">
           <div className="bg-white dark:bg-dk-inset border border-gray-200 dark:border-dk-border rounded-2xl p-4 shadow-sm w-52 h-52 flex items-center justify-center">
             {qrImageUrl
-              ? <img src={qrImageUrl} alt="QR thanh toán" className="w-44 h-44 rounded-lg bg-white p-1" />
+              ? /* giữ sáng: mã QR cần nền trắng + viền trắng (quiet zone) để quét được */ <img src={qrImageUrl} alt="QR thanh toán" className="w-44 h-44 rounded-lg bg-white p-1" />
               : <div className="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin" />
             }
           </div>

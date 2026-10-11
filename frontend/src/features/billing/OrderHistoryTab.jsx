@@ -10,11 +10,11 @@ import {
 import { getMyOrders } from '../auth/services/authApi.service';
 
 const STATUS_MAP = (t) => ({
-  success:   { label: t('accountProfileModal.success'), cls: 'text-green-600 bg-green-50 border-green-200', icon: HiOutlineCheckCircle },
-  pending:   { label: t('accountProfileModal.pending'), cls: 'text-amber-600 bg-amber-50 border-amber-200', icon: HiOutlineClock },
-  cancelled: { label: t('accountProfileModal.cancelled'), cls: 'text-gray-400 bg-gray-50 border-gray-200', icon: HiOutlineBan },
+  success:   { label: t('accountProfileModal.success'), cls: 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/40 border-green-200 dark:border-green-800', icon: HiOutlineCheckCircle },
+  pending:   { label: t('accountProfileModal.pending'), cls: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800', icon: HiOutlineClock },
+  cancelled: { label: t('accountProfileModal.cancelled'), cls: 'text-gray-400 dark:text-dk-muted bg-gray-50 dark:bg-dk-raised border-gray-200 dark:border-dk-border', icon: HiOutlineBan },
   // PLAN_HOAN_TIEN_DON_HANG PR-3 — khoá orders.refunded có sẵn ở vi.js/en.js.
-  refunded: { label: t('orders.refunded'), cls: 'text-rose-600 bg-rose-50 border-rose-200', icon: HiOutlineReceiptRefund },
+  refunded: { label: t('orders.refunded'), cls: 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800', icon: HiOutlineReceiptRefund },
 });
 
 const TOPUP_ITEM_LABEL_KEYS = {
@@ -47,7 +47,7 @@ function formatTopupItemsSummary(items, t) {
 function renderInvoiceStatus(invoice, orderCode, t, orderStatus) {
   if (!invoice || !invoice.status) {
     return (
-      <span className="text-xs text-gray-400">
+      <span className="text-xs text-gray-400 dark:text-dk-muted">
         {t('invoiceVat.history.none')}
       </span>
     );
@@ -57,7 +57,7 @@ function renderInvoiceStatus(invoice, orderCode, t, orderStatus) {
 
   if (status === 'pending' || status === 'processing') {
     return (
-      <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 border border-amber-200">
+      <span className="inline-flex items-center rounded-full bg-amber-50 dark:bg-amber-950/40 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
         {t('invoiceVat.history.pending')}
       </span>
     );
@@ -66,12 +66,12 @@ function renderInvoiceStatus(invoice, orderCode, t, orderStatus) {
   if (status === 'issued') {
     return (
       <div className="flex items-center gap-2">
-        <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 border border-emerald-200">
+        <span className="inline-flex items-center rounded-full bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
           {t('invoiceVat.history.issued', { soHdon: soHdon || '—' })}
         </span>
         <Link
           to={`/invoices/${orderCode}`}
-          className="inline-flex items-center text-xs font-semibold text-primary-600 hover:text-primary-700 underline"
+          className="inline-flex items-center text-xs font-semibold text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 underline"
         >
           {t('invoiceVat.history.view')}
         </Link>
@@ -82,12 +82,12 @@ function renderInvoiceStatus(invoice, orderCode, t, orderStatus) {
   if (status === 'cqt_ok') {
     return (
       <div className="flex items-center gap-2">
-        <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 border border-emerald-200">
+        <span className="inline-flex items-center rounded-full bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
           {t('invoiceVat.history.cqtOk')}
         </span>
         <Link
           to={`/invoices/${orderCode}`}
-          className="inline-flex items-center text-xs font-semibold text-primary-600 hover:text-primary-700 underline"
+          className="inline-flex items-center text-xs font-semibold text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 underline"
         >
           {t('invoiceVat.history.view')}
         </Link>
@@ -99,7 +99,7 @@ function renderInvoiceStatus(invoice, orderCode, t, orderStatus) {
   // đang thử lại" là sai với khách, hệ thống sẽ không thử lại.
   if (status === 'failed' && orderStatus === 'refunded') {
     return (
-      <span className="text-xs text-gray-500">
+      <span className="text-xs text-gray-500 dark:text-dk-text2">
         {t('invoiceVat.history.refundedNoInvoice')}
       </span>
     );
@@ -107,7 +107,7 @@ function renderInvoiceStatus(invoice, orderCode, t, orderStatus) {
 
   if (status === 'failed') {
     return (
-      <span className="inline-flex items-center rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-medium text-rose-700 border border-rose-200">
+      <span className="inline-flex items-center rounded-full bg-rose-50 dark:bg-rose-950/40 px-2.5 py-0.5 text-xs font-medium text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
         {t('invoiceVat.history.failed')}
       </span>
     );
@@ -115,14 +115,14 @@ function renderInvoiceStatus(invoice, orderCode, t, orderStatus) {
 
   if (status === 'cqt_rejected') {
     return (
-      <span className="inline-flex items-center rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-medium text-rose-700 border border-rose-200">
+      <span className="inline-flex items-center rounded-full bg-rose-50 dark:bg-rose-950/40 px-2.5 py-0.5 text-xs font-medium text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
         {t('invoiceVat.history.cqtRejected')}
       </span>
     );
   }
 
   return (
-    <span className="text-xs text-gray-400">
+    <span className="text-xs text-gray-400 dark:text-dk-muted">
       {t('invoiceVat.history.none')}
     </span>
   );
@@ -142,7 +142,7 @@ export default function OrderHistoryTab({ isUserAdmin, t }) {
 
   if (!isUserAdmin) {
     return (
-      <div className="py-12 text-center text-gray-400 text-sm">
+      <div className="py-12 text-center text-gray-400 dark:text-dk-muted text-sm">
         {t('accountProfileModal.ordersFeatureOnlyForMembers')}
       </div>
     );

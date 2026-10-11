@@ -205,13 +205,13 @@ export default function EmailPreviewModal({ isOpen, onClose, notification }) {
         <div className="border-b border-slate-200 bg-slate-50/60 px-6 py-4 dark:border-dk-border dark:bg-dk-raised">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-xs">
             <div>
-              <div className="text-slate-400 uppercase tracking-wide font-semibold mb-1">Subject</div>
+              <div className="text-slate-400 dark:text-dk-muted uppercase tracking-wide font-semibold mb-1">Subject</div>
               <div className="font-medium text-slate-900 break-words dark:text-dk-text" title={subjectInferred}>
                 {subjectInferred || '—'}
               </div>
             </div>
             <div>
-              <div className="text-slate-400 uppercase tracking-wide font-semibold mb-1">
+              <div className="text-slate-400 dark:text-dk-muted uppercase tracking-wide font-semibold mb-1">
                 {t('notificationCenter.previewModal.from')}
               </div>
               <div className="font-mono text-slate-700 break-all dark:text-dk-text">
@@ -219,7 +219,7 @@ export default function EmailPreviewModal({ isOpen, onClose, notification }) {
               </div>
             </div>
             <div>
-              <div className="text-slate-400 uppercase tracking-wide font-semibold mb-1">
+              <div className="text-slate-400 dark:text-dk-muted uppercase tracking-wide font-semibold mb-1">
                 {t('notificationCenter.previewModal.to')}
               </div>
               <div className="text-slate-700 dark:text-dk-text">
@@ -229,11 +229,11 @@ export default function EmailPreviewModal({ isOpen, onClose, notification }) {
               </div>
             </div>
             <div>
-              <div className="text-slate-400 uppercase tracking-wide font-semibold mb-1">
+              <div className="text-slate-400 dark:text-dk-muted uppercase tracking-wide font-semibold mb-1">
                 {t('notificationCenter.previewModal.time')}
               </div>
               <div className="text-slate-700 inline-flex items-center gap-1.5 dark:text-dk-text">
-                <HiOutlineCalendar className="w-3.5 h-3.5 text-slate-400" />
+                <HiOutlineCalendar className="w-3.5 h-3.5 text-slate-400 dark:text-dk-muted" />
                 {sentAt !== '—'
                   ? `${t('notificationCenter.previewModal.sentAt')} ${sentAt}`
                   : scheduledAt !== '—'
@@ -333,18 +333,18 @@ export default function EmailPreviewModal({ isOpen, onClose, notification }) {
         {/* Body */}
         <div className="flex-1 overflow-auto bg-slate-100 dark:bg-dk-inset">
           {loading && !html && (
-            <div className="flex items-center justify-center h-full min-h-[400px] text-slate-400 text-sm">
+            <div className="flex items-center justify-center h-full min-h-[400px] text-slate-400 dark:text-dk-muted text-sm">
               <FaSpinner className="w-5 h-5 animate-spin mr-2" />
               {t('notificationCenter.previewModal.loading')}
             </div>
           )}
           {error && (
-            <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-red-500 text-sm gap-2">
+            <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-red-500 dark:text-red-400 text-sm gap-2">
               <span>{error}</span>
               <button
                 type="button"
                 onClick={() => setLang((l) => l)}
-                className="text-xs text-slate-500 underline"
+                className="text-xs text-slate-500 dark:text-dk-text2 underline"
               >
                 {t('notificationCenter.previewModal.retry', '(retry)')}
               </button>
@@ -352,6 +352,7 @@ export default function EmailPreviewModal({ isOpen, onClose, notification }) {
           )}
           {!loading && !error && html && view === 'rendered' && (
             <div className="flex justify-center p-6">
+              {/* giữ sáng: thân email xem trước là HTML thật gửi cho khách (nền trong suốt, chữ đen) — khung bao quanh vẫn tối */}
               <iframe
                 key={`rendered-${lang}-${device}`}
                 title="Email Preview"
@@ -381,7 +382,7 @@ export default function EmailPreviewModal({ isOpen, onClose, notification }) {
         {/* Footer toolbar */}
         <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-t border-slate-100 bg-white dark:border-dk-border dark:bg-dk-surface">
           <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-dk-text2">
-            <FaCheck className="w-3.5 h-3.5 text-green-500" />
+            <FaCheck className="w-3.5 h-3.5 text-green-500 dark:text-green-400" />
             {t('notificationCenter.previewModal.badgeNote')}
           </div>
           <div className="flex items-center gap-2">

@@ -103,10 +103,10 @@ export default function PlanSection({ data, t }) {
 
   if (!hasPlan) {
     return (
-      <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-center">
-        <HiOutlineTag className="w-6 h-6 text-gray-300 mx-auto mb-1" />
-        <p className="text-sm text-gray-500">{t('accountProfileModal.noPlanAssigned')}</p>
-        <p className="text-xs text-gray-400 mt-0.5">{t('accountProfileModal.contactAdmin')}</p>
+      <div className="rounded-xl border border-dashed border-gray-300 dark:border-dk-border-strong bg-gray-50 dark:bg-dk-raised p-4 text-center">
+        <HiOutlineTag className="w-6 h-6 text-gray-300 dark:text-dk-muted mx-auto mb-1" />
+        <p className="text-sm text-gray-500 dark:text-dk-text2">{t('accountProfileModal.noPlanAssigned')}</p>
+        <p className="text-xs text-gray-400 dark:text-dk-muted mt-0.5">{t('accountProfileModal.contactAdmin')}</p>
       </div>
     );
   }
@@ -192,7 +192,7 @@ export default function PlanSection({ data, t }) {
 
         if (isFullyExpired) {
           return (
-            <div className="flex items-center gap-2.5 rounded-xl px-4 py-3 text-sm bg-red-50 border border-red-200 text-red-700 shadow-2xs">
+            <div className="flex items-center gap-2.5 rounded-xl px-4 py-3 text-sm bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 shadow-2xs">
               <HiOutlineExclamation className="w-5 h-5 shrink-0" />
               <span className="font-semibold">
                 {t('accountProfileModal.fullyExpired')}
@@ -203,7 +203,7 @@ export default function PlanSection({ data, t }) {
 
         if (isInGrace) {
           return (
-            <div className="flex items-center gap-2.5 rounded-xl px-4 py-3 text-sm bg-amber-50 border border-amber-200 text-amber-800 shadow-2xs">
+            <div className="flex items-center gap-2.5 rounded-xl px-4 py-3 text-sm bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 shadow-2xs">
               <HiOutlineExclamation className="w-5 h-5 shrink-0" />
               <span>
                 {t('accountProfileModal.inGracePeriod', { days: graceDaysLeft })}
@@ -214,18 +214,18 @@ export default function PlanSection({ data, t }) {
 
         return (
           <div className={`flex items-center gap-2.5 rounded-xl px-4 py-2.5 text-sm shadow-2xs ${
-            isDanger ? 'bg-red-50 border border-red-200 text-red-700'
-            : isWarning ? 'bg-amber-50 border border-amber-200 text-amber-800'
-            : 'bg-white border border-gray-200 text-gray-700'
+            isDanger ? 'bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300'
+            : isWarning ? 'bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300'
+            : 'bg-white dark:bg-dk-surface border border-gray-200 dark:border-dk-border text-gray-700 dark:text-dk-text'
           }`}>
             {isWarning
-              ? <HiOutlineExclamation className="w-4 h-4 shrink-0 text-amber-600" />
-              : <HiOutlineClock className="w-4 h-4 shrink-0 text-gray-500" />
+              ? <HiOutlineExclamation className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              : <HiOutlineClock className="w-4 h-4 shrink-0 text-gray-500 dark:text-dk-text2" />
             }
             <span className="font-medium">
               {t('accountProfileModal.expiresOn', { date: expiresAt.toLocaleDateString('vi-VN') })}
               {isWarning && daysLeft > 0 && (
-                <span className="ml-1.5 font-bold text-amber-700">{t('accountProfileModal.daysLeft', { days: daysLeft })}</span>
+                <span className="ml-1.5 font-bold text-amber-700 dark:text-amber-300">{t('accountProfileModal.daysLeft', { days: daysLeft })}</span>
               )}
             </span>
           </div>
@@ -240,7 +240,7 @@ export default function PlanSection({ data, t }) {
               key={i}
               className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs bg-white text-gray-700 rounded-lg border border-gray-200/70 shadow-2xs dark:bg-dk-surface dark:text-dk-text dark:border-dk-border"
             >
-              <HiOutlineBadgeCheck className="w-3.5 h-3.5 text-emerald-500" />
+              <HiOutlineBadgeCheck className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
               {unwrapFeature(feat, locale)}
             </span>
           ))}
@@ -395,11 +395,11 @@ export default function PlanSection({ data, t }) {
       <StorageUsageSection />
 
       {data.addons && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 space-y-2">
-          <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide">
+        <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/40 p-4 space-y-2">
+          <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 uppercase tracking-wide">
             {t('accountProfileModal.addonsTitle')}
           </p>
-          <ul className="space-y-1 text-sm text-amber-950">
+          <ul className="space-y-1 text-sm text-amber-950 dark:text-amber-300">
             {[
               ['zaloMessages', 'topup.items.zaloMessages', true],
               ['telegramMessages', 'topup.items.telegramMessages', true],
@@ -444,7 +444,7 @@ export default function PlanSection({ data, t }) {
               );
             })}
           </ul>
-          <p className="text-xs text-amber-700/90 pt-1">
+          <p className="text-xs text-amber-700/90 dark:text-amber-300 pt-1">
             {t('accountProfileModal.addonsRolloverNote')}
           </p>
         </div>

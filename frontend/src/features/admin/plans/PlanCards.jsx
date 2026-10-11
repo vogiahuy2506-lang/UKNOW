@@ -21,7 +21,7 @@ export const PlanCard = ({ plan, onEdit, onDelete, onAssign, onToggle }) => {
 
       <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-dk-text2">
         <span>{fmtEmp(plan.maxEmployees, t)}</span>
-        <span className="text-gray-200 dark:text-dk-border">|</span>
+        <span className="text-gray-200 dark:text-dk-muted">|</span>
         <span>{plan.user_count ?? 0} {t('plans.membersUsing')}</span>
       </div>
 
@@ -64,7 +64,7 @@ export const PlanCard = ({ plan, onEdit, onDelete, onAssign, onToggle }) => {
         <button onClick={() => onAssign(plan)} className="btn btn-secondary text-sm px-3" title={t('plans.assignToUser')}>
           <HiOutlineUserAdd className="w-4 h-4" />
         </button>
-        <button onClick={() => onDelete(plan)} className="btn btn-secondary text-sm px-3 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40" title={t('plans.deletePlan')}>
+        <button onClick={() => onDelete(plan)} className="btn btn-secondary text-sm px-3 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40" title={t('plans.deletePlan')}>
           <HiOutlineTrash className="w-4 h-4" />
         </button>
       </div>
@@ -157,7 +157,7 @@ export const CustomPlanCard = ({ plan, onEdit, onDelete, onActivate, onRestore }
               <HiOutlinePencil className="w-4 h-4 mr-1.5" />
               {t('plans.edit')}
             </button>
-            <button onClick={() => onDelete(plan)} className="btn btn-secondary text-sm px-3 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40" title={t('plans.hideOrDelete')}>
+            <button onClick={() => onDelete(plan)} className="btn btn-secondary text-sm px-3 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40" title={t('plans.hideOrDelete')}>
               <HiOutlineTrash className="w-4 h-4" />
             </button>
           </>

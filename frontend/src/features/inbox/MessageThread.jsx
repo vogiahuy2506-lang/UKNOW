@@ -142,7 +142,7 @@ const MessageBubble = ({
     >
       <RenderTextWithLinks
         text={text}
-        linkClassName={`break-all underline font-medium hover:opacity-80 transition-opacity ${isAgentMessage ? 'text-white/90' : 'text-primary-600'}`}
+        linkClassName={`break-all underline font-medium hover:opacity-80 transition-opacity ${isAgentMessage ? 'text-white/90' : 'text-primary-600 dark:text-primary-400'}`}
       />
     </p>
   );
@@ -222,7 +222,7 @@ const MessageBubble = ({
                       target="_blank"
                       rel="noopener noreferrer"
                       className={`flex items-center gap-2 text-sm font-medium underline hover:opacity-80 ${
-                        sendFailed || sendRetrying ? 'text-red-700' : isAgentMessage ? 'text-white/90' : 'text-primary-600 dark:text-primary-400'
+                        sendFailed || sendRetrying ? 'text-red-700 dark:text-red-300' : isAgentMessage ? 'text-white/90' : 'text-primary-600 dark:text-primary-400'
                       }`}
                     >
                       <HiOutlinePaperClip className="w-4 h-4 shrink-0" />
@@ -256,7 +256,7 @@ const MessageBubble = ({
                   )}
                   {normalizedContent.description && (
                     <p className={`text-sm leading-snug break-words ${
-                      sendFailed || sendRetrying ? 'text-red-700/80' : isAgentMessage ? 'text-white/80' : 'text-gray-500'
+                      sendFailed || sendRetrying ? 'text-red-700/80 dark:text-red-300' : isAgentMessage ? 'text-white/80' : 'text-gray-500 dark:text-dk-text2'
                     }`} style={{ overflowWrap: 'anywhere' }}>
                       {normalizedContent.description}
                     </p>
@@ -266,7 +266,7 @@ const MessageBubble = ({
                     target="_blank"
                     rel="noopener noreferrer"
                     className={`block break-all text-sm underline font-medium hover:opacity-80 transition-opacity ${
-                      sendFailed || sendRetrying ? 'text-red-700' : isAgentMessage ? 'text-white/90' : 'text-primary-600'
+                      sendFailed || sendRetrying ? 'text-red-700 dark:text-red-300' : isAgentMessage ? 'text-white/90' : 'text-primary-600 dark:text-primary-400'
                     }`}
                   >
                     {linkHref}
@@ -284,17 +284,17 @@ const MessageBubble = ({
             {/* Time and status */}
             <div className={`flex items-center gap-1.5 px-4 pb-2 ${isAgentMessage ? 'justify-end' : 'justify-start'}`}>
               <span className={`text-[11px] ${
-                sendFailed || sendRetrying ? 'text-red-500' : isAgentMessage ? 'text-white/70' : 'text-gray-400'
+                sendFailed || sendRetrying ? 'text-red-500 dark:text-red-400' : isAgentMessage ? 'text-white/70' : 'text-gray-400 dark:text-dk-muted'
               }`}>
                 {formatMessageTime(message.createdAt, locale)}
               </span>
               {isAgent && sendFailed && (
-                <span title={sendState.error || t('inbox.sendFailed')} className="text-red-600">
+                <span title={sendState.error || t('inbox.sendFailed')} className="text-red-600 dark:text-red-400">
                   <HiExclamationCircle className="w-4 h-4" />
                 </span>
               )}
               {isAgent && sendRetrying && (
-                <span title={t('inbox.sendRetrying')} className="text-amber-600 text-[11px] font-medium">
+                <span title={t('inbox.sendRetrying')} className="text-amber-600 dark:text-amber-400 text-[11px] font-medium">
                   {t('inbox.sendRetrying')}
                 </span>
               )}
@@ -306,7 +306,7 @@ const MessageBubble = ({
                   type="button"
                   disabled={isRetryBusy}
                   onClick={() => onRetry(message)}
-                  className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-lg border border-red-300 dark:border-red-700 bg-white dark:bg-dk-surface px-3 py-1.5 text-xs font-semibold text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/60 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isRetryBusy ? t('inbox.retrying') : t('inbox.retrySend')}
                 </button>
@@ -425,7 +425,7 @@ const MessageThread = ({
       <div className="h-full min-h-0 flex items-center justify-center">
         <div className="text-center">
           <div className="w-14 h-14 border-[3px] border-primary-500 border-t-transparent rounded-full mx-auto mb-4 animate-spin"></div>
-          <p className="text-gray-500 font-medium">{t('inbox.loadingMessages')}</p>
+          <p className="text-gray-500 dark:text-dk-text2 font-medium">{t('inbox.loadingMessages')}</p>
         </div>
       </div>
     );
@@ -466,7 +466,7 @@ const MessageThread = ({
                 {searchQuery && (
                   <button
                     onClick={() => setSearchQuery('')}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-dk-text hover:bg-gray-200 dark:hover:bg-dk-strong rounded-lg transition-all"
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 text-gray-400 dark:text-dk-muted hover:text-gray-600 dark:hover:text-dk-text hover:bg-gray-200 dark:hover:bg-dk-strong rounded-lg transition-all"
                   >
                     <HiX className="w-4 h-4" />
                   </button>
@@ -514,7 +514,7 @@ const MessageThread = ({
             <div 
               key={msg.id || index} 
               data-msg-index={index}
-              className={isHighlighted ? 'bg-primary-50/50 rounded-2xl -mx-4 px-4 py-2 my-2' : ''}
+              className={isHighlighted ? 'bg-primary-50/50 dark:bg-primary-950/40 rounded-2xl -mx-4 px-4 py-2 my-2' : ''}
             >
               <MessageBubble
                 message={msg}
