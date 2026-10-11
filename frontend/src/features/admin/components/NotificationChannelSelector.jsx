@@ -41,8 +41,8 @@ export default function NotificationChannelSelector({
 
   return (
     <fieldset className="space-y-3">
-      <legend className="text-sm font-medium text-slate-800">{t('notificationCenter.channels.title')}</legend>
-      <p className="text-xs text-slate-500">{t('notificationCenter.channels.hint')}</p>
+      <legend className="text-sm font-medium text-slate-800 dark:text-dk-text">{t('notificationCenter.channels.title')}</legend>
+      <p className="text-xs text-slate-500 dark:text-dk-text2">{t('notificationCenter.channels.hint')}</p>
 
       <div className="grid gap-3 sm:grid-cols-2">
         {options.map(({ id, Icon, label, desc, on }) => {
@@ -51,21 +51,21 @@ export default function NotificationChannelSelector({
           <div
             key={id}
             className={`rounded-lg border p-3 transition-colors ${
-              off ? 'border-slate-200 bg-slate-50 opacity-70' : on ? 'border-orange-400 bg-orange-50' : 'border-slate-300 bg-white'
+              off ? 'border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-raised opacity-70' : on ? 'border-orange-400 bg-orange-50 dark:bg-orange-950/40' : 'border-slate-300 dark:border-dk-border-strong bg-white dark:bg-dk-surface'
             }`}
           >
-            <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-900">
+            <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-900 dark:text-dk-text">
               <input
                 type="checkbox"
                 checked={on && !off}
                 disabled={off}
                 onChange={() => toggle(id)}
-                className="h-4 w-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500"
+                className="h-4 w-4 rounded border-slate-300 dark:border-dk-border-strong text-orange-600 dark:text-orange-400 focus:ring-orange-500"
               />
-              <Icon className="h-4 w-4 text-orange-500" aria-hidden="true" />
+              <Icon className="h-4 w-4 text-orange-500 dark:text-orange-400" aria-hidden="true" />
               <span>{label}</span>
             </label>
-            <p className="mt-1 pl-6 text-xs text-slate-500">{off ? t('notificationCenter.channels.disabledNote') : desc}</p>
+            <p className="mt-1 pl-6 text-xs text-slate-500 dark:text-dk-text2">{off ? t('notificationCenter.channels.disabledNote') : desc}</p>
           </div>
           );
         })}
@@ -73,7 +73,7 @@ export default function NotificationChannelSelector({
 
       {inAppOn ? (
         <div className="space-y-1.5">
-          <label className="block text-sm font-medium text-slate-800" htmlFor="notification-broadcast-link">
+          <label className="block text-sm font-medium text-slate-800 dark:text-dk-text" htmlFor="notification-broadcast-link">
             {t('notificationCenter.channels.linkLabel')}
           </label>
           <input
@@ -82,18 +82,18 @@ export default function NotificationChannelSelector({
             onChange={(event) => onLinkChange(event.target.value)}
             maxLength={500}
             placeholder={t('notificationCenter.channels.linkPlaceholder')}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+            className="w-full rounded-lg border border-slate-300 dark:border-dk-border-strong bg-white dark:bg-dk-inset px-3 py-2 text-sm text-slate-900 dark:text-dk-text placeholder-slate-400 dark:placeholder-dk-muted focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
           />
-          <p className="text-xs text-slate-500">{t('notificationCenter.channels.linkHint')}</p>
+          <p className="text-xs text-slate-500 dark:text-dk-text2">{t('notificationCenter.channels.linkHint')}</p>
           {isValidBroadcastLink(link) ? null : (
-            <p role="alert" className="text-xs font-medium text-red-600">{t('notificationCenter.channels.linkInvalid')}</p>
+            <p role="alert" className="text-xs font-medium text-red-600 dark:text-red-400">{t('notificationCenter.channels.linkInvalid')}</p>
           )}
-          <p className="text-xs text-slate-500">{t('notificationCenter.channels.sharedContentNote')}</p>
+          <p className="text-xs text-slate-500 dark:text-dk-text2">{t('notificationCenter.channels.sharedContentNote')}</p>
         </div>
       ) : null}
 
       {emailOn && emailLocked ? (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+        <p className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
           {t('notificationCenter.channels.emailLockedNote')}
         </p>
       ) : null}

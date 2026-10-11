@@ -9,10 +9,10 @@ import { formatRelativeTime } from '../utils/formatRelativeTime';
 import { pickLocalizedText } from '../utils/pickLocalizedText';
 
 const SEVERITY_STYLES = {
-  info: { Icon: HiOutlineInformationCircle, wrap: 'bg-blue-50 text-blue-600' },
-  success: { Icon: HiOutlineCheckCircle, wrap: 'bg-emerald-50 text-emerald-600' },
-  warning: { Icon: HiOutlineExclamation, wrap: 'bg-amber-50 text-amber-600' },
-  error: { Icon: HiOutlineExclamationCircle, wrap: 'bg-red-50 text-red-600' },
+  info: { Icon: HiOutlineInformationCircle, wrap: 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400' },
+  success: { Icon: HiOutlineCheckCircle, wrap: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400' },
+  warning: { Icon: HiOutlineExclamation, wrap: 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400' },
+  error: { Icon: HiOutlineExclamationCircle, wrap: 'bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400' },
 };
 
 /**
@@ -36,25 +36,25 @@ export default function NotificationItem({ item, onSelect, compact = false }) {
       data-testid="notification-item"
       data-unread={unread ? 'true' : 'false'}
       onClick={() => onSelect(item)}
-      className={`w-full flex items-start gap-3 text-left transition-colors hover:bg-gray-50 ${
+      className={`w-full flex items-start gap-3 text-left transition-colors hover:bg-gray-50 dark:hover:bg-dk-raised ${
         compact ? 'px-3 py-2.5' : 'px-4 py-3.5'
-      } ${unread ? 'bg-orange-50/40' : ''}`}
+      } ${unread ? 'bg-orange-50/40 dark:bg-orange-950/40' : ''}`}
     >
       <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${wrap}`}>
         <Icon className="h-4 w-4" aria-hidden="true" />
       </span>
       <span className="min-w-0 flex-1">
         <span
-          className={`block truncate text-[13px] leading-snug text-gray-900 ${unread ? 'font-semibold' : 'font-medium'}`}
+          className={`block truncate text-[13px] leading-snug text-gray-900 dark:text-dk-text ${unread ? 'font-semibold' : 'font-medium'}`}
         >
           {title}
         </span>
         {message && (
-          <span className="mt-0.5 block whitespace-pre-line break-words text-[12px] leading-snug text-gray-500 line-clamp-2">
+          <span className="mt-0.5 block whitespace-pre-line break-words text-[12px] leading-snug text-gray-500 dark:text-dk-text2 line-clamp-2">
             {message}
           </span>
         )}
-        <span className="mt-1 block text-[11px] text-gray-400">{formatRelativeTime(item.createdAt, t)}</span>
+        <span className="mt-1 block text-[11px] text-gray-400 dark:text-dk-muted">{formatRelativeTime(item.createdAt, t)}</span>
       </span>
       {unread && (
         <span

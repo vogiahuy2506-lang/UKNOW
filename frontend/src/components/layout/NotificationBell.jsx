@@ -79,14 +79,14 @@ export default function NotificationBell() {
         aria-haspopup="dialog"
         aria-expanded={open}
         data-testid="notification-bell"
-        className="relative inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
+        className="relative inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 dark:text-dk-text2 transition-colors hover:bg-gray-100 dark:hover:bg-dk-strong hover:text-gray-800 dark:hover:text-dk-text"
       >
         <HiOutlineBell className="h-5 w-5" aria-hidden="true" />
         {unreadCount > 0 && (
           <span
             data-testid="notification-badge"
             aria-hidden="true"
-            className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white"
+            className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white dark:ring-dk-surface"
           >
             {badgeText}
           </span>
@@ -98,16 +98,16 @@ export default function NotificationBell() {
           role="dialog"
           aria-label={t('notifications.title')}
           data-testid="notification-dropdown"
-          className="fixed inset-x-2 top-[48px] z-50 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[380px]"
+          className="fixed inset-x-2 top-[48px] z-50 overflow-hidden rounded-2xl border border-gray-100 dark:border-dk-border bg-white dark:bg-dk-surface shadow-2xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[380px]"
         >
-          <div className="flex items-center justify-between gap-2 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white px-4 py-3">
-            <p className="text-[13px] font-bold text-gray-900">{t('notifications.title')}</p>
+          <div className="flex items-center justify-between gap-2 border-b border-gray-100 dark:border-dk-border bg-gradient-to-r from-gray-50 dark:from-dk-raised to-white dark:to-dk-surface px-4 py-3">
+            <p className="text-[13px] font-bold text-gray-900 dark:text-dk-text">{t('notifications.title')}</p>
             <div className="flex items-center gap-1">
               <button
                 type="button"
                 onClick={() => markAllRead.mutate()}
                 disabled={unreadCount === 0 || markAllRead.isPending}
-                className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[12px] font-medium text-orange-600 transition-colors hover:bg-orange-50 disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-transparent"
+                className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[12px] font-medium text-orange-600 dark:text-orange-400 transition-colors hover:bg-orange-50 dark:hover:bg-orange-950/60 disabled:cursor-not-allowed disabled:text-gray-300 dark:disabled:text-dk-muted disabled:hover:bg-transparent"
               >
                 <HiOutlineCheck className="h-3.5 w-3.5" aria-hidden="true" />
                 {t('notifications.markAllRead')}
@@ -118,22 +118,22 @@ export default function NotificationBell() {
                 aria-label={t('notifications.settings')}
                 title={t('notifications.settings')}
                 data-testid="notification-settings-link"
-                className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+                className="rounded-lg p-1.5 text-gray-400 dark:text-dk-muted transition-colors hover:bg-gray-100 dark:hover:bg-dk-strong hover:text-gray-700 dark:hover:text-dk-text"
               >
                 <HiOutlineCog className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
           </div>
 
-          <div className="max-h-[420px] divide-y divide-gray-50 overflow-y-auto">
+          <div className="max-h-[420px] divide-y divide-gray-50 dark:divide-dk-border overflow-y-auto">
             {query.isPending && query.fetchStatus !== 'idle' && (
               <div className="space-y-3 px-4 py-4" aria-busy="true">
                 {[0, 1, 2].map((key) => (
                   <div key={key} className="flex gap-3">
-                    <div className="h-8 w-8 animate-pulse rounded-lg bg-gray-200" />
+                    <div className="h-8 w-8 animate-pulse rounded-lg bg-gray-200 dark:bg-dk-strong" />
                     <div className="flex-1 space-y-2">
-                      <div className="h-3 w-2/3 animate-pulse rounded bg-gray-200" />
-                      <div className="h-3 w-full animate-pulse rounded bg-gray-100" />
+                      <div className="h-3 w-2/3 animate-pulse rounded bg-gray-200 dark:bg-dk-strong" />
+                      <div className="h-3 w-full animate-pulse rounded bg-gray-100 dark:bg-dk-raised" />
                     </div>
                   </div>
                 ))}
@@ -142,11 +142,11 @@ export default function NotificationBell() {
 
             {query.isError && !query.data && (
               <div className="px-4 py-8 text-center">
-                <p className="text-[13px] text-gray-500">{t('notifications.loadFailed')}</p>
+                <p className="text-[13px] text-gray-500 dark:text-dk-text2">{t('notifications.loadFailed')}</p>
                 <button
                   type="button"
                   onClick={() => query.refetch()}
-                  className="mt-2 text-[12px] font-medium text-orange-600 hover:underline"
+                  className="mt-2 text-[12px] font-medium text-orange-600 dark:text-orange-400 hover:underline"
                 >
                   {t('notifications.retry')}
                 </button>
@@ -155,8 +155,8 @@ export default function NotificationBell() {
 
             {!query.isPending && !query.isError && items.length === 0 && (
               <div className="px-4 py-10 text-center">
-                <HiOutlineBell className="mx-auto h-8 w-8 text-gray-200" aria-hidden="true" />
-                <p className="mt-2 text-[13px] text-gray-400">{t('notifications.empty')}</p>
+                <HiOutlineBell className="mx-auto h-8 w-8 text-gray-200 dark:text-dk-border" aria-hidden="true" />
+                <p className="mt-2 text-[13px] text-gray-400 dark:text-dk-muted">{t('notifications.empty')}</p>
               </div>
             )}
 
@@ -165,12 +165,12 @@ export default function NotificationBell() {
             ))}
           </div>
 
-          <div className="border-t border-gray-100 p-1.5">
+          <div className="border-t border-gray-100 dark:border-dk-border p-1.5">
             <button
               type="button"
               onClick={() => goTo(notificationsPagePath(user))}
               data-testid="notification-view-all"
-              className="w-full rounded-xl px-3 py-2 text-center text-[13px] font-medium text-orange-600 transition-colors hover:bg-orange-50"
+              className="w-full rounded-xl px-3 py-2 text-center text-[13px] font-medium text-orange-600 dark:text-orange-400 transition-colors hover:bg-orange-50 dark:hover:bg-orange-950/60"
             >
               {t('notifications.viewAll')}
             </button>

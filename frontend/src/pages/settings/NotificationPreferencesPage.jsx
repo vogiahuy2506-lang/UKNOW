@@ -33,7 +33,7 @@ function EmailSwitch({ checked, disabled, label, onToggle }) {
       disabled={disabled}
       onClick={onToggle}
       className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2 ${
-        checked ? 'bg-orange-500' : 'bg-slate-300'
+        checked ? 'bg-orange-500' : 'bg-slate-300 dark:bg-dk-border-strong'
       } ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
     >
       <span
@@ -81,27 +81,27 @@ export default function NotificationPreferencesPage() {
           variant="danger"
           title={t('notifications.preferences.loadFailed')}
           action={
-            <button type="button" onClick={() => query.refetch()} className="text-sm font-medium text-red-700 hover:underline">
+            <button type="button" onClick={() => query.refetch()} className="text-sm font-medium text-red-700 dark:text-red-300 hover:underline">
               {t('notifications.retry')}
             </button>
           }
         />
       )}
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[560px] text-left text-sm">
-            <thead className="border-b border-slate-100 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <thead className="border-b border-slate-100 dark:border-dk-border bg-slate-50 dark:bg-dk-raised text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-dk-text2">
               <tr>
                 <th scope="col" className="px-4 py-3">{t('notifications.preferences.columnEvent')}</th>
                 <th scope="col" className="w-36 px-4 py-3">{t('notifications.preferences.columnBell')}</th>
                 <th scope="col" className="w-36 px-4 py-3">{t('notifications.preferences.columnEmail')}</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 dark:divide-dk-border">
               {query.isPending && query.fetchStatus !== 'idle' && (
                 <tr>
-                  <td colSpan={3} className="px-4 py-8 text-center text-slate-400">{t('notifications.loading')}</td>
+                  <td colSpan={3} className="px-4 py-8 text-center text-slate-400 dark:text-dk-muted">{t('notifications.loading')}</td>
                 </tr>
               )}
               {rows.map((row) => {
@@ -112,10 +112,10 @@ export default function NotificationPreferencesPage() {
                 return (
                   <tr key={row.eventType} data-testid={`preference-row-${row.eventType}`}>
                     <td className="px-4 py-3.5 align-top">
-                      <p className="font-medium text-slate-900">{label}</p>
-                      {row.description && <p className="mt-0.5 text-xs text-slate-500">{row.description}</p>}
+                      <p className="font-medium text-slate-900 dark:text-dk-text">{label}</p>
+                      {row.description && <p className="mt-0.5 text-xs text-slate-500 dark:text-dk-text2">{row.description}</p>}
                       {locked && (
-                        <p className="mt-1 text-xs text-amber-700">
+                        <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
                           {offBySystem ? t('notifications.preferences.emailOffBySystem') : t('notifications.preferences.emailLocked')}
                         </p>
                       )}
@@ -123,7 +123,7 @@ export default function NotificationPreferencesPage() {
                     <td className="px-4 py-3.5 align-top">
                       <span
                         className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-                          row.inAppEnabled ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                          row.inAppEnabled ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-dk-raised text-slate-500 dark:text-dk-text2'
                         }`}
                       >
                         {row.inAppEnabled ? t('notifications.preferences.bellAlwaysOn') : t('notifications.preferences.bellOffBySystem')}
@@ -142,7 +142,7 @@ export default function NotificationPreferencesPage() {
               })}
               {!query.isPending && !query.isError && rows.length === 0 && (
                 <tr>
-                  <td colSpan={3} className="px-4 py-8 text-center text-slate-400">{t('notifications.preferences.empty')}</td>
+                  <td colSpan={3} className="px-4 py-8 text-center text-slate-400 dark:text-dk-muted">{t('notifications.preferences.empty')}</td>
                 </tr>
               )}
             </tbody>

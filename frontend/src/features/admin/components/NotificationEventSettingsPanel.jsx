@@ -31,7 +31,7 @@ function Switch({ checked, disabled, onChange, label }) {
       checked={checked}
       disabled={disabled}
       onChange={(event) => onChange(event.target.checked)}
-      className="h-4 w-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500 disabled:cursor-not-allowed disabled:opacity-50"
+      className="h-4 w-4 rounded border-slate-300 dark:border-dk-border-strong text-orange-600 dark:text-orange-400 focus:ring-orange-500 disabled:cursor-not-allowed disabled:opacity-50"
     />
   );
 }
@@ -94,23 +94,23 @@ export default function NotificationEventSettingsPanel({ onEntrySaved }) {
   };
 
   return (
-    <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <section className="space-y-4 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface p-5 shadow-sm">
       <header>
-        <h2 className="font-semibold text-slate-900">{t('notificationCenter.events.title')}</h2>
-        <p className="mt-1 text-xs text-slate-500">{t('notificationCenter.events.subtitle')}</p>
+        <h2 className="font-semibold text-slate-900 dark:text-dk-text">{t('notificationCenter.events.title')}</h2>
+        <p className="mt-1 text-xs text-slate-500 dark:text-dk-text2">{t('notificationCenter.events.subtitle')}</p>
       </header>
 
       {loading ? (
-        <p role="status" className="text-sm text-slate-500">{t('notificationCenter.events.loading')}</p>
+        <p role="status" className="text-sm text-slate-500 dark:text-dk-text2">{t('notificationCenter.events.loading')}</p>
       ) : null}
 
       {!loading && loadError ? (
-        <div role="alert" className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div role="alert" className="flex items-center gap-3 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-3 py-2 text-sm text-red-700 dark:text-red-300">
           <span>{t('notificationCenter.events.loadFailed')}</span>
           <button
             type="button"
             onClick={load}
-            className="rounded-md border border-red-300 bg-white px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
+            className="rounded-md border border-red-300 dark:border-red-700 bg-white dark:bg-dk-surface px-2 py-1 text-xs font-semibold text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-950/60"
           >
             {t('notificationCenter.events.retry')}
           </button>
@@ -121,7 +121,7 @@ export default function NotificationEventSettingsPanel({ onEntrySaved }) {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+              <tr className="border-b border-slate-200 dark:border-dk-border text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-dk-text2">
                 <th className="px-3 py-3">{t('notificationCenter.events.colEvent')}</th>
                 <th className="px-3 py-3 text-center">{t('notificationCenter.events.colInApp')}</th>
                 <th className="px-3 py-3 text-center">{t('notificationCenter.events.colEmail')}</th>
@@ -129,7 +129,7 @@ export default function NotificationEventSettingsPanel({ onEntrySaved }) {
                 <th className="px-3 py-3 text-right">{t('notificationCenter.events.colAction')}</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 dark:divide-dk-border">
               {entries.map((entry) => {
                 const draft = drafts[entry.key] || draftOf(entry);
                 const name = locale === 'en' ? entry.labelEn : entry.label;
@@ -143,14 +143,14 @@ export default function NotificationEventSettingsPanel({ onEntrySaved }) {
                 return (
                   <tr key={entry.key} data-testid={`event-row-${entry.key}`}>
                     <td className="px-3 py-3 align-top">
-                      <p className="font-medium text-slate-900">{name}</p>
-                      <p className="mt-0.5 max-w-md text-xs text-slate-500">{entry.description}</p>
+                      <p className="font-medium text-slate-900 dark:text-dk-text">{name}</p>
+                      <p className="mt-0.5 max-w-md text-xs text-slate-500 dark:text-dk-text2">{entry.description}</p>
                       <p className="mt-1 flex flex-wrap gap-1.5 text-[11px]">
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600">
+                        <span className="rounded-full bg-slate-100 dark:bg-dk-raised px-2 py-0.5 font-medium text-slate-600 dark:text-dk-text2">
                           {isAdminAudience ? t('notificationCenter.events.audienceAdmin') : t('notificationCenter.events.audienceUser')}
                         </span>
                         {entry.settings.isDefault ? (
-                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-500">
+                          <span className="rounded-full bg-slate-100 dark:bg-dk-raised px-2 py-0.5 text-slate-500 dark:text-dk-text2">
                             {t('notificationCenter.events.defaultBadge')}
                           </span>
                         ) : null}
@@ -178,7 +178,7 @@ export default function NotificationEventSettingsPanel({ onEntrySaved }) {
                         onChange={(value) => setField(entry.key, 'userCanDisableEmail', value)}
                       />
                       {disableUserSwitch ? (
-                        <p className="mx-auto mt-1 max-w-[11rem] text-[11px] text-slate-400">
+                        <p className="mx-auto mt-1 max-w-[11rem] text-[11px] text-slate-400 dark:text-dk-muted">
                           {isAdminAudience ? t('notificationCenter.events.adminNoPref') : t('notificationCenter.events.lockedByCatalog')}
                         </p>
                       ) : null}
@@ -189,7 +189,7 @@ export default function NotificationEventSettingsPanel({ onEntrySaved }) {
                         onClick={() => save(entry)}
                         disabled={!dirty || saving}
                         aria-label={`${t('notificationCenter.events.save')} - ${name}`}
-                        className="rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+                        className="rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-slate-200 dark:disabled:bg-dk-strong disabled:text-slate-400 dark:disabled:text-dk-muted"
                       >
                         {saving ? t('notificationCenter.events.saving') : t('notificationCenter.events.save')}
                       </button>
