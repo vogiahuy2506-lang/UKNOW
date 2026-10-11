@@ -9,7 +9,7 @@
 /** Trần số dòng một lần xuất. */
 export const CUSTOMER_EXPORT_MAX_ROWS = 10000;
 
-export const CSV_BOM = '﻿';
+export const CSV_BOM = '\uFEFF';
 
 export const CUSTOMER_CSV_HEADERS = Object.freeze([
   'Họ tên', 'Email', 'Số điện thoại', 'Nguồn dữ liệu', 'Trạng thái email', 'Ngày tạo',

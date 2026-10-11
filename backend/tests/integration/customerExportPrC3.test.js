@@ -45,7 +45,7 @@ async function createCustomerRow({
 const get = (token, url) => request(app).get(url).set('Authorization', `Bearer ${token}`);
 
 /** Tách thân CSV thành các dòng (bỏ BOM + dòng trống cuối). */
-const csvLines = (text) => text.replace(/^﻿/, '').split('\r\n').filter(Boolean);
+const csvLines = (text) => text.replace(/^\uFEFF/, '').split('\r\n').filter(Boolean);
 
 describe('PR-C3 — GET /api/customers/export.csv', () => {
   it('cần đăng nhập', async () => {
