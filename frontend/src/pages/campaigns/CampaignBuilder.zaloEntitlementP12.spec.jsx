@@ -244,13 +244,15 @@ describe('CampaignBuilder — palette theo quyền kênh (khoá thay vì ẩn)',
     expect(screen.getByTestId('drop-allowed').textContent).toBe('');
   });
 
-  it('Email hết lượt trong kỳ: chỉ send_email bị khoá, Zalo/Telegram/WhatsApp kéo bình thường', async () => {
+  // 11/10/2026: Trình dựng dùng ignoreQuota — hết lượt kỳ này vẫn DỰNG được (dựng sẵn cho kỳ sau / mua thêm trước khi chạy);
+  // backend chặn lúc gửi. Chỉ Gửi nhanh khoá theo lượt.
+  it('Email hết lượt trong kỳ: Trình dựng KHÔNG khoá send_email (vẫn kéo thả được)', async () => {
     entitlementsState.enabledAdapterChannels = SYSTEM_ADAPTERS;
     useAuthStore.setState({ sendUsage: { ...emptyUsage(), email: meter(1000, 1000) } });
     renderBuilder();
     await waitFor(() => expect(screen.getByTestId('allowed-actions').textContent).toContain('send_telegram'));
-    expect(readLocked()).toEqual({ send_email: 'email' });
-    expect(screen.getByTestId('drop-allowed').textContent).not.toContain('send_email');
+    expect(readLocked()).toEqual({});
+    expect(screen.getByTestId('drop-allowed').textContent).toContain('send_email');
     expect(screen.getByTestId('drop-allowed').textContent).toContain('send_telegram');
   });
 

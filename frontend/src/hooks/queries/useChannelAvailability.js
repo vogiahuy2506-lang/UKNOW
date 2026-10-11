@@ -119,6 +119,7 @@ function resolveReason(channel, { entitlements, billingStatus, sendUsage, addons
  * @param {object|null} [input.sendUsage] authStore.sendUsage
  * @param {object|null} [input.addons] authStore.addons
  * @param {boolean} [input.isAdmin]
+ * @param {boolean} [input.ignoreQuota] bỏ qua lý do `quota_exhausted` (chỗ dựng chiến dịch)
  * @returns {Record<'email'|'zalo'|'telegram'|'whatsapp', {visible: boolean, available: boolean, reason: string|null, detail: string|null, used: number|null, limit: number|null}>}
  */
 export function resolveChannelAvailability({
@@ -128,12 +129,16 @@ export function resolveChannelAvailability({
   sendUsage = null,
   addons = null,
   isAdmin = false,
+  ignoreQuota = false,
 } = {}) {
   const adapterKeys = new Set((adapterChannels || []).map((c) => c?.key));
   const result = {};
   for (const channel of CHANNEL_KEYS) {
     const visible = ADAPTER_CHANNEL_KEYS.includes(channel) ? adapterKeys.has(channel) : true;
-    const resolved = resolveReason(channel, { entitlements, billingStatus, sendUsage, addons, isAdmin });
+    let resolved = resolveReason(channel, { entitlements, billingStatus, sendUsage, addons, isAdmin });
+    // ignoreQuota: chỗ DỰNG chiến dịch (Tạo chiến dịch, Trình dựng) không khoá vì hết lượt kỳ này — người dùng vẫn dựng sẵn
+    // cho kỳ sau / mua thêm trước khi chạy; backend chặn lúc GỬI. Chỉ Gửi nhanh (gửi ngay) khoá theo lượt.
+    if (ignoreQuota && resolved.reason === 'quota_exhausted') resolved = { ...resolved, reason: null };
     result[channel] = { visible, available: resolved.reason === null, ...resolved };
   }
   return result;
@@ -146,7 +151,7 @@ export function resolveChannelAvailability({
  *   Không truyền thì không có đường dự phòng (Telegram/WhatsApp không `visible` khi backend cũ) — chỗ không cần `visible`
  *   (Triển khai chatbot) bỏ qua tham số này.
  */
-export function useChannelAvailability({ fetchAdapterChannels } = {}) {
+export function useChannelAvailability({ fetchAdapterChannels, ignoreQuota = false } = {}) {
   const entitlements = useChannelEntitlements();
   const sendUsage = useAuthStore((state) => state.sendUsage);
   const billingStatus = useAuthStore((state) => state.billingStatus);
@@ -203,8 +208,9 @@ export function useChannelAvailability({ fetchAdapterChannels } = {}) {
       sendUsage,
       addons,
       isAdmin: role === 'admin',
+      ignoreQuota,
     }),
-    [entitlementTelegram, entitlementWhatsapp, entitlementZalo, adapterChannels, billingStatus, sendUsage, addons, role]
+    [entitlementTelegram, entitlementWhatsapp, entitlementZalo, adapterChannels, billingStatus, sendUsage, addons, role, ignoreQuota]
   );
 
   return { ...availability, adapterChannels, isLoading };

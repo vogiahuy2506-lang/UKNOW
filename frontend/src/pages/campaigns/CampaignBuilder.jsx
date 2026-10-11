@@ -841,7 +841,7 @@ const CampaignBuilder = () => {
   // đều hiện; bước của kênh chưa dùng được (gói không có kênh / hết hạn / hết lượt) mờ + khoá, không kéo thả được, bấm mở
   // modal gợi ý mua. Telegram/WhatsApp chỉ ẩn khi cờ HỆ THỐNG tắt; backend cũ thiếu trường thì hook gọi GET /campaigns/channels
   // như trước (lỗi/404 -> ẩn). Node đã có trong chiến dịch CŨ vẫn nằm trên canvas, không bị xoá (preflight báo 403 CHANNEL_NOT_IN_PLAN).
-  const channelAvailability = useChannelAvailability({ fetchAdapterChannels: () => campaignBuilderApiService.getChannels() });
+  const channelAvailability = useChannelAvailability({ fetchAdapterChannels: () => campaignBuilderApiService.getChannels(), ignoreQuota: true });
   const telegramChannelEnabled = channelAvailability.telegram.visible;
   const whatsappChannelEnabled = channelAvailability.whatsapp.visible;
   const emailChannelAvailable = channelAvailability.email.available;

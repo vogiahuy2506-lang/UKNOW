@@ -172,11 +172,12 @@ describe('Campaigns — P12 quyền kênh Zalo ở modal tạo chiến dịch', 
     expect(screen.getByTestId('create-campaign-type-email')).toBeTruthy();
   });
 
-  it('Email hết lượt trong kỳ -> loại mặc định chuyển sang loại dùng được đầu tiên (Zalo cá nhân), Email khoá', async () => {
+  // 11/10/2026: tạo chiến dịch dùng ignoreQuota — hết lượt kỳ này vẫn tạo/dựng được, backend chặn lúc gửi.
+  it('Email hết lượt trong kỳ -> loại Email VẪN chọn được (không khoá), mặc định giữ Email', async () => {
     useAuthStore.setState({ sendUsage: { ...emptyUsage(), email: meter(1000, 1000) } });
     await openCreateModal();
-    expect(screen.getByTestId('create-campaign-type-email')).toHaveAttribute('aria-disabled', 'true');
-    expect(screen.getByTestId('create-campaign-type-zalo').className).toContain('border-orange-500');
+    expect(screen.getByTestId('create-campaign-type-email')).not.toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByTestId('create-campaign-type-email').className).toContain('border-orange-500');
   });
 
   it('gói hết hạn: mọi loại khoá; điền tên rồi bấm "Tạo" mở modal Gia hạn thay vì gọi API tạo chiến dịch', async () => {

@@ -89,6 +89,22 @@ describe('resolveChannelAvailability — bảng 4 trạng thái × 4 kênh', () 
     expect(result.telegram).toMatchObject({ reason: 'not_in_plan', detail: 'messages' });
   });
 
+  // Chỗ DỰNG chiến dịch (Tạo chiến dịch, Trình dựng) dùng ignoreQuota: hết lượt kỳ này vẫn dựng được, backend chặn lúc gửi.
+  it.each(CHANNELS)('ignoreQuota: %s hết lượt -> VẪN dùng được; gói không có kênh/hết hạn vẫn khoá', (channel) => {
+    const sendUsage = emptyUsage();
+    sendUsage[USAGE_KEY[channel]] = meter(500, 500);
+    const relaxed = resolveChannelAvailability({ adapterChannels: ADAPTERS, sendUsage, ignoreQuota: true });
+    expect(relaxed[channel]).toMatchObject({ available: true, reason: null });
+    const expired = resolveChannelAvailability({
+      adapterChannels: ADAPTERS, sendUsage, ignoreQuota: true, billingStatus: { planRevokedAfterExpiry: true },
+    });
+    expect(expired[channel]).toMatchObject({ available: false, reason: 'plan_expired' });
+    const noMessages = emptyUsage();
+    noMessages[USAGE_KEY[channel]] = meter(0, 0);
+    const notInPlan = resolveChannelAvailability({ adapterChannels: ADAPTERS, sendUsage: noMessages, ignoreQuota: true });
+    expect(notInPlan[channel]).toMatchObject({ available: false, reason: 'not_in_plan' });
+  });
+
   it.each(CHANNELS)('hết lượt trong kỳ -> %s: quota_exhausted kèm used/limit của ĐÚNG đồng hồ kênh đó', (channel) => {
     const sendUsage = emptyUsage();
     sendUsage[USAGE_KEY[channel]] = meter(500, 500);

@@ -115,7 +115,7 @@ const Campaigns = () => {
   // 11/10/2026 — KHÔNG ẩn loại chiến dịch theo gói nữa: mọi loại có kênh `visible` đều vẽ ra, loại có kênh chưa dùng được
   // (gói không có kênh / hết hạn / hết lượt) mờ + khoá, bấm mở modal giải thích + gợi ý mua. Telegram/WhatsApp chỉ ẩn khi cờ
   // HỆ THỐNG tắt (không bán được); backend cũ thiếu trường thì hook gọi GET /campaigns/channels như trước (lỗi/404 -> ẩn).
-  const channelAvailability = useChannelAvailability({ fetchAdapterChannels: () => campaignApiService.getChannels() });
+  const channelAvailability = useChannelAvailability({ fetchAdapterChannels: () => campaignApiService.getChannels(), ignoreQuota: true });
   const telegramChannelEnabled = channelAvailability.telegram.visible;
   const whatsappChannelEnabled = channelAvailability.whatsapp.visible;
   const [lockedChannelModal, setLockedChannelModal] = useState(null);
