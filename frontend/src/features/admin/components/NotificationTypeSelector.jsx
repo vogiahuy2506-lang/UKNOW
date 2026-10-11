@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { FaExclamationTriangle, FaInfoCircle, FaGift, FaExclamationCircle, FaClock, FaShieldAlt } from 'react-icons/fa';
 
+// darkChip: chip loại thông báo ở bảng lịch sử tô bằng style inline (hex sáng) nên chế độ tối phải ghi đè bằng `!` (important).
 const TYPE_CONFIG = {
   maintenance: {
     icon: FaExclamationTriangle,
@@ -8,6 +9,7 @@ const TYPE_CONFIG = {
     bgColor: '#fef2f2',
     borderColor: '#fecaca',
     headerColor: '#dc2626',
+    darkChip: 'dark:!bg-red-950/40 dark:!text-red-300',
     label: 'Bảo trì',
     labelEn: 'Maintenance'
   },
@@ -17,6 +19,7 @@ const TYPE_CONFIG = {
     bgColor: '#fff7ed',
     borderColor: '#fed7aa',
     headerColor: '#f97316',
+    darkChip: 'dark:!bg-orange-950/40 dark:!text-orange-300',
     label: 'Thông báo',
     labelEn: 'Announcement'
   },
@@ -26,6 +29,7 @@ const TYPE_CONFIG = {
     bgColor: '#fff7ed',
     borderColor: '#fed7aa',
     headerColor: '#f97316',
+    darkChip: 'dark:!bg-orange-950/40 dark:!text-orange-300',
     label: 'Khuyến mãi',
     labelEn: 'Promotion'
   },
@@ -35,6 +39,7 @@ const TYPE_CONFIG = {
     bgColor: '#fffbeb',
     borderColor: '#fde68a',
     headerColor: '#f59e0b',
+    darkChip: 'dark:!bg-amber-950/40 dark:!text-amber-300',
     label: 'Cảnh báo',
     labelEn: 'Warning'
   },
@@ -44,6 +49,7 @@ const TYPE_CONFIG = {
     bgColor: '#f0fdf4',
     borderColor: '#bbf7d0',
     headerColor: '#22c55e',
+    darkChip: 'dark:!bg-green-950/40 dark:!text-green-300',
     label: 'Nhắc nhở',
     labelEn: 'Reminder'
   },
@@ -53,6 +59,7 @@ const TYPE_CONFIG = {
     bgColor: '#fef2f2',
     borderColor: '#fecaca',
     headerColor: '#dc2626',
+    darkChip: 'dark:!bg-red-950/40 dark:!text-red-300',
     label: 'Bảo mật',
     labelEn: 'Security'
   }

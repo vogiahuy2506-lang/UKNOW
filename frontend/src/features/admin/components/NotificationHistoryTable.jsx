@@ -5,13 +5,14 @@ import { TYPE_CONFIG } from './NotificationTypeSelector';
 import { useI18n } from '../../../i18n';
 import { channelsOfNotification } from '../utils/notificationChannels.util';
 
+// `color` là style inline (hex) nên chế độ tối ghi đè chữ bằng `dark:!text-*` đặt ngay trong chuỗi `bg`.
 const STATUS_CONFIG = {
-  draft: { color: '#6b7280', bg: 'bg-gray-100', label: 'Nháp', icon: HiOutlineClock },
-  scheduled: { color: '#f97316', bg: 'bg-orange-100', label: 'Đã hẹn', icon: HiOutlineClock },
-  sending: { color: '#2563eb', bg: 'bg-blue-100', label: 'Đang gửi', icon: HiOutlineMail },
-  sent: { color: '#22c55e', bg: 'bg-green-100', label: 'Đã gửi', icon: HiOutlineCheck },
-  failed: { color: '#dc2626', bg: 'bg-red-100', label: 'Thất bại', icon: HiOutlineX },
-  cancelled: { color: '#991b1b', bg: 'bg-red-50', label: 'Đã hủy', icon: HiOutlineX }
+  draft: { color: '#6b7280', bg: 'bg-gray-100 dark:bg-dk-raised dark:!text-dk-text2', label: 'Nháp', icon: HiOutlineClock },
+  scheduled: { color: '#f97316', bg: 'bg-orange-100 dark:bg-orange-950/40 dark:!text-orange-300', label: 'Đã hẹn', icon: HiOutlineClock },
+  sending: { color: '#2563eb', bg: 'bg-blue-100 dark:bg-blue-950/40 dark:!text-blue-300', label: 'Đang gửi', icon: HiOutlineMail },
+  sent: { color: '#22c55e', bg: 'bg-green-100 dark:bg-green-950/40 dark:!text-green-300', label: 'Đã gửi', icon: HiOutlineCheck },
+  failed: { color: '#dc2626', bg: 'bg-red-100 dark:bg-red-950/40 dark:!text-red-300', label: 'Thất bại', icon: HiOutlineX },
+  cancelled: { color: '#991b1b', bg: 'bg-red-50 dark:bg-red-950/40 dark:!text-red-300', label: 'Đã hủy', icon: HiOutlineX }
 };
 
 export default function NotificationHistoryTable({
@@ -70,7 +71,7 @@ export default function NotificationHistoryTable({
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="px-4 py-2 border border-gray-200 rounded-xl text-sm bg-white hover:border-orange-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all dark:border-dk-border dark:bg-dk-inset dark:text-dk-text"
+            className="px-4 py-2 border border-gray-200 rounded-xl text-sm bg-white hover:border-orange-300 dark:hover:border-orange-700 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-800 transition-all dark:border-dk-border dark:bg-dk-inset dark:text-dk-text"
           >
             <option value="">{t('notificationCenter.allStatuses', 'Tất cả trạng thái')}</option>
             {Object.entries(STATUS_CONFIG).map(([value]) => (
@@ -146,7 +147,7 @@ export default function NotificationHistoryTable({
                     <tr key={notification.id} className="hover:bg-orange-50/30 dark:hover:bg-dk-raised/40 transition-colors">
                       <td className="px-5 py-4">
                         <span
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold ${typeConfig.darkChip}`}
                           style={{
                             backgroundColor: typeConfig.bgColor,
                             color: typeConfig.color
@@ -169,7 +170,7 @@ export default function NotificationHistoryTable({
                             <span
                               key={channel}
                               className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                                channel === 'email' ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'
+                                channel === 'email' ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300' : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300'
                               }`}
                             >
                               {channel === 'email' ? <HiOutlineMail className="h-3 w-3" /> : <HiOutlineBell className="h-3 w-3" />}
@@ -196,7 +197,7 @@ export default function NotificationHistoryTable({
                           {notification.open_rate > 0 && ` | ${t('notificationCenter.table.openRateSub', { pct: notification.open_rate })}`}
                         </p>
                         {channelsOfNotification(notification).includes('in_app') && (
-                          <p className="text-xs font-medium text-amber-700">
+                          <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
                             {t('notificationCenter.channels.inAppCount', { count: notification.in_app_count || 0 })}
                           </p>
                         )}
@@ -230,7 +231,7 @@ export default function NotificationHistoryTable({
                           {/* Preview Email */}
                           <button
                             onClick={() => onPreview?.(notification)}
-                            className="p-2 text-blue-500 hover:bg-blue-50 dark:hover:bg-dk-raised rounded-lg transition-all"
+                            className="p-2 text-blue-500 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-dk-raised rounded-lg transition-all"
                             title={t('notificationCenter.actions.preview', 'Xem email')}
                           >
                             <FaEnvelope size={14} />
@@ -250,14 +251,14 @@ export default function NotificationHistoryTable({
                             <>
                               <button
                                 onClick={() => onSend?.(notification)}
-                                className="p-2 text-green-600 hover:bg-green-50 dark:hover:bg-dk-raised rounded-lg transition-all"
+                                className="p-2 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-dk-raised rounded-lg transition-all"
                                 title={t('notificationCenter.actions.sendNow', 'Gửi ngay')}
                               >
                                 <FaPaperPlane size={14} />
                               </button>
                               <button
                                 onClick={() => onSchedule?.(notification)}
-                                className="p-2 text-orange-600 hover:bg-orange-50 dark:hover:bg-dk-raised rounded-lg transition-all"
+                                className="p-2 text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-dk-raised rounded-lg transition-all"
                                 title={t('notificationCenter.actions.schedule', 'Hẹn giờ')}
                               >
                                 <FaClock size={14} />
@@ -269,14 +270,14 @@ export default function NotificationHistoryTable({
                             <>
                               <button
                                 onClick={() => onLogs?.(notification)}
-                                className="p-2 text-purple-600 hover:bg-purple-50 dark:hover:bg-dk-raised rounded-lg transition-all"
+                                className="p-2 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-dk-raised rounded-lg transition-all"
                                 title={t('notificationCenter.actions.logs', 'Chi tiết gửi')}
                               >
                                 <FaEnvelope size={14} />
                               </button>
                               <button
                                 onClick={() => onResend?.(notification)}
-                                className="p-2 text-green-600 hover:bg-green-50 dark:hover:bg-dk-raised rounded-lg transition-all"
+                                className="p-2 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-dk-raised rounded-lg transition-all"
                                 title={t('notificationCenter.actions.resend', 'Gửi lại')}
                               >
                                 <FaRedo size={14} />
@@ -287,7 +288,7 @@ export default function NotificationHistoryTable({
                           {notification.status === 'scheduled' && (
                             <button
                               onClick={() => onSend?.(notification)}
-                              className="p-2 text-green-600 hover:bg-green-50 dark:hover:bg-dk-raised rounded-lg transition-all"
+                              className="p-2 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-dk-raised rounded-lg transition-all"
                               title={t('notificationCenter.actions.sendNow', 'Gửi ngay')}
                             >
                               <FaPaperPlane size={14} />
@@ -298,7 +299,7 @@ export default function NotificationHistoryTable({
                           {(notification.status === 'draft' || notification.status === 'scheduled') && (
                             <button
                               onClick={() => onDelete?.(notification)}
-                              className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-dk-raised rounded-lg transition-all"
+                              className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-dk-raised rounded-lg transition-all"
                               title={t('notificationCenter.actions.delete', 'Xóa')}
                             >
                               <FaTrash size={14} />
@@ -328,7 +329,7 @@ export default function NotificationHistoryTable({
               <button
                 onClick={() => onPageChange?.(pagination.page - 1)}
                 disabled={pagination.page <= 1}
-                className="px-4 py-2 text-sm border border-gray-200 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text rounded-xl hover:bg-white hover:border-orange-300 hover:text-orange-600 dark:hover:bg-dk-raised disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+                className="px-4 py-2 text-sm border border-gray-200 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text rounded-xl hover:bg-white hover:border-orange-300 dark:hover:border-orange-700 hover:text-orange-600 dark:hover:text-orange-400 dark:hover:bg-dk-raised disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
               >
                 <FaChevronLeft className="w-3 h-3" />
                 {t('common.prev', 'Trước')}
@@ -336,7 +337,7 @@ export default function NotificationHistoryTable({
               <button
                 onClick={() => onPageChange?.(pagination.page + 1)}
                 disabled={pagination.page >= pagination.totalPages}
-                className="px-4 py-2 text-sm border border-gray-200 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text rounded-xl hover:bg-white hover:border-orange-300 hover:text-orange-600 dark:hover:bg-dk-raised disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+                className="px-4 py-2 text-sm border border-gray-200 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text rounded-xl hover:bg-white hover:border-orange-300 dark:hover:border-orange-700 hover:text-orange-600 dark:hover:text-orange-400 dark:hover:bg-dk-raised disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
               >
                 {t('common.next', 'Sau')}
                 <FaChevronRight className="w-3 h-3" />

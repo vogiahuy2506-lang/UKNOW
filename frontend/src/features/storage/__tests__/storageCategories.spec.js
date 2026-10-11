@@ -42,6 +42,9 @@ describe('STORAGE_CATEGORIES — ghim từng phần tử', () => {
     expect(labelOf(vi, item.labelKey)).toBe(viLabel);
     expect(labelOf(en, item.labelKey)).toBe(enLabel);
     expect(item.color).toMatch(/^bg-\S+ text-\S+ border-\S+$/);
+    // Giao diện tối: mỗi thẻ có bộ `dark:` đủ nền + chữ + viền, và `resolveStorageCategory` trả ra cả hai bộ.
+    expect(item.darkColor).toMatch(/^dark:bg-\S+ dark:text-\S+ dark:border-\S+$/);
+    expect(resolveStorageCategory(value, (key) => key).color).toBe(`${item.color} ${item.darkColor}`);
   });
 
   it('mã chưa biết giữ nguyên mã thô (lộ ra thiếu nhãn) thay vì bị nuốt thành "Khác"', () => {
