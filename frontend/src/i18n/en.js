@@ -6806,6 +6806,8 @@ export default {
     logout: 'Logout',
     notifications: 'Notifications',
     support: 'Feedback & support',
+    switchToLight: 'Switch to light mode',
+    switchToDark: 'Switch to dark mode',
   },
 
   // Support / feedback tickets (users + super admin)

@@ -6816,6 +6816,8 @@ export default {
     logout: 'Đăng xuất',
     notifications: 'Thông báo',
     support: 'Góp ý & hỗ trợ',
+    switchToLight: 'Chuyển sang giao diện sáng',
+    switchToDark: 'Chuyển sang giao diện tối',
   },
 
   // Ticket góp ý / hỗ trợ (người dùng + super admin)

@@ -85,7 +85,7 @@ const Header = ({ onToggleSidebar }) => {
             type="button"
             onClick={onToggleSidebar}
             className="lg:hidden mr-2 p-1.5 text-gray-500 hover:bg-gray-100 dark:text-dk-text2 dark:hover:bg-dk-raised rounded-md transition-colors"
-            aria-label="Open sidebar"
+            aria-label={t('header.openMenu')}
           >
             <HiOutlineMenu className="w-5 h-5" />
           </button>
@@ -197,8 +197,8 @@ const Header = ({ onToggleSidebar }) => {
         <button
           type="button"
           onClick={toggleTheme}
-          title={isDark ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
-          aria-label={isDark ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
+          title={isDark ? t('header.switchToLight') : t('header.switchToDark')}
+          aria-label={isDark ? t('header.switchToLight') : t('header.switchToDark')}
           className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 dark:text-dk-text dark:hover:text-amber-400 dark:hover:bg-dk-raised transition-colors mx-1 shrink-0"
         >
           {isDark ? (
