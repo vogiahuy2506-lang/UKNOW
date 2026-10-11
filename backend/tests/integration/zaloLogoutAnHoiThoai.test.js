@@ -228,6 +228,19 @@ describe('POST /api/zalo/accounts/:id/logout', () => {
     expect((await rowOf(ctx.a)).status).toBe('logged_out');
   });
 
+  it('nhân viên ĐƯỢC giao tài khoản nhưng KHÔNG có quyền zalo_settings → 403 PERMISSION_DENIED (router.use requirePermission phủ route logout), DB không đổi', async () => {
+    const ctx = await setup();
+    const noPerm = await createUser({ username: 'nv_khong_quyen', role: 'user' });
+    await addMembership(ctx.owner.id, noPerm.id, { inbox_view: true, inbox_reply: true });
+    await assign(ctx.owner.id, noPerm.id, ctx.a);
+
+    const res = await asEmployee(request(app).post(`${ZALO}/accounts/${ctx.a}/logout`), await loginAs(noPerm), ctx);
+    expect(res.status).toBe(403);
+    expect(res.body?.success).toBe(false);
+    expect(res.body?.code).toBe('PERMISSION_DENIED');
+    expect((await rowOf(ctx.a)).status).toBe('connected');
+  });
+
   it('GET /api/zalo/accounts vẫn liệt kê tài khoản với status "logged_out" (trang Cài đặt để quét QR lại)', async () => {
     const ctx = await setup();
     await logout(ctx);
