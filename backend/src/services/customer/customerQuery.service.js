@@ -116,6 +116,7 @@ class CustomerQueryService {
     search,
     source,
     consentSource,
+    emailStatus,
     campaignId,
     purchaseOrderStatusExpr,
   }) {
@@ -129,6 +130,7 @@ class CustomerQueryService {
       search,
       source,
       consentSource,
+      emailStatus,
       campaignId,
       purchaseOrderStatusExpr,
     });
@@ -150,6 +152,9 @@ class CustomerQueryService {
         totalOrders: item.total_orders,
         totalSpent: item.total_spent,
         emailSubscribed: item.email_subscribed,
+        emailUnsubscribedAt: item.email_unsubscribed_at ?? null,
+        emailHardBounced: item.email_hard_bounced ?? false,
+        campaignJoinedAt: item.campaign_joined_at ?? null,
         campaignCount: item.campaign_count,
         lastCampaignActivityAt: item.last_campaign_activity_at,
         tags: [],

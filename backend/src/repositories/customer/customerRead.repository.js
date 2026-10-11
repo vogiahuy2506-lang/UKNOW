@@ -285,7 +285,7 @@ class CustomerReadRepository {
    *
    * @returns {{ whereSql: string, params: any[], campaignParamIdx: number|null }}
    */
-  buildCustomerListFilter({ userId, status, search, source, consentSource, campaignId, purchaseOrderStatusExpr }) {
+  buildCustomerListFilter({ userId, status, search, source, consentSource, emailStatus, campaignId, purchaseOrderStatusExpr }) {
     const parsedCampaignId = Number.parseInt(campaignId, 10);
     const params = [userId];
 
@@ -332,6 +332,16 @@ class CustomerReadRepository {
     if (normalizedConsentSource) {
       params.push(normalizedConsentSource);
       whereSql += ` AND LOWER(c.consent_source) = $${params.length}`;
+    }
+
+    // Trạng thái nhận email: đã huỷ đăng ký / hard bounce / còn nhận được (cả hai cờ đều NOT NULL).
+    const normalizedEmailStatus = typeof emailStatus === 'string' ? emailStatus.trim().toLowerCase() : '';
+    if (normalizedEmailStatus === 'unsubscribed') {
+      whereSql += ' AND c.email_subscribed = FALSE';
+    } else if (normalizedEmailStatus === 'bounced') {
+      whereSql += ' AND c.email_hard_bounced = TRUE';
+    } else if (normalizedEmailStatus === 'subscribed') {
+      whereSql += ' AND c.email_subscribed = TRUE AND c.email_hard_bounced = FALSE';
     }
 
     if (campaignParamIdx) {
@@ -391,12 +401,13 @@ class CustomerReadRepository {
     search,
     source,
     consentSource,
+    emailStatus,
     campaignId,
     purchaseOrderStatusExpr,
   }) {
     const offset = (page - 1) * limit;
     const { whereSql, params, campaignParamIdx } = this.buildCustomerListFilter({
-      userId, status, search, source, consentSource, campaignId, purchaseOrderStatusExpr,
+      userId, status, search, source, consentSource, emailStatus, campaignId, purchaseOrderStatusExpr,
     });
 
     const orderStatusFilter = campaignParamIdx ? `AND cp.id_campaign = $${campaignParamIdx}` : '';
@@ -408,11 +419,13 @@ class CustomerReadRepository {
       ? `cc2.uknow_status AS uknow_status,
              cc2.has_clicked AS campaign_has_clicked,
              cc2.has_opened AS campaign_has_opened,
-             cc2.email_received_count AS campaign_email_received_count`
+             cc2.email_received_count AS campaign_email_received_count,
+             cc2.joined_at::timestamptz AS campaign_joined_at`
       : `NULL AS uknow_status,
              NULL AS campaign_has_clicked,
              NULL AS campaign_has_opened,
-             NULL AS campaign_email_received_count`;
+             NULL AS campaign_email_received_count,
+             NULL AS campaign_joined_at`;
 
     const limitIdx = params.length + 1;
     const offsetIdx = params.length + 2;
@@ -428,6 +441,7 @@ class CustomerReadRepository {
        )
        SELECT c.id, c.email, c.phone, c.full_name, c.customer_source, c.consent_source,
               c.has_purchased, c.total_orders, c.total_spent, c.email_subscribed,
+              c.email_unsubscribed_at::timestamptz AS email_unsubscribed_at, c.email_hard_bounced,
               COALESCE(act.campaign_count, 0)::INTEGER AS campaign_count,
               act.last_campaign_activity_at,
               ord.order_status AS order_status,
@@ -470,6 +484,32 @@ class CustomerReadRepository {
       params
     );
     return { rows: [], total: Number.parseInt(countResult.rows[0].count, 10) };
+  }
+
+  /**
+   * Hàng cho file CSV xuất khách: cùng bộ lọc với danh sách (`buildCustomerListFilter`), chỉ cột cơ bản,
+   * KHÔNG kèm số liệu theo chiến dịch/đơn hàng nên rẻ hơn truy vấn danh sách. Lấy `limit` dòng (người gọi
+   * truyền trần + 1 để biết có bị cắt hay không).
+   *
+   * @returns {Promise<object[]>}
+   */
+  async getCustomerExportRows({
+    userId, status, search, source, consentSource, emailStatus, campaignId, purchaseOrderStatusExpr, limit,
+  }) {
+    const { whereSql, params } = this.buildCustomerListFilter({
+      userId, status, search, source, consentSource, emailStatus, campaignId, purchaseOrderStatusExpr,
+    });
+    const result = await db.query(
+      `SELECT c.id, c.full_name, c.email, c.phone, c.consent_source,
+              c.email_subscribed, c.email_hard_bounced,
+              c.created_at::timestamptz AS created_at
+       FROM customers c
+       WHERE ${whereSql}
+       ORDER BY c.created_at DESC, c.id DESC
+       LIMIT $${params.length + 1}`,
+      [...params, limit]
+    );
+    return result.rows;
   }
 
   async getOwnedCampaign(campaignId, userId) {

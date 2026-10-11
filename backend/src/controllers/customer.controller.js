@@ -1,6 +1,7 @@
 import campaignCustomerRepository from '../repositories/campaign/campaignCustomer.repository.js';
 import customerHelperService from '../services/customer/customerHelper.service.js';
 import customerQueryService from '../services/customer/customerQuery.service.js';
+import customerExportService from '../services/customer/customerExport.service.js';
 import customerInterestedService from '../services/customer/customerInterested.service.js';
 import customerJourneyService from '../services/customer/customerJourney.service.js';
 import customerProfileService from '../services/customer/customerProfile.service.js';
@@ -38,13 +39,13 @@ class CustomerController {
   // Lấy danh sách customers
   /**
    * Lấy danh sách khách hàng của user (phân trang, lọc theo status/source/campaign/search).
-   * @param {import('express').Request} req - query: { page, limit, status, search, source, campaignId }
+   * @param {import('express').Request} req - query: { page, limit, status, search, source, consentSource, emailStatus, campaignId }
    * @param {import('express').Response} res
    */
   async getAll(req, res) {
     try {
       const userId = getWorkspaceContext(req.user).workspaceOwnerId;
-      const { page = 1, limit = 10, status, search, source, campaignId, consentSource } = req.query;
+      const { page = 1, limit = 10, status, search, source, campaignId, consentSource, emailStatus } = req.query;
       const purchaseOrderStatusExpr = await this.resolvePurchaseOrderStatusExpr('cp');
       const data = await customerQueryService.getAllCustomers({
         userId,
@@ -54,6 +55,7 @@ class CustomerController {
         search,
         source,
         consentSource,
+        emailStatus,
         campaignId,
         purchaseOrderStatusExpr,
       });
@@ -71,6 +73,52 @@ class CustomerController {
         success: false,
         message: 'Lỗi server'
       });
+    }
+  }
+
+  /**
+   * Xuất khách ra CSV (UTF-8 có BOM) theo đúng bộ lọc của danh sách, tối đa 10.000 dòng.
+   * Ghi từng đợt xuống kết nối thay vì dựng một chuỗi khổng lồ; bị cắt thì báo qua `X-Export-Truncated`.
+   *
+   * @param {import('express').Request} req - query: { status, search, source, consentSource, emailStatus, campaignId }
+   * @param {import('express').Response} res
+   */
+  async exportCsv(req, res) {
+    try {
+      const userId = getWorkspaceContext(req.user).workspaceOwnerId;
+      const purchaseOrderStatusExpr = await this.resolvePurchaseOrderStatusExpr('cp');
+      const { header, lines, rowCount, truncated } = await customerExportService.buildCustomerCsv({
+        userId,
+        filters: req.query,
+        purchaseOrderStatusExpr,
+      });
+
+      const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      res.status(200);
+      res.set({
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename="khach-hang-${stamp}.csv"`,
+        'Cache-Control': 'no-store',
+        'X-Export-Row-Count': String(rowCount),
+        'X-Export-Truncated': truncated ? 'true' : 'false',
+        'Access-Control-Expose-Headers': 'Content-Disposition, X-Export-Row-Count, X-Export-Truncated',
+      });
+      res.write(header);
+      const CHUNK_LINES = 500;
+      for (let index = 0; index < lines.length; index += CHUNK_LINES) {
+        res.write(lines.slice(index, index + CHUNK_LINES).join(''));
+      }
+      return res.end();
+    } catch (error) {
+      if (res.headersSent) {
+        console.error('Export customers csv error (đã gửi một phần):', error);
+        return res.end();
+      }
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({ success: false, message: error.message });
+      }
+      console.error('Export customers csv error:', error);
+      return res.status(500).json({ success: false, message: 'Lỗi server' });
     }
   }
 

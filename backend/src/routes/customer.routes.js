@@ -26,6 +26,8 @@ router.use(requirePermission('customers'));
 
 // Get all
 router.get('/', customerController.getAll.bind(customerController));
+// Xuất CSV theo bộ lọc danh sách — khai báo TRƯỚC `/:id` để 'export.csv' không bị bắt làm id.
+router.get('/export.csv', customerController.exportCsv.bind(customerController));
 router.get(
   '/campaigns/:campaignId/zalo-group/messages',
   customerController.getCampaignZaloGroupMessages.bind(customerController),
