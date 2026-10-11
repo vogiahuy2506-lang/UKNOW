@@ -22,6 +22,8 @@ body {
 }
 
 html.dark {
+  /* Điều khiển gốc của trình duyệt (input range, thanh cuộn, ô date/select, checkbox) theo tối. */
+  color-scheme: dark;
   --dk-inset: 10 16 28;
   --dk-bg: 12 19 34;
   --dk-surface: 27 37 55;
