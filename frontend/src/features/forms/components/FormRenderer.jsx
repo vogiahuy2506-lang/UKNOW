@@ -449,6 +449,10 @@ export default function FormRenderer({
           const val = answers[key] ?? '';
           const fieldError = clientErrors[key];
           const fieldControlId = ['radio', 'checkbox'].includes(type) ? undefined : `field_${key}`;
+          // Chữ hướng dẫn nhỏ dưới nhãn (PR-3) + gợi ý trong ô nhập (placeholder) — thiếu thì không hiện gì.
+          const helpText = typeof field.helpText === 'string' ? field.helpText.trim() : '';
+          const helpId = helpText ? `help_${key}` : undefined;
+          const inputPlaceholder = typeof field.placeholder === 'string' && field.placeholder.trim() ? field.placeholder : undefined;
 
           return (
             <div key={key} className="space-y-1.5">
@@ -460,12 +464,20 @@ export default function FormRenderer({
                 {required && <span className="text-red-500 ml-1">*</span>}
               </label>
 
+              {helpText && (
+                <p id={helpId} className="text-xs text-gray-500 leading-snug whitespace-pre-line break-words">
+                  {helpText}
+                </p>
+              )}
+
               {/* short_text */}
               {type === 'short_text' && (
                 <input
                   id={fieldControlId}
                   type="text"
                   maxLength={500}
+                  placeholder={inputPlaceholder}
+                  aria-describedby={helpId}
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 ${
                     fieldError
                       ? 'border-red-300 focus:ring-red-200'
@@ -483,6 +495,8 @@ export default function FormRenderer({
                   id={fieldControlId}
                   rows={4}
                   maxLength={5000}
+                  placeholder={inputPlaceholder}
+                  aria-describedby={helpId}
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 resize-y ${
                     fieldError
                       ? 'border-red-300 focus:ring-red-200'
@@ -500,6 +514,8 @@ export default function FormRenderer({
                   id={fieldControlId}
                   type="email"
                   maxLength={255}
+                  placeholder={inputPlaceholder}
+                  aria-describedby={helpId}
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 ${
                     fieldError
                       ? 'border-red-300 focus:ring-red-200'
@@ -517,6 +533,8 @@ export default function FormRenderer({
                   id={fieldControlId}
                   type="tel"
                   maxLength={50}
+                  placeholder={inputPlaceholder}
+                  aria-describedby={helpId}
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 ${
                     fieldError
                       ? 'border-red-300 focus:ring-red-200'
@@ -533,6 +551,8 @@ export default function FormRenderer({
                 <input
                   id={fieldControlId}
                   type="number"
+                  placeholder={inputPlaceholder}
+                  aria-describedby={helpId}
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 ${
                     fieldError
                       ? 'border-red-300 focus:ring-red-200'
@@ -549,6 +569,7 @@ export default function FormRenderer({
                 <input
                   id={fieldControlId}
                   type="date"
+                  aria-describedby={helpId}
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 ${
                     fieldError
                       ? 'border-red-300 focus:ring-red-200'
@@ -564,6 +585,7 @@ export default function FormRenderer({
               {type === 'select' && (
                 <select
                   id={fieldControlId}
+                  aria-describedby={helpId}
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 bg-white ${
                     fieldError
                       ? 'border-red-300 focus:ring-red-200'

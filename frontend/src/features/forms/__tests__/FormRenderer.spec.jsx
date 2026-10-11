@@ -709,4 +709,109 @@ describe('FormRenderer component', () => {
       expect(screen.queryByAltText('')).not.toBeInTheDocument();
     });
   });
+
+  describe('chữ hướng dẫn, placeholder, lời đồng ý tuỳ chỉnh (PR-3 trình soạn mới)', () => {
+    const renderForm = (form, props = {}) =>
+      render(
+        <I18nProvider>
+          <FormRenderer form={form} onSubmit={vi.fn()} {...props} />
+        </I18nProvider>
+      );
+
+    it('helpText hiện chữ nhỏ dưới nhãn và được nối với ô nhập qua aria-describedby', () => {
+      renderForm({
+        ...baseForm,
+        fields: [
+          { key: 'full_name', label: 'Họ và tên', type: 'short_text', required: true, helpText: 'Ghi đúng như trên CMND' },
+          { key: 'user_email', label: 'Email', type: 'email', required: true },
+        ],
+      });
+
+      const help = screen.getByText('Ghi đúng như trên CMND');
+      expect(help).toBeInTheDocument();
+      expect(help.id).toBe('help_full_name');
+      expect(screen.getByLabelText(/Họ và tên/i)).toHaveAttribute('aria-describedby', 'help_full_name');
+      // Trường không có helpText: không có đoạn chữ phụ, không có aria-describedby
+      expect(screen.getByLabelText(/Email/i)).not.toHaveAttribute('aria-describedby');
+      expect(document.querySelectorAll('[id^="help_"]')).toHaveLength(1);
+    });
+
+    it('helpText toàn khoảng trắng / thiếu → không render đoạn chữ phụ', () => {
+      renderForm({
+        ...baseForm,
+        fields: [{ key: 'a', label: 'Trường A', type: 'short_text', helpText: '   ' }],
+      });
+      expect(document.querySelector('[id^="help_"]')).toBeNull();
+    });
+
+    it('helpText hiện cả với trường dạng nhóm lựa chọn (radio) — không có ô nhập duy nhất', () => {
+      renderForm({
+        ...baseForm,
+        fields: [{ key: 'r', label: 'Gói', type: 'radio', options: ['A', 'B'], helpText: 'Chọn một gói' }],
+      });
+      expect(screen.getByText('Chọn một gói')).toBeInTheDocument();
+    });
+
+    it('placeholder được dùng cho short_text / long_text / email / phone / number', () => {
+      renderForm({
+        ...baseForm,
+        fields: [
+          { key: 'a', label: 'A', type: 'short_text', placeholder: 'Nguyễn Văn A' },
+          { key: 'b', label: 'B', type: 'long_text', placeholder: 'Mô tả nhu cầu' },
+          { key: 'c', label: 'C', type: 'email', placeholder: 'ten@congty.vn' },
+          { key: 'd', label: 'D', type: 'phone', placeholder: '09xx xxx xxx' },
+          { key: 'e', label: 'E', type: 'number', placeholder: 'Số lượng' },
+        ],
+      });
+      expect(screen.getByPlaceholderText('Nguyễn Văn A')).toHaveAttribute('type', 'text');
+      expect(screen.getByPlaceholderText('Mô tả nhu cầu').tagName).toBe('TEXTAREA');
+      expect(screen.getByPlaceholderText('ten@congty.vn')).toHaveAttribute('type', 'email');
+      expect(screen.getByPlaceholderText('09xx xxx xxx')).toHaveAttribute('type', 'tel');
+      expect(screen.getByPlaceholderText('Số lượng')).toHaveAttribute('type', 'number');
+    });
+
+    it('trường không có placeholder (hoặc chỉ khoảng trắng) → ô nhập không có thuộc tính placeholder', () => {
+      renderForm({
+        ...baseForm,
+        fields: [
+          { key: 'a', label: 'A', type: 'short_text' },
+          { key: 'b', label: 'B', type: 'short_text', placeholder: '   ' },
+        ],
+      });
+      expect(screen.getByLabelText('A')).not.toHaveAttribute('placeholder');
+      expect(screen.getByLabelText('B')).not.toHaveAttribute('placeholder');
+    });
+
+    it('consentEnabled + settings.consentText → hiện đúng lời đồng ý tuỳ chỉnh thay vì câu mặc định', () => {
+      renderForm({
+        ...baseForm,
+        settings: { ...baseForm.settings, consentEnabled: true, consentText: 'Tôi đồng ý nhận ưu đãi từ Công ty A.' },
+      });
+      expect(screen.getByText('Tôi đồng ý nhận ưu đãi từ Công ty A.')).toBeInTheDocument();
+      expect(screen.queryByText('Tôi đồng ý nhận thông tin tư vấn và ưu đãi tiếp thị.')).not.toBeInTheDocument();
+    });
+
+    it('consentEnabled không có consentText → câu đồng ý mặc định của hệ thống', () => {
+      renderForm({ ...baseForm, settings: { ...baseForm.settings, consentEnabled: true } });
+      expect(screen.getByText('Tôi đồng ý nhận thông tin tư vấn và ưu đãi tiếp thị.')).toBeInTheDocument();
+    });
+
+    it('previewMode: hiện ô đồng ý (khoá, bấm không đổi) + bộ chọn lịch mẫu và KHÔNG gọi onSubmit khi bấm gửi', () => {
+      const onSubmit = vi.fn();
+      renderForm(
+        {
+          ...baseForm,
+          settings: { ...baseForm.settings, consentEnabled: true, consentText: 'Đồng ý nhận tin' },
+          booking: { enabled: true, daysAhead: 14 },
+        },
+        { onSubmit, previewMode: true }
+      );
+      const consent = screen.getByRole('checkbox');
+      expect(consent).toBeDisabled();
+      expect(screen.getByText('Đồng ý nhận tin')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /Gửi thông tin/i }));
+      fireEvent.submit(consent.closest('form'));
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+  });
 });
