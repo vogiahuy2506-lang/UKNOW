@@ -1,17 +1,17 @@
 /**
- * Notification Center — Remake 2026-09-19 (v3)
+ * Trung tâm Chiến dịch Email — bố cục trình soạn (11/10/2026)
  * ----------------------------------------------------------------
- * 3 pill tabs:
- *   1) Lịch sử chiến dịch — bảng danh sách + hành động
- *   2) Soạn mẫu         — chọn 1 trong 6 dạng, soạn HTML Vi (code editor), lưu thành mẫu
- *   3) Chiến dịch mới    — chọn dạng, đối tượng, lịch, nhấn Gửi (có thể dùng mẫu đã lưu)
+ * Kiểu "Tạo landing page" của /app (components/editor/AdminEditorShell): thanh trên 52px + vùng soạn chiếm trọn,
+ * MỌI cấu hình gom vào modal Cài đặt.
  *
- * Tên hiển thị: "Trung tâm Chiến dịch Email" (alias của "Trung tâm Thông báo").
+ * Thanh trên: [icon + tên] — [3 chế độ: Lịch sử · Soạn mẫu · Gửi chiến dịch] — [Cài đặt] [Công cụ] | [nút chính theo chế độ]
+ *   1) Lịch sử        — bảng danh sách + hành động (toàn chiều rộng)
+ *   2) Soạn mẫu       — chọn 1 trong 6 dạng, soạn HTML (trái) + xem trước (phải); nút chính "Lưu thành mẫu"
+ *   3) Gửi chiến dịch — chọn dạng / mẫu đã lưu, xem trước + tóm tắt; nút chính "Gửi ngay" / "Hẹn giờ" / "Lên lịch định kỳ"
+ * Cài đặt: Kênh gửi · Đối tượng · Lịch gửi · Cấu hình kênh (theo sự kiện).
  *
- * Pattern tham khảo AdminWelcomeEmailPage:
- *  - 1 textarea HTML lớn + chip variables
- *  - Live preview iframe render HTML vừa soạn
- *  - Selector chip ở trên editor
+ * CHỈ ĐỔI BỐ CỤC: state, handler, lời gọi API và payload gửi đi giữ nguyên so với bản trước (kênh / đối tượng / lịch chọn trong
+ * Cài đặt vẫn vào payload như cũ — xem NotificationCenter.layout.spec.jsx).
  *
  * Subject + body tách riêng; map xuống `title` + `message` khi gửi.
  */
@@ -20,18 +20,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   HiOutlineAdjustments,
+  HiOutlineArrowRight,
+  HiOutlineBookmark,
   HiOutlineClock,
   HiOutlineCode,
   HiOutlineEye,
+  HiOutlineInformationCircle,
+  HiOutlineMail,
   HiOutlineMailOpen,
   HiOutlinePaperAirplane,
   HiOutlinePencil,
   HiOutlineRefresh,
-  HiOutlineUserGroup,
   HiOutlineSparkles,
-  HiOutlineBookmark,
+  HiOutlineUserGroup,
 } from 'react-icons/hi';
-import PageContainer from '../../components/common/PageContainer';
 import { FaBell, FaClock } from 'react-icons/fa';
 import adminNotificationApiService from '../../features/admin/services/adminNotificationApi.service';
 import {
@@ -54,19 +56,19 @@ import {
   NotificationChannelSelector,
   NotificationEventSettingsPanel,
 } from '../../features/admin/components';
+import {
+  AdminEditorShell,
+  EditorSettingsModal,
+  EditorTopbar,
+  TopbarButton,
+  TopbarDivider,
+  TopbarSaveButton,
+  TopbarSegmented,
+  TopbarSettingsButton,
+  TopbarToolsMenu,
+} from '../../components/editor/AdminEditorShell';
 import { useAuthStore } from '../../stores/authStore.js';
 import { useI18n } from '../../i18n';
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const TABS = [
-  { id: 'history', label: 'Lịch sử chiến dịch', icon: HiOutlineMailOpen },
-  { id: 'templates', label: 'Soạn mẫu', icon: HiOutlineCode },
-  { id: 'send', label: 'Chiến dịch mới', icon: HiOutlinePaperAirplane },
-  { id: 'events', labelKey: 'notificationCenter.tabs.eventConfig', icon: HiOutlineAdjustments },
-];
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -165,27 +167,50 @@ function validatePayload(payload) {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function PillTabs({ active, onChange, tabs }) {
+const CARD_CLASS = 'rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface shadow-sm';
+
+/** Biểu tượng (i) kèm gợi ý — thay cho các dòng chú thích dài trên đầu trang. */
+function HintIcon({ text }) {
   return (
-    <div className="flex flex-wrap gap-2" role="tablist">
-      {tabs.map((tab) => {
-        const Icon = tab.icon;
-        const selected = active === tab.id;
+    <span
+      role="img"
+      tabIndex={0}
+      title={text}
+      aria-label={text}
+      className="inline-flex cursor-help text-slate-400 dark:text-dk-muted hover:text-orange-500 dark:hover:text-orange-400 focus:outline-none focus-visible:text-orange-500"
+    >
+      <HiOutlineInformationCircle className="h-4 w-4" />
+    </span>
+  );
+}
+
+/**
+ * Chọn chế độ trên màn hẹp: `center` của EditorTopbar ẩn dưới md nên chế độ phải có chỗ khác để bấm.
+ * Dùng nút `aria-pressed` (không phải role="tab") để không trùng với TopbarSegmented trong cây DOM.
+ */
+function MobileModeStrip({ value, onChange, options, ariaLabel }) {
+  return (
+    <div
+      role="group"
+      aria-label={ariaLabel}
+      className="md:hidden shrink-0 flex gap-1 border-b border-gray-200/90 dark:border-dk-border bg-white dark:bg-dk-surface p-2"
+    >
+      {options.map((opt) => {
+        const active = opt.value === value;
         return (
           <button
-            key={tab.id}
+            key={opt.value}
             type="button"
-            role="tab"
-            aria-pressed={selected}
-            onClick={() => onChange(tab.id)}
-            className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${
-              selected
-                ? 'border-orange-500 bg-orange-500 text-white shadow-sm'
-                : 'border-slate-300 dark:border-dk-border-strong bg-white dark:bg-dk-surface text-slate-700 dark:text-dk-text hover:border-orange-300 dark:hover:border-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950/60 hover:text-orange-700 dark:hover:text-orange-300'
+            aria-pressed={active}
+            onClick={() => onChange(opt.value)}
+            className={`flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs font-semibold transition-colors ${
+              active
+                ? 'border-orange-200 dark:border-orange-800/60 bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300'
+                : 'border-gray-200 dark:border-dk-border bg-white dark:bg-dk-raised text-gray-600 dark:text-dk-text'
             }`}
           >
-            <Icon className="h-4 w-4" />
-            {tab.label}
+            {opt.icon ? <opt.icon className="h-3.5 w-3.5 shrink-0" /> : null}
+            <span className="truncate">{opt.label}</span>
           </button>
         );
       })}
@@ -193,24 +218,25 @@ function PillTabs({ active, onChange, tabs }) {
   );
 }
 
-function TypeChips({ value, onChange }) {
+function TypeChips({ value, onChange, className = 'flex flex-wrap gap-1.5' }) {
+  const { t } = useI18n();
   return (
-    <div className="flex flex-wrap gap-2" role="group" aria-label="Chọn dạng email">
-      {Object.values(TYPE_TEMPLATES).map((t) => {
-        const selected = value === t.key;
+    <div className={className} role="group" aria-label={t('notificationCenter.studio.emailType')}>
+      {Object.values(TYPE_TEMPLATES).map((tpl) => {
+        const selected = value === tpl.key;
         return (
           <button
-            key={t.key}
+            key={tpl.key}
             type="button"
-            onClick={() => onChange(t.key)}
+            onClick={() => onChange(tpl.key)}
             aria-pressed={selected}
-            className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
+            className={`shrink-0 whitespace-nowrap rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
               selected
                 ? 'border-orange-500 bg-orange-500 text-white shadow-sm'
                 : 'border-slate-300 dark:border-dk-border-strong bg-white dark:bg-dk-surface text-slate-700 dark:text-dk-text hover:border-orange-300 dark:hover:border-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950/60 hover:text-orange-700 dark:hover:text-orange-300'
             }`}
           >
-            {t.label}
+            {tpl.label}
           </button>
         );
       })}
@@ -219,6 +245,7 @@ function TypeChips({ value, onChange }) {
 }
 
 function HtmlEditor({ value, onChange, variables, bodyRef }) {
+  const { t } = useI18n();
   const insertVariable = (variable) => {
     const token = `{{${variable}}}`;
     const input = bodyRef.current;
@@ -233,17 +260,19 @@ function HtmlEditor({ value, onChange, variables, bodyRef }) {
   };
 
   return (
-    <div className="space-y-3">
-      <div className="space-y-1.5">
-        <span className="text-sm font-medium text-slate-800 dark:text-dk-text">Biến số có sẵn</span>
-        <p className="text-xs text-slate-500 dark:text-dk-text2">Click để chèn tại vị trí con trỏ trong HTML.</p>
-        <div className="flex flex-wrap gap-2">
+    <div className="flex flex-1 min-h-0 flex-col gap-3">
+      <div className="shrink-0 space-y-1.5">
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm font-medium text-slate-800 dark:text-dk-text">{t('notificationCenter.studio.variables')}</span>
+          <HintIcon text={t('notificationCenter.studio.variablesHint')} />
+        </div>
+        <div className="flex flex-wrap gap-1.5">
           {variables.map((variable) => (
             <button
               key={variable}
               type="button"
               onClick={() => insertVariable(variable)}
-              className="rounded-md border border-slate-300 dark:border-dk-border-strong bg-white dark:bg-dk-surface px-2 py-1 font-mono text-xs text-slate-700 dark:text-dk-text hover:border-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950/60 hover:text-orange-700 dark:hover:text-orange-300"
+              className="rounded-md border border-slate-300 dark:border-dk-border-strong bg-white dark:bg-dk-surface px-2 py-0.5 font-mono text-[11px] text-slate-700 dark:text-dk-text hover:border-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950/60 hover:text-orange-700 dark:hover:text-orange-300"
             >
               {`{{${variable}}}`}
             </button>
@@ -251,9 +280,12 @@ function HtmlEditor({ value, onChange, variables, bodyRef }) {
         </div>
       </div>
 
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-slate-800 dark:text-dk-text">Mã HTML</span>
+      <div className="flex flex-1 min-h-0 flex-col gap-1.5">
+        <div className="flex shrink-0 items-center justify-between">
+          <span className="flex items-center gap-1.5 text-sm font-medium text-slate-800 dark:text-dk-text">
+            {t('notificationCenter.studio.htmlCode')}
+            <HintIcon text={t('notificationCenter.studio.htmlHint')} />
+          </span>
           <span className="font-mono text-[10px] text-slate-400 dark:text-dk-muted">{value.length} chars</span>
         </div>
         <textarea
@@ -262,33 +294,31 @@ function HtmlEditor({ value, onChange, variables, bodyRef }) {
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder="<p>Tiêu đề email...</p>"
-          rows={22}
+          rows={14}
           spellCheck={false}
-          className="w-full rounded-lg border border-slate-300 dark:border-dk-border-strong bg-white dark:bg-dk-inset px-3 py-3 font-mono text-xs leading-5 text-slate-800 dark:text-dk-text placeholder-slate-400 dark:placeholder-dk-muted focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+          className="w-full flex-1 min-h-[280px] lg:min-h-0 resize-none rounded-lg border border-slate-300 dark:border-dk-border-strong bg-white dark:bg-dk-inset px-3 py-3 font-mono text-xs leading-5 text-slate-800 dark:text-dk-text placeholder-slate-400 dark:placeholder-dk-muted focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
         />
-        <p className="text-xs text-slate-500 dark:text-dk-text2">
-          Nội dung body của email (chỉ phần <code className="font-mono">body</code>, không cần thẻ <code className="font-mono">&lt;html&gt;</code> bao ngoài). Tiêu đề riêng ở ô phía trên.
-        </p>
       </div>
     </div>
   );
 }
 
-function LivePreview({ html, subject, templateKey }) {
+function LivePreview({ html, subject, templateKey, className = '' }) {
+  const { t } = useI18n();
   const previewHtml = useMemo(
     () => renderFreeformPreview({ templateKey, bodyHtml: html, subject }),
     [templateKey, html, subject],
   );
   return (
-    <section className="overflow-hidden rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface shadow-sm">
-      <div className="flex items-center justify-between gap-3 border-b border-slate-200 dark:border-dk-border px-5 py-4">
-        <div className="min-w-0">
-          <h2 className="flex items-center gap-2 font-semibold text-slate-900 dark:text-dk-text">
-            <HiOutlineEye className="h-5 w-5 text-orange-500 dark:text-orange-400" />
-            Bản xem trước
-          </h2>
-          <p className="mt-1 truncate text-xs text-slate-500 dark:text-dk-text2">{subject || 'Chưa có tiêu đề'}</p>
-        </div>
+    <section className={`flex min-h-0 flex-col overflow-hidden ${CARD_CLASS} ${className}`}>
+      <div className="flex shrink-0 items-center gap-3 border-b border-slate-200 dark:border-dk-border px-4 py-2.5">
+        <h2 className="flex shrink-0 items-center gap-2 text-sm font-semibold text-slate-900 dark:text-dk-text">
+          <HiOutlineEye className="h-4 w-4 text-orange-500 dark:text-orange-400" />
+          {t('notificationCenter.studio.previewTitle')}
+        </h2>
+        <p className="min-w-0 flex-1 truncate text-right text-xs text-slate-500 dark:text-dk-text2">
+          {subject || t('notificationCenter.studio.noSubject')}
+        </p>
       </div>
       {html ? (
         // giữ sáng: thân thư xem trước giống thật, luôn nền trắng (khung bao quanh vẫn theo chế độ tối)
@@ -296,15 +326,20 @@ function LivePreview({ html, subject, templateKey }) {
           title="Email Preview"
           srcDoc={previewHtml}
           sandbox=""
-          className="h-[760px] w-full bg-white"
+          className="w-full flex-1 min-h-[480px] lg:min-h-0 bg-white"
         />
       ) : (
-        <div className="flex h-80 items-center justify-center text-sm text-slate-400 dark:text-dk-muted">
-          Chưa có nội dung để xem trước
+        <div className="flex min-h-[240px] flex-1 items-center justify-center text-sm text-slate-400 dark:text-dk-muted">
+          {t('notificationCenter.studio.noContent')}
         </div>
       )}
     </section>
   );
+}
+
+/** Vòng quay thay icon nút chính khi đang gửi (TopbarSaveButton chỉ tự quay khi `saving`, mà nhãn "Đang lưu..." sai ngữ cảnh gửi). */
+function SpinIcon({ className = '' }) {
+  return <HiOutlineRefresh className={`${className} animate-spin`} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -317,10 +352,15 @@ export default function NotificationCenter() {
   const { t } = useI18n();
   const [activeTab, setActiveTab] = useState('history');
   const [busy, setBusy] = useState(false);
-  const tabs = useMemo(
-    () => TABS.map((tab) => ({ ...tab, label: tab.labelKey ? t(tab.labelKey) : tab.label })),
-    [t],
-  );
+  // Modal Cài đặt (11/10/2026): kênh gửi / đối tượng / lịch gửi / cấu hình kênh theo sự kiện. Chỉ là chỗ ĐẶT các điều khiển —
+  // giá trị (channels, targeting, schedule…) vẫn nằm ở state của trang như trước.
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState('channels');
+  const openSettings = useCallback((tab) => {
+    if (tab) setSettingsTab(tab);
+    setSettingsOpen(true);
+  }, []);
+  const closeSettings = useCallback(() => setSettingsOpen(false), []);
 
   // Tab "Mẫu email" state
   const [typeKey, setTypeKey] = useState('announcement');
@@ -722,326 +762,325 @@ export default function NotificationCenter() {
 
   // ----------------------------------------------------------------- Render
 
+  const modeOptions = [
+    { value: 'history', label: t('notificationCenter.studio.modeHistory'), icon: HiOutlineMailOpen },
+    { value: 'templates', label: t('notificationCenter.studio.modeTemplates'), icon: HiOutlineCode },
+    { value: 'send', label: t('notificationCenter.studio.modeSend'), icon: HiOutlinePaperAirplane },
+  ];
+
+  const settingsTabs = [
+    { key: 'channels', label: t('notificationCenter.studio.tabChannels'), icon: HiOutlineMail },
+    { key: 'audience', label: t('notificationCenter.studio.tabAudience'), icon: HiOutlineUserGroup },
+    { key: 'schedule', label: t('notificationCenter.studio.tabSchedule'), icon: HiOutlineClock },
+    { key: 'events', label: t('notificationCenter.tabs.eventConfig'), icon: HiOutlineAdjustments },
+  ];
+
+  // Nội dung chế độ "Gửi chiến dịch": lấy bản soạn của dạng đang chọn, rơi về mẫu gốc nếu chưa có.
+  const sendHtml = drafts[sendTypeKey]?.bodyHtml || TYPE_TEMPLATES[sendTypeKey]?.bodyHtml || '';
+  const sendSubject = drafts[sendTypeKey]?.subject || TYPE_TEMPLATES[sendTypeKey]?.subject || '';
+
+  // Tóm tắt một dòng (kênh · đối tượng · thời gian) — chỉ để xem, sửa trong Cài đặt.
+  const channelsSummary = channels.length
+    ? channels.map((channel) => t(channel === 'email' ? 'notificationCenter.channels.chipEmail' : 'notificationCenter.channels.chipInApp')).join(' + ')
+    : '—';
+  const audienceCount = (targeting.user_ids?.length || 0) + (targeting.emails?.length || 0);
+  const hasCriteria = Boolean(
+    targeting.roles?.length || targeting.plans?.length || targeting.statuses?.length
+    || targeting.registered_before || targeting.registered_after,
+  );
+  let audienceSummary = t('notificationCenter.studio.audienceNone');
+  if (audienceCount > 0) audienceSummary = t('notificationCenter.studio.audienceCount', { count: audienceCount });
+  else if (hasCriteria) audienceSummary = t('notificationCenter.studio.audienceCriteria');
+  let timeSummary;
+  if (schedule.schedule_type === 'now') timeSummary = t('notificationCenter.studio.timeNow');
+  else if (schedule.schedule_type === 'scheduled') timeSummary = t('notificationCenter.studio.timeScheduled', { date: formatDateTime(schedule.scheduled_at) });
+  else timeSummary = t('notificationCenter.studio.timeRecurring', { pattern: t(`notificationCenter.schedule.${schedule.recurrence_pattern || 'daily'}`).toLowerCase() });
+
+  let sendLabel = t('notificationCenter.studio.sendRecurring');
+  if (schedule.schedule_type === 'now') sendLabel = t('notificationCenter.studio.sendNow');
+  else if (schedule.schedule_type === 'scheduled') sendLabel = t('notificationCenter.studio.schedule');
+
+  let primaryAction = null;
+  if (activeTab === 'templates') {
+    // Màn hẹp dùng nhãn ngắn để tên trang trên thanh không bị cắt còn "Chiế…".
+    const saveTemplateLabel = (
+      <>
+        <span className="sm:hidden">{t('notificationCenter.studio.saveTemplateShort')}</span>
+        <span className="hidden sm:inline">{t('notificationCenter.studio.saveTemplate')}</span>
+      </>
+    );
+    primaryAction = isSuperAdmin ? (
+      <TopbarSaveButton onClick={openSaveAsModal} label={saveTemplateLabel} icon={HiOutlineBookmark} />
+    ) : (
+      <TopbarButton icon={HiOutlineBookmark} disabled title={t('notificationCenter.studio.superAdminOnly')}>
+        {saveTemplateLabel}
+      </TopbarButton>
+    );
+  } else if (activeTab === 'send') {
+    primaryAction = (
+      <TopbarSaveButton
+        onClick={submit}
+        disabled={busy}
+        label={busy ? t('notificationCenter.studio.processing') : sendLabel}
+        icon={busy ? SpinIcon : (schedule.schedule_type === 'scheduled' ? FaClock : FaBell)}
+      />
+    );
+  }
+
+  const toolItems = activeTab === 'templates'
+    ? [
+        {
+          key: 'use-template',
+          icon: HiOutlineCode,
+          label: t('notificationCenter.studio.useTemplate', { label: TYPE_TEMPLATES[typeKey]?.label || typeKey }),
+          description: t('notificationCenter.studio.useTemplateHint'),
+          onClick: () => applyTemplate(typeKey),
+        },
+        {
+          key: 'clear',
+          icon: HiOutlineRefresh,
+          label: t('notificationCenter.studio.clearDraft'),
+          description: t('notificationCenter.studio.clearDraftHint'),
+          onClick: clearTemplate,
+          danger: true,
+        },
+      ]
+    : [];
+
+  const inputClass = 'w-full rounded-lg border border-slate-300 dark:border-dk-border-strong bg-white dark:bg-dk-inset px-3 py-2 text-sm text-slate-900 dark:text-dk-text placeholder-slate-400 dark:placeholder-dk-muted focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/30';
+
   return (
-    <PageContainer
-      icon={HiOutlineSparkles}
-      title="Trung tâm Chiến dịch Email"
-      subtitle={
-        <div>
-          <span>Soạn mẫu HTML theo từng dạng email → lưu thành mẫu có tên riêng (super admin) → chọn người nhận → gửi ngay hoặc hẹn giờ.</span>
-          <p className="mt-2 block w-fit max-w-full rounded-2xl sm:inline-flex sm:rounded-full bg-slate-100 dark:bg-dk-raised px-3 py-1 text-xs font-medium text-slate-700 dark:text-dk-text">
-            Dùng <code className="font-mono">{`{{user_name}}`}</code>, <code className="font-mono">{`{{dashboard_url}}`}</code>… sẽ tự thay bằng dữ liệu người nhận.
-          </p>
-        </div>
-      }
-    >
-
-      {/* Tabs */}
-      <PillTabs active={activeTab} onChange={setActiveTab} tabs={tabs} />
-
-      {/* Tab content */}
-      {activeTab === 'history' ? (
-        <section className="space-y-4 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface p-5 shadow-sm">
-          <header className="flex items-center gap-2">
-            <HiOutlineMailOpen className="h-5 w-5 text-orange-500 dark:text-orange-400" />
-            <h2 className="font-semibold text-slate-900 dark:text-dk-text">Lịch sử thông báo</h2>
-          </header>
-          <NotificationHistoryTable
-            notifications={notifications}
-            loading={loadingList}
-            pagination={pagination}
-            onPageChange={loadNotifications}
-            onView={() => {}}
-            onPreview={(n) => setPreviewModal({ open: true, notification: n })}
-            onLogs={(n) => setLogsModal({ open: true, notificationId: n.id, title: n.title })}
-            onCopy={(n) => {
-              applyTemplate(n.type || 'announcement');
-              toast.success('Đã copy nội dung thông báo vào tab Mẫu email');
-              setActiveTab('templates');
-            }}
-            onSend={sendOne}
-            onResend={resendOne}
-            onSchedule={scheduleOne}
-            onDelete={deleteOne}
-          />
-        </section>
-      ) : null}
-
-      {activeTab === 'templates' ? (
-        <div className="space-y-5">
-          <section className="space-y-4 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface p-5 shadow-sm">
-            <header>
-              <h2 className="flex items-center gap-2 font-semibold text-slate-900 dark:text-dk-text">
-                <HiOutlineCode className="h-5 w-5 text-orange-500 dark:text-orange-400" />
-                Mẫu email theo dạng
-              </h2>
-              <p className="mt-1 text-xs text-slate-500 dark:text-dk-text2">
-                Mỗi dạng có một mẫu HTML riêng (khác nhau về layout/component). Bấm "Dùng mẫu" để copy vào ô bên dưới, sau đó sửa trực tiếp.
-              </p>
-            </header>
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="text-sm font-medium text-slate-800 dark:text-dk-text">Dạng email:</span>
-              <TypeChips value={typeKey} onChange={setTypeKey} />
-              <button
-                type="button"
-                onClick={() => applyTemplate(typeKey)}
-                className="rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-600"
-              >
-                Dùng mẫu {TYPE_TEMPLATES[typeKey]?.label}
-              </button>
-              <button
-                type="button"
-                onClick={clearTemplate}
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 dark:border-dk-border-strong bg-white dark:bg-dk-surface px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-dk-text hover:border-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950/60 hover:text-orange-700 dark:hover:text-orange-300"
-              >
-                <HiOutlineRefresh className="h-3.5 w-3.5" />
-                Xóa trắng
-              </button>
-            </div>
-          </section>
-
-          <div className="grid gap-6 xl:grid-cols-2">
-            <section className="space-y-4 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface p-5 shadow-sm">
-              <header className="flex items-center justify-between gap-3">
-                <h2 className="flex items-center gap-2 font-semibold text-slate-900 dark:text-dk-text">
-                  <HiOutlinePencil className="h-5 w-5 text-orange-500 dark:text-orange-400" />
-                  Soạn HTML
-                </h2>
-                {isSuperAdmin ? (
-                  <button
-                    type="button"
-                    onClick={openSaveAsModal}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-orange-300 dark:border-orange-700 bg-white dark:bg-dk-surface px-3 py-1.5 text-xs font-semibold text-orange-700 dark:text-orange-300 hover:bg-orange-50 dark:hover:bg-orange-950/60"
-                    title="Lưu bản soạn hiện tại thành mẫu mới (mẫu gốc KHÔNG đổi)"
-                  >
-                    <HiOutlineBookmark className="h-3.5 w-3.5" />
-                    Lưu thành mẫu
-                  </button>
-                ) : (
-                  <span
-                    className="text-xs text-slate-400 dark:text-dk-muted"
-                    title="Chỉ super admin mới có quyền lưu mẫu mới"
-                  >
-                    <HiOutlineBookmark className="inline h-3.5 w-3.5" /> Chỉ super admin
-                  </span>
-                )}
-              </header>
-              {isSuperAdmin ? (
-                <p className="rounded-lg border border-dashed border-orange-300 dark:border-orange-700 bg-orange-50/60 dark:bg-orange-950/40 px-3 py-2 text-xs text-orange-800 dark:text-orange-300">
-                  💡 Soạn xong? Bấm <strong>Lưu thành mẫu mới</strong> ở thanh cam bên dưới để lưu vào DB.
-                  Mẫu gốc sẽ <strong>không</strong> bị thay đổi — bạn có thể chọn lại mẫu vừa lưu ở tab <em>Chiến dịch mới</em>.
-                </p>
+    <AdminEditorShell
+      topbar={(
+        <EditorTopbar
+          icon={HiOutlineSparkles}
+          title={t('notificationCenter.studio.title')}
+          center={(
+            <TopbarSegmented
+              ariaLabel={t('notificationCenter.studio.modesLabel')}
+              value={activeTab}
+              onChange={setActiveTab}
+              options={modeOptions}
+            />
+          )}
+          right={(
+            <>
+              <TopbarSettingsButton onClick={() => openSettings()} />
+              <TopbarToolsMenu items={toolItems} />
+              {primaryAction ? (
+                <>
+                  <TopbarDivider />
+                  {primaryAction}
+                </>
               ) : null}
+            </>
+          )}
+        />
+      )}
+    >
+      <div className="flex h-full min-h-0 flex-col">
+        <MobileModeStrip
+          ariaLabel={t('notificationCenter.studio.modesLabel')}
+          value={activeTab}
+          onChange={setActiveTab}
+          options={modeOptions}
+        />
 
-              <label className="block space-y-1.5">
-                <span className="text-sm font-medium text-slate-800 dark:text-dk-text">Tiêu đề email (subject)</span>
-                <input
-                  aria-label="Tiêu đề email"
-                  value={draft.subject}
-                  onChange={(event) => setDrafts((current) => ({ ...current, [typeKey]: { ...current[typeKey], subject: event.target.value } }))}
-                  maxLength={200}
-                  placeholder="[Founder AI] Tiêu đề email"
-                  className="w-full rounded-lg border border-slate-300 dark:border-dk-border-strong bg-white dark:bg-dk-inset px-3 py-2 text-sm text-slate-900 dark:text-dk-text placeholder-slate-400 dark:placeholder-dk-muted focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-                />
-                <span className="block text-right text-xs text-slate-400 dark:text-dk-muted">{draft.subject.length}/200</span>
-              </label>
-
-              <HtmlEditor
-                value={draft.bodyHtml}
-                onChange={(v) => setDrafts((current) => ({ ...current, [typeKey]: { ...current[typeKey], bodyHtml: v } }))}
-                variables={VARIABLES}
-                bodyRef={bodyRef}
+        <div className="flex-1 min-h-0">
+          {/* Chế độ 1 — Lịch sử: bảng toàn chiều rộng */}
+          {activeTab === 'history' ? (
+            <div className="h-full overflow-y-auto p-3 sm:p-4">
+              <NotificationHistoryTable
+                notifications={notifications}
+                loading={loadingList}
+                pagination={pagination}
+                onPageChange={loadNotifications}
+                onView={() => {}}
+                onPreview={(n) => setPreviewModal({ open: true, notification: n })}
+                onLogs={(n) => setLogsModal({ open: true, notificationId: n.id, title: n.title })}
+                onCopy={(n) => {
+                  applyTemplate(n.type || 'announcement');
+                  toast.success('Đã copy nội dung thông báo vào tab Mẫu email');
+                  setActiveTab('templates');
+                }}
+                onSend={sendOne}
+                onResend={resendOne}
+                onSchedule={scheduleOne}
+                onDelete={deleteOne}
               />
-            </section>
+            </div>
+          ) : null}
 
-            <LivePreview html={draft.bodyHtml} subject={draft.subject} templateKey={typeKey} />
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/40 p-4 text-sm text-slate-700 dark:text-dk-text">
-            <p>
-              Đã soạn xong mẫu? <strong>Chuyển sang tab "Chiến dịch mới"</strong>, chọn dạng tương ứng rồi cấu hình đối tượng + lịch.
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
-              {isSuperAdmin ? (
+          {/* Chế độ 2 — Soạn mẫu: dạng email (thanh nhỏ) + soạn (trái) | xem trước (phải) */}
+          {activeTab === 'templates' ? (
+            <div className="flex h-full min-h-0 flex-col">
+              <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-gray-200/90 dark:border-dk-border bg-white dark:bg-dk-surface px-3 py-2 sm:px-4">
+                <span className="whitespace-nowrap text-xs font-semibold text-slate-600 dark:text-dk-text2">
+                  {t('notificationCenter.studio.emailType')}
+                </span>
+                <div className="min-w-0 basis-full md:basis-auto md:flex-1">
+                  <TypeChips
+                    value={typeKey}
+                    onChange={setTypeKey}
+                    className="flex gap-1.5 overflow-x-auto pb-0.5 md:flex-wrap md:overflow-visible md:pb-0"
+                  />
+                </div>
                 <button
                   type="button"
-                  onClick={openSaveAsModal}
-                  className="inline-flex items-center gap-2 rounded-lg border border-orange-400 bg-white dark:bg-dk-surface px-4 py-2 text-sm font-semibold text-orange-700 dark:text-orange-300 hover:bg-orange-100 dark:hover:bg-orange-950/60"
-                  title="Lưu bản soạn hiện tại thành mẫu mới (mẫu gốc KHÔNG đổi)"
+                  onClick={() => {
+                    setSendTypeKey(typeKey);
+                    setActiveTab('send');
+                  }}
+                  title={t('notificationCenter.studio.goSendTitle')}
+                  className="ml-auto inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-1 text-xs font-semibold text-orange-700 dark:text-orange-300 hover:bg-orange-50 dark:hover:bg-orange-950/40"
                 >
-                  <HiOutlineBookmark className="h-4 w-4" />
-                  Lưu thành mẫu mới
+                  {t('notificationCenter.studio.goSend')}
+                  <HiOutlineArrowRight className="h-3.5 w-3.5" />
                 </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => {
-                  setSendTypeKey(typeKey);
-                  setActiveTab('send');
-                }}
-                className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
-              >
-                Tiếp tục: chuyển sang Chiến dịch mới →
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+              </div>
 
-      {activeTab === 'send' ? (
-        <div className="grid gap-6 xl:grid-cols-2">
-          {/* LEFT — config */}
-          <div className="space-y-5">
-            <section className="space-y-4 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface p-5 shadow-sm">
-              <header>
-                <h2 className="flex items-center gap-2 font-semibold text-slate-900 dark:text-dk-text">
-                  <HiOutlinePaperAirplane className="h-5 w-5 text-orange-500 dark:text-orange-400" />
-                  Gửi thông báo
-                </h2>
-                <p className="mt-1 text-xs text-slate-500 dark:text-dk-text2">Chọn dạng email đã soạn, đối tượng và lịch gửi.</p>
-              </header>
+              <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden">
+                <div className="grid gap-3 p-3 sm:p-4 lg:h-full lg:grid-cols-2">
+                  <section className={`flex min-h-0 flex-col gap-3 p-4 lg:overflow-y-auto ${CARD_CLASS}`}>
+                    <label className="block shrink-0 space-y-1.5">
+                      <span className="flex items-center justify-between text-sm font-medium text-slate-800 dark:text-dk-text">
+                        <span className="flex items-center gap-2">
+                          <HiOutlinePencil className="h-4 w-4 text-orange-500 dark:text-orange-400" />
+                          Tiêu đề email (subject)
+                        </span>
+                        <span className="text-xs font-normal text-slate-400 dark:text-dk-muted">{draft.subject.length}/200</span>
+                      </span>
+                      <input
+                        aria-label="Tiêu đề email"
+                        value={draft.subject}
+                        onChange={(event) => setDrafts((current) => ({ ...current, [typeKey]: { ...current[typeKey], subject: event.target.value } }))}
+                        maxLength={200}
+                        placeholder="[Founder AI] Tiêu đề email"
+                        className={inputClass}
+                      />
+                    </label>
 
-              <div className="space-y-3">
-                <div>
-                  <span className="text-sm font-medium text-slate-800 dark:text-dk-text">Dạng email</span>
-                  <div className="mt-2">
-                    <TypeChips value={sendTypeKey} onChange={setSendTypeKey} />
-                  </div>
-                </div>
+                    <HtmlEditor
+                      value={draft.bodyHtml}
+                      onChange={(v) => setDrafts((current) => ({ ...current, [typeKey]: { ...current[typeKey], bodyHtml: v } }))}
+                      variables={VARIABLES}
+                      bodyRef={bodyRef}
+                    />
+                  </section>
 
-                <div className="rounded-lg border border-dashed border-slate-300 dark:border-dk-border-strong bg-slate-50 dark:bg-dk-raised p-3">
-                  <label className="text-sm font-medium text-slate-800 dark:text-dk-text">
-                    Dùng mẫu đã lưu (tuỳ chọn)
-                  </label>
-                  <select
-                    value={selectedSavedTemplateId}
-                    onChange={onPickSavedTemplate}
-                    className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-dk-border-strong bg-white dark:bg-dk-inset px-3 py-2 text-sm text-slate-900 dark:text-dk-text focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-                  >
-                    <option value="">— Soạn tự do —</option>
-                    {savedTemplates.map((tpl) => (
-                      <option key={tpl.id} value={tpl.id}>
-                        {tpl.name} · {TYPE_TEMPLATES[tpl.type_key]?.label || tpl.type_key}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="mt-1 text-xs text-slate-500 dark:text-dk-text2">
-                    Chọn mẫu để fill subject + HTML vào form bên dưới. Bạn vẫn phải chọn nhóm
-                    người nhận + lịch trước khi gửi.
-                  </p>
+                  <LivePreview html={draft.bodyHtml} subject={draft.subject} templateKey={typeKey} />
                 </div>
               </div>
-            </section>
-
-            <section className="space-y-4 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface p-5 shadow-sm">
-              <NotificationChannelSelector
-                value={channels}
-                onChange={onChannelsChange}
-                link={broadcastLink}
-                onLinkChange={setBroadcastLink}
-                type={sendTypeKey}
-                disabledChannels={disabledChannels}
-              />
-            </section>
-
-            <section className="space-y-4 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface p-5 shadow-sm">
-              <header>
-                <h2 className="flex items-center gap-2 font-semibold text-slate-900 dark:text-dk-text">
-                  <HiOutlineUserGroup className="h-5 w-5 text-orange-500 dark:text-orange-400" />
-                  Nhắm đối tượng
-                </h2>
-                <p className="mt-1 text-xs text-slate-500 dark:text-dk-text2">Có thể kết hợp nhiều tiêu chí.</p>
-              </header>
-              <TargetingPanel
-                criteria={targeting}
-                onChange={setTargeting}
-              />
-            </section>
-
-            <section className="space-y-4 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface p-5 shadow-sm">
-              <header>
-                <h2 className="flex items-center gap-2 font-semibold text-slate-900 dark:text-dk-text">
-                  <HiOutlineClock className="h-5 w-5 text-orange-500 dark:text-orange-400" />
-                  Thời gian gửi
-                </h2>
-                <p className="mt-1 text-xs text-slate-500 dark:text-dk-text2">Gửi ngay / Hẹn giờ / Định kỳ.</p>
-              </header>
-              <ScheduleSelector value={schedule} onChange={setSchedule} />
-            </section>
-
-            <div className="flex flex-wrap justify-end gap-3">
-              <button
-                type="button"
-                onClick={submit}
-                disabled={busy}
-                className={`inline-flex items-center gap-2 rounded-lg px-6 py-2.5 text-sm font-medium text-white shadow-sm transition-all ${
-                  busy
-                    ? 'cursor-not-allowed bg-orange-200 dark:bg-orange-900/40'
-                    : 'bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700'
-                }`}
-              >
-                {busy ? (
-                  <>
-                    <span className="loading loading-spinner loading-sm" />
-                    Đang xử lý...
-                  </>
-                ) : schedule.schedule_type === 'now' ? (
-                  <>
-                    <FaBell className="h-4 w-4" />
-                    Gửi ngay
-                  </>
-                ) : schedule.schedule_type === 'scheduled' ? (
-                  <>
-                    <FaClock className="h-4 w-4" />
-                    Hẹn giờ
-                  </>
-                ) : (
-                  <>
-                    <FaBell className="h-4 w-4" />
-                    Lên lịch định kỳ
-                  </>
-                )}
-              </button>
             </div>
-          </div>
+          ) : null}
 
-          {/* RIGHT — preview */}
-          <div className="space-y-5 xl:sticky xl:top-4 xl:self-start">
-            <LivePreview
-              html={drafts[sendTypeKey]?.bodyHtml || TYPE_TEMPLATES[sendTypeKey]?.bodyHtml || ''}
-              subject={drafts[sendTypeKey]?.subject || TYPE_TEMPLATES[sendTypeKey]?.subject || ''}
-              templateKey={sendTypeKey}
-            />
+          {/* Chế độ 3 — Gửi chiến dịch: dạng + mẫu đã lưu (trái) | tóm tắt + xem trước (phải); cấu hình nằm trong Cài đặt */}
+          {activeTab === 'send' ? (
+            <div className="h-full overflow-y-auto lg:overflow-hidden">
+              <div className="grid gap-3 p-3 sm:p-4 lg:h-full lg:grid-cols-[minmax(300px,380px)_minmax(0,1fr)]">
+                <div className="min-h-0 space-y-3 lg:overflow-y-auto">
+                  <section className={`space-y-2 p-4 ${CARD_CLASS}`}>
+                    <span className="text-sm font-medium text-slate-800 dark:text-dk-text">{t('notificationCenter.studio.emailType')}</span>
+                    <TypeChips value={sendTypeKey} onChange={setSendTypeKey} />
+                  </section>
 
-            <div className="rounded-xl border border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-raised p-4 text-sm text-slate-700 dark:text-dk-text">
-              <p className="font-semibold">Tóm tắt sẽ gửi</p>
-              <ul className="mt-2 list-disc space-y-1 pl-5 text-xs">
-                <li>Dạng: <strong>{TYPE_TEMPLATES[sendTypeKey]?.label || sendTypeKey}</strong></li>
-                <li>
-                  {t('notificationCenter.channels.summaryLabel')}:{' '}
-                  <strong>
-                    {channels.length
-                      ? channels.map((channel) => t(channel === 'email' ? 'notificationCenter.channels.chipEmail' : 'notificationCenter.channels.chipInApp')).join(' + ')
-                      : '—'}
-                  </strong>
-                </li>
-                <li>
-                  Thời gian:{' '}
-                  <strong>
-                    {schedule.schedule_type === 'now'
-                      ? 'gửi ngay'
-                      : schedule.schedule_type === 'scheduled'
-                      ? `hẹn ${formatDateTime(schedule.scheduled_at)}`
-                      : `lặp ${schedule.recurrence_pattern || 'daily'}`}
-                  </strong>
-                </li>
-              </ul>
+                  <section className={`space-y-1.5 p-4 ${CARD_CLASS}`}>
+                    <label htmlFor="notification-saved-template" className="text-sm font-medium text-slate-800 dark:text-dk-text">
+                      {t('notificationCenter.studio.savedTemplate')}
+                    </label>
+                    <select
+                      id="notification-saved-template"
+                      value={selectedSavedTemplateId}
+                      onChange={onPickSavedTemplate}
+                      className={inputClass}
+                    >
+                      <option value="">{t('notificationCenter.studio.savedTemplateNone')}</option>
+                      {savedTemplates.map((tpl) => (
+                        <option key={tpl.id} value={tpl.id}>
+                          {tpl.name} · {TYPE_TEMPLATES[tpl.type_key]?.label || tpl.type_key}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-slate-500 dark:text-dk-text2">{t('notificationCenter.studio.savedTemplateHint')}</p>
+                  </section>
+                </div>
+
+                <div className="flex min-h-0 flex-col gap-3">
+                  <div
+                    role="group"
+                    aria-label={t('notificationCenter.studio.summaryAria')}
+                    className={`flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 text-xs text-slate-700 dark:text-dk-text ${CARD_CLASS}`}
+                  >
+                    <span>
+                      {t('notificationCenter.channels.summaryLabel')}: <strong>{channelsSummary}</strong>
+                    </span>
+                    <span>
+                      {t('notificationCenter.studio.summaryAudience')}:{' '}
+                      <strong className={audienceCount === 0 && !hasCriteria ? 'text-amber-700 dark:text-amber-300' : ''}>{audienceSummary}</strong>
+                    </span>
+                    <span>
+                      {t('notificationCenter.studio.summaryTime')}: <strong>{timeSummary}</strong>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => openSettings('channels')}
+                      title={t('notificationCenter.studio.editTitle')}
+                      className="ml-auto inline-flex items-center gap-1 rounded-lg border border-orange-300 dark:border-orange-700 bg-white dark:bg-dk-surface px-2.5 py-1 font-semibold text-orange-700 dark:text-orange-300 hover:bg-orange-50 dark:hover:bg-orange-950/60"
+                    >
+                      <HiOutlinePencil className="h-3.5 w-3.5" />
+                      {t('notificationCenter.studio.edit')}
+                    </button>
+                  </div>
+
+                  <LivePreview html={sendHtml} subject={sendSubject} templateKey={sendTypeKey} className="flex-1" />
+                </div>
+              </div>
             </div>
-          </div>
+          ) : null}
         </div>
-      ) : null}
+      </div>
 
-      {activeTab === 'events' ? <NotificationEventSettingsPanel onEntrySaved={onEventSaved} /> : null}
+      {/* Cài đặt — kênh gửi, đối tượng, lịch gửi, cấu hình kênh theo sự kiện */}
+      <EditorSettingsModal
+        open={settingsOpen}
+        onClose={closeSettings}
+        title={t('notificationCenter.studio.settingsTitle')}
+        subtitle={t('notificationCenter.studio.settingsSubtitle')}
+        tabs={settingsTabs}
+        activeTab={settingsTab}
+        onTabChange={setSettingsTab}
+        footer={<TopbarButton onClick={closeSettings}>{t('common.done')}</TopbarButton>}
+      >
+        {settingsTab === 'channels' ? (
+          <NotificationChannelSelector
+            value={channels}
+            onChange={onChannelsChange}
+            link={broadcastLink}
+            onLinkChange={setBroadcastLink}
+            type={sendTypeKey}
+            disabledChannels={disabledChannels}
+          />
+        ) : null}
+
+        {settingsTab === 'audience' ? (
+          <div className="space-y-3">
+            <p className="text-xs text-slate-500 dark:text-dk-text2">{t('notificationCenter.studio.audienceHint')}</p>
+            <TargetingPanel
+              criteria={targeting}
+              onChange={setTargeting}
+            />
+          </div>
+        ) : null}
+
+        {settingsTab === 'schedule' ? (
+          <div className="space-y-3">
+            <p className="text-xs text-slate-500 dark:text-dk-text2">{t('notificationCenter.studio.scheduleHint')}</p>
+            <ScheduleSelector value={schedule} onChange={setSchedule} />
+          </div>
+        ) : null}
+
+        {settingsTab === 'events' ? <NotificationEventSettingsPanel bare onEntrySaved={onEventSaved} /> : null}
+      </EditorSettingsModal>
 
       {/* Modals */}
       <EmailPreviewModal
@@ -1068,8 +1107,6 @@ export default function NotificationCenter() {
           typeLabel: TYPE_TEMPLATES[typeKey]?.label || typeKey,
         }}
       />
-    </PageContainer>
+    </AdminEditorShell>
   );
 }
-
-

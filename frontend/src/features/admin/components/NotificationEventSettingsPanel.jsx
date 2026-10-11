@@ -7,6 +7,8 @@ import adminNotificationApiService from '../services/adminNotificationApi.servic
  * Tab "Cấu hình kênh" của Trung tâm Chiến dịch Email (PLAN_TICKET_GOP_Y_VA_CHUONG_THONG_BAO_2026-10-10 mục 5):
  * mỗi sự kiện thông báo có 3 công tắc — chuông, email, người dùng được tắt email. Lưu TỪNG DÒNG bằng
  * PUT /api/admin/notification-events/:eventType { inAppEnabled, emailEnabled, userCanDisableEmail }.
+ *
+ * `bare` (11/10/2026): bỏ khung thẻ bao ngoài khi đặt trong modal Cài đặt của NotificationCenter (modal đã là khung).
  */
 
 function draftOf(entry) {
@@ -36,7 +38,7 @@ function Switch({ checked, disabled, onChange, label }) {
   );
 }
 
-export default function NotificationEventSettingsPanel({ onEntrySaved }) {
+export default function NotificationEventSettingsPanel({ onEntrySaved, bare = false }) {
   const { t, locale } = useI18n();
   const [entries, setEntries] = useState([]);
   const [drafts, setDrafts] = useState({});
@@ -94,7 +96,7 @@ export default function NotificationEventSettingsPanel({ onEntrySaved }) {
   };
 
   return (
-    <section className="space-y-4 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface p-5 shadow-sm">
+    <section className={bare ? 'space-y-4' : 'space-y-4 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface p-5 shadow-sm'}>
       <header>
         <h2 className="font-semibold text-slate-900 dark:text-dk-text">{t('notificationCenter.events.title')}</h2>
         <p className="mt-1 text-xs text-slate-500 dark:text-dk-text2">{t('notificationCenter.events.subtitle')}</p>
@@ -119,7 +121,7 @@ export default function NotificationEventSettingsPanel({ onEntrySaved }) {
 
       {!loading && !loadError ? (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[640px] text-sm">
             <thead>
               <tr className="border-b border-slate-200 dark:border-dk-border text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-dk-text2">
                 <th className="px-3 py-3">{t('notificationCenter.events.colEvent')}</th>

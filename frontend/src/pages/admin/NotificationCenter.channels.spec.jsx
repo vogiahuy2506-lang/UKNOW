@@ -68,10 +68,22 @@ function renderPage() {
   );
 }
 
+// 11/10/2026: bố cục mới — chế độ "Gửi chiến dịch" ở thanh trên; kênh / đối tượng / lịch gửi nằm trong modal Cài đặt
+// (tab Kênh gửi · Đối tượng · Lịch gửi), nút Gửi nằm ở thanh trên. Test vẫn đi qua giao diện thật rồi kiểm payload.
 async function openSendTab() {
   renderPage();
-  fireEvent.click(await screen.findByRole('tab', { name: /Chiến dịch mới/ }));
-  await screen.findByText('stub-chon-nguoi-nhan');
+  fireEvent.click(await screen.findByRole('tab', { name: /Gửi chiến dịch/ }));
+  await screen.findByRole('button', { name: /Gửi ngay/ });
+}
+
+const openSettings = () => fireEvent.click(screen.getByRole('button', { name: 'Cài đặt' }));
+const gotoSettingsTab = (name) => fireEvent.click(screen.getByRole('button', { name }));
+const closeSettings = () => fireEvent.click(screen.getAllByRole('button', { name: 'Xong' }).at(-1));
+/** Chọn người nhận trong Cài đặt > Đối tượng rồi đóng Cài đặt. */
+async function pickRecipientAndClose() {
+  gotoSettingsTab('Đối tượng');
+  fireEvent.click(await screen.findByText('stub-chon-nguoi-nhan'));
+  closeSettings();
 }
 
 const emailBox = () => screen.getByRole('checkbox', { name: /^Email/ });
@@ -91,10 +103,11 @@ describe('NotificationCenter - chọn kênh gửi (PR-3)', () => {
   it('mặc định cả Email và Chuông; gửi ngay → payload có channels [email, in_app]', async () => {
     await openSendTab();
     await waitFor(() => expect(mockGetEvents).toHaveBeenCalled());
+    openSettings();
     expect(emailBox()).toBeChecked();
     expect(bellBox()).toBeChecked();
 
-    fireEvent.click(screen.getByText('stub-chon-nguoi-nhan'));
+    await pickRecipientAndClose();
     fireEvent.click(screen.getByRole('button', { name: /Gửi ngay/ }));
 
     await waitFor(() => expect(mockSendDirect).toHaveBeenCalledTimes(1));
@@ -104,9 +117,10 @@ describe('NotificationCenter - chọn kênh gửi (PR-3)', () => {
 
   it('bỏ Email, chỉ Chuông + liên kết → channels [in_app] và metadata.link', async () => {
     await openSendTab();
+    openSettings();
     fireEvent.click(emailBox());
     fireEvent.change(screen.getByLabelText(/Liên kết khi bấm/), { target: { value: ' /app/plans ' } });
-    fireEvent.click(screen.getByText('stub-chon-nguoi-nhan'));
+    await pickRecipientAndClose();
     fireEvent.click(screen.getByRole('button', { name: /Gửi ngay/ }));
 
     await waitFor(() => expect(mockSendDirect).toHaveBeenCalledTimes(1));
@@ -115,9 +129,10 @@ describe('NotificationCenter - chọn kênh gửi (PR-3)', () => {
 
   it('chỉ Email → không có metadata dù đã gõ liên kết trước đó', async () => {
     await openSendTab();
+    openSettings();
     fireEvent.change(screen.getByLabelText(/Liên kết khi bấm/), { target: { value: '/app/plans' } });
     fireEvent.click(bellBox());
-    fireEvent.click(screen.getByText('stub-chon-nguoi-nhan'));
+    await pickRecipientAndClose();
     fireEvent.click(screen.getByRole('button', { name: /Gửi ngay/ }));
 
     await waitFor(() => expect(mockSendDirect).toHaveBeenCalledTimes(1));
@@ -128,9 +143,10 @@ describe('NotificationCenter - chọn kênh gửi (PR-3)', () => {
 
   it('bỏ cả hai kênh → báo lỗi, không gọi API', async () => {
     await openSendTab();
+    openSettings();
     fireEvent.click(emailBox());
     fireEvent.click(bellBox());
-    fireEvent.click(screen.getByText('stub-chon-nguoi-nhan'));
+    await pickRecipientAndClose();
     fireEvent.click(screen.getByRole('button', { name: /Gửi ngay/ }));
 
     expect(toast.error).toHaveBeenCalledWith('Vui lòng chọn ít nhất một kênh gửi (email hoặc chuông).');
@@ -139,8 +155,9 @@ describe('NotificationCenter - chọn kênh gửi (PR-3)', () => {
 
   it('liên kết kiểu javascript: bị chặn ở giao diện, không gọi API', async () => {
     await openSendTab();
+    openSettings();
     fireEvent.change(screen.getByLabelText(/Liên kết khi bấm/), { target: { value: 'javascript:alert(1)' } });
-    fireEvent.click(screen.getByText('stub-chon-nguoi-nhan'));
+    await pickRecipientAndClose();
     fireEvent.click(screen.getByRole('button', { name: /Gửi ngay/ }));
 
     expect(toast.error).toHaveBeenCalledWith('Liên kết phải bắt đầu bằng / hoặc http(s)://');
@@ -150,13 +167,14 @@ describe('NotificationCenter - chọn kênh gửi (PR-3)', () => {
   it('Chuông đang tắt trong Cấu hình kênh → checkbox disabled, bỏ tick mặc định, payload chỉ email', async () => {
     mockGetEvents.mockResolvedValue(eventsResponse({ inAppEnabled: false }));
     await openSendTab();
+    openSettings();
 
     await waitFor(() => expect(bellBox()).toBeDisabled());
     expect(bellBox()).not.toBeChecked();
     expect(emailBox()).toBeChecked();
     expect(screen.getByText(/Đang tắt trong tab "Cấu hình kênh"/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('stub-chon-nguoi-nhan'));
+    await pickRecipientAndClose();
     fireEvent.click(screen.getByRole('button', { name: /Gửi ngay/ }));
     await waitFor(() => expect(mockSendDirect).toHaveBeenCalledTimes(1));
     expect(mockSendDirect.mock.calls[0][0].channels).toEqual(['email']);
@@ -165,6 +183,7 @@ describe('NotificationCenter - chọn kênh gửi (PR-3)', () => {
   it('Email đang tắt → checkbox Email disabled và không được chọn mặc định', async () => {
     mockGetEvents.mockResolvedValue(eventsResponse({ emailEnabled: false }));
     await openSendTab();
+    openSettings();
 
     await waitFor(() => expect(emailBox()).toBeDisabled());
     expect(emailBox()).not.toBeChecked();
@@ -173,9 +192,13 @@ describe('NotificationCenter - chọn kênh gửi (PR-3)', () => {
 
   it('hẹn giờ: createNotification nhận channels trước khi hẹn', async () => {
     await openSendTab();
+    openSettings();
     fireEvent.click(emailBox());
-    fireEvent.click(screen.getByText('stub-chon-nguoi-nhan'));
-    fireEvent.click(screen.getByText('stub-hen-gio'));
+    gotoSettingsTab('Đối tượng');
+    fireEvent.click(await screen.findByText('stub-chon-nguoi-nhan'));
+    gotoSettingsTab('Lịch gửi');
+    fireEvent.click(await screen.findByText('stub-hen-gio'));
+    closeSettings();
     fireEvent.click(screen.getByRole('button', { name: /Hẹn giờ/ }));
 
     await waitFor(() => expect(mockCreate).toHaveBeenCalledTimes(1));
