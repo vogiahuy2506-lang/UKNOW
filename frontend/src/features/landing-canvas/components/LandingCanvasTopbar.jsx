@@ -58,6 +58,7 @@ export default function LandingCanvasTopbar({
   showPreviewControls = false,
 }) {
   const tc = useI18n('landingCanvas.topbar');
+  const linkedFormsCount = Array.isArray(form?.linkedForms) ? form.linkedForms.length : 0;
   const ti = useI18n('landingCanvas.importHtml');
   const tp = useI18n('landingCanvas.canvasPreview');
   const closeBtnRef = useRef(null);
@@ -344,17 +345,20 @@ export default function LandingCanvasTopbar({
           )}
         </div>
 
-        {/* PR-5b-2b mục 7 — chỉ hiện khi landing này có Biểu mẫu gắn */}
-        {form?.linkedFormId ? (
+        {/* PR-5b-2b mục 7 / PR-6 — chỉ hiện khi landing này có Biểu mẫu gắn: 1 biểu mẫu → mở thẳng trình soạn của nó;
+            nhiều biểu mẫu → mở mục Biểu mẫu (danh sách đầy đủ + từng biểu mẫu nằm ở Cài đặt trang). */}
+        {linkedFormsCount > 0 ? (
           <a
-            href={`/app/forms/${form.linkedFormId}/edit`}
+            href={linkedFormsCount === 1 ? `/app/forms/${form.linkedForms[0].id}/edit` : '/app/forms'}
             target="_blank"
             rel="noopener noreferrer"
-            title={tc('openLinkedForm')}
+            title={linkedFormsCount === 1 ? tc('openLinkedForm') : tc('openLinkedForms', { count: linkedFormsCount })}
             className="h-[36px] px-2.5 rounded-xl transition-colors text-blue-700 dark:text-blue-400 bg-blue-50/80 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200/80 dark:border-blue-800/60 inline-flex items-center justify-center gap-1.5 text-xs font-semibold box-border"
           >
             <HiOutlineClipboardList className="w-4 h-4" />
-            <span className="hidden lg:inline">{tc('openLinkedForm')}</span>
+            <span className="hidden lg:inline">
+              {linkedFormsCount === 1 ? tc('openLinkedForm') : tc('openLinkedForms', { count: linkedFormsCount })}
+            </span>
           </a>
         ) : null}
 

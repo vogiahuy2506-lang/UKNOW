@@ -52,7 +52,31 @@ export default function CanvasPreviewArea({
   const title = form?.title || '';
   const slug = form?.slug || '';
 
-  const srcDoc = useCanvasSrcDoc({ html, title, slug, emptyHint: tc('empty'), formSlotHint: tc('formSlotHint') });
+  // PR-6 — chỗ trống có LOẠI hiện đúng loại ("Biểu mẫu đặt lịch hẹn sẽ hiện ở đây sau khi lưu"). `tc` đổi danh tính mỗi lượt render
+  // nên memo theo CHUỖI (không theo hàm) để srcDoc không dựng lại vô ích.
+  const kindHintConsult = tc('formSlotKinds.consult');
+  const kindHintBooking = tc('formSlotKinds.booking');
+  const kindHintPayment = tc('formSlotKinds.payment');
+  const kindHintSurvey = tc('formSlotKinds.survey');
+  const kindHintBlank = tc('formSlotKinds.blank');
+  const formSlotKindHints = useMemo(
+    () => ({
+      consult: kindHintConsult,
+      booking: kindHintBooking,
+      payment: kindHintPayment,
+      survey: kindHintSurvey,
+      blank: kindHintBlank,
+    }),
+    [kindHintConsult, kindHintBooking, kindHintPayment, kindHintSurvey, kindHintBlank]
+  );
+  const srcDoc = useCanvasSrcDoc({
+    html,
+    title,
+    slug,
+    emptyHint: tc('empty'),
+    formSlotHint: tc('formSlotHint'),
+    formSlotKindHints,
+  });
   const publicUrl = useMemo(() => getPublicUrlFromSlug(slug), [slug]);
 
   const handleCodeChange = useCallback(

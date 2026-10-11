@@ -119,6 +119,51 @@ export function injectLandingEnhancements(html, { slug, frontendOrigin, apiBase,
  * lệch nhau nghĩa là xem trước báo được nhưng lưu lại hỏng (hoặc ngược lại). */
 const FORM_SLOT_RE = /<div\b[^>]*\bdata-founderai-form-slot\b(?:=(?:"[^"]*"|'[^']*'))?[^>]*>(?:\s|<!--[\s\S]*?-->)*<\/div>/gi;
 
+/**
+ * PR-6 — các LOẠI biểu mẫu của chỗ trống (`data-founderai-form-slot="booking"`), PHẢI bằng
+ * `FORM_SLOT_KINDS` của backend (`landingHtmlInjection.util.js`). Chỗ trống TRẦN (không giá trị) = `consult`.
+ */
+export const FORM_SLOT_KINDS = Object.freeze(['consult', 'booking', 'payment', 'survey', 'blank']);
+
+/**
+ * Thuộc tính `data-founderai-form-slot[=giá trị]` trong thẻ mở. Cùng ý với bản backend nhưng KHÔNG dùng lookbehind
+ * (`(?<!…)`): Safari < 16.4 không hiểu và báo SyntaxError làm hỏng cả module — thay bằng tiền tố `(?:^|[\s"'/])`.
+ */
+const FORM_SLOT_ATTR_VALUE_RE = /(?:^|[\s"'/])data-founderai-form-slot(?![\w-])(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>/]+)))?/i;
+
+/**
+ * Đọc loại của MỘT chỗ trống từ chuỗi khớp FORM_SLOT_RE (cùng quy tắc với backend `parseFormSlotKind`).
+ *
+ * @param {string} slotHtml
+ * @returns {{ kind: string, rawKind: string|null, bare: boolean, valid: boolean }}
+ *   `bare`: không giá trị (trần) → `kind='consult'`. `valid=false`: giá trị ngoài FORM_SLOT_KINDS (backend sẽ từ chối khi lưu).
+ */
+export function parseFormSlotKind(slotHtml) {
+  const openTag = String(slotHtml ?? '').match(/^<div\b[^>]*>/i)?.[0] || '';
+  const attr = openTag.match(FORM_SLOT_ATTR_VALUE_RE);
+  const rawValue = attr ? (attr[1] ?? attr[2] ?? attr[3] ?? '') : '';
+  const normalized = rawValue.trim().toLowerCase();
+  if (!normalized) return { kind: 'consult', rawKind: null, bare: true, valid: true };
+  if (FORM_SLOT_KINDS.includes(normalized)) return { kind: normalized, rawKind: rawValue.trim(), bare: false, valid: true };
+  return { kind: 'consult', rawKind: rawValue.trim(), bare: false, valid: false };
+}
+
+/**
+ * PR-6 — mọi chỗ trống hợp lệ DẠNG trong HTML theo thứ tự xuất hiện, kèm vị trí ký tự và loại.
+ *
+ * @param {string} html
+ * @returns {Array<{ type: 'slot', start: number, end: number, text: string, kind: string, rawKind: string|null, bare: boolean, valid: boolean }>}
+ */
+export function listFormSlotMatches(html) {
+  return [...String(html ?? '').matchAll(FORM_SLOT_RE)].map((m) => ({
+    type: 'slot',
+    start: m.index,
+    end: m.index + m[0].length,
+    text: m[0],
+    ...parseFormSlotKind(m[0]),
+  }));
+}
+
 function escapeHtmlText(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -134,17 +179,27 @@ function escapeHtmlText(value) {
  * iframe preview (`buildCanvasSrcDoc.js`), gọi SAU `prepareLandingHtmlForPreview`, không gọi ở
  * đường lưu thật.
  *
+ * PR-6: chỗ trống có LOẠI tường minh hiện đúng loại — `kindHints[kind]` (vd "Biểu mẫu đặt lịch hẹn sẽ hiện ở đây sau khi lưu")
+ * nếu có, không thì dùng `hintText` chung. Chỗ trống TRẦN và loại lạ (sai dạng) luôn dùng `hintText` chung.
+ *
  * @param {string} html
  * @param {string} hintText Chữ hiển thị trong khung — nên truyền từ i18n (vi/en)
+ * @param {Record<string, string>} [kindHints] chữ theo loại (consult/booking/payment/survey/blank) — nên truyền từ i18n
  * @returns {string}
  */
-export function injectFormSlotPreviewHint(html, hintText) {
+export function injectFormSlotPreviewHint(html, hintText, kindHints) {
   const source = String(html ?? '');
   if (!source) return source;
-  const text = escapeHtmlText(hintText || 'Biểu mẫu đăng ký sẽ hiện ở đây sau khi lưu');
-  const placeholder =
-    `<div style="border:2px dashed #f97316;border-radius:12px;padding:32px 16px;` +
-    `text-align:center;color:#f97316;background:#fff7ed;font-family:system-ui,sans-serif;` +
-    `font-size:14px;">${text}</div>`;
-  return source.replace(FORM_SLOT_RE, () => placeholder);
+  const fallback = hintText || 'Biểu mẫu đăng ký sẽ hiện ở đây sau khi lưu';
+  return source.replace(FORM_SLOT_RE, (match) => {
+    const { kind, valid, bare } = parseFormSlotKind(match);
+    // Chỗ trống TRẦN giữ chữ chung (đúng như trước PR-6: "Biểu mẫu đăng ký sẽ hiện ở đây…"); chỉ chỗ trống có LOẠI tường minh
+    // mới hiện chữ theo loại.
+    const text = escapeHtmlText((valid && !bare && kindHints && kindHints[kind]) || fallback);
+    return (
+      `<div style="border:2px dashed #f97316;border-radius:12px;padding:32px 16px;` +
+      `text-align:center;color:#f97316;background:#fff7ed;font-family:system-ui,sans-serif;` +
+      `font-size:14px;">${text}</div>`
+    );
+  });
 }

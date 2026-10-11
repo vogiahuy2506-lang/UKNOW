@@ -23,6 +23,7 @@ import RestoreFreeLinkPanel from './RestoreFreeLinkPanel.jsx';
 import RetryFreeLinkPanel from './RetryFreeLinkPanel.jsx';
 import useLandingDomainInfo from '../hooks/useLandingDomainInfo.js';
 import { SYSTEM_BASE_DOMAIN, isFreeLinkPending } from '../utils/landingDomain.js';
+import { buildFormRows } from '../utils/landingFormLink.js';
 
 const BASE_DOMAIN = SYSTEM_BASE_DOMAIN;
 
@@ -255,12 +256,14 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
 
   const uploadedImagesCount = inPageImages.length + pendingUploadedAssets.length;
   const customFieldCount = (form?.leadFormConfig?.customFields || []).length;
-  // Huy hiệu "Dùng biểu mẫu": biểu mẫu KHÁCH CHỌN (đang gắn hoặc đang chờ lưu), không phải form tự sinh của Form cơ bản.
-  const usesChosenForm = form?.linkedFormChoice
-    ? form.linkedFormChoice.mode === 'linked'
-    : form?.linkedFormSource === 'chosen';
-  const leadFormBadge = usesChosenForm
-    ? tc('sections.leadForm.badgeLinked')
+  // Huy hiệu số biểu mẫu của trang (PR-6): khối nhúng đã lưu + chỗ trống biểu mẫu mới + biểu mẫu có sẵn chờ gắn.
+  const formRowCount = buildFormRows({
+    html: form?.htmlContent,
+    linkedForms: form?.linkedForms,
+    pending: form?.linkedFormsPending,
+  }).length;
+  const leadFormBadge = formRowCount > 0
+    ? tc('sections.leadForm.badgeForms', { count: formRowCount })
     : customFieldCount > 0
     ? tc('sections.leadForm.badgeCustom', { count: customFieldCount })
     : null;

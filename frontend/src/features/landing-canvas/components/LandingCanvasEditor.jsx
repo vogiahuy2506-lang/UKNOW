@@ -14,7 +14,7 @@ import {
   updateLandingPageAdmin,
 } from '../../landing-pages/services/landingPagesAdminApi.service.js';
 import { prepareLeadFormConfigForSave } from '../../landing-pages/utils/landingLeadFormConfig.js';
-import { applyLinkedFormChoiceToHtml, buildLinkedFormPayload } from '../utils/landingFormLink.js';
+import { buildLinkedFormsPayload } from '../utils/landingFormLink.js';
 // Import components từ GitHub (landing-pages)
 import TemplateGallery from '../../landing-pages/components/TemplateGallery.jsx';
 import SaveTemplateModal from '../../landing-pages/components/SaveTemplateModal.jsx';
@@ -138,19 +138,16 @@ export default function LandingCanvasEditor({
         // (Cài đặt trang → CustomDomainPanel) chứ không qua lần lưu nội dung. `form.domainType` có thể CŨ (tên miền vừa
         // kết nối / gỡ trong modal, hoặc ở tab khác) và backend đổi hàng domain theo nó: gửi 'system' lên trang vừa kết
         // nối tên miền riêng sẽ thay tên miền của khách bằng link miễn phí. Giống AiChatbot.jsx — đường UPDATE không gửi.
-        // "Dùng biểu mẫu đã tạo" (PR-F): lựa chọn chờ lưu → gửi `linkedFormId` + đưa HTML về dạng có ĐÚNG MỘT chỗ trống
-        // chờ biểu mẫu (backend thay bằng khối nhúng). Không có lựa chọn thì body và HTML y nguyên như trước.
-        const linkChoice = form.linkedFormChoice || null;
-        const htmlToSave = linkChoice
-          ? applyLinkedFormChoiceToHtml(form.htmlContent, linkChoice, form.linkedFormPublicKey)
-          : form.htmlContent;
+        // Danh sách biểu mẫu của trang (PR-6): HTML đang soạn đã mang đủ — khối nhúng của biểu mẫu đã lưu, chỗ trống CÓ LOẠI của
+        // biểu mẫu mới (backend tạo lúc lưu) — nên gửi y nguyên. Chỉ biểu mẫu CÓ SẴN vừa chọn (chưa có trong HTML) cần gửi thêm
+        // `linkedFormIds`; không có thì body y nguyên như trước.
         const updated = await updateLandingPageAdmin(editingId, {
           slug: slug || null,
           title: effectiveTitle,
-          htmlContent: htmlToSave,
+          htmlContent: form.htmlContent,
           isPublished: form.isPublished,
           leadFormConfig,
-          ...buildLinkedFormPayload(linkChoice),
+          ...buildLinkedFormsPayload(form.linkedFormsPending),
         });
         toast.success(t('landingPagesAdmin.updated'));
         if (updated?.warning) {
@@ -158,7 +155,7 @@ export default function LandingCanvasEditor({
         }
         const updatedAt = updated?.updatedAt ?? null;
         // Lưu xong trình soạn đóng (onClose bên dưới) nên không cần đồng bộ lại biểu mẫu đang gắn vào state: mở lại thì tải
-        // từ server (GET trả linkedFormId / Source / PublicKey).
+        // từ server (GET trả linkedForms).
         const savedForm = { ...form, title: effectiveTitle };
         if (titleOverride !== undefined) setForm((prev) => ({ ...prev, title: effectiveTitle }));
         setBaselineSnapshot(snapshotDraftForm(savedForm));

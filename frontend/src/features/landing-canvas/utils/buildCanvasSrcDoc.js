@@ -54,9 +54,11 @@ function buildEmptyHint(text) {
  * @param {string} [params.emptyHint] Nội dung placeholder khi chưa có HTML (nên truyền từ i18n)
  * @param {string} [params.formSlotHint] PR-5b-2b — chữ hiện trong khung chấm thay chỗ trống
  *   `data-founderai-form-slot` LÚC XEM TRƯỚC (nên truyền từ i18n); không đổi HTML thật sẽ lưu.
+ * @param {Record<string, string>} [params.formSlotKindHints] PR-6 — chữ theo LOẠI chỗ trống (consult/booking/payment/survey/blank),
+ *   cùng cơ chế với `formSlotHint`; loại không có chữ thì dùng `formSlotHint`.
  * @returns {string} srcDoc HTML hoàn chỉnh
  */
-export function buildCanvasSrcDoc({ html, title, slug, emptyHint, formSlotHint }) {
+export function buildCanvasSrcDoc({ html, title, slug, emptyHint, formSlotHint, formSlotKindHints }) {
   const rawTrim = String(html || '').trim();
   const trimmedSlug = String(slug || '').trim().toLowerCase();
 
@@ -114,17 +116,17 @@ export function buildCanvasSrcDoc({ html, title, slug, emptyHint, formSlotHint }
   // PR-5b-2b mục 2 — CHỈ ảnh hưởng srcDoc của iframe preview, không đổi `html`/`baseHtml` gốc nên
   // không lọt vào bất kỳ đường lưu thật nào (setForm chỉ nhận input từ CanvasPreviewCode, không
   // đọc lại biến `preview` này).
-  preview = injectFormSlotPreviewHint(preview, formSlotHint);
+  preview = injectFormSlotPreviewHint(preview, formSlotHint, formSlotKindHints);
   return ensureTailwindCdn(preview);
 }
 
 /**
  * React hook: build srcDoc memoized theo form state.
  */
-export function useCanvasSrcDoc({ html, title, slug, emptyHint, formSlotHint }) {
+export function useCanvasSrcDoc({ html, title, slug, emptyHint, formSlotHint, formSlotKindHints }) {
   return useMemo(
-    () => buildCanvasSrcDoc({ html, title, slug, emptyHint, formSlotHint }),
-    [html, title, slug, emptyHint, formSlotHint]
+    () => buildCanvasSrcDoc({ html, title, slug, emptyHint, formSlotHint, formSlotKindHints }),
+    [html, title, slug, emptyHint, formSlotHint, formSlotKindHints]
   );
 }
 

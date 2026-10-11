@@ -50,12 +50,11 @@ function buildServerForm(full) {
     leadFormConfig: normalizeLeadFormConfig(full.leadFormConfig),
     leadFormPersistedMeta: snapshotLeadFormPersistedMeta(full.leadFormConfig),
     leadFormFieldErrors: {},
-    // PR-5b-2b mục 7 — Biểu mẫu gắn landing này (PR-5b-2a forms.landing_page_id), null nếu
-    // chưa có. Dùng để hiện link "Mở Biểu mẫu của trang này" trong trình soạn.
-    // PR-F: kèm tên / khoá công khai / nguồn ('chosen' = biểu mẫu khách chọn, 'basic' = form tự sinh) — chỉ-server.
+    // PR-5b-2b mục 7 / PR-6 — CÁC biểu mẫu nhúng trong landing này (bảng chỉ mục landing_page_forms): [{ id, title, publicKey,
+    // isPublished, kind, position, needsPaymentSetup }]. Dùng để hiện danh sách biểu mẫu của trang + link "Mở Biểu mẫu" — chỉ-server.
     ...pickLinkedFormFields(full),
-    // Lựa chọn "Dùng biểu mẫu đã tạo" chờ bấm Lưu (landingFormLink.js); null = không đổi gì.
-    linkedFormChoice: null,
+    // Biểu mẫu CÓ SẴN vừa chọn từ mục Biểu mẫu, chờ bấm Lưu (landingFormLink.js); [] = không có.
+    linkedFormsPending: [],
   };
 }
 
@@ -131,11 +130,8 @@ export default function LandingCanvasPage() {
         : defaultLeadFormConfig(),
       leadFormPersistedMeta: { keys: [], optionValuesByKey: {} },
       leadFormFieldErrors: {},
-      linkedFormId: null,
-      linkedFormTitle: null,
-      linkedFormPublicKey: null,
-      linkedFormSource: null,
-      linkedFormChoice: null,
+      linkedForms: [],
+      linkedFormsPending: [],
     };
   }, []);
 
@@ -148,6 +144,8 @@ export default function LandingCanvasPage() {
       leadFormConfig: picked.leadFormConfig
         ? normalizeLeadFormConfig(picked.leadFormConfig)
         : base.leadFormConfig,
+      // Nháp cũ (trước PR-6) không có khoá này → pickDraftForm trả null: coi là "không có gì chờ gắn".
+      linkedFormsPending: Array.isArray(picked.linkedFormsPending) ? picked.linkedFormsPending : [],
     };
   }, []);
 

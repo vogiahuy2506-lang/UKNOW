@@ -12,9 +12,10 @@ export const DRAFT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 export const KEEP_UNDO_HTML_COUNT = 3;
 
 /**
- * Các trường form lưu được vào nháp. KHÔNG gồm leadFormFieldErrors / leadFormPersistedMeta / linkedFormId (trường chỉ-server).
- * `linkedFormChoice` (lựa chọn "Dùng biểu mẫu đã tạo" chờ bấm Lưu — landingFormLink.js) CÓ trong nháp: đó là thay đổi người dùng
- * đã làm, mất khi F5 thì họ tưởng đã chọn mà thực ra chưa.
+ * Các trường form lưu được vào nháp. KHÔNG gồm leadFormFieldErrors / leadFormPersistedMeta / linkedForms (trường chỉ-server).
+ * `linkedFormsPending` (biểu mẫu CÓ SẴN vừa chọn từ mục Biểu mẫu, chờ bấm Lưu — landingFormLink.js, PR-6) CÓ trong nháp: đó là
+ * thay đổi người dùng đã làm, mất khi F5 thì họ tưởng đã thêm mà thực ra chưa. (Biểu mẫu MỚI theo mẫu nằm sẵn trong HTML dưới dạng
+ * chỗ trống có loại nên đã đi cùng `htmlContent`.) Trước PR-6 khoá này là `linkedFormChoice` — nháp cũ còn khoá đó bị bỏ qua.
  */
 export const DRAFT_FORM_FIELDS = [
   'title',
@@ -25,7 +26,7 @@ export const DRAFT_FORM_FIELDS = [
   'customDomainHostname',
   'customDomainIsApex',
   'leadFormConfig',
-  'linkedFormChoice',
+  'linkedFormsPending',
 ];
 
 function getStorage() {
@@ -77,7 +78,10 @@ export function snapshotDraftForm(form) {
     customDomainHostname: picked.customDomainHostname || null,
     customDomainIsApex: Boolean(picked.customDomainIsApex),
     leadFormConfig: stableStringify(picked.leadFormConfig),
-    linkedFormChoice: stableStringify(picked.linkedFormChoice),
+    // null / thiếu / [] đều là "không có gì chờ gắn" — cùng một giá trị để nháp cũ (không có khoá) không bị coi là bẩn.
+    linkedFormsPending: stableStringify(
+      Array.isArray(picked.linkedFormsPending) && picked.linkedFormsPending.length > 0 ? picked.linkedFormsPending : []
+    ),
   };
 }
 
