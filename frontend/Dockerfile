@@ -49,7 +49,7 @@ ENV VITE_INVOICE_VAT_ENABLED=${VITE_INVOICE_VAT_ENABLED}
 RUN npm run build
 RUN printf '{"sha":"%s"}\n' "$BUILD_SHA" > /app/dist/version.json
 
-FROM nginx:1.27-alpine AS runner
+FROM nginx:1.31-alpine AS runner
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 # Header bảo mật cho SPA — include theo từng location trong nginx.conf.
