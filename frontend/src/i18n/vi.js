@@ -206,7 +206,7 @@ export default {
   creditBanner: {
     low: 'Sắp hết {resource} — còn {remaining} {unit} ({percent}%).',
     empty: 'Đã hết {resource} trong kỳ này — nâng cấp hoặc mua thêm để tiếp tục.',
-    expired: 'Gói đã hết hạn — gửi tin & AI tạm dừng cho đến khi gia hạn.',
+    expired: 'Gói đã hết hạn — các tính năng tạm khoá cho đến khi gia hạn. Dữ liệu vẫn được giữ nguyên.',
     storageCritical: 'Dung lượng lưu trữ sắp hết (còn {remaining}). Hãy dọn bớt tệp hoặc nâng cấp gói.',
     storageWarning: 'Dung lượng lưu trữ đã dùng {percent}% (còn {remaining}). Hãy kiểm tra để tránh gián đoạn.',
     storageEmployeeLow: 'Không gian của công ty sắp hết dung lượng lưu trữ — vui lòng báo chủ tài khoản nâng cấp gói.',
@@ -11707,13 +11707,18 @@ export default {
 
   planExpiryModal: {
     expiredTitle: 'Gói của bạn đã hết hạn',
-    expiredDesc: 'Các chiến dịch marketing của bạn đã tạm dừng. Vui lòng nâng cấp gói để tiếp tục sử dụng dịch vụ.',
+    expiredDesc: 'Các tính năng đang tạm khoá, dữ liệu của bạn vẫn được giữ nguyên. Vui lòng nâng cấp gói để tiếp tục sử dụng dịch vụ.',
     graceTitle: 'Gói của bạn đã hết hạn',
     graceDesc: 'Gói dịch vụ đã hết hạn nhưng bạn còn {days} ngày ân hạn. Vui lòng nâng cấp ngay để không làm gián đoạn chiến dịch.',
     expiringTitle: 'Gói của bạn sắp hết hạn',
     expiringDesc: 'Gói dịch vụ sẽ hết hạn sau {days} ngày nữa. Các chiến dịch đang chạy sẽ dừng khi hết hạn. Vui lòng nâng cấp sớm.',
     upgradeNow: 'Nâng cấp ngay',
     remindLater: 'Để sau',
+    lockedDesc: 'Các tính năng đang tạm khoá cho đến khi gia hạn. Dữ liệu khách hàng, chiến dịch, sản phẩm, hội thoại… vẫn được giữ nguyên và mở lại ngay khi gói có hiệu lực.',
+    lockedEmployeeDesc: 'Gói của chủ tài khoản đã hết hạn nên các tính năng đang tạm khoá. Hãy báo chủ tài khoản gia hạn — dữ liệu vẫn được giữ nguyên và mở lại ngay khi gói có hiệu lực.',
+    renewNow: 'Gia hạn ngay',
+    needSupport: 'Cần hỗ trợ',
+    viewPricing: 'Xem bảng giá',
     badgeExpired: 'Đã hết hạn',
     badgeGrace: 'Đang ân hạn',
     badgeExpiring: 'Sắp hết hạn',
