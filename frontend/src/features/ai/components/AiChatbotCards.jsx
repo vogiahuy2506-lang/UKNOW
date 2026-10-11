@@ -56,7 +56,7 @@ function InlineLink({ href, children }) {
       href={safeHref}
       target="_blank"
       rel="noopener noreferrer"
-      className="text-blue-600 underline hover:text-blue-700 break-words"
+      className="text-blue-600 dark:text-blue-400 underline hover:text-blue-700 dark:hover:text-blue-300 break-words"
     >
       {children}
     </a>
@@ -92,7 +92,7 @@ export function AiContent({ text }) {
               <a
                 key={`${key}-email-${k}`}
                 href={`mailto:${seg}`}
-                className="text-blue-600 underline hover:text-blue-700 break-words"
+                className="text-blue-600 dark:text-blue-400 underline hover:text-blue-700 dark:hover:text-blue-300 break-words"
               >
                 {seg}
               </a>
@@ -110,7 +110,7 @@ export function AiContent({ text }) {
         // Bullet: lines starting with - or *
         if (/^[-*]\s/.test(line)) {
           const content = line.replace(/^[-*]\s/, '');
-          return <div key={i} className="flex gap-1.5"><span className="text-slate-400 shrink-0 mt-0.5">•</span><span>{renderInline(content, i)}</span></div>;
+          return <div key={i} className="flex gap-1.5"><span className="text-slate-400 dark:text-dk-muted shrink-0 mt-0.5">•</span><span>{renderInline(content, i)}</span></div>;
         }
         return <p key={i}>{renderInline(line, i)}</p>;
       })}
@@ -163,10 +163,10 @@ const CategoryPicker = ({ onSelect, onCancel, t }) => {
   };
 
   return (
-    <div className="mt-3 p-3 bg-orange-50 rounded-xl border border-orange-100">
-      <p className="text-xs font-bold text-orange-700 mb-2">📂 {t('aiChatbot.saveToCategory')}</p>
+    <div className="mt-3 p-3 bg-orange-50 dark:bg-orange-950/40 rounded-xl border border-orange-100 dark:border-orange-800">
+      <p className="text-xs font-bold text-orange-700 dark:text-orange-300 mb-2">📂 {t('aiChatbot.saveToCategory')}</p>
       {labels === null ? (
-        <p className="text-xs text-slate-400">{t('common.loading')}</p>
+        <p className="text-xs text-slate-400 dark:text-dk-muted">{t('common.loading')}</p>
       ) : (
         <div className="flex flex-wrap gap-2">
           {categories.map((cat) => (
@@ -187,7 +187,7 @@ const CategoryPicker = ({ onSelect, onCancel, t }) => {
           {!showNewCategoryInput && (
             <button
               onClick={() => setShowNewCategoryInput(true)}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-full border border-dashed border-orange-300 text-orange-600 bg-white transition-all hover:bg-orange-100"
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-full border border-dashed border-orange-300 dark:border-orange-700 text-orange-600 dark:text-orange-400 bg-white dark:bg-dk-surface transition-all hover:bg-orange-100 dark:hover:bg-orange-950/60"
             >
               ＋ {t('aiChatbot.createNewCategory') || 'Tạo danh mục mới'}
             </button>
@@ -203,7 +203,7 @@ const CategoryPicker = ({ onSelect, onCancel, t }) => {
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleCreateCategory(); } }}
             placeholder={t('aiChatbot.newCategoryPlaceholder') || 'Tên danh mục mới...'}
             autoFocus
-            className="min-w-0 flex-1 rounded-lg border border-orange-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 focus:border-orange-400 focus:outline-none"
+            className="min-w-0 flex-1 rounded-lg border border-orange-200 dark:border-orange-800 bg-white dark:bg-dk-inset px-2.5 py-1.5 text-xs text-slate-700 dark:text-dk-text dark:placeholder-dk-muted focus:border-orange-400 focus:outline-none"
           />
           <button
             onClick={handleCreateCategory}
@@ -216,7 +216,7 @@ const CategoryPicker = ({ onSelect, onCancel, t }) => {
           </button>
         </div>
       )}
-      <button onClick={onCancel} className="w-full mt-2 text-xs text-slate-400 hover:text-slate-600">{t('aiChatbot.cancel')}</button>
+      <button onClick={onCancel} className="w-full mt-2 text-xs text-slate-400 dark:text-dk-muted hover:text-slate-600 dark:hover:text-dk-text2">{t('aiChatbot.cancel')}</button>
     </div>
   );
 };
@@ -269,7 +269,7 @@ const TemplateDraftHtmlPreview = ({ html, title }) => {
       sandbox="allow-same-origin"
       srcDoc={srcDoc}
       onLoad={handleLoad}
-      className="block w-full border border-slate-100 rounded-lg bg-gray-50"
+      className="block w-full border border-slate-100 dark:border-dk-border rounded-lg bg-gray-50 dark:bg-dk-raised"
       style={{ height }}
     />
   );
@@ -327,35 +327,35 @@ export const TemplateDraftCard = ({ draft, onSave, onEdit, onUseExisting, t, aut
   };
 
   return (
-    <div className="mt-4 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-orange-50 to-amber-50 border-b border-slate-100">
+    <div className="mt-4 bg-white dark:bg-dk-surface rounded-2xl border border-slate-200 dark:border-dk-border shadow-sm overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-orange-50 dark:from-orange-950/40 to-amber-50 dark:to-amber-950/40 border-b border-slate-100 dark:border-dk-border">
         {draft.channel === 'email'
-          ? <HiOutlineMail className="w-4 h-4 text-orange-500" />
-          : <HiOutlineChat className="w-4 h-4 text-blue-500" />}
-        <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">
+          ? <HiOutlineMail className="w-4 h-4 text-orange-500 dark:text-orange-400" />
+          : <HiOutlineChat className="w-4 h-4 text-blue-500 dark:text-blue-400" />}
+        <span className="text-[11px] font-black uppercase tracking-widest text-slate-500 dark:text-dk-text2">
           {draft.channel === 'email' ? t('aiChatbot.emailTemplate') : t('aiChatbot.zaloTemplate')}
         </span>
       </div>
 
       <div className="p-4 space-y-3">
         <div>
-          <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">{t('aiChatbot.templateName')}</p>
-          <p className="text-sm font-bold text-slate-800">{draft.templateName}</p>
+          <p className="text-[10px] text-slate-400 dark:text-dk-muted font-medium uppercase tracking-wider">{t('aiChatbot.templateName')}</p>
+          <p className="text-sm font-bold text-slate-800 dark:text-dk-text">{draft.templateName}</p>
         </div>
 
         {draft.subject && (
           <div>
-            <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">{t('aiChatbot.subject')}</p>
-            <p className="text-sm text-slate-700">{draft.subject}</p>
+            <p className="text-[10px] text-slate-400 dark:text-dk-muted font-medium uppercase tracking-wider">{t('aiChatbot.subject')}</p>
+            <p className="text-sm text-slate-700 dark:text-dk-text">{draft.subject}</p>
           </div>
         )}
 
         <div>
-          <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider mb-1">{t('aiChatbot.content')}</p>
+          <p className="text-[10px] text-slate-400 dark:text-dk-muted font-medium uppercase tracking-wider mb-1">{t('aiChatbot.content')}</p>
           {draft.channel === 'email' && draft.bodyHtml ? (
             <TemplateDraftHtmlPreview html={draft.bodyHtml} title={t('aiChatbot.content')} />
           ) : (
-            <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap max-h-40 overflow-y-auto">
+            <p className="text-xs text-slate-600 dark:text-dk-text2 leading-relaxed whitespace-pre-wrap max-h-40 overflow-y-auto">
               {draft.bodyText}
             </p>
           )}
@@ -366,7 +366,7 @@ export const TemplateDraftCard = ({ draft, onSave, onEdit, onUseExisting, t, aut
         ) : (
           <div className="flex flex-col gap-2 pt-1">
             {!canSave && (
-              <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
+              <p className="text-xs text-slate-500 dark:text-dk-text2 bg-slate-50 dark:bg-dk-raised border border-slate-200 dark:border-dk-border rounded-xl px-3 py-2.5">
                 {t('aiChatbot.noPermissionSaveTemplate')}
               </p>
             )}
@@ -388,7 +388,7 @@ export const TemplateDraftCard = ({ draft, onSave, onEdit, onUseExisting, t, aut
                   disabled={saving || isSaved}
                   className={`flex-1 py-2.5 text-xs font-black rounded-xl flex items-center justify-center gap-1.5 transition-all disabled:cursor-default ${
                     isSaved
-                      ? 'bg-emerald-50 border border-emerald-200 text-emerald-700'
+                      ? 'bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
                       : 'bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-60'
                   }`}
                 >
@@ -404,9 +404,9 @@ export const TemplateDraftCard = ({ draft, onSave, onEdit, onUseExisting, t, aut
               )}
               <button
                 onClick={() => onEdit?.(draft)}
-                className="flex-1 py-2.5 bg-slate-50 border border-slate-200 text-slate-700 text-xs font-black rounded-xl hover:bg-slate-100 flex items-center justify-center gap-1.5 transition-all"
+                className="flex-1 py-2.5 bg-slate-50 dark:bg-dk-raised border border-slate-200 dark:border-dk-border text-slate-700 dark:text-dk-text text-xs font-black rounded-xl hover:bg-slate-100 dark:hover:bg-dk-strong flex items-center justify-center gap-1.5 transition-all"
               >
-                <HiOutlinePencilAlt className="w-4 h-4 text-orange-500" />
+                <HiOutlinePencilAlt className="w-4 h-4 text-orange-500 dark:text-orange-400" />
                 {t('aiChatbot.edit')}
               </button>
             </div>
@@ -414,7 +414,7 @@ export const TemplateDraftCard = ({ draft, onSave, onEdit, onUseExisting, t, aut
               <button
                 type="button"
                 onClick={() => onUseExisting(draft)}
-                className="w-full rounded-xl border border-slate-300 bg-white py-2.5 text-xs font-black text-slate-700 transition-all hover:border-orange-300 hover:bg-orange-50"
+                className="w-full rounded-xl border border-slate-300 dark:border-dk-border-strong bg-white dark:bg-dk-surface py-2.5 text-xs font-black text-slate-700 dark:text-dk-text transition-all hover:border-orange-300 dark:hover:border-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950/60"
               >
                 {t('aiChatbot.useExistingTemplate') || 'Dùng mẫu có sẵn'}
               </button>
@@ -433,8 +433,8 @@ export const ContentPlanCard = ({ data, workflow, approvalMode = false, t }) => 
 
   const channelIcon = (channel) => (
     channel === 'email'
-      ? <HiOutlineMail className="w-4 h-4 text-orange-500" />
-      : <HiOutlineChat className="w-4 h-4 text-blue-500" />
+      ? <HiOutlineMail className="w-4 h-4 text-orange-500 dark:text-orange-400" />
+      : <HiOutlineChat className="w-4 h-4 text-blue-500 dark:text-blue-400" />
   );
 
   const channelLabel = (channel) => {
@@ -456,15 +456,15 @@ export const ContentPlanCard = ({ data, workflow, approvalMode = false, t }) => 
   const generatingDay = workflow?.generatingDay ?? null;
 
   return (
-    <div className="mt-4 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-slate-100">
-        <HiOutlineSparkles className="w-5 h-5 text-blue-500" />
+    <div className="mt-4 bg-white dark:bg-dk-surface rounded-2xl border border-slate-200 dark:border-dk-border shadow-sm overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-50 dark:from-blue-950/40 to-indigo-50 dark:to-indigo-950/40 border-b border-slate-100 dark:border-dk-border">
+        <HiOutlineSparkles className="w-5 h-5 text-blue-500 dark:text-blue-400" />
         <div className="min-w-0">
-          <span className="text-[11px] font-black uppercase tracking-widest text-blue-600">
+          <span className="text-[11px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400">
             {t('aiChatbot.contentPlanTitle', { count: totalDays })}
           </span>
           {approvalMode && (
-            <p className="mt-0.5 text-[11px] font-medium text-blue-700/80">
+            <p className="mt-0.5 text-[11px] font-medium text-blue-700/80 dark:text-blue-300">
               {t('aiChatbot.contentPlanApprovalSubtitle')}
             </p>
           )}
@@ -484,24 +484,24 @@ export const ContentPlanCard = ({ data, workflow, approvalMode = false, t }) => 
           const isRetry = failedDay === day;
           const slots = Array.isArray(dayItem.slots) ? dayItem.slots : [];
           return (
-            <div key={`${dayItem.day}-${dayItem.channel}-${dayItem.goal}`} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+            <div key={`${dayItem.day}-${dayItem.channel}-${dayItem.goal}`} className="rounded-xl border border-slate-100 dark:border-dk-border bg-slate-50 dark:bg-dk-raised p-3">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0 flex-1">
                   <div className="mb-2 flex flex-wrap items-center gap-2">
-                    <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-600 border border-slate-200">
+                    <span className="rounded-full bg-white dark:bg-dk-surface px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-600 dark:text-dk-text2 border border-slate-200 dark:border-dk-border">
                       {t('aiChatbot.dayLabel', { day })}
                     </span>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-slate-500 border border-slate-200">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-white dark:bg-dk-surface px-2.5 py-1 text-[10px] font-bold text-slate-500 dark:text-dk-text2 border border-slate-200 dark:border-dk-border">
                       {channelIcon(dayItem.channel)}
                       {channelLabel(dayItem.channel)}
                     </span>
                   </div>
-                  <p className="text-sm font-bold text-slate-800">{dayItem.goal}</p>
-                  <p className="mt-1 text-xs leading-relaxed text-slate-500">{dayItem.summary}</p>
+                  <p className="text-sm font-bold text-slate-800 dark:text-dk-text">{dayItem.goal}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-dk-text2">{dayItem.summary}</p>
                   {slots.length > 0 && (
                     <div className="mt-2 space-y-1">
                       {slots.map((slot, idx) => (
-                        <p key={`${day}-slot-${slot.slotId || idx}`} className="text-[11px] text-slate-500">
+                        <p key={`${day}-slot-${slot.slotId || idx}`} className="text-[11px] text-slate-500 dark:text-dk-text2">
                           #{slot.slotIndex || idx + 1}
                           {slot.sendTime ? ` • ${slot.sendTime}` : ''}
                           {slot.summary ? ` • ${slot.summary}` : ''}
@@ -513,14 +513,14 @@ export const ContentPlanCard = ({ data, workflow, approvalMode = false, t }) => 
                 {!approvalMode && (
                 <span className={`shrink-0 inline-flex items-center rounded-xl px-3 py-2 text-xs font-black ${
                   completed
-                    ? 'bg-emerald-100 text-emerald-700'
+                    ? 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
                     : loading
-                      ? 'bg-blue-100 text-blue-700'
+                      ? 'bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
                       : isRetry
-                        ? 'bg-rose-100 text-rose-700'
+                        ? 'bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300'
                         : actionable
-                          ? 'bg-orange-100 text-orange-700'
-                          : 'bg-slate-200 text-slate-500'
+                          ? 'bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300'
+                          : 'bg-slate-200 dark:bg-dk-strong text-slate-500 dark:text-dk-text2'
                 }`}
                 >
                   {completed
@@ -538,7 +538,7 @@ export const ContentPlanCard = ({ data, workflow, approvalMode = false, t }) => 
                 )}
               </div>
               {!approvalMode && waiting && (
-                <p className="mt-2 text-[11px] text-slate-400">
+                <p className="mt-2 text-[11px] text-slate-400 dark:text-dk-muted">
                   Hãy hoàn tất Ngày {pendingDay} trước.
                 </p>
               )}
@@ -599,7 +599,7 @@ export const ContentPlanActionsCard = ({
           type="button"
           onClick={() => setReviseOpen((open) => !open)}
           disabled={busy}
-          className="rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-700 transition-all hover:border-orange-300 hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded-xl border-2 border-slate-300 dark:border-dk-border-strong bg-white dark:bg-dk-surface px-3 py-2 text-xs font-black text-slate-700 dark:text-dk-text transition-all hover:border-orange-300 dark:hover:border-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950/60 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {t('aiChatbot.planReviseButton') || 'Chỉnh lại kế hoạch'}
         </button>
@@ -608,7 +608,7 @@ export const ContentPlanActionsCard = ({
           type="button"
           onClick={onUseExisting}
           disabled={busy || !firstDay || typeof onUseExisting !== 'function'}
-          className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-700 transition-all hover:border-orange-300 hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded-xl border border-slate-300 dark:border-dk-border-strong bg-white dark:bg-dk-surface px-3 py-2 text-xs font-black text-slate-700 dark:text-dk-text transition-all hover:border-orange-300 dark:hover:border-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950/60 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {t('aiChatbot.useExistingTemplate') || 'Dùng mẫu có sẵn'}
         </button>
@@ -617,7 +617,7 @@ export const ContentPlanActionsCard = ({
           type="button"
           onClick={onGenerateAll}
           disabled={busy}
-          className="rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-xs font-black text-orange-700 transition-all hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded-xl border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/40 px-3 py-2 text-xs font-black text-orange-700 dark:text-orange-300 transition-all hover:bg-orange-100 dark:hover:bg-orange-950/60 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {workflow?.isGeneratingAll
             ? (t('aiChatbot.planGeneratingAll') || 'Đang tạo tất cả...')
@@ -628,7 +628,7 @@ export const ContentPlanActionsCard = ({
       </div>
 
       {!reviseOpen && (
-        <p className="text-[11px] text-slate-500">
+        <p className="text-[11px] text-slate-500 dark:text-dk-text2">
           {approvalMode
             ? (t('aiChatbot.planApprovalNextStep') || 'Cả 2 nút «Đồng ý» đều duyệt kế hoạch — khác nhau ở cách soạn template: soạn lần lượt từng ngày để bạn duyệt từng tin, hoặc soạn sẵn tất cả các ngày trong 1 lượt.')
             : (t('aiChatbot.planReviseTeaser') || 'Kế hoạch chưa ổn? Bấm «Chỉnh lại kế hoạch» để ghi góp ý.')}
@@ -636,8 +636,8 @@ export const ContentPlanActionsCard = ({
       )}
 
       {reviseOpen && (
-        <div className="rounded-xl border border-slate-200 bg-white p-3">
-          <p className="mb-2 text-xs font-semibold text-slate-600">
+        <div className="rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface p-3">
+          <p className="mb-2 text-xs font-semibold text-slate-600 dark:text-dk-text2">
             {t('aiChatbot.planReviseHint') || 'Ghi ngắn gọn phần cần đổi (ngày nào, giờ gửi, nội dung, số tin...):'}
           </p>
           <textarea
@@ -645,14 +645,14 @@ export const ContentPlanActionsCard = ({
             onChange={(event) => setReviseText(event.target.value)}
             rows={3}
             placeholder={t('aiChatbot.planRevisePlaceholder') || 'Ví dụ: Ngày 2 gửi 9h thay vì 8h, Ngày 4 nhắc ưu đãi thay vì chào hỏi...'}
-            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-orange-400 focus:outline-none"
+            className="w-full rounded-xl border border-slate-200 dark:border-dk-border dark:bg-dk-inset px-3 py-2 text-sm text-slate-700 dark:text-dk-text dark:placeholder-dk-muted focus:border-orange-400 focus:outline-none"
           />
           <div className="mt-2 flex flex-wrap gap-2">
             <button
               type="button"
               onClick={handleReviseSubmit}
               disabled={busy}
-              className="rounded-xl bg-slate-800 px-3 py-2 text-xs font-black text-white transition-all hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-xl bg-slate-800 dark:bg-dk-strong px-3 py-2 text-xs font-black text-white transition-all hover:bg-slate-900 dark:hover:bg-dk-border-strong disabled:cursor-not-allowed disabled:opacity-60"
             >
               {t('aiChatbot.planReviseSubmit') || 'Gửi góp ý chỉnh kế hoạch'}
             </button>
@@ -660,7 +660,7 @@ export const ContentPlanActionsCard = ({
               type="button"
               onClick={() => { setReviseOpen(false); setReviseText(''); }}
               disabled={busy}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600 transition-all hover:bg-slate-50"
+              className="rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface px-3 py-2 text-xs font-black text-slate-600 dark:text-dk-text2 transition-all hover:bg-slate-50 dark:hover:bg-dk-raised"
             >
               {t('common.cancel') || 'Hủy'}
             </button>
@@ -673,13 +673,13 @@ export const ContentPlanActionsCard = ({
 
 // Ask-more card
 export const AskMoreCard = ({ missingFields, t }) => (
-  <div className="mt-3 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3">
-    <HiOutlineQuestionMarkCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+  <div className="mt-3 flex items-start gap-2 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl p-3">
+    <HiOutlineQuestionMarkCircle className="w-4 h-4 text-amber-500 dark:text-amber-400 mt-0.5 shrink-0" />
     <div>
-      <p className="text-xs font-bold text-amber-800 mb-1">{t('aiChatbot.needMoreInfo')}</p>
+      <p className="text-xs font-bold text-amber-800 dark:text-amber-300 mb-1">{t('aiChatbot.needMoreInfo')}</p>
       <ul className="space-y-0.5">
         {missingFields.map((f, i) => (
-          <li key={i} className="text-xs text-amber-700 flex items-center gap-1">
+          <li key={i} className="text-xs text-amber-700 dark:text-amber-300 flex items-center gap-1">
             <span className="w-1 h-1 bg-amber-500 rounded-full shrink-0" />{f}
           </li>
         ))}
@@ -1050,21 +1050,21 @@ export const AskCampaignDetailsCard = ({
   };
 
   return (
-    <div className={`mt-4 bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-200 rounded-2xl p-4 space-y-4 ${isActive ? '' : 'opacity-60 pointer-events-none'}`}>
+    <div className={`mt-4 bg-gradient-to-br from-orange-50 dark:from-orange-950/40 to-amber-50 dark:to-amber-950/40 border border-orange-200 dark:border-orange-800 rounded-2xl p-4 space-y-4 ${isActive ? '' : 'opacity-60 pointer-events-none'}`}>
       <div className="flex items-center gap-2">
-        <HiOutlineSparkles className="w-5 h-5 text-orange-500" />
-        <span className="font-black text-[10px] uppercase tracking-[0.2em] text-orange-600">
+        <HiOutlineSparkles className="w-5 h-5 text-orange-500 dark:text-orange-400" />
+        <span className="font-black text-[10px] uppercase tracking-[0.2em] text-orange-600 dark:text-orange-400">
           {t('aiChatbot.designCampaign')}
         </span>
       </div>
 
       {data.campaignName && (
-        <p className="text-sm font-bold text-slate-800">{data.campaignName}</p>
+        <p className="text-sm font-bold text-slate-800 dark:text-dk-text">{data.campaignName}</p>
       )}
 
       {data.questions.map((q) => (
         <div key={q.id}>
-          <p className="text-xs font-semibold text-slate-600 mb-2">{q.label}</p>
+          <p className="text-xs font-semibold text-slate-600 dark:text-dk-text2 mb-2">{q.label}</p>
           <div className="flex flex-wrap gap-2">
             {q.options.map((opt) => (
               <button
@@ -1074,13 +1074,13 @@ export const AskCampaignDetailsCard = ({
                 className={`max-w-full px-3 py-2 rounded-xl text-left text-xs font-medium border transition-all ${
                   answers[q.id] === opt.value
                     ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
-                    : 'bg-white text-slate-600 border-slate-200 hover:border-orange-300 hover:bg-orange-50'
+                    : 'bg-white dark:bg-dk-surface text-slate-600 dark:text-dk-text2 border-slate-200 dark:border-dk-border hover:border-orange-300 dark:hover:border-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950/60'
                 }`}
               >
                 <span className="font-semibold">{opt.label}</span>
                 {opt.description && (
                   <span className={`mt-0.5 block text-[10px] leading-snug ${
-                    answers[q.id] === opt.value ? 'text-orange-50' : 'text-slate-500'
+                    answers[q.id] === opt.value ? 'text-orange-50' : 'text-slate-500 dark:text-dk-text2'
                   }`}
                   >
                     {opt.description}
@@ -1090,13 +1090,13 @@ export const AskCampaignDetailsCard = ({
             ))}
           </div>
           {isBriefQuestion(q) && answers.campaignBrief === 'single_product' && (
-            <div className="mt-3 space-y-2 rounded-xl border border-orange-200 bg-white p-3">
+            <div className="mt-3 space-y-2 rounded-xl border border-orange-200 dark:border-orange-800 bg-white dark:bg-dk-surface p-3">
               <div className="flex items-center justify-between">
-                <p className="text-[11px] font-semibold text-orange-800">
+                <p className="text-[11px] font-semibold text-orange-800 dark:text-orange-300">
                   {t('aiChatbot.campaignPickProduct') || 'Chọn sản phẩm / khóa học:'}
                 </p>
                 {selectedProductIds.length > 0 && (
-                  <span className="text-[10px] font-medium bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
+                  <span className="text-[10px] font-medium bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 px-2 py-0.5 rounded-full">
                     Đã chọn {selectedProductIds.length}
                   </span>
                 )}
@@ -1105,19 +1105,19 @@ export const AskCampaignDetailsCard = ({
               {/* Search bar */}
               {(q.courseOptions || []).length > 3 && (
                 <div className="relative">
-                  <HiOutlineSearch className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" />
+                  <HiOutlineSearch className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400 dark:text-dk-muted" />
                   <input
                     type="text"
                     value={productSearchQuery}
                     onChange={(e) => setProductSearchQuery(e.target.value)}
                     placeholder="Tìm kiếm sản phẩm..."
-                    className="w-full text-xs rounded-xl border border-slate-200 bg-slate-50 pl-8 pr-3 py-1.5 text-slate-700 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-300"
+                    className="w-full text-xs rounded-xl border border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-inset pl-8 pr-3 py-1.5 text-slate-700 dark:text-dk-text placeholder-slate-400 dark:placeholder-dk-muted focus:bg-white dark:focus:bg-dk-raised focus:outline-none focus:ring-2 focus:ring-orange-300 dark:focus:ring-orange-700"
                   />
                   {productSearchQuery && (
                     <button
                       type="button"
                       onClick={() => setProductSearchQuery('')}
-                      className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 text-xs"
+                      className="absolute right-2.5 top-2 text-slate-400 dark:text-dk-muted hover:text-slate-600 dark:hover:text-dk-text2 text-xs"
                     >
                       ✕
                     </button>
@@ -1139,12 +1139,12 @@ export const AskCampaignDetailsCard = ({
 
                   if (productSearchQuery.trim() && catalogFiltered.length === 0) {
                     return (
-                      <div className="text-center py-3 text-xs text-slate-500">
+                      <div className="text-center py-3 text-xs text-slate-500 dark:text-dk-text2">
                         Không khớp «{productSearchQuery}».{' '}
                         <button
                           type="button"
                           onClick={() => setProductSearchQuery('')}
-                          className="text-orange-600 hover:underline font-medium"
+                          className="text-orange-600 dark:text-orange-400 hover:underline font-medium"
                         >
                           Xóa tìm kiếm
                         </button>
@@ -1165,7 +1165,7 @@ export const AskCampaignDetailsCard = ({
                               className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all flex items-center gap-1.5 ${
                                 isSelected
                                   ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
-                                  : 'bg-white text-slate-600 border-slate-200 hover:border-orange-300 hover:bg-orange-50'
+                                  : 'bg-white dark:bg-dk-surface text-slate-600 dark:text-dk-text2 border-slate-200 dark:border-dk-border hover:border-orange-300 dark:hover:border-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950/60'
                               }`}
                             >
                               {isSelected && <HiOutlineCheck className="w-3.5 h-3.5 shrink-0" />}
@@ -1176,14 +1176,14 @@ export const AskCampaignDetailsCard = ({
                       </div>
 
                       {otherOption && (
-                        <div className="pt-2 border-t border-slate-100">
+                        <div className="pt-2 border-t border-slate-100 dark:border-dk-border">
                           <button
                             type="button"
                             onClick={() => toggleProduct('other')}
                             className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
                               answers.campaignProduct === 'other'
                                 ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
-                                : 'bg-white text-slate-600 border-slate-200 hover:border-orange-300 hover:bg-orange-50'
+                                : 'bg-white dark:bg-dk-surface text-slate-600 dark:text-dk-text2 border-slate-200 dark:border-dk-border hover:border-orange-300 dark:hover:border-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950/60'
                             }`}
                           >
                             {otherOption.label || 'Khác'}
@@ -1196,17 +1196,17 @@ export const AskCampaignDetailsCard = ({
               </div>
 
               {answers.campaignProduct === 'other' && (
-                <div className="space-y-2 pt-2 border-t border-orange-100">
+                <div className="space-y-2 pt-2 border-t border-orange-100 dark:border-orange-800">
                   <input
                     type="text"
                     value={productName}
                     onChange={(e) => setProductName(e.target.value)}
                     placeholder={t('aiChatbot.otherProductNamePlaceholder')}
                     maxLength={PRODUCT_NAME_MAX}
-                    className="w-full text-xs rounded-xl border border-orange-200 bg-white px-3 py-2 text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-300"
+                    className="w-full text-xs rounded-xl border border-orange-200 dark:border-orange-800 bg-white dark:bg-dk-inset px-3 py-2 text-slate-700 dark:text-dk-text placeholder-slate-400 dark:placeholder-dk-muted focus:outline-none focus:ring-2 focus:ring-orange-300 dark:focus:ring-orange-700"
                   />
                   {otherNameInvalid && (
-                    <p className="text-[10px] text-amber-600">
+                    <p className="text-[10px] text-amber-600 dark:text-amber-400">
                       {productName.trim().length === 0
                         ? t('aiChatbot.otherProductNameRequired')
                         : t('aiChatbot.otherProductNameLength')}
@@ -1218,46 +1218,46 @@ export const AskCampaignDetailsCard = ({
                     placeholder={t('aiChatbot.otherProductDescPlaceholder')}
                     rows={2}
                     maxLength={PRODUCT_DESC_MAX}
-                    className="w-full text-xs rounded-xl border border-orange-200 bg-white px-3 py-2 text-slate-700 placeholder-slate-400 resize-none focus:outline-none focus:ring-2 focus:ring-orange-300"
+                    className="w-full text-xs rounded-xl border border-orange-200 dark:border-orange-800 bg-white dark:bg-dk-inset px-3 py-2 text-slate-700 dark:text-dk-text placeholder-slate-400 dark:placeholder-dk-muted resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 dark:focus:ring-orange-700"
                   />
                   {otherDescInvalid && (
-                    <p className="text-[10px] text-amber-600">{t('aiChatbot.otherProductDescLength')}</p>
+                    <p className="text-[10px] text-amber-600 dark:text-amber-400">{t('aiChatbot.otherProductDescLength')}</p>
                   )}
                 </div>
               )}
             </div>
           )}
           {isBriefQuestion(q) && answers.campaignBrief === 'custom_topic' && (
-            <div className="mt-3 rounded-xl border border-orange-200 bg-white p-3">
+            <div className="mt-3 rounded-xl border border-orange-200 dark:border-orange-800 bg-white dark:bg-dk-surface p-3">
               <textarea
                 value={topicText}
                 onChange={(e) => setTopicText(e.target.value)}
                 placeholder={t('aiChatbot.campaignTopicPlaceholder') || 'Ví dụ: Email cảm ơn sau mua hàng, thông báo nghỉ lễ…'}
                 rows={3}
                 maxLength={TOPIC_MAX}
-                className="w-full text-xs rounded-xl border border-orange-200 bg-white px-3 py-2 text-slate-700 placeholder-slate-400 resize-none focus:outline-none focus:ring-2 focus:ring-orange-300"
+                className="w-full text-xs rounded-xl border border-orange-200 dark:border-orange-800 bg-white dark:bg-dk-inset px-3 py-2 text-slate-700 dark:text-dk-text placeholder-slate-400 dark:placeholder-dk-muted resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 dark:focus:ring-orange-700"
               />
               {topicInvalid && (
-                <p className="mt-1 text-[10px] text-amber-600">
+                <p className="mt-1 text-[10px] text-amber-600 dark:text-amber-400">
                   {t('aiChatbot.campaignTopicLength') || 'Chủ đề cần từ 2 đến 500 ký tự'}
                 </p>
               )}
             </div>
           )}
           {isBriefQuestion(q) && answers.campaignBrief === 'multiple_products' && (
-            <p className="mt-2 text-[11px] text-slate-500">
+            <p className="mt-2 text-[11px] text-slate-500 dark:text-dk-text2">
               {t('aiChatbot.campaignMultipleHint') || 'Sẽ dùng danh sách sản phẩm hiện có trong tài khoản để soạn nội dung.'}
             </p>
           )}
           {isBriefQuestion(q) && answers.campaignBrief === 'attached_file' && (
-            <div className="mt-3 rounded-xl border border-orange-200 bg-orange-50 p-4 flex flex-col items-center justify-center text-center">
-              <p className="text-xs text-orange-800 leading-relaxed mb-3">
+            <div className="mt-3 rounded-xl border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/40 p-4 flex flex-col items-center justify-center text-center">
+              <p className="text-xs text-orange-800 dark:text-orange-300 leading-relaxed mb-3">
                 Bạn có thể bấm nút bên dưới để chọn file (Excel, Word, PDF...) chứa danh sách sản phẩm hoặc nội dung chiến dịch.
               </p>
               <button
                 type="button"
                 onClick={onAttachClick}
-                className="flex items-center gap-2 px-4 py-2 bg-orange-100 hover:bg-orange-200 text-orange-800 text-sm font-medium rounded-lg transition-colors border border-orange-300 shadow-sm"
+                className="flex items-center gap-2 px-4 py-2 bg-orange-100 dark:bg-orange-900/30 hover:bg-orange-200 dark:hover:bg-orange-900/50 text-orange-800 dark:text-orange-300 text-sm font-medium rounded-lg transition-colors border border-orange-300 dark:border-orange-700 shadow-sm"
               >
                 <HiOutlinePaperClip className="w-4 h-4" />
                 Chọn file đính kèm
@@ -1265,14 +1265,14 @@ export const AskCampaignDetailsCard = ({
               {uploadedFiles && uploadedFiles.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-2 justify-center">
                   {uploadedFiles.map((f, i) => (
-                    <div key={i} className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-orange-200 rounded-lg text-xs text-orange-900 font-medium shadow-xs">
-                      <HiOutlineDocumentText className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+                    <div key={i} className="flex items-center gap-1.5 px-2.5 py-1 bg-white dark:bg-dk-surface border border-orange-200 dark:border-orange-800 rounded-lg text-xs text-orange-900 dark:text-orange-300 font-medium shadow-xs">
+                      <HiOutlineDocumentText className="w-3.5 h-3.5 text-orange-600 dark:text-orange-400 shrink-0" />
                       <span className="truncate max-w-[180px]">{f.name || f.originalName}</span>
                       {onRemoveFile && (
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); onRemoveFile(i); }}
-                          className="text-orange-400 hover:text-red-500 ml-1 p-0.5 rounded transition-colors"
+                          className="text-orange-400 hover:text-red-500 dark:hover:text-red-400 ml-1 p-0.5 rounded transition-colors"
                           title="Gỡ file"
                         >
                           <HiOutlineX className="w-3.5 h-3.5" />
@@ -1285,9 +1285,9 @@ export const AskCampaignDetailsCard = ({
             </div>
           )}
           {q.id === 'dataSource' && answers[q.id] === 'sheet' && (
-            <div className="mt-3 rounded-xl border border-orange-200 bg-orange-50 p-4 space-y-3">
+            <div className="mt-3 rounded-xl border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/40 p-4 space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-orange-900 mb-1">
+                <label className="block text-xs font-semibold text-orange-900 dark:text-orange-300 mb-1">
                   Dán link Google Sheet:
                 </label>
                 <input
@@ -1295,45 +1295,45 @@ export const AskCampaignDetailsCard = ({
                   value={sheetUrl}
                   onChange={(e) => setSheetUrl(e.target.value)}
                   placeholder="https://docs.google.com/spreadsheets/d/..."
-                  className="w-full text-xs rounded-xl border border-orange-200 bg-white px-3 py-2 text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-300"
+                  className="w-full text-xs rounded-xl border border-orange-200 dark:border-orange-800 bg-white dark:bg-dk-inset px-3 py-2 text-slate-700 dark:text-dk-text placeholder-slate-400 dark:placeholder-dk-muted focus:outline-none focus:ring-2 focus:ring-orange-300 dark:focus:ring-orange-700"
                 />
                 {sheetUrl.trim().length > 0 && !hasValidSheetUrl && (
-                  <p className="mt-1 text-[10px] text-amber-600">
+                  <p className="mt-1 text-[10px] text-amber-600 dark:text-amber-400">
                     Link không đúng định dạng Google Sheet (cần có dạng https://docs.google.com/spreadsheets/...)
                   </p>
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <div className="h-px bg-orange-200 flex-1" />
-                <span className="text-[10px] font-semibold text-orange-600 uppercase">HOẶC</span>
-                <div className="h-px bg-orange-200 flex-1" />
+                <div className="h-px bg-orange-200 dark:bg-orange-900/40 flex-1" />
+                <span className="text-[10px] font-semibold text-orange-600 dark:text-orange-400 uppercase">HOẶC</span>
+                <div className="h-px bg-orange-200 dark:bg-orange-900/40 flex-1" />
               </div>
               <div className="flex flex-col items-center justify-center text-center">
-                <p className="text-xs text-orange-800 leading-relaxed mb-2">
+                <p className="text-xs text-orange-800 dark:text-orange-300 leading-relaxed mb-2">
                   Tải lên tệp bảng tính (.xlsx, .xls, .csv) chứa danh sách người nhận:
                 </p>
                 <button
                   type="button"
                   onClick={onAttachClick}
-                  className="flex items-center gap-2 px-4 py-2 bg-orange-100 hover:bg-orange-200 text-orange-800 text-sm font-medium rounded-lg transition-colors border border-orange-300 shadow-sm"
+                  className="flex items-center gap-2 px-4 py-2 bg-orange-100 dark:bg-orange-900/30 hover:bg-orange-200 dark:hover:bg-orange-900/50 text-orange-800 dark:text-orange-300 text-sm font-medium rounded-lg transition-colors border border-orange-300 dark:border-orange-700 shadow-sm"
                 >
                   <HiOutlinePaperClip className="w-4 h-4" />
                   Chọn file đính kèm
                 </button>
-                <p className="text-xs text-gray-500 mt-2 max-w-sm leading-relaxed">
+                <p className="text-xs text-gray-500 dark:text-dk-text2 mt-2 max-w-sm leading-relaxed">
                   {t('aiChatbot.uploadFreezesList')}
                 </p>
                 {uploadedFiles && uploadedFiles.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-2 justify-center">
                     {uploadedFiles.map((f, i) => (
-                      <div key={i} className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-orange-200 rounded-lg text-xs text-orange-900 font-medium shadow-xs">
-                        <HiOutlineDocumentText className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+                      <div key={i} className="flex items-center gap-1.5 px-2.5 py-1 bg-white dark:bg-dk-surface border border-orange-200 dark:border-orange-800 rounded-lg text-xs text-orange-900 dark:text-orange-300 font-medium shadow-xs">
+                        <HiOutlineDocumentText className="w-3.5 h-3.5 text-orange-600 dark:text-orange-400 shrink-0" />
                         <span className="truncate max-w-[180px]">{f.name || f.originalName}</span>
                         {onRemoveFile && (
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); onRemoveFile(i); }}
-                            className="text-orange-400 hover:text-red-500 ml-1 p-0.5 rounded transition-colors"
+                            className="text-orange-400 hover:text-red-500 dark:hover:text-red-400 ml-1 p-0.5 rounded transition-colors"
                             title="Gỡ file"
                           >
                             <HiOutlineX className="w-3.5 h-3.5" />
@@ -1344,18 +1344,18 @@ export const AskCampaignDetailsCard = ({
                   </div>
                 )}
                 {isExtractingRecipients && (
-                  <p className="mt-2 text-xs text-orange-700 animate-pulse">
+                  <p className="mt-2 text-xs text-orange-700 dark:text-orange-300 animate-pulse">
                     Đang đọc danh sách người nhận từ tệp / Google Sheet...
                   </p>
                 )}
                 {extractError && (
-                  <p className="mt-2 text-xs text-red-600 font-medium bg-red-50 p-2 rounded-lg border border-red-200">
+                  <p className="mt-2 text-xs text-red-600 dark:text-red-400 font-medium bg-red-50 dark:bg-red-950/40 p-2 rounded-lg border border-red-200 dark:border-red-800">
                     {extractError}
                   </p>
                 )}
                 {recipientChannelMismatch && (
-                  <div className="mt-2 p-3 bg-amber-50 border border-amber-300 rounded-xl text-left text-xs text-amber-900 flex items-start gap-2">
-                    <HiOutlineExclamationCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="mt-2 p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-xl text-left text-xs text-amber-900 dark:text-amber-300 flex items-start gap-2">
+                    <HiOutlineExclamationCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                     <div>
                       <p className="font-semibold">{t('aiChatbot.recipientColumnMismatchTitle') || 'Thiếu cột dữ liệu cần thiết cho kênh gửi'}</p>
                       <p className="mt-1 text-[11px] leading-relaxed">{mismatchWarning}</p>
@@ -1363,30 +1363,30 @@ export const AskCampaignDetailsCard = ({
                   </div>
                 )}
                 {extractedRecipients && !recipientChannelMismatch && (
-                  <div className="mt-3 p-3 bg-white border border-orange-200 rounded-xl text-left w-full space-y-2">
+                  <div className="mt-3 p-3 bg-white dark:bg-dk-surface border border-orange-200 dark:border-orange-800 rounded-xl text-left w-full space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-green-700 flex items-center gap-1.5">
-                        <HiOutlineCheck className="w-4 h-4 text-green-600" />
+                      <span className="text-xs font-semibold text-green-700 dark:text-green-300 flex items-center gap-1.5">
+                        <HiOutlineCheck className="w-4 h-4 text-green-600 dark:text-green-400" />
                         Đã đọc {extractedRecipients.rowCount} người nhận ({extractedRecipients.emails?.length || 0} email, {extractedRecipients.phones?.length || 0} SĐT)
                       </span>
                       {extractedRecipients.sampleRows?.length > 0 && (
                         <button
                           type="button"
                           onClick={() => setShowSampleRows((v) => !v)}
-                          className="text-[11px] text-orange-600 hover:underline font-medium"
+                          className="text-[11px] text-orange-600 dark:text-orange-400 hover:underline font-medium"
                         >
                           {showSampleRows ? 'Ẩn' : `Xem trước ${Math.min(5, extractedRecipients.sampleRows.length)} dòng`}
                         </button>
                       )}
                     </div>
                     {showSampleRows && extractedRecipients.sampleRows?.length > 0 && (
-                      <div className="border border-slate-200 rounded-lg overflow-x-auto text-[11px] bg-slate-50 p-1.5 space-y-1">
+                      <div className="border border-slate-200 dark:border-dk-border rounded-lg overflow-x-auto text-[11px] bg-slate-50 dark:bg-dk-raised p-1.5 space-y-1">
                         {extractedRecipients.sampleRows.map((row, idx) => (
-                          <div key={idx} className="flex gap-2 text-slate-700">
-                            <span className="font-mono text-slate-400">{idx + 1}.</span>
+                          <div key={idx} className="flex gap-2 text-slate-700 dark:text-dk-text">
+                            <span className="font-mono text-slate-400 dark:text-dk-muted">{idx + 1}.</span>
                             {row.name && <span className="font-medium">{row.name}</span>}
-                            {row.email && <span className="text-blue-600">{row.email}</span>}
-                            {row.phone && <span className="text-green-600">{row.phone}</span>}
+                            {row.email && <span className="text-blue-600 dark:text-blue-400">{row.email}</span>}
+                            {row.phone && <span className="text-green-600 dark:text-green-400">{row.phone}</span>}
                           </div>
                         ))}
                       </div>
@@ -1397,7 +1397,7 @@ export const AskCampaignDetailsCard = ({
                       đọc tệp hỏng. Bug thật 25/08/2026.
                     */}
                     {extractedRecipients.skipped > 0 && (
-                      <div className="rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-900">
+                      <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-2 text-[11px] text-amber-900 dark:text-amber-300">
                         <p className="font-semibold">
                           Bỏ qua {extractedRecipients.skipped} dòng không dùng được
                         </p>
@@ -1405,11 +1405,11 @@ export const AskCampaignDetailsCard = ({
                           <ul className="mt-1 space-y-0.5">
                             {extractedRecipients.skippedSamples.map((item, idx) => (
                               <li key={idx} className="flex gap-1.5">
-                                <span className="text-amber-500">•</span>
+                                <span className="text-amber-500 dark:text-amber-400">•</span>
                                 <span className="break-all">
                                   {item.row ? `Dòng ${item.row}: ` : ''}
                                   {item.value ? (
-                                    <code className="rounded bg-amber-100 px-1 font-mono">{item.value}</code>
+                                    <code className="rounded bg-amber-100 dark:bg-amber-950/40 px-1 font-mono">{item.value}</code>
                                   ) : (
                                     'không có email/SĐT'
                                   )}
@@ -1421,7 +1421,7 @@ export const AskCampaignDetailsCard = ({
                           </ul>
                         )}
                         {extractedRecipients.skipped > (extractedRecipients.skippedSamples?.length || 0) && (
-                          <p className="mt-1 text-amber-700">
+                          <p className="mt-1 text-amber-700 dark:text-amber-300">
                             …và {extractedRecipients.skipped - (extractedRecipients.skippedSamples?.length || 0)} dòng khác.
                           </p>
                         )}
@@ -1433,13 +1433,13 @@ export const AskCampaignDetailsCard = ({
             </div>
           )}
           {isScheduleQuestion(q) && answers[q.id] === 'drip' && (
-            <div className="mt-3 rounded-xl border border-orange-200 bg-white p-3">
-              <p className="mb-2 text-xs font-semibold text-orange-800">
+            <div className="mt-3 rounded-xl border border-orange-200 dark:border-orange-800 bg-white dark:bg-dk-surface p-3">
+              <p className="mb-2 text-xs font-semibold text-orange-800 dark:text-orange-300">
                 {t('aiChatbot.wizardScheduleDripHint') || 'Chọn số ngày và số tin mỗi ngày cho chuỗi gửi:'}
               </p>
               <div className="grid grid-cols-2 gap-3">
               <label className="block">
-                <span className="mb-1 block text-[11px] font-semibold text-slate-600">
+                <span className="mb-1 block text-[11px] font-semibold text-slate-600 dark:text-dk-text2">
                   {t('aiChatbot.wizardScheduleDays') || 'Số ngày'}
                 </span>
                 <input
@@ -1448,11 +1448,11 @@ export const AskCampaignDetailsCard = ({
                   max={30}
                   value={answers.scheduleDays || ''}
                   onChange={(event) => setAnswers((prev) => ({ ...prev, scheduleDays: event.target.value }))}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-orange-400 focus:outline-none"
+                  className="w-full rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset px-3 py-2 text-sm text-slate-700 dark:text-dk-text dark:placeholder-dk-muted focus:border-orange-400 focus:outline-none"
                 />
               </label>
               <label className="block">
-                <span className="mb-1 block text-[11px] font-semibold text-slate-600">
+                <span className="mb-1 block text-[11px] font-semibold text-slate-600 dark:text-dk-text2">
                   {t('aiChatbot.wizardScheduleSlotsPerDay') || 'Số tin mỗi ngày'}
                 </span>
                 <input
@@ -1461,26 +1461,26 @@ export const AskCampaignDetailsCard = ({
                   max={5}
                   value={answers.scheduleSlotsPerDay || ''}
                   onChange={(event) => setAnswers((prev) => ({ ...prev, scheduleSlotsPerDay: event.target.value }))}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-orange-400 focus:outline-none"
+                  className="w-full rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset px-3 py-2 text-sm text-slate-700 dark:text-dk-text dark:placeholder-dk-muted focus:border-orange-400 focus:outline-none"
                 />
               </label>
               </div>
             </div>
           )}
           {q.id === 'dataSource' && answers[q.id] === 'manual' && (
-            <div className="mt-3 rounded-xl border border-orange-200 bg-white p-3">
-              <label className="block text-xs font-semibold text-slate-700">
+            <div className="mt-3 rounded-xl border border-orange-200 dark:border-orange-800 bg-white dark:bg-dk-surface p-3">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-dk-text">
                 {t('aiChatbot.manualRecipientsLabel') || 'Email hoặc số điện thoại người nhận'}
                 <textarea
                   value={manualRecipients}
                   onChange={(event) => setManualRecipients(event.target.value)}
                   rows={4}
                   placeholder={t('aiChatbot.manualRecipientsPlaceholder') || 'Dán mỗi email hoặc số điện thoại trên một dòng'}
-                  className="mt-2 w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-xs font-normal text-slate-700 focus:border-orange-400 focus:outline-none"
+                  className="mt-2 w-full resize-none rounded-lg border border-slate-200 dark:border-dk-border dark:bg-dk-inset px-3 py-2 text-xs font-normal text-slate-700 dark:text-dk-text dark:placeholder-dk-muted focus:border-orange-400 focus:outline-none"
                 />
               </label>
               {manualRecipientsError && (
-                <p className="mt-2 text-xs text-red-600 font-medium bg-red-50 p-2 rounded-lg border border-red-200">
+                <p className="mt-2 text-xs text-red-600 dark:text-red-400 font-medium bg-red-50 dark:bg-red-950/40 p-2 rounded-lg border border-red-200 dark:border-red-800">
                   {manualRecipientsError}
                 </p>
               )}
@@ -1491,7 +1491,7 @@ export const AskCampaignDetailsCard = ({
 
       {isEmailChannel && !isWizardQuestion && (
         <div>
-          <p className="text-xs font-semibold text-slate-600 mb-2">{t('aiChatbot.emailContent')}</p>
+          <p className="text-xs font-semibold text-slate-600 dark:text-dk-text2 mb-2">{t('aiChatbot.emailContent')}</p>
           <div className="flex flex-wrap gap-2">
             {[
               { value: 'new', label: t('aiChatbot.createNewContent') },
@@ -1503,7 +1503,7 @@ export const AskCampaignDetailsCard = ({
                 className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
                   emailChoice === opt.value
                     ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
-                    : 'bg-white text-slate-600 border-slate-200 hover:border-orange-300 hover:bg-orange-50'
+                    : 'bg-white dark:bg-dk-surface text-slate-600 dark:text-dk-text2 border-slate-200 dark:border-dk-border hover:border-orange-300 dark:hover:border-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950/60'
                 }`}
               >
                 {opt.label}
@@ -1516,7 +1516,7 @@ export const AskCampaignDetailsCard = ({
               placeholder={t('aiChatbot.enterEmailTemplateName')}
               value={emailTemplateName}
               onChange={e => setEmailTemplateName(e.target.value)}
-              className="mt-2 w-full px-3 py-2 text-xs border border-orange-200 rounded-xl bg-white focus:outline-none focus:border-orange-400 placeholder-slate-400"
+              className="mt-2 w-full px-3 py-2 text-xs border border-orange-200 dark:border-orange-800 rounded-xl bg-white dark:bg-dk-inset dark:text-dk-text focus:outline-none focus:border-orange-400 placeholder-slate-400 dark:placeholder-dk-muted"
             />
           )}
         </div>
@@ -1533,7 +1533,7 @@ export const AskCampaignDetailsCard = ({
         <button
           type="button"
           onClick={onDismiss}
-          className="mt-2 w-full text-center text-xs text-slate-500 hover:text-slate-700 py-1 transition-colors"
+          className="mt-2 w-full text-center text-xs text-slate-500 dark:text-dk-text2 hover:text-slate-700 dark:hover:text-dk-text py-1 transition-colors"
         >
           {t('aiChatbot.wizardDismiss') || 'Không phải, tôi chỉ hỏi thôi'}
         </button>
@@ -1593,21 +1593,21 @@ export const AskLandingDetailsCard = ({ data, onSubmit, isActive = true, t }) =>
   };
 
   return (
-    <div className={`mt-4 bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-200 rounded-2xl p-4 space-y-4 ${isActive ? '' : 'opacity-60 pointer-events-none'}`}>
+    <div className={`mt-4 bg-gradient-to-br from-indigo-50 dark:from-indigo-950/40 to-purple-50 dark:to-purple-950/40 border border-indigo-200 dark:border-indigo-800 rounded-2xl p-4 space-y-4 ${isActive ? '' : 'opacity-60 pointer-events-none'}`}>
       <div className="flex items-center gap-2">
-        <HiOutlineGlobeAlt className="w-5 h-5 text-indigo-500" />
-        <span className="font-black text-[10px] uppercase tracking-[0.2em] text-indigo-600">
+        <HiOutlineGlobeAlt className="w-5 h-5 text-indigo-500 dark:text-indigo-400" />
+        <span className="font-black text-[10px] uppercase tracking-[0.2em] text-indigo-600 dark:text-indigo-400">
           {t('aiChatbot.designLandingPage')}
         </span>
       </div>
 
       {data.pageTitle && (
-        <p className="text-sm font-bold text-slate-800">{data.pageTitle}</p>
+        <p className="text-sm font-bold text-slate-800 dark:text-dk-text">{data.pageTitle}</p>
       )}
 
       {data.questions.map(q => (
         <div key={q.id}>
-          <p className="text-xs font-semibold text-slate-600 mb-2">{q.label}</p>
+          <p className="text-xs font-semibold text-slate-600 dark:text-dk-text2 mb-2">{q.label}</p>
           <div className="flex flex-wrap gap-2">
             {q.options.map(opt => (
               <button
@@ -1616,7 +1616,7 @@ export const AskLandingDetailsCard = ({ data, onSubmit, isActive = true, t }) =>
                 className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
                   answers[q.id] === opt.value
                     ? 'bg-indigo-500 text-white border-indigo-500 shadow-sm'
-                    : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50'
+                    : 'bg-white dark:bg-dk-surface text-slate-600 dark:text-dk-text2 border-slate-200 dark:border-dk-border hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/60'
                 }`}
               >
                 {opt.label}
@@ -1632,10 +1632,10 @@ export const AskLandingDetailsCard = ({ data, onSubmit, isActive = true, t }) =>
                   onChange={(e) => setProductName(e.target.value)}
                   placeholder={t('aiChatbot.otherProductNamePlaceholder')}
                   maxLength={160}
-                  className="w-full text-xs rounded-xl border border-indigo-200 bg-white px-3 py-2 text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  className="w-full text-xs rounded-xl border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-dk-inset px-3 py-2 text-slate-700 dark:text-dk-text placeholder-slate-400 dark:placeholder-dk-muted focus:outline-none focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-700"
                 />
                 {otherNameInvalid && (
-                  <p className="text-[10px] text-amber-600 mt-1">
+                  <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">
                     {otherName.length === 0
                       ? t('aiChatbot.otherProductNameRequired')
                       : t('aiChatbot.otherProductNameLength')}
@@ -1648,10 +1648,10 @@ export const AskLandingDetailsCard = ({ data, onSubmit, isActive = true, t }) =>
                 placeholder={t('aiChatbot.otherProductDescPlaceholder')}
                 rows={2}
                 maxLength={2000}
-                className="w-full text-xs rounded-xl border border-indigo-200 bg-white px-3 py-2 text-slate-700 placeholder-slate-400 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                className="w-full text-xs rounded-xl border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-dk-inset px-3 py-2 text-slate-700 dark:text-dk-text placeholder-slate-400 dark:placeholder-dk-muted resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-700"
               />
               {otherDescInvalid && (
-                <p className="text-[10px] text-amber-600">{t('aiChatbot.otherProductDescLength')}</p>
+                <p className="text-[10px] text-amber-600 dark:text-amber-400">{t('aiChatbot.otherProductDescLength')}</p>
               )}
             </div>
           )}
@@ -1659,16 +1659,16 @@ export const AskLandingDetailsCard = ({ data, onSubmit, isActive = true, t }) =>
       ))}
 
       {/* Câu hỏi cố định: form fields — luôn hiển thị */}
-      <div className="pt-1 border-t border-indigo-100">
-        <p className="text-xs font-semibold text-slate-600 mb-1">{t('aiChatbot.formFieldsLabel')}</p>
-        <p className="text-[10px] text-slate-400 mb-2">{t('aiChatbot.formFieldsDefault')}</p>
+      <div className="pt-1 border-t border-indigo-100 dark:border-indigo-800">
+        <p className="text-xs font-semibold text-slate-600 dark:text-dk-text2 mb-1">{t('aiChatbot.formFieldsLabel')}</p>
+        <p className="text-[10px] text-slate-400 dark:text-dk-muted mb-2">{t('aiChatbot.formFieldsDefault')}</p>
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => pick('formFields', 'basic')}
             className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
               answers.formFields === 'basic'
                 ? 'bg-indigo-500 text-white border-indigo-500 shadow-sm'
-                : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50'
+                : 'bg-white dark:bg-dk-surface text-slate-600 dark:text-dk-text2 border-slate-200 dark:border-dk-border hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/60'
             }`}
           >
             {t('aiChatbot.formFieldsBasic')}
@@ -1678,7 +1678,7 @@ export const AskLandingDetailsCard = ({ data, onSubmit, isActive = true, t }) =>
             className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
               answers.formFields === 'extended'
                 ? 'bg-indigo-500 text-white border-indigo-500 shadow-sm'
-                : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50'
+                : 'bg-white dark:bg-dk-surface text-slate-600 dark:text-dk-text2 border-slate-200 dark:border-dk-border hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/60'
             }`}
           >
             {t('aiChatbot.formFieldsExtended')}
@@ -1688,7 +1688,7 @@ export const AskLandingDetailsCard = ({ data, onSubmit, isActive = true, t }) =>
             className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
               answers.formFields === 'custom'
                 ? 'bg-indigo-500 text-white border-indigo-500 shadow-sm'
-                : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50'
+                : 'bg-white dark:bg-dk-surface text-slate-600 dark:text-dk-text2 border-slate-200 dark:border-dk-border hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/60'
             }`}
           >
             {t('aiChatbot.formFieldsCustom')}
@@ -1701,9 +1701,9 @@ export const AskLandingDetailsCard = ({ data, onSubmit, isActive = true, t }) =>
               onChange={e => setCustomFieldsText(e.target.value)}
               placeholder={t('aiChatbot.customFieldsPlaceholder')}
               rows={2}
-              className="w-full text-xs rounded-xl border border-indigo-200 bg-white px-3 py-2 text-slate-700 placeholder-slate-400 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              className="w-full text-xs rounded-xl border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-dk-inset px-3 py-2 text-slate-700 dark:text-dk-text placeholder-slate-400 dark:placeholder-dk-muted resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-700"
             />
-            <p className="text-[10px] text-slate-400 mt-1">{t('aiChatbot.customFieldsHint')}</p>
+            <p className="text-[10px] text-slate-400 dark:text-dk-muted mt-1">{t('aiChatbot.customFieldsHint')}</p>
           </div>
         )}
       </div>
@@ -1727,7 +1727,7 @@ export const AskLandingDetailsCard = ({ data, onSubmit, isActive = true, t }) =>
       </button>
 
       {isActive && (
-        <p className="text-[11px] text-indigo-600/80 text-center leading-relaxed">
+        <p className="text-[11px] text-indigo-600/80 dark:text-indigo-400 text-center leading-relaxed">
           📎 {t('aiChatbot.landingAttachHint')}
         </p>
       )}
@@ -1799,7 +1799,7 @@ export const CampaignDraftEditor = ({ script, onSave, onCancel, t }) => {
   };
 
   return (
-    <div className="mt-4 bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-2xl overflow-hidden">
+    <div className="mt-4 bg-gradient-to-r from-orange-50 dark:from-orange-950/40 to-amber-50 dark:to-amber-950/40 border border-orange-200 dark:border-orange-800 rounded-2xl overflow-hidden">
       {/* Header */}
       <div className="p-4 bg-orange-500 text-white">
         <div className="flex items-center justify-between">
@@ -1814,11 +1814,11 @@ export const CampaignDraftEditor = ({ script, onSave, onCancel, t }) => {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-orange-100">
+      <div className="flex border-b border-orange-100 dark:border-orange-800">
         <button
           onClick={() => setActiveTab('basic')}
           className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
-            activeTab === 'basic' ? 'text-orange-600 border-b-2 border-orange-500' : 'text-slate-400'
+            activeTab === 'basic' ? 'text-orange-600 dark:text-orange-400 border-b-2 border-orange-500' : 'text-slate-400 dark:text-dk-muted'
           }`}
         >
           📝 {t('aiChatbot.basic')}
@@ -1826,7 +1826,7 @@ export const CampaignDraftEditor = ({ script, onSave, onCancel, t }) => {
         <button
           onClick={() => setActiveTab('nodes')}
           className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
-            activeTab === 'nodes' ? 'text-orange-600 border-b-2 border-orange-500' : 'text-slate-400'
+            activeTab === 'nodes' ? 'text-orange-600 dark:text-orange-400 border-b-2 border-orange-500' : 'text-slate-400 dark:text-dk-muted'
           }`}
         >
           📋 {t('aiChatbot.nodes')} ({displayItems.length})
@@ -1838,25 +1838,25 @@ export const CampaignDraftEditor = ({ script, onSave, onCancel, t }) => {
         {activeTab === 'basic' && (
           <div className="space-y-3">
             <div>
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+              <label className="text-[10px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider block mb-1">
                 {t('aiChatbot.campaignName')}
               </label>
               <input
                 type="text"
                 value={editedScript.campaignName}
                 onChange={(e) => setEditedScript(prev => ({ ...prev, campaignName: e.target.value }))}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-orange-400 focus:ring-1 focus:ring-orange-400/20 outline-none"
+                className="w-full px-3 py-2 border border-slate-200 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted rounded-lg text-sm focus:border-orange-400 focus:ring-1 focus:ring-orange-400/20 outline-none"
                 placeholder={t('aiChatbot.enterCampaignName')}
               />
             </div>
             <div>
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+              <label className="text-[10px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider block mb-1">
                 {t('aiChatbot.description')}
               </label>
               <textarea
                 value={editedScript.description}
                 onChange={(e) => setEditedScript(prev => ({ ...prev, description: e.target.value }))}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-orange-400 focus:ring-1 focus:ring-orange-400/20 outline-none resize-none"
+                className="w-full px-3 py-2 border border-slate-200 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted rounded-lg text-sm focus:border-orange-400 focus:ring-1 focus:ring-orange-400/20 outline-none resize-none"
                 rows={3}
                 placeholder={t('aiChatbot.enterDescription')}
               />
@@ -1870,19 +1870,19 @@ export const CampaignDraftEditor = ({ script, onSave, onCancel, t }) => {
               const isStep = item.step !== undefined; // Là step hay node
               const nodeId = item.tempId || item.id || i;
               return (
-                <div key={nodeId} className="bg-white rounded-lg p-3 border border-slate-100">
+                <div key={nodeId} className="bg-white dark:bg-dk-surface rounded-lg p-3 border border-slate-100 dark:border-dk-border">
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-lg">{isStep ? '📝' : getNodeIcon(item)}</span>
-                    <span className="text-xs font-bold text-slate-600">{t('aiChatbot.step')} {item.step || i + 1}</span>
-                    <span className="text-[10px] text-slate-400">
+                    <span className="text-xs font-bold text-slate-600 dark:text-dk-text2">{t('aiChatbot.step')} {item.step || i + 1}</span>
+                    <span className="text-[10px] text-slate-400 dark:text-dk-muted">
                       {isStep ? (item.action || '') : (item.nodeSubtype || item.subtype || 'action')}
                     </span>
                   </div>
                   {isStep ? (
                     // Hiển thị step (text-only)
                     <div className="space-y-1">
-                      <p className="text-xs text-slate-700">{item.action || item.description || ''}</p>
-                      <p className="text-[10px] text-slate-400">{item.timing || ''}</p>
+                      <p className="text-xs text-slate-700 dark:text-dk-text">{item.action || item.description || ''}</p>
+                      <p className="text-[10px] text-slate-400 dark:text-dk-muted">{item.timing || ''}</p>
                     </div>
                   ) : (
                     // Hiển thị node
@@ -1891,7 +1891,7 @@ export const CampaignDraftEditor = ({ script, onSave, onCancel, t }) => {
                         type="text"
                         value={item.nodeName || ''}
                         onChange={(e) => handleNodeNameChange(nodeId, e.target.value)}
-                        className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs mb-2 focus:border-orange-400 outline-none"
+                        className="w-full px-2 py-1.5 border border-slate-200 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted rounded text-xs mb-2 focus:border-orange-400 outline-none"
                         placeholder={t('aiChatbot.nodeName')}
                       />
                       {/* Email config */}
@@ -1901,7 +1901,7 @@ export const CampaignDraftEditor = ({ script, onSave, onCancel, t }) => {
                             type="text"
                             value={item.config?.emailSubject || ''}
                             onChange={(e) => handleNodeConfigChange(nodeId, 'emailSubject', e.target.value)}
-                            className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs focus:border-orange-400 outline-none"
+                            className="w-full px-2 py-1.5 border border-slate-200 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted rounded text-xs focus:border-orange-400 outline-none"
                             placeholder={t('aiChatbot.emailSubject')}
                           />
                         </div>
@@ -1911,7 +1911,7 @@ export const CampaignDraftEditor = ({ script, onSave, onCancel, t }) => {
                         <textarea
                           value={item.config?.message || ''}
                           onChange={(e) => handleNodeConfigChange(nodeId, 'message', e.target.value)}
-                          className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs resize-none focus:border-orange-400 outline-none"
+                          className="w-full px-2 py-1.5 border border-slate-200 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted rounded text-xs resize-none focus:border-orange-400 outline-none"
                           rows={3}
                           placeholder={t('aiChatbot.zaloMessage')}
                         />
@@ -1921,17 +1921,17 @@ export const CampaignDraftEditor = ({ script, onSave, onCancel, t }) => {
                 </div>
               );
             }) : (
-              <p className="text-xs text-slate-400 text-center py-4">{t('aiChatbot.noNodesToEdit')}</p>
+              <p className="text-xs text-slate-400 dark:text-dk-muted text-center py-4">{t('aiChatbot.noNodesToEdit')}</p>
             )}
           </div>
         )}
       </div>
 
       {/* Footer */}
-      <div className="p-4 bg-white/50 border-t border-orange-100 flex gap-2">
+      <div className="p-4 bg-white/50 dark:bg-dk-surface/50 border-t border-orange-100 dark:border-orange-800 flex gap-2">
         <button
           onClick={onCancel}
-          className="flex-1 py-2 bg-slate-100 text-slate-600 font-bold text-xs uppercase tracking-wider rounded-lg hover:bg-slate-200 transition-colors"
+          className="flex-1 py-2 bg-slate-100 dark:bg-dk-raised text-slate-600 dark:text-dk-text2 font-bold text-xs uppercase tracking-wider rounded-lg hover:bg-slate-200 dark:hover:bg-dk-strong transition-colors"
         >
           {t('aiChatbot.cancelAction')}
         </button>
@@ -2012,7 +2012,7 @@ export const ConfirmCreateCard = ({ confirmationView, onConfirm, onConfirmAndRun
   );
 
   return (
-    <div className="mt-4 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl overflow-hidden">
+    <div className="mt-4 bg-gradient-to-r from-emerald-50 dark:from-emerald-950/40 to-teal-50 dark:to-teal-950/40 border border-emerald-200 dark:border-emerald-800 rounded-2xl overflow-hidden">
       {/* Header */}
       <div className="p-4 bg-emerald-500 text-white">
         <div className="flex items-center gap-2 mb-2">
@@ -2025,11 +2025,11 @@ export const ConfirmCreateCard = ({ confirmationView, onConfirm, onConfirmAndRun
         )}
       </div>
       <div className="p-4 space-y-3">
-        {isPreparing && <p className="text-sm text-emerald-700">{locale === 'en' ? 'Preparing the delivery preview...' : 'Đang chuẩn bị bản xem trước gửi tin...'}</p>}
-        {prepareError && <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700"><p>{prepareError}</p>{isActive && <button onClick={onRetry} className="mt-2 font-bold underline">{locale === 'en' ? 'Retry' : 'Thử lại'}</button>}</div>}
+        {isPreparing && <p className="text-sm text-emerald-700 dark:text-emerald-300">{locale === 'en' ? 'Preparing the delivery preview...' : 'Đang chuẩn bị bản xem trước gửi tin...'}</p>}
+        {prepareError && <div className="rounded-lg border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 p-3 text-xs text-rose-700 dark:text-rose-300"><p>{prepareError}</p>{isActive && <button onClick={onRetry} className="mt-2 font-bold underline">{locale === 'en' ? 'Retry' : 'Thử lại'}</button>}</div>}
         {!isPreparing && !prepareError && confirmationView && <>
           {blockingIssues.length > 0 && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+            <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-3 text-xs text-amber-800 dark:text-amber-300">
               <p className="font-bold">{locale === 'en' ? 'Fix these items before creating:' : 'Cần sửa trước khi tạo:'}</p>
               <ul className="mt-1 list-disc pl-4">
                 {blockingIssues.map((issue, index) => {
@@ -2049,7 +2049,7 @@ export const ConfirmCreateCard = ({ confirmationView, onConfirm, onConfirmAndRun
           <div className="space-y-2 max-h-80 overflow-y-auto">
             {steps.map((step, index) => {
               const expanded = expandedSteps.has(step.key);
-              return <div key={step.key} className="rounded-lg border border-emerald-100 bg-white/75 p-3"><div className="flex items-start gap-2"><div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-[10px] font-bold shrink-0">{index + 1}</div><div className="min-w-0 flex-1"><p className="text-xs font-bold text-slate-800 break-words">{step.title}</p><p className="text-[10px] text-slate-500">{previewChannelLabel(step.channel, locale)} · {formatPreviewTiming(step.timing, locale)}</p>{step.sender?.label && <p className="text-[10px] text-slate-500">{locale === 'en' ? 'Sender' : 'Tài khoản gửi'}: {step.sender.label}</p>}{step.recipients?.sourceLabel && <p className="text-[10px] text-slate-500">{locale === 'en' ? 'Recipients' : 'Người nhận'}: {step.recipients.sourceLabel}</p>}{step.recipients?.filters && describeAudienceFilter(step.recipients.filters, t) && <p className="text-[10px] font-semibold text-amber-700 break-words">{t('aiChatbot.confirmation.audienceFilterLabel')}: {describeAudienceFilter(step.recipients.filters, t)}</p>}{step.recipients?.conversations && <p className="text-[10px] font-semibold text-amber-700 break-words">{locale === 'en' ? 'Recipients' : 'Người nhận'}: {describeConversationAudience(step.recipients.conversations, t)}</p>}{step.recipients?.landing && describeLandingAudience(step.recipients.landing, t) && <p className="text-[10px] font-semibold text-amber-700 break-words">{t('aiChatbot.confirmation.landingAudienceLabel')}: {describeLandingAudience(step.recipients.landing, t)}</p>}{step.content?.subject && <p className="mt-2 text-xs font-semibold text-slate-700 break-words">{step.content.subject}</p>}<p className={`mt-1 whitespace-pre-wrap break-words text-xs text-slate-600 ${expanded ? '' : 'line-clamp-3'}`}>{step.content?.bodyText || (locale === 'en' ? 'No message body' : 'Chưa có nội dung tin')}</p>{step.content?.bodyText && <button onClick={() => toggleStep(step.key)} className="mt-1 text-[10px] font-bold text-emerald-700">{expanded ? (locale === 'en' ? 'Collapse' : 'Thu gọn') : (locale === 'en' ? 'Show more' : 'Xem thêm')}</button>}{step.content?.attachments?.length > 0 && <p className="mt-1 text-[10px] text-slate-500">{locale === 'en' ? 'Attachments' : 'Tệp đính kèm'}: {step.content.attachments.map((file) => file.name || file.contentType).filter(Boolean).join(', ')}</p>}</div></div></div>;
+              return <div key={step.key} className="rounded-lg border border-emerald-100 dark:border-emerald-800 bg-white/75 dark:bg-dk-surface/75 p-3"><div className="flex items-start gap-2"><div className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-[10px] font-bold shrink-0">{index + 1}</div><div className="min-w-0 flex-1"><p className="text-xs font-bold text-slate-800 dark:text-dk-text break-words">{step.title}</p><p className="text-[10px] text-slate-500 dark:text-dk-text2">{previewChannelLabel(step.channel, locale)} · {formatPreviewTiming(step.timing, locale)}</p>{step.sender?.label && <p className="text-[10px] text-slate-500 dark:text-dk-text2">{locale === 'en' ? 'Sender' : 'Tài khoản gửi'}: {step.sender.label}</p>}{step.recipients?.sourceLabel && <p className="text-[10px] text-slate-500 dark:text-dk-text2">{locale === 'en' ? 'Recipients' : 'Người nhận'}: {step.recipients.sourceLabel}</p>}{step.recipients?.filters && describeAudienceFilter(step.recipients.filters, t) && <p className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 break-words">{t('aiChatbot.confirmation.audienceFilterLabel')}: {describeAudienceFilter(step.recipients.filters, t)}</p>}{step.recipients?.conversations && <p className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 break-words">{locale === 'en' ? 'Recipients' : 'Người nhận'}: {describeConversationAudience(step.recipients.conversations, t)}</p>}{step.recipients?.landing && describeLandingAudience(step.recipients.landing, t) && <p className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 break-words">{t('aiChatbot.confirmation.landingAudienceLabel')}: {describeLandingAudience(step.recipients.landing, t)}</p>}{step.content?.subject && <p className="mt-2 text-xs font-semibold text-slate-700 dark:text-dk-text break-words">{step.content.subject}</p>}<p className={`mt-1 whitespace-pre-wrap break-words text-xs text-slate-600 dark:text-dk-text2 ${expanded ? '' : 'line-clamp-3'}`}>{step.content?.bodyText || (locale === 'en' ? 'No message body' : 'Chưa có nội dung tin')}</p>{step.content?.bodyText && <button onClick={() => toggleStep(step.key)} className="mt-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">{expanded ? (locale === 'en' ? 'Collapse' : 'Thu gọn') : (locale === 'en' ? 'Show more' : 'Xem thêm')}</button>}{step.content?.attachments?.length > 0 && <p className="mt-1 text-[10px] text-slate-500 dark:text-dk-text2">{locale === 'en' ? 'Attachments' : 'Tệp đính kèm'}: {step.content.attachments.map((file) => file.name || file.contentType).filter(Boolean).join(', ')}</p>}</div></div></div>;
             })}
           </div>
           {/* Ước tính thời gian gửi do server tính (PR-2); thiếu / null / lỗi → không hiện gì, thẻ không vỡ. */}
@@ -2057,10 +2057,10 @@ export const ConfirmCreateCard = ({ confirmationView, onConfirm, onConfirmAndRun
             <CampaignEstimatePanel status="ready" estimate={confirmationView.estimate} t={t} />
           )}
         </>}
-        {!isActive && <p className="text-xs text-slate-500">{locale === 'en' ? 'This is an earlier confirmation and is read-only.' : 'Đây là bản xác nhận cũ, chỉ để xem.'}</p>}
+        {!isActive && <p className="text-xs text-slate-500 dark:text-dk-text2">{locale === 'en' ? 'This is an earlier confirmation and is read-only.' : 'Đây là bản xác nhận cũ, chỉ để xem.'}</p>}
       </div>
 
-      <div className="p-4 bg-white/50 border-t border-emerald-100">
+      <div className="p-4 bg-white/50 dark:bg-dk-surface/50 border-t border-emerald-100 dark:border-emerald-800">
         {isActive && <div className="space-y-2">
           {/* "Tạo và chạy": chỉ hiện khi người dùng ĐÃ nói rõ muốn chạy ngay (cổng BE) và có quyền chạy. Chiến dịch chỉ chạy khi bấm nút này. */}
           {showCreateAndRun && canCreateCampaign && canRunCampaign && onConfirmAndRun && (
@@ -2074,7 +2074,7 @@ export const ConfirmCreateCard = ({ confirmationView, onConfirm, onConfirmAndRun
                 <HiOutlinePlay className="w-5 h-5" />
                 {t('aiChatbot.createAndRunBtn')}
               </button>
-              <p className="text-[11px] leading-snug text-slate-500 text-center">{t('aiChatbot.createAndRunNotice')}</p>
+              <p className="text-[11px] leading-snug text-slate-500 dark:text-dk-text2 text-center">{t('aiChatbot.createAndRunNotice')}</p>
             </>
           )}
           {canCreateCampaign ? (
@@ -2087,7 +2087,7 @@ export const ConfirmCreateCard = ({ confirmationView, onConfirm, onConfirmAndRun
               {t('aiChatbot.createCampaignBtn')}
             </button>
           ) : (
-            <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
+            <p className="text-xs text-slate-500 dark:text-dk-text2 bg-slate-50 dark:bg-dk-raised border border-slate-200 dark:border-dk-border rounded-xl px-3 py-2.5">
               {t('aiChatbot.noPermissionCreateCampaign')}
             </p>
           )}
@@ -2104,14 +2104,14 @@ export const ConfirmCreateCard = ({ confirmationView, onConfirm, onConfirmAndRun
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={onEdit}
-              className="py-2.5 bg-white border border-slate-200 text-slate-700 font-black text-xs uppercase tracking-widest rounded-xl hover:bg-slate-50 flex items-center justify-center gap-1.5"
+              className="py-2.5 bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border text-slate-700 dark:text-dk-text font-black text-xs uppercase tracking-widest rounded-xl hover:bg-slate-50 dark:hover:bg-dk-raised flex items-center justify-center gap-1.5"
             >
-              <HiOutlinePencilAlt className="w-4 h-4 text-orange-500" />
+              <HiOutlinePencilAlt className="w-4 h-4 text-orange-500 dark:text-orange-400" />
               {t('aiChatbot.editCampaign')}
             </button>
             <button
               onClick={onCancel}
-              className="py-2.5 bg-slate-50 border border-slate-200 text-slate-500 font-black text-xs uppercase tracking-widest rounded-xl hover:bg-slate-100 flex items-center justify-center gap-1.5"
+              className="py-2.5 bg-slate-50 dark:bg-dk-raised border border-slate-200 dark:border-dk-border text-slate-500 dark:text-dk-text2 font-black text-xs uppercase tracking-widest rounded-xl hover:bg-slate-100 dark:hover:bg-dk-strong flex items-center justify-center gap-1.5"
             >
               {t('aiChatbot.cancelAction')}
             </button>
@@ -2124,36 +2124,36 @@ export const ConfirmCreateCard = ({ confirmationView, onConfirm, onConfirmAndRun
 
 // Success card after auto-creating campaign
 export const AutoCreatedSuccessCard = ({ result, onView, t }) => (
-  <div className="mt-3 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-4">
+  <div className="mt-3 bg-gradient-to-r from-green-50 dark:from-green-950/40 to-emerald-50 dark:to-emerald-950/40 border border-green-200 dark:border-green-800 rounded-2xl p-4">
     <div className="flex items-center gap-3 mb-3">
       <div className="w-10 h-10 bg-green-500 rounded-xl flex items-center justify-center">
         <HiOutlineCheck className="w-5 h-5 text-white" />
       </div>
       <div>
-        <p className="text-sm font-bold text-green-800">{t('aiChatbot.campaignRunning')}</p>
-        <p className="text-xs text-green-600">{result.campaignName}</p>
+        <p className="text-sm font-bold text-green-800 dark:text-green-300">{t('aiChatbot.campaignRunning')}</p>
+        <p className="text-xs text-green-600 dark:text-green-400">{result.campaignName}</p>
       </div>
     </div>
     <div className="grid grid-cols-2 gap-2 mb-3">
-      <div className="bg-white/60 rounded-lg p-2">
-        <p className="text-[10px] text-green-600 uppercase tracking-wider">{t('aiChatbot.campaignId')}</p>
-        <p className="text-sm font-bold text-green-800">#{result.campaignId}</p>
+      <div className="bg-white/60 dark:bg-dk-surface/60 rounded-lg p-2">
+        <p className="text-[10px] text-green-600 dark:text-green-400 uppercase tracking-wider">{t('aiChatbot.campaignId')}</p>
+        <p className="text-sm font-bold text-green-800 dark:text-green-300">#{result.campaignId}</p>
       </div>
       {result.runId && (
-        <div className="bg-white/60 rounded-lg p-2">
-          <p className="text-[10px] text-green-600 uppercase tracking-wider">{t('aiChatbot.runId')}</p>
-          <p className="text-sm font-bold text-green-800">#{result.runId}</p>
+        <div className="bg-white/60 dark:bg-dk-surface/60 rounded-lg p-2">
+          <p className="text-[10px] text-green-600 dark:text-green-400 uppercase tracking-wider">{t('aiChatbot.runId')}</p>
+          <p className="text-sm font-bold text-green-800 dark:text-green-300">#{result.runId}</p>
         </div>
       )}
     </div>
-    <div className="flex items-center gap-2 text-xs text-green-700 mb-3">
+    <div className="flex items-center gap-2 text-xs text-green-700 dark:text-green-300 mb-3">
       <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
       <span>{t('aiChatbot.sendingMessages')}</span>
     </div>
     {onView && (
       <button
         onClick={onView}
-        className="w-full py-2.5 bg-white border border-green-300 text-green-700 font-black text-xs uppercase tracking-widest rounded-xl hover:bg-green-50 flex items-center justify-center gap-2"
+        className="w-full py-2.5 bg-white dark:bg-dk-surface border border-green-300 dark:border-green-700 text-green-700 dark:text-green-300 font-black text-xs uppercase tracking-widest rounded-xl hover:bg-green-50 dark:hover:bg-green-950/60 flex items-center justify-center gap-2"
       >
         <HiOutlineTerminal className="w-4 h-4" />
         {t('aiChatbot.viewCampaign')}
@@ -2188,28 +2188,28 @@ export const TemplatePickerModal = ({ isOpen, onClose, onSelect, channel = 'zalo
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="flex max-h-[70vh] w-full max-w-md flex-col rounded-2xl bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-100 p-4">
+      <div className="flex max-h-[70vh] w-full max-w-md flex-col rounded-2xl bg-white dark:bg-dk-surface shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-100 dark:border-dk-border p-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <HiOutlineFolderOpen className="h-5 w-5 shrink-0 text-orange-500" />
-              <h3 className="font-bold text-slate-800">{t('aiChatbot.selectTemplate') || 'Chọn template'}</h3>
+              <HiOutlineFolderOpen className="h-5 w-5 shrink-0 text-orange-500 dark:text-orange-400" />
+              <h3 className="font-bold text-slate-800 dark:text-dk-text">{t('aiChatbot.selectTemplate') || 'Chọn template'}</h3>
             </div>
             {slotLabel && (
-              <p className="mt-1 truncate text-[11px] text-slate-500">{slotLabel}</p>
+              <p className="mt-1 truncate text-[11px] text-slate-500 dark:text-dk-text2">{slotLabel}</p>
             )}
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-slate-50">
-            <HiOutlineX className="h-5 w-5 text-slate-400" />
+          <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-slate-50 dark:hover:bg-dk-raised">
+            <HiOutlineX className="h-5 w-5 text-slate-400 dark:text-dk-muted" />
           </button>
         </div>
-        <div className="border-b border-slate-100 p-4">
+        <div className="border-b border-slate-100 dark:border-dk-border p-4">
           <input
             type="text"
             placeholder={t('aiChatbot.searchTemplatePlaceholder') || 'Tìm theo tên template...'}
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
-            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:border-orange-400"
+            className="w-full rounded-xl border border-slate-200 dark:border-dk-border bg-slate-50 dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted px-4 py-2.5 text-sm outline-none focus:border-orange-400"
           />
         </div>
         <div className="flex-1 overflow-y-auto p-2">
@@ -2218,7 +2218,7 @@ export const TemplatePickerModal = ({ isOpen, onClose, onSelect, channel = 'zalo
               <div className="h-6 w-6 animate-spin rounded-full border-2 border-orange-500/30 border-t-orange-500" />
             </div>
           ) : filtered.length === 0 ? (
-            <p className="py-8 text-center text-sm text-slate-400">{t('aiChatbot.noTemplates') || 'Chưa có template nào.'}</p>
+            <p className="py-8 text-center text-sm text-slate-400 dark:text-dk-muted">{t('aiChatbot.noTemplates') || 'Chưa có template nào.'}</p>
           ) : (
             <div className="space-y-1">
               {filtered.map((item) => (
@@ -2226,18 +2226,18 @@ export const TemplatePickerModal = ({ isOpen, onClose, onSelect, channel = 'zalo
                   key={item.id}
                   type="button"
                   onClick={() => onSelect(item)}
-                  className="flex w-full items-center gap-3 rounded-xl p-3 text-left transition-colors hover:bg-slate-50"
+                  className="flex w-full items-center gap-3 rounded-xl p-3 text-left transition-colors hover:bg-slate-50 dark:hover:bg-dk-raised"
                 >
                   <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
-                    templateChannel === 'email' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'
+                    templateChannel === 'email' ? 'bg-orange-100 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400' : 'bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400'
                   }`}
                   >
                     {templateChannel === 'email' ? 'E' : 'Z'}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-slate-800">{item.templateName || item.name}</p>
+                    <p className="truncate text-sm font-semibold text-slate-800 dark:text-dk-text">{item.templateName || item.name}</p>
                     {item.subject && (
-                      <p className="truncate text-[10px] text-slate-400">{item.subject}</p>
+                      <p className="truncate text-[10px] text-slate-400 dark:text-dk-muted">{item.subject}</p>
                     )}
                   </div>
                 </button>
