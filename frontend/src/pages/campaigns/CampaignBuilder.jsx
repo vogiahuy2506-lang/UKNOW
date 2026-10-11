@@ -12,6 +12,7 @@ import {
   campaignFlowHasZaloPoolMulti,
   getAllowedActionNodeTypesByCampaignType,
   getAllowedDataNodeTypesByCampaignType,
+  getLockedNodeChannels,
   isTriggerNodeType,
 } from '../../features/campaigns/utils/campaignBuilderFlow';
 import { buildFlowFromCampaign } from '../../features/campaigns/utils/campaignBuilderFlowSerialization';
@@ -35,7 +36,8 @@ import {
   createPastedCampaignNode,
   isEditableClipboardTarget,
 } from '../../features/campaigns/utils/campaignNodeClipboard';
-import { useChannelEntitlements } from '../../hooks/queries/useChannelEntitlements';
+import { useChannelAvailability } from '../../hooks/queries/useChannelAvailability';
+import ChannelUnavailableModal from '../../components/common/ChannelUnavailableModal';
 import CampaignBuilderPageLayout from '../../features/campaigns/components/CampaignBuilderPageLayout';
 import CampaignRunModals from '../../features/campaigns/components/CampaignRunModals';
 import CampaignShareModal from '../../features/campaigns/components/CampaignShareModal';
@@ -835,49 +837,50 @@ const CampaignBuilder = () => {
     );
   };
 
-  // PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 4 — nguồn cờ: gọi 1 lần khi mở trình dựng.
-  // Lỗi/404 (BE cũ) -> coi như tắt (mặc định false, không có node Telegram).
-  const [telegramChannelEnabled, setTelegramChannelEnabled] = useState(false);
-  // PLAN_WHATSAPP_DAY_DU_2026-09-29 PR-W4b — cùng nguồn /campaigns/channels (key 'whatsapp').
-  const [whatsappChannelEnabled, setWhatsappChannelEnabled] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    campaignBuilderApiService.getChannels()
-      .then((res) => {
-        if (cancelled) return;
-        const channels = res?.data?.data?.channels;
-        setTelegramChannelEnabled(Array.isArray(channels) && channels.some((c) => c.key === 'telegram'));
-        setWhatsappChannelEnabled(Array.isArray(channels) && channels.some((c) => c.key === 'whatsapp'));
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setTelegramChannelEnabled(false);
-          setWhatsappChannelEnabled(false);
-        }
-      });
-    return () => { cancelled = true; };
-  }, []);
+  // 11/10/2026 (PLAN_KENH_KHONG_AN_KHOA_VA_GOI_Y_MUA) — palette KHÔNG ẩn bước của kênh theo gói nữa: bước có kênh `visible`
+  // đều hiện; bước của kênh chưa dùng được (gói không có kênh / hết hạn / hết lượt) mờ + khoá, không kéo thả được, bấm mở
+  // modal gợi ý mua. Telegram/WhatsApp chỉ ẩn khi cờ HỆ THỐNG tắt; backend cũ thiếu trường thì hook gọi GET /campaigns/channels
+  // như trước (lỗi/404 -> ẩn). Node đã có trong chiến dịch CŨ vẫn nằm trên canvas, không bị xoá (preflight báo 403 CHANNEL_NOT_IN_PLAN).
+  const channelAvailability = useChannelAvailability({ fetchAdapterChannels: () => campaignBuilderApiService.getChannels() });
+  const telegramChannelEnabled = channelAvailability.telegram.visible;
+  const whatsappChannelEnabled = channelAvailability.whatsapp.visible;
+  const emailChannelAvailable = channelAvailability.email.available;
+  const zaloChannelAvailable = channelAvailability.zalo.available;
+  const telegramChannelAvailable = telegramChannelEnabled && channelAvailability.telegram.available;
+  const whatsappChannelAvailable = whatsappChannelEnabled && channelAvailability.whatsapp.available;
+  const [lockedChannelModal, setLockedChannelModal] = useState(null);
 
-  // P12 — quyền kênh Zalo theo gói (mặc định "có quyền" khi đang tải/lỗi). Node Zalo đã có trong chiến dịch cũ vẫn hiện
-  // trên canvas (preflight báo 403 CHANNEL_NOT_IN_PLAN); chỉ palette thôi không cho kéo thêm.
-  const { zalo: zaloEntitled } = useChannelEntitlements();
-
+  // Thả node lên canvas: chỉ cho kênh DÙNG ĐƯỢC (palette đã không cho kéo bước khoá; đây là chốt chặn cho đường khác).
   const getAllowedActionNodeTypesForDrop = useCallback(
-    (type) => getAllowedActionNodeTypesByCampaignType(type, {
-      telegramEnabled: telegramChannelEnabled,
-      whatsappEnabled: whatsappChannelEnabled,
-      zaloEnabled: zaloEntitled,
-    }),
-    [telegramChannelEnabled, whatsappChannelEnabled, zaloEntitled]
+    (type) => {
+      const allowed = getAllowedActionNodeTypesByCampaignType(type, {
+        telegramEnabled: telegramChannelAvailable,
+        whatsappEnabled: whatsappChannelAvailable,
+        zaloEnabled: zaloChannelAvailable,
+      });
+      if (!emailChannelAvailable) allowed.delete('send_email');
+      return allowed;
+    },
+    [telegramChannelAvailable, whatsappChannelAvailable, zaloChannelAvailable, emailChannelAvailable]
   );
 
+  // Palette: vẽ cả bước của kênh `visible` nhưng chưa dùng được (zaloEnabled luôn true vì Zalo luôn hiện).
   const allowedActionNodeTypes = useMemo(
     () => getAllowedActionNodeTypesByCampaignType(campaignType, {
       telegramEnabled: telegramChannelEnabled,
       whatsappEnabled: whatsappChannelEnabled,
-      zaloEnabled: zaloEntitled,
+      zaloEnabled: channelAvailability.zalo.visible,
     }),
-    [campaignType, telegramChannelEnabled, whatsappChannelEnabled, zaloEntitled]
+    [campaignType, telegramChannelEnabled, whatsappChannelEnabled, channelAvailability.zalo.visible]
+  );
+  const lockedNodeChannels = useMemo(
+    () => getLockedNodeChannels({
+      email: channelAvailability.email,
+      zalo: channelAvailability.zalo,
+      telegram: channelAvailability.telegram,
+      whatsapp: channelAvailability.whatsapp,
+    }),
+    [channelAvailability.email, channelAvailability.zalo, channelAvailability.telegram, channelAvailability.whatsapp]
   );
   const allowedDataNodeTypes = useMemo(
     () => getAllowedDataNodeTypesByCampaignType(campaignType),
@@ -1200,7 +1203,9 @@ const CampaignBuilder = () => {
       expandedCategories={expandedCategories}
       filterNodes={filterNodes}
       allowedActionNodeTypes={allowedActionNodeTypes}
-      zaloEnabled={zaloEntitled}
+      zaloEnabled={channelAvailability.zalo.visible}
+      lockedNodeChannels={lockedNodeChannels}
+      onLockedNodeClick={setLockedChannelModal}
       allowedDataNodeTypes={allowedDataNodeTypes}
       suppressGetAllFriendsPalette={suppressGetAllFriendsPalette}
       onDragStart={onDragStart}
@@ -1276,6 +1281,13 @@ const CampaignBuilder = () => {
       leaveModalTitle={leaveModalTitle}
       leaveModalMessage={leaveModalMessage}
     />
+      {lockedChannelModal && (
+        <ChannelUnavailableModal
+          channel={lockedChannelModal}
+          info={channelAvailability[lockedChannelModal]}
+          onClose={() => setLockedChannelModal(null)}
+        />
+      )}
       <CampaignRunModals
         weeklyDayOptions={runController.weeklyDayOptions}
         showRunConfirmModal={runController.showRunConfirmModal}

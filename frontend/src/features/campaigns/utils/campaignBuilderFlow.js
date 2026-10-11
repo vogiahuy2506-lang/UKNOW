@@ -116,6 +116,40 @@ export const isTriggerNodeType = (nodeType) => {
 export const isLogicNodeType = (nodeType) => LOGIC_NODE_TYPES.includes(String(nodeType || ''));
 
 /**
+ * Node nào thuộc kênh nào — để khoá bước của kênh chưa dùng được ngay trên palette (PLAN_KENH_KHONG_AN_KHOA_VA_GOI_Y_MUA
+ * 11/10/2026). Kênh Zalo gồm cả các khối chỉ phục vụ Zalo (chọn tài khoản, lấy bạn bè/nhóm).
+ */
+export const CHANNEL_NODE_TYPES = Object.freeze({
+  email: Object.freeze([...EMAIL_ACTION_TYPES]),
+  zalo: Object.freeze([
+    ...ZALO_PERSONAL_ACTION_TYPES,
+    ...ZALO_GROUP_ACTION_TYPES,
+    ZALO_ACCOUNT_NODE_TYPE,
+    ...ZALO_PERSONAL_DATA_NODE_TYPES,
+    ...ZALO_GROUP_DATA_NODE_TYPES,
+  ]),
+  telegram: Object.freeze([...TELEGRAM_ACTION_TYPES]),
+  whatsapp: Object.freeze([...WHATSAPP_ACTION_TYPES]),
+});
+
+/**
+ * Bảng "node -> kênh" cho những kênh ĐANG HIỆN nhưng CHƯA DÙNG ĐƯỢC (hết hạn / gói không có / hết lượt).
+ * Palette vẽ node trong bảng này mờ + khoá (không kéo thả được, bấm mở modal gợi ý mua); node không có trong bảng dùng bình thường.
+ *
+ * @param {Record<string, {visible?: boolean, available?: boolean}>} availability kết quả useChannelAvailability
+ * @returns {Record<string, string>} vd { send_telegram: 'telegram' }
+ */
+export const getLockedNodeChannels = (availability = {}) => {
+  const locked = {};
+  for (const [channel, nodeTypes] of Object.entries(CHANNEL_NODE_TYPES)) {
+    const info = availability?.[channel];
+    if (!info || info.visible === false || info.available !== false) continue;
+    for (const nodeType of nodeTypes) locked[nodeType] = channel;
+  }
+  return locked;
+};
+
+/**
  * Flow có ít nhất một node «Chọn tài khoản Zalo» bật pool đa TK (có ít nhất 1 id trong pool).
  * Dùng để ẩn / không chạy node «Lấy danh sách bạn bè» vì nguồn gửi không dùng danh sách bạn bè.
  *

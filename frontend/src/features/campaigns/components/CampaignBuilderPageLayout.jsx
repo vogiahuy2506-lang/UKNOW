@@ -5,6 +5,7 @@ import {
   HiOutlineChevronLeft,
   HiOutlineChevronRight,
   HiOutlineChevronDown,
+  HiOutlineLockClosed,
   HiOutlineSearch,
   HiOutlineX,
 } from 'react-icons/hi';
@@ -96,15 +97,12 @@ const buildNodeOrderIndex = (campaignType) => {
   }, {});
 };
 
-const NodePaletteItem = ({ node, orderIndex, onDragStart }) => {
-  const { locale } = useI18n();
+const NodePaletteItem = ({ node, orderIndex, onDragStart, lockedChannel = null, onLockedClick }) => {
+  const { t, locale } = useI18n();
   const hasOrder = typeof orderIndex === 'number' || (typeof orderIndex === 'string' && orderIndex !== '-');
-  return (
-    <div
-      draggable
-      onDragStart={(e) => onDragStart(e, node.type, node)}
-      className="flex items-center px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-dk-raised/60 cursor-grab active:cursor-grabbing transition-colors gap-2 sm:gap-2.5"
-    >
+  const nodeLabel = locale === 'vi' ? node.nameVi : node.name;
+  const body = (
+    <>
       <span
         className="shrink-0 w-5 h-5 sm:w-5 sm:h-5 rounded bg-slate-50 dark:bg-dk-raised text-slate-400 dark:text-dk-text2 text-[10px] font-medium flex items-center justify-center tabular-nums border border-slate-200/70 dark:border-dk-border/70"
         title={hasOrder ? 'Thứ tự gợi ý' : ''}
@@ -118,8 +116,45 @@ const NodePaletteItem = ({ node, orderIndex, onDragStart }) => {
         <node.icon className="w-4 h-4" style={{ color: node.iconColor }} />
       </div>
       <span className="text-sm text-gray-700 dark:text-dk-text leading-5 truncate">
-        {locale === 'vi' ? node.nameVi : node.name}
+        {nodeLabel}
       </span>
+    </>
+  );
+
+  // Bước của kênh chưa dùng được (11/10/2026, PLAN_KENH_KHONG_AN_KHOA_VA_GOI_Y_MUA): vẫn hiện nhưng mờ + khoá, KHÔNG kéo thả
+  // được (không `draggable`), bấm mở modal giải thích + gợi ý mua. Chiến dịch cũ đã có node này trên canvas giữ nguyên.
+  if (lockedChannel) {
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        aria-disabled="true"
+        data-testid={`palette-node-${node.type}`}
+        data-locked-channel={lockedChannel}
+        title={t('channelUnavailable.lockedTip', { channel: nodeLabel })}
+        onClick={() => onLockedClick?.(lockedChannel)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onLockedClick?.(lockedChannel);
+          }
+        }}
+        className="flex items-center px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-dk-raised/60 cursor-pointer opacity-60 transition-colors gap-2 sm:gap-2.5"
+      >
+        {body}
+        <HiOutlineLockClosed className="ml-auto w-3.5 h-3.5 shrink-0 text-slate-400 dark:text-dk-muted" aria-hidden="true" />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      draggable
+      data-testid={`palette-node-${node.type}`}
+      onDragStart={(e) => onDragStart(e, node.type, node)}
+      className="flex items-center px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-dk-raised/60 cursor-grab active:cursor-grabbing transition-colors gap-2 sm:gap-2.5"
+    >
+      {body}
     </div>
   );
 };
@@ -153,6 +188,10 @@ const CampaignBuilderPageLayout = ({
   filterNodes,
   allowedActionNodeTypes,
   zaloEnabled = true,
+  /** { [nodeType]: 'email'|'zalo'|'telegram'|'whatsapp' } — node của kênh chưa dùng được: vẽ mờ + khoá (xem NodePaletteItem). */
+  lockedNodeChannels = {},
+  /** (channel) => void — bấm node bị khoá thì mở modal gợi ý mua. */
+  onLockedNodeClick,
   allowedDataNodeTypes,
   /** Khi true — ẩn «Lấy danh sách bạn bè Zalo» khỏi palette (đang bật pool đa TK) */
   suppressGetAllFriendsPalette = false,
@@ -385,6 +424,8 @@ const CampaignBuilderPageLayout = ({
                       node={node}
                       orderIndex={NODE_ORDER_INDEX[node.type] ?? '-'}
                       onDragStart={onDragStart}
+                      lockedChannel={lockedNodeChannels[node.type] || null}
+                      onLockedClick={onLockedNodeClick}
                     />
                   ))}
                 </div>
@@ -455,6 +496,8 @@ const CampaignBuilderPageLayout = ({
                       node={node}
                       orderIndex={NODE_ORDER_INDEX[node.type] ?? '-'}
                       onDragStart={onDragStart}
+                      lockedChannel={lockedNodeChannels[node.type] || null}
+                      onLockedClick={onLockedNodeClick}
                     />
                   ))}
                 </div>
