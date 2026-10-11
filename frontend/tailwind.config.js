@@ -1,3 +1,59 @@
+import plugin from 'tailwindcss/plugin.js';
+
+/**
+ * Bộ "animate-in" tối giản — thay cho plugin `tailwindcss-animate` mà repo KHÔNG cài (không `npm install` thêm).
+ * 16 chỗ / 10 tệp viết `animate-in fade-in zoom-in-95 slide-in-from-top-1 duration-150` (modal xác nhận, ô gợi ý ngân
+ * hàng, menu thiết bị của landing canvas...) mà Tailwind 3 không có các class này → không sinh CSS → hộp thoại hiện
+ * ngay, không hiệu ứng, không báo lỗi gì. Chỉ làm họ "vào" (không có `animate-out`): đủ cho các tên đang dùng, và chốt
+ * `tailwindClassesExist.spec.js` đòi MỌI class `animate-in`/`fade-in`/`zoom-in`/`slide-in-from-*` trong src phải sinh CSS.
+ * Cách hoạt động như `tailwindcss-animate`: `animate-in` chạy keyframes `enter`, các class còn lại đặt biến `--tw-enter-*`
+ * mà keyframes đọc (thiếu biến → giữ nguyên giá trị thường: opacity 1, scale 1, không dịch).
+ * `duration-*` của Tailwind chỉ đặt `transition-duration` nên cần thêm bản `animation-duration` — viết dạng ghép
+ * `.animate-in[class~="duration-N"]` để KHÔNG đổi thời lượng của `animate-spin`/`animate-pulse` ở các chỗ khác.
+ */
+const animateInPlugin = plugin(({ addUtilities, matchUtilities, theme }) => {
+  addUtilities({
+    '@keyframes enter': {
+      from: {
+        opacity: 'var(--tw-enter-opacity, 1)',
+        transform:
+          'translate3d(var(--tw-enter-translate-x, 0), var(--tw-enter-translate-y, 0), 0) scale3d(var(--tw-enter-scale, 1), var(--tw-enter-scale, 1), var(--tw-enter-scale, 1))',
+      },
+    },
+    '.animate-in': {
+      animationName: 'enter',
+      animationDuration: '150ms',
+      '--tw-enter-opacity': 'initial',
+      '--tw-enter-scale': 'initial',
+      '--tw-enter-translate-x': 'initial',
+      '--tw-enter-translate-y': 'initial',
+    },
+  });
+
+  // Bộ chọn thuộc tính `[class~="duration-N"]` chứ không phải `.animate-in.duration-N`: viết dạng class ghép thì Tailwind
+  // đăng ký luật dưới ứng viên `duration-N`, và `@apply duration-200` trong index.css (`.btn`, `.transition-base`,
+  // `.menu-item`) kéo theo `.animate-in.btn`... — rác. Độ ưu tiên vẫn là (0,2,0), thắng `.animate-in` (0,1,0).
+  const durations = theme('transitionDuration') || {};
+  addUtilities(
+    Object.fromEntries(
+      Object.entries(durations)
+        .filter(([key]) => key !== 'DEFAULT')
+        .map(([key, value]) => [`.animate-in[class~="duration-${key}"]`, { animationDuration: value }])
+    )
+  );
+
+  // `fade-in` (không số) = từ trong suốt hẳn; `fade-in-50` = từ 50%.
+  matchUtilities({ 'fade-in': (value) => ({ '--tw-enter-opacity': value }) }, { values: { DEFAULT: '0', ...theme('opacity') } });
+  // `zoom-in-95` = từ 95% kích thước.
+  matchUtilities({ 'zoom-in': (value) => ({ '--tw-enter-scale': value }) }, { values: { DEFAULT: '0', ...theme('scale') } });
+  // `slide-in-from-top-1` = từ trên xuống 0,25rem (số theo thang spacing); `-full` = 100%.
+  const slideValues = { DEFAULT: '100%', ...theme('translate') };
+  matchUtilities({ 'slide-in-from-top': (value) => ({ '--tw-enter-translate-y': `-${value}` }) }, { values: slideValues });
+  matchUtilities({ 'slide-in-from-bottom': (value) => ({ '--tw-enter-translate-y': value }) }, { values: slideValues });
+  matchUtilities({ 'slide-in-from-left': (value) => ({ '--tw-enter-translate-x': `-${value}` }) }, { values: slideValues });
+  matchUtilities({ 'slide-in-from-right': (value) => ({ '--tw-enter-translate-x': value }) }, { values: slideValues });
+});
+
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
@@ -134,5 +190,5 @@ export default {
       },
     },
   },
-  plugins: [],
+  plugins: [animateInPlugin],
 }

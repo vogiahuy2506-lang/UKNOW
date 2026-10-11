@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import postcss from 'postcss';
+import tailwindcss from 'tailwindcss';
+import tailwindConfig from '../../../tailwind.config.js';
 
 /**
  * Chốt chặn: class Tailwind viết theo kiểu bản 4 mà bản 3 (repo đang dùng) KHÔNG sinh CSS.
@@ -17,6 +20,12 @@ import { fileURLToPath } from 'url';
  *
  * Spacing thập phân hợp lệ ở repo này: 0.5, 1.5, 2.5, 3.5 (có sẵn) + 4.5 (khai ở tailwind.config.js).
  * Muốn thêm số mới → khai vào `theme.extend.spacing` rồi thêm vào SPACING_DECIMALS_OK ở đây.
+ *
+ * 11/10/2026: `animate-in fade-in zoom-in-95 slide-in-from-top-1` (16 chỗ / 10 tệp) là class của plugin `tailwindcss-animate`
+ * mà repo không cài → modal xác nhận, ô gợi ý ngân hàng, menu thiết bị hiện cái bụp, không hiệu ứng. Giờ có plugin nội
+ * tuyến trong tailwind.config.js (`animateInPlugin`, chỉ làm hiệu ứng VÀO); chốt dưới biên dịch Tailwind bằng cấu hình
+ * thật và đòi MỌI class họ này đang dùng trong src sinh ra CSS — dùng `animate-out` / `slide-out-to-*` / `zoom-out`
+ * (chưa có) sẽ đỏ ở đây thay vì lặng lẽ không có tác dụng.
  */
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -126,5 +135,69 @@ describe('tailwindClassesExist — class Tailwind 4 mà bản 3 không sinh CSS'
     expect(config.theme.extend.spacing['4.5']).toBe('1.125rem');
     expect(config.theme.extend.boxShadow.xs).toBeTruthy();
     expect(config.theme.extend.boxShadow['2xs']).toBeTruthy();
+  });
+});
+
+// Họ class của `tailwindcss-animate` (không cài). Cả hướng "ra" (`animate-out`, `*-out-*`) cũng nằm trong mẫu: plugin nội tuyến
+// chưa làm hiệu ứng ra, nên dùng chúng phải đỏ. (?<![\w-]) để `animate-fade-in` / `animate-fade-in-up` (class riêng ở index.css)
+// không bị tính là `fade-in`.
+const ANIMATE_FAMILY_RE =
+  /(?<![\w-])(?:animate-(?:in|out)|(?:fade|zoom|spin)-(?:in|out)(?:-[\w/.]+)?|slide-(?:in-from|out-to)-(?:top|bottom|left|right)(?:-[\w/.]+)?)(?![\w-])/g;
+
+async function compileUtilities(candidates, extraCss = '') {
+  const result = await postcss([tailwindcss({ ...tailwindConfig, content: [{ raw: candidates.join(' ') }] })]).process(
+    `@tailwind utilities;${extraCss}`,
+    { from: undefined }
+  );
+  return result.css;
+}
+
+// Selector CSS của một class: thoát mọi ký tự ngoài [\w-] (`slide-in-from-top-1/2` → `.slide-in-from-top-1\/2`).
+const cssSelector = (token) => `.${token.replace(/[^\w-]/g, '\\$&')}`;
+
+describe('tailwindClassesExist — họ animate-in (plugin nội tuyến thay tailwindcss-animate)', () => {
+  it('các class đang dùng (animate-in / fade-in / zoom-in-95 / slide-in-from-top-1 / duration-*) sinh CSS đúng', async () => {
+    const css = await compileUtilities(
+      ['animate-in', 'fade-in', 'fade-in-50', 'zoom-in-95', 'slide-in-from-top-1', 'duration-150', 'animate-spin'],
+      '.btn { @apply transition-all duration-200; }'
+    );
+    // keyframes `enter` + class chạy nó
+    expect(css).toMatch(/@keyframes enter\b/);
+    expect(css).toMatch(/\.animate-in\s*\{[^}]*animation-name:\s*enter/);
+    // các class đặt biến mà keyframes đọc
+    expect(css).toMatch(/\.fade-in\s*\{[^}]*--tw-enter-opacity:\s*0/);
+    expect(css).toMatch(/\.fade-in-50\s*\{[^}]*--tw-enter-opacity:\s*0?\.5/);
+    expect(css).toMatch(/\.zoom-in-95\s*\{[^}]*--tw-enter-scale:\s*\.95/);
+    expect(css).toMatch(/\.slide-in-from-top-1\s*\{[^}]*--tw-enter-translate-y:\s*-0?\.25rem/);
+    // `duration-N` đi kèm animate-in đổi được thời lượng hiệu ứng (chỉ khi cùng phần tử có animate-in)
+    expect(css).toMatch(/\.animate-in\[class~="duration-150"\]\s*\{[^}]*animation-duration:\s*150ms/);
+    // không kéo rác theo `@apply duration-200` (`.btn`, `.transition-base`...) và không đụng animate-spin
+    expect(css).not.toMatch(/\.animate-in\.[\w-]/);
+    expect(css).not.toMatch(/\.animate-spin\s*\{[^}]*enter/);
+  });
+
+  it('MỌI class animate-in / fade-in / zoom-in / slide-in-from-* đang dùng trong src đều sinh CSS', async () => {
+    const used = new Map(); // token → "tệp:dòng" đầu tiên
+    for (const file of listSourceFiles(SRC)) {
+      const rel = path.relative(SRC, file);
+      fs.readFileSync(file, 'utf8')
+        .split('\n')
+        .forEach((line, index) => {
+          for (const match of line.matchAll(ANIMATE_FAMILY_RE)) {
+            if (!used.has(match[0])) used.set(match[0], `${rel}:${index + 1}`);
+          }
+        });
+    }
+    // Tự chứng minh bộ quét thấy được class đang dùng — không thì chốt này rỗng và xanh vô nghĩa.
+    expect(used.has('animate-in'), 'bộ quét không thấy `animate-in` nào trong src (mẫu regex hỏng?)').toBe(true);
+
+    const css = await compileUtilities([...used.keys()]);
+    const missing = [...used.entries()]
+      .filter(([token]) => !css.includes(cssSelector(token)))
+      .map(([token, where]) => `${where}: ${token}`);
+    expect(
+      missing,
+      `Class thuộc họ tailwindcss-animate mà tailwind.config.js (animateInPlugin) không sinh CSS — lặng lẽ không có tác dụng. Thêm vào plugin hoặc đổi sang class có sẵn:\n${missing.join('\n')}`
+    ).toEqual([]);
   });
 });
