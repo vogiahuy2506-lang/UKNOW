@@ -278,7 +278,7 @@ const BusinessProfilePage = () => {
           subtitle={t('businessProfile.basicInfoSubtitle')}
           accent="orange"
         >
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             {/* Cột trái — Logo */}
             <div className="space-y-2">
               <label className="text-[10px] font-semibold text-slate-500 dark:text-dk-text2 uppercase tracking-wide">{t('businessProfile.companyLogo')}</label>
@@ -348,7 +348,7 @@ const BusinessProfilePage = () => {
 
         {/* Sản phẩm / dịch vụ — quản lý tại trang Sản phẩm */}
         <div className="bg-white dark:bg-dk-surface border border-slate-200 dark:border-dk-border rounded-2xl p-5">
-          <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
             <div className="min-w-0">
               <p className="text-sm font-semibold text-slate-700 dark:text-dk-text">
                 {t('businessProfile.productsPreviewTitle')} ({productTotal})
