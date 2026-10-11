@@ -1,12 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
+  HiOutlineClock,
   HiOutlineEye,
+  HiOutlineInformationCircle,
   HiOutlineMail,
   HiOutlineRefresh,
-  HiOutlineSave,
 } from 'react-icons/hi';
-import PageContainer from '../../components/common/PageContainer';
+import {
+  AdminEditorShell,
+  EditorSettingsModal,
+  EditorTopbar,
+  TopbarButton,
+  TopbarDivider,
+  TopbarSaveButton,
+  TopbarSegmented,
+  TopbarSettingsButton,
+  TopbarToolsMenu,
+} from '../../components/editor/AdminEditorShell';
 import { useI18n } from '../../i18n';
 import adminSystemEmailTemplateApiService from '../../features/admin/services/adminSystemEmailTemplateApi.service';
 import adminSubscriptionReminderSettingsApiService from '../../features/admin/services/adminSubscriptionReminderSettingsApi.service';
@@ -15,6 +26,10 @@ import AdminSubscriptionReminderScheduleSection from './AdminSubscriptionReminde
 // PR-2b (13/09/2026, PLAN_CANH_BAO_SAP_HET_HAN_GOI mục 4.2) — trang này giờ sửa được cả 3 mẫu thư
 // hạn gói (không chỉ welcome), qua bộ chọn mẫu bên dưới. Tên file/route/component giữ nguyên
 // (welcome-email) — đổi tên không phải yêu cầu của PR này.
+//
+// 11/10/2026 (PLAN_TRANG_SOAN_QUAN_TRI) — CHỈ đổi bố cục theo kiểu "Tạo landing page" /app: thanh trên
+// (chọn mẫu thư · Cài đặt · Công cụ · Lưu) + vùng soạn/xem trước chiếm trọn chiều cao; Lịch nhắc hạn và
+// thông tin mẫu nằm trong modal Cài đặt. State, handler, lời gọi API giữ nguyên.
 const TEMPLATE_KEYS = ['welcome', 'plan_expiring', 'plan_expired', 'employee_invitation'];
 
 const VARIABLE_LABEL_KEYS = {
@@ -96,7 +111,9 @@ function validateScheduleDraft(draftDays, t) {
 export default function AdminWelcomeEmailPage() {
   const { t, locale } = useI18n();
   const bodyRef = useRef(null);
-  const [activeTab, setActiveTab] = useState('content');
+  // Cài đặt (modal): tab 'schedule' = Lịch nhắc hạn, 'info' = Thông tin mẫu đang sửa.
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState('schedule');
   const [templateKey, setTemplateKey] = useState('welcome');
   const [template, setTemplate] = useState({ subject: '', bodyHtml: '' });
   const [savedTemplate, setSavedTemplate] = useState({ subject: '', bodyHtml: '' });
@@ -131,6 +148,13 @@ export default function AdminWelcomeEmailPage() {
     plan_expired: t('adminWelcomeEmail.templateKeys.plan_expired'),
     employee_invitation: t('adminWelcomeEmail.templateKeys.employee_invitation'),
   };
+  // Nhãn ngắn cho thanh trên (4 nhãn đầy đủ không vừa giữa thanh 52px); nhãn đầy đủ nằm ở tooltip.
+  const templateKeyShortLabels = {
+    welcome: t('adminWelcomeEmail.templateKeysShort.welcome'),
+    plan_expiring: t('adminWelcomeEmail.templateKeysShort.plan_expiring'),
+    plan_expired: t('adminWelcomeEmail.templateKeysShort.plan_expired'),
+    employee_invitation: t('adminWelcomeEmail.templateKeysShort.employee_invitation'),
+  };
   const templateMeta = {
     welcome: {
       title: t('adminWelcomeEmail.templateMeta.welcome.title'),
@@ -141,8 +165,8 @@ export default function AdminWelcomeEmailPage() {
     plan_expiring: {
       title: t('adminWelcomeEmail.templateMeta.plan_expiring.title'),
       // Hai dòng này TỪNG ghi cứng "còn 7 ngày và còn 3 ngày". Từ khi lịch nhắc sửa được
-      // (PR-2), ghi cứng là tự mâu thuẫn: sếp đặt [10,5,2] ở tab bên cạnh mà tab này vẫn nói 7/3.
-      // Lấy từ scheduleSaved (đã lưu), KHÔNG phải scheduleDraft — tab này mô tả hành vi THẬT.
+      // (PR-2), ghi cứng là tự mâu thuẫn: sếp đặt [10,5,2] ở Cài đặt mà chữ mô tả vẫn nói 7/3.
+      // Lấy từ scheduleSaved (đã lưu), KHÔNG phải scheduleDraft — chữ này mô tả hành vi THẬT.
       subtitle: t('adminWelcomeEmail.templateMeta.plan_expiring.subtitle', { days: savedDaysText }),
       behaviorNote: t('adminWelcomeEmail.templateMeta.plan_expiring.behaviorNote', { days: savedDaysText }),
       previewFrameTitle: t('adminWelcomeEmail.templateMeta.plan_expiring.previewFrameTitle'),
@@ -223,11 +247,19 @@ export default function AdminWelcomeEmailPage() {
     setTemplateKey(nextKey);
   };
 
-  const selectTab = (nextTab) => {
-    if (nextTab === activeTab) return;
-    const leavingDirty = activeTab === 'content' ? isDirty : scheduleIsDirty;
-    if (leavingDirty && !window.confirm(t('adminWelcomeEmail.tabSwitchConfirm'))) return;
-    setActiveTab(nextTab);
+  // Lịch nhắc hạn giờ nằm trong modal Cài đặt (không còn "tab" ngang hàng với nội dung thư). Lịch đang sửa mà
+  // chưa Lưu thì đóng Cài đặt phải hỏi (thay cho hộp hỏi khi chuyển tab trước đây); đồng ý thì bỏ bản nháp.
+  const openSettings = (nextTab) => {
+    if (nextTab) setSettingsTab(nextTab);
+    setSettingsOpen(true);
+  };
+
+  const closeSettings = () => {
+    if (scheduleIsDirty) {
+      if (!window.confirm(t('adminWelcomeEmail.settingsCloseConfirm'))) return;
+      setScheduleDraft(scheduleSaved.map(String));
+    }
+    setSettingsOpen(false);
   };
 
   const save = async () => {
@@ -379,190 +411,107 @@ export default function AdminWelcomeEmailPage() {
     } catch {}
   }, []);
 
-  return (
-    <PageContainer className="space-y-3 pb-4">
-      {/* ── Studio Top Header Bar: Thu gọn tối đa, tích hợp các bộ điều khiển ── */}
-      <div className="bg-white dark:bg-dk-surface border border-slate-200/80 dark:border-dk-border rounded-2xl p-3 shadow-xs space-y-2.5">
-        {/* Hàng 1: Tabs trang + Icon & H1 + Location chip + Nút hành động */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3 flex-wrap min-w-0">
-            {/* Tiêu đề trang & Icon (Bên Trái) */}
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-orange-500 to-amber-500 text-white flex items-center justify-center shadow-xs shrink-0">
-                <HiOutlineMail className="w-4 h-4" />
-              </div>
-              <div className="min-w-0">
-                <h1 className="text-sm sm:text-base font-bold text-slate-900 dark:text-dk-text sm:truncate">
-                  {templateMeta.title}
-                </h1>
-                <p className="text-xs text-slate-500 dark:text-dk-muted sm:truncate">
-                  {templateMeta.subtitle}
-                </p>
-              </div>
-            </div>
+  const toolsItems = [
+    {
+      key: 'refresh-preview',
+      icon: HiOutlineEye,
+      label: isPreviewing ? t('adminWelcomeEmail.previewing') : t('adminWelcomeEmail.refreshPreview'),
+      description: t('adminWelcomeEmail.toolsRefreshPreviewDesc'),
+      disabled: isPreviewing,
+      onClick: () => requestPreview(template, templateKey),
+    },
+    {
+      key: 'restore-default',
+      icon: HiOutlineRefresh,
+      label: isResetting ? t('adminWelcomeEmail.resetting') : t('adminWelcomeEmail.restoreDefault'),
+      description: t('adminWelcomeEmail.toolsRestoreDefaultDesc'),
+      disabled: isResetting || isSaving,
+      danger: true,
+      onClick: reset,
+    },
+  ];
 
-            <div className="h-4 w-px bg-slate-200 dark:bg-dk-raised hidden sm:block shrink-0" />
-
-            {/* Tabs trang (Nội dung thư / Lịch nhắc hạn) */}
-            <div
-              className="inline-flex bg-slate-100 dark:bg-dk-raised p-0.5 rounded-xl border border-slate-200/60 dark:border-dk-border/80 shrink-0"
-              role="group"
-              aria-label={t('adminWelcomeEmail.pageTabsLabel')}
-            >
-              <button
-                type="button"
-                onClick={() => selectTab('content')}
-                aria-pressed={activeTab === 'content'}
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
-                  activeTab === 'content'
-                    ? 'bg-white dark:bg-orange-500 text-orange-600 dark:text-dk-text shadow-xs'
-                    : 'text-slate-600 dark:text-dk-text2 hover:text-slate-900 dark:hover:text-dk-text'
-                }`}
-              >
-                {t('adminWelcomeEmail.contentTabLabel')}
-              </button>
-              <button
-                type="button"
-                onClick={() => selectTab('schedule')}
-                aria-pressed={activeTab === 'schedule'}
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
-                  activeTab === 'schedule'
-                    ? 'bg-white dark:bg-orange-500 text-orange-600 dark:text-dk-text shadow-xs'
-                    : 'text-slate-600 dark:text-dk-text2 hover:text-slate-900 dark:hover:text-dk-text'
-                }`}
-              >
-                {t('adminSubscriptionReminderSchedule.tabLabel')}
-              </button>
-            </div>
-
-            {/* Badge vị trí điều hướng */}
-            <p className="inline-flex items-center max-w-full text-[11px] font-medium text-slate-500 dark:text-dk-text2 bg-slate-100 dark:bg-dk-raised/80 px-2 py-0.5 rounded-md border border-slate-200/60 dark:border-dk-border/60 sm:shrink-0">
-              {t('adminWelcomeEmail.locationNote')}
-            </p>
-          </div>
-
-          {/* Cụm nút hành động bên phải */}
-          {activeTab === 'content' && (
-            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-              <button
-                type="button"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-dk-text bg-slate-100 hover:bg-slate-200/80 dark:bg-dk-raised dark:hover:bg-dk-strong border border-slate-200/80 dark:border-dk-border/80 rounded-xl transition-all shadow-2xs"
-                onClick={reset}
-                disabled={isResetting || isSaving}
-              >
-                <HiOutlineRefresh className={`h-3.5 w-3.5 text-slate-500 dark:text-dk-text2 ${isResetting ? 'animate-spin' : ''}`} />
-                <span>{isResetting ? t('adminWelcomeEmail.resetting') : t('adminWelcomeEmail.restoreDefault')}</span>
-              </button>
-              <button
-                type="button"
-                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white rounded-xl transition-all shadow-sm ${
-                  isSaving || !isDirty
-                    ? 'bg-slate-400 dark:bg-dk-strong cursor-not-allowed text-slate-200'
-                    : 'bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 shadow-orange-500/20 active:scale-[0.98]'
-                }`}
-                onClick={save}
-                disabled={isSaving || !isDirty}
-              >
-                <HiOutlineSave className="h-3.5 w-3.5" />
-                <span>{isSaving ? t('common.saving') : t('common.save')}</span>
-                {isDirty && <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
-              </button>
-            </div>
+  const topbar = (
+    <EditorTopbar
+      icon={HiOutlineMail}
+      title={t('adminWelcomeEmail.topbarTitle')}
+      subtitle={templateMeta.title}
+      center={(
+        // Chỉ từ xl: giữa thanh 52px 4 tab + cụm nút phải không vừa ở 768–1279px (kể cả khi menu trái mở) → tràn đè nút Cài đặt.
+        // Dưới xl đã có ô chọn mẫu thư ngay dưới thanh trên.
+        <div className="hidden xl:block">
+          <TopbarSegmented
+            value={templateKey}
+            onChange={selectTemplateKey}
+            ariaLabel={t('adminWelcomeEmail.templateSelector')}
+            options={TEMPLATE_KEYS.map((key) => ({
+              value: key,
+              label: templateKeyShortLabels[key],
+              title: templateKeyLabels[key],
+            }))}
+          />
+        </div>
+      )}
+      right={(
+        <>
+          {isDirty && (
+            <span className="hidden lg:inline-flex items-center gap-1.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" aria-hidden="true" />
+              {t('adminWelcomeEmail.unsavedBadge')}
+            </span>
           )}
+          <TopbarSettingsButton onClick={() => openSettings()} active={settingsOpen} />
+          <TopbarToolsMenu items={toolsItems} />
+          <TopbarDivider />
+          <TopbarSaveButton onClick={save} saving={isSaving} disabled={!isDirty} />
+        </>
+      )}
+    />
+  );
+
+  const inputClass = 'w-full rounded-xl border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-inset text-gray-900 dark:text-dk-text focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20';
+
+  return (
+    <AdminEditorShell topbar={topbar}>
+      <div className="h-full flex flex-col min-h-0">
+        {/* Dưới xl thanh trên không chứa bộ chọn mẫu thư (không đủ chỗ) → ô chọn gọn ngay dưới thanh trên. */}
+        <div className="xl:hidden shrink-0 px-3 py-2 bg-white dark:bg-dk-surface border-b border-gray-200/90 dark:border-dk-border">
+          <select
+            aria-label={t('adminWelcomeEmail.templateSelector')}
+            value={templateKey}
+            onChange={(event) => selectTemplateKey(event.target.value)}
+            className={`${inputClass} h-9 px-3 text-sm font-medium sm:max-w-xs`}
+          >
+            {TEMPLATE_KEYS.map((key) => (
+              <option key={key} value={key}>{templateKeyShortLabels[key]}</option>
+            ))}
+          </select>
         </div>
 
-        {/* Hàng 2: Bộ chọn Mẫu thư & Dòng thông tin giải thích (chỉ ở tab content) */}
-        {activeTab === 'content' && (
-          <div className="pt-2 border-t border-slate-100 dark:border-dk-border/80 space-y-2">
-            {/* Bộ chọn mẫu thư: Hàng riêng đầy đủ không gian, không bị ngắt quãng giữa chừng */}
-            <div className="flex items-center gap-2 flex-wrap min-w-0">
-              <span className="text-xs font-bold text-slate-400 dark:text-dk-muted uppercase tracking-wider shrink-0">
-                {t('adminWelcomeEmail.templateSelector')}:
-              </span>
-              <div
-                className="flex items-center gap-1.5 flex-wrap"
-                role="group"
-                aria-label={t('adminWelcomeEmail.templateSelector')}
-              >
-                {TEMPLATE_KEYS.map((key) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => selectTemplateKey(key)}
-                    aria-pressed={key === templateKey}
-                    className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-all ${
-                      key === templateKey
-                        ? 'bg-orange-500 text-white font-semibold shadow-xs'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-dk-raised dark:text-dk-text dark:hover:bg-dk-strong'
-                    }`}
-                  >
-                    {templateKeyLabels[key]}
-                  </button>
-                ))}
-              </div>
-              <p className="text-[11px] text-slate-400 dark:text-dk-muted truncate">
-                {t('adminWelcomeEmail.templateSelectorHint')}
-              </p>
-            </div>
-
-            {/* Dòng ghi chú phạm vi / hành vi: Hiển thị đầy đủ câu, không bị truncate */}
-            <div className="flex items-start sm:items-center gap-2 px-3 py-1.5 rounded-xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/50 dark:border-blue-900/40 text-xs text-blue-800 dark:text-blue-300">
-              <span className="font-semibold shrink-0 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block shrink-0" />
-                {t('adminWelcomeEmail.behaviorTitle')}:
-              </span>
-              <p className="text-xs text-blue-700 dark:text-blue-300 leading-normal">
-                {templateMeta.behaviorNote}
-              </p>
-            </div>
+        {isLoading ? (
+          <div className="flex-1 flex items-center justify-center py-16 text-sm text-gray-400 dark:text-dk-muted">
+            {t('common.loading')}
           </div>
-        )}
-      </div>
-
-      {activeTab === 'content' && (
-        isLoading ? (
-          <div className="py-16 text-center text-sm text-gray-400 dark:text-dk-muted">{t('common.loading')}</div>
         ) : (
           <div
             ref={containerRef}
-            className={`flex flex-col lg:flex-row gap-0 items-stretch min-h-[580px] lg:h-[calc(100vh-190px)] relative ${
+            className={`flex-1 min-h-0 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden relative ${
               isResizing ? 'cursor-col-resize select-none' : ''
             }`}
           >
-            {/* Cột Trái: Trình soạn thảo (Resizable) */}
+            {/* Cột Trái: soạn (Tiêu đề · Biến · Nội dung HTML) */}
             <section
               style={isDesktop ? { width: `${splitRatio}%` } : undefined}
-              className="w-full lg:w-auto flex flex-col rounded-2xl border border-slate-200/80 dark:border-dk-border bg-white dark:bg-dk-surface shadow-xs overflow-hidden shrink-0"
+              className="w-full lg:w-auto shrink-0 flex flex-col lg:h-full min-h-0 bg-white dark:bg-dk-surface border-b lg:border-b-0 lg:border-r border-gray-200/90 dark:border-dk-border"
             >
-              {/* Header Editor */}
-              <div className="h-10 px-4 border-b border-slate-100 dark:border-dk-border flex items-center justify-between gap-3 shrink-0 bg-slate-50/70 dark:bg-dk-surface">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-dk-text">
-                    {t('adminWelcomeEmail.editorTitle')}
-                  </h2>
-                </div>
-                <span
-                  className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
-                    metadata.isCustomized
-                      ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60'
-                      : 'bg-slate-100 text-slate-600 dark:bg-dk-raised dark:text-dk-text2 border border-slate-200/60 dark:border-dk-border/60'
-                  }`}
-                >
-                  {metadata.isCustomized
-                    ? t('adminWelcomeEmail.customized')
-                    : t('adminWelcomeEmail.usingDefault')}
-                </span>
-              </div>
-
-              {/* Body Editor */}
-              <div className="p-3.5 space-y-3 flex-1 flex flex-col min-h-0 overflow-y-auto">
+              <div className="flex-1 min-h-0 flex flex-col gap-4 p-4 lg:overflow-y-auto">
                 {/* Tiêu đề email */}
-                <label className="block space-y-1 shrink-0">
+                <label className="block space-y-1.5 shrink-0">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-slate-700 dark:text-dk-text">
+                    <span className="text-xs font-semibold text-gray-700 dark:text-dk-text">
                       {t('adminWelcomeEmail.subject')}
                     </span>
-                    <span className="text-[11px] text-slate-400 font-mono">
+                    <span className="text-[11px] text-gray-400 dark:text-dk-muted font-mono">
                       {template.subject.length}/200
                     </span>
                   </div>
@@ -573,28 +522,33 @@ export default function AdminWelcomeEmailPage() {
                       setTemplate((current) => ({ ...current, subject: event.target.value }))
                     }
                     maxLength={200}
-                    className="w-full rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset text-slate-900 dark:text-dk-text px-3 py-1.5 text-xs focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                    className={`${inputClass} px-3 py-2 text-sm`}
                   />
                 </label>
 
-                {/* Biến cá nhân hóa */}
-                <div className="space-y-1 shrink-0">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-slate-700 dark:text-dk-text">
+                {/* Biến cá nhân hóa — gợi ý dài chuyển thành tooltip (i) */}
+                <div className="space-y-1.5 shrink-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-semibold text-gray-700 dark:text-dk-text">
                       {t('adminWelcomeEmail.variables')}
                     </span>
-                    <span className="text-[10px] text-slate-400 hidden sm:inline">
-                      {t('adminWelcomeEmail.variablesHint')}
+                    <span
+                      role="img"
+                      aria-label={t('adminWelcomeEmail.variablesHint')}
+                      title={t('adminWelcomeEmail.variablesHint')}
+                      className="text-gray-400 dark:text-dk-muted cursor-help inline-flex"
+                    >
+                      <HiOutlineInformationCircle className="w-4 h-4" />
                     </span>
                   </div>
-                  <div className="flex flex-wrap gap-1.5 max-h-20 overflow-y-auto p-1 bg-slate-50 dark:bg-dk-inset rounded-xl border border-slate-200/60 dark:border-dk-border">
+                  <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
                     {metadata.variables.map((variable) => (
                       <button
                         key={variable}
                         type="button"
                         onClick={() => insertBodyVariable(variable)}
                         title={t(`adminWelcomeEmail.variableLabels.${VARIABLE_LABEL_KEYS[variable] || variable}`)}
-                        className="rounded-lg border border-slate-200 dark:border-dk-border/80 bg-white dark:bg-dk-raised px-2 py-0.5 font-mono text-[11px] text-slate-700 dark:text-dk-text hover:border-orange-400 hover:bg-orange-50 dark:hover:border-orange-500/50 dark:hover:bg-orange-950/30 transition-colors shadow-2xs"
+                        className="rounded-lg border border-gray-200 dark:border-dk-border/80 bg-gray-50 dark:bg-dk-raised px-2 py-0.5 font-mono text-[11px] text-gray-700 dark:text-dk-text hover:border-orange-400 hover:bg-orange-50 dark:hover:border-orange-500/50 dark:hover:bg-orange-950/30 transition-colors"
                       >
                         {`{{${variable}}}`}
                       </button>
@@ -603,15 +557,10 @@ export default function AdminWelcomeEmailPage() {
                 </div>
 
                 {/* Nội dung HTML */}
-                <label className="flex-1 flex flex-col min-h-0 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-slate-700 dark:text-dk-text">
-                      {t('adminWelcomeEmail.bodyHtml')}
-                    </span>
-                    <span className="text-[10px] text-slate-400">
-                      {t('adminWelcomeEmail.htmlHint')}
-                    </span>
-                  </div>
+                <label className="flex-1 flex flex-col min-h-0 space-y-1.5">
+                  <span className="text-xs font-semibold text-gray-700 dark:text-dk-text">
+                    {t('adminWelcomeEmail.bodyHtml')}
+                  </span>
                   <textarea
                     aria-label={t('adminWelcomeEmail.bodyHtml')}
                     ref={bodyRef}
@@ -621,18 +570,13 @@ export default function AdminWelcomeEmailPage() {
                     }
                     rows={16}
                     spellCheck={false}
-                    className="flex-1 w-full rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-inset text-slate-900 dark:text-dk-text p-3 font-mono text-xs leading-5 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20 resize-none min-h-[200px]"
+                    className={`${inputClass} flex-1 p-3 font-mono text-xs leading-5 resize-none min-h-[260px]`}
                   />
                 </label>
-
-                {metadata.updatedAt && (
-                  <p className="text-[11px] text-slate-400 dark:text-dk-muted shrink-0">
-                    {t('adminWelcomeEmail.updatedAt', {
-                      time: new Date(metadata.updatedAt).toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN'),
-                    })}
-                  </p>
-                )}
               </div>
+              <p className="shrink-0 px-4 py-2 border-t border-gray-100 dark:border-dk-border text-[11px] text-gray-400 dark:text-dk-muted">
+                {t('adminWelcomeEmail.htmlHint')}
+              </p>
             </section>
 
             {/* Thanh kéo phân cách thay đổi tỷ lệ giữa Editor và Preview */}
@@ -642,14 +586,14 @@ export default function AdminWelcomeEmailPage() {
               tabIndex={0}
               onMouseDown={handleMouseDownResize}
               onDoubleClick={handleResetSplit}
-              title="Kéo qua lại để thu nhỏ / phóng to phần soạn thảo và xem trước (Nhấp đúp để đặt lại 48%)"
+              title={t('adminWelcomeEmail.resizeHint')}
               className={`hidden lg:flex w-3 -mx-1.5 z-20 cursor-col-resize select-none shrink-0 items-center justify-center group transition-colors ${
                 isResizing ? 'bg-orange-500/20' : 'hover:bg-orange-500/10'
               }`}
             >
               <div
                 className={`w-1 h-10 rounded-full transition-colors ${
-                  isResizing ? 'bg-orange-500' : 'bg-slate-300 dark:bg-dk-strong group-hover:bg-orange-400'
+                  isResizing ? 'bg-orange-500' : 'bg-gray-300 dark:bg-dk-strong group-hover:bg-orange-400'
                 }`}
               />
             </div>
@@ -657,85 +601,135 @@ export default function AdminWelcomeEmailPage() {
             {/* Cột Phải: Xem trước (Live Preview) */}
             <section
               style={isDesktop ? { width: `${100 - splitRatio}%` } : undefined}
-              className="w-full lg:w-auto flex-1 flex flex-col rounded-2xl border border-slate-200/80 dark:border-dk-border bg-white dark:bg-dk-surface shadow-xs overflow-hidden shrink-0 mt-4 lg:mt-0"
+              className="w-full lg:w-auto flex-1 flex flex-col lg:h-full min-h-0 shrink-0 bg-gray-100/70 dark:bg-dk-inset p-3"
             >
-              {/* Header Preview */}
-              <div className="h-10 px-4 border-b border-slate-100 dark:border-dk-border flex items-center justify-between gap-3 shrink-0 bg-slate-50/70 dark:bg-dk-surface">
-                <div className="flex items-center gap-2 min-w-0">
-                  <h2 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-dk-text shrink-0">
-                    {t('adminWelcomeEmail.previewTitle')}
-                  </h2>
-                  <span className="text-xs text-slate-400 dark:text-dk-muted font-mono truncate max-w-xs">
-                    {preview.subject || t('adminWelcomeEmail.noPreview')}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:text-dk-text bg-white dark:bg-dk-raised border border-slate-200 dark:border-dk-border hover:bg-slate-50 dark:hover:bg-dk-strong rounded-lg transition-all shadow-2xs shrink-0"
-                  onClick={() => requestPreview(template, templateKey)}
-                  disabled={isPreviewing}
-                >
-                  <HiOutlineEye className="h-3.5 w-3.5 text-slate-500 dark:text-dk-text2" />
-                  <span>{isPreviewing ? t('adminWelcomeEmail.previewing') : t('adminWelcomeEmail.refreshPreview')}</span>
-                </button>
-              </div>
-
-              {/* Email Client Mock Frame — giữ sáng: mô phỏng hộp thư thật, thân thư luôn nền trắng (lớp bao ngoài vẫn theo chế độ tối) */}
-              <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-slate-100 dark:bg-dk-inset p-2.5">
-                <div className="flex-1 flex flex-col bg-white rounded-xl shadow-xs overflow-hidden border border-slate-200/80">
-                  {/* Email headers info */}
-                  <div className="px-4 py-2 border-b border-slate-100 bg-slate-50/80 text-[11px] text-slate-600 flex items-center justify-between gap-3 shrink-0">
-                    <div className="flex items-center gap-2 truncate">
-                      <span className="font-semibold text-slate-700">{t('adminWelcomeEmail.previewTo', 'Đến:')}</span>
+              {/* Khung hộp thư giả lập — giữ sáng: mô phỏng hộp thư thật, thân thư luôn nền trắng (lớp bao ngoài vẫn theo chế độ tối) */}
+              <div className="flex-1 flex flex-col min-h-0 bg-white rounded-xl shadow-xs overflow-hidden border border-slate-200/80">
+                <div className="px-4 py-2 border-b border-slate-100 bg-slate-50/80 shrink-0 space-y-0.5">
+                  <div className="flex items-center justify-between gap-3 text-[11px] text-slate-600">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-semibold text-slate-700">{t('adminWelcomeEmail.previewTo')}</span>
                       <span className="font-mono text-slate-500 truncate">user@example.com</span>
                     </div>
-                    <div className="flex items-center gap-1.5 text-slate-400 text-[10px]">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
-                      <span>{t('adminWelcomeEmail.previewSampleData', 'Xem trước với dữ liệu mẫu')}</span>
+                    <div className="flex items-center gap-1.5 text-slate-400 text-[10px] shrink-0">
+                      {isPreviewing ? (
+                        <HiOutlineRefresh className="w-3 h-3 animate-spin" aria-hidden="true" />
+                      ) : (
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+                      )}
+                      <span className="hidden sm:inline">
+                        {isPreviewing ? t('adminWelcomeEmail.previewing') : t('adminWelcomeEmail.previewSampleData')}
+                      </span>
                     </div>
                   </div>
-
-                  {/* Iframe */}
-                  {preview.html ? (
-                    <iframe
-                      title={templateMeta.previewFrameTitle}
-                      srcDoc={preview.html}
-                      sandbox=""
-                      className={`w-full flex-1 min-h-[460px] bg-white border-0 ${
-                        isResizing ? 'pointer-events-none' : ''
-                      }`}
-                    />
-                  ) : (
-                    <div className="flex flex-1 min-h-[300px] items-center justify-center text-sm text-gray-400 dark:text-dk-muted">
-                      {t('adminWelcomeEmail.noPreview')}
-                    </div>
+                  {preview.subject && (
+                    <div className="text-xs font-semibold text-slate-800 truncate">{preview.subject}</div>
                   )}
                 </div>
+
+                {preview.html ? (
+                  <iframe
+                    title={templateMeta.previewFrameTitle}
+                    srcDoc={preview.html}
+                    sandbox=""
+                    className={`w-full flex-1 min-h-[420px] lg:min-h-0 bg-white border-0 ${
+                      isResizing ? 'pointer-events-none' : ''
+                    }`}
+                  />
+                ) : (
+                  <div className="flex flex-1 min-h-[240px] items-center justify-center text-sm text-slate-400">
+                    {t('adminWelcomeEmail.noPreview')}
+                  </div>
+                )}
               </div>
             </section>
           </div>
-        )
-      )}
+        )}
+      </div>
 
-      {activeTab === 'schedule' && (
-        <AdminSubscriptionReminderScheduleSection
-          t={t}
-          locale={locale}
-          isLoading={isScheduleLoading}
-          isSaving={isScheduleSaving}
-          draftDays={scheduleDraft}
-          errors={scheduleErrors}
-          isValid={isScheduleValid}
-          isDirty={scheduleIsDirty}
-          previewText={schedulePreviewText}
-          showEmptyWarning={scheduleDraft.length === 0}
-          updatedAt={scheduleUpdatedAt}
-          onChangeDay={changeScheduleDay}
-          onAddDay={addScheduleDay}
-          onRemoveDay={removeScheduleDay}
-          onSave={saveSchedule}
-        />
-      )}
-    </PageContainer>
+      <EditorSettingsModal
+        open={settingsOpen}
+        onClose={closeSettings}
+        title={t('adminWelcomeEmail.settingsTitle')}
+        subtitle={t('adminWelcomeEmail.settingsSubtitle')}
+        tabs={[
+          { key: 'schedule', label: t('adminSubscriptionReminderSchedule.tabLabel'), icon: HiOutlineClock },
+          { key: 'info', label: t('adminWelcomeEmail.settingsInfoTab'), icon: HiOutlineInformationCircle },
+        ]}
+        activeTab={settingsTab}
+        onTabChange={setSettingsTab}
+        footer={<TopbarButton onClick={closeSettings}>{t('editorShell.close')}</TopbarButton>}
+      >
+        {settingsTab === 'schedule' && (
+          // Bản gốc là lưới 2 cột (xl) gồm 2 thẻ; trong modal ép về 1 cột cho gọn.
+          <div className="[&>div]:grid-cols-1">
+            <AdminSubscriptionReminderScheduleSection
+              t={t}
+              locale={locale}
+              isLoading={isScheduleLoading}
+              isSaving={isScheduleSaving}
+              draftDays={scheduleDraft}
+              errors={scheduleErrors}
+              isValid={isScheduleValid}
+              isDirty={scheduleIsDirty}
+              previewText={schedulePreviewText}
+              showEmptyWarning={scheduleDraft.length === 0}
+              updatedAt={scheduleUpdatedAt}
+              onChangeDay={changeScheduleDay}
+              onAddDay={addScheduleDay}
+              onRemoveDay={removeScheduleDay}
+              onSave={saveSchedule}
+            />
+          </div>
+        )}
+
+        {settingsTab === 'info' && (
+          <div className="space-y-5">
+            <section className="space-y-1">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-dk-muted">
+                {t('adminWelcomeEmail.infoTemplateHeading')}
+              </h3>
+              <p className="text-sm font-semibold text-gray-900 dark:text-dk-text">{templateMeta.title}</p>
+              <p className="text-sm text-gray-600 dark:text-dk-text2">{templateMeta.subtitle}</p>
+            </section>
+
+            <section className="space-y-1">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-dk-muted">
+                {t('adminWelcomeEmail.behaviorTitle')}
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-dk-text2">{templateMeta.behaviorNote}</p>
+            </section>
+
+            <section className="space-y-1.5">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-dk-muted">
+                {t('adminWelcomeEmail.infoStatusHeading')}
+              </h3>
+              <span
+                className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+                  metadata.isCustomized
+                    ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60'
+                    : 'bg-gray-100 text-gray-600 dark:bg-dk-raised dark:text-dk-text2 border border-gray-200/60 dark:border-dk-border/60'
+                }`}
+              >
+                {metadata.isCustomized
+                  ? t('adminWelcomeEmail.customized')
+                  : t('adminWelcomeEmail.usingDefault')}
+              </span>
+              {metadata.updatedAt && (
+                <p className="text-xs text-gray-400 dark:text-dk-muted">
+                  {t('adminWelcomeEmail.updatedAt', {
+                    time: new Date(metadata.updatedAt).toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN'),
+                  })}
+                </p>
+              )}
+            </section>
+
+            <p className="rounded-xl border border-gray-200 dark:border-dk-border bg-gray-50 dark:bg-dk-raised px-3 py-2 text-xs text-gray-600 dark:text-dk-text2">
+              {t('adminWelcomeEmail.locationNote')}
+            </p>
+          </div>
+        )}
+      </EditorSettingsModal>
+    </AdminEditorShell>
   );
 }

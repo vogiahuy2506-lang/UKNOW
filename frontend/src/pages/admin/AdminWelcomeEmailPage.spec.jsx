@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../../i18n';
 import viDict from '../../i18n/vi.js';
@@ -53,6 +53,21 @@ const scheduleT = viDict.adminSubscriptionReminderSchedule;
 const welcomeT = viDict.adminWelcomeEmail;
 const dayLabel = (n) => scheduleT.dayInputLabel.replace('{index}', String(n));
 const previewText = (days) => scheduleT.previewWithDays.replace('{days}', days);
+
+// 11/10/2026 — bố cục mới (thanh trên + Cài đặt + Công cụ): Lịch nhắc hạn và Thông tin mẫu nằm trong modal
+// Cài đặt, "Khôi phục mặc định" / "Cập nhật xem trước" nằm trong menu Công cụ, bộ chọn mẫu là tab ở thanh trên.
+const openSettings = (tabName) => {
+  fireEvent.click(screen.getByRole('button', { name: 'Cài đặt' }));
+  const dialog = screen.getByRole('dialog');
+  if (tabName) fireEvent.click(within(dialog).getByRole('button', { name: tabName }));
+  return dialog;
+};
+const clickTool = (label) => {
+  fireEvent.click(screen.getByRole('button', { name: 'Công cụ' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: new RegExp(label) }));
+};
+const selectTemplateTab = (shortLabel) => fireEvent.click(screen.getByRole('tab', { name: shortLabel }));
+const scheduleSaveButton = () => within(screen.getByRole('dialog')).getByRole('button', { name: 'Lưu' });
 
 function response(data) {
   return { data: { data } };
@@ -109,7 +124,13 @@ describe('AdminWelcomeEmailPage', () => {
     );
 
     expect(await screen.findByText('Email chào mừng thành viên')).toBeInTheDocument();
-    expect(screen.getByText(/Quản trị hệ thống → AI & thông báo → Email chào mừng/)).toBeInTheDocument();
+    // Vị trí menu nằm trong Cài đặt → Thông tin (không còn chiếm chỗ ở vùng soạn).
+    expect(screen.queryByText(/Quản trị hệ thống → AI & thông báo → Email chào mừng/)).not.toBeInTheDocument();
+    const infoDialog = openSettings('Thông tin');
+    expect(within(infoDialog).getByText(/Quản trị hệ thống → AI & thông báo → Email chào mừng/)).toBeInTheDocument();
+    expect(within(infoDialog).getByText('Đang dùng bản mặc định')).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(mockGetTemplate).toHaveBeenCalledWith('welcome');
     expect(mockPreviewTemplate).toHaveBeenCalledWith('welcome', {
       subject: welcomeTemplate.subject,
@@ -124,7 +145,7 @@ describe('AdminWelcomeEmailPage', () => {
     fireEvent.click(screen.getByRole('button', { name: '{{user_email}}' }));
     expect(body.value).toContain('{{user_email}}');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cập nhật xem trước' }));
+    clickTool('Cập nhật xem trước');
     await waitFor(() => expect(mockPreviewTemplate).toHaveBeenLastCalledWith('welcome', {
       subject: 'Chào {{user_name}}',
       bodyHtml: expect.stringContaining('{{user_email}}'),
@@ -139,9 +160,12 @@ describe('AdminWelcomeEmailPage', () => {
       subject: 'Chào {{user_name}}',
       bodyHtml: expect.stringContaining('{{user_email}}'),
     }));
-    expect(await screen.findByText('Đang dùng bản tùy chỉnh')).toBeInTheDocument();
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith('Đã lưu mẫu email chào mừng'));
+    // Trạng thái "Đang dùng bản tùy chỉnh" nằm trong Cài đặt → Thông tin.
+    expect(within(openSettings('Thông tin')).getByText('Đang dùng bản tùy chỉnh')).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Khôi phục mặc định' }));
+    clickTool('Khôi phục mặc định');
     await waitFor(() => expect(mockResetTemplate).toHaveBeenCalledWith('welcome'));
     expect(screen.getByDisplayValue(welcomeTemplate.subject)).toBeInTheDocument();
     expect(mockToastSuccess).toHaveBeenCalledWith('Đã khôi phục mẫu email mặc định');
@@ -158,9 +182,11 @@ describe('AdminWelcomeEmailPage', () => {
     );
     await screen.findByText('Email chào mừng thành viên');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Email nhắc sắp hết hạn gói' }));
+    selectTemplateTab('Sắp hết hạn');
 
-    expect(await screen.findByText('Email nhắc sắp hết hạn gói', { selector: 'h1' })).toBeInTheDocument();
+    // Tên đầy đủ của mẫu hiện ở dòng phụ của thanh trên; tab "Sắp hết hạn" được chọn.
+    expect(await screen.findByText('Email nhắc sắp hết hạn gói')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Sắp hết hạn' })).toHaveAttribute('aria-selected', 'true');
     await waitFor(() => expect(mockGetTemplate).toHaveBeenCalledWith('plan_expiring'));
     expect(screen.getByDisplayValue(planExpiringTemplate.subject)).toBeInTheDocument();
     await waitFor(() => expect(mockPreviewTemplate).toHaveBeenLastCalledWith('plan_expiring', {
@@ -186,17 +212,50 @@ describe('AdminWelcomeEmailPage', () => {
       target: { value: 'Bản đang sửa, chưa lưu' },
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Email nhắc sắp hết hạn gói' }));
+    selectTemplateTab('Sắp hết hạn');
 
     expect(window.confirm).toHaveBeenCalledWith('Nội dung đang sửa chưa được lưu. Chuyển mẫu khác sẽ bỏ các thay đổi này?');
     // Bị từ chối → vẫn ở mẫu welcome, nội dung đang sửa còn nguyên, KHÔNG gọi lại getTemplate.
     expect(screen.getByDisplayValue('Bản đang sửa, chưa lưu')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Chào mừng' })).toHaveAttribute('aria-selected', 'true');
     expect(mockGetTemplate).toHaveBeenCalledTimes(1);
+  });
+
+  // Dưới md thanh trên ẩn bộ chọn giữa → có ô chọn mẫu thư riêng; nó đi qua CÙNG handler (cùng hộp hỏi, cùng getTemplate).
+  it('ô chọn mẫu thư trên màn nhỏ đổi mẫu qua cùng luồng với tab ở thanh trên', async () => {
+    render(
+      <I18nProvider>
+        <AdminWelcomeEmailPage />
+      </I18nProvider>
+    );
+    await screen.findByText('Email chào mừng thành viên');
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Mẫu thư' }), { target: { value: 'plan_expired' } });
+
+    await waitFor(() => expect(mockGetTemplate).toHaveBeenCalledWith('plan_expired'));
+    expect(screen.getByRole('tab', { name: 'Đã hết hạn' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  // Cấu hình nằm trong Cài đặt: vùng soạn chỉ còn soạn + xem trước.
+  it('vùng soạn không còn ô cấu hình lịch nhắc; chúng chỉ hiện sau khi mở Cài đặt', async () => {
+    render(
+      <I18nProvider>
+        <AdminWelcomeEmailPage />
+      </I18nProvider>
+    );
+    await screen.findByText('Email chào mừng thành viên');
+
+    expect(screen.queryByLabelText(dayLabel(1))).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    openSettings();
+    expect(await screen.findByLabelText(dayLabel(1))).toHaveValue(7);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
   // PLAN_CAU_HINH_LICH_NHAC_HAN_2026-09-13.md, mục 5 (PR-2) — 9 ca nghiệm thu của bảng mục "Nghiệm
   // thu" trong plan. Nhãn tiếng Việt lấy từ vi.js (scheduleT/welcomeT), không gõ tay.
-  describe('Lịch nhắc hạn (tab riêng, cùng trang)', () => {
+  describe('Lịch nhắc hạn (trong modal Cài đặt)', () => {
     async function openScheduleTab() {
       render(
         <I18nProvider>
@@ -204,11 +263,11 @@ describe('AdminWelcomeEmailPage', () => {
         </I18nProvider>
       );
       await screen.findByText('Email chào mừng thành viên');
-      fireEvent.click(screen.getByRole('button', { name: scheduleT.tabLabel }));
+      openSettings(scheduleT.tabLabel);
       await screen.findByLabelText(dayLabel(1));
     }
 
-    it('ca 1 — mở tab Lịch nhắc hạn → hiện đúng [7, 3] đọc từ API', async () => {
+    it('ca 1 — mở Cài đặt → Lịch nhắc hạn → hiện đúng [7, 3] đọc từ API', async () => {
       await openScheduleTab();
 
       expect(mockGetScheduleSettings).toHaveBeenCalledTimes(1);
@@ -224,7 +283,7 @@ describe('AdminWelcomeEmailPage', () => {
       fireEvent.click(screen.getByRole('button', { name: scheduleT.addDay }));
       fireEvent.change(screen.getByLabelText(dayLabel(3)), { target: { value: '2' } });
 
-      fireEvent.click(screen.getByRole('button', { name: 'Lưu' }));
+      fireEvent.click(scheduleSaveButton());
 
       await waitFor(() => expect(mockUpdateScheduleSettings).toHaveBeenCalledWith([10, 5, 2]));
       expect(mockToastSuccess).toHaveBeenCalledWith(scheduleT.saveSuccess);
@@ -236,7 +295,7 @@ describe('AdminWelcomeEmailPage', () => {
       fireEvent.change(screen.getByLabelText(dayLabel(2)), { target: { value: '7' } });
 
       expect(await screen.findByText(scheduleT.errorDuplicate)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Lưu' })).toBeDisabled();
+      expect(scheduleSaveButton()).toBeDisabled();
       expect(mockUpdateScheduleSettings).not.toHaveBeenCalled();
     });
 
@@ -245,7 +304,7 @@ describe('AdminWelcomeEmailPage', () => {
 
       fireEvent.change(screen.getByLabelText(dayLabel(1)), { target: { value: '0' } });
       expect(await screen.findByText(scheduleT.errorRange)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Lưu' })).toBeDisabled();
+      expect(scheduleSaveButton()).toBeDisabled();
 
       fireEvent.change(screen.getByLabelText(dayLabel(1)), { target: { value: '400' } });
       expect(await screen.findByText(scheduleT.errorRange)).toBeInTheDocument();
@@ -264,7 +323,7 @@ describe('AdminWelcomeEmailPage', () => {
       fireEvent.change(screen.getByLabelText(dayLabel(6)), { target: { value: '120' } });
 
       expect(await screen.findByText(scheduleT.errorTooMany)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Lưu' })).toBeDisabled();
+      expect(scheduleSaveButton()).toBeDisabled();
       expect(mockUpdateScheduleSettings).not.toHaveBeenCalled();
     });
 
@@ -278,9 +337,9 @@ describe('AdminWelcomeEmailPage', () => {
       expect(await screen.findByText(scheduleT.emptyWarningTitle)).toBeInTheDocument();
       expect(screen.getByText(scheduleT.emptyWarningBody)).toBeInTheDocument();
       // Rỗng vẫn hợp lệ — nút Lưu KHÔNG bị chặn.
-      expect(screen.getByRole('button', { name: 'Lưu' })).not.toBeDisabled();
+      expect(scheduleSaveButton()).not.toBeDisabled();
 
-      fireEvent.click(screen.getByRole('button', { name: 'Lưu' }));
+      fireEvent.click(scheduleSaveButton());
       await waitFor(() => expect(mockUpdateScheduleSettings).toHaveBeenCalledWith([]));
     });
 
@@ -289,27 +348,55 @@ describe('AdminWelcomeEmailPage', () => {
       await openScheduleTab();
 
       fireEvent.change(screen.getByLabelText(dayLabel(1)), { target: { value: '10' } });
-      fireEvent.click(screen.getByRole('button', { name: 'Lưu' }));
+      fireEvent.click(scheduleSaveButton());
 
       await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Máy chủ đang bận, thử lại sau'));
       // Dữ liệu đang nhập KHÔNG mất — vẫn còn '10' trong ô, không bị reset về mẫu cũ.
       expect(screen.getByLabelText(dayLabel(1))).toHaveValue(10);
     });
 
-    it('ca 8 (đột biến bắt buộc: bỏ guard isDirty phải làm ca này đỏ) — sửa lịch chưa lưu, chuyển sang tab Nội dung thư → hỏi xác nhận; từ chối thì giữ tab lịch và không mất nội dung đang sửa', async () => {
+    // 11/10/2026: Lịch nhắc hạn không còn là "tab" ngang hàng với nội dung thư mà nằm trong modal Cài đặt → hộp hỏi
+    // khi chuyển tab đổi thành hộp hỏi khi ĐÓNG Cài đặt mà lịch đang sửa chưa Lưu (cùng mục đích: không bỏ quên bản nháp).
+    it('ca 8 (đột biến bắt buộc: bỏ guard scheduleIsDirty phải làm ca này đỏ) — sửa lịch chưa lưu, đóng Cài đặt → hỏi xác nhận; từ chối thì modal còn mở và không mất giá trị đang sửa', async () => {
       window.confirm.mockReturnValue(false);
       await openScheduleTab();
 
       fireEvent.change(screen.getByLabelText(dayLabel(1)), { target: { value: '99' } });
-      fireEvent.click(screen.getByRole('button', { name: welcomeT.contentTabLabel }));
+      fireEvent.click(within(screen.getByRole('dialog')).getAllByRole('button', { name: 'Đóng' })[0]);
 
-      expect(window.confirm).toHaveBeenCalledWith(welcomeT.tabSwitchConfirm);
-      // Vẫn ở tab Lịch nhắc hạn, giá trị đang sửa còn nguyên.
+      expect(window.confirm).toHaveBeenCalledWith(welcomeT.settingsCloseConfirm);
+      // Từ chối → modal vẫn mở, giá trị đang sửa còn nguyên.
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
       expect(screen.getByLabelText(dayLabel(1))).toHaveValue(99);
     });
 
-    it('chiều ngược lại của ca 8 — sửa nội dung thư chưa lưu, chuyển sang tab Lịch nhắc hạn → cũng hỏi xác nhận', async () => {
-      window.confirm.mockReturnValue(false);
+    it('ca 8b — đồng ý bỏ thay đổi khi đóng Cài đặt → modal đóng và mở lại thấy lịch đã lưu [7, 3], không gọi API', async () => {
+      window.confirm.mockReturnValue(true);
+      await openScheduleTab();
+
+      fireEvent.change(screen.getByLabelText(dayLabel(1)), { target: { value: '99' } });
+      fireEvent.keyDown(document, { key: 'Escape' });
+
+      expect(window.confirm).toHaveBeenCalledWith(welcomeT.settingsCloseConfirm);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+      openSettings(scheduleT.tabLabel);
+      expect(await screen.findByLabelText(dayLabel(1))).toHaveValue(7);
+      expect(mockUpdateScheduleSettings).not.toHaveBeenCalled();
+    });
+
+    it('ca 8c — lịch KHÔNG thay đổi thì đóng Cài đặt không hỏi gì', async () => {
+      await openScheduleTab();
+
+      fireEvent.keyDown(document, { key: 'Escape' });
+
+      expect(window.confirm).not.toHaveBeenCalled();
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    // Chiều ngược lại của ca 8 (trước: sửa thư chưa lưu → sang tab Lịch nhắc hạn cũng hỏi). Mở Cài đặt là mở modal CHỒNG lên
+    // trang, nội dung thư vẫn nằm nguyên ở state phía sau → không có gì để mất nên KHÔNG hỏi; ghim lại để không ai chặn nhầm.
+    it('chiều ngược lại của ca 8 — sửa nội dung thư chưa lưu rồi mở Cài đặt → KHÔNG hỏi, nội dung đang sửa còn nguyên sau khi đóng', async () => {
       render(
         <I18nProvider>
           <AdminWelcomeEmailPage />
@@ -318,10 +405,12 @@ describe('AdminWelcomeEmailPage', () => {
       await screen.findByText('Email chào mừng thành viên');
 
       fireEvent.change(screen.getByLabelText('Tiêu đề email'), { target: { value: 'Đang sửa, chưa lưu' } });
-      fireEvent.click(screen.getByRole('button', { name: scheduleT.tabLabel }));
+      openSettings(scheduleT.tabLabel);
+      fireEvent.keyDown(document, { key: 'Escape' });
 
-      expect(window.confirm).toHaveBeenCalledWith(welcomeT.tabSwitchConfirm);
+      expect(window.confirm).not.toHaveBeenCalled();
       expect(screen.getByDisplayValue('Đang sửa, chưa lưu')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Lưu' })).not.toBeDisabled();
     });
 
     it('ca 9 — xem trước đổi ngay khi sửa mốc, chưa cần Lưu', async () => {
@@ -338,11 +427,11 @@ describe('AdminWelcomeEmailPage', () => {
 });
 
 /**
- * Ghim chữ mô tả ở tab "Nội dung thư" phải THEO lịch đang đặt.
+ * Ghim chữ mô tả của mẫu plan_expiring phải THEO lịch đang đặt.
  *
  * Trước 13/09/2026 hai chuỗi `templateMeta.plan_expiring.subtitle` và `.behaviorNote` ghi cứng
  * "còn 7 ngày và còn 3 ngày". Từ khi PR-2 cho sửa lịch, ghi cứng là tự mâu thuẫn NGAY TRONG MỘT
- * TRANG: sếp đặt [10, 5] ở tab Lịch nhắc hạn, bấm sang tab bên cạnh thì nó vẫn nói 7 và 3.
+ * TRANG: sếp đặt [10, 5] ở Lịch nhắc hạn, quay lại thì chữ mô tả vẫn nói 7 và 3.
  *
  * Người implement có nêu chuyện này trong báo cáo nhưng xếp là "ngoài phạm vi". Thực ra nó là hệ
  * quả trực tiếp của chính tính năng PR-2, nên Claude sửa luôn lúc review.
@@ -360,8 +449,10 @@ describe('AdminWelcomeEmailPage — mô tả mẫu plan_expiring bám theo lịc
     );
     await screen.findByText('Email chào mừng thành viên');
 
-    // Chuyển sang mẫu "sắp hết hạn" ở tab Nội dung thư.
-    fireEvent.click(screen.getByRole('button', { name: welcomeT.templateKeys.plan_expiring }));
+    // Chuyển sang mẫu "sắp hết hạn" rồi mở Cài đặt → Thông tin (chữ mô tả đã chuyển vào đó khỏi vùng soạn).
+    selectTemplateTab(welcomeT.templateKeysShort.plan_expiring);
+    await screen.findByText(welcomeT.templateMeta.plan_expiring.title);
+    openSettings(welcomeT.settingsInfoTab);
 
     // CẢ HAI chỗ phải động: dòng mô tả (subtitle) và dòng giải thích hành vi (behaviorNote).
     const mota = await screen.findAllByText((_, el) => {

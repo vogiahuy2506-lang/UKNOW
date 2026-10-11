@@ -11350,7 +11350,18 @@ export default {
     locationNote: 'Vị trí: Quản trị hệ thống → AI & thông báo → Email chào mừng',
     behaviorTitle: 'Phạm vi áp dụng',
     behaviorNote: 'Áp dụng cho thành viên đăng ký mới bằng email hoặc Google. Các email đã gửi trước đây không thay đổi.',
-    editorTitle: 'Nội dung email',
+    // 11/10/2026 — bố cục kiểu "Tạo landing page": thanh trên + Cài đặt (Lịch nhắc hạn, Thông tin) + Công cụ.
+    topbarTitle: 'Email tự động',
+    unsavedBadge: 'Chưa lưu',
+    toolsRefreshPreviewDesc: 'Tạo lại từ nội dung đang sửa',
+    toolsRestoreDefaultDesc: 'Bỏ bản tùy chỉnh, dùng mẫu gốc',
+    settingsTitle: 'Cài đặt email tự động',
+    settingsSubtitle: 'Lịch nhắc hạn gói và thông tin về mẫu thư đang sửa.',
+    settingsInfoTab: 'Thông tin',
+    settingsCloseConfirm: 'Lịch nhắc hạn đang sửa chưa được lưu. Đóng Cài đặt sẽ bỏ các thay đổi này?',
+    infoTemplateHeading: 'Mẫu đang sửa',
+    infoStatusHeading: 'Trạng thái',
+    resizeHint: 'Kéo qua lại để đổi độ rộng phần soạn và xem trước (nhấp đúp để đặt lại 48%)',
     customized: 'Đang dùng bản tùy chỉnh',
     usingDefault: 'Đang dùng bản mặc định',
     subject: 'Tiêu đề email',
@@ -11358,7 +11369,6 @@ export default {
     variablesHint: 'Bấm vào một biến để chèn tại vị trí con trỏ trong nội dung HTML.',
     bodyHtml: 'Nội dung HTML',
     htmlHint: 'Hỗ trợ HTML an toàn. Script, form và thuộc tính nguy hiểm sẽ bị loại bỏ khi lưu.',
-    previewTitle: 'Xem trước với dữ liệu mẫu',
     previewSampleData: 'Xem trước với dữ liệu mẫu',
     previewTo: 'Đến:',
     previewFrameTitle: 'Bản xem trước email chào mừng',
@@ -11377,16 +11387,19 @@ export default {
     resetSuccess: 'Đã khôi phục mẫu email mặc định',
     previewFailed: 'Không thể tạo bản xem trước',
     templateSelector: 'Mẫu thư',
-    templateSelectorHint: 'Chọn mẫu bên dưới để sửa từng loại thư.',
     switchConfirm: 'Nội dung đang sửa chưa được lưu. Chuyển mẫu khác sẽ bỏ các thay đổi này?',
-    pageTabsLabel: 'Chọn tab',
-    contentTabLabel: 'Nội dung thư',
-    tabSwitchConfirm: 'Nội dung đang sửa chưa được lưu. Chuyển tab khác sẽ bỏ các thay đổi này?',
     templateKeys: {
       welcome: 'Email chào mừng',
       plan_expiring: 'Email nhắc sắp hết hạn gói',
       plan_expired: 'Email báo đã hết hạn gói',
       employee_invitation: 'Email mời nhân viên tham gia',
+    },
+    // Nhãn ngắn cho thanh trên (nhãn đầy đủ ở trên làm tooltip).
+    templateKeysShort: {
+      welcome: 'Chào mừng',
+      plan_expiring: 'Sắp hết hạn',
+      plan_expired: 'Đã hết hạn',
+      employee_invitation: 'Mời nhân viên',
     },
     templateMeta: {
       welcome: {
@@ -11397,8 +11410,8 @@ export default {
       },
       plan_expiring: {
         title: 'Email nhắc sắp hết hạn gói',
-        subtitle: 'Chỉnh nội dung email nhắc khi gói của thành viên sắp hết hạn, theo các mốc {days} ngày đang đặt ở tab Lịch nhắc hạn.',
-        behaviorNote: 'Gửi tự động lúc 08:00 hằng ngày, theo các mốc {days} ngày trước hạn (đổi ở tab Lịch nhắc hạn). Các email đã gửi trước đây không thay đổi.',
+        subtitle: 'Chỉnh nội dung email nhắc khi gói của thành viên sắp hết hạn, theo các mốc {days} ngày đang đặt ở Cài đặt → Lịch nhắc hạn.',
+        behaviorNote: 'Gửi tự động lúc 08:00 hằng ngày, theo các mốc {days} ngày trước hạn (đổi ở Cài đặt → Lịch nhắc hạn). Các email đã gửi trước đây không thay đổi.',
         previewFrameTitle: 'Bản xem trước email nhắc hết hạn gói',
       },
       plan_expired: {
@@ -11456,7 +11469,7 @@ export default {
   adminSubscriptionReminderSchedule: {
     tabLabel: 'Lịch nhắc hạn',
     title: 'Lịch nhắc hạn gói',
-    subtitle: 'Chọn số ngày trước khi gói hết hạn để gửi thư nhắc. Nội dung thư sửa ở tab "Nội dung thư" (mẫu "Email nhắc sắp hết hạn gói").',
+    subtitle: 'Chọn số ngày trước khi gói hết hạn để gửi thư nhắc. Nội dung thư sửa ở màn hình chính (chọn mẫu "Sắp hết hạn").',
     fixedTimeNote: 'Giờ gửi cố định 08:00 (giờ Việt Nam), không sửa được ở đây — lịch cron đăng ký lúc hệ thống khởi động, đổi giờ lúc đang chạy là một thay đổi khác.',
     daysLabel: 'Các mốc nhắc trước hạn',
     daysHint: 'Mỗi mốc là số ngày còn lại trước khi gói hết hạn. Tối đa 5 mốc, mỗi mốc từ 1 đến 365 ngày. Để trống hết là tắt mọi thư nhắc trước hạn — vẫn còn thư gửi đúng ngày hết hạn.',
