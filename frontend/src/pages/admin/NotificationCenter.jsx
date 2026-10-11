@@ -728,7 +728,7 @@ export default function NotificationCenter() {
       subtitle={
         <div>
           <span>Soạn mẫu HTML theo từng dạng email → lưu thành mẫu có tên riêng (super admin) → chọn người nhận → gửi ngay hoặc hẹn giờ.</span>
-          <p className="mt-2 inline-flex rounded-full bg-slate-100 dark:bg-dk-raised px-3 py-1 text-xs font-medium text-slate-700 dark:text-dk-text">
+          <p className="mt-2 block w-fit max-w-full rounded-2xl sm:inline-flex sm:rounded-full bg-slate-100 dark:bg-dk-raised px-3 py-1 text-xs font-medium text-slate-700 dark:text-dk-text">
             Dùng <code className="font-mono">{`{{user_name}}`}</code>, <code className="font-mono">{`{{dashboard_url}}`}</code>… sẽ tự thay bằng dữ liệu người nhận.
           </p>
         </div>
