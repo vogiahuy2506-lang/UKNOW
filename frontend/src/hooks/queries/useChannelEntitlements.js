@@ -28,6 +28,10 @@ export function useChannelEntitlements(options = {}) {
     // P12 — tài khoản Zalo cá nhân; thiếu trường (backend cũ) -> có quyền.
     zalo: data ? data.zalo !== false : true,
     limits: data?.limits || { telegram: null, whatsapp: null, zalo: null },
+    // 11/10/2026 — kênh adapter (Telegram/WhatsApp) mà HỆ THỐNG đang bật, KHÔNG lọc theo gói: [{ key, label }].
+    // `null` = backend cũ (chưa có trường) hoặc chưa tải/lỗi -> chỗ dùng rơi về GET /campaigns/channels như trước.
+    // `[]` là câu trả lời thật "cờ hệ thống tắt hết" — phân biệt với null bằng Array.isArray.
+    enabledAdapterChannels: Array.isArray(data?.enabledAdapterChannels) ? data.enabledAdapterChannels : null,
     isLoading: query.isLoading,
     refetch: query.refetch,
   };

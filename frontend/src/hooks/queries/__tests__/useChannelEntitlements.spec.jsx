@@ -41,6 +41,28 @@ describe('useChannelEntitlements (P9)', () => {
     expect(result.current.zalo).toBe(true);
   });
 
+  it('11/10/2026: enabledAdapterChannels — mảng thì giữ nguyên (kể cả [] = cờ hệ thống tắt hết), thiếu trường/chưa tải/lỗi thì null (chỗ dùng rơi về GET /campaigns/channels)', async () => {
+    service.getChannelEntitlements.mockResolvedValue({
+      data: { data: { telegram: false, whatsapp: false, zalo: true, limits: {}, enabledAdapterChannels: [{ key: 'telegram', label: 'Telegram' }] } },
+    });
+    const withList = renderHook(() => useChannelEntitlements(), { wrapper });
+    expect(withList.result.current.enabledAdapterChannels).toBeNull();
+    await waitFor(() => expect(withList.result.current.isLoading).toBe(false));
+    expect(withList.result.current.enabledAdapterChannels).toEqual([{ key: 'telegram', label: 'Telegram' }]);
+
+    queryClient.clear();
+    service.getChannelEntitlements.mockResolvedValue({ data: { data: { telegram: true, whatsapp: true, limits: {}, enabledAdapterChannels: [] } } });
+    const empty = renderHook(() => useChannelEntitlements(), { wrapper });
+    await waitFor(() => expect(empty.result.current.isLoading).toBe(false));
+    expect(empty.result.current.enabledAdapterChannels).toEqual([]);
+
+    queryClient.clear();
+    service.getChannelEntitlements.mockResolvedValue({ data: { data: { telegram: true, whatsapp: true, limits: {} } } });
+    const oldBackend = renderHook(() => useChannelEntitlements(), { wrapper });
+    await waitFor(() => expect(oldBackend.result.current.isLoading).toBe(false));
+    expect(oldBackend.result.current.enabledAdapterChannels).toBeNull();
+  });
+
   it('P12: zalo limit=1 -> có quyền; backend cũ thiếu trường zalo -> có quyền (fail-open)', async () => {
     service.getChannelEntitlements.mockResolvedValue({
       data: { data: { telegram: true, whatsapp: true, zalo: true, limits: { zalo: 1 } } },

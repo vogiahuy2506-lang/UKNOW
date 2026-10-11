@@ -7593,6 +7593,22 @@ export default {
     upgrade: 'Nâng gói',
   },
 
+  // 11/10/2026 — kênh bị khoá (không ẩn): thẻ/bước/loại chiến dịch hiện mờ, bấm vào mở modal giải thích + gợi ý mua.
+  channelUnavailable: {
+    lockedTip: '{channel} chưa dùng được — bấm để xem lý do',
+    lockedBadge: 'Chưa dùng được',
+    buySlot: 'Mua thêm slot tài khoản {channel}',
+    buyQuota: 'Mua thêm lượt',
+    renew: 'Gia hạn gói',
+    expiredTitle: 'Gói đã hết hạn — gửi tin tạm dừng',
+    expiredHint: 'Gói dịch vụ của bạn đã hết hạn nên chưa thể gửi tin qua {channel}. Gia hạn gói để tiếp tục; dữ liệu và lịch sử của bạn vẫn được giữ nguyên.',
+    quotaTitle: 'Đã hết lượt gửi {channel} trong kỳ ({used}/{limit})',
+    quotaHint: 'Mua thêm lượt gửi hoặc nâng gói để tiếp tục. Lượt của gói được cấp lại khi bắt đầu kỳ mới.',
+    quotaCombinedHint: 'Tổng lượt gửi của gói đã hết ({used}/{limit}) nên mọi kênh, trong đó có {channel}, tạm dừng. Nâng gói hoặc chờ kỳ mới để tiếp tục.',
+    noMessagesHint: 'Gói của bạn không có lượt gửi {channel}. Nâng gói để dùng kênh này.',
+    ownerOnlyHint: 'Chỉ chủ tài khoản mới mua thêm hoặc nâng gói được. Hãy liên hệ chủ tài khoản của bạn.',
+  },
+
   topup: {
     title: 'Mua thêm hạn mức',
     subtitle: 'Bổ sung tin Zalo, email hoặc lượt AI trong chu kỳ hiện tại.',

@@ -7583,6 +7583,22 @@ export default {
     upgrade: 'Upgrade plan',
   },
 
+  // 11/10/2026 — locked channels (never hidden): the card/step/campaign type is dimmed; clicking it opens a modal that explains why and suggests what to buy.
+  channelUnavailable: {
+    lockedTip: '{channel} is not available yet — click to see why',
+    lockedBadge: 'Not available',
+    buySlot: 'Buy more {channel} account slots',
+    buyQuota: 'Buy more messages',
+    renew: 'Renew plan',
+    expiredTitle: 'Plan expired — sending is paused',
+    expiredHint: 'Your plan has expired, so you cannot send through {channel} right now. Renew your plan to continue; your data and history are kept as they are.',
+    quotaTitle: 'You have used all your {channel} sends for this period ({used}/{limit})',
+    quotaHint: 'Buy more sends or upgrade your plan to keep going. Your plan allowance is renewed when the next period starts.',
+    quotaCombinedHint: 'The plan total send allowance is used up ({used}/{limit}), so every channel, including {channel}, is paused. Upgrade your plan or wait for the next period.',
+    noMessagesHint: 'Your plan has no {channel} sends. Upgrade your plan to use this channel.',
+    ownerOnlyHint: 'Only the account owner can buy more or upgrade the plan. Please contact your account owner.',
+  },
+
   topup: {
     title: 'Buy more quota',
     subtitle: 'Add Zalo messages, emails, or AI credits for the current billing cycle.',
