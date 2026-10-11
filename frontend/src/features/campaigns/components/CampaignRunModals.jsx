@@ -547,7 +547,7 @@ const CampaignRunModals = ({
             </div>
 
             <div>
-              <h4 className="text-md font-semibold text-gray-900 dark:text-dk-text mb-3">{t('campaignRunModals.runHistory')}</h4>
+              <h4 className="text-base font-semibold text-gray-900 dark:text-dk-text mb-3">{t('campaignRunModals.runHistory')}</h4>
 
               {scheduleRuns.length === 0 ? (
                 <div className="text-center py-8 text-gray-500 dark:text-dk-text2">
