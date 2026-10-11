@@ -1921,22 +1921,25 @@ class CampaignZaloSenderService {
     stepIndex,
     zaloMessageId,
   }) {
+    const jobPayload = {
+      userId,
+      accountId,
+      recipient,
+      recipientType,
+      message,
+      attachments,
+      quotaRecipientKey,
+      quotaContentKey,
+      runId,
+      nodeId,
+      stepIndex,
+      zaloMessageId,
+    };
     return outboundMessageQueueService.enqueueAndWait({
       type: OUTBOUND_MESSAGE_JOB_TYPES.ZALO_PERSONAL_SEND,
-      payload: {
-        userId,
-        accountId,
-        recipient,
-        recipientType,
-        message,
-        attachments,
-        quotaRecipientKey,
-    quotaContentKey,
-        runId,
-        nodeId,
-        stepIndex,
-        zaloMessageId,
-      },
+      payload: jobPayload,
+      // jobId ổn định = khoá giữ chỗ quota của lần gửi logic (PR-Q2 việc a): thêm lại / stalled không gửi trùng.
+      jobKey: this.buildZaloJobKey(jobPayload, Number.isInteger(stepIndex) ? stepIndex : 1),
       jobOptions: { attempts: 1 },
     });
   }
@@ -1992,6 +1995,37 @@ class CampaignZaloSenderService {
   }
 
   /**
+   * Khoá giữ chỗ quota của một lần gửi Zalo trong chiến dịch. Dùng chung cho `reserveCampaignZaloQuota`
+   * và cho jobId BullMQ (PR-Q2 việc a) để hai khoá không bao giờ lệch nhau.
+   *
+   * @param {object} payload payload job (runId, nodeId, quotaRecipientKey/recipient/phone/groupId)
+   * @param {number} logicalStep
+   * @returns {string}
+   */
+  buildCampaignZaloReservationKey(payload = {}, logicalStep = 1) {
+    const recipientForKey = payload.quotaRecipientKey || payload.recipient || payload.phone || payload.groupId || '';
+    return buildCampaignReservationKey({
+      runId: payload.runId,
+      nodeId: payload.nodeId,
+      channel: 'zalo',
+      recipient: recipientForKey,
+      logicalStep,
+    });
+  }
+
+  /**
+   * Khoá job BullMQ của một lần gửi Zalo (null nếu không đủ định danh lượt chạy: gửi lẻ ngoài chiến dịch).
+   *
+   * @param {object} payload
+   * @param {number} logicalStep
+   * @returns {string|null}
+   */
+  buildZaloJobKey(payload = {}, logicalStep = 1) {
+    if (!payload?.userId || payload.runId == null || payload.nodeId == null) return null;
+    return this.buildCampaignZaloReservationKey(payload, logicalStep);
+  }
+
+  /**
    * Reserve quota atomic cho một logical send campaign Zalo (PR-Q4b).
    * Thay thế backstop `checkSendQuota()` cũ trong send*ByQueue — đây là "final send boundary"
    * ngay trước provider call, sau khi campaignRun.service.js đã chạy advisory pre-check
@@ -2005,13 +2039,7 @@ class CampaignZaloSenderService {
   async reserveCampaignZaloQuota(payload = {}, { logicalStep = 1 } = {}) {
     if (!payload?.userId) return { reservation: null, active: false };
     const recipientForKey = payload.quotaRecipientKey || payload.recipient || payload.phone || payload.groupId || '';
-    const reservationKey = buildCampaignReservationKey({
-      runId: payload.runId,
-      nodeId: payload.nodeId,
-      channel: 'zalo',
-      recipient: recipientForKey,
-      logicalStep,
-    });
+    const reservationKey = this.buildCampaignZaloReservationKey(payload, logicalStep);
     // requestPayload dạng object (không chỉ hash tính sẵn) để reserveSendQuota() tự tính lại
     // fingerprint đúng theo fingerprint_version ĐÃ LƯU của reservation khi kiểm trùng key — thiếu
     // field này thì so khớp rơi về so sánh chuỗi thô theo fingerprintVersion hiện tại của CALLER,
@@ -2324,20 +2352,23 @@ class CampaignZaloSenderService {
     stepIndex,
     zaloMessageId,
   }) {
+    const jobPayload = {
+      userId,
+      accountId,
+      phone,
+      message,
+      quotaRecipientKey,
+      quotaContentKey,
+      runId,
+      nodeId,
+      stepIndex,
+      zaloMessageId,
+    };
     return outboundMessageQueueService.enqueueAndWait({
       type: OUTBOUND_MESSAGE_JOB_TYPES.ZALO_FRIEND_REQUEST_SEND,
-      payload: {
-        userId,
-        accountId,
-        phone,
-        message,
-        quotaRecipientKey,
-    quotaContentKey,
-        runId,
-        nodeId,
-        stepIndex,
-        zaloMessageId,
-      },
+      payload: jobPayload,
+      // jobId ổn định = khoá giữ chỗ quota của lần gửi logic (PR-Q2 việc a): thêm lại / stalled không gửi trùng.
+      jobKey: this.buildZaloJobKey(jobPayload, 1),
       jobOptions: { attempts: 1 },
     });
   }
@@ -2496,21 +2527,24 @@ class CampaignZaloSenderService {
     stepIndex,
     zaloMessageId,
   }) {
+    const jobPayload = {
+      userId,
+      accountId,
+      groupId,
+      message,
+      attachments,
+      quotaRecipientKey,
+      quotaContentKey,
+      runId,
+      nodeId,
+      stepIndex,
+      zaloMessageId,
+    };
     return outboundMessageQueueService.enqueueAndWait({
       type: OUTBOUND_MESSAGE_JOB_TYPES.ZALO_GROUP_SEND,
-      payload: {
-        userId,
-        accountId,
-        groupId,
-        message,
-        attachments,
-        quotaRecipientKey,
-    quotaContentKey,
-        runId,
-        nodeId,
-        stepIndex,
-        zaloMessageId,
-      },
+      payload: jobPayload,
+      // jobId ổn định = khoá giữ chỗ quota của lần gửi logic (PR-Q2 việc a): thêm lại / stalled không gửi trùng.
+      jobKey: this.buildZaloJobKey(jobPayload, Number.isInteger(stepIndex) ? stepIndex : 1),
       jobOptions: { attempts: 1 },
     });
   }

@@ -12,6 +12,7 @@ import emailSettingsSmtpService, {
 import auditService, { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
 import { resolveRequestIdempotencyKey } from '../services/quota/sendQuotaKey.service.js';
+import { buildEmailUnsubscribeUrl } from '../utils/emailListUnsubscribe.util.js';
 
 class EmailSettingsController {
   /**
@@ -163,7 +164,8 @@ class EmailSettingsController {
 
     const openUrl = `${trackingBaseUrl}/api/customers/email-tracking/open/${trackingToken}`;
     const clickBaseUrl = `${trackingBaseUrl}/api/customers/email-tracking/click/${trackingToken}`;
-    const unsubscribeUrl = `${trackingBaseUrl}/api/customers/email-tracking/unsubscribe/${trackingToken}`;
+    // Cùng hàm với header List-Unsubscribe của campaignEmailSender để link trong thư và header không lệch nhau.
+    const unsubscribeUrl = buildEmailUnsubscribeUrl(trackingBaseUrl, trackingToken);
     const privacyPolicyUrl = String(process.env.PRIVACY_POLICY_URL || '').trim()
       || 'https://campaign.digiso.vn/privacy-policy';
 

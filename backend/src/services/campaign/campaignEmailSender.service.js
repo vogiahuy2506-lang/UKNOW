@@ -31,6 +31,7 @@ import {
 } from '../quota/sendQuotaReservation.service.js';
 import { buildCampaignReservationKey, computeRequestFingerprint } from '../quota/sendQuotaKey.service.js';
 import { checkAccountDailyLimit } from '../quota/accountDailyLimit.service.js';
+import { buildEmailUnsubscribeUrl, buildListUnsubscribeHeaders } from '../../utils/emailListUnsubscribe.util.js';
 
 // PR-1 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26), Việc 2 — lỗi ghi log email_messages trước đây
 // chỉ console.error, vô hình với chủ chiến dịch/vận hành. Ghi vào run_metadata để lộ ra trang
@@ -98,6 +99,7 @@ class CampaignEmailSenderService {
    * @param {Array<object>} [input.attachments]
    * @param {string} [input.from]
    * @param {string} [input.replyTo]
+   * @param {Record<string, string>} [input.headers] header tuỳ chỉnh (vd List-Unsubscribe)
    * @returns {Promise<{info: object, messageId: string|null, sendMs: number}>}
    */
   async sendRawEmail({
@@ -110,6 +112,7 @@ class CampaignEmailSenderService {
     from = null,
     replyTo = null,
     envelope = null,
+    headers = null,
   }) {
     const transporter = this.getOrCreateTransporter(settings);
     const sendStartedAt = Date.now();
@@ -120,6 +123,7 @@ class CampaignEmailSenderService {
       replyTo: replyTo || settings.reply_to || undefined,
       to,
       ...(envelope ? { envelope } : {}),
+      ...(headers && Object.keys(headers).length > 0 ? { headers } : {}),
       subject: subject || 'Email từ Founder AI',
       text: text || String(html || '').replace(/<[^>]*>/g, ''),
       html: html || `<p>${text || ''}</p>`,
@@ -485,12 +489,51 @@ class CampaignEmailSenderService {
       payload: {
         actionNode,
         customer,
-        campaign,
+        // PR-Q2 việc e — chỉ mang đúng 4 trường mà luồng gửi đọc (grep `campaign.` trong file này), không
+        // nhét cả bản ghi chiến dịch (nodes/edges/cấu hình lịch…) vào Redis cho từng người nhận.
+        campaign: this.buildQueueCampaignRef(campaign),
         runId,
         retryMeta,
         sendMeta,
       },
+      // jobId ổn định = khoá giữ chỗ quota của đúng lần gửi logic này (cùng khoá với reserveSendQuota ở
+      // sendEmailToCustomerDirect): thêm lại / job stalled không tạo bản gửi thứ hai (PR-Q2 việc a).
+      jobKey: this.buildEmailReservationKey({ actionNode, customer, runId, sendMeta }),
       jobOptions: { attempts: 1 },
+    });
+  }
+
+  /**
+   * Phần tối thiểu của chiến dịch được đưa vào payload job.
+   *
+   * @param {object|null} campaign
+   * @returns {{id: *, id_user: *, created_by: *, workspace_owner_id: *}}
+   */
+  buildQueueCampaignRef(campaign) {
+    return {
+      id: campaign?.id,
+      id_user: campaign?.id_user,
+      created_by: campaign?.created_by,
+      workspace_owner_id: campaign?.workspace_owner_id,
+    };
+  }
+
+  /**
+   * Khoá giữ chỗ quota của một lần gửi email trong chiến dịch (đồng thời là khoá job BullMQ).
+   * Trả null khi thiếu runId (gửi lẻ ngoài lượt chạy) — khi đó không dùng jobId ổn định.
+   *
+   * @param {{actionNode: object, customer: object, runId: number|null, sendMeta: object|null}} input
+   * @returns {string|null}
+   */
+  buildEmailReservationKey({ actionNode, customer, runId, sendMeta }) {
+    if (runId == null) return null;
+    const logicalStep = Number.isInteger(sendMeta?.emailStep) ? sendMeta.emailStep : 1;
+    return buildCampaignReservationKey({
+      runId,
+      nodeId: actionNode?.id,
+      channel: 'email',
+      recipient: customer?.email || '',
+      logicalStep,
     });
   }
 
@@ -760,13 +803,12 @@ class CampaignEmailSenderService {
     // Giữ chỗ quota atomic ngay trước provider call (PR-Q4a Wave 2). Đặt muộn nhất có thể để
     // không phải release cho các nhánh throw/return sớm hơn (template thiếu, settings thiếu,
     // unsubscribed/hard-bounced) — những nhánh đó chưa từng giữ reservation nào.
-    const logicalStep = Number.isInteger(sendMeta?.emailStep) ? sendMeta.emailStep : 1;
     const reservationKey = buildCampaignReservationKey({
       runId,
       nodeId: actionNode?.id,
       channel: 'email',
       recipient: customer?.email || '',
-      logicalStep,
+      logicalStep: Number.isInteger(sendMeta?.emailStep) ? sendMeta.emailStep : 1,
     });
     // requestPayload dùng dạng object (không chỉ hash tính sẵn) để reserveSendQuota() tự tính lại
     // fingerprint đúng theo fingerprint_version ĐÃ LƯU của reservation khi kiểm trùng key — khớp
@@ -926,6 +968,10 @@ class CampaignEmailSenderService {
         text: textBody,
         html: trackedHtmlContent || `<p>${textBody}</p>`,
         attachments: realMailAttachments,
+        // PR-Q2 việc g — huỷ đăng ký một chạm (RFC 2369 + 8058): URL trùng link trong chân thư.
+        headers: buildListUnsubscribeHeaders({
+          unsubscribeUrl: buildEmailUnsubscribeUrl(trackingBaseUrl, trackingToken),
+        }),
       });
       info = rawResult.info;
     } catch (smtpError) {

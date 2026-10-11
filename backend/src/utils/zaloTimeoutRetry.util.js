@@ -8,6 +8,12 @@ const ZALO_TIMEOUT_BASE_DELAY_MS = (() => {
 })();
 
 const ZALO_TIMEOUT_MAX_ATTEMPTS = 4;
+/**
+ * Tổng thời gian NGỦ tối đa giữa các lần thử lại của một lần gọi `executeWithZaloTimeoutRetry` với cấu hình
+ * mặc định: base × (1 + 2 + 4) = 70 giây (10 + 20 + 40). `outboundMessageQueue.service.js` dựa vào hằng này
+ * để đặt thời gian chờ kết quả job Zalo luôn LỚN HƠN thời gian job có thể mất (PR-Q2 việc b).
+ */
+export const ZALO_TIMEOUT_RETRY_TOTAL_DELAY_MS = ZALO_TIMEOUT_BASE_DELAY_MS * ((2 ** (ZALO_TIMEOUT_MAX_ATTEMPTS - 1)) - 1);
 const RETRYABLE_TIMEOUT_CODES = new Set([
   'UND_ERR_CONNECT_TIMEOUT',
   'ETIMEDOUT',

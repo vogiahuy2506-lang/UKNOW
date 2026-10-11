@@ -3,6 +3,7 @@ import {
   classifyZaloSendError,
   isZaloPhoneLookupRateLimitError,
 } from '../zaloSendErrorClassifier.util.js';
+import { serializeJobError } from '../queueJobError.util.js';
 
 describe('zaloSendErrorClassifier.util', () => {
   describe('isZaloPhoneLookupRateLimitError', () => {
@@ -113,6 +114,25 @@ describe('zaloSendErrorClassifier.util', () => {
       expect(result.category).toBe('UNKNOWN');
       expect(result.label).toBe('Lỗi SDK lạ XYZ');
       expect(result.isTimeout).toBe(false);
+    });
+  });
+
+  describe('nhận cả object lỗi chuẩn hoá từ worker BullMQ (PR-Q2 việc d)', () => {
+    it('lỗi timeout Zalo đi qua hàng đợi vẫn phân loại TIMEOUT + số lần thử lại', () => {
+      const err = new Error('Connect Timeout Error');
+      err.code = 'UND_ERR_CONNECT_TIMEOUT';
+      err.zaloRetry = { attempt: 4 };
+      const viaQueue = JSON.parse(JSON.stringify(serializeJobError(err)));
+      const direct = classifyZaloSendError(err);
+      const queued = classifyZaloSendError(viaQueue);
+      expect(queued.category).toBe('TIMEOUT');
+      expect(queued.label).toContain('4 lần');
+      expect(queued).toEqual(direct);
+    });
+
+    it('dạng rút gọn { ok:false, code, message } cũng nhận được', () => {
+      const result = classifyZaloSendError({ ok: false, code: null, message: 'Tìm số điện thoại quá nhiều' });
+      expect(result.category).toBe('PHONE_LOOKUP_RATE_LIMIT');
     });
   });
 });

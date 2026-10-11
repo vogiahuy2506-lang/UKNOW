@@ -1,4 +1,5 @@
 import { isZaloTimeoutError } from './zaloTimeoutRetry.util.js';
+import { isSerializedJobError, reviveJobError } from './queueJobError.util.js';
 import {
   classifyBounceType,
   isRecipientAddressNotFoundError,
@@ -157,7 +158,10 @@ function formatTimeoutLabel(error) {
  * @param {{ stage?: 'lookup'|'send'|'wait'|string }} [options]
  * @returns {{ category: string, label: string, hint: string|null, isTimeout: boolean, failureCode: string }}
  */
-export function classifyZaloSendError(error, { stage } = {}) {
+export function classifyZaloSendError(inputError, { stage } = {}) {
+  // Lỗi có thể là Error thật (đường chạy thẳng) hoặc object lỗi chuẩn hoá do worker BullMQ trả về
+  // (PR-Q2 việc d) — dựng lại Error để mọi nhánh phân loại bên dưới đọc cùng một dạng.
+  const error = isSerializedJobError(inputError) ? reviveJobError(inputError) : inputError;
   const rawMessage = String(
     error && typeof error === 'object' ? (error.message || error.code || '') : (error ?? '')
   ).trim();
