@@ -130,6 +130,9 @@ export function TopbarSettingsButton({ onClick, active = false }) {
 export function TopbarToolsMenu({ items }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
+  // Dưới sm menu rộng cả bề ngang màn hình (nút Công cụ không còn nằm sát mép phải nên `right-0 w-64` tràn ra ngoài trái) —
+  // vị trí dọc lấy từ đáy nút lúc mở.
+  const [menuTop, setMenuTop] = useState(0);
   const ref = useRef(null);
   useEffect(() => {
     if (!open) return undefined;
@@ -144,9 +147,13 @@ export function TopbarToolsMenu({ items }) {
     <div className="relative" ref={ref}>
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          if (!open && ref.current) setMenuTop(Math.round(ref.current.getBoundingClientRect().bottom) + 6);
+          setOpen((v) => !v);
+        }}
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-label={t('editorShell.tools')}
         className={`h-[36px] px-2.5 sm:px-3 rounded-xl text-xs sm:text-sm font-medium transition-all inline-flex items-center justify-center gap-1 border shadow-2xs ${
           open
             ? 'bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-800/60'
@@ -158,7 +165,10 @@ export function TopbarToolsMenu({ items }) {
         <HiOutlineChevronDown className={`w-3 h-3 text-gray-400 dark:text-dk-muted transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div role="menu" className="absolute right-0 mt-1.5 w-64 bg-white dark:bg-dk-surface rounded-2xl shadow-xl border border-gray-200/90 dark:border-dk-border py-1.5 z-50 animate-in fade-in slide-in-from-top-1 duration-150">
+        <div
+          role="menu"
+          style={{ '--tools-top': `${menuTop}px` }}
+          className="fixed left-3 right-3 top-[var(--tools-top)] sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-1.5 sm:w-64 bg-white dark:bg-dk-surface rounded-2xl shadow-xl border border-gray-200/90 dark:border-dk-border py-1.5 z-50 animate-in fade-in slide-in-from-top-1 duration-150">
           {items.map((it) => (
             <button
               key={it.key}
