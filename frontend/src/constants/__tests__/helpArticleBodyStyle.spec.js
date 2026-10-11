@@ -32,3 +32,12 @@ describe('HELP_ARTICLE_BODY_RICH_CLASS', () => {
     expect(HELP_ARTICLE_BODY_RICH_CLASS).toContain('[&_h2]:text-2xl');
   });
 });
+
+// 11/10/2026: `[&_code]:bg-slate-100` cũng áp vào <code> NẰM TRONG <pre> (nền slate-900, chữ slate-100) → khối mã chữ sáng
+// trên nền sáng, tương phản 1,00:1 ở chế độ sáng. Code trong pre phải trong suốt.
+describe('HELP_ARTICLE_BODY_RICH_CLASS — khối mã', () => {
+  it('code trong pre bỏ nền sáng của code nội dòng', async () => {
+    const { HELP_ARTICLE_BODY_RICH_CLASS } = await import('../helpArticleBodyStyle');
+    expect(HELP_ARTICLE_BODY_RICH_CLASS).toContain('[&_pre_code]:bg-transparent');
+  });
+});

@@ -15,4 +15,5 @@ export const HELP_ARTICLE_BODY_RICH_CLASS = `help-article-body
   [&_img]:my-4 [&_img]:max-w-full [&_img]:rounded-lg [&_img]:border [&_img]:border-slate-200
   [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-slate-900 [&_pre]:p-3 [&_pre]:text-slate-100
   [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1 [&_code]:text-sm
+  [&_pre_code]:bg-transparent [&_pre_code]:p-0
   [&_table]:w-full [&_table]:border-collapse [&_th]:border [&_td]:border [&_th]:border-slate-200 [&_td]:border-slate-200 [&_th]:bg-slate-50 [&_th]:p-2 [&_td]:p-2`;
