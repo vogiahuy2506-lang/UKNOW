@@ -53,10 +53,22 @@ const PRODUCTS = [
 ];
 
 // ───────────────────────────── DRIVER (chỉ phần này đổi khi vị trí UI đổi) ─────────────────────────────
+//
+// Bố cục trình soạn MỚI (PR-3): trái = danh sách trường (chọn một hàng để mở bảng thuộc tính của nó), phải = xem trước cố
+// định, mọi cấu hình ngoài trường nằm trong modal "Cài đặt" có tab. Mỗi lệnh dưới đây làm đúng việc cũ qua vị trí UI mới.
 
 const LABEL_PLACEHOLDER = 'Ví dụ: Họ và tên';
 
-const fieldCard = (idx) => screen.getAllByPlaceholderText(LABEL_PLACEHOLDER)[idx].closest('.rounded-2xl');
+const SETTINGS_TAB_NAMES = {
+  general: 'Thông tin chung',
+  afterSubmit: 'Sau khi gửi',
+  booking: 'Đặt lịch hẹn',
+  payment: 'Thanh toán',
+  theme: 'Giao diện',
+  product: 'Sản phẩm',
+};
+
+const fieldRow = (idx) => screen.getByTestId(`field-row-${idx}`);
 
 // Ô gắn nhãn kiểu "<div>nhãn</div> … <input>" — nhãn nằm cùng khối cha với ô nhập.
 const controlNextToText = (text, selector) => screen.getByText(text).closest('div').querySelector(selector);
@@ -67,43 +79,37 @@ const driver = {
     fireEvent.change(screen.getByPlaceholderText(/Ví dụ: Đăng ký tư vấn lộ trình 1-1/i), { target: { value } }),
   save: () => fireEvent.click(screen.getByRole('button', { name: /Lưu biểu mẫu/i })),
 
-  // Trình soạn cũ hiện đủ mọi trường cùng lúc nên chọn trường là no-op.
-  selectField: () => {},
+  // Chọn một hàng để mở bảng thuộc tính của nó (chỉ trường đang chọn có ô nhập).
+  selectField: (idx) =>
+    fireEvent.click(within(fieldRow(idx)).getByRole('button', { name: new RegExp(`^Trường #${idx + 1}:`) })),
   setLabel: (idx, value) =>
-    fireEvent.change(screen.getAllByPlaceholderText(LABEL_PLACEHOLDER)[idx], { target: { value } }),
+    fireEvent.change(within(fieldRow(idx)).getByPlaceholderText(LABEL_PLACEHOLDER), { target: { value } }),
   setType: (idx, value) =>
-    fireEvent.change(within(fieldCard(idx)).getAllByRole('combobox')[0], { target: { value } }),
+    fireEvent.change(within(fieldRow(idx)).getByLabelText('Kiểu dữ liệu'), { target: { value } }),
   setRole: (idx, value) =>
-    fireEvent.change(within(fieldCard(idx)).getAllByRole('combobox')[1], { target: { value } }),
+    fireEvent.change(within(fieldRow(idx)).getByLabelText('Vai trò định danh'), { target: { value } }),
   toggleRequired: (idx) =>
-    fireEvent.click(within(fieldCard(idx)).getByRole('checkbox', { name: /Bắt buộc/ })),
+    fireEvent.click(within(fieldRow(idx)).getByRole('checkbox', { name: /Bắt buộc/ })),
   moveField: (idx, direction) =>
-    fireEvent.click(within(fieldCard(idx)).getByTitle(direction < 0 ? 'Di chuyển lên' : 'Di chuyển xuống')),
-  removeField: (idx) => fireEvent.click(within(fieldCard(idx)).getByTitle('Xoá trường')),
-  addOption: (idx) => fireEvent.click(within(fieldCard(idx)).getByRole('button', { name: /Thêm lựa chọn/ })),
+    fireEvent.click(within(fieldRow(idx)).getByTitle(direction < 0 ? 'Di chuyển lên' : 'Di chuyển xuống')),
+  removeField: (idx) => fireEvent.click(within(fieldRow(idx)).getByTitle('Xoá trường')),
+  addOption: (idx) => fireEvent.click(within(fieldRow(idx)).getByRole('button', { name: /Thêm lựa chọn/ })),
   setOption: (idx, optIdx, value) =>
-    fireEvent.change(within(fieldCard(idx)).getAllByPlaceholderText('Nhập lựa chọn...')[optIdx], {
+    fireEvent.change(within(fieldRow(idx)).getAllByPlaceholderText('Nhập lựa chọn...')[optIdx], {
       target: { value },
     }),
   removeOption: (idx, optIdx) =>
-    fireEvent.click(within(fieldCard(idx)).getAllByTitle('Xoá lựa chọn')[optIdx]),
+    fireEvent.click(within(fieldRow(idx)).getAllByTitle('Xoá lựa chọn')[optIdx]),
   addBlankField: () => fireEvent.click(screen.getByRole('button', { name: /Thêm trường/i })),
   quickAdd: (name) => fireEvent.click(screen.getByRole('button', { name })),
   showMoreFieldTypes: () => fireEvent.click(screen.getByRole('button', { name: 'Loại khác…' })),
 
-  /** Mở khối / tab cấu hình: 'general' | 'afterSubmit' | 'booking' | 'payment' | 'theme' | 'product'. */
+  /** Mở modal Cài đặt (nếu chưa mở) rồi chọn tab: 'general' | 'afterSubmit' | 'booking' | 'payment' | 'theme' | 'product'. */
   openSettings: (tab) => {
-    const clickIfPresent = (name) => {
-      const el = screen.queryByRole('button', { name });
-      if (el) fireEvent.click(el);
-    };
-    if (tab === 'afterSubmit') {
-      const toggle = screen.getByRole('button', { name: 'Sau khi gửi' });
-      if (toggle.getAttribute('aria-expanded') !== 'true') fireEvent.click(toggle);
+    if (!screen.queryByRole('dialog')) {
+      fireEvent.click(screen.getByRole('button', { name: 'Cài đặt' }));
     }
-    if (tab === 'booking') clickIfPresent(/Thêm đặt lịch hẹn/);
-    if (tab === 'payment') clickIfPresent(/Thu tiền khi gửi/);
-    if (tab === 'theme') clickIfPresent(/^Giao diện/);
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: SETTINGS_TAB_NAMES[tab] }));
   },
 
   descriptionInput: () => screen.getByPlaceholderText(/Mô tả mục đích hoặc hướng dẫn/),
@@ -113,6 +119,9 @@ const driver = {
   successMessageInput: () => controlNextToText('Thông báo sau khi nộp thành công', 'textarea'),
   redirectUrlInput: () => controlNextToText(/Đường dẫn chuyển hướng sau khi nộp/, 'input'),
   productSelect: () => screen.getByTestId('form-product-select'),
+  // Ô giờ / ngày nghỉ của tab Đặt lịch hẹn (xem trước bên phải cũng có thể có ô ngày/giờ nên tìm trong modal).
+  timeInputs: () => screen.getByRole('dialog').querySelectorAll('input[type="time"]'),
+  closedDateInput: () => screen.getByRole('dialog').querySelector('input[type="date"]'),
 };
 
 // ───────────────────────────────────────────── Dàn dựng ─────────────────────────────────────────────
@@ -400,14 +409,14 @@ describe('FormEditorPage — hợp đồng payload gửi API khi Lưu', () => {
     const addSlotButtons = screen.getAllByRole('button', { name: /Thêm khung giờ/i });
     fireEvent.click(addSlotButtons[0]); // Thứ 2
     fireEvent.click(addSlotButtons[6]); // Chủ nhật
-    const timeInputs = document.querySelectorAll('input[type="time"]');
+    const timeInputs = driver.timeInputs();
     fireEvent.change(timeInputs[0], { target: { value: '09:00' } });
     fireEvent.change(timeInputs[1], { target: { value: '10:30' } });
     fireEvent.change(controlNextToText('Sức chứa mỗi khung giờ', 'input'), { target: { value: '5' } });
     fireEvent.change(controlNextToText('Số ngày cho đặt trước', 'input'), { target: { value: '14' } });
     fireEvent.change(controlNextToText('Báo trước tối thiểu (phút)', 'input'), { target: { value: '120' } });
     fireEvent.click(screen.getByRole('button', { name: /Thêm ngày nghỉ/ }));
-    fireEvent.change(document.querySelector('input[type="date"]'), { target: { value: '2026-12-25' } });
+    fireEvent.change(driver.closedDateInput(), { target: { value: '2026-12-25' } });
 
     // Thanh toán (chủ tài khoản)
     driver.openSettings('payment');

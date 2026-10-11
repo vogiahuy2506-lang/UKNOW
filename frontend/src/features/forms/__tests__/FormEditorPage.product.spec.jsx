@@ -5,6 +5,7 @@ import { I18nProvider } from '../../../i18n';
 import FormEditorPage from '../pages/FormEditorPage';
 import * as formAdminApi from '../services/formAdminApi.service';
 import productApiService from '../../products/services/productApi.service';
+import { openSettingsTab } from './formEditorTestUtils';
 
 vi.mock('../services/formAdminApi.service', () => ({
   fetchFormById: vi.fn(),
@@ -78,6 +79,7 @@ describe('FormEditorPage — ô chọn sản phẩm', () => {
     renderEditor();
 
     await waitFor(() => expect(screen.getByDisplayValue('Biểu mẫu bán khoá học')).toBeInTheDocument());
+    openSettingsTab('product');
     await waitFor(() => expect(screen.getByRole('option', { name: 'Khoá AI thực chiến' })).toBeInTheDocument());
 
     fireEvent.change(screen.getByTestId('form-product-select'), { target: { value: '11' } });
@@ -105,6 +107,8 @@ describe('FormEditorPage — ô chọn sản phẩm', () => {
     formAdminApi.updateForm.mockResolvedValue(existingForm);
     renderEditor();
 
+    await waitFor(() => expect(screen.getByDisplayValue('Biểu mẫu bán khoá học')).toBeInTheDocument());
+    openSettingsTab('product');
     await waitFor(() => expect(screen.getByTestId('form-product-select').value).toBe('12'));
     fireEvent.change(screen.getByTestId('form-product-select'), { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: /Lưu biểu mẫu/i }));
@@ -119,6 +123,8 @@ describe('FormEditorPage — ô chọn sản phẩm', () => {
     formAdminApi.updateForm.mockResolvedValue(existingForm);
     renderEditor();
 
+    await waitFor(() => expect(screen.getByDisplayValue('Biểu mẫu bán khoá học')).toBeInTheDocument());
+    openSettingsTab('product');
     await waitFor(() => expect(screen.getByTestId('form-product-select').value).toBe('12'));
     fireEvent.click(screen.getByRole('button', { name: /Lưu biểu mẫu/i }));
 
@@ -129,13 +135,20 @@ describe('FormEditorPage — ô chọn sản phẩm', () => {
   it('chọn sản phẩm có priceAmount khi thanh toán bật mà ô số tiền trống → tự điền 500.000; sản phẩm không có số thì không điền', async () => {
     formAdminApi.fetchFormById.mockResolvedValue({ ...existingForm, paymentConfig: PAID_CONFIG });
     renderEditor();
+    await waitFor(() => expect(screen.getByDisplayValue('Biểu mẫu bán khoá học')).toBeInTheDocument());
+    // Ô chọn sản phẩm ở tab "Sản phẩm", ô số tiền ở tab "Thanh toán" — hai tab không dựng cùng lúc nên đổi qua lại để kiểm.
+    openSettingsTab('product');
     await waitFor(() => expect(screen.getByRole('option', { name: 'Khoá AI thực chiến' })).toBeInTheDocument());
 
     fireEvent.change(screen.getByTestId('form-product-select'), { target: { value: '12' } });
+    openSettingsTab('payment');
     expect(screen.queryByDisplayValue('500.000')).toBeNull();
 
+    openSettingsTab('product');
     fireEvent.change(screen.getByTestId('form-product-select'), { target: { value: '11' } });
+    openSettingsTab('payment');
     expect(screen.getByDisplayValue('500.000')).toBeInTheDocument();
+    openSettingsTab('product');
     expect(screen.getByTestId('form-product-price-hint')).toHaveTextContent('500.000 đ');
     // đã khớp giá sản phẩm → không có nút "Dùng giá sản phẩm"
     expect(screen.queryByTestId('form-product-use-price')).toBeNull();
@@ -144,14 +157,20 @@ describe('FormEditorPage — ô chọn sản phẩm', () => {
   it('ô số tiền đã có số khác → KHÔNG đè; hiện nút "Dùng giá sản phẩm (500.000 đ)", bấm thì đổi', async () => {
     formAdminApi.fetchFormById.mockResolvedValue({ ...existingForm, paymentConfig: { ...PAID_CONFIG, amount: 300000 } });
     renderEditor();
+    await waitFor(() => expect(screen.getByDisplayValue('Biểu mẫu bán khoá học')).toBeInTheDocument());
+    openSettingsTab('product');
     await waitFor(() => expect(screen.getByRole('option', { name: 'Khoá AI thực chiến' })).toBeInTheDocument());
 
     fireEvent.change(screen.getByTestId('form-product-select'), { target: { value: '11' } });
+    openSettingsTab('payment');
     expect(screen.getByDisplayValue('300.000')).toBeInTheDocument();
+    openSettingsTab('product');
     const useBtn = screen.getByTestId('form-product-use-price');
     expect(useBtn).toHaveTextContent('Dùng giá sản phẩm (500.000 đ)');
     fireEvent.click(useBtn);
+    openSettingsTab('payment');
     expect(screen.getByDisplayValue('500.000')).toBeInTheDocument();
+    openSettingsTab('product');
     expect(screen.queryByTestId('form-product-use-price')).toBeNull();
   });
 });

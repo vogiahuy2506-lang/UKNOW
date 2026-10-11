@@ -8,6 +8,7 @@ import * as formAdminApi from '../services/formAdminApi.service';
 import * as formPublicApi from '../services/formPublicApi.service';
 import { I18nProvider } from '../../../i18n';
 import * as vietqrParser from '../../../utils/vietqrParser';
+import { openSettingsTab } from './formEditorTestUtils';
 
 vi.mock('../services/formAdminApi.service', () => ({
   fetchFormById: vi.fn(),
@@ -80,6 +81,10 @@ describe('PR-4: QR MoMo tạo từ thông tin chủ form nhập (Frontend)', () 
         { route: '/app/forms/101/edit' }
       );
 
+      // Khối Thanh toán nay nằm ở tab "Thanh toán" của modal Cài đặt — chờ nạp xong rồi mở tab.
+      await screen.findByDisplayValue('Form MoMo Cũ');
+      openSettingsTab('payment');
+
       await waitFor(() => {
         const accountRadio = screen.getByLabelText(/Nhập số tài khoản MoMo/i);
         expect(accountRadio).toBeChecked();
@@ -114,6 +119,10 @@ describe('PR-4: QR MoMo tạo từ thông tin chủ form nhập (Frontend)', () 
         </Routes>,
         { route: '/app/forms/102/edit' }
       );
+
+      // Khối Thanh toán nay nằm ở tab "Thanh toán" của modal Cài đặt — chờ nạp xong rồi mở tab.
+      await screen.findByDisplayValue('Form MoMo Preview Test');
+      openSettingsTab('payment');
 
       await waitFor(() => {
         expect(screen.getByTestId('momo-preview-qr')).toBeInTheDocument();
@@ -159,6 +168,10 @@ describe('PR-4: QR MoMo tạo từ thông tin chủ form nhập (Frontend)', () 
         { route: '/app/forms/103/edit' }
       );
 
+      // Khối Thanh toán nay nằm ở tab "Thanh toán" của modal Cài đặt — chờ nạp xong rồi mở tab.
+      await screen.findByDisplayValue('Form MoMo SĐT');
+      openSettingsTab('payment');
+
       await waitFor(() => expect(screen.getByLabelText(/Dùng số điện thoại MoMo/i)).toBeChecked());
       expect(screen.getByText(/Nhận tiền → bấm mũi tên cạnh Số tài khoản/i)).toBeInTheDocument();
       expect(screen.queryByPlaceholderText('Vd: PSP2604014200000493')).not.toBeInTheDocument();
@@ -196,6 +209,10 @@ describe('PR-4: QR MoMo tạo từ thông tin chủ form nhập (Frontend)', () 
         </Routes>,
         { route: '/app/forms/103/edit' }
       );
+
+      // Khối Thanh toán nay nằm ở tab "Thanh toán" của modal Cài đặt — chờ nạp xong rồi mở tab.
+      await screen.findByDisplayValue('Form Test Input STK');
+      openSettingsTab('payment');
 
       await waitFor(() => {
         expect(screen.getByPlaceholderText('Vd: PSP2604014200000493')).toBeInTheDocument();
@@ -243,6 +260,10 @@ describe('PR-4: QR MoMo tạo từ thông tin chủ form nhập (Frontend)', () 
         </Routes>,
         { route: '/app/forms/104/edit' }
       );
+
+      // Khối Thanh toán nay nằm ở tab "Thanh toán" của modal Cài đặt — chờ nạp xong rồi mở tab.
+      await screen.findByDisplayValue('Form Test Auto Fill Error');
+      openSettingsTab('payment');
 
       await waitFor(() => {
         expect(screen.getByText('Điền tự động từ ảnh QR')).toBeInTheDocument();
@@ -296,6 +317,10 @@ describe('PR-4: QR MoMo tạo từ thông tin chủ form nhập (Frontend)', () 
         </Routes>,
         { route: '/app/forms/105/edit' }
       );
+
+      // Khối Thanh toán nay nằm ở tab "Thanh toán" của modal Cài đặt — chờ nạp xong rồi mở tab.
+      await screen.findByDisplayValue('Form Test Auto Fill Success');
+      openSettingsTab('payment');
 
       await waitFor(() => {
         expect(screen.getByText('Điền tự động từ ảnh QR')).toBeInTheDocument();

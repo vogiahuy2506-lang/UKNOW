@@ -6,6 +6,7 @@ import FormSubmissionStatusPage from '../pages/FormSubmissionStatusPage';
 import FormEditorPage from '../pages/FormEditorPage';
 import * as formPublicApi from '../services/formPublicApi.service';
 import * as formAdminApi from '../services/formAdminApi.service';
+import { openSettingsTab } from './formEditorTestUtils';
 
 vi.mock('../services/formPublicApi.service', () => ({
   fetchPublicSubmissionStatus: vi.fn(),
@@ -166,6 +167,10 @@ describe('PR-3: QR MoMo từ ảnh QR Đa Năng (Frontend)', () => {
         { route: '/app/forms/10/edit' }
       );
 
+      // Khối Thanh toán nay nằm ở tab "Thanh toán" của modal Cài đặt — chờ nạp xong rồi mở tab.
+      await screen.findByDisplayValue('Form MoMo Có QR');
+      openSettingsTab('payment');
+
       await waitFor(() => {
         const accountRadio = screen.getByLabelText(/Nhập số tài khoản MoMo/i);
         expect(accountRadio).toBeInTheDocument();
@@ -210,6 +215,9 @@ describe('PR-3: QR MoMo từ ảnh QR Đa Năng (Frontend)', () => {
       formAdminApi.updateForm.mockResolvedValue({ ...MOMO_QR_FORM });
 
       renderEditor();
+      // Khối Thanh toán nay nằm ở tab "Thanh toán" của modal Cài đặt — chờ nạp xong rồi mở tab.
+      await screen.findByDisplayValue('Form MoMo Có QR');
+      openSettingsTab('payment');
       await waitFor(() => expect(screen.getByDisplayValue('PSP2604014212340493')).toBeInTheDocument());
 
       fireEvent.change(screen.getByDisplayValue('Form MoMo Có QR'), { target: { value: 'Tiêu đề mới' } });
@@ -232,6 +240,9 @@ describe('PR-3: QR MoMo từ ảnh QR Đa Năng (Frontend)', () => {
       formAdminApi.updateForm.mockResolvedValue({ ...MOMO_QR_FORM });
 
       renderEditor();
+      // Khối Thanh toán nay nằm ở tab "Thanh toán" của modal Cài đặt — chờ nạp xong rồi mở tab.
+      await screen.findByDisplayValue('Form MoMo Có QR');
+      openSettingsTab('payment');
       await waitFor(() => expect(screen.getByDisplayValue('PSP2604014212340493')).toBeInTheDocument());
 
       const noneRadio = screen.getByLabelText(/Không dùng QR/i);
