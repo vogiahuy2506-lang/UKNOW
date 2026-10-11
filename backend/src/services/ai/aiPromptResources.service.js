@@ -275,7 +275,7 @@ class AiPromptResourcesService {
         slug: r.slug,
         title: r.title,
         isPublished: r.is_published,
-        // PR-5b-2b — Biểu mẫu đã gắn landing này (PR-5b-2a forms.landing_page_id), null nếu chưa
+        // PR-5b-2b — Biểu mẫu CHÍNH đã gắn landing này (bảng chỉ mục landing_page_forms; landing nhiều biểu mẫu → chỉ biểu mẫu chính), null nếu chưa
         // gắn/đã bị super admin tắt. Prompt dùng field này để chọn read_form_submissions thay vì
         // read_landing_leads.
         formId: r.form_id != null ? Number(r.form_id) : null,

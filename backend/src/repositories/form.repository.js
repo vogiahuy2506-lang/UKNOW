@@ -164,10 +164,9 @@ class FormRepository {
     theme = {},
     bookingConfig = null,
     paymentConfig = null,
-    // PR-5b-2a — biết ngay lúc tạo landing nào đã sinh ra form này (đường UPDATE landing: id
-    // landing đã biết trước, gắn thẳng ở INSERT, không cần UPDATE riêng). Đường CREATE landing
-    // (id landing CHƯA có lúc form được tạo) để mặc định null, gắn sau bằng setLandingPageId
-    // trong CÙNG transaction với INSERT landing (landingPageAdmin.service.js).
+    // PR-5b-2a — cột đơn cũ `forms.landing_page_id`. Từ PR-6 (migration 297) landing ↔ biểu mẫu là nhiều–nhiều qua bảng chỉ
+    // mục `landing_page_forms`; cột này chỉ còn để tương thích và do `replaceLandingForms` tính lại khi lưu landing —
+    // code lưu landing KHÔNG truyền tham số này nữa (mặc định null).
     landingPageId = null,
     productId = null,
   }) {
@@ -224,36 +223,41 @@ class FormRepository {
   }
 
   /**
-   * PR-5b-2a — form (nếu có) đã gắn với một landing page cụ thể, để lúc lưu landing lại (HTML lại
-   * có chỗ trống) TÁI DÙNG đúng form thay vì đẻ form mồ côi. `LIMIT 1`: quy ước 1 landing tối đa 1
-   * form. PR-F: biểu mẫu khách chọn sẵn cũng gắn qua đây — `landingPageAdmin.service.js`
-   * `applyLinkedFormTx` gỡ gắn form cũ và gắn form mới trong CÙNG transaction nên không bao giờ có 2 form;
-   * `ORDER BY id` chỉ để kết quả ổn định nếu dữ liệu cũ vẫn lệch.
+   * PR-6 — các biểu mẫu đang NHÚNG trong một landing, theo bảng chỉ mục `landing_page_forms` (migration 297), đúng thứ tự
+   * trong HTML. Thay `findByLandingPageId` (1 form, `LIMIT 1`, đọc cột đơn `forms.landing_page_id`): một landing nay có
+   * nhiều biểu mẫu và một biểu mẫu dùng được cho nhiều landing. Chỉ trả form CÙNG chủ workspace với landing (kiểm chéo thêm
+   * dù lúc ghi chỉ mục đã lọc đúng như vậy).
    *
-   * PR-F: kèm `title` để trình soạn landing hiện "đang dùng biểu mẫu nào" (không phải gọi thêm API).
+   * Kèm `paymentConfig` / `adminDisabledAt` để tính cờ "cần bổ sung" (kind payment chưa khai tiền + tài khoản) mà khỏi gọi
+   * thêm API; `kind` = loại lúc hệ thống tự tạo từ chỗ trống (NULL = biểu mẫu chủ chọn / dữ liệu cũ).
    *
    * @param {number} landingPageId
    * @param {number} workspaceOwnerId
-   * @returns {Promise<{id: number, publicKey: string, isPublished: boolean, title: string}|null>}
+   * @param {import('pg').PoolClient|typeof db} [queryable]
+   * @returns {Promise<Array<{id: number, publicKey: string, isPublished: boolean, title: string, paymentConfig: object|null,
+   *   adminDisabledAt: Date|null, position: number, kind: string|null}>>}
    */
-  async findByLandingPageId(landingPageId, workspaceOwnerId) {
-    const result = await db.query(
-      `SELECT id, public_key AS "publicKey", is_published AS "isPublished", title
-       FROM forms
-       WHERE landing_page_id = $1 AND workspace_owner_id = $2
-       ORDER BY id
-       LIMIT 1`,
+  async listByLandingPageId(landingPageId, workspaceOwnerId, queryable = db) {
+    const result = await queryable.query(
+      `SELECT f.id, f.public_key AS "publicKey", f.is_published AS "isPublished", f.title,
+              f.payment_config AS "paymentConfig", f.admin_disabled_at AS "adminDisabledAt",
+              lpf.position, lpf.kind
+       FROM landing_page_forms lpf
+       JOIN forms f ON f.id = lpf.form_id
+       WHERE lpf.landing_page_id = $1 AND f.workspace_owner_id = $2
+       ORDER BY lpf.position, f.id`,
       [landingPageId, workspaceOwnerId]
     );
-    return result.rows[0] || null;
+    return result.rows;
   }
 
   /**
-   * PR-F — biểu mẫu đang gắn cho NHIỀU landing trong một câu truy vấn (danh sách landing). Chỉ tính form
-   * cùng chủ workspace với landing (quy ước giống `findByLandingPageId`).
+   * PR-6 — biểu mẫu đang nhúng cho NHIỀU landing trong một câu truy vấn (danh sách landing). Chỉ tính form cùng chủ
+   * workspace với landing. Mỗi dòng = một cặp (landing, form); caller gom theo `landingPageId`.
    *
    * @param {Array<number|string>} landingPageIds
-   * @returns {Promise<Array<{id: number, title: string, publicKey: string, landingPageId: number}>>}
+   * @returns {Promise<Array<{id: number, title: string, publicKey: string, isPublished: boolean, paymentConfig: object|null,
+   *   landingPageId: number, position: number, kind: string|null}>>}
    */
   async listLinkedByLandingPageIds(landingPageIds) {
     const ids = (Array.isArray(landingPageIds) ? landingPageIds : [])
@@ -261,74 +265,120 @@ class FormRepository {
       .filter((v) => Number.isFinite(v));
     if (ids.length === 0) return [];
     const result = await db.query(
-      `SELECT f.id, f.title, f.public_key AS "publicKey", f.landing_page_id AS "landingPageId"
-       FROM forms f
-       JOIN landing_pages lp ON lp.id = f.landing_page_id
-       WHERE f.landing_page_id = ANY($1::bigint[])
+      `SELECT f.id, f.title, f.public_key AS "publicKey", f.is_published AS "isPublished",
+              f.payment_config AS "paymentConfig", lpf.landing_page_id AS "landingPageId", lpf.position, lpf.kind
+       FROM landing_page_forms lpf
+       JOIN forms f ON f.id = lpf.form_id
+       JOIN landing_pages lp ON lp.id = lpf.landing_page_id
+       WHERE lpf.landing_page_id = ANY($1::bigint[])
          AND f.workspace_owner_id = COALESCE(lp.workspace_owner_id, lp.id_user)
-       ORDER BY f.id`,
+       ORDER BY lpf.landing_page_id, lpf.position, f.id`,
       [ids]
     );
     return result.rows;
   }
 
   /**
-   * PR-F — khoá hàng biểu mẫu (FOR UPDATE) để gắn vào landing; CHỈ gọi bên trong transaction của caller
-   * (`client`). Hai landing cùng bấm gắn một biểu mẫu thì lượt sau phải đợi lượt trước rồi thấy
-   * `landingPageId` đã đổi.
+   * PR-6 — tra biểu mẫu theo publicKey (khoá trong khối nhúng của HTML) CHỈ trong workspace này. Khoá không thuộc workspace
+   * (dán tay khoá của người khác, khoá bịa) đơn giản không có trong kết quả → không vào chỉ mục.
    *
-   * @param {number} formId
+   * @param {string[]} publicKeys
    * @param {number} workspaceOwnerId
-   * @param {import('pg').PoolClient} client
-   * @returns {Promise<{id: number, publicKey: string, title: string, isPublished: boolean, adminDisabledAt: Date|null, landingPageId: number|null}|null>}
-   */
-  async lockByIdAndOwner(formId, workspaceOwnerId, client) {
-    const result = await client.query(
-      `SELECT id, public_key AS "publicKey", title, is_published AS "isPublished",
-              admin_disabled_at AS "adminDisabledAt", landing_page_id AS "landingPageId"
-       FROM forms
-       WHERE id = $1 AND workspace_owner_id = $2
-       FOR UPDATE`,
-      [formId, workspaceOwnerId]
-    );
-    return result.rows[0] || null;
-  }
-
-  /**
-   * PR-F — gỡ gắn (`landing_page_id = NULL`) mọi biểu mẫu đang gắn landing này, TRỪ `exceptFormId`.
-   * KHÔNG xoá form, KHÔNG đụng bài nộp — form thành form độc lập trong mục Biểu mẫu.
-   *
-   * @param {number} landingPageId
-   * @param {number} workspaceOwnerId
-   * @param {number|null} exceptFormId
    * @param {import('pg').PoolClient|typeof db} [queryable]
-   * @returns {Promise<number[]>} id các form vừa được gỡ gắn
+   * @returns {Promise<Array<{id: number, publicKey: string}>>}
    */
-  async unlinkFromLanding(landingPageId, workspaceOwnerId, exceptFormId = null, queryable = db) {
+  async findIdsByPublicKeysAndOwner(publicKeys, workspaceOwnerId, queryable = db) {
+    const keys = [...new Set((Array.isArray(publicKeys) ? publicKeys : []).map((k) => String(k)).filter(Boolean))];
+    if (keys.length === 0) return [];
     const result = await queryable.query(
-      `UPDATE forms SET landing_page_id = NULL, updated_at = NOW()
-       WHERE landing_page_id = $1 AND workspace_owner_id = $2
-         AND ($3::bigint IS NULL OR id <> $3)
-       RETURNING id`,
-      [landingPageId, workspaceOwnerId, exceptFormId]
+      `SELECT id, public_key AS "publicKey" FROM forms WHERE public_key = ANY($1::text[]) AND workspace_owner_id = $2`,
+      [keys, workspaceOwnerId]
     );
-    return result.rows.map((row) => row.id);
+    return result.rows;
   }
 
   /**
-   * PR-5b-2a — gắn `landing_page_id` cho form ĐÃ TỒN TẠI (đường CREATE landing: form được tạo
-   * TRƯỚC khi biết `id` landing, gắn lại sau trong CÙNG transaction với INSERT landing — truyền
-   * `client` để 2 câu lệnh cùng transaction). `queryable` mặc định `db` (pool) cho lúc gọi ngoài
-   * transaction (không dùng ở đường CREATE landing, chỉ để đối xứng với các hàm khác trong file).
+   * PR-6 — GHI LẠI bảng chỉ mục `landing_page_forms` của một landing cho khớp danh sách biểu mẫu nhúng trong HTML vừa lưu
+   * (nguồn sự thật = HTML; bảng chỉ là chỉ mục). Gọi bên trong transaction lưu landing (`queryable` = client).
+   *
+   * - Xoá dòng của form không còn nhúng; chèn/cập nhật dòng còn lại với `position` = thứ tự trong `entries` (0, 1, 2…).
+   * - `kind`: entry có `kind` thì ghi đè; `kind` null thì GIỮ giá trị cũ của dòng đó (form chọn có sẵn / dòng cũ không mất loại
+   *   mỗi lần lưu lại).
+   * - Cột đơn cũ `forms.landing_page_id` (còn một đợt, code mới không đọc) được tính lại cho mọi form liên quan = landing GẮN
+   *   SỚM NHẤT của form đó (NULL nếu không còn gắn landing nào) — nên form gỡ khỏi landing này mà còn ở landing khác không bị
+   *   NULL oan, và quy ước cũ "form gắn 1 landing" vẫn đúng với dữ liệu 1-1.
+   *
+   * @param {number} landingPageId
+   * @param {Array<{formId: number, kind?: string|null}>} entries thứ tự = vị trí; formId trùng chỉ giữ lần đầu
+   * @param {import('pg').PoolClient|typeof db} [queryable]
+   * @returns {Promise<number[]>} id biểu mẫu sau khi ghi, đúng thứ tự vị trí
+   */
+  async replaceLandingForms(landingPageId, entries, queryable = db) {
+    const seen = new Set();
+    const unique = [];
+    for (const entry of Array.isArray(entries) ? entries : []) {
+      const formId = Number(entry?.formId);
+      if (!Number.isSafeInteger(formId) || formId <= 0 || seen.has(formId)) continue;
+      seen.add(formId);
+      unique.push({ formId, kind: entry.kind ?? null });
+    }
+    const formIds = unique.map((e) => e.formId);
+
+    const previous = await queryable.query(
+      `SELECT form_id FROM landing_page_forms WHERE landing_page_id = $1`,
+      [landingPageId]
+    );
+    const previousIds = previous.rows.map((r) => Number(r.form_id));
+
+    await queryable.query(
+      `DELETE FROM landing_page_forms WHERE landing_page_id = $1 AND form_id <> ALL($2::bigint[])`,
+      [landingPageId, formIds]
+    );
+    if (unique.length > 0) {
+      await queryable.query(
+        `INSERT INTO landing_page_forms (landing_page_id, form_id, position, kind)
+         SELECT $1, t.form_id, t.position, t.kind
+         FROM unnest($2::bigint[], $3::int[], $4::text[]) AS t(form_id, position, kind)
+         ON CONFLICT (landing_page_id, form_id) DO UPDATE
+           SET position = EXCLUDED.position,
+               kind = COALESCE(EXCLUDED.kind, landing_page_forms.kind)`,
+        [landingPageId, formIds, unique.map((_, index) => index), unique.map((e) => e.kind)]
+      );
+    }
+
+    const affected = [...new Set([...previousIds, ...formIds])];
+    if (affected.length > 0) {
+      await queryable.query(
+        `UPDATE forms f SET landing_page_id = s.landing_page_id
+         FROM (
+           SELECT f2.id AS form_id,
+                  (SELECT lpf.landing_page_id FROM landing_page_forms lpf
+                   WHERE lpf.form_id = f2.id
+                   ORDER BY lpf.created_at, lpf.landing_page_id
+                   LIMIT 1) AS landing_page_id
+           FROM forms f2
+           WHERE f2.id = ANY($1::bigint[])
+         ) s
+         WHERE f.id = s.form_id AND f.landing_page_id IS DISTINCT FROM s.landing_page_id`,
+        [affected]
+      );
+    }
+    return formIds;
+  }
+
+  /**
+   * PR-6 — xuất bản một biểu mẫu qua `queryable` (client trong transaction lưu landing): gắn biểu mẫu chủ chọn còn NHÁP vào
+   * landing thì phải xuất bản NGUYÊN TỬ với việc lưu landing (landing lưu hỏng thì biểu mẫu không bị xuất bản oan).
+   * Không đụng biểu mẫu đang bị quản trị khoá (`admin_disabled_at`) — caller đã chặn từ trước.
    *
    * @param {number} formId
-   * @param {number} landingPageId
+   * @param {number} workspaceOwnerId
    * @param {import('pg').PoolClient|typeof db} [queryable]
    */
-  async setLandingPageId(formId, landingPageId, queryable = db) {
+  async publishInTx(formId, workspaceOwnerId, queryable = db) {
     await queryable.query(
-      `UPDATE forms SET landing_page_id = $2, updated_at = NOW() WHERE id = $1`,
-      [formId, landingPageId]
+      `UPDATE forms SET is_published = TRUE, updated_at = NOW() WHERE id = $1 AND workspace_owner_id = $2 AND is_published = FALSE`,
+      [formId, workspaceOwnerId]
     );
   }
 

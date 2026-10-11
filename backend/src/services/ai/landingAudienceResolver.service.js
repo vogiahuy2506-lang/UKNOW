@@ -3,7 +3,8 @@ import aiCampaignRepository from '../../repositories/ai/aiCampaign.repository.js
 /**
  * PR-5b-2b (`PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md`, "Bổ sung 15/09 khi soạn lệnh
  * PR-5b-2", "Neo PR-5b-2b") — "gửi cho người đăng ký landing X" nên đọc node nào: landing X có
- * Biểu mẫu gắn (PR-5b-2a `forms.landing_page_id`, form chưa bị super admin tắt) thì đọc
+ * Biểu mẫu gắn (bảng chỉ mục `landing_page_forms`; landing có nhiều biểu mẫu thì lấy biểu mẫu CHÍNH — xem
+ * `PRIMARY_LANDING_FORM_LATERAL` ở aiCampaign.repository.js; form chưa bị super admin tắt) thì đọc
  * `read_form_submissions` (đúng `formId` đó); landing X KHÔNG có form gắn thì giữ nguyên
  * `read_landing_leads` — nếu đổi bừa sang form thì campaign chạy trên node đọc landing vẫn
  * đúng, còn đổi landing dựng bằng Biểu mẫu mà không đổi thì node cũ đọc bảng `leads` trong khi

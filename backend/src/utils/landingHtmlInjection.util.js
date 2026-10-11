@@ -315,11 +315,84 @@ export function countFormSlots(html) {
 }
 
 /**
+ * PR-6 (PLAN_BIEU_MAU_TUY_BIEN_AI_LANDING_2026-10-11 QĐ3) — LOẠI biểu mẫu của chỗ trống:
+ * `<div data-founderai-form-slot="booking"></div>`. Chỗ trống TRẦN (không thuộc tính giá trị, hoặc `=""`) là `consult`
+ * để HTML cũ / nháp đang mở / prompt cũ vẫn hợp lệ y nguyên. Giá trị ngoài danh sách → sai dạng (`hasMalformedFormSlot`).
+ */
+export const FORM_SLOT_KINDS = Object.freeze(['consult', 'booking', 'payment', 'survey', 'blank']);
+export const DEFAULT_FORM_SLOT_KIND = 'consult';
+
+/**
+ * Trần KỸ THUẬT số biểu mẫu trên một landing (chỗ trống + khối nhúng cộng lại). Không phải giới hạn nghiệp vụ
+ * (user chốt 11/10: "thêm bao nhiêu thì thêm"): mỗi biểu mẫu là một iframe, trần chỉ để chống lỗi/nhồi.
+ */
+export const MAX_FORMS_PER_LANDING = 20;
+
+/** Thuộc tính `data-founderai-form-slot[=giá trị]` bên trong thẻ mở — tên viết hoa/thường đều được (HTML không phân biệt). */
+const FORM_SLOT_ATTR_VALUE_RE = /(?<![\w-])data-founderai-form-slot(?![\w-])(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>/]+)))?/i;
+
+/**
+ * Đọc loại của MỘT chỗ trống từ chuỗi khớp `FORM_SLOT_RE`.
+ *
+ * @param {string} slotHtml `<div …data-founderai-form-slot…></div>`
+ * @returns {{ kind: string, rawKind: string|null, bare: boolean, valid: boolean }}
+ *   `bare`: không có giá trị (trần) → `kind='consult'`; `valid=false` khi có giá trị nhưng ngoài `FORM_SLOT_KINDS`
+ *   (`kind` khi đó vẫn là `consult` để caller không phải xử lý undefined — nhưng caller PHẢI từ chối trước khi dùng).
+ */
+function parseFormSlotKind(slotHtml) {
+  const openTag = String(slotHtml).match(/^<div\b[^>]*>/i)?.[0] || '';
+  const attr = openTag.match(FORM_SLOT_ATTR_VALUE_RE);
+  const rawValue = attr ? (attr[1] ?? attr[2] ?? attr[3] ?? '') : '';
+  const normalized = rawValue.trim().toLowerCase();
+  if (!normalized) return { kind: DEFAULT_FORM_SLOT_KIND, rawKind: null, bare: true, valid: true };
+  if (FORM_SLOT_KINDS.includes(normalized)) return { kind: normalized, rawKind: rawValue.trim(), bare: false, valid: true };
+  return { kind: DEFAULT_FORM_SLOT_KIND, rawKind: rawValue.trim(), bare: false, valid: false };
+}
+
+/**
+ * Liệt kê các chỗ trống HỢP LỆ DẠNG theo thứ tự xuất hiện trong HTML, kèm loại.
+ *
+ * @param {string} html
+ * @returns {Array<{ kind: string, rawKind: string|null, bare: boolean, valid: boolean }>}
+ */
+export function listFormSlots(html) {
+  return [...String(html || '').matchAll(FORM_SLOT_RE)].map((m) => parseFormSlotKind(m[0]));
+}
+
+/**
+ * Loại của từng chỗ trống theo thứ tự xuất hiện; chỗ trống trần = `consult`. (Bỏ qua tính hợp lệ của giá trị — dùng
+ * `findInvalidFormSlotKinds`/`hasMalformedFormSlot` để chặn giá trị lạ TRƯỚC khi dùng danh sách này.)
+ *
+ * @param {string} html
+ * @returns {string[]}
+ */
+export function listFormSlotKinds(html) {
+  return listFormSlots(html).map((slot) => slot.kind);
+}
+
+/**
+ * Các giá trị loại KHÔNG hợp lệ (đã khử trùng lặp, giữ thứ tự xuất hiện) — để báo lỗi rõ cho người dùng.
+ *
+ * @param {string} html
+ * @returns {string[]}
+ */
+export function findInvalidFormSlotKinds(html) {
+  const bad = [];
+  for (const slot of listFormSlots(html)) {
+    if (!slot.valid && !bad.includes(slot.rawKind)) bad.push(slot.rawKind);
+  }
+  return bad;
+}
+
+/**
  * PR-5b-2a nợ 1 — có div mang thuộc tính `data-founderai-form-slot` nhưng KHÔNG khớp dạng hợp lệ
  * (ví dụ có nội dung con thật: `<div data-founderai-form-slot><p>x</p></div>`) hay không. So số
  * lần chuỗi nhắc tên thuộc tính với số chỗ trống hợp lệ đếm được — lệch (nhắc nhiều hơn hợp lệ)
  * nghĩa là có ít nhất một div hỏng dạng. Không phải HTML parser thật (không cần cho phạm vi này —
  * chỉ AI sinh hoặc admin dán tay một khối đơn giản), chỉ đủ để KHÔNG lặng lẽ bỏ qua như nợ 1.
+ *
+ * PR-6: giá trị loại ngoài `FORM_SLOT_KINDS` (`data-founderai-form-slot="contact"`) cũng là sai dạng — không đoán ý,
+ * không âm thầm coi là `consult`.
  *
  * @param {string} html
  * @returns {boolean}
@@ -327,7 +400,8 @@ export function countFormSlots(html) {
 export function hasMalformedFormSlot(html) {
   const source = String(html || '');
   const mentionCount = (source.match(FORM_SLOT_ATTR_MENTION_RE) || []).length;
-  return mentionCount > countFormSlots(source);
+  if (mentionCount > countFormSlots(source)) return true;
+  return findInvalidFormSlotKinds(source).length > 0;
 }
 
 /**
@@ -341,6 +415,42 @@ export function hasMalformedFormSlot(html) {
  */
 export function replaceFormSlotWithEmbed(html, replacementHtml) {
   return String(html || '').replace(FORM_SLOT_RE, () => String(replacementHtml || ''));
+}
+
+/**
+ * PR-6 — thay TỪNG chỗ trống (theo thứ tự xuất hiện) bằng phần tử tương ứng của `replacements`: chỗ trống thứ i → `replacements[i]`.
+ * Một lượt duy nhất (không quét lại phần vừa chèn), nên khối nhúng chứa chữ `data-founderai-form-slot` cũng không bị thay lần hai.
+ * `replacements[i]` là `undefined`/`null` thì GIỮ NGUYÊN chỗ trống đó.
+ *
+ * @param {string} html
+ * @param {Array<string|null|undefined>} replacements
+ * @returns {string}
+ */
+export function replaceFormSlotsWithEmbeds(html, replacements) {
+  let index = 0;
+  return String(html || '').replace(FORM_SLOT_RE, (match) => {
+    const replacement = replacements[index];
+    index += 1;
+    return replacement == null ? match : String(replacement);
+  });
+}
+
+/**
+ * PR-6 — chèn một đoạn HTML ngay trước `</body>` CUỐI CÙNG (không có `</body>` thì nối vào cuối). Dùng để đặt khối nhúng của
+ * biểu mẫu có sẵn mà người dùng vừa thêm vào danh sách biểu mẫu của trang (`linkedFormIds`) nhưng HTML chưa có chỗ cho nó.
+ * Cùng quy ước vị trí với `insertFormSlot` phía frontend (`landingFormLink.js`).
+ *
+ * @param {string} html
+ * @param {string} snippet
+ * @returns {string}
+ */
+export function appendBeforeBodyClose(html, snippet) {
+  const source = String(html || '');
+  const closeBody = source.search(/<\/body\s*>(?![\s\S]*<\/body\s*>)/i);
+  if (closeBody >= 0) {
+    return `${source.slice(0, closeBody)}\n${snippet}\n${source.slice(closeBody)}`;
+  }
+  return `${source}\n${snippet}\n`;
 }
 
 /**

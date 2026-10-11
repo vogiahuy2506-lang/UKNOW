@@ -335,8 +335,9 @@ class LandingPageRepository {
    * @param {object} payload
    * @returns {Promise<object|null>}
    */
-  async updateById(id, payload) {
-    const result = await db.query(
+  async updateById(id, payload, client = null) {
+    const queryable = client || db;
+    const result = await queryable.query(
       `UPDATE landing_pages SET
          slug = NULLIF(LOWER(TRIM($2)), ''),
          title = $3,
@@ -384,9 +385,9 @@ class LandingPageRepository {
   /**
    * Update có scope trong chính câu SQL để chặn TOCTOU/cross-workspace mutation.
    */
-  async updateByIdInScope(id, payload, scope = {}) {
+  async updateByIdInScope(id, payload, scope = {}, client = null) {
     if (scope?.isSuperAdmin === true || isSuperAdmin(scope?.role ?? scope?.roleCode)) {
-      return this.updateById(id, payload);
+      return this.updateById(id, payload, client);
     }
 
     const workspaceOwnerId = Number.parseInt(
@@ -395,7 +396,8 @@ class LandingPageRepository {
     );
     if (!Number.isFinite(workspaceOwnerId)) return null;
 
-    const result = await db.query(
+    const queryable = client || db;
+    const result = await queryable.query(
       `UPDATE landing_pages SET
          slug = NULLIF(LOWER(TRIM($2)), ''),
          title = $3,

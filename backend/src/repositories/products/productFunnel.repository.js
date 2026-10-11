@@ -152,8 +152,8 @@ class ProductFunnelRepository {
   }
 
   /**
-   * PR-2: landing "thuộc" sản phẩm = landing có biểu mẫu gắn sản phẩm (`forms.landing_page_id` + `forms.product_id`),
-   * cùng workspace. Trả mỗi sản phẩm: `productUrl`, danh sách landing (slug + tên miền đang `active`) để PR-3 dựng địa chỉ
+   * PR-2: landing "thuộc" sản phẩm = landing có biểu mẫu gắn sản phẩm (bảng chỉ mục `landing_page_forms` + `forms.product_id`;
+   * PR-6: một landing có nhiều biểu mẫu, một biểu mẫu nằm ở nhiều landing), cùng workspace. Trả mỗi sản phẩm: `productUrl`, danh sách landing (slug + tên miền đang `active`) để PR-3 dựng địa chỉ
    * công khai, và hai số theo slug trong khoảng `created_at`: `landingViews` (landing_page_events `view` — LƯỢT XEM, `lp-track.js`
    * chỉ gửi `{slug}`) và `leads` (bảng `leads`, cùng workspace).
    *
@@ -176,7 +176,8 @@ class ProductFunnelRepository {
                 ORDER BY d.id
               ) AS hostnames
        FROM forms f
-       JOIN landing_pages lp ON lp.id = f.landing_page_id
+       JOIN landing_page_forms lpf ON lpf.form_id = f.id
+       JOIN landing_pages lp ON lp.id = lpf.landing_page_id
        WHERE f.workspace_owner_id = $1
          AND f.product_id IS NOT NULL
          AND COALESCE(lp.workspace_owner_id, lp.id_user) = $1`,

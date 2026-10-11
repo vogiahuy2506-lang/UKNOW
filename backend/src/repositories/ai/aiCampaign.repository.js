@@ -1,5 +1,27 @@
 import db from '../../config/database.js';
 
+/**
+ * PR-6 (PLAN_BIEU_MAU_TUY_BIEN_AI_LANDING_2026-10-11) — một landing nay có NHIỀU biểu mẫu (bảng chỉ mục `landing_page_forms`,
+ * migration 297). Node `read_form_submissions` của chiến dịch chỉ nhận MỘT `formId`, nên mỗi landing đại diện bằng biểu mẫu
+ * CHÍNH: chưa bị super admin tắt, ưu tiên biểu mẫu đã xuất bản (nháp không nhận bài nộp), rồi theo vị trí trong HTML.
+ * LATERAL + LIMIT 1 giữ nguyên hình dạng "mỗi landing một dòng" của các truy vấn bên dưới (JOIN thẳng sẽ nhân dòng theo số biểu mẫu).
+ *
+ * NỢ ĐÃ BIẾT: landing có từ 2 biểu mẫu thì chiến dịch "gửi cho người đăng ký landing X" chỉ đọc người điền biểu mẫu chính — người
+ * điền các biểu mẫu còn lại KHÔNG có trong danh sách (an toàn: gửi ít hơn, không gửi nhầm). Muốn đủ phải mở rộng node để nhận
+ * nhiều formId hoặc lọc bài nộp theo `landing_page_slug`.
+ */
+const PRIMARY_LANDING_FORM_LATERAL = `
+  LEFT JOIN LATERAL (
+    SELECT fx.id
+    FROM landing_page_forms lpf
+    JOIN forms fx ON fx.id = lpf.form_id
+    WHERE lpf.landing_page_id = lp.id
+      AND fx.admin_disabled_at IS NULL
+      AND fx.workspace_owner_id = COALESCE(lp.workspace_owner_id, lp.id_user)
+    ORDER BY fx.is_published DESC, lpf.position, fx.id
+    LIMIT 1
+  ) f ON TRUE`;
+
 class AiCampaignRepository {
   /**
    * Sản phẩm cho trợ lý AI (thẻ chọn sản phẩm + danh sách tài nguyên trong prompt).
@@ -128,8 +150,8 @@ class AiCampaignRepository {
   }
 
   /**
-   * PR-5b-2b — kèm `form_id` (Biểu mẫu đã gắn landing qua PR-5b-2a `forms.landing_page_id`, chưa
-   * bị super admin tắt) để AI biết landing nào nên sinh `read_form_submissions` thay vì
+   * PR-5b-2b — kèm `form_id` (Biểu mẫu CHÍNH đã gắn landing qua bảng chỉ mục `landing_page_forms`, chưa
+   * bị super admin tắt — xem PRIMARY_LANDING_FORM_LATERAL) để AI biết landing nào nên sinh `read_form_submissions` thay vì
    * `read_landing_leads` khi soạn chiến dịch "gửi cho người đăng ký landing X".
    *
    * Review "Neo PR-5b-2b" — lọc trước đây `WHERE id_user = $1`, KHÔNG phải chủ workspace: landing
@@ -150,7 +172,7 @@ class AiCampaignRepository {
          lp.is_published,
          f.id AS form_id
        FROM landing_pages lp
-       LEFT JOIN forms f ON f.landing_page_id = lp.id AND f.admin_disabled_at IS NULL
+       ${PRIMARY_LANDING_FORM_LATERAL}
        WHERE COALESCE(lp.workspace_owner_id, lp.id_user) = $1
        ORDER BY lp.updated_at DESC
        LIMIT 20`,
@@ -181,7 +203,7 @@ class AiCampaignRepository {
            WHERE s.form_id = f.id AND s.marketing_consent IS TRUE AND s.status <> 'cancelled'
          ) END AS form_consented_count
        FROM landing_pages lp
-       LEFT JOIN forms f ON f.landing_page_id = lp.id AND f.admin_disabled_at IS NULL
+       ${PRIMARY_LANDING_FORM_LATERAL}
        WHERE COALESCE(lp.workspace_owner_id, lp.id_user) = $1
        ORDER BY lp.updated_at DESC
        LIMIT 100`,
@@ -223,10 +245,10 @@ class AiCampaignRepository {
     const result = await db.query(
       `SELECT f.id
        FROM landing_pages lp
-       JOIN forms f ON f.landing_page_id = lp.id
+       ${PRIMARY_LANDING_FORM_LATERAL}
        WHERE lp.slug = $1
          AND COALESCE(lp.workspace_owner_id, lp.id_user) = $2
-         AND f.admin_disabled_at IS NULL
+         AND f.id IS NOT NULL
        LIMIT 1`,
       [slug, ownerId]
     );

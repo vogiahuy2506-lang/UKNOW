@@ -1,4 +1,4 @@
-import { countFormSlots, hasMalformedFormSlot } from './landingHtmlInjection.util.js';
+import { hasMalformedFormSlot, listFormSlotKinds } from './landingHtmlInjection.util.js';
 import { scanHtmlTags, getAttr } from './landingHtmlScan.util.js';
 
 /**
@@ -188,11 +188,23 @@ function unescapeJsonStringHtml(html) {
  * @returns {Set<string>}
  */
 export function extractFormEmbedKeys(html) {
-  const keys = new Set();
+  return new Set(listFormEmbedKeys(html));
+}
+
+/**
+ * PR-6 — publicKey của TỪNG khối nhúng theo thứ tự xuất hiện trong HTML, GIỮ trùng lặp (một biểu mẫu nhúng hai lần = hai
+ * phần tử). Dùng để (a) đếm số khối nhúng (trần kỹ thuật + chốt "số khối nhúng không giảm"), (b) ghi bảng chỉ mục
+ * `landing_page_forms` đúng thứ tự (vị trí = thứ tự trong HTML).
+ *
+ * @param {string} html
+ * @returns {string[]}
+ */
+export function listFormEmbedKeys(html) {
+  const keys = [];
   const re = /\bdata-founderai-form\s*=\s*(["'])([A-Za-z0-9_-]+)\1/g;
   let m;
   while ((m = re.exec(String(html || '')))) {
-    keys.add(m[2]);
+    keys.push(m[2]);
   }
   return keys;
 }
@@ -347,7 +359,10 @@ export function validateEditHtmlOutput({ currentHtml, newHtml, finishReason, str
   const newFormEmbedKeys = extractFormEmbedKeys(next);
   const lostFormEmbedKey = [...oldFormEmbedKeys].some((key) => !newFormEmbedKeys.has(key));
   const lostFormEmbedScript = current.includes('form-embed.js') && !next.includes('form-embed.js');
-  if (lostFormEmbedKey || lostFormEmbedScript) {
+  // PR-6: trang có nhiều biểu mẫu — số khối nhúng (kể cả cùng một khoá nhúng hai lần) không được GIẢM, không chỉ "mỗi khoá
+  // còn ít nhất một lần".
+  const lostFormEmbedBlock = listFormEmbedKeys(next).length < listFormEmbedKeys(current).length;
+  if (lostFormEmbedKey || lostFormEmbedScript || lostFormEmbedBlock) {
     const err = new Error('AI đã làm mất biểu mẫu nhúng. Vui lòng thử lại.');
     err.status = 422;
     throw err;
@@ -362,12 +377,20 @@ export function validateEditHtmlOutput({ currentHtml, newHtml, finishReason, str
   // lọt qua im lặng, landing publish ra KHÔNG có Biểu mẫu. Chỉ xét khi bản CŨ đang có ít nhất 1 chỗ
   // trống hợp lệ — trang không dùng form-mode giữ nguyên hành vi cũ (luật 2b của prompt vẫn thêm
   // trường vào form capture bình thường, không bị chốt này chặn nhầm).
-  const oldSlotCount = countFormSlots(current);
-  if (oldSlotCount >= 1) {
-    const newSlotCount = countFormSlots(next);
+  //
+  // PR-6 (PLAN_BIEU_MAU_TUY_BIEN_AI_LANDING_2026-10-11, QĐ3) — chỗ trống có LOẠI (`data-founderai-form-slot="booking"`) và một
+  // trang có thể có nhiều chỗ trống: so ĐA TẬP loại (cũ == mới, không quan tâm thứ tự), không chỉ số lượng. Chỉ so số lượng
+  // thì AI đổi `booking` thành trần (= `consult`) hay đổi hai chỗ trống `booking`+`payment` thành `consult`+`consult` vẫn lọt
+  // — landing publish ra biểu mẫu SAI LOẠI. Đường vá lẫn đường viết lại đều đi qua hàm này (finalizeEdit).
+  const oldSlotKinds = listFormSlotKinds(current);
+  if (oldSlotKinds.length >= 1) {
+    const newSlotKinds = listFormSlotKinds(next);
     const oldFormTagCount = (current.match(/<form\b/gi) || []).length;
     const newFormTagCount = (next.match(/<form\b/gi) || []).length;
-    if (newSlotCount !== oldSlotCount || hasMalformedFormSlot(next) || newFormTagCount > oldFormTagCount) {
+    const sameKinds =
+      newSlotKinds.length === oldSlotKinds.length
+      && [...newSlotKinds].sort().join('|') === [...oldSlotKinds].sort().join('|');
+    if (!sameKinds || hasMalformedFormSlot(next) || newFormTagCount > oldFormTagCount) {
       const err = new Error('AI đã làm mất hoặc sửa sai chỗ trống chờ Biểu mẫu. Vui lòng thử lại.');
       err.status = 422;
       throw err;
