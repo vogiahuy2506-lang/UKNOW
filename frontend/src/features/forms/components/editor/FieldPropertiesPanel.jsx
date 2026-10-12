@@ -1,5 +1,6 @@
 import { HiOutlineTrash } from 'react-icons/hi';
 import { useI18n } from '../../../../i18n';
+import FieldShowIfEditor from './FieldShowIfEditor';
 import { isDisplayFieldType } from '../../utils/formFieldTypes.util';
 import {
   FIELD_TYPES,
@@ -34,13 +35,18 @@ const inputErr = 'border-red-300 dark:border-red-500/60 focus:ring-red-100 dark:
  * Độ rộng / Lựa chọn; paragraph và page_break cũng không có chữ hướng dẫn. Nhãn đổi nghĩa theo loại: heading = chữ tiêu
  * đề, paragraph = NỘI DUNG đoạn chữ (lưu trong `label`, tối đa 2000), page_break = tiêu đề bước (tuỳ chọn, được để trống).
  * rating / yes_no / time không có Vai trò.
+ *
+ * PR-8a: mục "Điều kiện hiển thị" ở cuối bảng (mọi trường trừ ngắt trang) — xem FieldShowIfEditor.
  */
 export default function FieldPropertiesPanel({
   field,
   idx,
   errors,
+  fields = [],
+  showIfIssues = [],
   fileUploadsEnabled = false,
   onUpdateField,
+  onEnsureFieldKey,
   onAddOption,
   onUpdateOption,
   onRemoveOption,
@@ -375,6 +381,18 @@ export default function FieldPropertiesPanel({
             ))}
           </div>
         </div>
+      )}
+
+      {/* Điều kiện hiển thị (PR-8a): mọi trường trừ ngắt trang (ranh giới trang không có điều kiện) */}
+      {!isPageBreak && (
+        <FieldShowIfEditor
+          field={field}
+          idx={idx}
+          fields={fields}
+          issues={showIfIssues}
+          onUpdateField={onUpdateField}
+          onEnsureFieldKey={onEnsureFieldKey}
+        />
       )}
     </div>
   );

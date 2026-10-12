@@ -9,6 +9,8 @@ import {
   HiOutlineLightningBolt,
   HiOutlineViewList,
   HiOutlineX,
+  HiOutlineEye,
+  HiOutlineExclamation,
 } from 'react-icons/hi';
 import { useI18n } from '../../../../i18n';
 import FieldPropertiesPanel from './FieldPropertiesPanel';
@@ -27,6 +29,7 @@ export default function FieldListPane({
   errors,
   selectedUid,
   setupHints,
+  showIfIssues = [],
   fileUploadsEnabled = false,
   onDismissSetupHints,
   onOpenSettings,
@@ -38,6 +41,7 @@ export default function FieldListPane({
   onDuplicateField,
   onRemoveField,
   onUpdateField,
+  onEnsureFieldKey,
   onAddOption,
   onUpdateOption,
   onRemoveOption,
@@ -210,6 +214,9 @@ export default function FieldListPane({
         {fields.map((field, idx) => {
           const selected = field.uid === selectedUid;
           const hasError = Object.keys(errors).some((k) => k.startsWith(`field_${idx}_`));
+          // PR-8a: ô có điều kiện hiển thị (huy hiệu) — vàng khi điều kiện đang hỏng (sẽ bị gỡ lúc lưu).
+          const fieldIssues = showIfIssues.filter((issue) => issue.uid === field.uid);
+          const hasShowIf = field.type !== 'page_break' && Array.isArray(field.showIf?.conditions) && field.showIf.conditions.length > 0;
           const typeLabel = t(FIELD_TYPES.find((ft) => ft.value === field.type)?.labelKey || 'forms.types.short_text');
           const isBlock = isDisplayFieldType(field.type);
           // page_break không bắt buộc nhãn: hàng trống nhãn hiện "Sang trang mới" thay vì dấu gạch.
@@ -318,6 +325,25 @@ export default function FieldListPane({
                       {field.role}
                     </span>
                   )}
+                  {hasShowIf && (
+                    <span
+                      data-testid={`field-showif-badge-${idx}`}
+                      data-broken={fieldIssues.length > 0 ? 'true' : 'false'}
+                      title={fieldIssues.length > 0 ? t('forms.editorPage.showIf.badgeBroken') : t('forms.editorPage.showIf.badge')}
+                      className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md border shrink-0 ${
+                        fieldIssues.length > 0
+                          ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-900/60'
+                          : 'bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border-sky-100 dark:border-sky-900/60'
+                      }`}
+                    >
+                      {fieldIssues.length > 0 ? (
+                        <HiOutlineExclamation className="w-3 h-3" aria-hidden="true" />
+                      ) : (
+                        <HiOutlineEye className="w-3 h-3" aria-hidden="true" />
+                      )}
+                      {fieldIssues.length > 0 ? t('forms.editorPage.showIf.badgeBroken') : t('forms.editorPage.showIf.badge')}
+                    </span>
+                  )}
                   {hasError && (
                     <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" aria-hidden="true" />
                   )}
@@ -370,8 +396,11 @@ export default function FieldListPane({
                     field={field}
                     idx={idx}
                     errors={errors}
+                    fields={fields}
+                    showIfIssues={fieldIssues}
                     fileUploadsEnabled={fileUploadsEnabled}
                     onUpdateField={onUpdateField}
+                    onEnsureFieldKey={onEnsureFieldKey}
                     onAddOption={onAddOption}
                     onUpdateOption={onUpdateOption}
                     onRemoveOption={onRemoveOption}

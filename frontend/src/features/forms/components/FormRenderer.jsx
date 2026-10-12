@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useI18n } from '../../../i18n';
 import BookingSlotPicker from './BookingSlotPicker';
 import ProductShowcase from './ProductShowcase';
@@ -8,6 +8,7 @@ import { vnToday, addDaysToDateStr, formatSlotDateLabel } from '../utils/booking
 import { useFormFont } from '../utils/useFormFont';
 import { getReadableTextColor, isHexColor } from '../utils/formTheme.util';
 import { isDisplayFieldType, splitFormPages, RATING_MAX } from '../utils/formFieldTypes.util';
+import { getVisibleFieldKeys, getShowIfSourceKeys } from '../utils/formShowIf.util';
 import {
   buildFormFontFamily,
   FORM_BANNER_HEIGHTS,
@@ -88,6 +89,10 @@ function ProductColumns({ twoColumn, showcase, children }) {
  * Nhiều bước (PR-4): khối `page_break` chia biểu mẫu thành các trang (xem `splitFormPages`). Trang cuối mới có bộ
  * chọn lịch, ô đồng ý và nút gửi; các trang trước có "Tiếp" (kiểm trường bắt buộc của CHÍNH trang đó) và "Quay lại".
  * Không có `page_break` → một trang, hành vi y như trước.
+ *
+ * Hiện / ẩn ô theo câu trả lời (PR-8a, `field.showIf`): ô ẩn không vẽ, không kiểm bắt buộc, giá trị đã nhập bị XOÁ khỏi state (và
+ * không bao giờ nằm trong payload gửi đi); trang không còn ô nào hiện thì bị bỏ qua. Trong xem trước (`previewMode`) chỉ những ô
+ * đang là NGUỒN của một điều kiện được mở khoá để bấm thử — mọi ô khác vẫn khoá.
  */
 export default function FormRenderer({
   form,
@@ -147,9 +152,16 @@ export default function FormRenderer({
     };
   }, []);
 
-  const fields = Array.isArray(form?.fields) ? form.fields : [];
-  // Chia trang theo page_break. Không có trường nào để hiện (mảng rỗng) vẫn cần 1 trang trống để còn nút gửi.
-  const pages = splitFormPages(fields);
+  const formFields = form?.fields;
+  const fields = useMemo(() => (Array.isArray(formFields) ? formFields : []), [formFields]);
+  // Ô nào đang hiện với câu trả lời hiện tại (hàm thuần dùng chung với backend — ô ẩn lan theo chuỗi). `visibleFields` giữ nguyên thứ tự.
+  const visibleKeys = useMemo(() => getVisibleFieldKeys(fields, answers), [fields, answers]);
+  const visibleFields = useMemo(() => fields.filter((f) => visibleKeys.has(f.key)), [fields, visibleKeys]);
+  // Xem trước: ô là nguồn của điều kiện được mở khoá để bấm thử, còn lại khoá như cũ.
+  const previewLiveKeys = useMemo(() => (previewMode ? getShowIfSourceKeys(fields) : new Set()), [previewMode, fields]);
+  // Chia trang theo page_break CHỈ trên ô đang hiện: trang mà mọi ô đều ẩn thì không còn trang. Không có trường nào để hiện (mảng
+  // rỗng) vẫn cần 1 trang trống để còn nút gửi.
+  const pages = splitFormPages(visibleFields);
   const pageList = pages.length > 0 ? pages : [{ title: '', fields: [] }];
   const isMultiStep = pageList.length > 1;
   // Xem trước trong trình soạn: người soạn xoá bớt ngắt trang khi đang ở trang 3 → kẹp lại, không để trang "mất tích".
@@ -257,6 +269,41 @@ export default function FormRenderer({
       loadWeek(weekStart);
     }
   }, [bookingEnabled, bookingMock, weekStart, loadWeek]);
+
+  // Ô vừa bị ẩn: XOÁ giá trị đã nhập (và lỗi cũ) khỏi state — khách đổi ý rồi hiện lại ô thì ô trống, không gửi dữ liệu của ô đã ẩn.
+  useEffect(() => {
+    const hiddenKeys = fields.filter((f) => !isDisplayFieldType(f.type) && !visibleKeys.has(f.key)).map((f) => f.key);
+    if (hiddenKeys.length === 0) return;
+    const dropKeys = (prev) => {
+      if (!hiddenKeys.some((k) => k in prev)) return prev;
+      const next = { ...prev };
+      hiddenKeys.forEach((k) => delete next[k]);
+      return next;
+    };
+    setAnswers(dropKeys);
+    setClientErrors(dropKeys);
+  }, [fields, visibleKeys]);
+
+  // Riêng ô `file` bị ẩn: huỷ lượt tải còn dở, bỏ tệp đã chọn và dấu "hết dung lượng" của nó.
+  useEffect(() => {
+    const hiddenFileKeys = fields.filter((f) => f.type === 'file' && !visibleKeys.has(f.key)).map((f) => f.key);
+    if (hiddenFileKeys.length === 0) return;
+    if (hiddenFileKeys.some((k) => (fileItems[k] || []).length > 0)) {
+      hiddenFileKeys.forEach((k) => (fileItems[k] || []).forEach((item) => uploadControllersRef.current.get(item.id)?.abort()));
+      setFileItems((prev) => {
+        const next = { ...prev };
+        hiddenFileKeys.forEach((k) => delete next[k]);
+        return next;
+      });
+    }
+    if (hiddenFileKeys.some((k) => fileSkips[k])) {
+      setFileSkips((prev) => {
+        const next = { ...prev };
+        hiddenFileKeys.forEach((k) => delete next[k]);
+        return next;
+      });
+    }
+  }, [fields, visibleKeys, fileItems, fileSkips]);
 
   // Đổi trang: đưa đầu biểu mẫu vào tầm nhìn + chuyển tiêu điểm lên khối "Bước x/y" (nút Tiếp vừa bấm đã biến mất khỏi
   // DOM). Không làm gì trong xem trước (không giật cuộn / không cướp tiêu điểm của trình soạn) và ở lần vẽ đầu.
@@ -418,6 +465,8 @@ export default function FormRenderer({
     for (const field of list) {
       const { key, label, required, type } = field;
       if (isDisplayFieldType(type)) continue;
+      // Ô đang ẩn theo câu trả lời: không bắt buộc, không kiểm gì.
+      if (!visibleKeys.has(key)) continue;
 
       // Trường tệp: không kiểm theo `answers`. Đang tải dở thì chặn; bắt buộc mà chưa có tệp thì báo — TRỪ khi chủ biểu mẫu hết dung
       // lượng (đã có dấu skip) hoặc tính năng đang tắt: lúc đó khách vẫn gửi được các ô còn lại.
@@ -469,7 +518,7 @@ export default function FormRenderer({
   };
 
   const validateClient = () => {
-    const errors = validateFields(fields);
+    const errors = validateFields(visibleFields);
 
     if (bookingEnabled && !previewMode && !selectedSlot) {
       errors.__booking = t('publicForm.booking.selectRequired');
@@ -525,6 +574,11 @@ export default function FormRenderer({
     try {
       const cleanAnswers = { ...answers };
 
+      // Ô đang ẩn: giá trị (nếu còn sót) KHÔNG được gửi đi.
+      for (const field of fields) {
+        if (!visibleKeys.has(field.key)) delete cleanAnswers[field.key];
+      }
+
       for (const field of fields) {
         if (field.type === 'phone' && cleanAnswers[field.key]) {
           cleanAnswers[field.key] = normalizePhoneClient(cleanAnswers[field.key]);
@@ -538,7 +592,7 @@ export default function FormRenderer({
       const fileSkip = {};
       if (!fileUploadsDisabled) {
         for (const field of fields) {
-          if (field.type !== 'file') continue;
+          if (field.type !== 'file' || !visibleKeys.has(field.key)) continue;
           const uploadIds = (fileItems[field.key] || []).filter((item) => item.status === 'done').map((item) => item.uploadId);
           if (uploadIds.length > 0) cleanAnswers[field.key] = uploadIds;
           else if (fileSkips[field.key]) fileSkip[field.key] = fileSkips[field.key];
@@ -780,6 +834,8 @@ export default function FormRenderer({
         {currentPage.fields.map((field) => {
           const { key, label, type, required, options = [] } = field;
           const fullRowClass = singleColumn ? '' : 'sm:col-span-2';
+          // Xem trước khoá mọi ô, trừ ô là nguồn của một điều kiện (để bấm thử xem ô nào hiện / ẩn).
+          const controlsLocked = previewMode && !previewLiveKeys.has(key);
           const helpText = typeof field.helpText === 'string' ? field.helpText.trim() : '';
 
           // Khối hiển thị: không có giá trị / ô nhập — luôn cả hàng. (page_break không bao giờ tới đây: splitFormPages
@@ -868,7 +924,7 @@ export default function FormRenderer({
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 ${inputToneClass(Boolean(fieldError))}`}
                   value={val}
                   onChange={(e) => handleFieldChange(key, e.target.value)}
-                  disabled={isSubmitting || previewMode}
+                  disabled={isSubmitting || controlsLocked}
                 />
               )}
 
@@ -883,7 +939,7 @@ export default function FormRenderer({
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 resize-y ${inputToneClass(Boolean(fieldError))}`}
                   value={val}
                   onChange={(e) => handleFieldChange(key, e.target.value)}
-                  disabled={isSubmitting || previewMode}
+                  disabled={isSubmitting || controlsLocked}
                 />
               )}
 
@@ -898,7 +954,7 @@ export default function FormRenderer({
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 ${inputToneClass(Boolean(fieldError))}`}
                   value={val}
                   onChange={(e) => handleFieldChange(key, e.target.value)}
-                  disabled={isSubmitting || previewMode}
+                  disabled={isSubmitting || controlsLocked}
                 />
               )}
 
@@ -913,7 +969,7 @@ export default function FormRenderer({
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 ${inputToneClass(Boolean(fieldError))}`}
                   value={val}
                   onChange={(e) => handleFieldChange(key, e.target.value)}
-                  disabled={isSubmitting || previewMode}
+                  disabled={isSubmitting || controlsLocked}
                 />
               )}
 
@@ -927,7 +983,7 @@ export default function FormRenderer({
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 ${inputToneClass(Boolean(fieldError))}`}
                   value={val}
                   onChange={(e) => handleFieldChange(key, e.target.value)}
-                  disabled={isSubmitting || previewMode}
+                  disabled={isSubmitting || controlsLocked}
                 />
               )}
 
@@ -940,7 +996,7 @@ export default function FormRenderer({
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 ${inputToneClass(Boolean(fieldError))}`}
                   value={val}
                   onChange={(e) => handleFieldChange(key, e.target.value)}
-                  disabled={isSubmitting || previewMode}
+                  disabled={isSubmitting || controlsLocked}
                 />
               )}
 
@@ -952,7 +1008,7 @@ export default function FormRenderer({
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 ${isFilledInput ? '' : 'bg-white '}${inputToneClass(Boolean(fieldError))}`}
                   value={val}
                   onChange={(e) => handleFieldChange(key, e.target.value)}
-                  disabled={isSubmitting || previewMode}
+                  disabled={isSubmitting || controlsLocked}
                 >
                   <option value="">{t('publicForm.selectPlaceholder')}</option>
                   {options.map((opt, i) => {
@@ -988,7 +1044,7 @@ export default function FormRenderer({
                           value={optVal}
                           checked={val === optVal}
                           onChange={(e) => handleFieldChange(key, e.target.value)}
-                          disabled={isSubmitting || previewMode}
+                          disabled={isSubmitting || controlsLocked}
                           className="h-4 w-4 text-[color:var(--form-primary,#df5c0e)] focus:ring-primary-500 border-gray-300"
                         />
                         <span>{optLbl}</span>
@@ -1019,7 +1075,7 @@ export default function FormRenderer({
                           value={optVal}
                           checked={isChecked}
                           onChange={() => handleCheckboxItemToggle(key, optVal)}
-                          disabled={isSubmitting || previewMode}
+                          disabled={isSubmitting || controlsLocked}
                           className="h-4 w-4 rounded text-[color:var(--form-primary,#df5c0e)] focus:ring-primary-500 border-gray-300"
                         />
                         <span>{optLbl}</span>
@@ -1038,7 +1094,7 @@ export default function FormRenderer({
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 ${inputToneClass(Boolean(fieldError))}`}
                   value={val}
                   onChange={(e) => handleFieldChange(key, e.target.value)}
-                  disabled={isSubmitting || previewMode}
+                  disabled={isSubmitting || controlsLocked}
                 />
               )}
 
@@ -1054,7 +1110,7 @@ export default function FormRenderer({
                         role="radio"
                         aria-checked={current === n}
                         aria-label={t('publicForm.rating.starLabel', { count: n })}
-                        disabled={isSubmitting || previewMode}
+                        disabled={isSubmitting || controlsLocked}
                         onClick={() => handleFieldChange(key, current === n ? '' : n)}
                         className={`rounded p-0.5 text-3xl leading-none transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-200 disabled:cursor-not-allowed ${
                           current >= n ? 'text-amber-400' : 'text-gray-300 hover:text-amber-300'
@@ -1091,7 +1147,7 @@ export default function FormRenderer({
                           value={choice}
                           checked={val === choice}
                           onChange={() => handleFieldChange(key, choice)}
-                          disabled={isSubmitting || previewMode}
+                          disabled={isSubmitting || controlsLocked}
                           className="h-4 w-4 text-[color:var(--form-primary,#df5c0e)] focus:ring-primary-500 border-gray-300"
                         />
                         <span>{choice === 'yes' ? t('publicForm.yes') : t('publicForm.no')}</span>

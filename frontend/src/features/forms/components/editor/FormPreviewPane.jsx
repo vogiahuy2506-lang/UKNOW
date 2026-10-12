@@ -3,6 +3,7 @@ import { useI18n } from '../../../../i18n';
 import { TopbarSegmented } from '../../../../components/editor/AdminEditorShell';
 import FormRenderer from '../FormRenderer';
 import { buildFormPageBackgroundStyle } from '../../utils/formTheme.util';
+import { hasShowIf } from '../../utils/formShowIf.util';
 
 // Bề rộng khung điện thoại (khớp màn hình rộng ~390px cần kiểm tra không tràn ngang).
 const MOBILE_FRAME_WIDTH = 390;
@@ -15,6 +16,9 @@ const noopSubmit = () => {};
  * ô đồng ý (theo cài đặt thật), bộ chọn lịch (khi bật đặt lịch), chữ hướng dẫn, placeholder, màu, font, banner, logo.
  * Chuyển Máy tính / Điện thoại (khung rộng 390px). Biểu mẫu nhiều bước (khối ngắt trang) cũng xem được ngay ở đây:
  * Tiếp / Quay lại hoạt động, không kiểm trường bắt buộc, không gọi API nộp bài.
+ *
+ * Điều kiện hiển thị (PR-8a): các câu hỏi đang là NGUỒN của một điều kiện được mở khoá để bấm thử — ô phụ thuộc hiện / ẩn tức thì
+ * y như khách sẽ thấy (kèm một dòng nhắc bên dưới tiêu đề khi biểu mẫu có điều kiện).
  */
 export default function FormPreviewPane({
   form,
@@ -35,6 +39,11 @@ export default function FormPreviewPane({
         <div>
           <h2 className="text-sm font-bold text-slate-900 dark:text-dk-text">{t('forms.editorPage.preview.title')}</h2>
           <p className="text-[11px] text-slate-500 dark:text-dk-text2">{t('forms.editorPage.preview.hint')}</p>
+          {hasShowIf(form?.fields) && (
+            <p data-testid="form-preview-showif-hint" className="text-[11px] text-sky-700 dark:text-sky-300">
+              {t('forms.editorPage.preview.showIfHint')}
+            </p>
+          )}
         </div>
         <TopbarSegmented
           ariaLabel={t('forms.editorPage.preview.deviceLabel')}

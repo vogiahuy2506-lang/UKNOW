@@ -7,6 +7,7 @@ import productApiService from '../../products/services/productApi.service';
 import { PAYOS_BANK_BIN_MAP } from '../../../utils/payosBankBinMap';
 import { resolvePaymentPurpose } from '../utils/paymentPurpose.util';
 import { isDisplayFieldType } from '../utils/formFieldTypes.util';
+import { findShowIfIssues, sanitizeEditorShowIf, toPayloadShowIf, renameOptionInConditions } from '../utils/formShowIf.util';
 import { buildPreviewFormProduct } from '../utils/buildPreviewFormProduct.util';
 import { fetchFormById, createForm, updateForm, publishForm, fetchFormCapabilities } from '../services/formAdminApi.service';
 import {
@@ -90,6 +91,39 @@ const toPayloadFileConfig = (editorCfg) => {
   };
 };
 
+// Điều kiện hiển thị lưu ở server (`value` có thể là số) → state trình soạn (`value` luôn là chuỗi, gõ dở không bị ép kiểu).
+// Lựa chọn của nguồn dạng `{label, value}` (nhãn khác giá trị — chỉ gặp khi tạo qua API): trình soạn chỉ giữ NHÃN và lưu lại nhãn làm giá trị,
+// nên điều kiện cũng đổi sang nhãn để không bị coi là hỏng ngay khi mở.
+const toEditorShowIf = (raw, sourcesByKey = new Map()) => {
+  const conditions = Array.isArray(raw?.conditions) ? raw.conditions : [];
+  if (conditions.length === 0) return null;
+  return {
+    match: raw.match === 'any' ? 'any' : 'all',
+    conditions: conditions.map((c) => {
+      const source = sourcesByKey.get(c?.fieldKey);
+      let value = c?.value === undefined || c?.value === null ? '' : String(c.value);
+      if (source && OPTION_FIELD_TYPES.includes(source.type)) {
+        const hit = (source.options || []).find((o) => o && typeof o === 'object' && String(o.value) === value);
+        if (hit) value = String(hit.label || hit.value);
+      }
+      return { fieldKey: String(c?.fieldKey || ''), operator: String(c?.operator || ''), value };
+    }),
+  };
+};
+
+// Khoá cho trường MỚI được chọn làm nguồn điều kiện (điều kiện tham chiếu bằng key, mà key thường do server sinh lúc lưu). Cùng dạng
+// `f_<8 hex>` với backend generateFieldKey, không trùng khoá nào đang có trong biểu mẫu.
+const generateClientFieldKey = (used) => {
+  let key = '';
+  do {
+    const bytes = new Uint8Array(4);
+    if (globalThis.crypto?.getRandomValues) globalThis.crypto.getRandomValues(bytes);
+    else for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+    key = `f_${Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')}`;
+  } while (used.has(key));
+  return key;
+};
+
 const makeField = (partial = {}) => ({
   uid: nextFieldUid(),
   key: '', // trường mới key rỗng để server tự sinh
@@ -102,6 +136,7 @@ const makeField = (partial = {}) => ({
   options: [],
   width: 'full', // 'full' | 'half' (chỉ trường nhập); chỉ gửi lên server khi 'half'
   fileConfig: null, // chỉ trường `file`: { kinds, maxMb, maxFiles } (xem toEditorFileConfig)
+  showIf: null, // điều kiện hiển thị: { match, conditions: [{ fieldKey, operator, value }] } hoặc null (luôn hiện)
   ...partial,
 });
 
@@ -277,6 +312,7 @@ export default function FormEditorPage() {
         setInitialProductId(data.productId ? String(data.productId) : '');
         setPublicKey(data.publicKey || '');
         setSubmissionCount(data.submissionCount ?? null);
+        const sourcesByKey = new Map((Array.isArray(data.fields) ? data.fields : []).map((f) => [f.key, f]));
         setFields(
           Array.isArray(data.fields)
             ? data.fields.map((f) =>
@@ -290,6 +326,7 @@ export default function FormEditorPage() {
                   helpText: f.helpText || '',
                   width: f.width === 'half' ? 'half' : 'full',
                   fileConfig: f.type === 'file' ? toEditorFileConfig(f.fileConfig) : null,
+                  showIf: f.type === 'page_break' ? null : toEditorShowIf(f.showIf, sourcesByKey),
                   options: Array.isArray(f.options)
                     ? f.options.map((opt) => (typeof opt === 'object' ? opt.label || opt.value : opt))
                     : [],
@@ -661,6 +698,7 @@ export default function FormEditorPage() {
       role: '',
       options: [...(source.options || [])],
       fileConfig: source.fileConfig ? { ...source.fileConfig, kinds: [...source.fileConfig.kinds] } : null,
+      showIf: source.showIf ? { ...source.showIf, conditions: source.showIf.conditions.map((c) => ({ ...c })) } : null,
     };
     setFields((prev) => {
       const next = [...prev];
@@ -723,7 +761,16 @@ export default function FormEditorPage() {
       // Sang khối bố cục: bỏ mọi thuộc tính chỉ có nghĩa với trường nhập (bắt buộc / vai trò / gợi ý / độ rộng).
       // Sang sao / có-không / giờ: bỏ vai trò (các loại này không thể là tên, email, SĐT).
       if (key === 'type' && isDisplayFieldType(value)) {
-        copy[idx] = { ...copy[idx], required: false, role: '', placeholder: '', width: 'full', options: [] };
+        copy[idx] = {
+          ...copy[idx],
+          required: false,
+          role: '',
+          placeholder: '',
+          width: 'full',
+          options: [],
+          // Ngắt trang là ranh giới trang, không có điều kiện hiển thị.
+          ...(value === 'page_break' ? { showIf: null } : {}),
+        };
       } else if (key === 'type' && NO_ROLE_FIELD_TYPES.includes(value)) {
         copy[idx] = { ...copy[idx], role: '' };
       }
@@ -763,10 +810,25 @@ export default function FormEditorPage() {
     setFields((prev) => {
       const copy = [...prev];
       const currentOpts = [...(copy[fieldIdx].options || [])];
+      const previousText = currentOpts[optIdx];
       currentOpts[optIdx] = val;
       copy[fieldIdx] = { ...copy[fieldIdx], options: currentOpts };
-      return copy;
+      // Điều kiện hiển thị đang trỏ đúng lựa chọn này thì đổi theo chữ mới (gõ lại tên lựa chọn không làm hỏng điều kiện).
+      return renameOptionInConditions(copy, copy[fieldIdx].key, previousText, val);
     });
+  };
+
+  // Điều kiện hiển thị cần khoá của trường nguồn; trường MỚI chưa có khoá (server sinh lúc lưu) thì cấp ngay một khoá phía trình duyệt.
+  // Trả khoá đồng bộ để dòng điều kiện vừa tạo tham chiếu được luôn.
+  const handleEnsureFieldKey = (uid) => {
+    const current = fieldsRef.current;
+    const target = current.find((f) => f.uid === uid);
+    if (!target) return '';
+    if (target.key) return target.key;
+    const key = generateClientFieldKey(new Set(current.map((f) => f.key).filter(Boolean)));
+    fieldsRef.current = current.map((f) => (f.uid === uid ? { ...f, key } : f));
+    setFields((prev) => prev.map((f) => (f.uid === uid && !f.key ? { ...f, key } : f)));
+    return key;
   };
 
   const handleRemoveOption = (fieldIdx, optIdx) => {
@@ -994,8 +1056,17 @@ export default function FormEditorPage() {
     setIsSaving(true);
 
     try {
+      // Điều kiện hiển thị hỏng (nguồn bị xoá / đứng sau / đổi loại / lựa chọn không còn) GỠ trước khi lưu — backend sẽ từ chối cả biểu
+      // mẫu nếu để lọt. Báo người dùng số điều kiện đã gỡ.
+      const { fields: saveFields, removed: removedConditions } = sanitizeEditorShowIf(fields);
+      if (removedConditions > 0) {
+        setFields(saveFields);
+        toast.error(t('forms.editorPage.showIf.removedToast', { count: removedConditions }));
+      }
+      const earlierFields = new Map();
+
       // Chuẩn bị payload: giữ nguyên key cũ nếu có (bắt buộc theo PR-1b contract)
-      const payloadFields = fields.map((f) => {
+      const payloadFields = saveFields.map((f) => {
         const isBlock = isDisplayFieldType(f.type);
         const item = {
           label: f.label.trim(),
@@ -1031,6 +1102,12 @@ export default function FormEditorPage() {
         if (f.type === 'file') {
           item.fileConfig = toPayloadFileConfig(f.fileConfig);
         }
+        // Điều kiện hiển thị CHỈ gửi khi có (trường cũ không đổi một byte); nguồn là trường nhập đứng trước, value đã chuẩn (số cho sao / số).
+        if (f.type !== 'page_break') {
+          const { showIf } = toPayloadShowIf(f.showIf, earlierFields);
+          if (showIf) item.showIf = showIf;
+        }
+        if (f.key && String(f.key).trim()) earlierFields.set(f.key.trim(), f);
         return item;
       });
 
@@ -1231,11 +1308,24 @@ export default function FormEditorPage() {
   // Xem trước SỐNG (cột phải): FormRenderer previewMode dựng từ state nháp hiện tại, KHÔNG phải bản đã lưu — gồm cả ô đồng ý
   // (theo consentEnabled / consentText thật) và bộ chọn lịch (khi bật đặt lịch, ở dạng mẫu không gọi mạng). Key của trường
   // chưa có key dùng uid phía trình duyệt (ổn định khi gõ nhãn) thay vì nhãn.
+  // Điều kiện hiển thị: xem trước dùng đúng bản sẽ được lưu (điều kiện hỏng bị bỏ); danh sách điều kiện hỏng dùng cho huy hiệu / cảnh báo.
+  const previewSourceFields = useMemo(() => sanitizeEditorShowIf(fields).fields, [fields]);
+  const showIfIssues = useMemo(() => findShowIfIssues(fields), [fields]);
+  // Báo MỘT lần khi một ô vừa bị hỏng điều kiện vì thao tác cấu trúc (xoá / đổi chỗ / đổi loại câu hỏi nguồn). Giá trị lựa chọn không còn
+  // chỉ hiện cảnh báo tại ô (gõ lại tên lựa chọn đi qua trạng thái trống, không đáng bật thông báo mỗi lần).
+  const warnedShowIfUidsRef = useRef(new Set());
+  useEffect(() => {
+    const structural = new Set(showIfIssues.filter((issue) => issue.reason !== 'value').map((issue) => issue.uid));
+    const fresh = [...structural].filter((uid) => !warnedShowIfUidsRef.current.has(uid));
+    warnedShowIfUidsRef.current = structural;
+    if (fresh.length > 0) toast.error(t('forms.editorPage.showIf.brokenToast', { count: fresh.length }));
+  }, [showIfIssues, t]);
+
   const previewForm = useMemo(
     () => ({
       title: title || t('forms.formTitle'),
       description,
-      fields: fields.map((f) => ({
+      fields: previewSourceFields.map((f) => ({
         key: f.key || f.uid,
         label: f.label,
         type: f.type,
@@ -1245,6 +1335,7 @@ export default function FormEditorPage() {
         helpText: f.helpText,
         width: f.width,
         ...(f.type === 'file' ? { fileConfig: toPayloadFileConfig(f.fileConfig) } : {}),
+        ...(f.showIf ? { showIf: f.showIf } : {}),
       })),
       // Xem trước theo ĐÚNG những gì khách sẽ thấy: cờ tắt thì ô tệp thay bằng câu "tạm chưa nhận tệp".
       ...(fields.some((f) => f.type === 'file') ? { fileUploads: { enabled: fileUploadsEnabled } } : {}),
@@ -1276,6 +1367,7 @@ export default function FormEditorPage() {
     [
       title,
       description,
+      previewSourceFields,
       fields,
       settings.submitButtonText,
       settings.successMessage,
@@ -1371,6 +1463,7 @@ export default function FormEditorPage() {
                 errors={errors}
                 selectedUid={activeUid}
                 setupHints={setupHints}
+                showIfIssues={showIfIssues}
                 fileUploadsEnabled={fileUploadsEnabled}
                 onDismissSetupHints={() => setSetupHints({ booking: false, payment: false })}
                 onOpenSettings={openSettingsTab}
@@ -1382,6 +1475,7 @@ export default function FormEditorPage() {
                 onDuplicateField={handleDuplicateField}
                 onRemoveField={handleRemoveField}
                 onUpdateField={handleUpdateField}
+                onEnsureFieldKey={handleEnsureFieldKey}
                 onAddOption={handleAddOption}
                 onUpdateOption={handleUpdateOption}
                 onRemoveOption={handleRemoveOption}
