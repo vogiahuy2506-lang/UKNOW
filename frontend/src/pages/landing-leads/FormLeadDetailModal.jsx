@@ -32,7 +32,7 @@ function DetailRow({ label, children }) {
  *
  * @param {object} props
  * @param {object|null} props.submission dòng từ `GET /api/forms/submissions` (null = đóng)
- * @param {Array<{ key?: string, label?: string }>} [props.formFields] trường của biểu mẫu (tra nhãn / thứ tự)
+ * @param {Array<{ key?: string, label?: string, type?: string }>} [props.formFields] trường của biểu mẫu (tra nhãn / thứ tự / loại)
  * @param {() => void} props.onClose
  */
 export default function FormLeadDetailModal({ submission, formFields = [], onClose }) {
@@ -58,8 +58,8 @@ export default function FormLeadDetailModal({ submission, formFields = [], onClo
   }, [submission]);
 
   const answerEntries = useMemo(
-    () => buildAnswerEntries(submission?.answers, formFields),
-    [submission?.answers, formFields]
+    () => buildAnswerEntries(submission?.answers, formFields, t),
+    [submission?.answers, formFields, t]
   );
 
   if (!submission) return null;

@@ -1,3 +1,6 @@
+import { isDisplayFieldType } from './formFieldTypes.util';
+import { formatAnswerForDisplay, isDisplayBlockAnswer } from './formAnswerDisplay.util';
+
 /**
  * Helper thuần cho tab "Từ biểu mẫu" của màn "Khách để lại thông tin" (`GET /api/forms/submissions`).
  */
@@ -22,13 +25,6 @@ export function getSubmissionDisplayStatus(submission, now = Date.now()) {
   return submission?.status || 'submitted';
 }
 
-function formatAnswerValue(value) {
-  if (Array.isArray(value)) return value.map((v) => String(v ?? '')).filter(Boolean).join(', ');
-  if (value === null || value === undefined) return '';
-  if (typeof value === 'object') return JSON.stringify(value);
-  return String(value);
-}
-
 /**
  * Câu trả lời của một bài nộp theo NHÃN trường, đúng thứ tự trường trong biểu mẫu.
  *
@@ -37,29 +33,38 @@ function formatAnswerValue(value) {
  * của trường cùng `key` trong biểu mẫu; vẫn thiếu thì hiện chính `key`. Câu trả lời không còn trường
  * tương ứng (trường đã bị xoá khỏi biểu mẫu) xếp cuối, không bị bỏ mất.
  *
+ * PR-4: bỏ mục của khối hiển thị (tiêu đề / đoạn chữ / ngắt trang — theo loại trong ảnh chụp hoặc theo trường hiện
+ * tại của biểu mẫu); rating hiện "4/5 ★", yes_no hiện Có / Không (cần `t` để dịch; thiếu `t` thì hiện nguyên "yes"/"no").
+ *
  * @param {Record<string, unknown>|null|undefined} answers
- * @param {Array<{ key?: string, label?: string }>|null|undefined} formFields
+ * @param {Array<{ key?: string, label?: string, type?: string }>|null|undefined} formFields
+ * @param {(key: string) => string} [t]
  * @returns {Array<{ key: string, label: string, value: string }>}
  */
-export function buildAnswerEntries(answers, formFields) {
+export function buildAnswerEntries(answers, formFields, t) {
   const fields = Array.isArray(formFields) ? formFields : [];
   const order = new Map();
   const labelByKey = new Map();
+  const typeByKey = new Map();
   fields.forEach((field, index) => {
     if (!field?.key) return;
     order.set(field.key, index);
     if (field.label) labelByKey.set(field.key, field.label);
+    if (field.type) typeByKey.set(field.key, field.type);
   });
 
   const source = answers && typeof answers === 'object' && !Array.isArray(answers) ? answers : {};
   return Object.entries(source)
+    .filter(([key, item]) => !isDisplayBlockAnswer(item) && !isDisplayFieldType(typeByKey.get(key)))
     .map(([key, item]) => {
       const isSnapshot = item !== null && typeof item === 'object' && !Array.isArray(item) && 'value' in item;
       const snapshotLabel = isSnapshot && typeof item.label === 'string' ? item.label.trim() : '';
+      // Loại để định dạng: ưu tiên loại trong ảnh chụp lúc nộp, thiếu thì lấy loại hiện tại của trường.
+      const type = (isSnapshot && typeof item.type === 'string' ? item.type : '') || typeByKey.get(key);
       return {
         key,
         label: snapshotLabel || labelByKey.get(key) || key,
-        value: formatAnswerValue(isSnapshot ? item.value : item),
+        value: formatAnswerForDisplay(type, isSnapshot ? item.value : item, t),
       };
     })
     .sort((a, b) => {

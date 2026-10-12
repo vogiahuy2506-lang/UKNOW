@@ -22,6 +22,8 @@ import {
   fetchSubmissionReceiptBlob,
 } from '../services/formAdminApi.service';
 import { formatAppointmentAtVn, vnToday } from '../utils/bookingFormat.util';
+import { isDisplayFieldType } from '../utils/formFieldTypes.util';
+import { formatAnswerForDisplay, isDisplayBlockAnswer } from '../utils/formAnswerDisplay.util';
 import { formatVnd } from '../../../utils/vietqrParser';
 
 // PR-3b: pending_payment nhận thêm — chủ có thể huỷ một lượt còn đang chờ chuyển khoản (nhả
@@ -150,6 +152,17 @@ export default function FormSubmissionsPage() {
     if (Array.isArray(form?.fields)) {
       form.fields.forEach((f, idx) => {
         if (f.key) map.set(f.key, idx);
+      });
+    }
+    return map;
+  }, [form?.fields]);
+
+  // key → loại trường hiện tại (để bỏ khối hiển thị và định dạng rating / yes_no khi ảnh chụp thiếu `type`).
+  const formTypeByKey = useMemo(() => {
+    const map = new Map();
+    if (Array.isArray(form?.fields)) {
+      form.fields.forEach((f) => {
+        if (f.key && f.type) map.set(f.key, f.type);
       });
     }
     return map;
@@ -368,7 +381,10 @@ export default function FormSubmissionsPage() {
               <tbody className="divide-y divide-gray-100 dark:divide-dk-border">
                 {submissions.map((sub) => {
                   const answersObj = sub.answers || {};
-                  const answerEntries = Object.entries(answersObj).sort(([keyA], [keyB]) => {
+                  // PR-4: khối hiển thị (tiêu đề / đoạn chữ / ngắt trang) không có câu trả lời — không hiện thành dòng "nhãn: —".
+                  const answerEntries = Object.entries(answersObj)
+                    .filter(([key, item]) => !isDisplayBlockAnswer(item) && !isDisplayFieldType(formTypeByKey.get(key)))
+                    .sort(([keyA], [keyB]) => {
                     const orderA = formKeyOrderMap.has(keyA) ? formKeyOrderMap.get(keyA) : Number.MAX_SAFE_INTEGER;
                     const orderB = formKeyOrderMap.has(keyB) ? formKeyOrderMap.get(keyB) : Number.MAX_SAFE_INTEGER;
                     if (orderA !== orderB) return orderA - orderB;
@@ -551,9 +567,12 @@ export default function FormSubmissionsPage() {
                                   ? item.value
                                   : item;
 
-                              const displayVal = Array.isArray(value)
-                                ? value.join(', ')
-                                : String(value ?? '');
+                              // rating → "4/5 ★", yes_no → Có / Không; loại khác hiện như cũ.
+                              const answerType =
+                                typeof item === 'object' && item !== null && typeof item.type === 'string'
+                                  ? item.type
+                                  : formTypeByKey.get(fKey);
+                              const displayVal = formatAnswerForDisplay(answerType, value, t);
 
                               return (
                                 <div key={fKey} className="text-xs leading-relaxed break-words">
