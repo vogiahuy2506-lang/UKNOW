@@ -925,8 +925,13 @@ export default function FormRenderer({
               {t('publicForm.step.back')}
             </button>
           )}
+          {/* key RIÊNG cho hai nút: cùng vị trí, cùng thẻ <button> nên không có key thì React tái dùng một nút DOM và chỉ đổi
+              type "button" → "submit" NGAY trong lúc xử lý click "Tiếp"; trình duyệt thật chạy hành vi mặc định của
+              click SAU đó nên gửi luôn biểu mẫu khi vừa sang trang cuối (lỗi bắt được bằng ảnh chụp 12/10, jsdom không thấy
+              vì act gom cập nhật). Có key → nút "Tiếp" bị gỡ khỏi DOM, không còn là nút submit. */}
           {isLastPage ? (
             <button
+              key="submit"
               type="submit"
               disabled={isSubmitting || previewMode}
               className="w-full py-3 px-6 rounded-xl font-medium text-[color:var(--form-primary-text,#ffffff)] bg-[color:var(--form-primary,#df5c0e)] hover:brightness-95 active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
@@ -935,6 +940,7 @@ export default function FormRenderer({
             </button>
           ) : (
             <button
+              key="next"
               type="button"
               onClick={handleGoNext}
               disabled={isSubmitting}

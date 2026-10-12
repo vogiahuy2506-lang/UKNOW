@@ -174,6 +174,31 @@ describe('FormRenderer — nhiều bước (page_break)', () => {
     expect(screen.getByTestId('form-step-progress')).toHaveTextContent('Bước 2/2');
   });
 
+  it('sang trang cuối: nút "Tiếp" vừa bấm phải bị GỠ khỏi DOM, không được "biến" thành nút gửi (trình duyệt thật gửi biểu mẫu ngay)', () => {
+    // Lỗi thật (ảnh chụp Playwright 12/10): cùng vị trí, cùng thẻ button → React tái dùng nút DOM và đổi type
+    // button→submit giữa lúc xử lý click; hành vi mặc định của click chạy SAU đó nên gửi luôn biểu mẫu. jsdom/act gom cập
+    // nhật nên không tái hiện được hành vi, ở đây ghim cơ chế: nút Tiếp phải là một nút DOM khác nút gửi.
+    renderForm(
+      make([
+        f('a', 'Ô A'),
+        brk('b1', 'Bước 2'),
+        f('b', 'Ô B'),
+        brk('b2', 'Bước 3'),
+        f('c', 'Ô C'),
+      ])
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp' })); // → trang 2 (vẫn còn Tiếp)
+    const nextOnPage2 = screen.getByRole('button', { name: 'Tiếp' });
+    expect(nextOnPage2).toHaveAttribute('type', 'button');
+
+    fireEvent.click(nextOnPage2); // → trang 3 = trang cuối
+    expect(screen.getByTestId('form-step-progress')).toHaveTextContent('Bước 3/3');
+    expect(nextOnPage2.isConnected).toBe(false);
+    expect(nextOnPage2).toHaveAttribute('type', 'button');
+    expect(screen.getByRole('button', { name: 'Gửi thông tin' })).not.toBe(nextOnPage2);
+    expect(screen.getByRole('button', { name: 'Gửi thông tin' })).toHaveAttribute('type', 'submit');
+  });
+
   it('bộ chọn lịch + ô đồng ý chỉ hiện ở TRANG CUỐI', () => {
     const form = make(TWO_STEP.fields, {
       settings: { ...SETTINGS, consentEnabled: true },
