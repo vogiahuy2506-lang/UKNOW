@@ -12,12 +12,11 @@ const mockT = (key) => {
     'consentRequired.title': 'Cập nhật điều khoản & xử lý dữ liệu',
     'consentRequired.titleOutdated': 'Văn bản pháp lý đã cập nhật, vui lòng xác nhận lại',
     'consentRequired.description': 'Vui lòng đọc và đồng ý...',
-    'consentRequired.agreeTerms': 'Tôi đồng ý với',
-    'consentRequired.termsLink': 'Điều khoản dịch vụ',
-    'consentRequired.agreePrivacy': 'Tôi đồng ý với',
-    'consentRequired.privacyLink': 'Chính sách bảo mật',
-    'consentRequired.agreeDpa': 'Tôi đồng ý với',
-    'consentRequired.dpaLink': 'Thỏa thuận xử lý dữ liệu',
+    'auth.agreeAllIntro': 'Tôi đã đọc và đồng ý với',
+    'auth.termsOfUse': 'Điều khoản sử dụng',
+    'auth.privacyPolicy': 'Chính sách bảo mật',
+    'auth.publicDPA': 'Thỏa thuận xử lý dữ liệu',
+    'auth.and': 'và',
     'consentRequired.submit': 'Đồng ý và tiếp tục',
     'consentRequired.saving': 'Đang lưu...',
     'consentRequired.declineAndLogout': 'Không đồng ý và đăng xuất',
@@ -33,7 +32,7 @@ vi.mock('../../../../i18n', () => ({
   useI18n: () => ({ t: mockT }),
 }));
 
-describe('ConsentRequiredModal (Bắt buộc theo Nghị định 330, không có Để sau)', () => {
+describe('ConsentRequiredModal (bắt buộc, một ô đồng ý, không có Để sau)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -77,7 +76,31 @@ describe('ConsentRequiredModal (Bắt buộc theo Nghị định 330, không có
     expect(screen.getByText('Cập nhật điều khoản & xử lý dữ liệu')).toBeInTheDocument();
   });
 
-  it('chỉ submit được khi tick đủ cả 3 checkbox', async () => {
+  it('đúng 1 ô tích với 3 link văn bản mở tab mới; chưa tích thì nút Đồng ý khoá và không gửi', async () => {
+    render(<ConsentRequiredModal isOpen={true} />);
+
+    expect(screen.getAllByRole('checkbox')).toHaveLength(1);
+    for (const [name, href] of [
+      ['Điều khoản sử dụng', '/terms'],
+      ['Chính sách bảo mật', '/privacy-policy'],
+      ['Thỏa thuận xử lý dữ liệu', '/public-dpa'],
+    ]) {
+      const link = screen.getByRole('link', { name });
+      expect(link).toHaveAttribute('href', href);
+      expect(link).toHaveAttribute('target', '_blank');
+    }
+
+    const submitBtn = screen.getByRole('button', { name: 'Đồng ý và tiếp tục' });
+    expect(submitBtn).toBeDisabled();
+    // Ép submit form khi chưa tích (vd Enter) cũng không được gửi
+    fireEvent.submit(submitBtn.closest('form'));
+    await waitFor(() => {
+      expect(screen.getByText('Vui lòng tích chọn đầy đủ cả 3 mục')).toBeInTheDocument();
+    });
+    expect(authApiService.submitUserConsents).not.toHaveBeenCalled();
+  });
+
+  it('tích 1 ô → nút mở khoá và gửi đủ 3 khoá terms/privacy/dpa = true', async () => {
     authApiService.submitUserConsents.mockResolvedValue({ success: true });
     const onConsented = vi.fn();
 
@@ -86,19 +109,9 @@ describe('ConsentRequiredModal (Bắt buộc theo Nghị định 330, không có
     const submitBtn = screen.getByRole('button', { name: 'Đồng ý và tiếp tục' });
     expect(submitBtn).toBeDisabled();
 
-    const checkboxes = screen.getAllByRole('checkbox');
-    expect(checkboxes).toHaveLength(3);
-
-    // Tick 2/3 checkbox -> vẫn disabled
-    fireEvent.click(checkboxes[0]);
-    fireEvent.click(checkboxes[1]);
-    expect(submitBtn).toBeDisabled();
-
-    // Tick checkbox thứ 3 -> enable
-    fireEvent.click(checkboxes[2]);
+    fireEvent.click(screen.getByRole('checkbox'));
     expect(submitBtn).not.toBeDisabled();
 
-    // Submit form
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
@@ -137,10 +150,7 @@ describe('ConsentRequiredModal (Bắt buộc theo Nghị định 330, không có
 
     render(<ConsentRequiredModal isOpen={true} />);
 
-    const checkboxes = screen.getAllByRole('checkbox');
-    fireEvent.click(checkboxes[0]);
-    fireEvent.click(checkboxes[1]);
-    fireEvent.click(checkboxes[2]);
+    fireEvent.click(screen.getByRole('checkbox'));
 
     const submitBtn = screen.getByRole('button', { name: 'Đồng ý và tiếp tục' });
     const declineBtn = screen.getByRole('button', { name: 'Không đồng ý và đăng xuất' });

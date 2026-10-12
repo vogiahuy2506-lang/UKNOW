@@ -21,6 +21,7 @@ import {
   HiOutlineTag,
 } from 'react-icons/hi';
 import GoogleAuthButton from '../../components/GoogleAuthButton';
+import ConsentAgreementText from '../../features/auth/components/ConsentAgreementText';
 import { getPostAuthPath } from '../../utils/authRedirect';
 import { PASSWORD_MIN_LENGTH, PASSWORD_PATTERN } from '../../utils/passwordValidation';
 import { isValidAccountPhone } from '../../utils/phoneValidation';
@@ -261,9 +262,8 @@ const Register = () => {
   const [step, setStep]                               = useState('form');
   const [isSendingCode, setIsSendingCode]             = useState(false);
   const [otpData, setOtpData]                         = useState(null);
-  const [termsChecked, setTermsChecked]               = useState(false);
-  const [privacyChecked, setPrivacyChecked]           = useState(false);
-  const [dpaChecked, setDpaChecked]                   = useState(false);
+  // Một ô đồng ý cho cả 3 văn bản bắt buộc (Điều khoản, Chính sách quyền riêng tư, Thoả thuận xử lý dữ liệu)
+  const [agreed, setAgreed]                           = useState(false);
   const [searchParams]                                = useSearchParams();
   const inviteToken                                   = searchParams.get('invite') || searchParams.get('token') || '';
   const emailFromUrl                                  = searchParams.get('email') || '';
@@ -343,7 +343,7 @@ const Register = () => {
   }, [inviteToken, emailFromUrl, setValue]);
 
   const onSubmit = async (data) => {
-    if (!termsChecked || !privacyChecked || !dpaChecked) {
+    if (!agreed) {
       toast.error(t('register.acceptAllTerms') || t('auth.acceptTerms'));
       return;
     }
@@ -363,9 +363,9 @@ const Register = () => {
           referralCode: cleanRef || undefined,
           inviteToken,
           consents: {
-            terms: termsChecked,
-            privacy: privacyChecked,
-            dpa: dpaChecked,
+            terms: agreed,
+            privacy: agreed,
+            dpa: agreed,
           },
         };
         const result = await registerUser(payload);
@@ -405,9 +405,9 @@ const Register = () => {
           phone:    data.phone?.trim()    || undefined,
           referralCode: cleanRef || undefined,
           consents: {
-            terms: termsChecked,
-            privacy: privacyChecked,
-            dpa: dpaChecked,
+            terms: agreed,
+            privacy: agreed,
+            dpa: agreed,
           },
         },
       });
@@ -655,59 +655,22 @@ const Register = () => {
           </div>
         </div>
 
-        {/* Terms, Privacy Policy & Public DPA (Nghị định 330/2026/NĐ-CP) */}
-        <div className="space-y-2.5 pt-2">
+        {/* Một ô đồng ý cho Điều khoản sử dụng, Chính sách quyền riêng tư & Thoả thuận xử lý dữ liệu */}
+        <div className="pt-2">
           <label className="flex items-start gap-3 cursor-pointer group">
             <div className="relative mt-0.5">
-              <input 
-                type="checkbox" 
-                checked={termsChecked}
-                onChange={(e) => setTermsChecked(e.target.checked)}
+              <input
+                type="checkbox"
+                checked={agreed}
+                onChange={(e) => setAgreed(e.target.checked)}
                 className="sr-only peer"
               />
               <div className="w-5 h-5 border-2 border-slate-300 dark:border-dk-border-strong bg-white dark:bg-dk-inset rounded-md peer-checked:bg-orange-500 peer-checked:border-orange-500 transition-all duration-200 flex items-center justify-center">
-                {termsChecked && <HiOutlineCheckCircle className="w-3.5 h-3.5 text-white" />}
+                {agreed && <HiOutlineCheckCircle className="w-3.5 h-3.5 text-white" />}
               </div>
             </div>
             <span className="text-xs text-slate-600 dark:text-dk-text2 font-medium leading-relaxed group-hover:text-slate-700 dark:group-hover:text-dk-text transition-colors">
-              {t('auth.termsAgree')}{' '}
-              <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 font-bold hover:underline underline-offset-2 transition-colors">{t('auth.terms')}</a>
-            </span>
-          </label>
-
-          <label className="flex items-start gap-3 cursor-pointer group">
-            <div className="relative mt-0.5">
-              <input 
-                type="checkbox" 
-                checked={privacyChecked}
-                onChange={(e) => setPrivacyChecked(e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="w-5 h-5 border-2 border-slate-300 dark:border-dk-border-strong bg-white dark:bg-dk-inset rounded-md peer-checked:bg-orange-500 peer-checked:border-orange-500 transition-all duration-200 flex items-center justify-center">
-                {privacyChecked && <HiOutlineCheckCircle className="w-3.5 h-3.5 text-white" />}
-              </div>
-            </div>
-            <span className="text-xs text-slate-600 dark:text-dk-text2 font-medium leading-relaxed group-hover:text-slate-700 dark:group-hover:text-dk-text transition-colors">
-              {t('auth.termsAgree')}{' '}
-              <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 font-bold hover:underline underline-offset-2 transition-colors">{t('auth.privacyPolicy')}</a>
-            </span>
-          </label>
-
-          <label className="flex items-start gap-3 cursor-pointer group">
-            <div className="relative mt-0.5">
-              <input 
-                type="checkbox" 
-                checked={dpaChecked}
-                onChange={(e) => setDpaChecked(e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="w-5 h-5 border-2 border-slate-300 dark:border-dk-border-strong bg-white dark:bg-dk-inset rounded-md peer-checked:bg-orange-500 peer-checked:border-orange-500 transition-all duration-200 flex items-center justify-center">
-                {dpaChecked && <HiOutlineCheckCircle className="w-3.5 h-3.5 text-white" />}
-              </div>
-            </div>
-            <span className="text-xs text-slate-600 dark:text-dk-text2 font-medium leading-relaxed group-hover:text-slate-700 dark:group-hover:text-dk-text transition-colors">
-              {t('auth.termsAgree')}{' '}
-              <a href="/public-dpa" target="_blank" rel="noopener noreferrer" className="text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 font-bold hover:underline underline-offset-2 transition-colors">{t('auth.publicDPA')}</a>
+              <ConsentAgreementText linkClassName="text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 font-bold hover:underline underline-offset-2 transition-colors" />
             </span>
           </label>
         </div>

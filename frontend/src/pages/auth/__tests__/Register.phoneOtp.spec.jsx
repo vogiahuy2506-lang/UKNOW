@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Register from '../Register';
 
@@ -16,6 +16,7 @@ const m = vi.hoisted(() => ({
   phoneOtpEnabled: false,
   fetchPhoneOtpEnabled: vi.fn().mockResolvedValue(false),
   googleLogin: vi.fn().mockResolvedValue({ data: { user: { id: 1 }, trial: null } }),
+  register: vi.fn().mockResolvedValue({ data: { user: { id: 2 }, trial: null } }),
 }));
 
 vi.mock('../../../stores/authStore', () => ({
@@ -120,8 +121,10 @@ describe('Register.jsx — ô SĐT theo cờ phoneOtpEnabled & Đăng ký Google
     fireEvent.change(passwordInputs[0], { target: { value: 'Password123' } });
     fireEvent.change(passwordInputs[1], { target: { value: 'Password123' } });
 
+    // Một ô đồng ý duy nhất cho cả 3 văn bản
     const checkboxes = screen.getAllByRole('checkbox');
-    checkboxes.forEach((cb) => fireEvent.click(cb));
+    expect(checkboxes).toHaveLength(1);
+    fireEvent.click(checkboxes[0]);
 
     fireEvent.click(screen.getByText('register.registerButton'));
 
@@ -153,8 +156,10 @@ describe('Register.jsx — ô SĐT theo cờ phoneOtpEnabled & Đăng ký Google
     fireEvent.change(passwordInputs[0], { target: { value: 'Password123' } });
     fireEvent.change(passwordInputs[1], { target: { value: 'Password123' } });
 
+    // Một ô đồng ý duy nhất cho cả 3 văn bản
     const checkboxes = screen.getAllByRole('checkbox');
-    checkboxes.forEach((cb) => fireEvent.click(cb));
+    expect(checkboxes).toHaveLength(1);
+    fireEvent.click(checkboxes[0]);
 
     fireEvent.click(screen.getByText('register.registerButton'));
 
@@ -165,6 +170,79 @@ describe('Register.jsx — ô SĐT theo cờ phoneOtpEnabled & Đăng ký Google
     expect(sendVerificationCode).toHaveBeenCalledWith({
       email: 'test_otp_true@gmail.com',
       username: 'userotptrue',
+    });
+  });
+  describe('một ô đồng ý cho 3 văn bản bắt buộc', () => {
+    const fillForm = () => {
+      fireEvent.change(screen.getByPlaceholderText('register.usernamePlaceholder'), {
+        target: { value: 'userdongy' },
+      });
+      fireEvent.change(screen.getByPlaceholderText('register.emailPlaceholder'), {
+        target: { value: 'dongy@gmail.com' },
+      });
+      fireEvent.change(screen.getByPlaceholderText('register.phonePlaceholder'), {
+        target: { value: '0912345678' },
+      });
+      const passwordInputs = screen.getAllByPlaceholderText('••••••••');
+      fireEvent.change(passwordInputs[0], { target: { value: 'Password123' } });
+      fireEvent.change(passwordInputs[1], { target: { value: 'Password123' } });
+    };
+
+    it('đúng 1 ô tích, 3 link văn bản mở tab mới', () => {
+      m.phoneOtpEnabled = false;
+      renderRegister();
+
+      expect(screen.getAllByRole('checkbox')).toHaveLength(1);
+      for (const [name, href] of [
+        ['auth.termsOfUse', '/terms'],
+        ['auth.privacyPolicy', '/privacy-policy'],
+        ['auth.publicDPA', '/public-dpa'],
+      ]) {
+        const link = screen.getByRole('link', { name });
+        expect(link).toHaveAttribute('href', href);
+        expect(link).toHaveAttribute('target', '_blank');
+      }
+    });
+
+    it('chưa tích ô nào → không gửi mã xác minh', async () => {
+      m.phoneOtpEnabled = false;
+      const { sendVerificationCode } = await import('../../../features/auth/services/authApi.service');
+      renderRegister();
+      fillForm();
+
+      fireEvent.click(screen.getByText('register.registerButton'));
+
+      // chờ một nhịp để handleSubmit (async) chạy xong rồi mới khẳng định "không gọi"
+      await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+      expect(sendVerificationCode).not.toHaveBeenCalled();
+    });
+
+    it('tích 1 ô → payload đăng ký có đủ 3 khoá consents = true', async () => {
+      m.phoneOtpEnabled = false;
+      const { sendVerificationCode } = await import('../../../features/auth/services/authApi.service');
+      sendVerificationCode.mockResolvedValueOnce({ success: true });
+      renderRegister();
+      fillForm();
+
+      fireEvent.click(screen.getByRole('checkbox'));
+      fireEvent.click(screen.getByText('register.registerButton'));
+
+      await waitFor(() => {
+        expect(sendVerificationCode).toHaveBeenCalledTimes(1);
+      });
+
+      // Sang bước nhập OTP: nhập đủ 6 số rồi xác nhận
+      const digitInputs = await screen.findAllByRole('textbox');
+      expect(digitInputs).toHaveLength(6);
+      digitInputs.forEach((input, i) => fireEvent.change(input, { target: { value: String((i % 9) + 1) } }));
+      fireEvent.click(screen.getByText('register.confirmButton'));
+
+      await waitFor(() => {
+        expect(m.register).toHaveBeenCalledTimes(1);
+      });
+      expect(m.register.mock.calls[0][0].consents).toEqual({ terms: true, privacy: true, dpa: true });
     });
   });
 });

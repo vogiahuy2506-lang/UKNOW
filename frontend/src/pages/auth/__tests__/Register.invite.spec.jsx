@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import Register from '../Register';
 
@@ -100,9 +100,10 @@ describe('Register.jsx — luồng kích hoạt / đăng ký nhân viên đượ
       target: { value: 'Password123' },
     });
 
-    // Check 3 ô điều khoản
+    // Một ô đồng ý duy nhất cho cả 3 văn bản
     const checkboxes = screen.getAllByRole('checkbox');
-    checkboxes.forEach((cb) => fireEvent.click(cb));
+    expect(checkboxes).toHaveLength(1);
+    fireEvent.click(checkboxes[0]);
 
     const submitBtn = screen.getByText('Hoàn tất đăng ký & Kích hoạt');
     fireEvent.click(submitBtn);
@@ -125,5 +126,27 @@ describe('Register.jsx — luồng kích hoạt / đăng ký nhân viên đượ
         consents: { terms: true, privacy: true, dpa: true },
       })
     );
+  });
+
+  it('chưa tích ô đồng ý → không gọi registerUser', async () => {
+    renderRegister('/register?email=nhanvien%40example.com&invite=inv_token_999');
+
+    fireEvent.change(screen.getByPlaceholderText('register.usernamePlaceholder'), {
+      target: { value: 'nhanvienmoi' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('register.phonePlaceholder'), {
+      target: { value: '0912345678' },
+    });
+    const passwordInputs = screen.getAllByPlaceholderText('••••••••');
+    fireEvent.change(passwordInputs[0], { target: { value: 'Password123' } });
+    fireEvent.change(passwordInputs[1], { target: { value: 'Password123' } });
+
+    fireEvent.click(screen.getByText('Hoàn tất đăng ký & Kích hoạt'));
+
+    // chờ một nhịp để handleSubmit (async) chạy xong rồi mới khẳng định "không gọi"
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+    expect(m.register).not.toHaveBeenCalled();
   });
 });
