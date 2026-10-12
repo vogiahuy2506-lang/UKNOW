@@ -4220,7 +4220,7 @@ export default {
       loadFailed: 'Could not load sales figures',
       leftContactShort: 'Left info',
       landingViewsClicks: '{views} views · {clicks} clicks',
-      leadsFromLanding: 'leads from landing page',
+      leftContactSources: 'from landing pages and forms',
       formSubmitters: 'people who submitted a form',
       awaitingAmountLine: 'Waiting for {amount}',
       allApproved: 'all approved',

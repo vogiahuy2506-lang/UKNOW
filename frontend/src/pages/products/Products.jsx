@@ -459,7 +459,7 @@ function ProductDetailModal({ product, funnel, canViewFunnel, onClose, onEdit })
                       <div className="text-lg font-bold text-slate-900 dark:text-dk-text mt-0.5" data-testid="funnel-detail-left-contact">
                         {funnel?.leftContact ?? 0}
                       </div>
-                      <span className="text-[10px] text-slate-400 dark:text-dk-muted block mt-0.5">{t('products.funnel.leadsFromLanding')}</span>
+                      <span className="text-[10px] text-slate-400 dark:text-dk-muted block mt-0.5">{t('products.funnel.leftContactSources')}</span>
                     </div>
 
                     {/* 3. Đăng ký */}

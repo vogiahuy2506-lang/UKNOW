@@ -4231,7 +4231,7 @@ export default {
       loadFailed: 'Không thể tải số liệu bán hàng',
       leftContactShort: 'Để lại TT',
       landingViewsClicks: '{views} view · {clicks} click',
-      leadsFromLanding: 'leads từ landing',
+      leftContactSources: 'từ landing và biểu mẫu',
       formSubmitters: 'người nộp form',
       awaitingAmountLine: 'Chờ {amount}',
       allApproved: 'đã duyệt hết',

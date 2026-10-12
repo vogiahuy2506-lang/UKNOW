@@ -335,6 +335,9 @@ describe('Products — cột phễu Đăng ký / Đã trả / Doanh thu', () => 
     expect(within(modal).getByRole('link', { name: 'https://example.com/course' })).toHaveAttribute('href', 'https://example.com/course');
     expect(screen.getByTestId('funnel-detail-interested')).toHaveTextContent('11');
     expect(screen.getByTestId('funnel-detail-left-contact')).toHaveTextContent('5');
+    // Số này gộp lead landing + người nộp biểu mẫu gắn sản phẩm → chú thích không được nói "chỉ từ landing".
+    expect(screen.getByTestId('funnel-detail-left-contact').parentElement).toHaveTextContent('từ landing và biểu mẫu');
+    expect(within(modal).queryByText('leads từ landing')).not.toBeInTheDocument();
     expect(screen.getByTestId('funnel-detail-registered')).toHaveTextContent('2');
     expect(screen.getByTestId('funnel-detail-awaiting')).toHaveTextContent('2');
     expect(screen.getByTestId('funnel-detail-paid')).toHaveTextContent('1');
