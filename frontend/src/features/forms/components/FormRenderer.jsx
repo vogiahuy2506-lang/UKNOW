@@ -4,6 +4,7 @@ import BookingSlotPicker from './BookingSlotPicker';
 import { vnToday, addDaysToDateStr, formatSlotDateLabel } from '../utils/bookingFormat.util';
 import { useFormFont } from '../utils/useFormFont';
 import { getReadableTextColor } from '../utils/formTheme.util';
+import { isDisplayFieldType, splitFormPages, RATING_MAX } from '../utils/formFieldTypes.util';
 import { buildFormFontFamily, FORM_BANNER_HEIGHTS, DEFAULT_FORM_BANNER_HEIGHT } from '../constants/formTheme';
 
 const SLOT_ERROR_CODES = new Set(['FORM_SLOT_FULL', 'INVALID_APPOINTMENT_SLOT']);
@@ -28,6 +29,13 @@ const SLOT_ERROR_CODES = new Set(['FORM_SLOT_FULL', 'INVALID_APPOINTMENT_SLOT'])
  *   Khi có redirectUrl, chuyển hướng CẢ TRANG NGOÀI (`window.top`) thay vì chỉ mỗi iframe —
  *   thất bại (top bị chặn/không truy cập được) thì hiện màn thành công kèm link `target="_top"`
  *   thay vì im lặng chuyển hướng mỗi iframe (khách chỉ thấy iframe đổi trang, trang ngoài đứng yên).
+ * @param {boolean} [props.singleColumn] - PR-4: ép MỘT cột dù viewport rộng (khung "Điện thoại" của xem trước trong
+ *   trình soạn: breakpoint `sm:` đo theo viewport chứ không theo khung 390px). Trang công khai/bản nhúng không truyền —
+ *   tự theo viewport: ≥ sm hai cột (trường `width:'half'` đứng chung hàng), < sm một cột.
+ *
+ * Nhiều bước (PR-4): khối `page_break` chia biểu mẫu thành các trang (xem `splitFormPages`). Trang cuối mới có bộ
+ * chọn lịch, ô đồng ý và nút gửi; các trang trước có "Tiếp" (kiểm trường bắt buộc của CHÍNH trang đó) và "Quay lại".
+ * Không có `page_break` → một trang, hành vi y như trước.
  */
 export default function FormRenderer({
   form,
@@ -37,6 +45,7 @@ export default function FormRenderer({
   previewMode = false,
   loadSlots,
   embedMode = false,
+  singleColumn = false,
 }) {
   const { t, locale } = useI18n();
 
@@ -45,6 +54,10 @@ export default function FormRenderer({
   const [clientErrors, setClientErrors] = useState({});
   const [submittedSuccess, setSubmittedSuccess] = useState(false);
   const [redirectFallbackUrl, setRedirectFallbackUrl] = useState('');
+  // Trang đang xem (0-based) — chỉ có nghĩa khi biểu mẫu có khối page_break (nhiều bước).
+  const [pageIndex, setPageIndex] = useState(0);
+  const stepHeaderRef = useRef(null);
+  const lastPageIndexRef = useRef(0);
 
   const booking = form?.booking || null;
   const bookingEnabled = Boolean(booking?.enabled);
@@ -67,6 +80,14 @@ export default function FormRenderer({
   const loadSlotsSeqRef = useRef(0);
 
   const fields = Array.isArray(form?.fields) ? form.fields : [];
+  // Chia trang theo page_break. Không có trường nào để hiện (mảng rỗng) vẫn cần 1 trang trống để còn nút gửi.
+  const pages = splitFormPages(fields);
+  const pageList = pages.length > 0 ? pages : [{ title: '', fields: [] }];
+  const isMultiStep = pageList.length > 1;
+  // Xem trước trong trình soạn: người soạn xoá bớt ngắt trang khi đang ở trang 3 → kẹp lại, không để trang "mất tích".
+  const safePageIndex = Math.min(pageIndex, pageList.length - 1);
+  const currentPage = pageList[safePageIndex];
+  const isLastPage = safePageIndex === pageList.length - 1;
   const settings = form?.settings || {};
   const submitButtonText = settings.submitButtonText?.trim() || t('publicForm.defaultSubmit');
   const successMessage = settings.successMessage?.trim() || t('publicForm.defaultSuccess');
@@ -141,6 +162,18 @@ export default function FormRenderer({
     }
   }, [bookingEnabled, bookingMock, weekStart, loadWeek]);
 
+  // Đổi trang: đưa đầu biểu mẫu vào tầm nhìn + chuyển tiêu điểm lên khối "Bước x/y" (nút Tiếp vừa bấm đã biến mất khỏi
+  // DOM). Không làm gì trong xem trước (không giật cuộn / không cướp tiêu điểm của trình soạn) và ở lần vẽ đầu.
+  useEffect(() => {
+    if (lastPageIndexRef.current === safePageIndex) return;
+    lastPageIndexRef.current = safePageIndex;
+    if (previewMode) return;
+    const el = stepHeaderRef.current;
+    if (!el) return;
+    el.focus?.({ preventScroll: true });
+    el.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+  }, [safePageIndex, previewMode]);
+
   const handlePrevWeek = () => {
     const prev = addDaysToDateStr(weekStart, -7);
     setWeekStart(prev < todayVn ? todayVn : prev);
@@ -188,11 +221,14 @@ export default function FormRenderer({
     handleFieldChange(key, updated);
   };
 
-  const validateClient = () => {
+  // Kiểm các trường NHẬP trong `list` (khối hiển thị không có giá trị nên bỏ qua). Dùng cho cả nút "Tiếp" (chỉ trường
+  // của trang hiện tại) lẫn nút gửi (mọi trang) — server luôn kiểm đủ, đây chỉ để báo lỗi sớm.
+  const validateFields = (list) => {
     const errors = {};
 
-    for (const field of fields) {
+    for (const field of list) {
       const { key, label, required, type } = field;
+      if (isDisplayFieldType(type)) continue;
       const val = answers[key];
 
       // Kiểm tra bắt buộc
@@ -226,6 +262,12 @@ export default function FormRenderer({
       }
     }
 
+    return errors;
+  };
+
+  const validateClient = () => {
+    const errors = validateFields(fields);
+
     if (bookingEnabled && !previewMode && !selectedSlot) {
       errors.__booking = t('publicForm.booking.selectRequired');
     }
@@ -233,10 +275,33 @@ export default function FormRenderer({
     return errors;
   };
 
+  const handleGoNext = () => {
+    // Xem trước: mọi ô bị khoá nên không thể điền — cho sang trang để xem, không chặn bằng trường bắt buộc.
+    if (!previewMode) {
+      const errors = validateFields(currentPage.fields);
+      if (Object.keys(errors).length > 0) {
+        setClientErrors((prev) => ({ ...prev, ...errors }));
+        return;
+      }
+    }
+    setPageIndex(Math.min(safePageIndex + 1, pageList.length - 1));
+  };
+
+  const handleGoBack = () => {
+    // Quay lại KHÔNG kiểm gì và không xoá câu trả lời — `answers` nằm ở renderer, không ở từng trang.
+    setPageIndex(Math.max(safePageIndex - 1, 0));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (previewMode) return;
+
+    // Enter trong ô nhập ở trang giữa = "Tiếp" (trang giữa không có nút gửi, nhưng form 1 ô nhập vẫn tự submit).
+    if (!isLastPage) {
+      handleGoNext();
+      return;
+    }
 
     // Chặn bấm đúp ngay lập tức bằng cờ ref
     if (submittingRef.current || isSubmitting) {
@@ -246,6 +311,9 @@ export default function FormRenderer({
     const errors = validateClient();
     if (Object.keys(errors).length > 0) {
       setClientErrors(errors);
+      // Lỗi nằm ở trang trước (hiếm: trang trước chỉ qua được "Tiếp" khi đã hợp lệ) → đưa khách về đúng trang đó.
+      const firstBadPage = pageList.findIndex((page) => page.fields.some((f) => errors[f.key]));
+      if (firstBadPage >= 0 && firstBadPage < safePageIndex) setPageIndex(firstBadPage);
       return;
     }
 
@@ -447,19 +515,73 @@ export default function FormRenderer({
           />
         </div>
 
-        {/* Danh sách các trường */}
-        {fields.map((field) => {
+        {/* Nhiều bước: "Bước x/y" + tiêu đề bước + thanh tiến trình (chỉ khi có page_break tạo ≥ 2 trang) */}
+        {isMultiStep && (
+          <div ref={stepHeaderRef} tabIndex={-1} data-testid="form-step-progress" className="outline-none">
+            <div className="flex items-baseline justify-between gap-3 text-xs text-gray-500">
+              <span className="font-semibold text-gray-700">
+                {t('publicForm.step.progress', { current: safePageIndex + 1, total: pageList.length })}
+              </span>
+              {currentPage.title && <span className="min-w-0 truncate text-right">{currentPage.title}</span>}
+            </div>
+            <div
+              role="progressbar"
+              aria-valuemin={1}
+              aria-valuemax={pageList.length}
+              aria-valuenow={safePageIndex + 1}
+              aria-label={t('publicForm.step.progress', { current: safePageIndex + 1, total: pageList.length })}
+              className="mt-1.5 h-1.5 w-full rounded-full bg-gray-200 overflow-hidden"
+            >
+              <div
+                className="h-full rounded-full bg-[color:var(--form-primary,#df5c0e)] transition-all"
+                style={{ width: `${((safePageIndex + 1) / pageList.length) * 100}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Danh sách các trường của trang hiện tại. Lưới 2 cột ≥ sm: trường `width:'half'` chiếm 1 cột (hai trường half
+            liền nhau đứng chung hàng), còn lại chiếm cả hàng; < sm (hoặc singleColumn) luôn 1 cột. */}
+        <div className={`grid grid-cols-1 ${singleColumn ? '' : 'sm:grid-cols-2'} gap-x-4 gap-y-5`}>
+        {currentPage.fields.map((field) => {
           const { key, label, type, required, options = [] } = field;
+          const fullRowClass = singleColumn ? '' : 'sm:col-span-2';
+          const helpText = typeof field.helpText === 'string' ? field.helpText.trim() : '';
+
+          // Khối hiển thị: không có giá trị / ô nhập — luôn cả hàng. (page_break không bao giờ tới đây: splitFormPages
+          // đã dùng nó làm ranh giới trang.)
+          if (type === 'heading') {
+            return (
+              <div key={key} data-block="heading" className={`min-w-0 pt-1 ${fullRowClass}`}>
+                <h2 className="text-lg font-semibold text-gray-900 break-words">{label}</h2>
+                {helpText && (
+                  <p className="mt-0.5 text-sm text-gray-600 leading-snug whitespace-pre-line break-words">{helpText}</p>
+                )}
+              </div>
+            );
+          }
+          if (type === 'paragraph') {
+            return (
+              <p
+                key={key}
+                data-block="paragraph"
+                className={`min-w-0 text-sm text-gray-700 leading-relaxed whitespace-pre-line break-words ${fullRowClass}`}
+              >
+                {label}
+              </p>
+            );
+          }
+
           const val = answers[key] ?? '';
           const fieldError = clientErrors[key];
-          const fieldControlId = ['radio', 'checkbox'].includes(type) ? undefined : `field_${key}`;
+          const fieldControlId = ['radio', 'checkbox', 'rating', 'yes_no'].includes(type) ? undefined : `field_${key}`;
           // Chữ hướng dẫn nhỏ dưới nhãn (PR-3) + gợi ý trong ô nhập (placeholder) — thiếu thì không hiện gì.
-          const helpText = typeof field.helpText === 'string' ? field.helpText.trim() : '';
           const helpId = helpText ? `help_${key}` : undefined;
           const inputPlaceholder = typeof field.placeholder === 'string' && field.placeholder.trim() ? field.placeholder.trim() : undefined;
+          const fieldSpanClass = field.width === 'half' ? '' : fullRowClass;
 
           return (
-            <div key={key} className="space-y-1.5">
+            <div key={key} className={`min-w-0 space-y-1.5 ${fieldSpanClass}`}>
               <label
                 htmlFor={fieldControlId}
                 className="block text-sm font-medium text-gray-800 break-words"
@@ -672,15 +794,91 @@ export default function FormRenderer({
                 </div>
               )}
 
+              {/* time */}
+              {type === 'time' && (
+                <input
+                  id={fieldControlId}
+                  type="time"
+                  aria-describedby={helpId}
+                  className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 ${
+                    fieldError
+                      ? 'border-red-300 focus:ring-red-200'
+                      : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
+                  }`}
+                  value={val}
+                  onChange={(e) => handleFieldChange(key, e.target.value)}
+                  disabled={isSubmitting || previewMode}
+                />
+              )}
+
+              {/* rating: 1–5 sao. Bấm lại đúng sao đang chọn = bỏ chọn (trường không bắt buộc cần xoá được). */}
+              {type === 'rating' && (
+                <div role="radiogroup" aria-label={label} aria-describedby={helpId} className="flex items-center gap-1 pt-0.5">
+                  {Array.from({ length: RATING_MAX }, (_, i) => i + 1).map((n) => {
+                    const current = Number(val) || 0;
+                    return (
+                      <button
+                        key={n}
+                        type="button"
+                        role="radio"
+                        aria-checked={current === n}
+                        aria-label={t('publicForm.rating.starLabel', { count: n })}
+                        disabled={isSubmitting || previewMode}
+                        onClick={() => handleFieldChange(key, current === n ? '' : n)}
+                        className={`rounded p-0.5 text-3xl leading-none transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-200 disabled:cursor-not-allowed ${
+                          current >= n ? 'text-amber-400' : 'text-gray-300 hover:text-amber-300'
+                        }`}
+                      >
+                        ★
+                      </button>
+                    );
+                  })}
+                  {Number(val) > 0 && (
+                    <span className="ml-2 text-xs text-gray-500">
+                      {Number(val)}/{RATING_MAX}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* yes_no */}
+              {type === 'yes_no' && (
+                <div role="radiogroup" aria-label={label} aria-describedby={helpId} className="flex items-center gap-6 pt-1">
+                  {['yes', 'no'].map((choice) => {
+                    const id = `yn-${key}-${choice}`;
+                    return (
+                      <label
+                        key={choice}
+                        htmlFor={id}
+                        className="flex items-center gap-2.5 cursor-pointer text-sm text-gray-700"
+                      >
+                        <input
+                          id={id}
+                          type="radio"
+                          name={key}
+                          value={choice}
+                          checked={val === choice}
+                          onChange={() => handleFieldChange(key, choice)}
+                          disabled={isSubmitting || previewMode}
+                          className="h-4 w-4 text-[color:var(--form-primary,#df5c0e)] focus:ring-primary-500 border-gray-300"
+                        />
+                        <span>{choice === 'yes' ? t('publicForm.yes') : t('publicForm.no')}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+
               {fieldError && (
                 <p className="text-xs text-red-600 mt-1">{fieldError}</p>
               )}
             </div>
           );
         })}
+        </div>
 
-        {/* Chọn khung giờ đặt lịch: chỉ hiện khi form.booking?.enabled */}
-        {bookingEnabled && (
+        {/* Chọn khung giờ đặt lịch: chỉ hiện khi form.booking?.enabled, và (nhiều bước) chỉ ở TRANG CUỐI */}
+        {bookingEnabled && isLastPage && (
           <BookingSlotPicker
             slots={slots}
             isLoading={slotsLoading}
@@ -697,8 +895,8 @@ export default function FormRenderer({
           />
         )}
 
-        {/* Ô đồng ý tiếp thị: chỉ hiện khi consentEnabled = true */}
-        {settings.consentEnabled === true && (
+        {/* Ô đồng ý tiếp thị: chỉ hiện khi consentEnabled = true (nhiều bước: ở trang cuối, cạnh nút gửi) */}
+        {settings.consentEnabled === true && isLastPage && (
           <div className="pt-2">
             <label className="flex items-start gap-3 cursor-pointer text-sm text-gray-700 select-none">
               <input
@@ -715,15 +913,36 @@ export default function FormRenderer({
           </div>
         )}
 
-        {/* Nút gửi */}
-        <div className="pt-4">
-          <button
-            type="submit"
-            disabled={isSubmitting || previewMode}
-            className="w-full py-3 px-6 rounded-xl font-medium text-[color:var(--form-primary-text,#ffffff)] bg-[color:var(--form-primary,#df5c0e)] hover:brightness-95 active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-          >
-            {isSubmitting ? t('publicForm.submitting') : submitButtonText}
-          </button>
+        {/* Điều hướng + nút gửi: trang giữa có "Tiếp", trang cuối có nút gửi; từ trang 2 trở đi có "Quay lại" */}
+        <div className="pt-4 flex items-stretch gap-3">
+          {isMultiStep && safePageIndex > 0 && (
+            <button
+              type="button"
+              onClick={handleGoBack}
+              disabled={isSubmitting}
+              className="shrink-0 py-3 px-5 rounded-xl font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {t('publicForm.step.back')}
+            </button>
+          )}
+          {isLastPage ? (
+            <button
+              type="submit"
+              disabled={isSubmitting || previewMode}
+              className="w-full py-3 px-6 rounded-xl font-medium text-[color:var(--form-primary-text,#ffffff)] bg-[color:var(--form-primary,#df5c0e)] hover:brightness-95 active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+            >
+              {isSubmitting ? t('publicForm.submitting') : submitButtonText}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleGoNext}
+              disabled={isSubmitting}
+              className="w-full py-3 px-6 rounded-xl font-medium text-[color:var(--form-primary-text,#ffffff)] bg-[color:var(--form-primary,#df5c0e)] hover:brightness-95 active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+            >
+              {t('publicForm.step.next')}
+            </button>
+          )}
         </div>
       </form>
       </div>
