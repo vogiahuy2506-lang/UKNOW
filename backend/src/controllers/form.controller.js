@@ -5,6 +5,9 @@ import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
 import { ingestFormAsset } from '../services/formAsset.service.js';
 import { StorageQuotaExceededError } from '../services/storage/storageQuota.service.js';
 import { getStorageBackend } from '../services/storage/storageBackend.js';
+import { draftForm } from '../services/ai/aiFormDraft.service.js';
+import { chargeAiCredit } from '../middleware/aiCredit.middleware.js';
+import { buildAiErrorPayload } from '../utils/aiErrorPayload.util.js';
 
 /**
  * PR-3a "Bổ sung 15/09": chỉ CHỦ workspace (không phải nhân viên) được đổi paymentConfig —
@@ -127,6 +130,38 @@ class FormController {
         message: error.message || 'Không thể tạo biểu mẫu',
         code: error.code || 'INTERNAL_ERROR',
       });
+    }
+  }
+
+  /**
+   * POST /api/forms/ai-draft — AI dựng / gợi ý thêm câu hỏi / viết lại câu chữ cho biểu mẫu (PR-5, PLAN_BIEU_MAU_TUY_BIEN_AI_LANDING).
+   * CHỈ trả NHÁP (không ghi CSDL). Cổng credit trước (`assertAiCreditAvailable('form_draft')` ở route), trừ 1 credit SAU khi nháp
+   * thành công — lỗi từ model hoặc nháp không hợp lệ ném trước dòng `chargeAiCredit` nên không bị trừ (đúng khuôn "AI viết hộ" chatbot).
+   * Chi phí + hồ sơ doanh nghiệp theo CHỦ workspace; người bấm (nhân viên) nằm ở actorUserId trong metadata sổ token.
+   */
+  async aiDraft(req, res) {
+    try {
+      const workspaceContext = getWorkspaceContext(req.user);
+      const body = req.body || {};
+
+      const data = await draftForm({
+        ownerId: workspaceContext.workspaceOwnerId,
+        actorUserId: workspaceContext.actorUserId,
+        description: body.description,
+        kind: body.kind,
+        productId: body.productId,
+        locale: body.locale,
+        existingForm: body.existingForm,
+        mode: body.mode || 'create',
+      });
+
+      await chargeAiCredit(req);
+
+      return res.json({ success: true, data });
+    } catch (error) {
+      const status = error.status || error.statusCode || 500;
+      if (status >= 500) console.error('[FormController.aiDraft]', error);
+      return res.status(status).json(buildAiErrorPayload(error, 'Không thể tạo biểu mẫu bằng AI'));
     }
   }
 
