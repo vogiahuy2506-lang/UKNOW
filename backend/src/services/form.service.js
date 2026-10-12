@@ -287,6 +287,95 @@ function buildPublicFormTheme(theme) {
   return out;
 }
 
+// ─── Thẻ sản phẩm trên biểu mẫu công khai (plan 12/10/2026) ────────────────────────────────
+
+// Mô tả/điểm nổi bật do chủ shop gõ tự do (có thể rất dài) -> cắt khi đưa ra trang công khai.
+const MAX_PUBLIC_PRODUCT_TEXT_LENGTH = 1000;
+
+function trimToNull(value) {
+  if (typeof value !== 'string') return null;
+  const text = value.trim();
+  return text || null;
+}
+
+function truncatePublicText(value) {
+  const text = trimToNull(value);
+  if (!text) return null;
+  if (text.length <= MAX_PUBLIC_PRODUCT_TEXT_LENGTH) return text;
+  let cut = text.slice(0, MAX_PUBLIC_PRODUCT_TEXT_LENGTH);
+  // Đừng để lại nửa cặp surrogate (emoji) ở cuối chuỗi bị cắt.
+  const last = cut.charCodeAt(cut.length - 1);
+  if (last >= 0xd800 && last <= 0xdbff) cut = cut.slice(0, -1);
+  return cut;
+}
+
+/**
+ * `thumbnail_url` là URL người dùng tự gõ (Products.jsx) -> chỉ nhận http:/https: tuyệt đối.
+ * `javascript:`, `data:`, đường dẫn tương đối (`/x.png`)... đều trả null.
+ *
+ * @param {unknown} rawUrl
+ * @returns {string|null}
+ */
+function toSafeHttpImageUrl(rawUrl) {
+  const text = trimToNull(rawUrl);
+  if (!text) return null;
+  try {
+    const parsed = new URL(text);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? text : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Chiếu một dòng bảng `products` sang dạng AN TOÀN cho trang công khai — whitelist thủ công,
+ * KHÔNG spread dòng (không lộ `product_url`, `product_code`, id nội bộ, category, đối tượng mục tiêu...).
+ * Trả null khi không có dòng hoặc sản phẩm không "đang bán": `status` hiểu y hệt trang quản lý sản phẩm
+ * (NULL/rỗng coi là `active`, không phân biệt hoa thường — `product.service.js` `normalizeStatus`).
+ *
+ * @param {object|null|undefined} row Dòng thô từ `productRepository.findById`
+ * @returns {{ name: string, imageUrl: string|null, priceText: string|null, priceAmount: number|null,
+ *   originalPrice: string|null, description: string|null, usp: string|null } | null}
+ */
+export function buildPublicFormProduct(row) {
+  if (!row || typeof row !== 'object') return null;
+  const status = typeof row.status === 'string' ? row.status.trim().toLowerCase() : '';
+  if ((status || 'active') !== 'active') return null;
+
+  const rawAmount = row.price_amount;
+  const amount = rawAmount === null || rawAmount === undefined || rawAmount === '' ? null : Number(rawAmount);
+
+  return {
+    name: String(row.product_name || '').trim(),
+    imageUrl: toSafeHttpImageUrl(row.thumbnail_url),
+    priceText: trimToNull(row.price),
+    priceAmount: Number.isFinite(amount) ? amount : null,
+    originalPrice: trimToNull(row.original_price),
+    description: truncatePublicText(row.description),
+    usp: truncatePublicText(row.usp),
+  };
+}
+
+/**
+ * Sản phẩm công khai của một biểu mẫu, hoặc null. Chỉ khi: form gắn `productId`, chủ không tắt
+ * `settings.showProductCard` (vắng = hiện), sản phẩm thuộc ĐÚNG workspace của chủ form (không lộ sản phẩm người
+ * khác) và đang bán. Lỗi tra sản phẩm (DB lỗi...) chỉ ghi log và trả null — không bao giờ làm hỏng trang biểu mẫu.
+ *
+ * @param {object} form Dòng từ `formRepository.findFormByPublicKey`
+ * @returns {Promise<ReturnType<typeof buildPublicFormProduct>>}
+ */
+async function loadPublicFormProduct(form) {
+  if (!form?.productId) return null;
+  if (form.settings?.showProductCard === false) return null;
+  try {
+    const row = await productRepository.findById(form.productId, { workspaceOwnerId: form.workspaceOwnerId });
+    return buildPublicFormProduct(row);
+  } catch (error) {
+    logError(`[FormService] Không tải được sản phẩm gắn với biểu mẫu ${form.id}:`, error?.message || error);
+    return null;
+  }
+}
+
 /**
  * Bản CHỦ FORM (private) của phép chiếu theme — GIỮ nguyên `bannerKey`/`logoKey` (trình soạn
  * cần biết khoá hiện tại để biết "đang chọn ảnh nào", không chỉ để hiển thị) và BỔ SUNG
@@ -876,6 +965,8 @@ class FormService {
     // Kiểm tra gói dịch vụ của chủ form
     this.checkOwnerActivePlan(form);
 
+    const product = await loadPublicFormProduct(form);
+
     // Trả về payload an toàn cho người dùng cuối
     return {
       publicKey: form.publicKey,
@@ -907,6 +998,9 @@ class FormService {
             methods: form.paymentConfig.methods || (form.paymentConfig.method ? [form.paymentConfig.method] : ['bank']),
           }
         : null,
+      // Thẻ sản phẩm (plan 12/10): whitelist 7 khoá qua buildPublicFormProduct; null khi không gắn / công tắc tắt /
+      // sản phẩm ngừng bán / lỗi tra cứu.
+      product,
     };
   }
 
@@ -1499,9 +1593,14 @@ class FormService {
       }
     }
 
+    // Cùng phép chiếu + cùng điều kiện với getPublicForm (kể cả công tắc showProductCard), nhưng chỉ lộ tên + ảnh để
+    // trang QR ghi "Bạn đang thanh toán cho: <tên>". Lỗi tra sản phẩm -> null, không làm hỏng trang trạng thái.
+    const publicProduct = await loadPublicFormProduct(form);
+
     return {
       status: submission.status,
       formTitle: form.title,
+      product: publicProduct ? { name: publicProduct.name, imageUrl: publicProduct.imageUrl } : null,
       // PR-4a mục 5: trang trạng thái công khai khớp giao diện form gốc — cùng phép chiếu
       // whitelist+URL với getPublicForm, không lộ bannerKey/logoKey.
       theme: buildPublicFormTheme(form.theme),

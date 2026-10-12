@@ -320,6 +320,16 @@ export function normalizeFormSettings(rawSettings) {
     settings.sendConfirmation = rawSettings.sendConfirmation;
   }
 
+  // showProductCard: CHỈ lưu khi được gửi lên, KHÔNG nằm trong object mặc định ở trên — nếu không mọi biểu mẫu cũ
+  // sẽ bị ghi `true`. Vắng mặt = HIỆN thẻ sản phẩm (gắn sản phẩm xong mà không thấy gì là điều người dùng phàn nàn);
+  // nơi đọc dùng `settings.showProductCard !== false`.
+  if (rawSettings.showProductCard !== undefined) {
+    if (typeof rawSettings.showProductCard !== 'boolean') {
+      throw createValidationError('showProductCard phải là giá trị boolean', 'INVALID_FORM_SETTINGS');
+    }
+    settings.showProductCard = rawSettings.showProductCard;
+  }
+
   if (rawSettings.submitButtonText !== undefined && rawSettings.submitButtonText !== null) {
     if (typeof rawSettings.submitButtonText !== 'string') {
       throw createValidationError('submitButtonText phải là chuỗi', 'INVALID_FORM_SETTINGS');

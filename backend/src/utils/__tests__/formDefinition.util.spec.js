@@ -361,6 +361,28 @@ describe('formDefinition.util - normalizeFormSettings', () => {
     expect(() => normalizeFormSettings({ sendConfirmation: 'yes' })).toThrow('sendConfirmation phải là giá trị boolean');
   });
 
+  it('showProductCard: true/false được lưu; vắng mặt (kể cả input null) thì KHÔNG có khoá (= hiện thẻ)', () => {
+    expect(normalizeFormSettings({ showProductCard: true }).showProductCard).toBe(true);
+    expect(normalizeFormSettings({ showProductCard: false }).showProductCard).toBe(false);
+
+    expect(normalizeFormSettings({ consentEnabled: true })).not.toHaveProperty('showProductCard');
+    expect(normalizeFormSettings({})).not.toHaveProperty('showProductCard');
+    expect(normalizeFormSettings(null)).not.toHaveProperty('showProductCard');
+    expect(normalizeFormSettings(undefined)).not.toHaveProperty('showProductCard');
+  });
+
+  it('showProductCard: sai kiểu (chuỗi/số/null) thì ném lỗi 400 INVALID_FORM_SETTINGS', () => {
+    for (const bad of ['false', 0, 1, null, {}]) {
+      expect(() => normalizeFormSettings({ showProductCard: bad })).toThrow('showProductCard phải là giá trị boolean');
+    }
+    try {
+      normalizeFormSettings({ showProductCard: 'no' });
+    } catch (err) {
+      expect(err.statusCode).toBe(400);
+      expect(err.code).toBe('INVALID_FORM_SETTINGS');
+    }
+  });
+
   it('ném lỗi 400 nếu submitButtonText > 50 hoặc successMessage > 500', () => {
     expect(() => normalizeFormSettings({ submitButtonText: 'a'.repeat(51) })).toThrow('Nút gửi không được vượt quá 50 ký tự');
     expect(() => normalizeFormSettings({ successMessage: 'b'.repeat(501) })).toThrow('Thông báo thành công không được vượt quá 500 ký tự');

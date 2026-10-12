@@ -129,6 +129,7 @@ class FormRepository {
          f.theme,
          f.booking_config AS "bookingConfig",
          f.payment_config AS "paymentConfig",
+         f.product_id AS "productId",
          f.is_published AS "isPublished",
          f.admin_disabled_at AS "adminDisabledAt",
          f.created_at AS "createdAt",
