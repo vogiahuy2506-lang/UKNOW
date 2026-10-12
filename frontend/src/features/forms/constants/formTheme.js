@@ -70,6 +70,36 @@ export const ALLOWED_FORM_BANNER_HEIGHTS = Object.freeze(Object.keys(FORM_BANNER
 export const DEFAULT_FORM_BANNER_HEIGHT = 'md';
 
 /**
+ * PR-8b (12/10/2026) — tuỳ chỉnh giao diện thêm. Bốn danh sách enum + trần độ tối ảnh nền PHẢI khớp
+ * `backend/src/utils/formDefinition.util.js` (test `formTheme.spec.js` đọc file NÀY bằng regex).
+ * Khoá vắng mặt trong theme = giao diện mặc định hiện tại; `solid` / `outline` (ô nhập) / `md` chính là hình dạng mặc định.
+ */
+export const ALLOWED_FORM_BUTTON_STYLES = Object.freeze(['solid', 'outline']);
+export const ALLOWED_FORM_BUTTON_RADII = Object.freeze(['none', 'sm', 'md', 'lg', 'full']);
+export const ALLOWED_FORM_CARD_RADII = Object.freeze(['none', 'sm', 'md', 'lg']);
+export const ALLOWED_FORM_INPUT_STYLES = Object.freeze(['outline', 'filled']);
+export const MAX_FORM_BACKGROUND_OVERLAY = 80;
+// Độ tối dùng khi có ảnh nền mà chủ chưa chọn (khoá vắng mặt) — đủ để thẻ trắng nổi lên khỏi ảnh sáng.
+export const DEFAULT_FORM_BACKGROUND_OVERLAY = 30;
+
+/** Bo góc CSS cho nút gửi / Tiếp / Quay lại. `md` = `rounded-xl` hiện tại (0.75rem). */
+export const FORM_BUTTON_RADII = Object.freeze({
+  none: '0px',
+  sm: '0.375rem',
+  md: '0.75rem',
+  lg: '1rem',
+  full: '9999px',
+});
+
+/** Bo góc CSS cho thẻ biểu mẫu. `md` = `rounded-2xl` hiện tại (1rem). */
+export const FORM_CARD_RADII = Object.freeze({
+  none: '0px',
+  sm: '0.5rem',
+  md: '1rem',
+  lg: '1.5rem',
+});
+
+/**
  * 5 mẫu dựng sẵn — CHỈ màu/font/layout, không chứa ảnh (banner/logo là tài sản riêng của form,
  * chọn preset không đụng tới — mục 6 "chọn preset ... giữ nguyên ảnh"). `id` khớp regex backend
  * `^[a-z0-9_-]{1,32}$`; nhãn hiển thị lấy qua i18n `forms.editorPage.theme.presets.<id>`, không

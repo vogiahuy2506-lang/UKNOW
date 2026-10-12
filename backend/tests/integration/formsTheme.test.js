@@ -575,3 +575,308 @@ describe('Nhân viên quyền forms — upload + lưu theme', () => {
     expect(createRes.body.data.theme.primaryColor).toBe('#654321');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════
+// PR-8b (12/10/2026) — giao diện thêm: màu chữ, kiểu nút, bo góc, kiểu ô nhập, ảnh nền + độ tối
+// ═══════════════════════════════════════════════════════════════════════
+async function uploadImageKey(token, filename = 'nen.png') {
+  const temp = await uploadTempFile(token, FAKE_PNG, filename, 'image/png');
+  const res = await uploadFormAsset(token, temp);
+  expect(res.status).toBe(200);
+  return res.body.data.storageKey;
+}
+
+async function putTheme(token, formId, theme) {
+  return request(app).put(`/api/forms/${formId}`).set('Authorization', `Bearer ${token}`).send({ theme });
+}
+
+describe('PR-8b — chuẩn hoá khoá giao diện thêm qua POST/PUT /api/forms', () => {
+  it('đủ khoá mới -> lưu đủ; owner GET trả khoá + URL; public GET trả URL (KHÔNG khoá thô) + độ tối + các enum', async () => {
+    const owner = await createUser({ username: 'extra-full' });
+    const token = await loginAs(owner);
+    const bgKey = await uploadImageKey(token);
+
+    const createRes = await createForm(token, {
+      theme: {
+        textColor: '#1F2937',
+        buttonStyle: 'outline',
+        buttonRadius: 'full',
+        cardRadius: 'lg',
+        inputStyle: 'filled',
+        backgroundImageKey: bgKey,
+        backgroundImageOverlay: 45,
+      },
+    });
+    expect(createRes.status).toBe(201);
+    expect(createRes.body.data.theme).toMatchObject({
+      textColor: '#1F2937',
+      buttonStyle: 'outline',
+      buttonRadius: 'full',
+      cardRadius: 'lg',
+      inputStyle: 'filled',
+      backgroundImageKey: bgKey,
+      backgroundImageOverlay: 45,
+    });
+    expect(createRes.body.data.theme.backgroundImageUrl.endsWith(`/lp-assets/${bgKey}`)).toBe(true);
+
+    const getRes = await request(app).get(`/api/forms/${createRes.body.data.id}`).set('Authorization', `Bearer ${token}`);
+    expect(getRes.body.data.theme.backgroundImageKey).toBe(bgKey);
+    expect(getRes.body.data.theme.backgroundImageUrl.endsWith(`/lp-assets/${bgKey}`)).toBe(true);
+
+    const form = await publishForm(token, createRes.body.data.id);
+    const publicRes = await request(app).get(`/api/public/forms/${form.publicKey}`);
+    expect(publicRes.status).toBe(200);
+    expect(publicRes.body.data.theme).toMatchObject({
+      textColor: '#1F2937',
+      buttonStyle: 'outline',
+      buttonRadius: 'full',
+      cardRadius: 'lg',
+      inputStyle: 'filled',
+      backgroundImageOverlay: 45,
+    });
+    expect(publicRes.body.data.theme.backgroundImageUrl.endsWith(`/lp-assets/${bgKey}`)).toBe(true);
+    expect(publicRes.body.data.theme).not.toHaveProperty('backgroundImageKey');
+
+    // Ảnh nền phục vụ công khai qua cửa /lp-assets như banner/logo
+    const imgRes = await request(app).get(`/lp-assets/${bgKey}`);
+    expect(imgRes.status).toBe(200);
+  });
+
+  it('trang trạng thái công khai (QR) cũng trả khoá mới để khớp giao diện biểu mẫu', async () => {
+    const owner = await createUser({ username: 'extra-status' });
+    const token = await loginAs(owner);
+    const bgKey = await uploadImageKey(token);
+    const createRes = await createForm(token, {
+      theme: { buttonStyle: 'outline', cardRadius: 'none', textColor: '#102030', backgroundImageKey: bgKey, backgroundImageOverlay: 10 },
+    });
+    const form = await publishForm(token, createRes.body.data.id);
+    const submitRes = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({ answers: { [createRes.body.data.fields[0].key]: 'a@b.com' } });
+    expect(submitRes.status).toBe(201);
+
+    const statusRes = await request(app).get(`/api/public/forms/${form.publicKey}/submissions/${submitRes.body.data.accessToken}`);
+    expect(statusRes.status).toBe(200);
+    expect(statusRes.body.data.theme).toMatchObject({ buttonStyle: 'outline', cardRadius: 'none', textColor: '#102030', backgroundImageOverlay: 10 });
+    expect(statusRes.body.data.theme.backgroundImageUrl.endsWith(`/lp-assets/${bgKey}`)).toBe(true);
+    expect(statusRes.body.data.theme).not.toHaveProperty('backgroundImageKey');
+  });
+
+  it('GIÁ TRỊ LẠ bị bỏ (không 400): chỉ còn khoá hợp lệ; thiếu khoá = giao diện mặc định', async () => {
+    const owner = await createUser({ username: 'extra-strange' });
+    const token = await loginAs(owner);
+    const res = await createForm(token, {
+      theme: {
+        primaryColor: '#112233',
+        textColor: 'red;background:url(x)',
+        buttonStyle: 'ghost',
+        buttonRadius: 'xl',
+        cardRadius: 'full',
+        inputStyle: 'underline',
+        backgroundImageKey: 'https://evil.example/nen.png',
+        backgroundImageOverlay: 30,
+      },
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.data.theme).toEqual({ primaryColor: '#112233' });
+
+    const publicForm = await publishForm(token, res.body.data.id);
+    const publicRes = await request(app).get(`/api/public/forms/${publicForm.publicKey}`);
+    expect(publicRes.body.data.theme).toEqual({ primaryColor: '#112233' });
+  });
+
+  it('độ tối ngoài 0..80 hoặc không có ảnh nền -> bị bỏ', async () => {
+    const owner = await createUser({ username: 'extra-overlay' });
+    const token = await loginAs(owner);
+    const bgKey = await uploadImageKey(token);
+
+    const tooDark = await createForm(token, { theme: { backgroundImageKey: bgKey, backgroundImageOverlay: 95 } });
+    expect(tooDark.status).toBe(201);
+    expect(tooDark.body.data.theme).not.toHaveProperty('backgroundImageOverlay');
+    expect(tooDark.body.data.theme.backgroundImageKey).toBe(bgKey);
+
+    const noImage = await createForm(token, { theme: { backgroundImageOverlay: 40 } });
+    expect(noImage.status).toBe(201);
+    expect(noImage.body.data.theme).toEqual({});
+  });
+
+  it('khoá ảnh nền mang id CHỦ KHÁC -> bị bỏ khỏi theme (khoá của người ta không được gắn, cũng không bị đụng tới)', async () => {
+    const ownerA = await createUser({ username: 'extra-owner-a' });
+    const ownerB = await createUser({ username: 'extra-owner-b' });
+    const tokenA = await loginAs(ownerA);
+    const otherKey = `uploads/${ownerB.id}/forms/1234_aaaaaaaa_real.png`;
+    await db.query(
+      `INSERT INTO storage_objects (pool_type, owner_user_id, actor_user_id, storage_key, category, state, size_bytes)
+       VALUES ('workspace', $1, $1, $2, 'form_asset', 'active', 100)`,
+      [ownerB.id, otherKey]
+    );
+
+    const res = await createForm(tokenA, { theme: { backgroundImageKey: otherKey, backgroundImageOverlay: 20 } });
+    expect(res.status).toBe(201);
+    expect(res.body.data.theme).toEqual({});
+    // Khoá của chủ B giữ nguyên trạng thái, không bị chuyển sang form của A
+    const row = await findStorageRow(otherKey);
+    expect(row.state).toBe('active');
+    expect(row.reference_type).not.toBe('form');
+  });
+
+  it('khoá ảnh nền ĐÚNG DẠNG của chủ nhưng sổ ghi chủ khác / không có dòng sổ -> 400 ở lớp kiểm DB (như banner)', async () => {
+    const ownerA = await createUser({ username: 'extra-db-a' });
+    const ownerB = await createUser({ username: 'extra-db-b' });
+    const tokenA = await loginAs(ownerA);
+
+    const tamperedKey = `uploads/${ownerA.id}/forms/5678_bbbbbbbb_tampered.png`;
+    await db.query(
+      `INSERT INTO storage_objects (pool_type, owner_user_id, actor_user_id, storage_key, category, state, size_bytes)
+       VALUES ('workspace', $1, $1, $2, 'form_asset', 'active', 100)`,
+      [ownerB.id, tamperedKey]
+    );
+    const tampered = await createForm(tokenA, { theme: { backgroundImageKey: tamperedKey } });
+    expect(tampered.status).toBe(400);
+    expect(tampered.body.code).toBe('INVALID_FORM_THEME');
+
+    const ghost = await createForm(tokenA, { theme: { backgroundImageKey: `uploads/${ownerA.id}/forms/9999_ffffffff_ghost.png` } });
+    expect(ghost.status).toBe(400);
+    expect(ghost.body.code).toBe('INVALID_FORM_THEME');
+  });
+
+  it('PUT không gửi theme -> khoá mới giữ nguyên; PUT theme {} -> xoá sạch (theme thay cả đối tượng)', async () => {
+    const owner = await createUser({ username: 'extra-put' });
+    const token = await loginAs(owner);
+    const createRes = await createForm(token, { theme: { buttonStyle: 'outline', textColor: '#102030' } });
+    const formId = createRes.body.data.id;
+
+    const keep = await request(app).put(`/api/forms/${formId}`).set('Authorization', `Bearer ${token}`).send({ title: 'Đổi tiêu đề' });
+    expect(keep.body.data.theme).toEqual({ buttonStyle: 'outline', textColor: '#102030' });
+
+    const wipe = await putTheme(token, formId, {});
+    expect(wipe.status).toBe(200);
+    expect(wipe.body.data.theme).toEqual({});
+  });
+});
+
+describe('PR-8b — vòng đời khoá ảnh nền (cùng kho, cùng quy tắc giải phóng như banner/logo)', () => {
+  it('lưu form với ảnh nền vừa tải -> sổ chuyển active, reference_type=form, reference_id=id form', async () => {
+    const owner = await createUser({ username: 'bg-activate' });
+    const token = await loginAs(owner);
+    const bgKey = await uploadImageKey(token);
+    expect((await findStorageRow(bgKey)).state).toBe('temp');
+
+    const createRes = await createForm(token, { theme: { backgroundImageKey: bgKey } });
+    expect(createRes.status).toBe(201);
+    const row = await findStorageRow(bgKey);
+    expect(row.state).toBe('active');
+    expect(row.reference_type).toBe('form');
+    expect(Number(row.reference_id)).toBe(Number(createRes.body.data.id));
+    expect(row.expires_at).toBeNull();
+  });
+
+  it('ĐỔI ảnh nền -> khoá cũ deleted, khoá mới active', async () => {
+    const owner = await createUser({ username: 'bg-swap' });
+    const token = await loginAs(owner);
+    const key1 = await uploadImageKey(token, 'nen1.png');
+    const formId = (await createForm(token, { theme: { backgroundImageKey: key1 } })).body.data.id;
+    const key2 = await uploadImageKey(token, 'nen2.png');
+
+    const putRes = await putTheme(token, formId, { backgroundImageKey: key2 });
+    expect(putRes.status).toBe(200);
+    expect((await findStorageRow(key1)).state).toBe('deleted');
+    const row2 = await findStorageRow(key2);
+    expect(row2.state).toBe('active');
+    expect(Number(row2.reference_id)).toBe(Number(formId));
+  });
+
+  it('GỠ ảnh nền (gửi theme không có khoá) -> khoá deleted, theme không còn khoá lẫn độ tối', async () => {
+    const owner = await createUser({ username: 'bg-remove' });
+    const token = await loginAs(owner);
+    const bgKey = await uploadImageKey(token);
+    const formId = (await createForm(token, { theme: { backgroundImageKey: bgKey, backgroundImageOverlay: 50 } })).body.data.id;
+
+    const putRes = await putTheme(token, formId, { primaryColor: '#112233' });
+    expect(putRes.status).toBe(200);
+    expect(putRes.body.data.theme).toEqual({ primaryColor: '#112233' });
+    expect((await findStorageRow(bgKey)).state).toBe('deleted');
+  });
+
+  it('XOÁ form -> khoá ảnh nền deleted', async () => {
+    const owner = await createUser({ username: 'bg-delete-form' });
+    const token = await loginAs(owner);
+    const bgKey = await uploadImageKey(token);
+    const formId = (await createForm(token, { theme: { backgroundImageKey: bgKey } })).body.data.id;
+
+    const del = await request(app).delete(`/api/forms/${formId}`).set('Authorization', `Bearer ${token}`);
+    expect(del.status).toBe(200);
+    expect((await findStorageRow(bgKey)).state).toBe('deleted');
+  });
+
+  it('MỘT ẢNH DÙNG HAI FORM: xoá form B -> khoá vẫn active (A còn dùng làm ảnh nền); xoá nốt A -> mới deleted', async () => {
+    const owner = await createUser({ username: 'bg-shared-forms' });
+    const token = await loginAs(owner);
+    const bgKey = await uploadImageKey(token);
+    const formA = (await createForm(token, { title: 'A', theme: { backgroundImageKey: bgKey } })).body.data;
+    const formB = (await createForm(token, { title: 'B', theme: { backgroundImageKey: bgKey } })).body.data;
+
+    expect((await request(app).delete(`/api/forms/${formB.id}`).set('Authorization', `Bearer ${token}`)).status).toBe(200);
+    expect((await findStorageRow(bgKey)).state).toBe('active');
+    expect((await request(app).get(`/lp-assets/${bgKey}`)).status).toBe(200);
+
+    expect((await request(app).delete(`/api/forms/${formA.id}`).set('Authorization', `Bearer ${token}`)).status).toBe(200);
+    expect((await findStorageRow(bgKey)).state).toBe('deleted');
+  });
+
+  it('MỘT ẢNH DÙNG HAI Ô trong CÙNG form (banner + ảnh nền): gỡ ảnh nền -> khoá vẫn active (banner còn dùng); gỡ nốt banner -> deleted', async () => {
+    const owner = await createUser({ username: 'bg-shared-slots' });
+    const token = await loginAs(owner);
+    const key = await uploadImageKey(token, 'chung.png');
+    const formId = (await createForm(token, { theme: { bannerKey: key, backgroundImageKey: key } })).body.data.id;
+
+    const removeBg = await putTheme(token, formId, { bannerKey: key });
+    expect(removeBg.status).toBe(200);
+    expect(removeBg.body.data.theme).not.toHaveProperty('backgroundImageKey');
+    expect((await findStorageRow(key)).state).toBe('active');
+
+    const removeBanner = await putTheme(token, formId, {});
+    expect(removeBanner.status).toBe(200);
+    expect((await findStorageRow(key)).state).toBe('deleted');
+  });
+
+  it('CHÉO Ô, CHÉO FORM: ảnh là banner của form B và ảnh nền của form A; xoá A -> khoá vẫn active (banner của B còn dùng); gỡ banner B -> deleted', async () => {
+    const owner = await createUser({ username: 'bg-cross' });
+    const token = await loginAs(owner);
+    const key = await uploadImageKey(token, 'cheo.png');
+    const formA = (await createForm(token, { title: 'A', theme: { backgroundImageKey: key } })).body.data;
+    const formB = (await createForm(token, { title: 'B', theme: { bannerKey: key } })).body.data;
+
+    expect((await request(app).delete(`/api/forms/${formA.id}`).set('Authorization', `Bearer ${token}`)).status).toBe(200);
+    expect((await findStorageRow(key)).state).toBe('active');
+
+    expect((await putTheme(token, formB.id, {})).status).toBe(200);
+    expect((await findStorageRow(key)).state).toBe('deleted');
+  });
+
+  it('ngược lại: ảnh là banner của form A và ảnh nền của form B; đổi banner A sang ảnh khác -> khoá KHÔNG bị giải phóng (ảnh nền của B còn dùng)', async () => {
+    const owner = await createUser({ username: 'bg-cross-2' });
+    const token = await loginAs(owner);
+    const key = await uploadImageKey(token, 'cheo2.png');
+    const formA = (await createForm(token, { title: 'A', theme: { bannerKey: key } })).body.data;
+    await createForm(token, { title: 'B', theme: { backgroundImageKey: key } });
+    const otherKey = await uploadImageKey(token, 'khac.png');
+
+    expect((await putTheme(token, formA.id, { bannerKey: otherKey })).status).toBe(200);
+    expect((await findStorageRow(key)).state).toBe('active');
+    expect((await findStorageRow(otherKey)).state).toBe('active');
+  });
+
+  it('khoá ảnh nền đã bị giải phóng (deleted) rồi bị form KHÁC dùng lại -> 400 (kiểm trạng thái vẫn có tác dụng ở ô ảnh nền)', async () => {
+    const owner = await createUser({ username: 'bg-reuse-deleted' });
+    const token = await loginAs(owner);
+    const bgKey = await uploadImageKey(token);
+    const formId = (await createForm(token, { theme: { backgroundImageKey: bgKey } })).body.data.id;
+    expect((await putTheme(token, formId, {})).status).toBe(200);
+    expect((await findStorageRow(bgKey)).state).toBe('deleted');
+
+    const reuse = await createForm(token, { theme: { backgroundImageKey: bgKey } });
+    expect(reuse.status).toBe(400);
+    expect(reuse.body.code).toBe('INVALID_FORM_THEME');
+  });
+});

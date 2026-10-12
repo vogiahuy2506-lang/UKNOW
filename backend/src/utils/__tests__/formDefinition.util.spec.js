@@ -10,6 +10,10 @@ import {
   ALLOWED_FIELD_TYPES,
   ALLOWED_ROLES,
   ALLOWED_FORM_FONTS,
+  ALLOWED_FORM_BUTTON_STYLES,
+  ALLOWED_FORM_BUTTON_RADII,
+  ALLOWED_FORM_CARD_RADII,
+  ALLOWED_FORM_INPUT_STYLES,
   MAX_FIELDS,
   MAX_INPUT_FIELDS,
   MAX_DISPLAY_BLOCKS,
@@ -888,6 +892,129 @@ describe('normalizeFormTheme (PR-4a, PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md
       const theme = normalizeFormTheme({ primaryColor: '#112233' }, ctx);
       expect(theme).not.toHaveProperty('bannerKey');
       expect(theme).not.toHaveProperty('logoKey');
+    });
+  });
+
+  // ─── PR-8b (12/10/2026): màu chữ, kiểu nút, bo góc, kiểu ô nhập, ảnh nền ───
+  describe('khoá giao diện thêm (PR-8b) — giá trị lạ BỊ BỎ (= mặc định), không ném lỗi', () => {
+    const BG_KEY = `uploads/${OWNER_ID}/forms/1700000000_abcd1234_nen.jpg`;
+
+    it('thiếu hết khoá mới (biểu mẫu cũ) -> kết quả KHÔNG có khoá nào trong số đó', () => {
+      const theme = normalizeFormTheme({ primaryColor: '#112233', layout: 'wide' }, ctx);
+      expect(theme).toEqual({ primaryColor: '#112233', layout: 'wide' });
+      for (const key of [
+        'textColor',
+        'buttonStyle',
+        'buttonRadius',
+        'cardRadius',
+        'inputStyle',
+        'backgroundImageKey',
+        'backgroundImageOverlay',
+      ]) {
+        expect(theme).not.toHaveProperty(key);
+      }
+    });
+
+    it('giá trị hợp lệ của cả 7 khoá được giữ nguyên', () => {
+      const theme = normalizeFormTheme(
+        {
+          textColor: '#1F2937',
+          buttonStyle: 'outline',
+          buttonRadius: 'full',
+          cardRadius: 'lg',
+          inputStyle: 'filled',
+          backgroundImageKey: BG_KEY,
+          backgroundImageOverlay: 45,
+        },
+        ctx
+      );
+      expect(theme).toEqual({
+        textColor: '#1F2937',
+        buttonStyle: 'outline',
+        buttonRadius: 'full',
+        cardRadius: 'lg',
+        inputStyle: 'filled',
+        backgroundImageKey: BG_KEY,
+        backgroundImageOverlay: 45,
+      });
+    });
+
+    it('mọi giá trị trong danh sách cho phép đều qua; danh sách đúng như plan', () => {
+      expect([...ALLOWED_FORM_BUTTON_STYLES]).toEqual(['solid', 'outline']);
+      expect([...ALLOWED_FORM_BUTTON_RADII]).toEqual(['none', 'sm', 'md', 'lg', 'full']);
+      expect([...ALLOWED_FORM_CARD_RADII]).toEqual(['none', 'sm', 'md', 'lg']);
+      expect([...ALLOWED_FORM_INPUT_STYLES]).toEqual(['outline', 'filled']);
+      for (const v of ALLOWED_FORM_BUTTON_STYLES) expect(normalizeFormTheme({ buttonStyle: v }, ctx)).toEqual({ buttonStyle: v });
+      for (const v of ALLOWED_FORM_BUTTON_RADII) expect(normalizeFormTheme({ buttonRadius: v }, ctx)).toEqual({ buttonRadius: v });
+      for (const v of ALLOWED_FORM_CARD_RADII) expect(normalizeFormTheme({ cardRadius: v }, ctx)).toEqual({ cardRadius: v });
+      for (const v of ALLOWED_FORM_INPUT_STYLES) expect(normalizeFormTheme({ inputStyle: v }, ctx)).toEqual({ inputStyle: v });
+    });
+
+    it('giá trị lạ của kiểu nút / bo góc / kiểu ô nhập -> khoá bị bỏ (không ném lỗi)', () => {
+      const theme = normalizeFormTheme(
+        {
+          buttonStyle: 'ghost',
+          buttonRadius: 'xl', // "xl" không có trong danh sách nút (cardRadius cũng không có "full")
+          cardRadius: 'full',
+          inputStyle: 'underline',
+        },
+        ctx
+      );
+      expect(theme).toEqual({});
+      // Sai kiểu dữ liệu, sai hoa/thường -> cũng bỏ
+      expect(normalizeFormTheme({ buttonStyle: 1, buttonRadius: ['sm'], cardRadius: null, inputStyle: {} }, ctx)).toEqual({});
+      expect(normalizeFormTheme({ buttonRadius: 'FULL' }, ctx)).toEqual({});
+    });
+
+    it('textColor: chỉ hex #RRGGBB; "red;background:url(x)", "#fff", số, null -> bị bỏ', () => {
+      expect(normalizeFormTheme({ textColor: '#ABCDEF' }, ctx)).toEqual({ textColor: '#ABCDEF' });
+      expect(normalizeFormTheme({ textColor: ' #123456 ' }, ctx)).toEqual({ textColor: '#123456' });
+      for (const bad of ['red;background:url(x)', '#fff', 'red', 123, null, '#12345G', 'rgb(0,0,0)']) {
+        expect(normalizeFormTheme({ textColor: bad }, ctx)).toEqual({});
+      }
+    });
+
+    it('backgroundImageKey: đúng dạng + đúng chủ -> giữ', () => {
+      expect(normalizeFormTheme({ backgroundImageKey: BG_KEY }, ctx)).toEqual({ backgroundImageKey: BG_KEY });
+      for (const ext of ['png', 'jpeg', 'webp', 'JPG']) {
+        const key = `uploads/${OWNER_ID}/forms/nen.${ext}`;
+        expect(normalizeFormTheme({ backgroundImageKey: key }, ctx).backgroundImageKey).toBe(key);
+      }
+    });
+
+    it('backgroundImageKey SAI CHỦ / URL ngoài / thư mục landing / đuôi svg / null / không phải chuỗi -> BỊ BỎ (khác banner: không 400)', () => {
+      const bad = [
+        `uploads/${OWNER_ID + 1}/forms/nen.png`,
+        'https://evil.example/nen.png',
+        `uploads/${OWNER_ID}/landing/nen.png`,
+        `uploads/${OWNER_ID}/forms/nen.svg`,
+        `uploads/${OWNER_ID}/forms/../x.png`,
+        null,
+        42,
+        { key: BG_KEY },
+      ];
+      for (const key of bad) {
+        expect(normalizeFormTheme({ backgroundImageKey: key, backgroundImageOverlay: 30 }, ctx)).toEqual({});
+      }
+    });
+
+    it('không có workspaceOwnerId (ctx rỗng) -> khoá ảnh nền bị bỏ (an toàn theo mặc định)', () => {
+      expect(normalizeFormTheme({ backgroundImageKey: BG_KEY }, {})).toEqual({});
+    });
+
+    it('backgroundImageOverlay: số nguyên 0..80 (hoặc chuỗi số) được giữ; ngoài khoảng / số lẻ / chữ bị bỏ', () => {
+      const withKey = (backgroundImageOverlay) => normalizeFormTheme({ backgroundImageKey: BG_KEY, backgroundImageOverlay }, ctx);
+      expect(withKey(0).backgroundImageOverlay).toBe(0);
+      expect(withKey(80).backgroundImageOverlay).toBe(80);
+      expect(withKey('35').backgroundImageOverlay).toBe(35);
+      for (const bad of [81, -1, 30.5, '', 'abc', null, NaN, Infinity, [], {}]) {
+        expect(withKey(bad)).toEqual({ backgroundImageKey: BG_KEY });
+      }
+    });
+
+    it('backgroundImageOverlay không có ảnh nền -> bỏ (độ tối chỉ có nghĩa khi có ảnh)', () => {
+      expect(normalizeFormTheme({ backgroundImageOverlay: 40 }, ctx)).toEqual({});
+      expect(normalizeFormTheme({ backgroundImageKey: 'rac', backgroundImageOverlay: 40 }, ctx)).toEqual({});
     });
   });
 

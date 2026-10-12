@@ -829,6 +829,13 @@ export const ALLOWED_FORM_FONTS = Object.freeze([
 ]);
 export const ALLOWED_FORM_LAYOUTS = Object.freeze(['card', 'wide']);
 export const ALLOWED_FORM_BANNER_HEIGHTS = Object.freeze(['sm', 'md', 'lg']);
+// PR-8b (12/10/2026) — tuỳ chỉnh giao diện thêm. Danh sách phải KHỚP `frontend/src/features/forms/constants/formTheme.js`
+// (test `formTheme.spec.js` đọc file đó bằng regex). `md` của bo góc nút/thẻ = đúng hình dạng mặc định hiện tại.
+export const ALLOWED_FORM_BUTTON_STYLES = Object.freeze(['solid', 'outline']);
+export const ALLOWED_FORM_BUTTON_RADII = Object.freeze(['none', 'sm', 'md', 'lg', 'full']);
+export const ALLOWED_FORM_CARD_RADII = Object.freeze(['none', 'sm', 'md', 'lg']);
+export const ALLOWED_FORM_INPUT_STYLES = Object.freeze(['outline', 'filled']);
+export const MAX_FORM_BACKGROUND_OVERLAY = 80;
 export const MAX_FORM_THEME_PRESET_LENGTH = 32;
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 const FORM_THEME_PRESET_RE = /^[a-z0-9_-]{1,32}$/;
@@ -939,5 +946,52 @@ export function normalizeFormTheme(raw, { workspaceOwnerId } = {}) {
     theme.logoKey = normalizeFormThemeAssetKey(raw.logoKey, 'logoKey', workspaceOwnerId);
   }
 
+  // ─── PR-8b: khoá giao diện thêm. KHÁC các khoá trên (giá trị sai -> 400): giá trị lạ ở đây bị BỎ, khoá vắng mặt
+  // = giao diện mặc định hiện tại (biểu mẫu cũ không có các khoá này nên không đổi một pixel). ───
+  if (typeof raw.textColor === 'string' && HEX_COLOR_RE.test(raw.textColor.trim())) {
+    theme.textColor = raw.textColor.trim();
+  }
+
+  const buttonStyle = pickAllowedThemeValue(raw.buttonStyle, ALLOWED_FORM_BUTTON_STYLES);
+  if (buttonStyle) theme.buttonStyle = buttonStyle;
+
+  const buttonRadius = pickAllowedThemeValue(raw.buttonRadius, ALLOWED_FORM_BUTTON_RADII);
+  if (buttonRadius) theme.buttonRadius = buttonRadius;
+
+  const cardRadius = pickAllowedThemeValue(raw.cardRadius, ALLOWED_FORM_CARD_RADII);
+  if (cardRadius) theme.cardRadius = cardRadius;
+
+  const inputStyle = pickAllowedThemeValue(raw.inputStyle, ALLOWED_FORM_INPUT_STYLES);
+  if (inputStyle) theme.inputStyle = inputStyle;
+
+  // Ảnh nền: cùng kho/quy tắc khoá với banner/logo (regex theo id chủ), nhưng khoá sai chủ/sai dạng/null bị BỎ thay vì 400.
+  // Lớp kiểm DB (khoá có thật, đúng chủ, còn dùng được) vẫn ở service như banner/logo.
+  if (typeof raw.backgroundImageKey === 'string' && workspaceOwnerId) {
+    const backgroundKey = raw.backgroundImageKey.trim();
+    if (buildFormAssetKeyRegex(workspaceOwnerId).test(backgroundKey)) {
+      theme.backgroundImageKey = backgroundKey;
+    }
+  }
+
+  // Độ tối phủ lên ảnh nền (0–80%, số nguyên): chỉ có nghĩa khi có ảnh nền.
+  if (theme.backgroundImageKey) {
+    const overlay = parseThemeOverlay(raw.backgroundImageOverlay);
+    if (overlay !== null) theme.backgroundImageOverlay = overlay;
+  }
+
   return theme;
+}
+
+function pickAllowedThemeValue(raw, allowed) {
+  if (typeof raw !== 'string') return null;
+  const value = raw.trim();
+  return allowed.includes(value) ? value : null;
+}
+
+function parseThemeOverlay(raw) {
+  let n = null;
+  if (typeof raw === 'number') n = raw;
+  else if (typeof raw === 'string' && raw.trim() !== '') n = Number(raw);
+  if (n === null || !Number.isInteger(n) || n < 0 || n > MAX_FORM_BACKGROUND_OVERLAY) return null;
+  return n;
 }

@@ -1693,7 +1693,7 @@ class FormRepository {
   }
 
   /**
-   * PR-4a review 15/09 (Việc 1) — kiểm một khoá kho ảnh (bannerKey/logoKey) còn được form NÀO
+   * PR-4a review 15/09 (Việc 1) — kiểm một khoá kho ảnh (bannerKey/logoKey/backgroundImageKey) còn được form NÀO
    * của workspace này tham chiếu hay không. Dùng TRƯỚC khi giải phóng khoá cũ trong vòng đời
    * theme (`form.service.js` `syncFormThemeAssetLifecycle`/`deleteForm`): hai form khác nhau có
    * thể trỏ cùng một khoá (nhân bản form, hoặc chủ động dùng lại ảnh) — đổi/xoá ở MỘT form không
@@ -1708,7 +1708,7 @@ class FormRepository {
     const result = await db.query(
       `SELECT 1 FROM forms
         WHERE workspace_owner_id = $1
-          AND (theme->>'bannerKey' = $2 OR theme->>'logoKey' = $2)
+          AND (theme->>'bannerKey' = $2 OR theme->>'logoKey' = $2 OR theme->>'backgroundImageKey' = $2)
         LIMIT 1`,
       [workspaceOwnerId, storageKey]
     );

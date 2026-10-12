@@ -267,8 +267,21 @@ async function assertFormAssetKeyOwned(key, workspaceOwnerId) {
  * @param {number} workspaceOwnerId
  */
 async function assertFormThemeAssetKeysOwned(theme, workspaceOwnerId) {
-  if (theme.bannerKey) await assertFormAssetKeyOwned(theme.bannerKey, workspaceOwnerId);
-  if (theme.logoKey) await assertFormAssetKeyOwned(theme.logoKey, workspaceOwnerId);
+  for (const slot of FORM_THEME_ASSET_SLOTS) {
+    if (theme[slot]) await assertFormAssetKeyOwned(theme[slot], workspaceOwnerId);
+  }
+}
+
+/**
+ * Các ô ảnh trong theme dùng chung kho `uploads/{chủ}/forms/` — banner, logo và (PR-8b) ảnh nền. Mọi thao tác vòng đời
+ * khoá (kích hoạt, giải phóng khi đổi/xoá, kiểm tham chiếu) duyệt qua CẢ ba ô, để một khoá dùng ở nhiều ô/nhiều form
+ * không bị giải phóng nhầm.
+ */
+const FORM_THEME_ASSET_SLOTS = Object.freeze(['bannerKey', 'logoKey', 'backgroundImageKey']);
+
+/** Tập các khoá ảnh (khử trùng lặp) mà một theme đang dùng, ở mọi ô. */
+function collectThemeAssetKeys(theme) {
+  return new Set(FORM_THEME_ASSET_SLOTS.map((slot) => theme?.[slot]).filter(Boolean));
 }
 
 /**
@@ -291,6 +304,16 @@ function buildPublicFormTheme(theme) {
   if (theme.bannerHeight) out.bannerHeight = theme.bannerHeight;
   if (theme.bannerKey) out.bannerUrl = buildFormAssetUrl(theme.bannerKey);
   if (theme.logoKey) out.logoUrl = buildFormAssetUrl(theme.logoKey);
+  // PR-8b: khoá giao diện thêm (chỉ khoá có giá trị; biểu mẫu cũ không có thì không thêm gì vào kết quả).
+  if (theme.textColor) out.textColor = theme.textColor;
+  if (theme.buttonStyle) out.buttonStyle = theme.buttonStyle;
+  if (theme.buttonRadius) out.buttonRadius = theme.buttonRadius;
+  if (theme.cardRadius) out.cardRadius = theme.cardRadius;
+  if (theme.inputStyle) out.inputStyle = theme.inputStyle;
+  if (theme.backgroundImageKey) {
+    out.backgroundImageUrl = buildFormAssetUrl(theme.backgroundImageKey);
+    if (Number.isInteger(theme.backgroundImageOverlay)) out.backgroundImageOverlay = theme.backgroundImageOverlay;
+  }
   return out;
 }
 
@@ -397,6 +420,7 @@ function augmentFormThemeWithUrls(form) {
   const augmented = { ...theme };
   if (theme.bannerKey) augmented.bannerUrl = buildFormAssetUrl(theme.bannerKey);
   if (theme.logoKey) augmented.logoUrl = buildFormAssetUrl(theme.logoKey);
+  if (theme.backgroundImageKey) augmented.backgroundImageUrl = buildFormAssetUrl(theme.backgroundImageKey);
   return { ...form, theme: augmented };
 }
 
@@ -445,14 +469,12 @@ async function releaseFormAssetKeyIfUnreferenced(key, workspaceOwnerId) {
  * @param {number} params.formId
  */
 async function syncFormThemeAssetLifecycle({ oldTheme, newTheme, workspaceOwnerId, formId }) {
-  const oldBanner = oldTheme?.bannerKey || null;
-  const newBanner = newTheme?.bannerKey || null;
-  const oldLogo = oldTheme?.logoKey || null;
-  const newLogo = newTheme?.logoKey || null;
+  // PR-8b: ba ô ảnh (banner, logo, ảnh nền). Khoá nào MỚI xuất hiện ở bất kỳ ô nào (chưa có trong tập khoá cũ của form)
+  // thì kích hoạt; khoá cũ không còn ở ô nào của form này thì mới xét giải phóng.
+  const oldKeySet = collectThemeAssetKeys(oldTheme);
+  const newKeySet = collectThemeAssetKeys(newTheme);
 
-  const keysToActivate = [];
-  if (newBanner && newBanner !== oldBanner) keysToActivate.push(newBanner);
-  if (newLogo && newLogo !== oldLogo) keysToActivate.push(newLogo);
+  const keysToActivate = [...newKeySet].filter((key) => !oldKeySet.has(key));
   if (keysToActivate.length > 0) {
     await activateFormAssetStorageObjects({
       storageKeys: keysToActivate,
@@ -461,8 +483,6 @@ async function syncFormThemeAssetLifecycle({ oldTheme, newTheme, workspaceOwnerI
     });
   }
 
-  const newKeySet = new Set([newBanner, newLogo].filter(Boolean));
-  const oldKeySet = new Set([oldBanner, oldLogo].filter(Boolean));
   for (const key of oldKeySet) {
     if (newKeySet.has(key)) continue; // vẫn dùng ở slot khác của CHÍNH form này
     await releaseFormAssetKeyIfUnreferenced(key, workspaceOwnerId);
@@ -740,8 +760,8 @@ class FormService {
 
     // PR-4a mục 3 (Việc 1 review 15/09): xoá form -> giải phóng khoá ảnh (nếu có) SAU khi DB đã
     // xoá xong — nhưng CHỈ khoá nào không còn form nào KHÁC của workspace này còn tham chiếu
-    // (releaseFormAssetKeyIfUnreferenced). Set khử trùng lặp trường hợp bannerKey === logoKey.
-    const keysToRelease = new Set([existing.theme?.bannerKey, existing.theme?.logoKey].filter(Boolean));
+    // (releaseFormAssetKeyIfUnreferenced). Set khử trùng lặp trường hợp một khoá nằm ở nhiều ô (banner/logo/ảnh nền).
+    const keysToRelease = collectThemeAssetKeys(existing.theme);
     for (const key of keysToRelease) {
       await releaseFormAssetKeyIfUnreferenced(key, workspaceOwnerId);
     }

@@ -216,10 +216,10 @@ class FormController {
   }
 
   /**
-   * POST /api/forms/assets — tải banner/logo cho biểu mẫu (PR-4a mục 2).
+   * POST /api/forms/assets — tải banner/logo/ảnh nền cho biểu mẫu (PR-4a mục 2, PR-8b).
    * Body: { tempId, originalName, contentType, size } — `tempId` lấy từ POST /api/uploads/temp
-   * trước đó. Trả `{ storageKey, url, sizeBytes }`; `storageKey` gán vào theme.bannerKey/logoKey
-   * ở lượt lưu form kế tiếp (POST/PUT /api/forms), lúc đó khoá mới chuyển 'active'.
+   * trước đó. Trả `{ storageKey, url, sizeBytes }`; `storageKey` gán vào theme.bannerKey/logoKey/
+   * backgroundImageKey ở lượt lưu form kế tiếp (POST/PUT /api/forms), lúc đó khoá mới chuyển 'active'.
    */
   async uploadAsset(req, res) {
     try {
