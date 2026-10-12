@@ -523,11 +523,15 @@ class FormRepository {
    * mẫu `storage.repository.js:13` `queryable = db`); đường nộp bài thường (không đặt lịch) vẫn
    * gọi như cũ, không cần truyền `queryable`.
    *
+   * `id` (tuỳ chọn): số đã đặt trước bằng `reserveSubmissionId()` — PR-4b cần biết id bài nộp TRƯỚC khi INSERT để đặt tệp
+   * khách tải lên vào đúng tiền tố `.../submissions/<id>/`. Vắng → để cột tự cấp như cũ.
+   *
    * @param {object} params
    * @param {import('pg').PoolClient|typeof db} [queryable]
    * @returns {Promise<object>}
    */
   async createSubmission({
+    id = null,
     formId,
     workspaceOwnerId,
     accessToken,
@@ -552,6 +556,7 @@ class FormRepository {
   }, queryable = db) {
     const result = await queryable.query(
       `INSERT INTO form_submissions (
+         id,
          form_id,
          workspace_owner_id,
          access_token,
@@ -573,7 +578,9 @@ class FormRepository {
          utm_campaign,
          utm_content,
          utm_term
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+       ) VALUES (
+         COALESCE($22::bigint, nextval(pg_get_serial_sequence('form_submissions', 'id'))),
+         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
        RETURNING
          id,
          form_id AS "formId",
@@ -622,9 +629,41 @@ class FormRepository {
         utmCampaign,
         utmContent,
         utmTerm,
+        id,
       ]
     );
     return result.rows[0];
+  }
+
+  /**
+   * Đặt trước một id bài nộp (PR-4b, xem `createSubmission`). Số bị bỏ phí nếu bài nộp không được tạo — id BIGSERIAL
+   * vốn đã có khoảng trống khi INSERT lỗi, không ai dựa vào việc liên tục.
+   *
+   * @param {import('pg').PoolClient|typeof db} [queryable]
+   * @returns {Promise<string>}
+   */
+  async reserveSubmissionId(queryable = db) {
+    const result = await queryable.query(
+      `SELECT nextval(pg_get_serial_sequence('form_submissions', 'id'))::text AS id`
+    );
+    return result.rows[0].id;
+  }
+
+  /**
+   * Câu trả lời của MỘT bài nộp thuộc MỘT form (tải tệp khách tải lên — PR-4b). Chỉ trả cột cần, không trả token.
+   *
+   * @param {number|string} submissionId
+   * @param {number|string} formId
+   * @returns {Promise<{ id: string, formId: string, workspaceOwnerId: string, answers: object }|null>}
+   */
+  async findSubmissionAnswersByIdAndForm(submissionId, formId) {
+    const result = await db.query(
+      `SELECT id, form_id AS "formId", workspace_owner_id AS "workspaceOwnerId", answers
+         FROM form_submissions
+        WHERE id = $1 AND form_id = $2`,
+      [submissionId, formId]
+    );
+    return result.rows[0] || null;
   }
 
   /**

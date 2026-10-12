@@ -1,12 +1,15 @@
 import crypto from 'crypto';
 import { isReservedCampaignItemFieldKey } from './formCampaignItem.util.js';
 import { isDisplayFieldType } from './formFieldTypes.util.js';
+import { normalizeFormFileConfig } from './formFileKinds.util.js';
 import { VIETQR_BANKS } from '../constants/vietQrBanks.js';
 
 export { DISPLAY_FIELD_TYPES, isDisplayFieldType } from './formFieldTypes.util.js';
 
 // 9 loại gốc + 3 loại nhập mới (rating, yes_no, time) + 3 khối hiển thị (heading, paragraph, page_break) —
 // PLAN_BIEU_MAU_TUY_BIEN_AI_LANDING_2026-10-11, PR-4. Khối hiển thị xem formFieldTypes.util.js.
+// PR-4b: `file` (khách tải tệp) — cấu hình `fileConfig` xem formFileKinds.util.js. Việc có CHO LƯU trường `file` hay không
+// phụ thuộc cờ FORM_FILE_UPLOAD_ENABLED nên kiểm ở form.service.js, không ở bộ chuẩn hoá thuần này.
 export const ALLOWED_FIELD_TYPES = Object.freeze([
   'short_text',
   'long_text',
@@ -20,14 +23,15 @@ export const ALLOWED_FIELD_TYPES = Object.freeze([
   'rating',
   'yes_no',
   'time',
+  'file',
   'heading',
   'paragraph',
   'page_break',
 ]);
 
 export const ALLOWED_ROLES = Object.freeze(['name', 'email', 'phone']);
-// Loại nhập KHÔNG nhận `role` (số sao / có-không / giờ không thể là tên, email hay SĐT người nộp).
-const NO_ROLE_INPUT_TYPES = Object.freeze(['rating', 'yes_no', 'time']);
+// Loại nhập KHÔNG nhận `role` (số sao / có-không / giờ / tệp không thể là tên, email hay SĐT người nộp).
+const NO_ROLE_INPUT_TYPES = Object.freeze(['rating', 'yes_no', 'time', 'file']);
 export const ALLOWED_FIELD_WIDTHS = Object.freeze(['full', 'half']);
 // Trần số trường NHẬP (khách điền) và số khối HIỂN THỊ (tiêu đề / đoạn chữ / ngắt trang) — tách riêng để
 // dàn trang không ăn vào hạn mức câu hỏi.
@@ -154,7 +158,9 @@ export function normalizeFormFields(rawFields) {
 
     // Khối hiển thị không có giá trị nên không thể bắt buộc / không có gợi ý trong ô.
     const required = isDisplay ? false : Boolean(field.required);
-    const placeholder = !isDisplay && field.placeholder ? String(field.placeholder).trim().slice(0, MAX_LABEL_LENGTH) : '';
+    const placeholder = !isDisplay && type !== 'file' && field.placeholder
+      ? String(field.placeholder).trim().slice(0, MAX_LABEL_LENGTH)
+      : '';
     // Chữ hướng dẫn: kiểm như nhãn — quá dài thì báo lỗi rõ thay vì cắt lặng lẽ (người dùng nhìn thấy chữ này).
     // paragraph / page_break không có chữ phụ (nội dung đã nằm ở `label`).
     const helpText = isParagraph || type === 'page_break' || !field.helpText ? '' : String(field.helpText).trim();
@@ -225,6 +231,9 @@ export function normalizeFormFields(rawFields) {
       }
     }
 
+    // Trường tệp: nhóm tệp / dung lượng / số tệp (thiếu → mặc định, sai → 400).
+    const fileConfig = type === 'file' ? normalizeFormFileConfig(field.fileConfig, label) : null;
+
     let key = '';
     const rawKey = typeof field.key === 'string' ? field.key.trim() : '';
     // Key trùng khoá cố định của item chiến dịch (email/phone/id/...) -> tự sinh khoá khác thay
@@ -253,6 +262,8 @@ export function normalizeFormFields(rawFields) {
       options,
       // Chỉ ghi khi 'half' — vắng khoá = full, nên dữ liệu/payload của trường cũ không đổi một byte.
       ...(width === 'half' ? { width } : {}),
+      // Chỉ trường `file` có khoá này — trường khác không đổi một byte.
+      ...(fileConfig ? { fileConfig } : {}),
     });
   }
 

@@ -292,3 +292,26 @@ export async function findSupportTicketStorageObject(objectId, queryable = db) {
   );
   return rows[0] || null;
 }
+
+/**
+ * PLAN_BIEU_MAU_TUY_BIEN_AI_LANDING PR-4b — các dòng sổ cái CÒN TÍNH dung lượng (active/temp/cleanup_pending) của MỘT chủ dưới
+ * một tiền tố khoá kho, theo category. Dùng khi xoá biểu mẫu: gom hết tệp khách tải lên của biểu mẫu để xoá kho + trừ dung lượng.
+ * Tiền tố do code ghép từ số nguyên (`uploads/<chủ>/forms/<form>/`) nên không có ký tự đặc biệt của LIKE.
+ *
+ * @param {{ ownerUserId: number|string, keyPrefix: string, category: string }} params
+ * @param {object} [queryable]
+ * @returns {Promise<Array<{ id: string, storage_key: string, size_bytes: string, state: string }>>}
+ */
+export async function listLiveStorageObjectsByKeyPrefix({ ownerUserId, keyPrefix, category }, queryable = db) {
+  const { rows } = await queryable.query(
+    `SELECT id, storage_key, size_bytes, state
+       FROM storage_objects
+      WHERE owner_user_id = $1
+        AND pool_type = 'workspace'
+        AND category = $2
+        AND state = ANY($3::varchar[])
+        AND left(storage_key, char_length($4)) = $4`,
+    [ownerUserId, category, QUOTA_USAGE_STATES, keyPrefix]
+  );
+  return rows;
+}

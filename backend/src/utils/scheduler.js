@@ -1545,6 +1545,15 @@ export const initScheduler = () => {
       } = await import('../services/storage/storageReconcile.service.js');
       await cronJobRunRepository.recordRun(STORAGE_RECONCILE_JOB_CODE, async () => {
         const summary = await reconcileStorageObjects();
+        // PR-4b: dọn tệp khách tải lên biểu mẫu mà không nộp (> 24 giờ). Gắn vào lượt đối soát đêm này thay vì mở cron riêng: cùng việc
+        // "dọn đối tượng kho mồ côi", không thêm job vào CRON_JOBS / cảnh báo. Lỗi ở đây KHÔNG được làm hỏng kết quả đối soát.
+        let formFileUploads = null;
+        try {
+          const { cleanupFormFileUploads } = await import('../services/formFileUpload.service.js');
+          formFileUploads = await cleanupFormFileUploads();
+        } catch (formFileError) {
+          console.error('[Scheduler] Lỗi dọn tệp tải lên biểu mẫu:', formFileError.message);
+        }
         console.log(
           `[Scheduler] Storage reconcile: processed=${summary.processed} `
           + `orphaned=${summary.orphanedCount} drift=${summary.driftCount} `
@@ -1555,12 +1564,14 @@ export const initScheduler = () => {
         );
         return {
           ...summary,
+          formFileUploads,
           synced: summary.orphanedCount
             + summary.driftCount
             + summary.restoredCount
             + summary.cleanupRetryDeleted
             + summary.expiredTempDeleted
-            + summary.untrackedDeletedCount,
+            + summary.untrackedDeletedCount
+            + (formFileUploads ? formFileUploads.expiredPending + formFileUploads.usedRemoved : 0),
         };
       });
     } catch (error) {

@@ -407,6 +407,16 @@ export const REFERENCE_CONFIGS = {
     label: 'Biên lai chuyển khoản',
     url: '/app/forms',
   },
+  // Tệp khách tải lên qua trường `file` của biểu mẫu (formFileUpload.service.js ghi reference_type này, reference_id = id bài nộp).
+  // Còn bài nộp thì tệp "đang dùng" (chặn xoá lẻ trong Thư viện media — xoá biểu mẫu mới giải phóng).
+  form_submission_file: {
+    sql: `SELECT fs.id, COALESCE(f.title, 'Biểu mẫu') AS name
+            FROM form_submissions fs
+            JOIN forms f ON f.id = fs.form_id
+           WHERE fs.id = $1 LIMIT 1`,
+    label: 'Tệp khách tải lên biểu mẫu',
+    url: '/app/forms',
+  },
   help_article: {
     sql: `SELECT id, title AS name FROM help_articles WHERE id = $1 LIMIT 1`,
     label: 'Bài viết hướng dẫn',

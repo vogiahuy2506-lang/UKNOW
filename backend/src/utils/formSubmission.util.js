@@ -2,6 +2,7 @@ import { parseMarketingConsent } from '../services/lead/lead.service.js';
 import { isDisplayFieldType, RATING_MAX, YES_NO_VALUES } from './formFieldTypes.util.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const UPLOAD_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Giờ 24h dạng HH:MM (đúng giá trị `<input type="time">` trả về, không có giây).
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -25,6 +26,32 @@ function normalizePhone(raw) {
 }
 
 /**
+ * Đọc danh sách `uploadId` của một trường `file` (PR-4b): mảng chuỗi UUID (hoặc 1 chuỗi), bỏ trùng, tối đa `maxFiles`.
+ * Chỉ kiểm HÌNH DẠNG — đối chiếu với kho và DB làm ở formFileUpload.service.js (cần I/O).
+ *
+ * @param {unknown} val
+ * @param {string} label
+ * @param {number} maxFiles
+ * @returns {string[]}
+ */
+function parseFileUploadIds(val, label, maxFiles) {
+  if (val === undefined || val === null || val === '') return [];
+  const list = Array.isArray(val) ? val : [val];
+  const ids = [];
+  for (const item of list) {
+    const id = typeof item === 'string' ? item.trim() : '';
+    if (!UPLOAD_ID_RE.test(id)) {
+      throw createSubmissionValidationError(`Tệp đính kèm của trường "${label}" không hợp lệ`, 'INVALID_UPLOAD');
+    }
+    if (!ids.includes(id.toLowerCase())) ids.push(id.toLowerCase());
+  }
+  if (ids.length > maxFiles) {
+    throw createSubmissionValidationError(`Trường "${label}" chỉ nhận tối đa ${maxFiles} tệp`, 'INVALID_UPLOAD');
+  }
+  return ids;
+}
+
+/**
  * Xác thực và chuẩn hóa câu trả lời của bài nộp form.
  * - Loại bỏ các key lạ không có trong định nghĩa fields.
  * - Kiểm tra các trường bắt buộc (required).
@@ -34,26 +61,34 @@ function normalizePhone(raw) {
  * - Khối hiển thị (heading, paragraph, page_break) KHÔNG có câu trả lời: bỏ qua hoàn toàn, kể cả khi client
  *   gửi kèm giá trị cho khoá của chúng. Việc chia trang chỉ là chuyện hiển thị — server luôn kiểm TẤT CẢ
  *   trường bắt buộc, không phụ thuộc trang nào.
+ * - Trường `file` (PR-4b): `answers[key]` là mảng `uploadId` đã xin trước (POST .../uploads). Hàm này chỉ kiểm hình dạng và
+ *   trả vào `fileInputs` (KHÔNG đưa vào `answers`) — service xác nhận tệp với kho rồi mới ghi câu trả lời. Trường tệp bắt
+ *   buộc mà không có tệp vẫn qua nếu khách gửi `body.fileSkip[key]` (dấu chủ biểu mẫu hết dung lượng — service kiểm chữ ký).
+ *   `options.fileUploadsEnabled=false` (cờ tắt): bỏ qua hoàn toàn trường `file`, kể cả bắt buộc — không để mất khách.
  * - Trích xuất respondent_name, respondent_email, respondent_phone theo role.
  * - Trích xuất marketingConsent qua parseMarketingConsent.
  *
  * @param {Array<object>} fields - Danh sách trường đã chuẩn hóa của form
  * @param {object} rawAnswers - Object câu trả lời gửi lên từ client
  * @param {object} rawBody - Toàn bộ body request (để lấy marketingConsent nếu có)
+ * @param {{ fileUploadsEnabled?: boolean }} [options]
  * @returns {{
  *   answers: Record<string, any>,
  *   respondentName: string|null,
  *   respondentEmail: string|null,
  *   respondentPhone: string|null,
- *   marketingConsent: boolean|null
+ *   marketingConsent: boolean|null,
+ *   fileInputs?: Record<string, { field: object, uploadIds?: string[], skipToken?: string }>
  * }}
  */
-export function validateFormSubmission(fields = [], rawAnswers = {}, rawBody = {}) {
+export function validateFormSubmission(fields = [], rawAnswers = {}, rawBody = {}, options = {}) {
+  const fileUploadsEnabled = options?.fileUploadsEnabled !== false;
   const safeAnswers = (rawAnswers && typeof rawAnswers === 'object' && !Array.isArray(rawAnswers))
     ? rawAnswers
     : {};
 
   const cleanAnswers = {};
+  const fileInputs = {};
   let respondentName = null;
   let respondentEmail = null;
   let respondentPhone = null;
@@ -62,6 +97,23 @@ export function validateFormSubmission(fields = [], rawAnswers = {}, rawBody = {
     const { key, type, label, required, options = [], role } = field;
     if (isDisplayFieldType(type)) continue;
     const val = safeAnswers[key];
+
+    if (type === 'file') {
+      if (!fileUploadsEnabled) continue;
+      const uploadIds = parseFileUploadIds(val, label, field.fileConfig?.maxFiles || 1);
+      if (uploadIds.length > 0) {
+        fileInputs[key] = { field, uploadIds };
+        continue;
+      }
+      const skipRaw = rawBody?.fileSkip && typeof rawBody.fileSkip === 'object' ? rawBody.fileSkip[key] : null;
+      const skipToken = typeof skipRaw === 'string' ? skipRaw.trim() : '';
+      if (skipToken) {
+        fileInputs[key] = { field, skipToken };
+      } else if (required) {
+        throw createSubmissionValidationError(`Trường "${label}" là bắt buộc`);
+      }
+      continue;
+    }
 
     // Kiểm tra trường bắt buộc
     const isArrayEmpty = Array.isArray(val) && val.length === 0;
@@ -187,5 +239,6 @@ export function validateFormSubmission(fields = [], rawAnswers = {}, rawBody = {
     respondentEmail,
     respondentPhone,
     marketingConsent,
+    ...(Object.keys(fileInputs).length > 0 ? { fileInputs } : {}),
   };
 }

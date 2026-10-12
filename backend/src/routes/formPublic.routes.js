@@ -6,6 +6,7 @@ import {
   formUnsubscribeLimiter,
   formReportPaidLimiter,
   formReceiptUploadLimiter,
+  formFileUploadLimiter,
 } from '../middleware/rateLimiter.middleware.js';
 
 const router = express.Router();
@@ -38,6 +39,9 @@ function handleReceiptMulter(req, res, next) {
 // sau thì "unsubscribe" sẽ bị nuốt làm giá trị của tham số `:publicKey`.
 router.get('/unsubscribe/:token', formUnsubscribeLimiter, formPublicController.unsubscribe.bind(formPublicController));
 
+// PR-4b — phát tệp khách tải lên bằng link ngắn hạn: cũng PHẢI khai trước `/:publicKey` (cùng lý do với unsubscribe).
+router.get('/files/:token', formPublicController.downloadFile.bind(formPublicController));
+
 router.get('/:publicKey', formPublicController.getPublic.bind(formPublicController));
 router.get('/:publicKey/slots', formPublicController.getSlots.bind(formPublicController));
 router.get('/:publicKey/submissions/:accessToken', formPublicController.getSubmissionStatus.bind(formPublicController));
@@ -52,6 +56,13 @@ router.post(
   handleReceiptMulter,
   formPublicController.uploadReceipt.bind(formPublicController)
 );
+// PR-4b — trường `file`: xin URL ký (rồi trình duyệt PUT thẳng lên kho). PUT .../content chỉ dùng cho kho CỤC BỘ (dev/test).
+router.post(
+  '/:publicKey/uploads',
+  formFileUploadLimiter,
+  formPublicController.requestFileUpload.bind(formPublicController)
+);
+router.put('/:publicKey/uploads/:uploadId/content', formPublicController.receiveFileUpload.bind(formPublicController));
 router.post(
   '/:publicKey/submissions',
   publicFormSubmissionLimiter,

@@ -107,6 +107,93 @@ export class GcsStorageBackend {
   }
 
   /**
+   * Cỡ + loại của object; null nếu không có (404). Lỗi khác (mất quyền, mạng) ném StorageUnavailableError.
+   * @param {string} key
+   * @returns {Promise<{ size: number, contentType: string|null }|null>}
+   */
+  async getObjectInfo(key) {
+    const metadata = await this.getMetadata(key);
+    if (!metadata) return null;
+    return { size: Number(metadata.size) || 0, contentType: metadata.contentType || null };
+  }
+
+  /**
+   * Đọc tối đa `length` byte đầu của object bằng Range request (không tải cả tệp — có thể tới 1 GB).
+   * @param {string} key
+   * @param {number} length
+   * @returns {Promise<Buffer>}
+   */
+  async readHead(key, length) {
+    const cleanKey = this.normalizeKey(key);
+    if (!cleanKey) {
+      throw new Error(`Invalid storage key for GCS: ${key}`);
+    }
+    try {
+      const [buf] = await this.bucket.file(cleanKey).download({ start: 0, end: length - 1 });
+      return buf;
+    } catch (err) {
+      if (isGcsNotFound(err)) throw new StorageNotFoundError(err);
+      logGcsError('readHead', cleanKey, err);
+      throw new StorageUnavailableError(err);
+    }
+  }
+
+  /**
+   * Sao chép object sang key mới ngay trên GCS (phía máy chủ, không qua RAM backend), giữ bản gốc.
+   * @param {string} srcKey
+   * @param {string} destKey
+   */
+  async copy(srcKey, destKey) {
+    const cleanSrc = this.normalizeKey(srcKey);
+    const cleanDest = this.normalizeKey(destKey);
+    if (!cleanSrc || !cleanDest) {
+      throw new Error(`Invalid storage key for GCS: ${!cleanSrc ? srcKey : destKey}`);
+    }
+    try {
+      await this.bucket.file(cleanSrc).copy(this.bucket.file(cleanDest));
+    } catch (err) {
+      if (isGcsNotFound(err)) throw new StorageNotFoundError(err);
+      logGcsError('copy', cleanSrc, err);
+      throw new StorageUnavailableError(err);
+    }
+  }
+
+  /**
+   * URL ký V4 (PUT) để TRÌNH DUYỆT tải thẳng một tệp lên GCS — không đi qua backend (RAM VPS 7,8 GB, Cloudflare chặn
+   * 100 MB/request). URL ràng buộc: Content-Type đúng giá trị `contentType` và header `x-goog-content-length-range: 1,<maxBytes>`
+   * — GCS tự từ chối PUT lệch (HTTP 400) nên khách không thể đẩy tệp to hơn trần chủ biểu mẫu đặt. Trình duyệt phải gửi CHÍNH XÁC
+   * hai header trong `headers` trả về. Cần CORS bucket cho PUT từ origin frontend (backend/scripts/gcs-cors-form-uploads.json).
+   * @param {{ key: string, contentType: string, maxBytes: number, ttlMs: number }} params
+   * @returns {Promise<{ uploadUrl: string, method: 'PUT', headers: Record<string,string>, expiresAt: string }>}
+   */
+  async createUploadTarget({ key, contentType, maxBytes, ttlMs }) {
+    const cleanKey = this.normalizeKey(key);
+    if (!cleanKey) {
+      throw new Error(`Invalid storage key for GCS: ${key}`);
+    }
+    const rangeHeader = `1,${maxBytes}`;
+    const expiresMs = Date.now() + ttlMs;
+    try {
+      const [uploadUrl] = await this.bucket.file(cleanKey).getSignedUrl({
+        version: 'v4',
+        action: 'write',
+        expires: expiresMs,
+        contentType,
+        extensionHeaders: { 'x-goog-content-length-range': rangeHeader },
+      });
+      return {
+        uploadUrl,
+        method: 'PUT',
+        headers: { 'Content-Type': contentType, 'x-goog-content-length-range': rangeHeader },
+        expiresAt: new Date(expiresMs).toISOString(),
+      };
+    } catch (err) {
+      logGcsError('createUploadTarget', cleanKey, err);
+      throw new StorageUnavailableError(err);
+    }
+  }
+
+  /**
    * Kiểm tra object có tồn tại trên GCS
    * @param {string} key
    * @returns {Promise<boolean>}

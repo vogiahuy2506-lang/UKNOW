@@ -44,6 +44,9 @@ import landingPageRepository from '../repositories/landingPage.repository.js';
 import { canonicalLandingPageSlug } from '../utils/landingPageSlugCanonical.util.js';
 import { buildFormUnsubscribeFooterHtml } from '../utils/formUnsubscribeFooter.util.js';
 import { renderLeadUnsubscribeHtml } from '../utils/leadUnsubscribeHtml.util.js';
+import { isFormFileUploadEnabled } from '../utils/formFileKinds.util.js';
+import { createFormFileDownloadToken } from '../utils/formFileToken.util.js';
+import formFileUploadService, { buildSubmissionFilesPrefix } from './formFileUpload.service.js';
 
 const MAX_SLOTS_DAYS_PARAM = 31;
 const DEFAULT_SLOTS_DAYS_PARAM = 7;
@@ -462,6 +465,28 @@ async function syncFormThemeAssetLifecycle({ oldTheme, newTheme, workspaceOwnerI
   }
 }
 
+/**
+ * PR-4b — cờ FORM_FILE_UPLOAD_ENABLED tắt thì KHÔNG cho lưu thêm trường `file` mới (400 rõ ràng). Trường `file` đã có sẵn trong
+ * biểu mẫu (cùng `key`) vẫn lưu lại được: chủ sửa tiêu đề/ô khác của biểu mẫu cũ không bị chặn vì cờ.
+ *
+ * @param {Array<{ key: string, type: string }>} newFields Kết quả `normalizeFormFields`
+ * @param {Array<{ key: string, type: string }>} [existingFields] Trường đang lưu của biểu mẫu (rỗng khi tạo mới)
+ */
+function assertFileFieldsAllowed(newFields, existingFields = []) {
+  if (isFormFileUploadEnabled()) return;
+  const existingFileKeys = new Set(
+    (Array.isArray(existingFields) ? existingFields : []).filter((f) => f?.type === 'file').map((f) => f.key)
+  );
+  const offending = newFields.find((f) => f.type === 'file' && !existingFileKeys.has(f.key));
+  if (offending) {
+    throw createHttpError(
+      'Tính năng nhận tệp từ khách chưa được bật. Vui lòng bỏ trường tải tệp khỏi biểu mẫu.',
+      400,
+      'FILE_UPLOAD_DISABLED'
+    );
+  }
+}
+
 class FormService {
   /**
    * Kiểm tra điều kiện gói dịch vụ của chủ workspace đối với form public.
@@ -542,6 +567,7 @@ class FormService {
     }
 
     const normalizedFields = normalizeFormFields(fields || []);
+    assertFileFieldsAllowed(normalizedFields);
     const safeSettings = normalizeFormSettings(settings);
     const safeTheme = normalizeFormTheme(theme, { workspaceOwnerId });
     await assertFormThemeAssetKeysOwned(safeTheme, workspaceOwnerId);
@@ -623,6 +649,7 @@ class FormService {
 
     if (payload.fields !== undefined) {
       updateData.fields = normalizeFormFields(payload.fields);
+      assertFileFieldsAllowed(updateData.fields, existing.fields);
     }
 
     if (payload.settings !== undefined) {
@@ -695,7 +722,17 @@ class FormService {
       throw createHttpError('Không tìm thấy biểu mẫu', 404, 'FORM_NOT_FOUND');
     }
 
+    // PR-4b: gom tệp khách tải lên của biểu mẫu TRƯỚC khi xoá (FK CASCADE xoá luôn dòng phiên/bài nộp nên sau đó không còn danh
+    // sách khoá); xoá thật trên kho + trừ dung lượng SAU khi DB đã xoá xong. Lỗi gom/xoá chỉ log — xoá biểu mẫu không được hỏng vì kho.
+    let collectedFiles = null;
+    try {
+      collectedFiles = await formFileUploadService.collectFormFiles({ formId: id, ownerId: workspaceOwnerId });
+    } catch (error) {
+      logError(`[FormService] Không gom được tệp khách tải lên của biểu mẫu ${id}: ${error?.message || error}`);
+    }
+
     await formRepository.deleteForm(id, workspaceOwnerId);
+    await formFileUploadService.removeCollectedFormFiles(collectedFiles);
 
     // PR-4a mục 3 (Việc 1 review 15/09): xoá form -> giải phóng khoá ảnh (nếu có) SAU khi DB đã
     // xoá xong — nhưng CHỈ khoá nào không còn form nào KHÁC của workspace này còn tham chiếu
@@ -973,6 +1010,10 @@ class FormService {
       title: form.title,
       description: form.description,
       fields: form.fields,
+      // PR-4b: chỉ biểu mẫu CÓ trường tệp mới mang khoá này; cờ tắt → renderer thay ô chọn tệp bằng câu "tạm không nhận tệp".
+      ...(Array.isArray(form.fields) && form.fields.some((f) => f?.type === 'file')
+        ? { fileUploads: { enabled: isFormFileUploadEnabled() } }
+        : {}),
       // PR-4a mục 5: whitelist thủ công + URL tính từ khoá — KHÔNG trả bannerKey/logoKey thô
       // cho khách ẩn danh (buildPublicFormTheme).
       theme: buildPublicFormTheme(form.theme),
@@ -1129,7 +1170,14 @@ class FormService {
     const utmTerm = trimUtmField(body?.utmTerm);
 
     // Xác thực câu trả lời
-    const validated = validateFormSubmission(form.fields, body.answers, body);
+    const validated = validateFormSubmission(form.fields, body.answers, body, {
+      fileUploadsEnabled: isFormFileUploadEnabled(),
+    });
+
+    // PR-4b — tệp khách đã tải lên: kiểm TOÀN BỘ (loại, cỡ thật, chữ ký) trước khi có bất kỳ ghi chép nào; sai → 400, không bài nộp nửa vời.
+    const verifiedFiles = validated.fileInputs
+      ? await formFileUploadService.verifyUploadsForSubmission({ form, fileInputs: validated.fileInputs })
+      : null;
 
     const bookingConfig = form.bookingConfig;
     const bookingEnabled = Boolean(bookingConfig?.enabled);
@@ -1206,13 +1254,27 @@ class FormService {
       }
     }
 
+    // PR-4b — đặt id bài nộp trước để tệp nằm đúng tiền tố .../submissions/<id>/, rồi ghi sổ dung lượng + sao chép tệp. Chủ hết dung lượng
+    // hoặc kho lỗi KHÔNG ném lỗi: bài nộp vẫn được nhận, trường tệp mang trạng thái tương ứng (QĐ7: không làm mất khách).
+    let fileCommit = null;
+    let reservedSubmissionId = null;
+    if (verifiedFiles) {
+      reservedSubmissionId = await formRepository.reserveSubmissionId();
+      fileCommit = await formFileUploadService.commitSubmissionFiles({
+        form,
+        submissionId: reservedSubmissionId,
+        verified: verifiedFiles,
+      });
+    }
+
     // Sinh access_token và lưu bài nộp vào database
     const accessToken = crypto.randomBytes(32).toString('hex');
     const baseSubmissionParams = {
+      id: reservedSubmissionId,
       formId: form.id,
       workspaceOwnerId: form.workspaceOwnerId,
       accessToken,
-      answers: validated.answers,
+      answers: fileCommit ? { ...validated.answers, ...fileCommit.answers } : validated.answers,
       respondentName: validated.respondentName,
       respondentEmail: validated.respondentEmail,
       respondentPhone: validated.respondentPhone,
@@ -1232,40 +1294,48 @@ class FormService {
     };
 
     let submission;
-    if (bookingEnabled) {
-      const appointmentAtIso = appointmentAt.toISOString();
-      const client = await db.getClient();
-      try {
-        await client.query('BEGIN');
-        await formRepository.acquireFormSlotLock(client, form.id, appointmentAtIso);
-        const occupied = await formRepository.countOccupiedForAppointment(form.id, appointmentAtIso, client);
-        const capacity = bookingConfig.slotCapacity;
-        if (capacity !== null && occupied >= capacity) {
-          throw createHttpError('Khung giờ này vừa hết chỗ, vui lòng chọn khung khác', 409, 'FORM_SLOT_FULL');
-        }
-        if (paymentEnabled) {
-          // Đếm TRONG CÙNG giao dịch + khoá của luồng đặt lịch (Bổ sung 15/09) — không mở khoá
-          // riêng cho chốt IP.
-          const pendingCount = await formRepository.countPendingHoldsForIpAndForm(form.id, submitterIpHash, client);
-          if (pendingCount >= MAX_PENDING_HOLDS_PER_IP_PER_FORM) {
-            throw createHttpError(
-              getPaymentWording(paymentSnapshot.purpose).tooManyPending,
-              429,
-              'FORM_TOO_MANY_PENDING_HOLDS'
-            );
+    try {
+      if (bookingEnabled) {
+        const appointmentAtIso = appointmentAt.toISOString();
+        const client = await db.getClient();
+        try {
+          await client.query('BEGIN');
+          await formRepository.acquireFormSlotLock(client, form.id, appointmentAtIso);
+          const occupied = await formRepository.countOccupiedForAppointment(form.id, appointmentAtIso, client);
+          const capacity = bookingConfig.slotCapacity;
+          if (capacity !== null && occupied >= capacity) {
+            throw createHttpError('Khung giờ này vừa hết chỗ, vui lòng chọn khung khác', 409, 'FORM_SLOT_FULL');
           }
+          if (paymentEnabled) {
+            // Đếm TRONG CÙNG giao dịch + khoá của luồng đặt lịch (Bổ sung 15/09) — không mở khoá
+            // riêng cho chốt IP.
+            const pendingCount = await formRepository.countPendingHoldsForIpAndForm(form.id, submitterIpHash, client);
+            if (pendingCount >= MAX_PENDING_HOLDS_PER_IP_PER_FORM) {
+              throw createHttpError(
+                getPaymentWording(paymentSnapshot.purpose).tooManyPending,
+                429,
+                'FORM_TOO_MANY_PENDING_HOLDS'
+              );
+            }
+          }
+          submission = await insertSubmissionWithPaymentCodeRetry(baseSubmissionParams, client, paymentEnabled, true);
+          await client.query('COMMIT');
+        } catch (error) {
+          await client.query('ROLLBACK');
+          throw error;
+        } finally {
+          client.release();
         }
-        submission = await insertSubmissionWithPaymentCodeRetry(baseSubmissionParams, client, paymentEnabled, true);
-        await client.query('COMMIT');
-      } catch (error) {
-        await client.query('ROLLBACK');
-        throw error;
-      } finally {
-        client.release();
+      } else {
+        submission = await insertSubmissionWithPaymentCodeRetry(baseSubmissionParams, db, paymentEnabled, false);
       }
-    } else {
-      submission = await insertSubmissionWithPaymentCodeRetry(baseSubmissionParams, db, paymentEnabled, false);
+    } catch (error) {
+      // PR-4b: bài nộp không tạo được (hết chỗ, quá lượt giữ chỗ, lỗi DB…) → trả tệp về như chưa nộp; khách nộp lại không phải tải lại tệp.
+      await formFileUploadService.rollbackFileCommit(fileCommit);
+      throw error;
     }
+    // PR-4b: bài nộp đã có → xoá tệp tạm (lỗi chỉ log, cron dọn nốt).
+    await formFileUploadService.finalizeFileCommit(fileCommit);
 
     let qrString = null;
     let paymentOptions = [];
@@ -1615,6 +1685,96 @@ class FormService {
       hasReceipt: Boolean(submission.paymentReceiptKey),
       receiptWaived: Boolean(submission.paymentReceiptWaivedReason),
     };
+  }
+
+  // ─── Trường `file` — khách tải tệp lên (PR-4b, QĐ7) ───────────────────────────────────────────────
+
+  /**
+   * Cấu hình tính năng cho trình soạn: có cho thêm trường "Tải tệp" không (cờ FORM_FILE_UPLOAD_ENABLED).
+   *
+   * @returns {{ fileUploadsEnabled: boolean }}
+   */
+  getCapabilities() {
+    return { fileUploadsEnabled: isFormFileUploadEnabled() };
+  }
+
+  /**
+   * Biểu mẫu công khai đã xuất bản, không bị khoá, chủ còn gói — nếu không thì 404/503 như `getPublicForm`.
+   * Dùng cho hai endpoint của luồng tải tệp (xin URL, PUT cục bộ).
+   */
+  async loadPublishedFormForUpload(publicKey) {
+    const key = String(publicKey || '').trim();
+    if (!key) {
+      throw createHttpError('Không tìm thấy biểu mẫu', 404, 'FORM_NOT_FOUND');
+    }
+    if (!isFormFileUploadEnabled()) {
+      throw createHttpError('Tính năng tải tệp hiện chưa mở', 403, 'FILE_UPLOAD_DISABLED');
+    }
+    const form = await formRepository.findFormByPublicKey(key);
+    if (!form || !form.isPublished || form.adminDisabledAt) {
+      throw createHttpError('Không tìm thấy biểu mẫu', 404, 'FORM_NOT_FOUND');
+    }
+    this.checkOwnerActivePlan(form);
+    return form;
+  }
+
+  /**
+   * POST /api/public/forms/:publicKey/uploads — xin URL ký để trình duyệt tải THẲNG một tệp lên kho.
+   *
+   * @param {string} publicKey
+   * @param {{ fieldKey?: unknown, fileName?: unknown, size?: unknown, contentType?: unknown }} body
+   */
+  async requestFileUpload(publicKey, body = {}) {
+    const form = await this.loadPublishedFormForUpload(publicKey);
+    return formFileUploadService.createUploadSession({ form, body });
+  }
+
+  /**
+   * PUT .../uploads/:uploadId/content — chỉ kho CỤC BỘ (dev/test); GCS không đi qua đây.
+   */
+  async receiveFileUpload(publicKey, uploadId, upload) {
+    const form = await this.loadPublishedFormForUpload(publicKey);
+    return formFileUploadService.receiveLocalUpload({ form, uploadId, ...upload });
+  }
+
+  /**
+   * Chủ (hoặc nhân viên có quyền `forms`) lấy link tải NGẮN HẠN một tệp khách đã tải lên. Biểu mẫu/bài nộp của workspace khác → 404.
+   * Link là token HMAC hết hạn sau vài phút; route công khai `/api/public/forms/files/:token` phát tệp dạng attachment.
+   *
+   * @param {number} formId
+   * @param {number} submissionId
+   * @param {number} workspaceOwnerId
+   * @param {string} fieldKey
+   * @param {number} index vị trí tệp trong `answers[fieldKey].files`
+   * @returns {Promise<{ path: string, fileName: string, expiresAt: Date }>}
+   */
+  async getSubmissionFileLink(formId, submissionId, workspaceOwnerId, fieldKey, index) {
+    const form = await formRepository.findFormByIdAndOwner(formId, workspaceOwnerId);
+    if (!form) {
+      throw createHttpError('Không tìm thấy biểu mẫu', 404, 'FORM_NOT_FOUND');
+    }
+    const submission = await formRepository.findSubmissionAnswersByIdAndForm(submissionId, formId);
+    if (!submission) {
+      throw createHttpError('Không tìm thấy bài nộp', 404, 'SUBMISSION_NOT_FOUND');
+    }
+    const entry = submission.answers?.[fieldKey];
+    const file = Array.isArray(entry?.files) && Number.isInteger(index) && index >= 0 ? entry.files[index] : null;
+    const expectedPrefix = buildSubmissionFilesPrefix({ ownerId: workspaceOwnerId, formId, submissionId });
+    // storageKey nằm trong JSON câu trả lời: đối chiếu tiền tố bài nộp để dữ liệu sai/bị sửa không dẫn tới tệp của người khác.
+    if (
+      !file
+      || typeof file.storageKey !== 'string'
+      || !file.storageKey.startsWith(expectedPrefix)
+      || file.storageKey.includes('..')
+    ) {
+      throw createHttpError('Không tìm thấy tệp', 404, 'FILE_NOT_FOUND');
+    }
+    const { token, expiresAt } = createFormFileDownloadToken({
+      storageKey: file.storageKey,
+      fileName: file.name,
+      contentType: file.contentType,
+    });
+    return { path: `/public/forms/files/${token}`, fileName: file.name, expiresAt };
   }
 
   /**

@@ -524,6 +524,33 @@ export const publicFormSubmissionLimiter = rateLimit({
   keyGenerator: (req) => `public-form:${clientIpKey(req)}`,
 });
 
+// Xin URL tải tệp lên cho trường `file` của biểu mẫu công khai (PR-4b, không auth). Mỗi tệp cần MỘT lượt; 40 lượt/15 phút/IP đủ cho
+// khách tải 10 tệp kèm vài lần thử lại, nhưng chặn được việc xin URL ồ ạt để đẩy rác lên kho (mỗi URL có thể tới 1 GB).
+export const FORM_FILE_UPLOAD_LIMITER_CONFIG = Object.freeze({
+  windowMs: 15 * 60 * 1000,
+  max: 40,
+  code: 'FORM_FILE_UPLOAD_RATE_LIMIT_EXCEEDED',
+  message: 'Bạn đã tải tệp quá nhiều lần. Vui lòng thử lại sau ít phút.',
+});
+
+export function createFormFileUploadLimiter({ skip = skipInTest } = {}) {
+  return rateLimit({
+    skip,
+    windowMs: FORM_FILE_UPLOAD_LIMITER_CONFIG.windowMs,
+    max: FORM_FILE_UPLOAD_LIMITER_CONFIG.max,
+    message: {
+      success: false,
+      message: FORM_FILE_UPLOAD_LIMITER_CONFIG.message,
+      code: FORM_FILE_UPLOAD_LIMITER_CONFIG.code,
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => `form-file-upload:${clientIpKey(req)}`,
+  });
+}
+
+export const formFileUploadLimiter = createFormFileUploadLimiter();
+
 // Public lead unsubscribe — chống flood/lạm dụng link rút lại đồng ý (không auth)
 export const leadUnsubscribeLimiter = rateLimit({
   skip: skipInTest,

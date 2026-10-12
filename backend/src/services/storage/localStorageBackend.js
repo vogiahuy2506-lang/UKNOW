@@ -1,9 +1,19 @@
 import path from 'path';
-import { promises as fs } from 'fs';
+import { createWriteStream, promises as fs } from 'fs';
 import {
   applyUploadedFileSecurityHeaders,
   resolveFileServePolicy,
 } from '../../utils/fileServePolicy.util.js';
+
+/** Luồng ghi vượt trần byte cho phép (PUT tệp biểu mẫu lên kho cục bộ). */
+export class StorageObjectTooLargeError extends Error {
+  constructor(maxBytes) {
+    super(`Tệp vượt quá ${maxBytes} byte cho phép`);
+    this.name = 'StorageObjectTooLargeError';
+    this.code = 'FILE_TOO_LARGE';
+    this.maxBytes = maxBytes;
+  }
+}
 
 const UPLOADS_ROOT_DIR = path.resolve(process.cwd(), 'uploads');
 const TEMP_DIR = path.resolve(process.cwd(), 'temp_uploads');
@@ -53,6 +63,138 @@ export class LocalStorageBackend {
     await fs.mkdir(path.dirname(absPath), { recursive: true });
     const content = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer, options.encoding || 'utf8');
     await fs.writeFile(absPath, content);
+  }
+
+  /**
+   * Ghi MỘT luồng byte vào storage key, KHÔNG đọc trọn vào RAM, dừng ngay khi vượt `maxBytes`
+   * (tệp ghi dở bị xoá). Dùng cho PUT tệp biểu mẫu ở máy dev/test — bản tương đương của URL ký GCS.
+   * @param {string} key
+   * @param {import('stream').Readable} readable
+   * @param {{ maxBytes?: number }} [options]
+   * @returns {Promise<{ size: number }>}
+   */
+  async putStream(key, readable, { maxBytes = Number.MAX_SAFE_INTEGER } = {}) {
+    const absPath = this.resolveAbsolutePathFromKey(key);
+    if (!absPath) {
+      throw new Error(`Invalid storage key for local backend: ${key}`);
+    }
+    await fs.mkdir(path.dirname(absPath), { recursive: true });
+
+    // Không dùng stream.pipeline: khi lỗi nó huỷ luôn `readable` (là req của Express) → socket đứt, không còn trả được 413.
+    // Ở đây vượt trần thì NGỪNG GHI, vẫn đọc nốt (bỏ) phần còn lại của luồng rồi mới báo lỗi, để response tới được client.
+    return new Promise((resolve, reject) => {
+      const out = createWriteStream(absPath);
+      let written = 0;
+      let failure = null;
+      let settled = false;
+
+      const settle = (error) => {
+        if (settled) return;
+        settled = true;
+        if (error) {
+          out.destroy();
+          fs.unlink(absPath).catch(() => {}).then(() => reject(error));
+        } else {
+          resolve({ size: written });
+        }
+      };
+
+      out.on('error', (error) => {
+        failure = failure || error;
+        readable.resume();
+      });
+      readable.on('data', (chunk) => {
+        if (failure) return;
+        written += chunk.length;
+        if (written > maxBytes) {
+          failure = new StorageObjectTooLargeError(maxBytes);
+          out.destroy();
+          return;
+        }
+        if (!out.write(chunk)) {
+          readable.pause();
+          out.once('drain', () => readable.resume());
+        }
+      });
+      readable.on('end', () => {
+        if (failure) {
+          settle(failure);
+          return;
+        }
+        out.end((error) => settle(failure || error || null));
+      });
+      readable.on('error', (error) => settle(failure || error));
+      readable.on('close', () => {
+        if (!settled && !readable.readableEnded) settle(failure || new Error('Kết nối bị ngắt giữa chừng'));
+      });
+    });
+  }
+
+  /**
+   * Cỡ + loại của object; null nếu không có.
+   * @param {string} key
+   * @returns {Promise<{ size: number, contentType: string|null }|null>}
+   */
+  async getObjectInfo(key) {
+    const absPath = this.resolveAbsolutePathFromKey(key);
+    if (!absPath) return null;
+    try {
+      const stats = await fs.stat(absPath);
+      if (!stats.isFile()) return null;
+      return { size: stats.size, contentType: null };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Đọc tối đa `length` byte đầu của object (kiểm chữ ký tệp) mà không nạp cả tệp.
+   * @param {string} key
+   * @param {number} length
+   * @returns {Promise<Buffer>}
+   */
+  async readHead(key, length) {
+    const absPath = this.resolveAbsolutePathFromKey(key);
+    if (!absPath) {
+      throw new Error(`Invalid storage key for local backend: ${key}`);
+    }
+    const handle = await fs.open(absPath, 'r');
+    try {
+      const buffer = Buffer.alloc(length);
+      const { bytesRead } = await handle.read(buffer, 0, length, 0);
+      return buffer.subarray(0, bytesRead);
+    } finally {
+      await handle.close();
+    }
+  }
+
+  /**
+   * Sao chép object sang key mới (giữ bản gốc).
+   * @param {string} srcKey
+   * @param {string} destKey
+   */
+  async copy(srcKey, destKey) {
+    const srcPath = this.resolveAbsolutePathFromKey(srcKey);
+    const destPath = this.resolveAbsolutePathFromKey(destKey);
+    if (!srcPath || !destPath) {
+      throw new Error(`Invalid storage key for local backend: ${!srcPath ? srcKey : destKey}`);
+    }
+    await fs.mkdir(path.dirname(destPath), { recursive: true });
+    await fs.copyFile(srcPath, destPath);
+  }
+
+  /**
+   * Đích để trình duyệt PUT tệp lên. Kho cục bộ không có URL ký nên trả đường dẫn endpoint backend
+   * (`fallbackPath`) — cùng HỢP ĐỒNG với GCS: `{ uploadUrl, method, headers, expiresAt }`.
+   * @param {{ key: string, contentType: string, maxBytes: number, ttlMs: number, fallbackPath: string }} params
+   */
+  async createUploadTarget({ contentType, ttlMs, fallbackPath }) {
+    return {
+      uploadUrl: fallbackPath,
+      method: 'PUT',
+      headers: { 'Content-Type': contentType },
+      expiresAt: new Date(Date.now() + ttlMs).toISOString(),
+    };
   }
 
   /**

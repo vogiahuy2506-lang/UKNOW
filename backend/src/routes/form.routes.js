@@ -27,12 +27,18 @@ router.get('/submissions', formController.listWorkspaceSubmissions.bind(formCont
 // (hết lượt / gói hết hạn / nhân viên vượt hạn mức → 402/403 trước khi gọi Google) → controller trừ 1 credit SAU khi nháp thành công.
 // Quyền `forms` đã áp cho cả router ở trên. Đặt trước '/:id' như '/submissions'.
 router.post('/ai-draft', aiLimiter, assertAiCreditAvailable('form_draft'), formController.aiDraft.bind(formController));
+// PR-4b — cờ tính năng cho trình soạn. Cũng PHẢI trước '/:id'.
+router.get('/capabilities', formController.capabilities.bind(formController));
 router.get('/:id', formController.get.bind(formController));
 router.put('/:id', formController.update.bind(formController));
 router.delete('/:id', formController.delete.bind(formController));
 router.put('/:id/publish', formController.publish.bind(formController));
 router.get('/:id/submissions', formController.submissions.bind(formController));
 router.get('/:id/submissions/:submissionId/receipt', formController.getSubmissionReceipt.bind(formController));
+router.get(
+  '/:id/submissions/:submissionId/files/:fieldKey/:index/link',
+  formController.getSubmissionFileLink.bind(formController)
+);
 router.post('/:id/submissions/:submissionId/cancel', formController.cancelSubmission.bind(formController));
 router.post('/:id/submissions/:submissionId/confirm-payment', formController.confirmPayment.bind(formController));
 router.get('/:id/campaign-preview', formController.campaignPreview.bind(formController));

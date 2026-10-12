@@ -1,5 +1,7 @@
 import formService from '../services/form.service.js';
 import { clientIpKey } from '../middleware/rateLimiter.middleware.js';
+import { getStorageBackend } from '../services/storage/storageBackend.js';
+import { verifyFormFileDownloadToken, FORM_FILE_DOWNLOAD_TTL_MS } from '../utils/formFileToken.util.js';
 
 class FormPublicController {
   async getPublic(req, res) {
@@ -66,6 +68,91 @@ class FormPublicController {
         code: error.code || 'INTERNAL_ERROR',
       });
     }
+  }
+
+  /**
+   * POST /api/public/forms/:publicKey/uploads — xin URL ký để TRÌNH DUYỆT tải thẳng một tệp (trường `file`) lên kho (PR-4b).
+   * Chủ hết dung lượng → 200 `{ quotaExceeded: true, skipToken }` (KHÔNG lỗi cứng — khách vẫn nộp được bài).
+   */
+  async requestFileUpload(req, res) {
+    try {
+      const { publicKey } = req.params;
+      const data = await formService.requestFileUpload(publicKey, req.body || {});
+      return res.status(data.quotaExceeded ? 200 : 201).json({ success: true, data });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[FormPublicController.requestFileUpload]', error);
+      return res.status(status).json({
+        success: false,
+        message: error.message || 'Không thể tạo liên kết tải tệp',
+        code: error.code || 'INTERNAL_ERROR',
+      });
+    }
+  }
+
+  /**
+   * PUT /api/public/forms/:publicKey/uploads/:uploadId/content — nhận byte của tệp ở kho CỤC BỘ (máy dev/test). Production dùng
+   * GCS: trình duyệt PUT thẳng vào URL ký, không qua route này.
+   */
+  async receiveFileUpload(req, res) {
+    try {
+      const { publicKey, uploadId } = req.params;
+      const data = await formService.receiveFileUpload(publicKey, uploadId, {
+        contentType: req.headers['content-type'],
+        contentLength: req.headers['content-length'],
+        stream: req,
+      });
+      return res.json({ success: true, data });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[FormPublicController.receiveFileUpload]', error);
+      return res.status(status).json({
+        success: false,
+        message: error.message || 'Không thể nhận tệp tải lên',
+        code: error.code || 'INTERNAL_ERROR',
+      });
+    }
+  }
+
+  /**
+   * GET /api/public/forms/files/:token — phát một tệp khách đã tải lên bằng link NGẮN HẠN mà chủ biểu mẫu lấy qua API có xác thực
+   * (`GET /api/forms/:id/submissions/:submissionId/files/:fieldKey/:index/link`). Luôn `attachment` + `nosniff`, không bao giờ inline.
+   * Khai TRƯỚC `/:publicKey` (formPublic.routes.js).
+   */
+  async downloadFile(req, res) {
+    let file;
+    try {
+      file = verifyFormFileDownloadToken(req.params.token);
+    } catch {
+      return res.status(404).json({
+        success: false,
+        message: 'Liên kết tải tệp không hợp lệ hoặc đã hết hạn',
+        code: 'FILE_LINK_INVALID',
+      });
+    }
+    try {
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Cache-Control', 'private, no-store');
+      const ok = await getStorageBackend().stream(file.storageKey, res, {
+        fileName: file.fileName,
+        mimeType: file.contentType,
+        preview: false,
+        signedUrlTtlMs: FORM_FILE_DOWNLOAD_TTL_MS,
+      });
+      if (!ok && !res.headersSent) {
+        return res.status(404).json({
+          success: false,
+          message: 'Tệp không còn trong kho lưu trữ',
+          code: 'FILE_NOT_FOUND',
+        });
+      }
+    } catch (error) {
+      console.error('[FormPublicController.downloadFile]', error);
+      if (!res.headersSent) {
+        return res.status(500).json({ success: false, message: 'Không thể tải tệp', code: 'INTERNAL_ERROR' });
+      }
+    }
+    return undefined;
   }
 
   /**

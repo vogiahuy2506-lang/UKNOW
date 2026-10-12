@@ -505,6 +505,51 @@ class FormController {
   }
 
   /**
+   * GET /api/forms/capabilities — tính năng đang bật cho trình soạn (PR-4b: có cho thêm trường "Tải tệp" không).
+   * Khai TRƯỚC `/:id` (form.routes.js).
+   */
+  async capabilities(req, res) {
+    return res.json({ success: true, data: formService.getCapabilities() });
+  }
+
+  /**
+   * GET /api/forms/:id/submissions/:submissionId/files/:fieldKey/:index/link — link tải NGẮN HẠN một tệp khách tải lên (PR-4b).
+   * Chủ hoặc nhân viên có quyền `forms`; workspace khác → 404. Trả `{ path, fileName, expiresAt }`: `path` ghép sau base API.
+   */
+  async getSubmissionFileLink(req, res) {
+    try {
+      const workspaceContext = getWorkspaceContext(req.user);
+      const id = Number.parseInt(req.params.id, 10);
+      const submissionId = Number.parseInt(req.params.submissionId, 10);
+      const index = Number.parseInt(req.params.index, 10);
+      if (!Number.isFinite(id) || !Number.isFinite(submissionId) || !Number.isFinite(index)) {
+        return res.status(400).json({
+          success: false,
+          message: 'ID không hợp lệ',
+          code: 'INVALID_ID',
+        });
+      }
+      const data = await formService.getSubmissionFileLink(
+        id,
+        submissionId,
+        workspaceContext.workspaceOwnerId,
+        String(req.params.fieldKey || ''),
+        index
+      );
+      res.setHeader('Cache-Control', 'private, no-store');
+      return res.json({ success: true, data });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[FormController.getSubmissionFileLink]', error);
+      return res.status(status).json({
+        success: false,
+        message: error.message || 'Không thể tạo liên kết tải tệp',
+        code: error.code || 'INTERNAL_ERROR',
+      });
+    }
+  }
+
+  /**
    * GET /api/forms/:id/campaign-preview?limit=
    * Preview bài nộp cho khung cấu hình node chiến dịch "Lấy dữ liệu từ biểu mẫu" (PR-6a → PR-6b).
    */
