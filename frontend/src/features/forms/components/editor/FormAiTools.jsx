@@ -8,6 +8,11 @@ import { MAX_FIELDS } from './formEditorConstants';
 
 const MAX_NOTE_LENGTH = 300;
 
+// Trạng thái nút bật/tắt panel. Tách thành hai hằng, mỗi hằng một dòng: luật giao diện tối (noDarkVariants, Luật 4) cấm nền tối và nền tối khi rê chuột trùng token trên cùng một dòng.
+const TOOL_ACTIVE = 'bg-violet-100 dark:bg-dk-strong border-violet-300 dark:border-violet-700 text-violet-800 dark:text-violet-200';
+const TOOL_IDLE =
+  'bg-white dark:bg-dk-raised border-violet-200 dark:border-violet-800/60 text-violet-700 dark:text-violet-300 hover:bg-violet-100/70 dark:hover:bg-dk-strong';
+
 /**
  * Hai nút AI của trình soạn biểu mẫu (PR-5, PLAN_BIEU_MAU_TUY_BIEN_AI_LANDING):
  *  - "AI gợi ý câu hỏi": AI đề xuất câu hỏi MỚI (không lặp câu đã có) → hiện danh sách để TÍCH CHỌN từng câu rồi mới thêm vào cuối;
@@ -188,7 +193,7 @@ export default function FormAiTools({ title, description, fields, productId = ''
               aria-expanded={panel === 'suggest'}
               disabled={busy}
               onClick={() => togglePanel('suggest')}
-              className={`${toolButton} ${panel === 'suggest' ? 'bg-violet-100 dark:bg-dk-strong border-violet-300 dark:border-violet-700 text-violet-800 dark:text-violet-200' : 'bg-white dark:bg-dk-raised border-violet-200 dark:border-violet-800/60 text-violet-700 dark:text-violet-300 hover:bg-violet-100/70 dark:hover:bg-dk-strong'}`}
+              className={`${toolButton} ${panel === 'suggest' ? TOOL_ACTIVE : TOOL_IDLE}`}
             >
               <HiOutlineSparkles className="w-3.5 h-3.5" />
               {t('forms.editorPage.ai.tools.suggest.toggle')}
@@ -199,7 +204,7 @@ export default function FormAiTools({ title, description, fields, productId = ''
               aria-expanded={panel === 'rewrite'}
               disabled={busy}
               onClick={() => togglePanel('rewrite')}
-              className={`${toolButton} ${panel === 'rewrite' ? 'bg-violet-100 dark:bg-dk-strong border-violet-300 dark:border-violet-700 text-violet-800 dark:text-violet-200' : 'bg-white dark:bg-dk-raised border-violet-200 dark:border-violet-800/60 text-violet-700 dark:text-violet-300 hover:bg-violet-100/70 dark:hover:bg-dk-strong'}`}
+              className={`${toolButton} ${panel === 'rewrite' ? TOOL_ACTIVE : TOOL_IDLE}`}
             >
               <HiOutlineSparkles className="w-3.5 h-3.5" />
               {t('forms.editorPage.ai.tools.rewrite.toggle')}

@@ -12314,7 +12314,7 @@ export default {
               text: 'Form đăng ký và đặt cọc giữ chỗ khoá học, hỏi họ tên, số điện thoại và hình thức học (online hay tại lớp)',
             },
             satisfactionSurvey: {
-              label: 'Khảo sát hài lòng',
+              label: 'Phản hồi sau mua',
               text: 'Khảo sát mức độ hài lòng của khách sau khi mua hàng, có chấm sao và ô góp ý',
             },
           },

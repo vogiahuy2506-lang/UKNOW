@@ -12302,7 +12302,7 @@ Feel free to ask me anything!`,
               text: 'Sign-up and deposit form to reserve a course seat, ask full name, phone number and learning format (online or in class)',
             },
             satisfactionSurvey: {
-              label: 'Satisfaction survey',
+              label: 'Post-purchase feedback',
               text: 'Customer satisfaction survey after a purchase, with a star rating and a comment box',
             },
           },
