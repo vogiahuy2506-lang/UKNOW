@@ -16,7 +16,7 @@ import { promises as fs } from 'fs';
 import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
 import formRepository from '../../src/repositories/form.repository.js';
-import { cleanupFormFileUploads } from '../../src/services/formFileUpload.service.js';
+import { cleanupFormFileUploads, settlePendingQuotaNotifications } from '../../src/services/formFileUpload.service.js';
 import { getStorageUsage } from '../../src/services/storage/storageQuota.service.js';
 import {
   setStorageBackendInstance,
@@ -57,7 +57,10 @@ beforeEach(async () => {
   await fs.mkdir(TEST_TEMP_DIR, { recursive: true });
 });
 
-afterEach(() => {
+afterEach(async () => {
+  // Chuông hết dung lượng (fire-and-forget) của ca này phải ghi xong TRƯỚC khi ca sau TRUNCATE — id đánh lại từ 1, chuông trễ sẽ
+  // rơi vào ca sau (review PR-4b 12/10).
+  await settlePendingQuotaNotifications();
   jest.restoreAllMocks();
 });
 
@@ -717,16 +720,10 @@ describe('chủ hết dung lượng', () => {
     return rows;
   };
 
-  // Chuông hết dung lượng bắn kiểu fire-and-forget (`void notifyOwnerFileQuotaExceeded`, nạp muộn dispatcher) để không bắt khách chờ —
-  // trên CI chậm, kiểm NGAY sau phản hồi thì chưa có dòng (đỏ CI 12/10, shard 3/8). Chờ tối đa 5s cho đủ `count` dòng.
-  const waitQuotaNotifications = async (ownerId, count, timeoutMs = 5000) => {
-    const deadline = Date.now() + timeoutMs;
-    let rows = await quotaNotifications(ownerId);
-    while (rows.length < count && Date.now() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      rows = await quotaNotifications(ownerId);
-    }
-    return rows;
+  // Chuông hết dung lượng bắn fire-and-forget: chờ các lời gọi đang bay xong (tất định) rồi mới đọc (đỏ CI 12/10, shard 3/8).
+  const waitQuotaNotifications = async (ownerId) => {
+    await settlePendingQuotaNotifications();
+    return quotaNotifications(ownerId);
   };
 
   async function exhaustQuota(ownerId) {
@@ -748,10 +745,8 @@ describe('chủ hết dung lượng', () => {
     expect(second.status).toBe(200);
 
     expect((await db.query('SELECT count(*)::int AS n FROM form_file_uploads')).rows[0].n).toBe(0);
-    // Chờ chuông fire-and-forget về đủ 1 dòng, rồi đợi thêm để chắc lượt xin URL thứ hai KHÔNG đẻ dòng thứ hai (chống trùng thật).
-    await waitQuotaNotifications(owner.id, 1);
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    const notes = await quotaNotifications(owner.id);
+    // Cả HAI lượt xin URL đều bắn chuông; chống trùng theo giờ phải giữ đúng 1 dòng.
+    const notes = await waitQuotaNotifications(owner.id);
     expect(notes).toHaveLength(1);
     expect(notes[0]).toMatchObject({ severity: 'warning', link: '/app/topup' });
     expect(notes[0].metadata).toMatchObject({ formId: String(form.id) });
@@ -804,7 +799,7 @@ describe('chủ hết dung lượng', () => {
     expect(await ledgerRows(owner.id)).toHaveLength(0);
     expect(await existsOnDisk(`uploads/${owner.id}/forms/${form.id}/tmp/${session.uploadId}.png`)).toBe(false);
     expect((await sessionRow(session.uploadId)).status).toBe('used');
-    expect(await waitQuotaNotifications(owner.id, 1)).toHaveLength(1);
+    expect(await waitQuotaNotifications(owner.id)).toHaveLength(1);
   });
 
   it('cờ enforcement TẮT (chế độ bóng): vẫn ghi sổ nhưng không bao giờ báo hết dung lượng', async () => {
@@ -814,9 +809,8 @@ describe('chủ hết dung lượng', () => {
     const res = await submit(form, { [nameKeyOf(form)]: 'Lan', [fileKeyOf(form)]: [session.uploadId] });
     expect(res.status).toBe(201);
     expect((await ledgerRows(owner.id))).toHaveLength(1);
-    // Chuông bắn fire-and-forget: đợi một nhịp rồi mới khẳng định KHÔNG có, kẻo xanh nhầm vì dòng chưa kịp ghi.
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    expect(await quotaNotifications(owner.id)).toHaveLength(0);
+    // Chờ mọi chuông đang bay xong rồi mới khẳng định KHÔNG có (kẻo xanh nhầm vì dòng chưa kịp ghi).
+    expect(await waitQuotaNotifications(owner.id)).toHaveLength(0);
   });
 
   it('phiên chờ GIỮ CHỖ dung lượng: chủ còn đủ chỗ cho 1 tệp thì tệp thứ hai (khi phiên đầu chưa nộp) bị báo hết dung lượng', async () => {

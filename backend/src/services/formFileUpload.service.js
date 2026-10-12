@@ -121,6 +121,20 @@ export async function notifyOwnerFileQuotaExceeded(form, now = new Date()) {
   }
 }
 
+// Chuông hết dung lượng bắn fire-and-forget (không bắt khách chờ). Giữ lại các lời gọi đang bay để TEST chờ được cho tất định:
+// review PR-4b 12/10 — chuông trễ của ca trước ghi SAU khi ca sau đã TRUNCATE (id đánh lại từ 1) làm bẩn ca sau (đỏ CI shard 3/8).
+const pendingQuotaNotifications = new Set();
+
+function fireQuotaNotification(form) {
+  const pending = notifyOwnerFileQuotaExceeded(form).finally(() => pendingQuotaNotifications.delete(pending));
+  pendingQuotaNotifications.add(pending);
+}
+
+/** Chờ mọi chuông hết dung lượng đang bay xong (dùng cho test; production không cần gọi). */
+export async function settlePendingQuotaNotifications() {
+  await Promise.allSettled([...pendingQuotaNotifications]);
+}
+
 /**
  * Xin URL tải tệp lên cho MỘT tệp của MỘT trường `file`.
  * Tiền điều kiện (form.service.js đã kiểm): biểu mẫu xuất bản, không bị khoá, chủ còn gói; cờ tính năng bật.
@@ -181,7 +195,7 @@ export async function createUploadSession({ form, body = {} }) {
     assertQuotaAvailable({ usage: { ...usage, usedBytes: usage.usedBytes + pendingBytes }, requestedBytes: size });
   } catch (error) {
     if (!(error instanceof StorageQuotaExceededError)) throw error;
-    void notifyOwnerFileQuotaExceeded(form);
+    fireQuotaNotification(form);
     const { token } = createFormFileSkipToken({ formId: form.id, fieldKey });
     return { quotaExceeded: true, skipToken: token };
   }
@@ -476,7 +490,7 @@ export async function commitSubmissionFiles({ form, submissionId, verified }) {
   } catch (error) {
     if (!(error instanceof StorageQuotaExceededError)) throw error;
     markAllFields(FILE_STATUS.QUOTA_EXCEEDED);
-    void notifyOwnerFileQuotaExceeded(form);
+    fireQuotaNotification(form);
     return result;
   }
   result.ledgerIds = ledgerRows.map((row) => String(row.id));
