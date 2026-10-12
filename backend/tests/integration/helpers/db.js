@@ -67,6 +67,7 @@ const TRUNCATE_ALL_SQL = `
       dashboard_insights,
       landing_testimonials,
       landing_featured_courses,
+      form_file_uploads,
       landing_page_forms,
       landing_pages,
       file_access_events,

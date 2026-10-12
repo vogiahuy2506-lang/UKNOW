@@ -4247,3 +4247,34 @@ CREATE TABLE IF NOT EXISTS landing_page_forms (
   PRIMARY KEY (landing_page_id, form_id)
 );
 CREATE INDEX IF NOT EXISTS idx_landing_page_forms_form_id ON landing_page_forms (form_id);
+
+-- --- Migration 300: form_file_uploads (PLAN_BIEU_MAU_TUY_BIEN_AI_LANDING PR-4b: phien tai tep tam cua truong `file`) ---
+CREATE TABLE IF NOT EXISTS form_file_uploads (
+  id                 UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+  form_id            BIGINT       NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
+  workspace_owner_id BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  field_key          VARCHAR(64)  NOT NULL,
+  object_key         TEXT         NOT NULL UNIQUE,
+  file_name          VARCHAR(255) NOT NULL,
+  file_ext           VARCHAR(10)  NOT NULL,
+  content_type       VARCHAR(127) NOT NULL,
+  declared_size      BIGINT       NOT NULL CHECK (declared_size > 0),
+  max_bytes          BIGINT       NOT NULL CHECK (max_bytes > 0),
+  status             VARCHAR(10)  NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'used')),
+  submission_id      BIGINT,
+  expires_at         TIMESTAMPTZ  NOT NULL,
+  used_at            TIMESTAMPTZ,
+  created_at         TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_form_file_uploads_pending_expiry
+  ON form_file_uploads (expires_at) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_form_file_uploads_used_at
+  ON form_file_uploads (used_at) WHERE status = 'used';
+CREATE INDEX IF NOT EXISTS idx_form_file_uploads_form
+  ON form_file_uploads (form_id);
+CREATE INDEX IF NOT EXISTS idx_form_file_uploads_owner_pending
+  ON form_file_uploads (workspace_owner_id) WHERE status = 'pending';
+
+INSERT INTO notification_event_settings (event_type, in_app_enabled, email_enabled, user_can_disable_email)
+VALUES ('form_file_quota_exceeded', true, false, true)
+ON CONFLICT (event_type) DO NOTHING;
