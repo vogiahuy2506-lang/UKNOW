@@ -61,12 +61,19 @@ const CheckoutPage = () => {
     const location = useLocation();
     const navigate = useNavigate();
 
-    const plan = location.state?.plan;
+    // Mở từ link trong thư/chuông nhắc thanh toán lại: `/checkout?order=<mã đơn cũ>` và KHÔNG có `location.state` (đi từ trang giá mới có state).
+    // Chỉ chấp nhận mã toàn chữ số (khớp order_code) — chuỗi lạ coi như không có `?order`, rơi về luồng cũ (về /pricing).
+    const hasStatePlan = Boolean(location.state?.plan || location.state?.isCustomPlan);
+    const orderParam = new URLSearchParams(location.search || '').get('order');
+    const reorderCode = !hasStatePlan && /^\d{1,18}$/.test(orderParam || '') ? orderParam : null;
+    const [reorder, setReorder] = useState(null); // { plan, billingPeriod, voucherCode } sau khi đọc đơn cũ
+
+    const plan = location.state?.plan || reorder?.plan;
     const isCustomPlan = Boolean(location.state?.isCustomPlan);
     const customQuantities = location.state?.quantities || null;
     const customQuote = location.state?.quote || null;
     const reusePlanId = location.state?.reusePlanId || null;
-    const billingPeriod = location.state?.billingPeriod || 'monthly';
+    const billingPeriod = location.state?.billingPeriod || reorder?.billingPeriod || 'monthly';
     const isYearly = isCustomPlan
         ? billingPeriod === 'yearly'
         : billingPeriod === 'yearly' && plan?.price_yearly;
@@ -87,6 +94,7 @@ const CheckoutPage = () => {
     const [error, setError] = useState(null);
     const user = useAuthStore((state) => state.user);
     const isAuthLoading = useAuthStore((state) => state.isLoading);
+    const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
     const [qrImageUrl, setQrImageUrl] = useState(null);
     const [autoPromotion, setAutoPromotion] = useState(null);
     const [manualVoucher, setManualVoucher] = useState(null);
@@ -332,7 +340,46 @@ const CheckoutPage = () => {
         }
     };
 
+    // Đọc đơn cũ cho `/checkout?order=<mã>` (link thư/chuông nhắc thanh toán lại). Chưa đăng nhập → /login?redirect=… (Login.jsx đưa về
+    // đúng URL này sau khi đăng nhập; /checkout không bọc ProtectedRoute nên phải tự chuyển). Luồng tạo link sau đó là luồng cũ: đơn MỚI.
     useEffect(() => {
+        if (!reorderCode || isAuthLoading) return undefined;
+        if (!isAuthenticated) {
+            navigate(`/login?redirect=${encodeURIComponent(`/checkout?order=${reorderCode}`)}`, { replace: true });
+            return undefined;
+        }
+        let cancelled = false;
+        (async () => {
+            try {
+                const info = await checkoutApiService.getReorderInfo(reorderCode);
+                if (cancelled) return;
+                setReorder({
+                    plan: info.plan,
+                    billingPeriod: info.billingPeriod,
+                    voucherCode: info.voucherCode || null,
+                });
+            } catch (err) {
+                if (cancelled) return;
+                const status = err?.response?.status;
+                if (status === 409) {
+                    toast(t('checkout.reorderAlreadyPaid'));
+                    navigate('/app/billing', { replace: true });
+                } else if (status === 410) {
+                    toast.error(t('checkout.reorderPlanUnavailable'));
+                    navigate('/pricing', { replace: true });
+                } else {
+                    toast.error(t('checkout.reorderLoadFailed'));
+                    navigate('/pricing', { replace: true });
+                }
+            }
+        })();
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [reorderCode, isAuthLoading, isAuthenticated]);
+
+    useEffect(() => {
+        // Đang đợi đơn cũ về thì chưa có `plan` — không phải lúc đá về /pricing.
+        if (reorderCode && !plan) return;
         if (!isCustomPlan && !plan) {
             navigate('/pricing', { replace: true });
             return;
@@ -410,6 +457,14 @@ const CheckoutPage = () => {
         }
     };
 
+    // Điền sẵn mã giảm giá khách đã nhập ở đơn cũ (chỉ mã khách tự nhập; khuyến mãi tự động server tự áp lại). Đi qua validate như nhập tay:
+    // mã hết hạn / không còn hợp lệ thì báo lỗi mã và khách thanh toán không mã — không chặn luồng.
+    useEffect(() => {
+        if (!reorder?.voucherCode) return;
+        applyVoucherCode(reorder.voucherCode);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [reorder]);
+
     // PR-7 (PLAN_VA_LOI_LUONG_TIEN_2026-09-26) — setInterval cố định 3 giây trước đây không thể
     // giãn nhịp khi bị 429, và catch nuốt MỌI lỗi im lặng (kể cả 429) nên trang kẹt mãi ở QR dù
     // webhook đã kích hoạt gói xong. Đổi sang setTimeout tự lên lịch lại để có thể tăng nhịp chờ
@@ -472,6 +527,29 @@ const CheckoutPage = () => {
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [orderCode, expiredAt]);
+
+    if (reorderCode && !plan) {
+        // Đang đọc đơn cũ (bộ xương). Trang thanh toán là nền sáng cố định (không có lớp dark: nào ở CheckoutPage/CheckoutLayout) nên giữ nền sáng.
+        return (
+            <div className="min-h-screen px-4 py-6 flex flex-col justify-center" role="status" aria-live="polite">
+                <div className="max-w-5xl mx-auto w-full bg-white/80 border border-white/90 backdrop-blur-xl rounded-3xl shadow-xl shadow-slate-200/50 p-6 md:p-8">
+                    <p className="text-sm font-semibold text-slate-500 mb-4">{t('checkout.reorderLoading')}</p>
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-5 animate-pulse" aria-hidden="true">
+                        <div className="md:col-span-7 space-y-3">
+                            <div className="h-5 w-2/3 rounded-lg bg-slate-200" />
+                            <div className="h-28 rounded-2xl bg-slate-100" />
+                            <div className="h-10 rounded-xl bg-slate-100" />
+                        </div>
+                        <div className="md:col-span-5 space-y-3">
+                            <div className="h-5 w-1/2 rounded-lg bg-slate-200" />
+                            <div className="h-24 rounded-2xl bg-slate-100" />
+                            <div className="h-12 rounded-xl bg-orange-100" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     if (!isCustomPlan && !plan) return null;
 

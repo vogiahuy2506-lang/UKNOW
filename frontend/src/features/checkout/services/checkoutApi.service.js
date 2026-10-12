@@ -35,6 +35,18 @@ const checkoutApiService = {
     return api.post('/payments/resolve-change', payload);
   },
 
+  /**
+   * Dữ liệu dựng lại một lần thanh toán từ đơn cũ — đích của link trong thư/chuông nhắc thanh toán lại (`/checkout?order=<mã>`).
+   * Chỉ chủ đơn xem được. Lỗi để axios ném nguyên: 404 không thấy đơn, 409 ORDER_ALREADY_PAID, 410 PLAN_UNAVAILABLE, 422 ORDER_NOT_REORDERABLE.
+   *
+   * @param {string|number} orderCode
+   * @returns {Promise<{ plan: object, billingPeriod: 'monthly'|'yearly', voucherCode: string|null, orderStatus: string }>}
+   */
+  async getReorderInfo(orderCode) {
+    const response = await api.get(`/payments/orders/${encodeURIComponent(orderCode)}/reorder`);
+    return response.data.result;
+  },
+
   async getPaymentStatus(orderCode) {
     const response = await api.get(`/payments/status/${orderCode}`);
     return response.data;

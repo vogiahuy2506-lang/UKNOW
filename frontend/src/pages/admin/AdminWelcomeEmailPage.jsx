@@ -30,7 +30,7 @@ import AdminSubscriptionReminderScheduleSection from './AdminSubscriptionReminde
 // 11/10/2026 (PLAN_TRANG_SOAN_QUAN_TRI) — CHỈ đổi bố cục theo kiểu "Tạo landing page" /app: thanh trên
 // (chọn mẫu thư · Cài đặt · Công cụ · Lưu) + vùng soạn/xem trước chiếm trọn chiều cao; Lịch nhắc hạn và
 // thông tin mẫu nằm trong modal Cài đặt. State, handler, lời gọi API giữ nguyên.
-const TEMPLATE_KEYS = ['welcome', 'plan_expiring', 'plan_expired', 'employee_invitation'];
+const TEMPLATE_KEYS = ['welcome', 'plan_expiring', 'plan_expired', 'employee_invitation', 'order_payment_reminder'];
 
 const VARIABLE_LABEL_KEYS = {
   user_name: 'userName',
@@ -48,6 +48,10 @@ const VARIABLE_LABEL_KEYS = {
   owner_name: 'ownerName',
   activation_url: 'activationUrl',
   expiry_hours: 'expiryHours',
+  billing_period_label: 'billingPeriodLabel',
+  amount: 'amount',
+  order_code: 'orderCode',
+  pay_url: 'payUrl',
 };
 
 // PLAN_CAU_HINH_LICH_NHAC_HAN_2026-09-13.md, mục 5 (PR-2) — chép đúng ba luật từ
@@ -160,6 +164,7 @@ export default function AdminWelcomeEmailPage() {
     plan_expiring: t('adminWelcomeEmail.templateKeys.plan_expiring'),
     plan_expired: t('adminWelcomeEmail.templateKeys.plan_expired'),
     employee_invitation: t('adminWelcomeEmail.templateKeys.employee_invitation'),
+    order_payment_reminder: t('adminWelcomeEmail.templateKeys.order_payment_reminder'),
   };
   // Nhãn ngắn cho thanh trên (4 nhãn đầy đủ không vừa giữa thanh 52px); nhãn đầy đủ nằm ở tooltip.
   const templateKeyShortLabels = {
@@ -167,6 +172,7 @@ export default function AdminWelcomeEmailPage() {
     plan_expiring: t('adminWelcomeEmail.templateKeysShort.plan_expiring'),
     plan_expired: t('adminWelcomeEmail.templateKeysShort.plan_expired'),
     employee_invitation: t('adminWelcomeEmail.templateKeysShort.employee_invitation'),
+    order_payment_reminder: t('adminWelcomeEmail.templateKeysShort.order_payment_reminder'),
   };
   const templateMeta = {
     welcome: {
@@ -195,6 +201,12 @@ export default function AdminWelcomeEmailPage() {
       subtitle: t('adminWelcomeEmail.templateMeta.employee_invitation.subtitle'),
       behaviorNote: t('adminWelcomeEmail.templateMeta.employee_invitation.behaviorNote'),
       previewFrameTitle: t('adminWelcomeEmail.templateMeta.employee_invitation.previewFrameTitle'),
+    },
+    order_payment_reminder: {
+      title: t('adminWelcomeEmail.templateMeta.order_payment_reminder.title'),
+      subtitle: t('adminWelcomeEmail.templateMeta.order_payment_reminder.subtitle'),
+      behaviorNote: t('adminWelcomeEmail.templateMeta.order_payment_reminder.behaviorNote'),
+      previewFrameTitle: t('adminWelcomeEmail.templateMeta.order_payment_reminder.previewFrameTitle'),
     },
   }[templateKey];
 

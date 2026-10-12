@@ -13,6 +13,16 @@ describe('openNotificationLink', () => {
     expect(navigate).toHaveBeenCalledWith('/app/delivery-monitor');
   });
 
+  // PLAN_NHAC_THANH_TOAN_LAI_SAU_2_GIO: chuông nhắc thanh toán lại mang link `/checkout?order=<mã>` — NGOÀI /app và có query. Phải điều hướng
+  // nguyên vẹn (kể cả query) bằng navigate, không mở tab mới và không bị coi là link lạ.
+  it('link /checkout?order=<mã> (ngoài /app, có query) → navigate nguyên vẹn', () => {
+    const navigate = vi.fn();
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    expect(openNotificationLink('/checkout?order=1760000000000011', navigate)).toBe(true);
+    expect(navigate).toHaveBeenCalledWith('/checkout?order=1760000000000011');
+    expect(open).not.toHaveBeenCalled();
+  });
+
   it('http/https tuyệt đối → tab mới với noopener, không navigate', () => {
     const navigate = vi.fn();
     const open = vi.spyOn(window, 'open').mockImplementation(() => null);
