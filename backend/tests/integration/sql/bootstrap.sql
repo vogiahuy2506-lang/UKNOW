@@ -916,6 +916,8 @@ CREATE INDEX idx_leads_user ON leads(id_user);
 CREATE INDEX idx_leads_workspace_owner ON leads(workspace_owner_id);
 CREATE INDEX idx_leads_effective_workspace_owner ON leads((COALESCE(workspace_owner_id, id_user)));
 CREATE INDEX idx_leads_created_at ON leads(created_at DESC);
+-- Mirror migration 301 (PR-7b): chốt đồng ý (PR-2) tra leads theo 9 số cuối SĐT. Biểu thức khớp từng chữ với CONSENT_LEAD_PHONE_MATCH_SQL.
+CREATE INDEX IF NOT EXISTS idx_leads_phone_key ON leads ((RIGHT(regexp_replace(phone, '[^0-9]', '', 'g'), 9)));
 
 -- Landing page events — view/click/submit tracking cho landing page.
 -- LeadService.createPublicLead ghi 1 event 'submit' nếu có slug.
@@ -3886,6 +3888,9 @@ CREATE INDEX IF NOT EXISTS idx_form_submissions_slot ON form_submissions (form_i
 CREATE UNIQUE INDEX IF NOT EXISTS uq_form_submissions_payment_code ON form_submissions (workspace_owner_id, payment_code) WHERE payment_code IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_form_submissions_owner_landing ON form_submissions (workspace_owner_id, landing_page_slug)
   WHERE landing_page_slug IS NOT NULL;
+-- Mirror migration 301 (PR-7b): chốt đồng ý (PR-2) tra bài nộp theo email / 9 số cuối SĐT cho từng người nhận.
+CREATE INDEX IF NOT EXISTS idx_form_submissions_owner_email_key ON form_submissions (workspace_owner_id, (LOWER(respondent_email)));
+CREATE INDEX IF NOT EXISTS idx_form_submissions_owner_phone_key ON form_submissions (workspace_owner_id, (RIGHT(regexp_replace(respondent_phone, '[^0-9]', '', 'g'), 9)));
 
 
 -- --- Migration 228: notification_templates (super admin save-as) ------------
