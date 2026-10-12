@@ -253,7 +253,7 @@ class CampaignNodeRegistryService {
           formIds: {
             type: 'array',
             label: 'Danh sách biểu mẫu',
-            description: 'Mảng id biểu mẫu (cùng workspace). Người điền nhiều biểu mẫu chỉ nhận một lần.',
+            description: 'Mảng id biểu mẫu (cùng tài khoản chủ). Người điền nhiều biểu mẫu chỉ nhận một lần.',
           },
           formId: {
             type: 'number',

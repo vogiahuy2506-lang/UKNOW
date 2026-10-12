@@ -2083,7 +2083,7 @@ class FormService {
     if (forms.length < ids.length) {
       const kept = new Set(forms.map((f) => f.id));
       console.warn(
-        `[FormService] Node chiến dịch bỏ ${ids.length - forms.length} biểu mẫu không còn / không thuộc workspace ${workspaceOwnerId}: `
+        `[FormService] Node chiến dịch bỏ ${ids.length - forms.length} biểu mẫu không còn / không thuộc chủ tài khoản ${workspaceOwnerId}: `
         + `${ids.filter((id) => !kept.has(id)).join(', ')}`
       );
     }

@@ -28,7 +28,7 @@ const PICKER = {
   landings: [
     { slug: 'khoa-ielts', title: 'Khoá IELTS', isPublished: true, formId: null, leadCount: 120, formConsentedCount: 0 },
     { slug: 'khoa-toeic', title: 'Khoá TOEIC', isPublished: true, formId: null, leadCount: 80, formConsentedCount: 0 },
-    { slug: 'dat-lich', title: 'Đặt lịch tư vấn', isPublished: true, formId: 3, leadCount: 0, formConsentedCount: 15 },
+    { slug: 'dat-lich', title: 'Đặt lịch tư vấn', isPublished: true, formId: 3, formIds: [3, 4, 9], leadCount: 0, formConsentedCount: 15 },
   ],
 };
 
@@ -59,9 +59,10 @@ describe('cổng landingLeads — chọn nguồn landing rồi PHẢI chọn tra
     const { landings } = gateOf(historyToLandingSource()).response.data;
 
     expect(landings[0]).toEqual({
-      slug: 'khoa-ielts', title: 'Khoá IELTS', isPublished: true, formId: null, leadCount: 120, formConsentedCount: 0,
+      slug: 'khoa-ielts', title: 'Khoá IELTS', isPublished: true, formId: null, formIds: [], leadCount: 120, formConsentedCount: 0,
     });
-    expect(landings[2]).toMatchObject({ slug: 'dat-lich', formId: 3, formConsentedCount: 15 });
+    // PR-7b: landing nhiều biểu mẫu mang ĐỦ formIds; formConsentedCount là số người đã khử trùng qua cả ba.
+    expect(landings[2]).toMatchObject({ slug: 'dat-lich', formId: 3, formIds: [3, 4, 9], formConsentedCount: 15 });
   });
 
   it('chọn ≥ 1 trang → cổng thông qua, wizard đi tiếp (campaignBrief)', () => {
