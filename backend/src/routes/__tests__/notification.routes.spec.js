@@ -199,7 +199,7 @@ describe('/api/notifications', () => {
   });
 
   describe('GET /preferences', () => {
-    it('chỉ liệt kê sự kiện audience=user (14 mục: 7 của PR-1 + 6 của PR-6 + nhắc thanh toán lại), không có sự kiện của admin', async () => {
+    it('chỉ liệt kê sự kiện audience=user (15 mục: 7 của PR-1 + 6 của PR-6 + nhắc thanh toán lại + 1 của PR-4b biểu mẫu), không có sự kiện của admin', async () => {
       const res = await request(app).get('/api/notifications/preferences').set('Authorization', 'Bearer user');
       expect(res.status).toBe(200);
       expect(res.body.data.map((item) => item.eventType)).toEqual([
@@ -217,6 +217,7 @@ describe('/api/notifications', () => {
         'plan_expired',
         'ai_unavailable',
         'order_payment_reminder',
+        'form_file_quota_exceeded',
       ]);
     });
 

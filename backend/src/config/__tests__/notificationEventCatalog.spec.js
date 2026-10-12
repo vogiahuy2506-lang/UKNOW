@@ -15,6 +15,7 @@ const MIGRATION_289 = path.resolve(__dirname, '../../../migrations/289_notificat
 const MIGRATION_293 = path.resolve(__dirname, '../../../migrations/293_notification_default_in_app_only.sql');
 const MIGRATION_294 = path.resolve(__dirname, '../../../migrations/294_notification_events_legacy_emails.sql');
 const MIGRATION_298 = path.resolve(__dirname, '../../../migrations/298_orders_payment_reminder.sql');
+const MIGRATION_300 = path.resolve(__dirname, '../../../migrations/300_form_file_uploads.sql');
 const BOOTSTRAP = path.resolve(__dirname, '../../../tests/integration/sql/bootstrap.sql');
 
 /**
@@ -42,6 +43,8 @@ const EXPECTED = {
   ai_unavailable: ['user', true, false, true],
   // 12/10/2026 — nhắc thanh toán lại đơn gói bỏ dở (migration 298). Mặc định BẬT email để kéo khách ngoài app quay lại, nhưng khách tự tắt được.
   order_payment_reminder: ['user', true, true, true],
+  // PR-4b biểu mẫu (12/10/2026) — chủ hết dung lượng khi khách tải tệp, migration 300. Chỉ chuông (mặc định chung), user tắt được email.
+  form_file_quota_exceeded: ['user', true, false, true],
 };
 
 /** 9 khoá của PR-1 (migration 289 + 293). */
@@ -50,6 +53,8 @@ const KEYS_PR1 = Object.keys(EXPECTED).slice(0, 9);
 const KEYS_PR6 = Object.keys(EXPECTED).slice(9, 15);
 /** Khoá nhắc thanh toán lại (migration 298). */
 const KEYS_PAYMENT_REMINDER = ['order_payment_reminder'];
+/** Khoá của PR-4b biểu mẫu (migration 300). */
+const KEYS_PR4B = ['form_file_quota_exceeded'];
 
 /** Giá trị email do migration 289 seed (lịch sử, KHÔNG đổi): email bật cho 7/9 sự kiện, 293 mới đưa về false. */
 const SEED_289_EMAIL = {
@@ -66,7 +71,7 @@ const SEED_289_EMAIL = {
 
 describe('notificationEventCatalog', () => {
   it('đúng 16 khoá của plan (9 của PR-1 + 6 của PR-6 + 1 nhắc thanh toán lại), không thừa không thiếu', () => {
-    expect(Object.keys(EXPECTED)).toHaveLength(16);
+    expect(Object.keys(EXPECTED)).toHaveLength(17);
     expect([...NOTIFICATION_EVENT_KEYS].sort()).toEqual(Object.keys(EXPECTED).sort());
     expect(new Set(NOTIFICATION_EVENT_KEYS).size).toBe(NOTIFICATION_EVENT_KEYS.length);
   });
@@ -161,6 +166,24 @@ describe('seed của migration 289 + bootstrap.sql (lịch sử) và migration 2
     expect(sql298).toMatch(/ON CONFLICT \(event_type\) DO NOTHING/);
   });
 
+  it('migration 300 seed đúng khoá của PR-4b biểu mẫu, khớp catalog', () => {
+    const rows = parseSeedRows(fs.readFileSync(MIGRATION_300, 'utf8'));
+    expect(Object.keys(rows).sort()).toEqual([...KEYS_PR4B].sort());
+    for (const key of KEYS_PR4B) {
+      const event = getNotificationEvent(key);
+      expect(event).not.toBeNull();
+      expect(rows[key]).toEqual([event.defaults.inApp, event.defaults.email, event.userCanDisableEmail]);
+    }
+    expect(fs.readFileSync(MIGRATION_300, 'utf8')).toMatch(/ON CONFLICT \(event_type\) DO NOTHING/);
+  });
+
+  it('bootstrap.sql có khối Migration 300 với đúng dòng seed của migration', () => {
+    const boot = fs.readFileSync(BOOTSTRAP, 'utf8');
+    expect(boot).toContain('-- --- Migration 300');
+    const block = boot.split('-- --- Migration 300')[1].split('-- --- Migration')[0];
+    expect(parseSeedRows(block)).toEqual(parseSeedRows(fs.readFileSync(MIGRATION_300, 'utf8')));
+  });
+
   it('bootstrap.sql có khối Migration 298 với đúng dòng seed của migration', () => {
     const boot = fs.readFileSync(BOOTSTRAP, 'utf8');
     expect(boot).toContain('-- --- Migration 298');
@@ -168,11 +191,12 @@ describe('seed của migration 289 + bootstrap.sql (lịch sử) và migration 2
     expect(parseSeedRows(block)).toEqual(parseSeedRows(fs.readFileSync(MIGRATION_298, 'utf8')));
   });
 
-  it('mọi khoá catalog đều có dòng seed trong 289 + 294 + 298 (không khoá nào rơi khỏi migration)', () => {
+  it('mọi khoá catalog đều có dòng seed trong 289 + 294 + 298 + 300 (không khoá nào rơi khỏi migration)', () => {
     const seeded = {
       ...parseSeedRows(fs.readFileSync(MIGRATION_289, 'utf8')),
       ...parseSeedRows(fs.readFileSync(MIGRATION_294, 'utf8')),
       ...parseSeedRows(fs.readFileSync(MIGRATION_298, 'utf8')),
+      ...parseSeedRows(fs.readFileSync(MIGRATION_300, 'utf8')),
     };
     expect(Object.keys(seeded).sort()).toEqual([...NOTIFICATION_EVENT_KEYS].sort());
   });

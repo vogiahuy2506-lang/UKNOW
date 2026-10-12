@@ -45,9 +45,11 @@ describe('formDefinition.util', () => {
     ).toThrow('Kiểu trường "file_upload" không được hỗ trợ');
   });
 
-  it('hỗ trợ đủ 9 kiểu trường gốc (PR-4 thêm 6 loại mới: 15 loại)', () => {
-    // 9 loại gốc + rating/yes_no/time + heading/paragraph/page_break (PR-4) — chi tiết loại mới ở describe riêng bên dưới.
-    expect(ALLOWED_FIELD_TYPES.length).toBe(15);
+  it('hỗ trợ đủ 9 kiểu trường gốc (PR-4 thêm 6 loại mới, PR-4b thêm `file`: 16 loại)', () => {
+    // 9 loại gốc + rating/yes_no/time + heading/paragraph/page_break (PR-4) + file (PR-4b) — chi tiết loại mới ở describe riêng bên dưới
+    // và formFileField.util.spec.js.
+    expect(ALLOWED_FIELD_TYPES.length).toBe(16);
+    expect(ALLOWED_FIELD_TYPES).toContain('file');
     const validFields = [
       { type: 'short_text', label: 'Họ tên' },
       { type: 'long_text', label: 'Ghi chú' },
