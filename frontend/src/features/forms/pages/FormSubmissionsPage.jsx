@@ -11,10 +11,12 @@ import {
   HiOutlineX,
   HiOutlinePhotograph,
   HiOutlineClipboardList,
+  HiOutlineDownload,
 } from 'react-icons/hi';
 import PageContainer from '../../../components/common/PageContainer';
 import { useI18n } from '../../../i18n';
 import {
+  exportFormSubmissionsCsv,
   fetchFormById,
   fetchFormSubmissions,
   cancelSubmission,
@@ -25,6 +27,7 @@ import { formatAppointmentAtVn, vnToday } from '../utils/bookingFormat.util';
 import { isDisplayFieldType } from '../utils/formFieldTypes.util';
 import { formatAnswerForDisplay, isDisplayBlockAnswer } from '../utils/formAnswerDisplay.util';
 import FormAnswerFiles from '../components/FormAnswerFiles';
+import useCsvExport from '../../../hooks/useCsvExport';
 import { formatVnd } from '../../../utils/vietqrParser';
 
 // PR-3b: pending_payment nhận thêm — chủ có thể huỷ một lượt còn đang chờ chuyển khoản (nhả
@@ -69,6 +72,7 @@ export default function FormSubmissionsPage() {
   const { t, locale } = useI18n();
   const navigate = useNavigate();
   const { id } = useParams();
+  const { exportCsv, isExporting } = useCsvExport();
 
   const [form, setForm] = useState(null);
   const [submissions, setSubmissions] = useState([]);
@@ -204,6 +208,10 @@ export default function FormSubmissionsPage() {
     loadData(newPage);
   };
 
+  // Xuất CSV (PR-8c): cột = nhãn trường của biểu mẫu này; áp bộ lọc ngày lịch hẹn đang chọn; backend ghi nhật ký hoạt động mỗi lần xuất.
+  const handleExportCsv = () =>
+    exportCsv(() => exportFormSubmissionsCsv(id, { date: dateFilter || undefined, lang: locale }), 'bai-nop-bieu-mau.csv');
+
   const handleSetTodayFilter = () => setDateFilter(vnToday());
   const handleClearFilter = () => setDateFilter('');
 
@@ -269,12 +277,25 @@ export default function FormSubmissionsPage() {
       backLabel={t('forms.submissionsPage.backToForms')}
       actions={
         form && (
-          <button
-            onClick={() => navigate(`/app/forms/${form.id}/edit`)}
-            className="btn btn-secondary text-xs"
-          >
-            {t('forms.submissionsPage.editFormConfig')}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              disabled={isExporting}
+              title={t('csvExport.buttonHint')}
+              data-testid="form-submissions-export-csv"
+              className="btn btn-secondary text-xs inline-flex items-center gap-1.5"
+            >
+              <HiOutlineDownload className="w-4 h-4" />
+              {isExporting ? t('csvExport.exporting') : t('csvExport.button')}
+            </button>
+            <button
+              onClick={() => navigate(`/app/forms/${form.id}/edit`)}
+              className="btn btn-secondary text-xs"
+            >
+              {t('forms.submissionsPage.editFormConfig')}
+            </button>
+          </div>
         )
       }
     >

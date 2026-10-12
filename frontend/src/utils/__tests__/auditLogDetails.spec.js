@@ -134,6 +134,18 @@ const REAL_ROWS = [
   ['ORDER_REFUNDED', { orderCode: '123', userId: 4, reason: 'Khách yêu cầu', amount: 500000, statusBefore: 'paid' }, 'Đơn 123 · Hoàn 500.000 đ · Lý do: Khách yêu cầu'],
   ['EINVOICE_RETRIED', { ok: false, skipped: false, reason: null, errorCode: 'E01', status: 'failed' }, 'Không thành công · Mã lỗi: E01'],
   ['FORM_DISABLED', { publicKey: 'k-1', title: 'Đăng ký' }, '"Đăng ký"'],
+  // PR-8c: xuất CSV / Excel dữ liệu khách — hình dạng thật từ formSubmissionExport.controller.js / leadExport.controller.js
+  [
+    'FORM_SUBMISSIONS_EXPORTED',
+    { exportType: 'form_submissions_workspace', formId: null, filters: { formId: null, landingPageSlug: null, from: null, to: null }, rowCount: 1250, totalMatched: 1250, truncated: false },
+    'Xuất 1.250 dòng · Tab Từ biểu mẫu (CSV)',
+  ],
+  [
+    'FORM_SUBMISSIONS_EXPORTED',
+    { exportType: 'form_submissions_form', formId: 7, filters: { date: null }, rowCount: 20000, totalMatched: 25000, truncated: true },
+    'Xuất 20.000 dòng · Bị cắt ở giới hạn (tổng 25.000 dòng) · Trang bài nộp biểu mẫu (CSV)',
+  ],
+  ['LANDING_LEADS_EXPORTED', { exportType: 'landing_leads_xlsx', formId: null, filters: { slugs: ['home'] }, rowCount: 7, totalMatched: 7, truncated: false }, 'Xuất 7 dòng · Tab Từ landing page (Excel)'],
   [
     'WIZARD_DEAD_END',
     { channel: 'email', count: 3, gate: 'audience', sessionId: 'abc' },

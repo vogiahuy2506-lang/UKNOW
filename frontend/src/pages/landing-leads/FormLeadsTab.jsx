@@ -2,13 +2,19 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   HiOutlineChevronLeft,
   HiOutlineChevronRight,
+  HiOutlineDownload,
   HiOutlineEye,
   HiOutlineInbox,
   HiOutlineRefresh,
   HiOutlineX,
 } from 'react-icons/hi';
 import { useI18n } from '../../i18n';
-import { fetchForms, fetchWorkspaceSubmissions } from '../../features/forms/services/formAdminApi.service.js';
+import {
+  exportWorkspaceSubmissionsCsv,
+  fetchForms,
+  fetchWorkspaceSubmissions,
+} from '../../features/forms/services/formAdminApi.service.js';
+import useCsvExport from '../../hooks/useCsvExport.js';
 import FormLeadDetailModal from './FormLeadDetailModal.jsx';
 import FormLeadStatusBadge from './FormLeadStatusBadge.jsx';
 
@@ -42,7 +48,8 @@ const TH_CLASS = 'px-3 py-3.5 text-left text-[11px] font-bold text-slate-500 dar
  * Trạng thái · Hành động — chi tiết đầy đủ (mọi câu trả lời theo nhãn trường) nằm trong modal.
  */
 export default function FormLeadsTab() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const { exportCsv, isExporting } = useCsvExport();
 
   const [forms, setForms] = useState([]);
   const [formFilter, setFormFilter] = useState('');
@@ -130,6 +137,12 @@ export default function FormLeadsTab() {
     setDateTo(value);
     setPage(1);
   };
+  // Xuất CSV (PR-8c): đúng bộ lọc đang áp (biểu mẫu · khoảng ngày), không phân trang; backend ghi nhật ký hoạt động mỗi lần xuất.
+  const handleExportCsv = () =>
+    exportCsv(
+      () => exportWorkspaceSubmissionsCsv({ formId: formFilter || undefined, from: dateFrom || undefined, to: dateTo || undefined, lang: locale }),
+      'khach-de-lai-thong-tin-bieu-mau.csv'
+    );
   const resetFilters = () => {
     setFormFilter('');
     setDateFrom('');
@@ -192,15 +205,28 @@ export default function FormLeadsTab() {
             {t('landingLeads.formsTab.clearFilters')}
           </button>
         ) : null}
-        <button
-          type="button"
-          onClick={() => setReloadToken((n) => n + 1)}
-          disabled={isLoading}
-          className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised hover:bg-slate-50 dark:hover:bg-dk-surface text-xs font-semibold text-slate-700 dark:text-dk-text transition-colors shadow-2xs disabled:opacity-50 sm:ml-auto"
-        >
-          <HiOutlineRefresh className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-          <span>{t('landingLeads.refresh')}</span>
-        </button>
+        <div className="flex items-center gap-2 sm:ml-auto">
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            disabled={isExporting || hasInvalidRange}
+            title={t('csvExport.buttonHint')}
+            data-testid="form-leads-export-csv"
+            className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised hover:bg-slate-50 dark:hover:bg-dk-surface text-xs font-semibold text-slate-700 dark:text-dk-text transition-colors shadow-2xs disabled:opacity-50"
+          >
+            <HiOutlineDownload className="w-4 h-4" />
+            <span>{isExporting ? t('csvExport.exporting') : t('csvExport.button')}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setReloadToken((n) => n + 1)}
+            disabled={isLoading}
+            className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised hover:bg-slate-50 dark:hover:bg-dk-surface text-xs font-semibold text-slate-700 dark:text-dk-text transition-colors shadow-2xs disabled:opacity-50"
+          >
+            <HiOutlineRefresh className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            <span>{t('landingLeads.refresh')}</span>
+          </button>
+        </div>
       </div>
 
       {hasInvalidRange ? (

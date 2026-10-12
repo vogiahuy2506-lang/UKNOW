@@ -3725,6 +3725,8 @@ export default {
       EINVOICE_RETRIED: 'Xuất lại hoá đơn điện tử',
       EINVOICE_EMAIL_RESENT: 'Gửi lại email hoá đơn',
       FORM_PAYMENT_CONFIG_UPDATED: 'Cập nhật thanh toán của biểu mẫu',
+      FORM_SUBMISSIONS_EXPORTED: 'Xuất CSV bài nộp biểu mẫu',
+      LANDING_LEADS_EXPORTED: 'Xuất danh sách khách từ landing page',
       FORM_DISABLED: 'Quản trị tạm ngừng biểu mẫu',
       FORM_ENABLED: 'Quản trị mở lại biểu mẫu',
       AI_SYSTEM_MODEL_UPDATED: 'Đổi model AI hệ thống',
@@ -4000,6 +4002,16 @@ export default {
       form: {
         title: '"{name}"',
       },
+      export: {
+        rows: 'Xuất {n} dòng',
+        truncated: 'Bị cắt ở giới hạn (tổng {total} dòng)',
+      },
+      exportType: {
+        form_submissions_workspace: 'Tab Từ biểu mẫu (CSV)',
+        form_submissions_form: 'Trang bài nộp biểu mẫu (CSV)',
+        landing_leads_csv: 'Tab Từ landing page (CSV)',
+        landing_leads_xlsx: 'Tab Từ landing page (Excel)',
+      },
       order: {
         code: 'Đơn {code}',
         refund: 'Hoàn {amount} đ',
@@ -4050,6 +4062,7 @@ export default {
       ai_session: 'Phiên chat AI',
       einvoice: 'Hoá đơn điện tử',
       form: 'Biểu mẫu',
+      lead: 'Khách từ landing page',
       ai_model: 'Model AI',
     },
   },
@@ -6731,6 +6744,17 @@ export default {
         cancelled: 'Đã huỷ',
       },
     },
+  },
+
+  // Nút "Xuất CSV" ở màn "Khách để lại thông tin" (2 tab) và trang bài nộp từng biểu mẫu (PLAN_BIEU_MAU_TUY_BIEN_AI_LANDING PR-8c).
+  csvExport: {
+    button: 'Xuất CSV',
+    exporting: 'Đang xuất…',
+    buttonHint: 'Tải danh sách theo bộ lọc đang áp (UTF-8, mở được bằng Excel)',
+    done: 'Đã xuất {count} dòng ra file CSV.',
+    doneEmpty: 'Đã xuất file CSV (chưa có dòng dữ liệu nào khớp bộ lọc).',
+    truncated: 'Chỉ xuất {count}/{total} dòng mới nhất (tối đa {max} dòng mỗi lần). Hãy thu hẹp bộ lọc để lấy phần còn lại.',
+    failed: 'Không thể xuất file CSV. Vui lòng thử lại.',
   },
 
   landingInbox: {

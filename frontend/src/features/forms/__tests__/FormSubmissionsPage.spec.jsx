@@ -4,12 +4,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { I18nProvider } from '../../../i18n';
 import FormSubmissionsPage from '../pages/FormSubmissionsPage';
 import * as formAdminApi from '../services/formAdminApi.service';
+import { downloadCsvFromRequest } from '../../../utils/csvExportDownload';
 
 vi.mock('../services/formAdminApi.service', () => ({
   fetchFormById: vi.fn(),
   fetchFormSubmissions: vi.fn(),
   cancelSubmission: vi.fn(),
   confirmPayment: vi.fn(),
+  exportFormSubmissionsCsv: vi.fn(),
+}));
+
+vi.mock('../../../utils/csvExportDownload', async (importOriginal) => ({
+  ...(await importOriginal()),
+  downloadCsvFromRequest: vi.fn(),
 }));
 
 vi.mock('react-hot-toast', () => ({
@@ -188,6 +195,59 @@ describe('FormSubmissionsPage component', () => {
       expect(screen.getByText('Nguồn')).toBeInTheDocument();
       expect(screen.getByText('khoa-hoc-ai')).toBeInTheDocument();
       expect(screen.getByText('facebook · thang9')).toBeInTheDocument();
+    });
+  });
+
+  describe('Nút "Xuất CSV" (PR-8c)', () => {
+    const EXPORT_REQUEST = Promise.resolve({ data: new Blob(['x']), headers: {} });
+
+    function renderPage() {
+      return render(
+        <MemoryRouter initialEntries={['/app/forms/form-sub-123/submissions']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/:id/submissions" element={<FormSubmissionsPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+    }
+
+    beforeEach(() => {
+      formAdminApi.fetchFormById.mockResolvedValue(mockForm);
+      formAdminApi.fetchFormSubmissions.mockResolvedValue(mockSubmissionsPage1);
+      formAdminApi.exportFormSubmissionsCsv.mockReturnValue(EXPORT_REQUEST);
+      downloadCsvFromRequest.mockResolvedValue({ rowCount: 25, total: 25, truncated: false, filename: 'f.csv' });
+    });
+
+    it('bấm "Xuất CSV" → gọi API xuất của ĐÚNG biểu mẫu (id trên URL), lang theo giao diện, rồi tải file', async () => {
+      renderPage();
+      await waitFor(() => expect(screen.getByText('snapshot@example.com')).toBeInTheDocument());
+
+      fireEvent.click(screen.getByTestId('form-submissions-export-csv'));
+
+      await waitFor(() => expect(downloadCsvFromRequest).toHaveBeenCalledTimes(1));
+      expect(formAdminApi.exportFormSubmissionsCsv).toHaveBeenCalledWith('form-sub-123', { date: undefined, lang: 'vi' });
+      expect(downloadCsvFromRequest).toHaveBeenCalledWith(EXPORT_REQUEST, 'bai-nop-bieu-mau.csv');
+    });
+
+    it('đang lọc theo ngày lịch hẹn → file xuất cũng lọc theo ngày đó', async () => {
+      formAdminApi.fetchFormById.mockResolvedValue({ ...mockForm, bookingConfig: { enabled: true } });
+      renderPage();
+      await waitFor(() => expect(screen.getByText('snapshot@example.com')).toBeInTheDocument());
+      fireEvent.change(document.getElementById('date-filter'), { target: { value: '2026-10-14' } });
+      await waitFor(() => expect(formAdminApi.fetchFormSubmissions).toHaveBeenLastCalledWith('form-sub-123', expect.objectContaining({ date: '2026-10-14' })));
+
+      fireEvent.click(screen.getByTestId('form-submissions-export-csv'));
+
+      await waitFor(() => expect(formAdminApi.exportFormSubmissionsCsv).toHaveBeenCalledTimes(1));
+      expect(formAdminApi.exportFormSubmissionsCsv).toHaveBeenCalledWith('form-sub-123', { date: '2026-10-14', lang: 'vi' });
+    });
+
+    it('chưa tải xong biểu mẫu thì chưa có nút xuất (tránh xuất nhầm)', async () => {
+      formAdminApi.fetchFormById.mockReturnValue(new Promise(() => {}));
+      renderPage();
+      expect(screen.queryByTestId('form-submissions-export-csv')).not.toBeInTheDocument();
     });
   });
 

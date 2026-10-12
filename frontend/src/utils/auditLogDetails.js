@@ -542,6 +542,15 @@ register(['CUSTOMER_BULK_UPSERTED'], (t, d, locale) => joinParts([
 // adminForms.controller.js:42 → { publicKey, title }
 register(['FORM_DISABLED', 'FORM_ENABLED'], (t, d) => quoted(t, 'form.title', d.title));
 
+// formSubmissionExport.controller.js / leadExport.controller.js / lead.controller.js (PR-8c) → { exportType, formId, filters, rowCount, totalMatched, truncated }
+register(['FORM_SUBMISSIONS_EXPORTED', 'LANDING_LEADS_EXPORTED'], (t, d, locale) => joinParts([
+  typeof d.rowCount === 'number' ? tr(t, 'export.rows', { n: fmtNumber(d.rowCount, locale) }) : '',
+  d.truncated === true && typeof d.totalMatched === 'number'
+    ? tr(t, 'export.truncated', { total: fmtNumber(d.totalMatched, locale) })
+    : '',
+  isNil(d.exportType) ? '' : enumLabel(t, 'exportType', d.exportType),
+]));
+
 // adminOrders.controller.js:35 → { orderCode }; :68 → { orderCode, userId, reason, amount, statusBefore, transferRef, … }
 register(['ORDER_PAID_AFTER_CANCELLED_HANDLED', 'ORDER_REFUNDED'], (t, d, locale) => joinParts([
   isNil(d.orderCode) ? '' : tr(t, 'order.code', { code: d.orderCode }),

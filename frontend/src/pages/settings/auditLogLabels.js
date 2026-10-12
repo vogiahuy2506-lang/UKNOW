@@ -29,6 +29,7 @@ export const WORKSPACE_AUDIT_ACTIONS = [
   'LANDING_DOMAIN_UPDATED', 'LANDING_DOMAIN_VERIFIED', 'LANDING_DOMAIN_SSL_PROVISIONED', 'LANDING_DOMAIN_DELETED',
   'LANDING_VERSION_RESTORED', 'LANDING_VERSION_DELETED',
   'FORM_PAYMENT_CONFIG_UPDATED',
+  'FORM_SUBMISSIONS_EXPORTED', 'LANDING_LEADS_EXPORTED',
   'CHATBOT_CREATED', 'CHATBOT_UPDATED', 'CHATBOT_DELETED',
   'CHATBOT_CHANNEL_CONNECTED', 'CHATBOT_CHANNEL_UPDATED', 'CHATBOT_CHANNEL_DISCONNECTED',
   'KNOWLEDGE_BASE_CREATED', 'KNOWLEDGE_BASE_UPDATED', 'KNOWLEDGE_BASE_DELETED',
@@ -39,7 +40,7 @@ export const WORKSPACE_AUDIT_ACTIONS = [
 
 export const WORKSPACE_AUDIT_ENTITIES = [
   'employee', 'campaign', 'email_setting', 'zalo_setting', 'whatsapp_account', 'telegram_account', 'email_template', 'zalo_template', 'customer',
-  'landing_page', 'landing_page_domain', 'landing_page_version', 'form',
+  'landing_page', 'landing_page_domain', 'landing_page_version', 'form', 'lead',
   'chatbot', 'chatbot_channel', 'knowledge_base', 'knowledge_document',
   'inbox_conversation', 'inbox_message', 'media_object',
 ];

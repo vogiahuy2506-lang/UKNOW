@@ -3714,6 +3714,8 @@ export default {
       EINVOICE_RETRIED: 'E-invoice Reissued',
       EINVOICE_EMAIL_RESENT: 'E-invoice Email Resent',
       FORM_PAYMENT_CONFIG_UPDATED: 'Form Payment Settings Updated',
+      FORM_SUBMISSIONS_EXPORTED: 'Form Submissions Exported (CSV)',
+      LANDING_LEADS_EXPORTED: 'Landing Page Leads Exported',
       FORM_DISABLED: 'Form Disabled By Admin',
       FORM_ENABLED: 'Form Re-enabled By Admin',
       AI_SYSTEM_MODEL_UPDATED: 'Update system AI model',
@@ -3989,6 +3991,16 @@ export default {
       form: {
         title: '"{name}"',
       },
+      export: {
+        rows: 'Exported {n} rows',
+        truncated: 'Cut at the limit ({total} rows in total)',
+      },
+      exportType: {
+        form_submissions_workspace: 'From forms tab (CSV)',
+        form_submissions_form: 'Form submissions page (CSV)',
+        landing_leads_csv: 'From landing pages tab (CSV)',
+        landing_leads_xlsx: 'From landing pages tab (Excel)',
+      },
       order: {
         code: 'Order {code}',
         refund: 'Refund {amount} VND',
@@ -4039,6 +4051,7 @@ export default {
       ai_session: 'AI Chat Session',
       einvoice: 'E-invoice',
       form: 'Form',
+      lead: 'Landing page lead',
       ai_model: 'AI model',
     },
   },
@@ -6717,6 +6730,17 @@ export default {
         cancelled: 'Cancelled',
       },
     },
+  },
+
+  // "Export CSV" button on the "Leads" screen (2 tabs) and on each form's submissions page (PLAN_BIEU_MAU_TUY_BIEN_AI_LANDING PR-8c).
+  csvExport: {
+    button: 'Export CSV',
+    exporting: 'Exporting…',
+    buttonHint: 'Download the list with the current filters (UTF-8, opens in Excel)',
+    done: 'Exported {count} rows to a CSV file.',
+    doneEmpty: 'CSV file exported (no rows matched the filters).',
+    truncated: 'Only the newest {count} of {total} rows were exported (limit {max} rows per export). Narrow the filters to get the rest.',
+    failed: 'Could not export the CSV file. Please try again.',
   },
 
   landingInbox: {

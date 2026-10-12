@@ -3,7 +3,12 @@ import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { I18nProvider } from '../../../i18n';
 import FormLeadsTab from '../FormLeadsTab';
-import { fetchForms, fetchWorkspaceSubmissions } from '../../../features/forms/services/formAdminApi.service.js';
+import {
+  exportWorkspaceSubmissionsCsv,
+  fetchForms,
+  fetchWorkspaceSubmissions,
+} from '../../../features/forms/services/formAdminApi.service.js';
+import { downloadCsvFromRequest } from '../../../utils/csvExportDownload';
 
 vi.mock('../../../services/api', () => ({
   default: { get: vi.fn(), post: vi.fn() },
@@ -12,6 +17,11 @@ vi.mock('../../../services/api', () => ({
 vi.mock('../../../features/forms/services/formAdminApi.service.js', () => ({
   fetchForms: vi.fn(),
   fetchWorkspaceSubmissions: vi.fn(),
+  exportWorkspaceSubmissionsCsv: vi.fn(),
+}));
+vi.mock('../../../utils/csvExportDownload', async (importOriginal) => ({
+  ...(await importOriginal()),
+  downloadCsvFromRequest: vi.fn(),
 }));
 
 const FORMS = [
@@ -67,6 +77,8 @@ const SUB_PENDING_EXPIRED = {
   answers: {},
 };
 
+const EXPORT_REQUEST = Promise.resolve({ data: new Blob(['x']), headers: {} });
+
 function renderTab() {
   return render(
     <MemoryRouter>
@@ -84,12 +96,77 @@ function lastCallArgs() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  exportWorkspaceSubmissionsCsv.mockReturnValue(EXPORT_REQUEST);
+  downloadCsvFromRequest.mockResolvedValue({ rowCount: 2, total: 2, truncated: false, filename: 'f.csv' });
   fetchForms.mockResolvedValue(FORMS);
   fetchWorkspaceSubmissions.mockResolvedValue({
     items: [SUB_CONSULT, SUB_PENDING_EXPIRED],
     total: 2,
     page: 1,
     limit: 20,
+  });
+});
+
+describe('FormLeadsTab — nút "Xuất CSV" (PR-8c)', () => {
+  it('không lọc gì: gọi API xuất không kèm bộ lọc (lang theo giao diện) rồi tải file', async () => {
+    renderTab();
+    await screen.findByText('Nguyen Van A');
+
+    fireEvent.click(screen.getByTestId('form-leads-export-csv'));
+
+    await waitFor(() => expect(downloadCsvFromRequest).toHaveBeenCalledTimes(1));
+    expect(exportWorkspaceSubmissionsCsv).toHaveBeenCalledTimes(1);
+    expect(exportWorkspaceSubmissionsCsv).toHaveBeenCalledWith({
+      formId: undefined,
+      from: undefined,
+      to: undefined,
+      lang: 'vi',
+    });
+    // Tải đúng lời gọi API vừa tạo + tên dự phòng.
+    expect(downloadCsvFromRequest).toHaveBeenCalledWith(EXPORT_REQUEST, 'khach-de-lai-thong-tin-bieu-mau.csv');
+  });
+
+  it('xuất THEO BỘ LỌC đang áp: biểu mẫu + khoảng ngày giống hệt danh sách đang nhìn thấy', async () => {
+    renderTab();
+    await screen.findByText('Nguyen Van A');
+    await screen.findByRole('option', { name: 'Đăng ký workshop' });
+    fireEvent.change(screen.getByLabelText('Biểu mẫu', { selector: 'select' }), { target: { value: '8' } });
+    fireEvent.change(screen.getByLabelText('Từ ngày'), { target: { value: '2026-10-01' } });
+    fireEvent.change(screen.getByLabelText('Đến ngày'), { target: { value: '2026-10-05' } });
+    await waitFor(() => expect(lastCallArgs()).toMatchObject({ formId: '8', from: '2026-10-01', to: '2026-10-05' }));
+
+    fireEvent.click(screen.getByTestId('form-leads-export-csv'));
+
+    await waitFor(() => expect(exportWorkspaceSubmissionsCsv).toHaveBeenCalledTimes(1));
+    expect(exportWorkspaceSubmissionsCsv).toHaveBeenCalledWith({ formId: '8', from: '2026-10-01', to: '2026-10-05', lang: 'vi' });
+  });
+
+  it('khoảng ngày sai (từ sau đến) → nút xuất bị khoá, không gọi API', async () => {
+    renderTab();
+    await screen.findByText('Nguyen Van A');
+    fireEvent.change(screen.getByLabelText('Đến ngày'), { target: { value: '2026-10-05' } });
+    fireEvent.change(screen.getByLabelText('Từ ngày'), { target: { value: '2026-10-09' } });
+    await screen.findByRole('alert');
+
+    const button = screen.getByTestId('form-leads-export-csv');
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(exportWorkspaceSubmissionsCsv).not.toHaveBeenCalled();
+  });
+
+  it('đang xuất → nút khoá và đổi chữ; xong thì trở lại bình thường', async () => {
+    let finish;
+    downloadCsvFromRequest.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    renderTab();
+    await screen.findByText('Nguyen Van A');
+
+    fireEvent.click(screen.getByTestId('form-leads-export-csv'));
+    await waitFor(() => expect(screen.getByTestId('form-leads-export-csv')).toBeDisabled());
+    expect(screen.getByTestId('form-leads-export-csv')).toHaveTextContent('Đang xuất…');
+
+    finish({ rowCount: 2, total: 2, truncated: false, filename: 'f.csv' });
+    await waitFor(() => expect(screen.getByTestId('form-leads-export-csv')).not.toBeDisabled());
+    expect(screen.getByTestId('form-leads-export-csv')).toHaveTextContent('Xuất CSV');
   });
 });
 

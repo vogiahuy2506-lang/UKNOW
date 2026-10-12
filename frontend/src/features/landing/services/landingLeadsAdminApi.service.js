@@ -1,4 +1,5 @@
 import api from '../../../services/api.js';
+import { CSV_EXPORT_TIMEOUT_MS } from '../../../utils/csvExportDownload.js';
 
 /**
  * Chuẩn hóa query lọc lead landing (dùng chung list + export Excel).
@@ -151,4 +152,18 @@ export async function downloadLandingLeadsAdminExportXlsx(params = {}) {
     }
     throw e;
   }
+}
+
+/**
+ * Gọi GET /api/leads/export.csv (PR-8c biểu mẫu) — CSV UTF-8 có BOM, CÙNG bộ lọc với danh sách (không phân trang), tối đa 20.000 dòng.
+ * Trả response Blob thô; dùng `downloadCsvFromRequest` (utils/csvExportDownload) để lưu file và đọc số dòng / cờ bị cắt.
+ *
+ * @param {object} params Chỉ các trường lọc (giống list)
+ * @param {string} [lang] 'vi' | 'en' — ngôn ngữ tiêu đề cột
+ * @returns {Promise<import('axios').AxiosResponse<Blob>>}
+ */
+export function exportLandingLeadsAdminCsv(params = {}, lang) {
+  const q = buildLandingLeadsFilterQuery(params, { includePaging: false });
+  if (lang) q.lang = lang;
+  return api.get('/leads/export.csv', { params: q, responseType: 'blob', timeout: CSV_EXPORT_TIMEOUT_MS });
 }

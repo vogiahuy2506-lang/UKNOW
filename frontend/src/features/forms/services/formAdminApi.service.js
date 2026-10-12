@@ -1,4 +1,5 @@
 import api from '../../../services/api';
+import { CSV_EXPORT_TIMEOUT_MS } from '../../../utils/csvExportDownload';
 
 /**
  * Service gọi API quản trị biểu mẫu (/api/forms).
@@ -57,6 +58,37 @@ export async function fetchWorkspaceSubmissions({ page = 1, limit = 20, formId, 
   if (to) params.to = to;
   const res = await api.get('/forms/submissions', { params });
   return res.data?.data || { items: [], total: 0, page: 1, limit: 20 };
+}
+
+/**
+ * Xuất CSV bài nộp của MỌI biểu mẫu trong workspace (tab "Từ biểu mẫu") — CÙNG bộ lọc với `fetchWorkspaceSubmissions` để file khớp danh sách
+ * đang nhìn thấy. Trả response Blob thô; dùng `downloadCsvFromRequest` (utils/csvExportDownload) để lưu và đọc số dòng.
+ *
+ * @param {{ formId?: number|string, landingPageSlug?: string, from?: string, to?: string, lang?: string }} [options]
+ * @returns {Promise<import('axios').AxiosResponse<Blob>>}
+ */
+export function exportWorkspaceSubmissionsCsv({ formId, landingPageSlug, from, to, lang } = {}) {
+  const params = {};
+  if (formId) params.formId = formId;
+  if (landingPageSlug) params.landingPageSlug = landingPageSlug;
+  if (from) params.from = from;
+  if (to) params.to = to;
+  if (lang) params.lang = lang;
+  return api.get('/forms/submissions/export.csv', { params, responseType: 'blob', timeout: CSV_EXPORT_TIMEOUT_MS });
+}
+
+/**
+ * Xuất CSV bài nộp của MỘT biểu mẫu (trang bài nộp) — cột là nhãn trường của biểu mẫu đó. `date` (YYYY-MM-DD) là bộ lọc ngày lịch hẹn của trang.
+ *
+ * @param {number|string} id
+ * @param {{ date?: string, lang?: string }} [options]
+ * @returns {Promise<import('axios').AxiosResponse<Blob>>}
+ */
+export function exportFormSubmissionsCsv(id, { date, lang } = {}) {
+  const params = {};
+  if (date) params.date = date;
+  if (lang) params.lang = lang;
+  return api.get(`/forms/${id}/submissions/export.csv`, { params, responseType: 'blob', timeout: CSV_EXPORT_TIMEOUT_MS });
 }
 
 export async function cancelSubmission(id, submissionId) {

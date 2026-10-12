@@ -205,6 +205,8 @@ function buildDateRange(preset) {
  *     onReset={resetFilters}
  *     onExportExcel={handleExport}
  *     isExporting={isExporting}
+ *     onExportCsv={handleExportCsv}
+ *     isExportingCsv={isExportingCsv}
  *   />
  *
  * @param {object} props
@@ -214,6 +216,8 @@ function buildDateRange(preset) {
  * @param {function} props.onReset
  * @param {function} [props.onExportExcel]
  * @param {boolean} [props.isExporting]
+ * @param {function} [props.onExportCsv] Xuất CSV (PR-8c) — cùng bộ lọc đang áp
+ * @param {boolean} [props.isExportingCsv]
  * @param {number} [props.appliedCount] Số chip đang áp dụng (để hiện badge trên trigger)
  */
 export function LandingLeadsAdminFilters({
@@ -223,6 +227,8 @@ export function LandingLeadsAdminFilters({
   onReset,
   onExportExcel,
   isExporting = false,
+  onExportCsv,
+  isExportingCsv = false,
   appliedCount = 0,
 }) {
   const { t } = useI18n();
@@ -366,6 +372,19 @@ export function LandingLeadsAdminFilters({
           className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-2 text-sm font-medium text-emerald-800 dark:text-emerald-300 shadow-sm hover:bg-emerald-100 dark:hover:bg-emerald-900/40 disabled:opacity-50"
         >
           {isExporting ? t('landingLeads.exporting') : t('landingLeads.exportExcel')}
+        </button>
+      ) : null}
+
+      {typeof onExportCsv === 'function' ? (
+        <button
+          type="button"
+          onClick={() => onExportCsv()}
+          disabled={isExportingCsv}
+          title={t('csvExport.buttonHint')}
+          data-testid="landing-leads-export-csv"
+          className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-2 text-sm font-medium text-emerald-800 dark:text-emerald-300 shadow-sm hover:bg-emerald-100 dark:hover:bg-emerald-900/40 disabled:opacity-50"
+        >
+          {isExportingCsv ? t('csvExport.exporting') : t('csvExport.button')}
         </button>
       ) : null}
 

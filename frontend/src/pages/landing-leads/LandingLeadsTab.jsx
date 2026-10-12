@@ -15,7 +15,10 @@ import {
 } from 'react-icons/hi';
 import useLandingLeadsList from '../../features/landing/hooks/useLandingLeadsList.js';
 import { LandingLeadsAdminFilters } from '../../features/landing/components/LandingLeadsAdminFilters.jsx';
-import { fetchLandingLeadsCustomFieldDefinitions } from '../../features/landing/services/landingLeadsAdminApi.service.js';
+import {
+  exportLandingLeadsAdminCsv,
+  fetchLandingLeadsCustomFieldDefinitions,
+} from '../../features/landing/services/landingLeadsAdminApi.service.js';
 import LandingLeadConsentBadge from '../../features/landing/components/LandingLeadConsentBadge.jsx';
 import LandingLeadDetailModal from '../../features/landing/components/LandingLeadDetailModal.jsx';
 import {
@@ -25,6 +28,7 @@ import {
   getLeadInitials,
 } from '../../features/landing/utils/leadFields.js';
 import { useI18n } from '../../i18n';
+import useCsvExport from '../../hooks/useCsvExport.js';
 
 // eslint-disable-next-line no-unused-vars
 const PAGE_SIZE = 20;
@@ -45,7 +49,8 @@ const EXTRA_INLINE_FIELD_LIMIT = 2;
  *  - Custom field definitions endpoint `/leads/custom-field-definitions` — để hiển thị label + options.
  */
 export default function LandingLeadsTab() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const { exportCsv, isExporting: isExportingCsv } = useCsvExport();
   const {
     draftFilters,
     setDraftFilters,
@@ -132,6 +137,12 @@ export default function LandingLeadsTab() {
     }
   }, [exportExcel, t]);
 
+  // Xuất CSV (PR-8c): CÙNG bộ lọc đang áp với danh sách; backend ghi nhật ký hoạt động mỗi lần xuất.
+  const handleExportCsv = useCallback(
+    () => exportCsv(() => exportLandingLeadsAdminCsv(appliedFilters, locale), 'khach-de-lai-thong-tin-landing-page.csv'),
+    [exportCsv, appliedFilters, locale]
+  );
+
   const handleCopy = useCallback(
     async (text, label) => {
       try {
@@ -165,6 +176,8 @@ export default function LandingLeadsTab() {
           onReset={resetFilters}
           onExportExcel={handleExport}
           isExporting={isExporting}
+          onExportCsv={handleExportCsv}
+          isExportingCsv={isExportingCsv}
           appliedCount={appliedCount}
         />
         <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
