@@ -270,6 +270,26 @@ describe('FormEditorPage — loại trường & bố cục mới (PR-4)', () => 
     ]);
   });
 
+  it('dữ liệu bẩn nạp từ server: khối bố cục lỡ mang required/role/placeholder, rating lỡ mang role → lưu lại thì payload bỏ hết (không lan dữ liệu bẩn)', async () => {
+    await renderEdit({
+      ...FORM,
+      fields: [
+        { key: 'f_h', label: 'Tiêu đề', type: 'heading', required: true, role: 'name', placeholder: 'rác' },
+        { key: 'f_pb', label: 'Bước 2', type: 'page_break', required: true, role: 'email' },
+        { key: 'f_rate', label: 'Sao', type: 'rating', required: true, role: 'phone' },
+        { key: 'f_ok', label: 'Họ tên', type: 'short_text', required: true, role: 'name' },
+      ],
+    });
+    save();
+    const { fields } = await savedPayload();
+    expect(fields).toEqual([
+      { key: 'f_h', label: 'Tiêu đề', type: 'heading', required: false },
+      { key: 'f_pb', label: 'Bước 2', type: 'page_break', required: false },
+      { key: 'f_rate', label: 'Sao', type: 'rating', required: true },
+      { key: 'f_ok', label: 'Họ tên', type: 'short_text', required: true, role: 'name' },
+    ]);
+  });
+
   it('đổi trường nhập (bắt buộc + vai trò + nửa dòng + gợi ý) sang Tiêu đề phần: payload bỏ required/role/width/placeholder; đổi sang Chấm sao: bỏ role', async () => {
     const form = {
       ...FORM,
