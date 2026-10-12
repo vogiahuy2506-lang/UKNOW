@@ -72,6 +72,7 @@ function readScheduleSettings(response) {
   const data = response?.data?.data || {};
   return {
     daysBefore: Array.isArray(data.daysBefore) ? data.daysBefore : [],
+    daysBeforeYearly: Array.isArray(data.daysBeforeYearly) ? data.daysBeforeYearly : [],
     updatedAt: data.updatedAt || null,
   };
 }
@@ -126,21 +127,33 @@ export default function AdminWelcomeEmailPage() {
 
   const [scheduleDraft, setScheduleDraft] = useState([]);
   const [scheduleSaved, setScheduleSaved] = useState([]);
+  // Mốc nhắc riêng cho gói năm (PLAN_MOC_NHAC_HAN_THEO_KY B5); scheduleDraft/scheduleSaved ở trên = gói tháng.
+  const [scheduleYearlyDraft, setScheduleYearlyDraft] = useState([]);
+  const [scheduleYearlySaved, setScheduleYearlySaved] = useState([]);
   const [scheduleUpdatedAt, setScheduleUpdatedAt] = useState(null);
   const [isScheduleLoading, setIsScheduleLoading] = useState(true);
   const [isScheduleSaving, setIsScheduleSaving] = useState(false);
 
   const isDirty = template.subject !== savedTemplate.subject || template.bodyHtml !== savedTemplate.bodyHtml;
-  const scheduleIsDirty = JSON.stringify(scheduleDraft) !== JSON.stringify(scheduleSaved.map(String));
+  const scheduleIsDirty = JSON.stringify(scheduleDraft) !== JSON.stringify(scheduleSaved.map(String))
+    || JSON.stringify(scheduleYearlyDraft) !== JSON.stringify(scheduleYearlySaved.map(String));
   const { errors: scheduleErrors, parsed: scheduleParsedDays } = validateScheduleDraft(scheduleDraft, t);
-  const isScheduleValid = scheduleErrors.length === 0;
+  const { errors: scheduleYearlyErrors, parsed: scheduleYearlyParsedDays } = validateScheduleDraft(scheduleYearlyDraft, t);
+  const isScheduleValid = scheduleErrors.length === 0 && scheduleYearlyErrors.length === 0;
   const schedulePreviewText = scheduleParsedDays.length > 0
     ? t('adminSubscriptionReminderSchedule.previewWithDays', {
       days: [...new Set(scheduleParsedDays)].sort((a, b) => b - a).join(', '),
     })
     : t('adminSubscriptionReminderSchedule.previewNoDays');
+  const scheduleYearlyPreviewText = scheduleYearlyParsedDays.length > 0
+    ? t('adminSubscriptionReminderSchedule.previewWithDaysYearly', {
+      days: [...new Set(scheduleYearlyParsedDays)].sort((a, b) => b - a).join(', '),
+    })
+    : t('adminSubscriptionReminderSchedule.previewNoDaysYearly');
 
   const savedDaysText = [...scheduleSaved].sort((x, y) => y - x).join(', ');
+  const savedYearlyDaysText = [...scheduleYearlySaved].sort((x, y) => y - x).join(', ')
+    || t('adminSubscriptionReminderSchedule.noMarks');
 
   const templateKeyLabels = {
     welcome: t('adminWelcomeEmail.templateKeys.welcome'),
@@ -167,8 +180,8 @@ export default function AdminWelcomeEmailPage() {
       // Hai dòng này TỪNG ghi cứng "còn 7 ngày và còn 3 ngày". Từ khi lịch nhắc sửa được
       // (PR-2), ghi cứng là tự mâu thuẫn: sếp đặt [10,5,2] ở Cài đặt mà chữ mô tả vẫn nói 7/3.
       // Lấy từ scheduleSaved (đã lưu), KHÔNG phải scheduleDraft — chữ này mô tả hành vi THẬT.
-      subtitle: t('adminWelcomeEmail.templateMeta.plan_expiring.subtitle', { days: savedDaysText }),
-      behaviorNote: t('adminWelcomeEmail.templateMeta.plan_expiring.behaviorNote', { days: savedDaysText }),
+      subtitle: t('adminWelcomeEmail.templateMeta.plan_expiring.subtitle', { days: savedDaysText, daysYearly: savedYearlyDaysText }),
+      behaviorNote: t('adminWelcomeEmail.templateMeta.plan_expiring.behaviorNote', { days: savedDaysText, daysYearly: savedYearlyDaysText }),
       previewFrameTitle: t('adminWelcomeEmail.templateMeta.plan_expiring.previewFrameTitle'),
     },
     plan_expired: {
@@ -225,6 +238,8 @@ export default function AdminWelcomeEmailPage() {
       const loaded = readScheduleSettings(response);
       setScheduleDraft(loaded.daysBefore.map(String));
       setScheduleSaved(loaded.daysBefore);
+      setScheduleYearlyDraft(loaded.daysBeforeYearly.map(String));
+      setScheduleYearlySaved(loaded.daysBeforeYearly);
       setScheduleUpdatedAt(loaded.updatedAt);
     } catch (error) {
       toast.error(error?.response?.data?.message || t('adminSubscriptionReminderSchedule.loadFailed'));
@@ -258,6 +273,7 @@ export default function AdminWelcomeEmailPage() {
     if (scheduleIsDirty) {
       if (!window.confirm(t('adminWelcomeEmail.settingsCloseConfirm'))) return;
       setScheduleDraft(scheduleSaved.map(String));
+      setScheduleYearlyDraft(scheduleYearlySaved.map(String));
     }
     setSettingsOpen(false);
   };
@@ -340,14 +356,31 @@ export default function AdminWelcomeEmailPage() {
     setScheduleDraft((current) => current.filter((_, i) => i !== index));
   };
 
+  const changeScheduleYearlyDay = (index, value) => {
+    setScheduleYearlyDraft((current) => current.map((day, i) => (i === index ? value : day)));
+  };
+
+  const addScheduleYearlyDay = () => {
+    setScheduleYearlyDraft((current) => [...current, '']);
+  };
+
+  const removeScheduleYearlyDay = (index) => {
+    setScheduleYearlyDraft((current) => current.filter((_, i) => i !== index));
+  };
+
   const saveSchedule = async () => {
     if (!isScheduleValid) return;
     setIsScheduleSaving(true);
     try {
-      const response = await adminSubscriptionReminderSettingsApiService.updateSettings(scheduleParsedDays);
+      const response = await adminSubscriptionReminderSettingsApiService.updateSettings({
+        daysBefore: scheduleParsedDays,
+        daysBeforeYearly: scheduleYearlyParsedDays,
+      });
       const saved = readScheduleSettings(response);
       setScheduleDraft(saved.daysBefore.map(String));
       setScheduleSaved(saved.daysBefore);
+      setScheduleYearlyDraft(saved.daysBeforeYearly.map(String));
+      setScheduleYearlySaved(saved.daysBeforeYearly);
       setScheduleUpdatedAt(saved.updatedAt);
       toast.success(t('adminSubscriptionReminderSchedule.saveSuccess'));
     } catch (error) {
@@ -674,10 +707,17 @@ export default function AdminWelcomeEmailPage() {
               isDirty={scheduleIsDirty}
               previewText={schedulePreviewText}
               showEmptyWarning={scheduleDraft.length === 0}
+              yearlyDraftDays={scheduleYearlyDraft}
+              yearlyErrors={scheduleYearlyErrors}
+              yearlyPreviewText={scheduleYearlyPreviewText}
+              showYearlyEmptyWarning={scheduleYearlyDraft.length === 0}
               updatedAt={scheduleUpdatedAt}
               onChangeDay={changeScheduleDay}
               onAddDay={addScheduleDay}
               onRemoveDay={removeScheduleDay}
+              onChangeYearlyDay={changeScheduleYearlyDay}
+              onAddYearlyDay={addScheduleYearlyDay}
+              onRemoveYearlyDay={removeScheduleYearlyDay}
               onSave={saveSchedule}
             />
           </div>

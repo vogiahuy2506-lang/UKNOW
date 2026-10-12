@@ -52,7 +52,9 @@ vi.mock('../../features/admin/services/adminSubscriptionReminderSettingsApi.serv
 const scheduleT = viDict.adminSubscriptionReminderSchedule;
 const welcomeT = viDict.adminWelcomeEmail;
 const dayLabel = (n) => scheduleT.dayInputLabel.replace('{index}', String(n));
+const yearlyDayLabel = (n) => scheduleT.dayInputLabelYearly.replace('{index}', String(n));
 const previewText = (days) => scheduleT.previewWithDays.replace('{days}', days);
+const yearlyPreviewText = (days) => scheduleT.previewWithDaysYearly.replace('{days}', days);
 
 // 11/10/2026 — bố cục mới (thanh trên + Cài đặt + Công cụ): Lịch nhắc hạn và Thông tin mẫu nằm trong modal
 // Cài đặt, "Khôi phục mặc định" / "Cập nhật xem trước" nằm trong menu Công cụ, bộ chọn mẫu là tab ở thanh trên.
@@ -107,9 +109,12 @@ describe('AdminWelcomeEmailPage', () => {
       updatedAt: '2026-09-11T06:00:00.000Z',
     })));
     mockResetTemplate.mockImplementation(() => Promise.resolve(response(welcomeTemplate)));
-    mockGetScheduleSettings.mockResolvedValue(response({ daysBefore: [7, 3], updatedAt: null, updatedBy: null }));
-    mockUpdateScheduleSettings.mockImplementation((daysBefore) => Promise.resolve(response({
+    mockGetScheduleSettings.mockResolvedValue(response({
+      daysBefore: [7, 3], daysBeforeYearly: [30, 7, 3], updatedAt: null, updatedBy: null,
+    }));
+    mockUpdateScheduleSettings.mockImplementation(({ daysBefore, daysBeforeYearly }) => Promise.resolve(response({
       daysBefore,
+      daysBeforeYearly,
       updatedAt: '2026-09-14T08:00:00.000Z',
       updatedBy: 1,
     })));
@@ -285,7 +290,11 @@ describe('AdminWelcomeEmailPage', () => {
 
       fireEvent.click(scheduleSaveButton());
 
-      await waitFor(() => expect(mockUpdateScheduleSettings).toHaveBeenCalledWith([10, 5, 2]));
+      // PLAN_MOC_NHAC_HAN_THEO_KY B5: lưu MỘT lần cả hai danh sách; gói năm không đụng tới vẫn được gửi nguyên [30, 7, 3].
+      await waitFor(() => expect(mockUpdateScheduleSettings).toHaveBeenCalledWith({
+        daysBefore: [10, 5, 2],
+        daysBeforeYearly: [30, 7, 3],
+      }));
       expect(mockToastSuccess).toHaveBeenCalledWith(scheduleT.saveSuccess);
     });
 
@@ -340,7 +349,10 @@ describe('AdminWelcomeEmailPage', () => {
       expect(scheduleSaveButton()).not.toBeDisabled();
 
       fireEvent.click(scheduleSaveButton());
-      await waitFor(() => expect(mockUpdateScheduleSettings).toHaveBeenCalledWith([]));
+      await waitFor(() => expect(mockUpdateScheduleSettings).toHaveBeenCalledWith({
+        daysBefore: [],
+        daysBeforeYearly: [30, 7, 3],
+      }));
     });
 
     it('ca 7 — API trả lỗi khi Lưu → hiện lỗi đọc được, KHÔNG mất dữ liệu đang nhập', async () => {
@@ -413,6 +425,104 @@ describe('AdminWelcomeEmailPage', () => {
       expect(screen.getByRole('button', { name: 'Lưu' })).not.toBeDisabled();
     });
 
+    // ── PLAN_MOC_NHAC_HAN_THEO_KY_2026-10-12.md B5 — HAI danh sách: Gói tháng + Gói năm ─────────────────────────────
+    describe('hai danh sách mốc: Gói tháng và Gói năm', () => {
+      it('hiện đủ hai danh sách đọc từ API: gói tháng [7, 3], gói năm [30, 7, 3]', async () => {
+        await openScheduleTab();
+
+        expect(screen.getByText(scheduleT.monthlyTitle)).toBeInTheDocument();
+        expect(screen.getByText(scheduleT.yearlyTitle)).toBeInTheDocument();
+        expect(screen.getByLabelText(dayLabel(1))).toHaveValue(7);
+        expect(screen.getByLabelText(dayLabel(2))).toHaveValue(3);
+        expect(screen.queryByLabelText(dayLabel(3))).not.toBeInTheDocument();
+        expect(screen.getByLabelText(yearlyDayLabel(1))).toHaveValue(30);
+        expect(screen.getByLabelText(yearlyDayLabel(2))).toHaveValue(7);
+        expect(screen.getByLabelText(yearlyDayLabel(3))).toHaveValue(3);
+        // Hai đoạn xem trước, mỗi đoạn theo danh sách của mình.
+        expect(screen.getByText(previewText('7, 3'))).toBeInTheDocument();
+        expect(screen.getByText(yearlyPreviewText('30, 7, 3'))).toBeInTheDocument();
+      });
+
+      it('(đột biến: bỏ daysBeforeYearly khỏi payload phải làm ca này đỏ) sửa gói năm thành [60, 30, 7, 1] và Lưu → PUT gửi CẢ HAI danh sách trong một lần', async () => {
+        await openScheduleTab();
+
+        fireEvent.change(screen.getByLabelText(yearlyDayLabel(1)), { target: { value: '60' } });
+        fireEvent.change(screen.getByLabelText(yearlyDayLabel(2)), { target: { value: '30' } });
+        fireEvent.change(screen.getByLabelText(yearlyDayLabel(3)), { target: { value: '7' } });
+        fireEvent.click(screen.getByRole('button', { name: scheduleT.addDayYearly }));
+        fireEvent.change(screen.getByLabelText(yearlyDayLabel(4)), { target: { value: '1' } });
+        expect(await screen.findByText(yearlyPreviewText('60, 30, 7, 1'))).toBeInTheDocument();
+        // Danh sách gói tháng KHÔNG bị kéo theo.
+        expect(screen.getByLabelText(dayLabel(1))).toHaveValue(7);
+
+        fireEvent.click(scheduleSaveButton());
+
+        await waitFor(() => expect(mockUpdateScheduleSettings).toHaveBeenCalledTimes(1));
+        expect(mockUpdateScheduleSettings).toHaveBeenCalledWith({
+          daysBefore: [7, 3],
+          daysBeforeYearly: [60, 30, 7, 1],
+        });
+        expect(mockToastSuccess).toHaveBeenCalledWith(scheduleT.saveSuccess);
+        // Sau khi lưu thì không còn "chưa lưu": đóng Cài đặt không hỏi.
+        fireEvent.keyDown(document, { key: 'Escape' });
+        expect(window.confirm).not.toHaveBeenCalled();
+      });
+
+      it('gói năm nhập mốc trùng [30, 30] → báo lỗi tại chỗ, nút Lưu bị chặn dù gói tháng hợp lệ, không gọi API', async () => {
+        await openScheduleTab();
+
+        fireEvent.change(screen.getByLabelText(yearlyDayLabel(2)), { target: { value: '30' } });
+
+        expect(await screen.findByText(scheduleT.errorDuplicate)).toBeInTheDocument();
+        expect(scheduleSaveButton()).toBeDisabled();
+        expect(mockUpdateScheduleSettings).not.toHaveBeenCalled();
+      });
+
+      it('gói năm nhập 400 → báo lỗi khoảng 1-365; xoá hết mốc gói năm → cảnh báo riêng cho gói năm, vẫn cho lưu và gửi []', async () => {
+        await openScheduleTab();
+
+        fireEvent.change(screen.getByLabelText(yearlyDayLabel(1)), { target: { value: '400' } });
+        expect(await screen.findByText(scheduleT.errorRange)).toBeInTheDocument();
+        expect(scheduleSaveButton()).toBeDisabled();
+
+        for (let i = 0; i < 3; i += 1) {
+          fireEvent.click(screen.getAllByRole('button', { name: scheduleT.removeDayYearly })[0]);
+        }
+        expect(await screen.findByText(scheduleT.emptyWarningYearlyTitle)).toBeInTheDocument();
+        expect(screen.getByText(scheduleT.emptyWarningYearlyBody)).toBeInTheDocument();
+        expect(scheduleSaveButton()).not.toBeDisabled();
+
+        fireEvent.click(scheduleSaveButton());
+        await waitFor(() => expect(mockUpdateScheduleSettings).toHaveBeenCalledWith({
+          daysBefore: [7, 3],
+          daysBeforeYearly: [],
+        }));
+      });
+
+      it('chỉ sửa gói năm rồi đóng Cài đặt mà chưa Lưu → vẫn hỏi xác nhận (gói năm cũng tính là "chưa lưu"); đồng ý thì mở lại thấy giá trị đã lưu', async () => {
+        window.confirm.mockReturnValue(true);
+        await openScheduleTab();
+
+        fireEvent.change(screen.getByLabelText(yearlyDayLabel(1)), { target: { value: '99' } });
+        fireEvent.keyDown(document, { key: 'Escape' });
+
+        expect(window.confirm).toHaveBeenCalledWith(welcomeT.settingsCloseConfirm);
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+        openSettings(scheduleT.tabLabel);
+        expect(await screen.findByLabelText(yearlyDayLabel(1))).toHaveValue(30);
+        expect(mockUpdateScheduleSettings).not.toHaveBeenCalled();
+      });
+
+      it('API cũ chưa có daysBeforeYearly → gói năm hiện rỗng (cảnh báo riêng), không văng lỗi', async () => {
+        mockGetScheduleSettings.mockResolvedValue(response({ daysBefore: [7, 3], updatedAt: null, updatedBy: null }));
+        await openScheduleTab();
+
+        expect(screen.queryByLabelText(yearlyDayLabel(1))).not.toBeInTheDocument();
+        expect(screen.getByText(scheduleT.emptyWarningYearlyTitle)).toBeInTheDocument();
+      });
+    });
+
     it('ca 9 — xem trước đổi ngay khi sửa mốc, chưa cần Lưu', async () => {
       await openScheduleTab();
 
@@ -463,5 +573,27 @@ describe('AdminWelcomeEmailPage — mô tả mẫu plan_expiring bám theo lịc
 
     // Không còn dấu vết chuỗi cứng cũ.
     expect(screen.queryByText(/còn 7 ngày và còn 3 ngày/)).not.toBeInTheDocument();
+  });
+
+  it('chữ mô tả nêu CẢ mốc gói năm đã lưu (PLAN_MOC_NHAC_HAN_THEO_KY B5): gói tháng [10, 5], gói năm [60, 30]', async () => {
+    mockGetScheduleSettings.mockResolvedValue(
+      response({ daysBefore: [10, 5], daysBeforeYearly: [60, 30], updatedAt: null, updatedBy: null })
+    );
+
+    render(
+      <I18nProvider>
+        <AdminWelcomeEmailPage />
+      </I18nProvider>
+    );
+    await screen.findByText('Email chào mừng thành viên');
+    selectTemplateTab(welcomeT.templateKeysShort.plan_expiring);
+    await screen.findByText(welcomeT.templateMeta.plan_expiring.title);
+    openSettings(welcomeT.settingsInfoTab);
+
+    const mota = await screen.findAllByText((_, el) => {
+      const txt = el?.textContent || '';
+      return el?.tagName === 'P' && txt.includes('10, 5') && txt.includes('60, 30');
+    });
+    expect(mota).toHaveLength(2);
   });
 });

@@ -7,8 +7,9 @@ const adminSubscriptionReminderSettingsApiService = {
   getSettings() {
     return api.get('/admin/subscription-reminder-settings');
   },
-  updateSettings(daysBefore) {
-    return api.put('/admin/subscription-reminder-settings', { daysBefore });
+  // PLAN_MOC_NHAC_HAN_THEO_KY B5 — lưu MỘT lần cả hai danh sách: daysBefore = gói tháng, daysBeforeYearly = gói năm.
+  updateSettings({ daysBefore, daysBeforeYearly }) {
+    return api.put('/admin/subscription-reminder-settings', { daysBefore, daysBeforeYearly });
   },
 };
 
