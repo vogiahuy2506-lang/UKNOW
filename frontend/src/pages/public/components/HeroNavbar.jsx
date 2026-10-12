@@ -138,7 +138,7 @@ export default function HeroNavbar() {
                   {t('navbar.login')}
                 </Link>
                 <Link
-                  to="/register"
+                  to="/app"
                   className="inline-flex items-center gap-2 text-[13px] font-semibold text-white rounded-full px-4 py-2"
                   style={{ backgroundColor: '#ef4d23' }}
                 >
@@ -200,7 +200,7 @@ export default function HeroNavbar() {
                     {t('navbar.login')}
                   </Link>
                   <Link
-                    to="/register"
+                    to="/app"
                     onClick={() => setOpen(false)}
                     className="block px-4 py-2.5 text-[14px] font-semibold text-white rounded-xl transition-colors text-center"
                     style={{ backgroundColor: '#ef4d23' }}
