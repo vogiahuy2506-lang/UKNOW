@@ -56,6 +56,11 @@ describe('supportApi.service', () => {
     );
   });
 
+  it('closeTicket gửi thân {} (thân null thành JSON "null" → express.json strict trả 400)', async () => {
+    await supportUserApi.closeTicket(5);
+    expect(api.post).toHaveBeenLastCalledWith('/support/tickets/5/close', {}, { skipOwnerContext: true });
+  });
+
   it('admin: query bỏ tham số rỗng / "all", giữ status thật', async () => {
     await supportAdminApi.listTickets({ status: 'all', category: '', search: '  ' });
     expect(api.get).toHaveBeenLastCalledWith('/admin/support/tickets', { params: { page: 1, limit: 20 } });

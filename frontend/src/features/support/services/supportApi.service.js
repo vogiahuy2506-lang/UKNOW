@@ -59,8 +59,9 @@ export const supportUserApi = {
     return unwrap(response, null);
   },
 
+  // Thân `{}` chứ không `null` — axios gửi `null` thành JSON "null", express.json() strict trả 400 (xem notificationApi.markRead).
   async closeTicket(id) {
-    const response = await api.post(`/support/tickets/${encodeURIComponent(id)}/close`, null, USER_OPTIONS);
+    const response = await api.post(`/support/tickets/${encodeURIComponent(id)}/close`, {}, USER_OPTIONS);
     return unwrap(response, null);
   },
 

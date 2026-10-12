@@ -29,14 +29,18 @@ const notificationApi = {
     return response?.data?.data || EMPTY_LIST;
   },
 
-  /** @param {number|string} id */
+  /**
+   * Thân `{}`, KHÔNG phải `null`: axios gửi `null` thành chuỗi JSON "null", `express.json()` (strict) trả 400 trước cả
+   * bước đăng nhập — 10–12/10/2026 bấm thông báo / "Đánh dấu đã đọc hết" trên production không đánh dấu được dòng nào.
+   * @param {number|string} id
+   */
   async markRead(id) {
-    const response = await api.post(`/notifications/${encodeURIComponent(id)}/read`, null, REQUEST_OPTIONS);
+    const response = await api.post(`/notifications/${encodeURIComponent(id)}/read`, {}, REQUEST_OPTIONS);
     return response?.data?.data;
   },
 
   async markAllRead() {
-    const response = await api.post('/notifications/read-all', null, REQUEST_OPTIONS);
+    const response = await api.post('/notifications/read-all', {}, REQUEST_OPTIONS);
     return response?.data?.data;
   },
 
