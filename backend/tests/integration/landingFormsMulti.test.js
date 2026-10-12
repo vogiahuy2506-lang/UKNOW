@@ -295,6 +295,27 @@ describe('PR-6 — sửa landing nhiều biểu mẫu (update): lưu–mở lạ
     expect(res.body.data.linkedForms.map((f) => f.kind)).toEqual(['consult', 'booking', 'payment']);
   });
 
+  // Review PR-6 12/10: chủ dán/nhân bản khối nhúng → CÙNG một biểu mẫu xuất hiện 2 lần trong HTML. Khoá chính chỉ mục là
+  // (landing_page_id, form_id) — không lọc trùng thì INSERT vỡ và cả lượt lưu landing hỏng.
+  it('HTML nhúng CÙNG một biểu mẫu HAI lần → vẫn lưu được (200), chỉ mục không nhân đôi, không tạo biểu mẫu mới', async () => {
+    const me = await createUserWithPlan({ userOverrides: { username: 'multi-dup' } });
+    const token = await loginAs(me);
+    const landingId = await createThree(token, 'multi-dup');
+    const before = await indexRows(landingId);
+    const html = (await getLanding(token, landingId)).body.data.htmlContent;
+    const firstBlock = html.match(/<section[^>]*data-founderai-form-section[^>]*>[\s\S]*?<\/section>/)?.[0];
+    expect(firstBlock).toBeTruthy();
+
+    const res = await putLanding(token, landingId, {
+      slug: 'multi-dup', title: 'Landing multi-dup', htmlContent: `${html}${firstBlock}`,
+    });
+    expect(res.status).toBe(200);
+    expect((await db.query('SELECT COUNT(*)::int AS c FROM forms')).rows[0].c).toBe(3);
+    const after = await indexRows(landingId);
+    expect(after.map((r) => r.form_id)).toEqual(before.map((r) => r.form_id));
+    expect(after.map((r) => r.position)).toEqual([0, 1, 2]);
+  });
+
   it('BỎ một biểu mẫu khỏi HTML → chỉ mục còn 2 dòng đánh lại vị trí 0,1; biểu mẫu + bài nộp của nó còn nguyên', async () => {
     const me = await createUserWithPlan({ userOverrides: { username: 'multi-u2' } });
     const token = await loginAs(me);
