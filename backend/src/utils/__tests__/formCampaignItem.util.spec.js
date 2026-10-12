@@ -1,5 +1,9 @@
 import { describe, it, expect } from '@jest/globals';
-import { mapFormSubmissionToCampaignItem } from '../formCampaignItem.util.js';
+import {
+  mapFormSubmissionToCampaignItem,
+  campaignItemPersonKey,
+  dedupeCampaignItemsKeepNewest,
+} from '../formCampaignItem.util.js';
 
 describe('formCampaignItem.util - mapFormSubmissionToCampaignItem', () => {
   const fields = [
@@ -129,5 +133,48 @@ describe('formCampaignItem.util - mapFormSubmissionToCampaignItem', () => {
     expect(item.f_rate).toBe(4);
     expect(item.f_yn).toBe('yes');
     expect(item.f_time).toBe('09:30');
+  });
+});
+
+describe('formCampaignItem.util — khử trùng người điền nhiều biểu mẫu (PR-7b)', () => {
+  it('campaignItemPersonKey: email (trim + chữ thường) thắng; không có email thì 9 số cuối SĐT; SĐT quá ngắn / trống → null', () => {
+    expect(campaignItemPersonKey({ email: '  An@X.com ', phone: '0901234567' })).toBe('e:an@x.com');
+    expect(campaignItemPersonKey({ email: '', phone: '+84 901 234 567' })).toBe('p:901234567');
+    expect(campaignItemPersonKey({ email: null, phone: '0901234567' })).toBe('p:901234567');
+    expect(campaignItemPersonKey({ email: null, phone: '12345' })).toBeNull();
+    expect(campaignItemPersonKey({ email: '   ', phone: '' })).toBeNull();
+    expect(campaignItemPersonKey({})).toBeNull();
+  });
+
+  it('SĐT viết khác nhau (0901..., +84901..., 84 901...) cùng một người', () => {
+    expect(campaignItemPersonKey({ phone: '0901234567' })).toBe(campaignItemPersonKey({ phone: '+84901234567' }));
+    expect(campaignItemPersonKey({ phone: '0901234567' })).toBe(campaignItemPersonKey({ phone: '84 901 234 567' }));
+  });
+
+  it('dedupeCampaignItemsKeepNewest: đầu vào mới nhất trước → giữ bản gặp ĐẦU (mới nhất) của mỗi người, giữ thứ tự', () => {
+    const items = [
+      { submissionId: 9, formId: 2, email: 'a@x.com', fullName: 'A mới' },
+      { submissionId: 8, formId: 1, email: 'B@x.com', fullName: 'B' },
+      { submissionId: 7, formId: 1, email: 'a@X.com', fullName: 'A cũ' },
+      { submissionId: 6, formId: 3, email: null, phone: '0900000001', fullName: 'C' },
+      { submissionId: 5, formId: 1, email: null, phone: '+84900000001', fullName: 'C cũ' },
+    ];
+    const out = dedupeCampaignItemsKeepNewest(items);
+    expect(out.map((i) => i.submissionId)).toEqual([9, 8, 6]);
+    expect(out[0].fullName).toBe('A mới');
+  });
+
+  it('item không có email lẫn SĐT hợp lệ KHÔNG nhận diện được → giữ nguyên, không bị gộp với nhau', () => {
+    const items = [
+      { submissionId: 3, email: null, phone: null },
+      { submissionId: 2, email: '', phone: '123' },
+      { submissionId: 1, email: null, phone: undefined },
+    ];
+    expect(dedupeCampaignItemsKeepNewest(items)).toHaveLength(3);
+  });
+
+  it('đầu vào không phải mảng → []', () => {
+    expect(dedupeCampaignItemsKeepNewest(null)).toEqual([]);
+    expect(dedupeCampaignItemsKeepNewest(undefined)).toEqual([]);
   });
 });

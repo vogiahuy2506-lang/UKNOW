@@ -1128,12 +1128,13 @@ describe('aiCampaign.service', () => {
     });
   });
 
-  it('PR-5b-2b: prompt chat (V1) ghi rõ landing đã gắn Biểu mẫu (formId cạnh slug), landing khác vẫn ghi bình thường', async () => {
+  it('PR-5b-2b/PR-7b: prompt chat (V1) ghi rõ landing đã gắn Biểu mẫu (formIds cạnh slug, ĐỦ mọi id), landing khác vẫn ghi bình thường', async () => {
     reserve.mockResolvedValue({ maxOutputTokens: 1024 });
     extractGeminiUsage.mockReturnValue({ promptTokens: 2, outputTokens: 1, totalTokens: 3 });
     getLandingPages.mockResolvedValueOnce([
-      { slug: 'khoa-hoc-ielts', title: 'Khoá IELTS', isPublished: true, formId: 7 },
-      { slug: 'landing-thuong', title: 'Landing thường', isPublished: true, formId: null },
+      { slug: 'khoa-hoc-ielts', title: 'Khoá IELTS', isPublished: true, formId: 7, formIds: [7] },
+      { slug: 'landing-3-form', title: 'Landing 3 biểu mẫu', isPublished: true, formId: 11, formIds: [11, 12, 13] },
+      { slug: 'landing-thuong', title: 'Landing thường', isPublished: true, formId: null, formIds: [] },
     ]);
     axiosPost.mockResolvedValue({
       data: {
@@ -1155,11 +1156,14 @@ describe('aiCampaign.service', () => {
     const lastCall = axiosPost.mock.calls[axiosPost.mock.calls.length - 1];
     const systemPrompt = lastCall[1].systemInstruction.parts[0].text;
     expect(systemPrompt).toContain('slug: "khoa-hoc-ielts"');
-    expect(systemPrompt).toContain('formId=7');
+    expect(systemPrompt).toContain('formIds=[7]');
     expect(systemPrompt).toContain('slug: "landing-thuong"');
-    // Landing không có form gắn: dòng của nó KHÔNG chứa "formId=" (đứng riêng, không lẫn số của landing kia).
+    // PR-7b: landing có 3 biểu mẫu -> dòng của nó liệt kê ĐỦ cả 3 id (bỏ sót id = bỏ sót người đã đăng ký).
+    const landing3Line = systemPrompt.split('\n').find((line) => line.includes('slug: "landing-3-form"'));
+    expect(landing3Line).toContain('formIds=[11, 12, 13]');
+    // Landing không có form gắn: dòng của nó KHÔNG chứa "formIds=" (đứng riêng, không lẫn số của landing kia).
     const landingThuongLine = systemPrompt.split('\n').find((line) => line.includes('landing-thuong'));
-    expect(landingThuongLine).not.toContain('formId=');
+    expect(landingThuongLine).not.toContain('formIds=');
   });
 
   it('PR-B: trims content_plan days when model returns more days than user schedule', async () => {

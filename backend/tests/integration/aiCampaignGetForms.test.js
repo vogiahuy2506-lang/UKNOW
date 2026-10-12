@@ -33,12 +33,17 @@ async function insertForm(owner, {
   return Number(result.rows[0].id);
 }
 
-async function insertSubmission(formId, owner, { marketingConsent = null, status = 'submitted' } = {}) {
+async function insertSubmission(formId, owner, {
+  marketingConsent = null,
+  status = 'submitted',
+  email = null,
+  phone = null,
+} = {}) {
   const accessToken = crypto.randomBytes(16).toString('hex');
   await db.query(
-    `INSERT INTO form_submissions (form_id, workspace_owner_id, access_token, answers, marketing_consent, status)
-     VALUES ($1, $2, $3, '{}'::jsonb, $4, $5)`,
-    [formId, owner.id, accessToken, marketingConsent, status]
+    `INSERT INTO form_submissions (form_id, workspace_owner_id, access_token, answers, marketing_consent, status, respondent_email, respondent_phone)
+     VALUES ($1, $2, $3, '{}'::jsonb, $4, $5, $6, $7)`,
+    [formId, owner.id, accessToken, marketingConsent, status, email, phone]
   );
 }
 
@@ -194,7 +199,56 @@ describe('AiCampaignRepository.getLandingPages — PR-5b-2b', () => {
     const withFormRow = rows.find((r) => r.slug === 'khoa-hoc-ielts');
     const noFormRow = rows.find((r) => r.slug === 'landing-thuong');
     expect(Number(withFormRow.form_id)).toBe(form);
+    expect(withFormRow.form_ids).toEqual([form]);
     expect(noFormRow.form_id).toBeNull();
+    expect(noFormRow.form_ids).toEqual([]);
+  });
+
+  // PR-7b: trước đây landing nhiều biểu mẫu chỉ đại diện bằng biểu mẫu CHÍNH → người điền các biểu mẫu còn lại bị bỏ sót.
+  it('PR-7b: landing có 3 biểu mẫu → form_ids đủ cả 3 theo thứ tự trong landing (kể cả bản nháp); form_id = biểu mẫu đầu', async () => {
+    const owner = await createUser({ username: 'lp_owner_three_forms' });
+    const landing = await insertLanding(owner, { slug: 'landing-3-form' });
+    const first = await insertForm(owner, { title: 'Tư vấn', isPublished: true });
+    const second = await insertForm(owner, { title: 'Đặt lịch', isPublished: false }); // nháp vẫn nằm trong danh sách
+    const third = await insertForm(owner, { title: 'Khảo sát', isPublished: true });
+    await attachFormToLanding(first, landing);
+    await attachFormToLanding(second, landing);
+    await attachFormToLanding(third, landing);
+
+    const rows = await aiCampaignRepository.getLandingPages(owner.id);
+    const row = rows.find((r) => r.slug === 'landing-3-form');
+    expect(row.form_ids).toEqual([first, second, third]);
+    expect(row.form_id).toBe(first);
+    expect(typeof row.form_ids[0]).toBe('number');
+    // Vẫn MỘT dòng mỗi landing (array_agg trong LATERAL, không nhân dòng theo số biểu mẫu).
+    expect(rows.filter((r) => r.slug === 'landing-3-form')).toHaveLength(1);
+  });
+
+  it('PR-7b: biểu mẫu đã bị super admin tắt bị loại khỏi danh sách, các biểu mẫu còn lại vẫn đủ', async () => {
+    const owner = await createUser({ username: 'lp_owner_mixed_disabled' });
+    const landing = await insertLanding(owner, { slug: 'landing-co-form-tat' });
+    const ok1 = await insertForm(owner, { title: 'Còn 1' });
+    const off = await insertForm(owner, { title: 'Đã tắt', adminDisabled: true });
+    const ok2 = await insertForm(owner, { title: 'Còn 2' });
+    await attachFormToLanding(ok1, landing);
+    await attachFormToLanding(off, landing);
+    await attachFormToLanding(ok2, landing);
+
+    const rows = await aiCampaignRepository.getLandingPages(owner.id);
+    expect(rows.find((r) => r.slug === 'landing-co-form-tat').form_ids).toEqual([ok1, ok2]);
+  });
+
+  it('PR-7b: biểu mẫu của workspace KHÁC lỡ nằm trong chỉ mục landing_page_forms (dữ liệu lệch) → không bao giờ lọt vào form_ids', async () => {
+    const ownerA = await createUser({ username: 'lp_owner_cross_a' });
+    const ownerB = await createUser({ username: 'lp_owner_cross_b' });
+    const landingA = await insertLanding(ownerA, { slug: 'landing-cross' });
+    const ownForm = await insertForm(ownerA, { title: 'Của A' });
+    const foreignForm = await insertForm(ownerB, { title: 'Của B' });
+    await attachFormToLanding(ownForm, landingA);
+    await attachFormToLanding(foreignForm, landingA);
+
+    const rows = await aiCampaignRepository.getLandingPages(ownerA.id);
+    expect(rows.find((r) => r.slug === 'landing-cross').form_ids).toEqual([ownForm]);
   });
 
   it('form gắn landing nhưng đã bị super admin tắt → formId null (không gợi ý form đã tắt)', async () => {
@@ -206,6 +260,7 @@ describe('AiCampaignRepository.getLandingPages — PR-5b-2b', () => {
     const rows = await aiCampaignRepository.getLandingPages(owner.id);
     const row = rows.find((r) => r.slug === 'landing-form-tat');
     expect(row.form_id).toBeNull();
+    expect(row.form_ids).toEqual([]);
   });
 
   // Review "Neo PR-5b-2b" — trước đây lọc thẳng WHERE id_user = $1; landing có workspace_owner_id
@@ -237,49 +292,121 @@ describe('AiCampaignRepository.getLandingPages — PR-5b-2b', () => {
   });
 });
 
-describe('AiCampaignRepository.getFormIdForLandingSlug — PR-5b-2b', () => {
-  it('landing có form gắn, đúng chủ → trả formId', async () => {
+describe('AiCampaignRepository.getFormIdsForLandingSlug — PR-5b-2b, PR-7b', () => {
+  it('landing có form gắn, đúng chủ → trả [formId]', async () => {
     const owner = await createUser({ username: 'slug_owner_1' });
     const landing = await insertLanding(owner, { slug: 'khoa-hoc-ielts' });
     const form = await insertForm(owner, { title: 'Form' });
     await attachFormToLanding(form, landing);
 
-    const formId = await aiCampaignRepository.getFormIdForLandingSlug(owner.id, 'khoa-hoc-ielts');
-    expect(formId).toBe(form);
+    const formIds = await aiCampaignRepository.getFormIdsForLandingSlug(owner.id, 'khoa-hoc-ielts');
+    expect(formIds).toEqual([form]);
   });
 
-  it('landing không có form gắn → trả null', async () => {
+  it('PR-7b: landing có 3 biểu mẫu → trả ĐỦ 3 id theo thứ tự trong landing', async () => {
+    const owner = await createUser({ username: 'slug_owner_multi' });
+    const landing = await insertLanding(owner, { slug: 'landing-nhieu-form' });
+    const a = await insertForm(owner, { title: 'A' });
+    const b = await insertForm(owner, { title: 'B', isPublished: false });
+    const c = await insertForm(owner, { title: 'C' });
+    await attachFormToLanding(c, landing); // gắn C trước → position 0
+    await attachFormToLanding(a, landing);
+    await attachFormToLanding(b, landing);
+
+    const formIds = await aiCampaignRepository.getFormIdsForLandingSlug(owner.id, 'landing-nhieu-form');
+    expect(formIds).toEqual([c, a, b]);
+  });
+
+  it('landing không có form gắn → trả []', async () => {
     const owner = await createUser({ username: 'slug_owner_2' });
     await insertLanding(owner, { slug: 'khong-co-form' });
 
-    const formId = await aiCampaignRepository.getFormIdForLandingSlug(owner.id, 'khong-co-form');
-    expect(formId).toBeNull();
+    const formIds = await aiCampaignRepository.getFormIdsForLandingSlug(owner.id, 'khong-co-form');
+    expect(formIds).toEqual([]);
   });
 
-  it('slug thuộc landing của chủ KHÁC → trả null (không lộ formId của người khác)', async () => {
+  it('slug thuộc landing của chủ KHÁC → trả [] (không lộ formId của người khác)', async () => {
     const ownerA = await createUser({ username: 'slug_owner_a' });
     const ownerB = await createUser({ username: 'slug_owner_b' });
     const landingB = await insertLanding(ownerB, { slug: 'landing-cua-b-2' });
     const formB = await insertForm(ownerB, { title: 'Form của B' });
     await attachFormToLanding(formB, landingB);
 
-    const formId = await aiCampaignRepository.getFormIdForLandingSlug(ownerA.id, 'landing-cua-b-2');
-    expect(formId).toBeNull();
+    const formIds = await aiCampaignRepository.getFormIdsForLandingSlug(ownerA.id, 'landing-cua-b-2');
+    expect(formIds).toEqual([]);
   });
 
-  it('form gắn landing đã bị super admin tắt → trả null', async () => {
+  it('form gắn landing đã bị super admin tắt → trả [] (chỉ có form tắt); còn form khác thì chỉ trả form còn bật', async () => {
     const owner = await createUser({ username: 'slug_owner_3' });
     const landing = await insertLanding(owner, { slug: 'landing-form-tat-2' });
-    const form = await insertForm(owner, { title: 'Form đã tắt', adminDisabled: true });
-    await attachFormToLanding(form, landing);
+    const off = await insertForm(owner, { title: 'Form đã tắt', adminDisabled: true });
+    await attachFormToLanding(off, landing);
+    expect(await aiCampaignRepository.getFormIdsForLandingSlug(owner.id, 'landing-form-tat-2')).toEqual([]);
 
-    const formId = await aiCampaignRepository.getFormIdForLandingSlug(owner.id, 'landing-form-tat-2');
-    expect(formId).toBeNull();
+    const on = await insertForm(owner, { title: 'Form còn bật' });
+    await attachFormToLanding(on, landing);
+    expect(await aiCampaignRepository.getFormIdsForLandingSlug(owner.id, 'landing-form-tat-2')).toEqual([on]);
   });
 
-  it('slug không tồn tại → trả null', async () => {
+  it('slug không tồn tại → trả []', async () => {
     const owner = await createUser({ username: 'slug_owner_4' });
-    const formId = await aiCampaignRepository.getFormIdForLandingSlug(owner.id, 'khong-ton-tai');
-    expect(formId).toBeNull();
+    const formIds = await aiCampaignRepository.getFormIdsForLandingSlug(owner.id, 'khong-ton-tai');
+    expect(formIds).toEqual([]);
+  });
+});
+
+/**
+ * PR-7b — số NGƯỜI nhận của landing ở thẻ chọn nguồn / thẻ xác nhận phải khớp node thật: một biểu mẫu đếm bài nộp đã đồng ý
+ * (node đường một biểu mẫu không khử trùng); từ hai biểu mẫu đếm người đã khử trùng qua email / 9 số cuối SĐT.
+ */
+describe('AiCampaignRepository.getLandingPickerPages — form_consented_count nhiều biểu mẫu (PR-7b)', () => {
+  it('landing 3 biểu mẫu: gộp bài đồng ý của CẢ 3, người điền nhiều biểu mẫu đếm một lần; bài từ chối / huỷ / chưa hỏi không đếm', async () => {
+    const owner = await createUser({ username: 'picker_owner_multi' });
+    const landing = await insertLanding(owner, { slug: 'landing-picker-3' });
+    const f1 = await insertForm(owner, { title: 'F1' });
+    const f2 = await insertForm(owner, { title: 'F2' });
+    const f3 = await insertForm(owner, { title: 'F3' });
+    await attachFormToLanding(f1, landing);
+    await attachFormToLanding(f2, landing);
+    await attachFormToLanding(f3, landing);
+
+    // An điền F1 + F2 (cùng email khác hoa thường) → 1 người. Bình chỉ có SĐT, điền F2 + F3 (+84 vs 0) → 1 người. Cường chỉ F3.
+    await insertSubmission(f1, owner, { marketingConsent: true, email: 'An@x.com' });
+    await insertSubmission(f2, owner, { marketingConsent: true, email: 'an@X.com' });
+    await insertSubmission(f2, owner, { marketingConsent: true, phone: '0901000002' });
+    await insertSubmission(f3, owner, { marketingConsent: true, phone: '+84 901 000 002' });
+    await insertSubmission(f3, owner, { marketingConsent: true, email: 'cuong@x.com' });
+    // Không đếm: từ chối, huỷ, chưa hỏi.
+    await insertSubmission(f1, owner, { marketingConsent: false, email: 'tu-choi@x.com' });
+    await insertSubmission(f1, owner, { marketingConsent: true, status: 'cancelled', email: 'huy@x.com' });
+    await insertSubmission(f2, owner, { marketingConsent: null, email: 'chua-hoi@x.com' });
+
+    const rows = await aiCampaignRepository.getLandingPickerPages(owner.id);
+    const row = rows.find((r) => r.slug === 'landing-picker-3');
+    expect(row.form_ids).toEqual([f1, f2, f3]);
+    expect(row.form_consented_count).toBe(3);
+  });
+
+  it('landing MỘT biểu mẫu: đếm bài nộp đã đồng ý như trước (không khử trùng — node đường một biểu mẫu cũng không)', async () => {
+    const owner = await createUser({ username: 'picker_owner_single' });
+    const landing = await insertLanding(owner, { slug: 'landing-picker-1' });
+    const f = await insertForm(owner, { title: 'F' });
+    await attachFormToLanding(f, landing);
+    await insertSubmission(f, owner, { marketingConsent: true, email: 'dup@x.com' });
+    await insertSubmission(f, owner, { marketingConsent: true, email: 'dup@x.com' });
+
+    const rows = await aiCampaignRepository.getLandingPickerPages(owner.id);
+    expect(rows.find((r) => r.slug === 'landing-picker-1').form_consented_count).toBe(2);
+  });
+
+  it('landing không có biểu mẫu → form_ids [], form_consented_count 0', async () => {
+    const owner = await createUser({ username: 'picker_owner_none' });
+    await insertLanding(owner, { slug: 'landing-picker-0' });
+
+    const rows = await aiCampaignRepository.getLandingPickerPages(owner.id);
+    const row = rows.find((r) => r.slug === 'landing-picker-0');
+    expect(row.form_ids).toEqual([]);
+    expect(row.form_id).toBeNull();
+    expect(row.form_consented_count).toBe(0);
   });
 });

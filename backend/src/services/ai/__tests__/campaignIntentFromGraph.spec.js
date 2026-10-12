@@ -104,6 +104,28 @@ describe('Backtest - Việc 1: campaignIntentFromGraph.service', () => {
     });
   });
 
+  it('PR-7b: graph có read_form_submissions { formIds: [...] } -> audience giữ NGUYÊN danh sách (mở lại để AI sửa không mất biểu mẫu), formId = biểu mẫu đầu', () => {
+    const nodes = [
+      { id: 1, node_subtype: 'manual', config: {} },
+      { id: 2, node_subtype: 'read_form_submissions', config: { formIds: [12, 13, 14] } },
+      {
+        id: 3,
+        node_subtype: 'send_email',
+        config: { fromEmailId: 5, recipientSource: 'node' },
+      },
+      { id: 4, node_subtype: 'end', config: {} },
+    ];
+
+    const res = deriveIntentFromGraph(nodes, []);
+    expect(res.unsupported).toEqual([]);
+    expect(res.intent.audience).toEqual({
+      type: 'form',
+      formId: 12,
+      formIds: [12, 13, 14],
+      recipientKind: 'email',
+    });
+  });
+
   it('PR-6c: rút intent từ graph read_landing_leads đọc đúng landingLeadsSlugs (không phải landingPageSlugs)', () => {
     const nodes = [
       { id: 1, node_subtype: 'manual', config: {} },

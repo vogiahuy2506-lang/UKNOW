@@ -117,6 +117,31 @@ describe('PR-1: CampaignIntentV1 schema & deriveIntent', () => {
       expect(zaloGroup.intent.audience.recipientKind).toBe('phone');
     });
 
+    // PR-7b — landing nhiều biểu mẫu: audience.formIds (do server điền từ landing) đủ để biên dịch, kể cả khi thiếu formId.
+    describe('nguồn form: audience.formIds (landing nhiều biểu mẫu)', () => {
+      const formIntent = (audience) => ({
+        version: 1,
+        channel: 'email',
+        sender: { type: 'email_account', id: 1 },
+        audience: { type: 'form', recipientKind: 'email', ...audience },
+        schedule: { type: 'once' },
+        contentBrief: { topic: 'Ra mắt', locale: 'vi' },
+      });
+
+      it('chỉ có formId (chọn một biểu mẫu) -> biên dịch được như trước', () => {
+        expect(isCompilableIntent(formIntent({ formId: 7 })).ok).toBe(true);
+      });
+
+      it('có formIds hợp lệ (không formId) -> biên dịch được', () => {
+        expect(isCompilableIntent(formIntent({ formIds: [7, 8] })).ok).toBe(true);
+      });
+
+      it('không formId, formIds rỗng/rác -> thiếu audience.formId', () => {
+        expect(isCompilableIntent(formIntent({ formIds: [] }))).toMatchObject({ ok: false, missing: ['audience.formId'] });
+        expect(isCompilableIntent(formIntent({ formIds: ['x', 0] }))).toMatchObject({ ok: false, missing: ['audience.formId'] });
+      });
+    });
+
     // Rà soát C P2-7 / C-NO-COMPILER-LANDING-FORM — trước đây deriveIntent KHÔNG đưa slug landing vào audience nên intent landing luôn "khuyết".
     describe('nguồn landing: audience.slugs / allLandings từ cổng landingLeads', () => {
       const landingGates = (extra) => ({

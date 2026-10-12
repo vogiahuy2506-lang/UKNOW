@@ -38,6 +38,22 @@ describe('campaignBuilderRunValidation Spec (PR-3)', () => {
       expect(res.status).toBe('success');
     });
 
+    it('PR-7b: có formIds (nhiều biểu mẫu), không formId -> success', () => {
+      const node = {
+        type: 'read_form_submissions',
+        data: { config: { formIds: [9, 10, 11], formSubmissionsLimit: 500 } },
+      };
+      expect(validateNodeForRun(node).status).toBe('success');
+    });
+
+    it('PR-7b: formIds rỗng / toàn rác, không formId -> failed "Chưa chọn biểu mẫu"', () => {
+      for (const config of [{ formIds: [] }, { formIds: ['x', null, 0] }, { formId: '' }]) {
+        const res = validateNodeForRun({ type: 'read_form_submissions', data: { config } });
+        expect(res.status).toBe('failed');
+        expect(res.message).toContain('biểu mẫu');
+      }
+    });
+
     it('limit vượt trần -> failed', () => {
       const node = {
         type: 'read_form_submissions',

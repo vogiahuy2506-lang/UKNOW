@@ -3,11 +3,12 @@ import { createCampaignNodeRunner } from '../campaignBuilderNodeRunner';
 import { buildSchemaFromRows } from '../campaignBuilderRuntime';
 
 describe('campaignBuilderNodeRunner - read_form_submissions (dry-run, PR-6b)', () => {
-  const buildRunner = (previewFormSubmissionsImpl) =>
+  const buildRunner = (previewFormSubmissionsImpl, previewFormsSubmissionsImpl = vi.fn()) =>
     createCampaignNodeRunner({
       campaignId: 1,
       apiService: {
         previewFormSubmissions: previewFormSubmissionsImpl,
+        previewFormsSubmissions: previewFormsSubmissionsImpl,
       },
       buildSchemaFromRows,
       applyMappingsForRow: vi.fn(),
@@ -61,6 +62,7 @@ describe('campaignBuilderNodeRunner - read_form_submissions (dry-run, PR-6b)', (
     expect(previewFormSubmissions).toHaveBeenCalledTimes(1);
     expect(previewFormSubmissions.mock.calls[0][0]).toBe(9);
     expect(previewFormSubmissions.mock.calls[0][1]).toEqual({ limit: 1000 });
+    expect(result.input.formIds).toEqual([9]);
 
     expect(result.output.ok).toBe(true);
     const item = result.output.items[0];
@@ -103,5 +105,41 @@ describe('campaignBuilderNodeRunner - read_form_submissions (dry-run, PR-6b)', (
 
     expect(result.output.items[0].email).toBe('b@example.com');
     expect(result.output.items[0].phone).toBe('0909999999');
+  });
+
+  it('PR-7b: formId cũ dạng chuỗi (select FE lưu "9") vẫn đi đường MỘT biểu mẫu với id số', async () => {
+    const previewFormSubmissions = vi.fn().mockResolvedValue(previewResponse([], 0));
+    const previewFormsSubmissions = vi.fn();
+    const runner = buildRunner(previewFormSubmissions, previewFormsSubmissions);
+    await runner.buildRunResultForNode(buildNode({ formId: '9' }), {}, {});
+
+    expect(previewFormSubmissions).toHaveBeenCalledTimes(1);
+    expect(previewFormSubmissions.mock.calls[0][0]).toBe(9);
+    expect(previewFormsSubmissions).not.toHaveBeenCalled();
+  });
+
+  it('PR-7b: formIds nhiều biểu mẫu -> gọi preview GỘP một lần với đủ danh sách; fieldMap vẫn áp lại ở client', async () => {
+    const previewFormSubmissions = vi.fn();
+    const previewFormsSubmissions = vi.fn().mockResolvedValue(
+      previewResponse(
+        [
+          { submissionId: 3, id: 3, formId: 7, fullName: 'C', email: 'c@x.com', f_company_email: 'Corp@X.com' },
+          { submissionId: 1, id: 1, formId: 5, fullName: 'A', email: 'a@x.com' },
+        ],
+        2
+      )
+    );
+    const runner = buildRunner(previewFormSubmissions, previewFormsSubmissions);
+    const node = buildNode({ formIds: [5, '6', 7], fieldMap: { emailKey: 'f_company_email' } });
+    const result = await runner.buildRunResultForNode(node, {}, {});
+
+    expect(previewFormSubmissions).not.toHaveBeenCalled();
+    expect(previewFormsSubmissions).toHaveBeenCalledTimes(1);
+    expect(previewFormsSubmissions.mock.calls[0][0]).toEqual([5, 6, 7]);
+    expect(previewFormsSubmissions.mock.calls[0][1]).toEqual({ limit: 1000 });
+    expect(result.input.formIds).toEqual([5, 6, 7]);
+    expect(result.output.items[0].email).toBe('corp@x.com');
+    expect(result.output.items[1].email).toBe('a@x.com');
+    expect(result.output.meta.totalItems).toBe(2);
   });
 });

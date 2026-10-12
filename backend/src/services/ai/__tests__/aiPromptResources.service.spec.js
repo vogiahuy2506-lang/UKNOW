@@ -20,19 +20,22 @@ const { default: aiPromptResourcesService } = await import('../aiPromptResources
  * ai viết test, không phải vì có kiểm chứng). Bịt lỗ coverage này, không viết lại toàn bộ service.
  */
 describe('aiPromptResourcesService.getLandingPages — PR-5b-2c (bịt lỗ coverage review PR-5b-2b)', () => {
-  it('form_id (bigint dạng string từ Postgres) → formId số; null → formId null', async () => {
+  it('form_id / form_ids (bigint dạng string từ Postgres) → formId + formIds SỐ; null / rỗng → formId null, formIds []', async () => {
     getLandingPages.mockResolvedValueOnce([
-      { slug: 'khoa-hoc-ielts', title: 'Khoá IELTS', is_published: true, form_id: '7' },
-      { slug: 'landing-thuong', title: 'Landing thường', is_published: true, form_id: null },
+      { slug: 'khoa-hoc-ielts', title: 'Khoá IELTS', is_published: true, form_id: '7', form_ids: ['7'] },
+      { slug: 'landing-3-form', title: 'Landing 3 biểu mẫu', is_published: true, form_id: '11', form_ids: ['11', '12', '13'] },
+      { slug: 'landing-thuong', title: 'Landing thường', is_published: true, form_id: null, form_ids: [] },
     ]);
 
     const rows = await aiPromptResourcesService.getLandingPages(1);
 
     expect(rows).toEqual([
-      { slug: 'khoa-hoc-ielts', title: 'Khoá IELTS', isPublished: true, formId: 7 },
-      { slug: 'landing-thuong', title: 'Landing thường', isPublished: true, formId: null },
+      { slug: 'khoa-hoc-ielts', title: 'Khoá IELTS', isPublished: true, formId: 7, formIds: [7] },
+      { slug: 'landing-3-form', title: 'Landing 3 biểu mẫu', isPublished: true, formId: 11, formIds: [11, 12, 13] },
+      { slug: 'landing-thuong', title: 'Landing thường', isPublished: true, formId: null, formIds: [] },
     ]);
     expect(typeof rows[0].formId).toBe('number');
+    expect(rows[1].formIds.every((id) => typeof id === 'number')).toBe(true);
   });
 
   it('repository lỗi → nuốt lỗi, trả mảng rỗng (không throw lên prompt)', async () => {
@@ -48,9 +51,9 @@ describe('aiPromptResourcesService.getLandingPages — PR-5b-2c (bịt lỗ cove
 describe('aiPromptResourcesService.getLandingPickerOptions — C P2-7', () => {
   it('gộp số lead theo slug chuẩn (dữ liệu cũ "/l", "/"), tổng gồm cả lead không gắn landing, form_id → formId số', async () => {
     getLandingPickerPages.mockResolvedValueOnce([
-      { slug: 'khoa-ielts', title: 'Khoá IELTS', is_published: true, form_id: null, form_consented_count: 0 },
-      { slug: 'l', title: 'Trang chủ', is_published: false, form_id: null, form_consented_count: 0 },
-      { slug: 'dat-lich', title: 'Đặt lịch', is_published: true, form_id: '3', form_consented_count: 15 },
+      { slug: 'khoa-ielts', title: 'Khoá IELTS', is_published: true, form_id: null, form_ids: [], form_consented_count: 0 },
+      { slug: 'l', title: 'Trang chủ', is_published: false, form_id: null, form_ids: [], form_consented_count: 0 },
+      { slug: 'dat-lich', title: 'Đặt lịch', is_published: true, form_id: '3', form_ids: ['3', '4'], form_consented_count: 15 },
     ]);
     getLeadCountsBySlug.mockResolvedValueOnce([
       { slug: 'khoa-ielts', lead_count: 100 },
@@ -67,9 +70,10 @@ describe('aiPromptResourcesService.getLandingPickerOptions — C P2-7', () => {
     expect(getLeadCountsBySlug).toHaveBeenCalledWith(9);
     expect(result.totalLeads).toBe(135);
     expect(result.landings).toEqual([
-      { slug: 'khoa-ielts', title: 'Khoá IELTS', isPublished: true, formId: null, leadCount: 120, formConsentedCount: 0 },
-      { slug: 'l', title: 'Trang chủ', isPublished: false, formId: null, leadCount: 7, formConsentedCount: 0 },
-      { slug: 'dat-lich', title: 'Đặt lịch', isPublished: true, formId: 3, leadCount: 0, formConsentedCount: 15 },
+      { slug: 'khoa-ielts', title: 'Khoá IELTS', isPublished: true, formId: null, formIds: [], leadCount: 120, formConsentedCount: 0 },
+      { slug: 'l', title: 'Trang chủ', isPublished: false, formId: null, formIds: [], leadCount: 7, formConsentedCount: 0 },
+      // PR-7b: landing 2 biểu mẫu -> formIds đủ cả hai (số), formConsentedCount là số người đã khử trùng qua cả hai.
+      { slug: 'dat-lich', title: 'Đặt lịch', isPublished: true, formId: 3, formIds: [3, 4], leadCount: 0, formConsentedCount: 15 },
     ]);
   });
 

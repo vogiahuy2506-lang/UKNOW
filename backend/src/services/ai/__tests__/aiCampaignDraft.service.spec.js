@@ -710,7 +710,7 @@ describe('aiCampaignDraftService.prepareScript — compilerApplied skip-guard (P
   });
 });
 
-describe('aiCampaignDraftService.resolveLandingAudienceForDraft (PR-5b-2b)', () => {
+describe('aiCampaignDraftService.resolveLandingAudienceForDraft (PR-5b-2b, PR-7b)', () => {
   const scriptWithLandingNode = (slugs) => ({
     nodes: [
       { id: 'n1', tempId: 'n1', nodeType: 'trigger', nodeSubtype: 'manual', config: {} },
@@ -719,14 +719,14 @@ describe('aiCampaignDraftService.resolveLandingAudienceForDraft (PR-5b-2b)', () 
     ],
   });
 
-  it('node read_landing_leads slug x có form gắn → đổi thành read_form_submissions, config.formId đúng, KHÔNG còn landingLeadsSlugs', async () => {
+  it('node read_landing_leads slug x có form gắn → đổi thành read_form_submissions, config.formIds đúng, KHÔNG còn landingLeadsSlugs', async () => {
     const repo = (await import('../../../repositories/ai/aiCampaign.repository.js')).default;
-    const spy = jest.spyOn(repo, 'getFormIdForLandingSlug').mockResolvedValue(7);
+    const spy = jest.spyOn(repo, 'getFormIdsForLandingSlug').mockResolvedValue([7]);
 
     const result = await aiCampaignDraftService.resolveLandingAudienceForDraft(scriptWithLandingNode(['khoa-hoc-ielts']), 3);
     const node = result.nodes.find((n) => n.nodeSubtype === 'read_form_submissions');
     expect(node).not.toBeUndefined();
-    expect(node.config.formId).toBe(7);
+    expect(node.config).toEqual({ formIds: [7] });
     expect(node.config.landingLeadsSlugs).toBeUndefined();
     expect(result.nodes.some((n) => n.nodeSubtype === 'read_landing_leads')).toBe(false);
     expect(spy).toHaveBeenCalledWith(3, 'khoa-hoc-ielts');
@@ -734,9 +734,20 @@ describe('aiCampaignDraftService.resolveLandingAudienceForDraft (PR-5b-2b)', () 
     spy.mockRestore();
   });
 
+  it('PR-7b: landing có 3 biểu mẫu → node đọc ĐỦ 3 (bản nháp tự do cũng không chỉ lấy biểu mẫu chính)', async () => {
+    const repo = (await import('../../../repositories/ai/aiCampaign.repository.js')).default;
+    const spy = jest.spyOn(repo, 'getFormIdsForLandingSlug').mockResolvedValue([3, 5, 8]);
+
+    const result = await aiCampaignDraftService.resolveLandingAudienceForDraft(scriptWithLandingNode(['landing-3-form']), 3);
+    const node = result.nodes.find((n) => n.nodeSubtype === 'read_form_submissions');
+    expect(node.config).toEqual({ formIds: [3, 5, 8] });
+
+    spy.mockRestore();
+  });
+
   it('landing slug KHÔNG có form gắn → giữ nguyên read_landing_leads', async () => {
     const repo = (await import('../../../repositories/ai/aiCampaign.repository.js')).default;
-    const spy = jest.spyOn(repo, 'getFormIdForLandingSlug').mockResolvedValue(null);
+    const spy = jest.spyOn(repo, 'getFormIdsForLandingSlug').mockResolvedValue([]);
 
     const result = await aiCampaignDraftService.resolveLandingAudienceForDraft(scriptWithLandingNode(['khong-co-form']), 3);
     const node = result.nodes.find((n) => n.nodeSubtype === 'read_landing_leads');
@@ -749,7 +760,7 @@ describe('aiCampaignDraftService.resolveLandingAudienceForDraft (PR-5b-2b)', () 
 
   it('2 slug trong landingLeadsSlugs → giữ nguyên read_landing_leads, không tra cứu (mặc định phản biện)', async () => {
     const repo = (await import('../../../repositories/ai/aiCampaign.repository.js')).default;
-    const spy = jest.spyOn(repo, 'getFormIdForLandingSlug');
+    const spy = jest.spyOn(repo, 'getFormIdsForLandingSlug');
 
     const result = await aiCampaignDraftService.resolveLandingAudienceForDraft(scriptWithLandingNode(['a', 'b']), 3);
     expect(result.nodes.some((n) => n.nodeSubtype === 'read_landing_leads')).toBe(true);
@@ -760,7 +771,7 @@ describe('aiCampaignDraftService.resolveLandingAudienceForDraft (PR-5b-2b)', () 
 
   it('không có node read_landing_leads nào → không gọi tra cứu, trả nguyên script', async () => {
     const repo = (await import('../../../repositories/ai/aiCampaign.repository.js')).default;
-    const spy = jest.spyOn(repo, 'getFormIdForLandingSlug');
+    const spy = jest.spyOn(repo, 'getFormIdsForLandingSlug');
 
     const script = {
       nodes: [{ id: 'n1', tempId: 'n1', nodeType: 'action', nodeSubtype: 'send_email', config: {} }],
@@ -772,13 +783,13 @@ describe('aiCampaignDraftService.resolveLandingAudienceForDraft (PR-5b-2b)', () 
   });
 
   // Nghiệm thu "Form gắn thuộc chủ khác (dữ liệu lệch) → sanitizeFormOwnership bỏ formId" —
-  // getFormIdForLandingSlug đã tự lọc theo ownerId (WHERE COALESCE(workspace_owner_id, id_user) =
+  // getFormIdsForLandingSlug đã tự lọc theo ownerId (WHERE COALESCE(workspace_owner_id, id_user) =
   // $2 ở repository) nên KHÔNG nên trả id của chủ khác trong thực tế; test này mô phỏng lệch dữ
   // liệu giả định (phòng lỗi logic tương lai) qua CẢ HAI bước prepareScript chạy nối tiếp — đúng
   // như code thật (resolveLandingAudienceForDraft rồi sanitizeFormOwnership).
   it('formId tra được từ landing (hypothetically không thuộc chủ) → sanitizeFormOwnership chạy SAU vẫn bỏ nó (phòng lỗi logic tương lai)', async () => {
     const repo = (await import('../../../repositories/ai/aiCampaign.repository.js')).default;
-    const landingSpy = jest.spyOn(repo, 'getFormIdForLandingSlug').mockResolvedValue(999);
+    const landingSpy = jest.spyOn(repo, 'getFormIdsForLandingSlug').mockResolvedValue([999]);
     const ownershipSpy = jest.spyOn(repo, 'getFormIdsOwnedBy').mockResolvedValue([]); // 999 KHÔNG thuộc ownerId=3
 
     let script = scriptWithLandingNode(['some-slug']);
@@ -788,6 +799,7 @@ describe('aiCampaignDraftService.resolveLandingAudienceForDraft (PR-5b-2b)', () 
     const node = script.nodes.find((n) => n.nodeSubtype === 'read_form_submissions');
     expect(node).not.toBeUndefined();
     expect(node.config.formId).toBeUndefined();
+    expect(node.config.formIds).toBeUndefined();
 
     landingSpy.mockRestore();
     ownershipSpy.mockRestore();
@@ -855,6 +867,52 @@ describe('aiCampaignDraftService.sanitizeFormOwnership (PR-6c)', () => {
 
     spy.mockRestore();
     warnSpy.mockRestore();
+  });
+
+  it('PR-7b: formIds — chỉ giữ id THUỘC chủ workspace, id lạ rơi khỏi danh sách (không xoá cả danh sách)', async () => {
+    const repo = (await import('../../../repositories/ai/aiCampaign.repository.js')).default;
+    const spy = jest.spyOn(repo, 'getFormIdsOwnedBy').mockResolvedValue([3, 8]);
+    const script = {
+      nodes: [{ id: 'n2', tempId: 'n2', nodeType: 'data', nodeSubtype: 'read_form_submissions', config: { formIds: [3, 999, 8] } }],
+    };
+
+    const result = await aiCampaignDraftService.sanitizeFormOwnership(script, 7);
+    expect(result.nodes[0].config.formIds).toEqual([3, 8]);
+    expect(spy).toHaveBeenCalledWith(7, [3, 999, 8]);
+
+    spy.mockRestore();
+  });
+
+  it('PR-7b: formIds toàn id không thuộc chủ -> bỏ hẳn formIds (node rơi về "chưa chọn biểu mẫu")', async () => {
+    const repo = (await import('../../../repositories/ai/aiCampaign.repository.js')).default;
+    const spy = jest.spyOn(repo, 'getFormIdsOwnedBy').mockResolvedValue([]);
+    const script = {
+      nodes: [{ id: 'n2', tempId: 'n2', nodeType: 'data', nodeSubtype: 'read_form_submissions', config: { formIds: [901, 902] } }],
+    };
+
+    const result = await aiCampaignDraftService.sanitizeFormOwnership(script, 7);
+    expect(result.nodes[0].config.formIds).toBeUndefined();
+
+    spy.mockRestore();
+  });
+
+  it('PR-7b: kiểm sở hữu cả formId cũ lẫn formIds trong CÙNG một lượt truy vấn', async () => {
+    const repo = (await import('../../../repositories/ai/aiCampaign.repository.js')).default;
+    const spy = jest.spyOn(repo, 'getFormIdsOwnedBy').mockResolvedValue([5]);
+    const script = {
+      nodes: [
+        { id: 'n2', tempId: 'n2', nodeType: 'data', nodeSubtype: 'read_form_submissions', config: { formId: 5 } },
+        { id: 'n3', tempId: 'n3', nodeType: 'data', nodeSubtype: 'read_form_submissions', config: { formIds: [5, 6] } },
+      ],
+    };
+
+    const result = await aiCampaignDraftService.sanitizeFormOwnership(script, 7);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith(7, [5, 5, 6]);
+    expect(result.nodes[0].config.formId).toBe(5);
+    expect(result.nodes[1].config.formIds).toEqual([5]);
+
+    spy.mockRestore();
   });
 
   it('không có node read_form_submissions nào → không gọi getFormIdsOwnedBy (không tốn DB)', async () => {
