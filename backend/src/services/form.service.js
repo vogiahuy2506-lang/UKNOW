@@ -2109,7 +2109,7 @@ class FormService {
       console.warn(`[FormService] Node chiến dịch chạm trần quét ${MULTI_FORM_SUBMISSION_SCAN_CAP} bài nộp (workspace ${workspaceOwnerId}) — bài cũ nhất có thể bị bỏ`);
     }
     const fieldsByForm = new Map(forms.map((f) => [f.id, f.fields]));
-    const newestFirst = rows.map((row) => mapFormSubmissionToCampaignItem(row, fieldsByForm.get(row.formId) || [], fieldMap));
+    const newestFirst = rows.map((row) => mapFormSubmissionToCampaignItem(row, fieldsByForm.get(Number(row.formId)) || [], fieldMap));
     return dedupeCampaignItemsKeepNewest(newestFirst).reverse();
   }
 

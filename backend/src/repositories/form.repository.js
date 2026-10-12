@@ -1565,7 +1565,7 @@ class FormRepository {
        LIMIT $3`,
       [ids, workspaceOwnerId, scanLimit]
     );
-    return result.rows.map((row) => ({ ...row, formId: Number(row.formId) }));
+    return result.rows;
   }
 
   /**
