@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { isReservedCampaignItemFieldKey } from './formCampaignItem.util.js';
 import { isDisplayFieldType } from './formFieldTypes.util.js';
 import { normalizeFormFileConfig } from './formFileKinds.util.js';
+import { normalizeShowIf } from './formShowIf.util.js';
 import { VIETQR_BANKS } from '../constants/vietQrBanks.js';
 
 export { DISPLAY_FIELD_TYPES, isDisplayFieldType } from './formFieldTypes.util.js';
@@ -123,6 +124,14 @@ export function normalizeFormFields(rawFields) {
   const usedKeys = new Set();
   const usedRoles = new Set();
   const normalized = [];
+  // Điều kiện hiển thị (PR-8a): nguồn phải là trường đứng TRƯỚC. `precedingFields` = các trường đã chuẩn hoá theo key;
+  // `rawKeyIndex` = vị trí của khoá thô để phân biệt "trỏ tới trường đứng sau" với "trỏ tới trường không tồn tại" trong câu báo lỗi.
+  const precedingFields = new Map();
+  const rawKeyIndex = new Map();
+  rawFields.forEach((raw, i) => {
+    const rawKey = raw && typeof raw === 'object' && typeof raw.key === 'string' ? raw.key.trim() : '';
+    if (rawKey && !rawKeyIndex.has(rawKey)) rawKeyIndex.set(rawKey, i);
+  });
 
   for (let i = 0; i < rawFields.length; i += 1) {
     const field = rawFields[i];
@@ -251,7 +260,17 @@ export function normalizeFormFields(rawFields) {
     }
     usedKeys.add(key);
 
-    normalized.push({
+    // Điều kiện hiển thị: mọi trường trừ ngắt trang (ranh giới trang không có điều kiện — giá trị gửi lên bị bỏ qua).
+    let showIf = null;
+    if (type !== 'page_break' && field.showIf !== undefined && field.showIf !== null) {
+      const laterKeys = new Set();
+      for (const [rawKey, rawIdx] of rawKeyIndex) {
+        if (rawIdx >= i) laterKeys.add(rawKey);
+      }
+      showIf = normalizeShowIf(field.showIf, { label, precedingFields, laterKeys });
+    }
+
+    const entry = {
       key,
       type,
       label,
@@ -264,7 +283,11 @@ export function normalizeFormFields(rawFields) {
       ...(width === 'half' ? { width } : {}),
       // Chỉ trường `file` có khoá này — trường khác không đổi một byte.
       ...(fileConfig ? { fileConfig } : {}),
-    });
+      // Chỉ trường có điều kiện hiển thị mới có khoá này — trường cũ không đổi một byte.
+      ...(showIf ? { showIf } : {}),
+    };
+    normalized.push(entry);
+    precedingFields.set(key, entry);
   }
 
   return normalized;

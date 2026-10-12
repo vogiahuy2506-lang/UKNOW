@@ -174,6 +174,28 @@ describe('draftForm — create', () => {
     expect(JSON.stringify(draft)).not.toContain('fileConfig');
   });
 
+  it('PR-8a: điều kiện hiển thị `showIf` do model sinh (create) bị BỎ — AI chưa được tạo logic điều kiện; nháp không mang khoá showIf', async () => {
+    modelSays({
+      ...consultPayload(),
+      fields: [
+        nameF,
+        phoneF,
+        { label: 'Bạn có xe không?', type: 'yes_no', key: 'f_xe00001' },
+        {
+          label: 'Biển số xe',
+          type: 'short_text',
+          showIf: { match: 'all', conditions: [{ fieldKey: 'f_xe00001', operator: 'equals', value: 'yes' }] },
+        },
+        { label: 'Phần dành cho người có xe', type: 'heading', showIf: { conditions: [{ fieldKey: 'f_xe00001', operator: 'answered' }] } },
+      ],
+    });
+    const draft = await create();
+    expect(draft.fields.map((f) => f.label)).toEqual(['Họ và tên', 'Số điện thoại', 'Bạn có xe không?', 'Biển số xe', 'Phần dành cho người có xe']);
+    expect(draft.fields.some((f) => 'showIf' in f)).toBe(false);
+    expect(JSON.stringify(draft)).not.toContain('showIf');
+    expect(JSON.stringify(draft)).not.toContain('f_xe00001');
+  });
+
   it('alias loại quen thuộc được sửa (text→short_text, dropdown→select)', async () => {
     modelSays({
       ...consultPayload(),
@@ -496,6 +518,24 @@ describe('draftForm — suggest_questions', () => {
     expect(mockRunChat.mock.calls[0][0].history[0].content).toContain('Trình độ hiện tại');
   });
 
+  it('PR-8a: gợi ý câu hỏi mới KHÔNG mang showIf dù model trả về; showIf của trường hiện có (gửi lên từ trình soạn) không làm hỏng lượt gợi ý', async () => {
+    modelSays({
+      fields: [
+        { label: 'Bé học lớp mấy?', type: 'short_text', showIf: { conditions: [{ fieldKey: 'f_aaaa1111', operator: 'answered' }] } },
+      ],
+    });
+    const withCondition = {
+      ...existing,
+      fields: [
+        ...existing.fields,
+        { key: 'f_cccc3333', type: 'short_text', label: 'Chi tiết trình độ', showIf: { match: 'all', conditions: [{ fieldKey: 'f_aaaa1111', operator: 'answered' }] } },
+      ],
+    };
+    const draft = await suggest({ existingForm: withCondition });
+    expect(draft.fields.map((f) => f.label)).toEqual(['Bé học lớp mấy?']);
+    expect(JSON.stringify(draft)).not.toContain('showIf');
+  });
+
   it('vai trò đã có ở biểu mẫu không bị gán lần hai', async () => {
     modelSays({ fields: [{ label: 'Tên phụ huynh', type: 'short_text', role: 'name' }, { label: 'Địa chỉ email', type: 'email' }] });
     const draft = await suggest();
@@ -577,6 +617,21 @@ describe('draftForm — rewrite', () => {
     expect(draft.fields[0]).not.toHaveProperty('helpText');
     expect(draft).toMatchObject({ mode: 'rewrite', title: null, settings: null, bookingConfig: null, paymentConfig: null, usage: { creditCost: 1 } });
     expect(draft.fields).toHaveLength(existing.fields.length);
+  });
+
+  it('PR-8a: biểu mẫu hiện tại có showIf (client gửi kèm) vẫn viết lại được chữ; kết quả KHÔNG mang showIf (chỉ chữ đổi, logic điều kiện nằm ở trình soạn)', async () => {
+    const withCondition = {
+      ...existing,
+      fields: [
+        existing.fields[0],
+        { ...existing.fields[1], showIf: { match: 'all', conditions: [{ fieldKey: 'f_name0001', operator: 'answered' }] } },
+        ...existing.fields.slice(2),
+      ],
+    };
+    modelSays({ fields: [{ index: 1, label: 'Số điện thoại liên hệ', helpText: 'Số để chúng tôi gọi lại', showIf: { conditions: [] } }] });
+    const draft = await rewrite({ existingForm: withCondition });
+    expect(draft.fields[1]).toEqual({ key: 'f_phone001', label: 'Số điện thoại liên hệ', type: 'phone', required: true, role: 'phone', helpText: 'Số để chúng tôi gọi lại' });
+    expect(JSON.stringify(draft)).not.toContain('showIf');
   });
 
   it('lựa chọn: sai số lượng / trùng nhau / rỗng → GIỮ lựa chọn cũ của trường đó', async () => {

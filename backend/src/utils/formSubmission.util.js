@@ -1,5 +1,6 @@
 import { parseMarketingConsent } from '../services/lead/lead.service.js';
 import { isDisplayFieldType, RATING_MAX, YES_NO_VALUES } from './formFieldTypes.util.js';
+import { getVisibleFieldKeys } from './formShowIf.util.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const UPLOAD_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -65,6 +66,9 @@ function parseFileUploadIds(val, label, maxFiles) {
  *   trả vào `fileInputs` (KHÔNG đưa vào `answers`) — service xác nhận tệp với kho rồi mới ghi câu trả lời. Trường tệp bắt
  *   buộc mà không có tệp vẫn qua nếu khách gửi `body.fileSkip[key]` (dấu chủ biểu mẫu hết dung lượng — service kiểm chữ ký).
  *   `options.fileUploadsEnabled=false` (cờ tắt): bỏ qua hoàn toàn trường `file`, kể cả bắt buộc — không để mất khách.
+ * - Điều kiện hiển thị (`field.showIf`, PR-8a): trường bị ẩn theo câu trả lời THẬT của khách (`getVisibleFieldKeys`) thì KHÔNG bắt
+ *   buộc, KHÔNG được kiểm giá trị và câu trả lời gửi kèm của nó bị BỎ (không vào `answers`, `respondent_*` hay `fileInputs`; trường
+ *   `file` bị ẩn thì cả `uploadId` lẫn `fileSkip` của nó cũng bị bỏ). Trường hiện kiểm như cũ.
  * - Trích xuất respondent_name, respondent_email, respondent_phone theo role.
  * - Trích xuất marketingConsent qua parseMarketingConsent.
  *
@@ -93,9 +97,13 @@ export function validateFormSubmission(fields = [], rawAnswers = {}, rawBody = {
   let respondentEmail = null;
   let respondentPhone = null;
 
+  // Trường nào đang hiện với câu trả lời này; trường ẩn bị bỏ qua hoàn toàn ở vòng lặp dưới.
+  const visibleKeys = getVisibleFieldKeys(fields, safeAnswers);
+
   for (const field of fields) {
     const { key, type, label, required, options = [], role } = field;
     if (isDisplayFieldType(type)) continue;
+    if (!visibleKeys.has(key)) continue;
     const val = safeAnswers[key];
 
     if (type === 'file') {

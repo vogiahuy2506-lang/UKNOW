@@ -172,6 +172,22 @@ describe('buildFormInputFromDraft — không tin nháp: chuẩn hoá lại bằn
     expect(input.bookingConfig).toBeNull(); // chỗ trống payment không có đặt lịch
   });
 
+  it('PR-8a: nháp từ trình duyệt mang `showIf` → bị BỎ (chỉ trình soạn tạo điều kiện hiển thị), key do trình duyệt đặt cũng bị bỏ nên không thể trỏ vào đâu', () => {
+    const input = buildFormInputFromDraft(
+      bookingDraft({
+        fields: [
+          ...contact,
+          { label: 'Bạn có xe không?', type: 'yes_no', key: 'f_xe00001' },
+          { label: 'Biển số xe', type: 'short_text', showIf: { match: 'all', conditions: [{ fieldKey: 'f_xe00001', operator: 'equals', value: 'yes' }] } },
+        ],
+      }),
+      'booking',
+    );
+    expect(input.fields.map((f) => f.label)).toEqual(['Họ và tên', 'Số điện thoại', 'Email', 'Bạn có xe không?', 'Biển số xe']);
+    expect(input.fields.some((f) => 'showIf' in f)).toBe(false);
+    expect(JSON.stringify(input)).not.toContain('showIf');
+  });
+
   it('nháp sai loại so với chỗ trống → null (dùng mẫu backend)', () => {
     expect(buildFormInputFromDraft(bookingDraft(), 'payment')).toBeNull();
     expect(buildFormInputFromDraft(bookingDraft({ kind: 'survey' }), 'booking')).toBeNull();
