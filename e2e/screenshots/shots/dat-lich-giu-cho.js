@@ -5,9 +5,13 @@
  * Dùng chung biểu mẫu mẫu với bài `bieu-mau` (lib/shotFixtures.js): đã bật đặt
  * lịch, đã bật thanh toán giữ chỗ bằng chuyển khoản, có một bài đang "Chờ thanh
  * toán". Chỉ chạy ở máy mình.
+ *
+ * Giao diện từ 12/10/2026 (PLAN_BIEU_MAU_TUY_BIEN_AI_LANDING PR-3): Đặt lịch hẹn và Thanh toán là hai TAB trong hộp
+ * "Cài đặt biểu mẫu" (nút "Cài đặt" trên thanh trên cùng của trang soạn), không còn hai thẻ thu gọn "Thêm đặt lịch hẹn" /
+ * "Thu tiền khi gửi". Nút "Cài đặt" của trình soạn trùng tên mục "Cài đặt" của menu trái: luôn chọn trong `form-editor-topbar`.
  */
 import {
-  highlight, highlightCell, hideVolatileChrome, settle, contentShot, enclosingSection, tallViewportShot, bandShot,
+  highlight, highlightCell, hideVolatileChrome, settle, contentShot, tallViewportShot,
 } from '../lib/shotHelpers.js';
 import { ensureDemoForm, ensureDemoSubmissions, withDb } from '../lib/shotFixtures.js';
 
@@ -21,21 +25,31 @@ async function openEditor(page) {
   await openApp(page);
   const form = await ensureDemoForm(page);
   await page.goto(`/app/forms/${form.id}/edit`);
-  await page.getByRole('heading', { name: 'Đặt lịch hẹn', exact: true })
+  await page.getByRole('heading', { name: 'Danh sách trường thông tin' })
     .waitFor({ state: 'visible', timeout: 30_000 });
   await settle(page);
   await hideVolatileChrome(page);
   return form;
 }
 
-/** Chụp trọn một thẻ của trình soạn (thẻ thường cao hơn màn hình). */
-async function sectionCardShot(page, headingName) {
-  return tallViewportShot(page, 2600, async () => {
-    const heading = page.getByRole('heading', { name: headingName, exact: true });
-    await heading.scrollIntoViewIfNeeded();
-    await page.waitForTimeout(400);
-    const card = await enclosingSection(page, heading);
-    return contentShot(page, card);
+/** Mở hộp "Cài đặt biểu mẫu" (và chọn một tab nếu có). Trả về locator của hộp. */
+async function openSettings(page, tabName) {
+  await page.getByTestId('form-editor-topbar').getByRole('button', { name: 'Cài đặt', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Cài đặt biểu mẫu' });
+  await dialog.waitFor({ state: 'visible', timeout: 15_000 });
+  if (tabName) {
+    await dialog.getByTestId('editor-settings-tabs').getByRole('button', { name: new RegExp(`^${tabName}`) }).click();
+  }
+  await page.waitForTimeout(300);
+  return dialog;
+}
+
+/** Chụp trọn hộp Cài đặt ở một tab (tab thường cao hơn màn hình nên nới khung nhìn). */
+async function settingsTabShot(page, tabName) {
+  await openEditor(page);
+  return tallViewportShot(page, 2400, async () => {
+    const dialog = await openSettings(page, tabName);
+    return contentShot(page, dialog, { pad: 20 });
   });
 }
 
@@ -44,48 +58,54 @@ export default {
   shots: [
     {
       name: 'hai-muc-dat-lich-thanh-toan',
-      // Ở biểu mẫu mới, hai mục này là hai thẻ thu gọn tên "Thêm đặt lịch hẹn" / "Thu tiền khi gửi" (đúng nhãn vi.js
-      // `forms.editorPage.addBlock.*`, và đúng đoạn văn ngay trên ô ảnh).
-      caption: 'trang soạn biểu mẫu kéo xuống giữa trang, khoanh đỏ hai thẻ thu gọn "Thêm đặt lịch hẹn" và "Thu tiền khi gửi"',
+      caption: 'hộp Cài đặt biểu mẫu đang mở, khoanh đỏ hai tab "Đặt lịch hẹn" và "Thanh toán"',
       localOnly: true,
       async take(page) {
-        // Đường thật của người dùng: Tạo biểu mẫu mới -> chọn mẫu "Đăng ký tư vấn" (không bật sẵn đặt lịch / thu tiền)
-        // -> kéo xuống dưới phần câu hỏi. Chưa lưu gì nên không để lại biểu mẫu nào trong DB.
-        await page.goto('/app/forms/new');
-        const consult = page.getByTestId('form-template-consult');
-        await consult.waitFor({ state: 'visible', timeout: 30_000 });
-        await consult.click();
-        const bookingCard = page.locator('button#section-booking');
-        const paymentCard = page.locator('button#section-payment');
-        await bookingCard.waitFor({ state: 'visible', timeout: 30_000 });
-        await settle(page);
-        await hideVolatileChrome(page);
-        return tallViewportShot(page, 2600, async () => {
-          await highlight(bookingCard);
-          await highlight(paymentCard);
+        await openEditor(page);
+        return tallViewportShot(page, 1500, async () => {
+          const dialog = await openSettings(page, 'Đặt lịch hẹn');
+          const tabs = dialog.getByTestId('editor-settings-tabs');
+          await highlight(tabs.getByRole('button', { name: /^Đặt lịch hẹn/ }));
+          await highlight(tabs.getByRole('button', { name: /^Thanh toán/ }));
           await page.waitForTimeout(200);
-          // Dải từ thẻ "Sau khi gửi" (thu gọn, ngay trên) tới thẻ "Giao diện" (ngay dưới): thấy hai thẻ cần khoanh nằm
-          // giữa các khối khác của trang.
-          return bandShot(page, page.locator('#section-settings'), page.locator('button#section-theme'));
+          return contentShot(page, dialog, { pad: 20, maxHeight: 700 });
         });
       },
     },
     {
-      name: 'dat-lich-hen-da-bat',
-      caption: 'mục Đặt lịch hẹn đã bật, thấy khung giờ từng ngày và ba ô sức chứa, số ngày đặt trước, báo trước tối thiểu',
+      name: 'goi-y-khai-them',
+      caption: 'đầu danh sách câu hỏi của biểu mẫu vừa chọn mẫu Đặt lịch hẹn, khoanh đỏ khung xanh nhắc việc cùng nút "Khai khung giờ đặt lịch"',
       localOnly: true,
       async take(page) {
-        await openEditor(page);
-        return sectionCardShot(page, 'Đặt lịch hẹn');
+        // Đường thật của người dùng: Tạo biểu mẫu mới -> chọn mẫu "Đặt lịch hẹn" (bật sẵn tab Đặt lịch) -> khung xanh nhắc
+        // khai khung giờ hiện ở đầu danh sách câu hỏi. Chưa lưu gì nên không để lại biểu mẫu nào trong DB.
+        await page.goto('/app/forms/new');
+        const template = page.getByTestId('form-template-booking');
+        await template.waitFor({ state: 'visible', timeout: 30_000 });
+        await template.click();
+        const hints = page.getByTestId('form-setup-hints');
+        await hints.waitFor({ state: 'visible', timeout: 30_000 });
+        await settle(page);
+        await hideVolatileChrome(page);
+        await highlight(hints.getByRole('button', { name: 'Khai khung giờ đặt lịch', exact: true }));
+        await page.waitForTimeout(200);
+        return contentShot(page, hints, { pad: 20 });
+      },
+    },
+    {
+      name: 'dat-lich-hen-da-bat',
+      caption: 'tab Đặt lịch hẹn trong hộp Cài đặt biểu mẫu đã bật, thấy khung giờ từng ngày và ba ô sức chứa, số ngày đặt trước, báo trước tối thiểu',
+      localOnly: true,
+      async take(page) {
+        return settingsTabShot(page, 'Đặt lịch hẹn');
       },
     },
     {
       name: 'thanh-toan-giu-cho-chuyen-khoan',
-      caption: 'mục Thanh toán giữ chỗ đang chọn Chuyển khoản ngân hàng, đã điền ngân hàng, số tài khoản, tên chủ tài khoản, số tiền',
+      caption: 'tab Thanh toán trong hộp Cài đặt biểu mẫu đang chọn Chuyển khoản ngân hàng, đã điền ngân hàng, số tài khoản, tên chủ tài khoản, số tiền',
       localOnly: true,
       async take(page) {
-        await openEditor(page);
-        return sectionCardShot(page, 'Thanh toán giữ chỗ');
+        return settingsTabShot(page, 'Thanh toán');
       },
     },
     {

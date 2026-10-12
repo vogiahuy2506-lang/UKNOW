@@ -22,7 +22,7 @@ import {
   sidebarShot, highlight, hideVolatileChrome, settle, contentShot,
   tallViewportShot, paddedShot, boxAround, drawBoxes,
 } from '../lib/shotHelpers.js';
-import { ensureDemoForm, withDb } from '../lib/shotFixtures.js';
+import { ensureDemoForm, ensureDemoSubmissions, withDb } from '../lib/shotFixtures.js';
 
 const LANDING_PATH = '/app/settings/landing-pages';
 const MARKETING_TITLE = 'Khoá học Marketing';
@@ -312,51 +312,59 @@ export default {
       },
     },
     {
-      name: 'menu-khach-hang-tu-landing',
-      caption: 'menu bên trái, nhóm Landing page đang mở, khoanh đỏ mục "Khách hàng từ Landing page"',
+      // Mục menu đổi tên "Khách hàng từ Landing page" -> "Khách để lại thông tin" (PR-1, 11/10/2026).
+      name: 'menu-khach-de-lai-thong-tin',
+      caption: 'menu bên trái, nhóm Landing page đang mở, khoanh đỏ mục "Khách để lại thông tin"',
       async take(page, { baseURL }) {
         return sidebarShot(page, {
           groupName: 'Landing page',
-          itemName: 'Khách hàng từ Landing page',
+          itemName: 'Khách để lại thông tin',
           baseURL,
         });
       },
     },
     {
-      name: 'form-thu-khach-chon-cach',
-      caption: 'mục Form thu khách trong Cài đặt, khoanh đỏ hai lựa chọn Form cơ bản và Dùng biểu mẫu đã tạo cùng ô chọn biểu mẫu',
+      // PR-6 (12/10/2026): "Form cơ bản / Dùng biểu mẫu đã tạo" (hai radio) đã thay bằng phần "Biểu mẫu của trang" — DANH SÁCH nhiều
+      // biểu mẫu + nút "Thêm biểu mẫu". Chưa bấm Lưu nên trang không đổi gì.
+      name: 'form-thu-khach-bieu-mau-cua-trang',
+      caption: 'mục Form thu khách trong Cài đặt, khoanh đỏ phần Biểu mẫu của trang và nút Thêm biểu mẫu',
       localOnly: true,
       async take(page) {
-        // Cần có ít nhất một biểu mẫu trong mục Biểu mẫu để ô chọn có thứ mà chọn (dùng chung biểu mẫu mẫu của bài `bieu-mau`).
-        await page.goto(LANDING_PATH);
-        await page.getByRole('heading', { name: 'Quản lý Landing Pages' }).waitFor({ state: 'visible', timeout: 30_000 });
-        const demoForm = await ensureDemoForm(page);
-
+        // Đổi mốc form kiểu cũ của seed thành chỗ trống để danh sách có sẵn một dòng "Biểu mẫu mới: Đăng ký tư vấn".
+        await ensureFormSlotInHtml();
         await openEditor(page, { pageTitle: MARKETING_TITLE });
         return tallViewportShot(page, 1500, async () => {
           const modal = await openSettings(page);
           const card = settingsCard(modal, 'Form thu khách');
-          // Chọn "Dùng biểu mẫu đã tạo" rồi chọn một biểu mẫu trong ô danh sách. Chưa bấm Lưu nên trang không đổi gì.
-          const linked = card.getByRole('radio', { name: 'Dùng biểu mẫu đã tạo' });
-          await linked.check();
-          const select = card.locator('#lead-form-linked-select');
-          await select.waitFor({ state: 'visible', timeout: 15_000 });
-          await page.waitForFunction(
-            () => document.querySelectorAll('#lead-form-linked-select option').length > 1,
-            null,
-            { timeout: 15_000 },
-          );
-          await select.selectOption(String(demoForm.id));
-          await page.waitForTimeout(400);
+          const list = card.getByTestId('landing-forms-list');
+          await list.waitFor({ state: 'visible', timeout: 15_000 });
           await hideVolatileChrome(page);
-
-          for (const label of ['Form cơ bản', 'Dùng biểu mẫu đã tạo']) {
-            await highlight(card.locator('label', { has: page.getByRole('radio', { name: label, exact: true }) }));
-          }
-          await highlight(select);
+          await highlight(list.getByRole('heading', { name: /Biểu mẫu của trang/ }));
+          await highlight(list.getByTestId('add-form-toggle'));
           await page.waitForTimeout(250);
-          return contentShot(page, card);
+          return contentShot(page, card, { maxHeight: 900 });
         });
+      },
+    },
+    {
+      name: 'man-khach-de-lai-thong-tin',
+      caption: 'màn Khách để lại thông tin ở tab Từ biểu mẫu, khoanh đỏ hai tab Từ landing page và Từ biểu mẫu cùng ô lọc Biểu mẫu',
+      localOnly: true,
+      async take(page) {
+        // Bài nộp mẫu của bài `bieu-mau` (dựng qua API công khai) để tab "Từ biểu mẫu" có dòng.
+        await page.goto(LANDING_PATH);
+        await page.getByRole('heading', { name: 'Quản lý Landing Pages' }).waitFor({ state: 'visible', timeout: 30_000 });
+        const demoForm = await ensureDemoForm(page);
+        await ensureDemoSubmissions(page, demoForm);
+
+        await page.goto('/app/landing-leads?tab=forms');
+        await page.getByTestId('form-lead-row').first().waitFor({ state: 'visible', timeout: 30_000 });
+        await settle(page);
+        await hideVolatileChrome(page);
+        await highlight(page.getByRole('tablist', { name: 'Nguồn khách' }));
+        await highlight(page.locator('main select').first());
+        await page.waitForTimeout(200);
+        return contentShot(page, page.locator('main').first(), { maxHeight: 640 });
       },
     },
     {

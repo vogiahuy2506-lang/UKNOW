@@ -6,14 +6,17 @@
  * mẫu + bốn bài nộp qua API (`lib/shotFixtures.js`). Vì vậy chúng chỉ chạy ở máy
  * mình.
  *
- * Giao diện trình soạn từ 03/10/2026 (PLAN_DON_GIAN_CAI_DAT_LANDING_VA_BIEU_MAU PR-2): biểu mẫu MỚI bắt đầu bằng bước chọn mẫu;
- * "Sau khi gửi" / Đặt lịch / Thanh toán / Giao diện là thẻ thu gọn (khối đang có dữ liệu thì mở sẵn); hàng "Thêm nhanh" chỉ
- * có 4 loại + "Loại khác…"; Chia sẻ & QR / Bài nộp chỉ hiện sau khi đã lưu. Mọi ảnh ở đây mở biểu mẫu mẫu ĐÃ LƯU (/edit)
- * nên không đi qua bước chọn mẫu; ảnh bước chọn mẫu của biểu mẫu mới nằm ở shots/dat-lich-giu-cho.js.
+ * Giao diện trình soạn từ 12/10/2026 (PLAN_BIEU_MAU_TUY_BIEN_AI_LANDING PR-3/4/5): hai cột — trái là danh sách câu hỏi
+ * (kèm khung "AI hỗ trợ soạn"), phải là khung "Xem trước" cố định; thanh trên cùng có nút "Cài đặt" mở HỘP "Cài đặt biểu
+ * mẫu" gồm sáu tab (Thông tin chung / Sau khi gửi / Đặt lịch hẹn / Thanh toán / Giao diện / Sản phẩm). Biểu mẫu MỚI bắt đầu
+ * bằng bước chọn mẫu, có khung "Để AI soạn biểu mẫu giúp bạn" (ảnh chụp KHÔNG bấm "Tạo bằng AI" nên không tốn lượt AI).
+ * Mọi ảnh trình soạn mở biểu mẫu mẫu ĐÃ LƯU (/edit); các thao tác thêm ô / đổi độ rộng chỉ nằm trong state trang, không bấm
+ * Lưu nên không đổi DB. Ảnh bước chọn mẫu sau khi chọn mẫu nằm ở shots/dat-lich-giu-cho.js.
+ *
+ * Nút "Cài đặt" của trình soạn trùng tên mục "Cài đặt" của menu trái: luôn chọn trong `form-editor-topbar`.
  */
 import {
-  sidebarShot, highlight, highlightCell, hideVolatileChrome, settle, contentShot,
-  enclosingSection, tallViewportShot, maskLocalOrigin,
+  sidebarShot, highlight, highlightCell, hideVolatileChrome, settle, contentShot, tallViewportShot, maskLocalOrigin,
 } from '../lib/shotHelpers.js';
 import { ensureDemoForm, ensureDemoSubmissions } from '../lib/shotFixtures.js';
 
@@ -35,6 +38,18 @@ async function openEditor(page) {
   return form;
 }
 
+/** Mở hộp "Cài đặt biểu mẫu" (và chọn một tab nếu có). Trả về locator của hộp. */
+async function openSettings(page, tabName) {
+  await page.getByTestId('form-editor-topbar').getByRole('button', { name: 'Cài đặt', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Cài đặt biểu mẫu' });
+  await dialog.waitFor({ state: 'visible', timeout: 15_000 });
+  if (tabName) {
+    await dialog.getByTestId('editor-settings-tabs').getByRole('button', { name: new RegExp(`^${tabName}`) }).click();
+  }
+  await page.waitForTimeout(300);
+  return dialog;
+}
+
 export default {
   slug: 'bieu-mau',
   shots: [
@@ -46,44 +61,110 @@ export default {
       },
     },
     {
-      name: 'soan-bieu-mau-them-truong',
-      caption: 'trang soạn biểu mẫu, khoanh đỏ nút "Thêm trường" và một trường đang chọn kiểu dữ liệu',
+      name: 'ai-soan-bieu-mau',
+      caption: 'bước đầu khi tạo biểu mẫu mới, khoanh đỏ khung "Để AI soạn biểu mẫu giúp bạn" cùng ô mô tả và nút "Tạo bằng AI"',
+      localOnly: true,
+      async take(page) {
+        // Không bấm "Tạo bằng AI": chỉ điền sẵn câu mô tả bằng một gợi ý nhanh, nên không tốn lượt AI và không cần khoá Gemini.
+        await page.goto('/app/forms/new');
+        const card = page.getByTestId('form-ai-draft-card');
+        await card.waitFor({ state: 'visible', timeout: 30_000 });
+        await page.getByTestId('form-ai-example-englishTrial').click();
+        await settle(page);
+        await hideVolatileChrome(page);
+        await highlight(card.getByTestId('form-ai-description'));
+        await highlight(card.getByTestId('form-ai-draft-submit'));
+        await page.waitForTimeout(200);
+        return contentShot(page, card, { pad: 20 });
+      },
+    },
+    {
+      name: 'soan-bieu-mau-tong-quan',
+      caption: 'trang soạn biểu mẫu, bên trái danh sách câu hỏi, bên phải khung Xem trước, khoanh đỏ nút "Cài đặt" trên thanh trên cùng, hai nút AI và nút "Thêm trường"',
       localOnly: true,
       async take(page) {
         await openEditor(page);
-        // Khung nhìn nới cao để thẻ nằm trọn dưới thanh thao tác dính: ở khung thường, cuộn tới thẻ làm thanh dính
-        // (Lưu / Xuất bản…) đè lên đầu thẻ, che mất nút "Thêm trường".
-        return tallViewportShot(page, 2600, async () => {
-          await page.evaluate(() => {
-            window.scrollTo(0, 0);
-            document.querySelectorAll('main').forEach((el) => { el.scrollTop = 0; });
-          });
-          const heading = page.getByRole('heading', { name: 'Danh sách trường thông tin' });
-          const card = await enclosingSection(page, heading);
-          await highlight(card.getByRole('button', { name: 'Thêm trường' }));
-          // Ô "Kiểu dữ liệu" của trường đầu tiên — chính chỗ người dùng đổi kiểu.
-          await highlight(card.locator('select').first());
+        const topbar = page.getByTestId('form-editor-topbar');
+        const list = page.getByTestId('form-field-list-pane');
+        await highlight(topbar.getByRole('button', { name: 'Cài đặt', exact: true }));
+        await highlight(page.getByTestId('form-ai-suggest-toggle'));
+        await highlight(page.getByTestId('form-ai-rewrite-toggle'));
+        await highlight(list.getByRole('button', { name: 'Thêm trường', exact: true }));
+        await page.waitForTimeout(200);
+        // Khối nhỏ nhất ôm cả thanh trên cùng lẫn khung Xem trước (vùng soạn, không gồm menu trái).
+        const region = page.locator('div')
+          .filter({ has: topbar })
+          .filter({ has: page.getByTestId('form-preview-pane') })
+          .last();
+        return contentShot(page, region, { maxHeight: 880 });
+      },
+    },
+    {
+      name: 'bang-thuoc-tinh-o',
+      caption: 'bảng thuộc tính của một ô đang mở, khoanh đỏ ô "Độ rộng", ô "Gợi ý trong ô nhập (placeholder)" và ô "Chữ hướng dẫn dưới tên trường"',
+      localOnly: true,
+      async take(page) {
+        await openEditor(page);
+        const row = page.getByTestId('field-row-0');
+        await row.getByRole('button', { name: /Trường #1/ }).click();
+        const panel = row.getByTestId('field-properties-panel');
+        await panel.waitFor({ state: 'visible', timeout: 15_000 });
+        // Điền thử cho ảnh có chữ minh hoạ — chỉ nằm trong state trang, không bấm Lưu.
+        await panel.getByLabel('Độ rộng').selectOption('half');
+        await panel.getByLabel('Gợi ý trong ô nhập (placeholder)').fill('Nguyễn Văn A');
+        await panel.getByLabel('Chữ hướng dẫn dưới tên trường').fill('Ghi đúng họ tên như trên giấy tờ');
+        await highlight(panel.getByLabel('Độ rộng'));
+        await highlight(panel.getByLabel('Gợi ý trong ô nhập (placeholder)'));
+        await highlight(panel.getByLabel('Chữ hướng dẫn dưới tên trường'));
+        await page.waitForTimeout(200);
+        return tallViewportShot(page, 1600, async () => contentShot(page, row, { pad: 20 }));
+      },
+    },
+    {
+      name: 'xem-truoc-nhieu-buoc',
+      caption: 'khung Xem trước ở chế độ Điện thoại của biểu mẫu nhiều bước, thấy dòng "Bước 1/2" cùng nút "Tiếp"',
+      localOnly: true,
+      async take(page) {
+        await openEditor(page);
+        // Chia biểu mẫu mẫu thành hai bước: thêm khối "Ngắt trang" rồi một ô sau nó (chỉ trong state trang, không Lưu).
+        const list = page.getByTestId('form-field-list-pane');
+        await list.getByRole('button', { name: 'Loại khác…' }).click();
+        await page.getByTestId('form-more-field-types').getByRole('button', { name: 'Ngắt trang' }).click();
+        await list.getByRole('button', { name: 'Văn bản ngắn', exact: true }).click();
+        const pane = page.getByTestId('form-preview-pane');
+        await pane.getByRole('tab', { name: 'Điện thoại' }).click();
+        const frame = page.getByTestId('form-preview-frame');
+        await frame.getByTestId('form-step-progress').waitFor({ state: 'visible', timeout: 15_000 });
+        await highlight(frame.getByTestId('form-step-progress'));
+        await highlight(frame.getByRole('button', { name: 'Tiếp', exact: true }));
+        await page.waitForTimeout(200);
+        return tallViewportShot(page, 1800, async () => contentShot(page, pane, { pad: 20 }));
+      },
+    },
+    {
+      name: 'hop-cai-dat-bieu-mau',
+      caption: 'hộp Cài đặt biểu mẫu đang mở, khoanh đỏ cột sáu tab Thông tin chung, Sau khi gửi, Đặt lịch hẹn, Thanh toán, Giao diện, Sản phẩm',
+      localOnly: true,
+      async take(page) {
+        await openEditor(page);
+        return tallViewportShot(page, 1500, async () => {
+          const dialog = await openSettings(page);
+          await highlight(dialog.getByTestId('editor-settings-tabs'));
           await page.waitForTimeout(200);
-          // Đầu thẻ + hàng "Thêm nhanh" (4 loại + "Loại khác…") + trường đầu tiên; bốn trường thì cao hơn 1.100px.
-          return contentShot(page, card, { maxHeight: 640 });
+          return contentShot(page, dialog, { pad: 20 });
         });
       },
     },
     {
       name: 'giao-dien-bieu-mau',
-      caption: 'mục Giao diện với hàng mẫu dựng sẵn, ô màu, ô font và khung Xem trước',
+      caption: 'tab Giao diện trong hộp Cài đặt biểu mẫu, thấy hàng mẫu dựng sẵn, ô màu, ô font, ô bố cục và ô tải ảnh banner, logo',
       localOnly: true,
       async take(page) {
         await openEditor(page);
-        // Biểu mẫu mẫu đã chỉnh giao diện nên mục này mở sẵn; nếu thu gọn thì bấm thẻ "Giao diện" để mở.
-        const themeCard = page.locator('button#section-theme');
-        if (await themeCard.isVisible().catch(() => false)) await themeCard.click();
-        return tallViewportShot(page, 2400, async () => {
-          const heading = page.getByRole('heading', { name: 'Giao diện', exact: true });
-          await heading.scrollIntoViewIfNeeded();
-          await page.waitForTimeout(400);
-          const card = await enclosingSection(page, heading);
-          return contentShot(page, card);
+        return tallViewportShot(page, 2000, async () => {
+          const dialog = await openSettings(page, 'Giao diện');
+          await dialog.getByText('Mẫu dựng sẵn', { exact: false }).first().waitFor({ state: 'visible', timeout: 15_000 });
+          return contentShot(page, dialog, { pad: 20 });
         });
       },
     },

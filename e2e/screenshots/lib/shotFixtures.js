@@ -598,6 +598,48 @@ export async function ensureConsentSourceDemo() {
 }
 
 /**
+ * Node "Dữ liệu Biểu mẫu" (read_form_submissions) trong sơ đồ của chiến dịch nháp mẫu, và biểu mẫu mẫu được gắn vào landing
+ * mẫu "Khoá học Marketing" (bảng landing_page_forms) để khung cấu hình node có ô "Chọn nhanh theo landing page".
+ * Node cũ của lần chạy trước (nếu có) giữ nguyên — chỉ thêm khi chưa có.
+ * @param {{ formId: number|string }} params biểu mẫu mẫu (ensureDemoForm)
+ * @returns {Promise<{campaignId: number, nodeName: string}>}
+ */
+export async function ensureFormSubmissionsNodeDemo({ formId }) {
+  const NODE_NAME = 'Dữ liệu Biểu mẫu';
+  return withDb(async (db) => {
+    const people = await loadPeople(db);
+    const owner = people[OWNER_USERNAME];
+    const campaign = (await db.query(
+      `SELECT id FROM campaigns
+        WHERE COALESCE(workspace_owner_id, id_user) = $1 AND campaign_name LIKE '%Chào mừng Khách hàng mới%'
+        ORDER BY id LIMIT 1`,
+      [owner],
+    )).rows[0];
+    if (!campaign) throw new Error('Chưa có chiến dịch mẫu "Chào mừng Khách hàng mới". Nạp lại DB với E2E_SEED_CAMPAIGNS=1 (hoặc E2E_SEED_ALL=1).');
+
+    const existing = await db.query(
+      `SELECT id FROM campaign_nodes WHERE id_campaign = $1 AND node_type = 'read_form_submissions' LIMIT 1`, [campaign.id],
+    );
+    if (!existing.rows[0]) {
+      await db.query(
+        `INSERT INTO campaign_nodes (id_campaign, node_type, node_subtype, node_name, position_x, position_y, config, execution_order)
+         VALUES ($1, 'read_form_submissions', 'read_form_submissions', $2, 120, 360, '{}'::jsonb, 99)`,
+        [campaign.id, NODE_NAME],
+      );
+    }
+    // Landing mẫu + biểu mẫu mẫu: lối tắt "theo landing page" chỉ hiện khi có ít nhất một landing chứa biểu mẫu.
+    await db.query(
+      `INSERT INTO landing_page_forms (landing_page_id, form_id, position)
+       SELECT lp.id, $1::bigint, 0 FROM landing_pages lp
+        WHERE lp.slug = 'khoa-hoc-marketing-tu-dong-hoa'
+       ON CONFLICT (landing_page_id, form_id) DO NOTHING`,
+      [formId],
+    );
+    return { campaignId: campaign.id, nodeName: NODE_NAME };
+  });
+}
+
+/**
  * Node "Khách hàng từ Landing page" trong sơ đồ của một chiến dịch mẫu + vài lead, trong đó có người ĐÃ TỪ
  * CHỐI nhận tin — để khung cấu hình node hiện dòng "Có N lead bị bỏ qua vì đã từ chối nhận tin".
  * @returns {Promise<{campaignId: number, nodeName: string}>}

@@ -21,6 +21,7 @@
 import {
   sidebarShot, highlight, hideVolatileChrome, settle, contentShot, paddedShot,
 } from '../lib/shotHelpers.js';
+import { ensureDemoForm, ensureFormSubmissionsNodeDemo } from '../lib/shotFixtures.js';
 
 /**
  * Mở trình dựng của chiến dịch nháp đã có luồng mẫu.
@@ -215,6 +216,43 @@ export default {
         // Khung trắng của hộp thoại (con của lớp phủ toàn màn hình), cao tới hết hộp.
         const dialog = estimate.locator('xpath=ancestor::div[contains(@class,"fixed")][1]').locator('> div').first();
         return paddedShot(page, dialog, { pad: 16 });
+      },
+    },
+    {
+      // PR-7b (12/10/2026): khối "Dữ liệu Biểu mẫu" chọn NHIỀU biểu mẫu (ô tích) + lối tắt "Chọn nhanh theo landing page".
+      // Dựng node + gắn biểu mẫu mẫu vào landing mẫu qua DB test (lib/shotFixtures.js); chưa bấm Lưu nên sơ đồ không đổi.
+      name: 'khoi-du-lieu-bieu-mau',
+      caption: 'hộp cấu hình khối Dữ liệu Biểu mẫu, khoanh đỏ danh sách biểu mẫu có ô tích và ô Chọn nhanh theo landing page',
+      localOnly: true,
+      async take(page) {
+        await page.goto('/app/forms');
+        await page.getByRole('heading', { name: 'Biểu mẫu', exact: true }).first()
+          .waitFor({ state: 'visible', timeout: 30_000 });
+        const demoForm = await ensureDemoForm(page);
+        const { campaignId, nodeName } = await ensureFormSubmissionsNodeDemo({ formId: demoForm.id });
+
+        await page.goto(`/app/campaigns/${campaignId}/builder`);
+        // Node trên sơ đồ React Flow: bấm đúp mới mở khung cấu hình.
+        const node = page.locator('.react-flow__node').filter({ hasText: nodeName }).first();
+        await node.waitFor({ state: 'visible', timeout: 45_000 });
+        await settle(page);
+        await node.dblclick();
+
+        const legend = page.getByText('Chọn biểu mẫu', { exact: true }).first();
+        await legend.waitFor({ state: 'visible', timeout: 30_000 });
+        // Lối tắt: chọn landing thì mọi biểu mẫu của landing đó được tích sẵn ("Đã chọn N biểu mẫu").
+        const shortcut = page.locator('#form-submissions-landing-shortcut');
+        await shortcut.waitFor({ state: 'visible', timeout: 30_000 });
+        await shortcut.selectOption({ index: 1 });
+        await page.getByText(/Đã chọn \d+ biểu mẫu/).first().waitFor({ state: 'visible', timeout: 15_000 });
+        await page.waitForTimeout(600);
+        await hideVolatileChrome(page);
+
+        await highlight(shortcut);
+        await highlight(page.locator('fieldset').filter({ has: legend }).locator('div.overflow-y-auto').first());
+        await page.waitForTimeout(200);
+        const panel = legend.locator('xpath=ancestor::div[contains(@class,"rounded")][.//h2 or .//h3][1]');
+        return paddedShot(page, (await panel.count()) ? panel : legend.locator('xpath=ancestor::div[3]'), { pad: 12 });
       },
     },
   ],
