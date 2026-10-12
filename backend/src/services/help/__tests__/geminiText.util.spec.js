@@ -81,6 +81,17 @@ describe('help/geminiText.util generateGeminiText — qua lõi Gemini dùng chun
     expect(res.raw.candidates[0].finishReason).toBe('STOP');
   });
 
+  // 13/10/2026: bản dịch bài hướng dẫn phải là JSON hợp lệ — không bật JSON mode thì model để lọt dấu " chưa thoát trong HTML.
+  it('jsonMode: true → gửi responseMimeType application/json; mặc định không gửi', async () => {
+    global.fetch.mockResolvedValueOnce(googleOk('{"title":"T"}'));
+    await generateGeminiText({ userId: 1, systemPrompt: 'sp', userPrompt: 'u', jsonMode: true });
+    expect(requestBody(0).generationConfig.responseMimeType).toBe('application/json');
+
+    global.fetch.mockResolvedValueOnce(googleOk('ok'));
+    await generateGeminiText({ userId: 1, systemPrompt: 'sp', userPrompt: 'u' });
+    expect(requestBody(1).generationConfig.responseMimeType).toBeUndefined();
+  });
+
   it('khoá API ở header, không ở URL; systemInstruction + lượt user đúng; không gửi topP; thinkingBudget null → không gửi thinkingConfig', async () => {
     global.fetch.mockResolvedValueOnce(googleOk('ok'));
 

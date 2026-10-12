@@ -6,8 +6,10 @@ import { glossaryPromptBlock } from './helpGlossary.js';
 import { reindexArticle, _clearCapabilityMapCache } from './helpCenter.service.js';
 import * as helpRepo from '../../repositories/help/helpArticle.repository.js';
 
-// Bản dịch là TOÀN BỘ thân bài HTML bọc trong JSON. 8192 token cắt cụt bài dài (13/10/2026: bài `bieu-mau` ~22.000 ký tự
-// HTML → JSON đứt giữa chừng → "AI dịch trả về JSON không hợp lệ" lặp lại mọi lần). Model hệ thống (Gemini 2.5) nhận tới 65.536.
+// Bản dịch là TOÀN BỘ thân bài HTML bọc trong JSON. Trần đầu ra rộng cho bài dài (bài ~22.000 ký tự HTML dùng ~5.600 token).
+// 13/10/2026 — gốc thật của lỗi "AI dịch trả về JSON không hợp lệ" lặp mọi lần ở bài `bieu-mau` KHÔNG phải trần token (finish=STOP):
+// không bật JSON mode thì model để lọt dấu " chưa thoát trong HTML (vd tiêu đề `Do not skip "Identity role"`) → JSON.parse vỡ.
+// Đo trên prod: jsonMode=false → lỗi ở vị trí 9997; jsonMode=true → parse OK. Vì vậy hai lời gọi dưới đây bật `jsonMode`.
 export const HELP_TRANSLATE_MAX_OUTPUT_TOKENS = 32768;
 
 function normalizeLocale(locale) {
@@ -78,6 +80,7 @@ ${glossaryPromptBlock()}
     ({ text, modelName, raw } = await generateGeminiText({
       ...baseArgs,
       maxOutputTokens: HELP_TRANSLATE_MAX_OUTPUT_TOKENS,
+      jsonMode: true,
       thinkingBudget: 0,
     }));
   } catch (err) {
@@ -85,6 +88,7 @@ ${glossaryPromptBlock()}
     ({ text, modelName, raw } = await generateGeminiText({
       ...baseArgs,
       maxOutputTokens: HELP_TRANSLATE_MAX_OUTPUT_TOKENS,
+      jsonMode: true,
     }));
   }
 

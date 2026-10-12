@@ -77,5 +77,7 @@ describe('dịch bài trợ giúp — ghi token dịch chú thích', () => {
     const call = generateGeminiText.mock.calls.find((c) => c[0].feature === 'help_translate');
     expect(HELP_TRANSLATE_MAX_OUTPUT_TOKENS).toBeGreaterThanOrEqual(32768);
     expect(call[0].maxOutputTokens).toBe(HELP_TRANSLATE_MAX_OUTPUT_TOKENS);
+    // 13/10/2026: không bật JSON mode thì model để lọt dấu " chưa thoát trong HTML → JSON hỏng (đo trên prod).
+    expect(call[0].jsonMode).toBe(true);
   });
 });

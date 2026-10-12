@@ -27,6 +27,8 @@ export async function generateGeminiText({
   thinkingBudget = null,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   feature = 'help',
+  // true → Gemini trả JSON hợp lệ có thoát ký tự (`responseMimeType: application/json`). Nơi gọi parse JSON thì nên bật.
+  jsonMode = false,
 } = {}) {
   const modelName = await resolveAllowedModel(userId, null);
   const fallbackModel = await aiUsageMeter.resolveFallbackModel();
@@ -43,6 +45,7 @@ export async function generateGeminiText({
     timeoutMs,
     totalTimeoutMs: timeoutMs,
     feature, // chỉ để ghi sổ bền `ai_call_events` (PR-10); nơi gọi nào không truyền thì là 'help'
+    jsonMode,
     ownerUserId: userId ?? null,
   });
 
