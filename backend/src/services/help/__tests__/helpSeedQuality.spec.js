@@ -266,6 +266,9 @@ const UI_LABELS_IN_ARTICLES = [
   ['bieu-mau', 'forms.editorPage.showIf.valueLabel', 'Giá trị'],
   ['bieu-mau', 'forms.editorPage.showIf.badgeBroken', 'Điều kiện chưa hợp lệ'],
   ['bieu-mau', 'forms.editorPage.preview.title', 'Xem trước'],
+  // PR-8c (12/10/2026): nút xuất CSV ở trang Bài nộp và ở cả hai tab của màn "Khách để lại thông tin".
+  ['bieu-mau', 'csvExport.button', 'Xuất CSV'],
+  ['landing-page', 'csvExport.button', 'Xuất CSV'],
   ['dat-lich-giu-cho', 'forms.editorPage.addBlock.booking', 'Thêm đặt lịch hẹn'],
   ['dat-lich-giu-cho', 'forms.editorPage.addBlock.payment', 'Thu tiền khi gửi'],
   ['dat-lich-giu-cho', 'forms.editorPage.booking.title', 'Đặt lịch hẹn'],
