@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { HiOutlineDuplicate, HiOutlineExclamation } from 'react-icons/hi';
@@ -10,6 +10,11 @@ import {
 import { FORM_SUBMISSION_COLUMN_OPTIONS } from '../constants/dataNodeColumnOptions.js';
 import { NodeConfigDataColumnPicker } from './NodeConfigDataColumnPicker';
 import campaignBuilderApiService from '../services/campaignBuilderApi.service';
+import {
+  MAX_READ_FORM_SUBMISSIONS_FORM_IDS,
+  getFormIdsFromConfig,
+  previewFormSubmissionsForIds,
+} from '../utils/readFormSubmissionsFormIds.js';
 import NumberInput from '../../../components/common/NumberInput';
 
 /** Khoá cố định của item chiến dịch (khớp RESERVED_CAMPAIGN_ITEM_FIELD_KEYS phía backend). */
@@ -26,8 +31,9 @@ const FIXED_VARIABLE_ROWS = [
 ];
 
 /**
- * Cấu hình node «Dữ liệu Biểu mẫu» (read_form_submissions, PR-6b): chọn form, ánh xạ trường
- * Họ tên/Email/SĐT, chọn cột giữ lại, xem bảng biến để dùng ở bước gửi sau, giới hạn số bản ghi.
+ * Cấu hình node «Dữ liệu Biểu mẫu» (read_form_submissions, PR-6b): chọn MỘT HOẶC NHIỀU form (PR-7b; có lối tắt «mọi biểu
+ * mẫu của landing X»), ánh xạ trường Họ tên/Email/SĐT, chọn cột giữ lại, xem bảng biến để dùng ở bước gửi sau, giới hạn số bản ghi.
+ * Lựa chọn lưu ở `formData.formIds` (số[]); `formData.formId` chỉ còn là dạng cũ được đổi sang `formIds` lúc mở khung.
  *
  * @param {object} props
  * @param {object} props.formData
@@ -41,8 +47,22 @@ export function NodeConfigReadFormSubmissionsSection({ formData, setFormData }) 
   const [formsLoadError, setFormsLoadError] = useState('');
   const [formsForbidden, setFormsForbidden] = useState(false);
 
+  // Lối tắt «mọi biểu mẫu của landing X» — lỗi/không quyền thì chỉ ẩn lối tắt, không chặn việc chọn biểu mẫu.
+  const [landingGroups, setLandingGroups] = useState([]);
+
   const [isLoadingColumns, setIsLoadingColumns] = useState(false);
   const [columnsLoadError, setColumnsLoadError] = useState('');
+  // Tick liên tiếp nhiều biểu mẫu → nhiều lượt tải cột chồng nhau; chỉ lượt MỚI NHẤT được ghi vào formData.
+  const columnsRequestSeq = useRef(0);
+
+  const selectedIds = useMemo(
+    () => getFormIdsFromConfig(formData),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [formData.formIds, formData.formId]
+  );
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const hasSelection = selectedIds.length > 0;
+  const formsById = useMemo(() => new Map(forms.map((f) => [Number(f.id), f])), [forms]);
 
   const fieldMap = formData.fieldMap || {};
   const columnsSnapshot = useMemo(
@@ -78,58 +98,41 @@ export function NodeConfigReadFormSubmissionsSection({ formData, setFormData }) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Form đã chọn từ trước (đang sửa node) nhưng chưa có formColumnsSnapshot (config cũ) hoặc
-  // form đã bị xoá sau khi lưu -> tải lại cột ngay khi mở khung, để phát hiện lỗi sớm.
   useEffect(() => {
-    if (!formData.formId || columnsSnapshot.length > 0) return;
     let cancelled = false;
     (async () => {
-      setIsLoadingColumns(true);
-      setColumnsLoadError('');
       try {
-        const response = await campaignBuilderApiService.previewFormSubmissions(formData.formId, { limit: 1 });
-        const columns = Array.isArray(response.data?.data?.columns) ? response.data.data.columns : [];
-        if (!cancelled) {
-          setFormData((prev) => ({ ...prev, formColumnsSnapshot: columns }));
-        }
-      } catch (error) {
-        if (cancelled) return;
-        if (error?.response?.status === 404) {
-          setColumnsLoadError(t('nodeConfigFormSubmissions.formDeletedError'));
-        } else {
-          const msg = error.response?.data?.message || error.message || t('nodeConfigFormSubmissions.loadFormsError');
-          setColumnsLoadError(typeof msg === 'string' ? msg : t('nodeConfigFormSubmissions.loadFormsError'));
-        }
-      } finally {
-        if (!cancelled) setIsLoadingColumns(false);
+        const response = await campaignBuilderApiService.listLandingFormGroups();
+        const groups = Array.isArray(response?.data?.data) ? response.data.data : [];
+        if (!cancelled) setLandingGroups(groups.filter((g) => Array.isArray(g?.formIds) && g.formIds.length > 0));
+      } catch {
+        // Lối tắt là tiện ích — không báo lỗi, người dùng vẫn tick từng biểu mẫu được.
       }
     })();
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.formId]);
+  }, []);
 
-  const handleSelectForm = async (formId) => {
-    if (!formId) {
-      setFormData((prev) => ({ ...prev, formId: '', formColumnsSnapshot: [], formConsentEnabled: false }));
+  // Tải cột (nhãn dễ đọc cho khung ánh xạ + bảng biến) của các biểu mẫu đang chọn. Chỉ lượt gọi MỚI NHẤT được ghi lại.
+  const refreshColumns = async (ids) => {
+    columnsRequestSeq.current += 1;
+    const seq = columnsRequestSeq.current;
+    if (ids.length === 0) {
+      setFormData((prev) => ({ ...prev, formColumnsSnapshot: [] }));
       setColumnsLoadError('');
+      setIsLoadingColumns(false);
       return;
     }
-    const form = forms.find((f) => String(f.id) === String(formId));
-    setFormData((prev) => ({
-      ...prev,
-      formId,
-      formConsentEnabled: Boolean(form?.settings?.consentEnabled),
-    }));
-
     setIsLoadingColumns(true);
     setColumnsLoadError('');
     try {
-      const response = await campaignBuilderApiService.previewFormSubmissions(formId, { limit: 1 });
+      const response = await previewFormSubmissionsForIds(campaignBuilderApiService, ids, { limit: 1 });
+      if (seq !== columnsRequestSeq.current) return;
       const columns = Array.isArray(response.data?.data?.columns) ? response.data.data.columns : [];
       setFormData((prev) => ({ ...prev, formColumnsSnapshot: columns }));
     } catch (error) {
+      if (seq !== columnsRequestSeq.current) return;
       if (error?.response?.status === 404) {
         setColumnsLoadError(t('nodeConfigFormSubmissions.formDeletedError'));
       } else {
@@ -137,9 +140,58 @@ export function NodeConfigReadFormSubmissionsSection({ formData, setFormData }) 
         setColumnsLoadError(typeof msg === 'string' ? msg : t('nodeConfigFormSubmissions.loadFormsError'));
       }
     } finally {
-      setIsLoadingColumns(false);
+      if (seq === columnsRequestSeq.current) setIsLoadingColumns(false);
     }
   };
+
+  // Biểu mẫu đã chọn từ trước (đang sửa node) nhưng chưa có formColumnsSnapshot (config cũ) hoặc
+  // biểu mẫu đã bị xoá sau khi lưu -> tải lại cột ngay khi mở khung, để phát hiện lỗi sớm.
+  useEffect(() => {
+    if (!hasSelection || columnsSnapshot.length > 0) return undefined;
+    refreshColumns(selectedIds);
+    return () => {
+      // Đóng khung giữa chừng: vô hiệu lượt đang bay để không ghi vào formData đã huỷ.
+      columnsRequestSeq.current += 1;
+    };
+    // Chỉ chạy lúc mở khung: đổi lựa chọn đã có handler tải cột riêng (applySelection).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /**
+   * Áp danh sách biểu mẫu mới: ghi `formIds` (bỏ `formId` cũ), cờ đồng ý (TẤT CẢ biểu mẫu đã chọn đều bật hỏi đồng ý), rồi tải cột.
+   * @param {number[]} nextIds
+   */
+  const applySelection = (nextIds) => {
+    const ids = nextIds.slice(0, MAX_READ_FORM_SUBMISSIONS_FORM_IDS);
+    const allConsent = ids.length > 0
+      && ids.every((id) => Boolean(formsById.get(id)?.settings?.consentEnabled));
+    setFormData((prev) => {
+      const next = { ...prev, formIds: ids, formConsentEnabled: allConsent };
+      delete next.formId;
+      return next;
+    });
+    refreshColumns(ids);
+  };
+
+  const handleToggleForm = (formId) => {
+    const id = Number(formId);
+    applySelection(selectedIdSet.has(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id]);
+  };
+
+  // Lối tắt: THÊM mọi biểu mẫu của landing vào lựa chọn hiện có (không thay thế), bỏ qua id không còn trong danh sách biểu mẫu.
+  const handleAddLandingForms = (slug) => {
+    if (!slug) return;
+    const group = landingGroups.find((g) => g.slug === slug);
+    if (!group) return;
+    const merged = [...selectedIds];
+    for (const raw of group.formIds) {
+      const id = Number(raw);
+      if (Number.isFinite(id) && id > 0 && !merged.includes(id)) merged.push(id);
+    }
+    applySelection(merged);
+  };
+
+  const handleClearSelection = () => applySelection([]);
 
   const handleFieldMapChange = (key, value) => {
     setFormData((prev) => ({
@@ -174,14 +226,28 @@ export function NodeConfigReadFormSubmissionsSection({ formData, setFormData }) 
     [columnsSnapshot]
   );
 
+  // Cảnh báo "không lấy được ai": theo từng biểu mẫu đã chọn khi đã có danh sách biểu mẫu; chưa có thì dùng cờ đã lưu trong node.
+  const consentWarningText = useMemo(() => {
+    if (!hasSelection) return '';
+    if (formsById.size === 0) {
+      return formData.formConsentEnabled ? '' : t('nodeConfigFormSubmissions.consentWarning');
+    }
+    const noConsent = selectedIds
+      .map((id) => formsById.get(id))
+      .filter((form) => form && !form.settings?.consentEnabled);
+    if (noConsent.length === 0) return '';
+    if (selectedIds.length === 1) return t('nodeConfigFormSubmissions.consentWarning');
+    return t('nodeConfigFormSubmissions.consentWarningNamed', { titles: noConsent.map((f) => f.title).join(', ') });
+  }, [hasSelection, formsById, selectedIds, formData.formConsentEnabled, t]);
+
   return (
     <div className="space-y-6">
       <p className="text-sm text-gray-600 dark:text-dk-text2">{t('nodeConfigFormSubmissions.pageDescription')}</p>
 
-      <div>
-        <label htmlFor="form-submissions-select-form" className="mb-1 block text-sm font-medium text-gray-700 dark:text-dk-text">
+      <fieldset className="space-y-3">
+        <legend className="mb-1 block text-sm font-medium text-gray-700 dark:text-dk-text">
           {t('nodeConfigFormSubmissions.selectFormLabel')}
-        </label>
+        </legend>
         {isLoadingForms ? (
           <p className="text-sm text-gray-500 dark:text-dk-text2">{t('nodeConfigFormSubmissions.loadingForms')}</p>
         ) : formsForbidden ? (
@@ -198,37 +264,92 @@ export function NodeConfigReadFormSubmissionsSection({ formData, setFormData }) 
             </Link>
           </p>
         ) : (
-          <select
-            id="form-submissions-select-form"
-            value={formData.formId || ''}
-            onChange={(e) => handleSelectForm(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
-          >
-            <option value="">{t('nodeConfigFormSubmissions.selectFormPlaceholder')}</option>
-            {forms.map((form) => (
-              <option key={form.id} value={form.id}>
-                {form.title} ({t('nodeConfigFormSubmissions.submissionCount', { count: form.submissionCount || 0 })})
-              </option>
-            ))}
-          </select>
+          <>
+            <p className="text-xs text-gray-500 dark:text-dk-text2">{t('nodeConfigFormSubmissions.selectFormHint')}</p>
+
+            {landingGroups.length > 0 ? (
+              <div>
+                <label
+                  htmlFor="form-submissions-landing-shortcut"
+                  className="mb-1 block text-xs font-medium text-gray-700 dark:text-dk-text"
+                >
+                  {t('nodeConfigFormSubmissions.landingShortcutLabel')}
+                </label>
+                <select
+                  id="form-submissions-landing-shortcut"
+                  value=""
+                  onChange={(e) => handleAddLandingForms(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"
+                >
+                  <option value="">{t('nodeConfigFormSubmissions.landingShortcutPlaceholder')}</option>
+                  {landingGroups.map((group) => (
+                    <option key={group.slug} value={group.slug}>
+                      {t('nodeConfigFormSubmissions.landingShortcutOption', {
+                        title: group.title || group.slug,
+                        count: group.formIds.length,
+                      })}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+
+            <div className="max-h-56 space-y-0.5 overflow-y-auto rounded-lg border border-gray-200 p-1.5 dark:border-dk-border">
+              {forms.map((form) => {
+                const id = Number(form.id);
+                return (
+                  <label
+                    key={form.id}
+                    className="flex cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-dk-raised"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedIdSet.has(id)}
+                      onChange={() => handleToggleForm(id)}
+                      className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset"
+                    />
+                    <span className="min-w-0 text-sm text-gray-800 dark:text-dk-text">
+                      {form.title} ({t('nodeConfigFormSubmissions.submissionCount', { count: form.submissionCount || 0 })})
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+
+            {hasSelection ? (
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600 dark:text-dk-text2">
+                <span>{t('nodeConfigFormSubmissions.selectedCount', { count: selectedIds.length })}</span>
+                <button
+                  type="button"
+                  onClick={handleClearSelection}
+                  className="font-medium text-primary-700 underline hover:text-primary-800 dark:text-primary-300"
+                >
+                  {t('nodeConfigFormSubmissions.clearSelection')}
+                </button>
+              </div>
+            ) : null}
+          </>
         )}
-      </div>
+      </fieldset>
 
       {columnsLoadError ? (
         <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/40 dark:border-red-800 dark:text-red-300">{columnsLoadError}</p>
       ) : null}
 
-      {formData.formId && !formData.formConsentEnabled ? (
+      {consentWarningText ? (
         <p className="flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50/90 p-3 text-sm text-amber-950 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300">
           <HiOutlineExclamation className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
-          <span>{t('nodeConfigFormSubmissions.consentWarning')}</span>
+          <span>{consentWarningText}</span>
         </p>
       ) : null}
       <p className="text-xs text-gray-500 dark:text-dk-text2">{t('nodeConfigFormSubmissions.consentInfo')}</p>
 
-      {formData.formId ? (
+      {hasSelection ? (
         <div className="space-y-3 rounded-lg border border-gray-200 p-4 dark:border-dk-border">
           <span className="text-sm font-medium text-gray-700 dark:text-dk-text">{t('nodeConfigFormSubmissions.fieldMapTitle')}</span>
+          {selectedIds.length > 1 ? (
+            <p className="text-xs text-gray-500 dark:text-dk-text2">{t('nodeConfigFormSubmissions.multiFieldMapHint')}</p>
+          ) : null}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             {[
               { field: 'nameKey', label: t('nodeConfigFormSubmissions.nameFieldLabel') },
@@ -270,7 +391,7 @@ export function NodeConfigReadFormSubmissionsSection({ formData, setFormData }) 
         hint={t('nodeConfigFormSubmissions.keepFieldsHint')}
       />
 
-      {formData.formId ? (
+      {hasSelection ? (
         <div className="space-y-2 rounded-lg border border-gray-200 p-4 dark:border-dk-border">
           <div>
             <span className="text-sm font-medium text-gray-700 dark:text-dk-text">

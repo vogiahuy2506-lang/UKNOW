@@ -1,5 +1,6 @@
 import { LANDING_LEADS_MAX_RECORDS } from '../constants/landingLeadsNodeLimits.js';
 import { FORM_SUBMISSIONS_MAX_RECORDS } from '../constants/formSubmissionsNodeLimits.js';
+import { getFormIdsFromConfig } from './readFormSubmissionsFormIds.js';
 
 /**
  * Build execution order from flow graph with trigger-rooted traversal.
@@ -253,7 +254,7 @@ export const validateNodeForRun = (node) => {
   }
 
   if (nodeType === 'read_form_submissions') {
-    if (!String(config.formId || '').trim()) {
+    if (getFormIdsFromConfig(config).length === 0) {
       return { status: 'failed', message: 'Chưa chọn biểu mẫu' };
     }
     const limit = parseInt(config.formSubmissionsLimit, 10);

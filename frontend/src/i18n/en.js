@@ -8360,9 +8360,17 @@ export default {
   },
 
   nodeConfigFormSubmissions: {
-    pageDescription: 'Get people who submitted and consented to receive messages on a form you created.',
+    pageDescription: 'Get people who submitted and consented to receive messages on one or more forms you created.',
     selectFormLabel: 'Select form',
     selectFormPlaceholder: '-- Select a form --',
+    selectFormHint: 'Pick one or more forms. A person who filled several forms is messaged only once (their latest submission is used).',
+    landingShortcutLabel: 'Quick pick by landing page',
+    landingShortcutPlaceholder: '-- Add every form of landing... --',
+    landingShortcutOption: '{title} ({count} forms)',
+    selectedCount: '{count} forms selected',
+    clearSelection: 'Clear selection',
+    multiFieldMapHint: 'This mapping applies to every selected form. A form without the chosen field falls back to its field role.',
+    consentWarningNamed: 'These forms have not enabled marketing consent, so they will get no one: {titles}.',
     loadingForms: 'Loading forms...',
     loadFormsError: 'Failed to load forms list',
     forbiddenError: 'You need Forms permission to use this node',

@@ -1,6 +1,7 @@
 import { clampLandingLeadsLimitUi } from '../constants/landingLeadsNodeLimits.js';
 import { clampFormSubmissionsLimitUi } from '../constants/formSubmissionsNodeLimits.js';
 import { applyFieldMapToPreviewItems } from './formSubmissionFieldMap.js';
+import { getFormIdsFromConfig, previewFormSubmissionsForIds } from './readFormSubmissionsFormIds.js';
 import { resolveItemField } from './campaignBuilderRuntime.js';
 import { applyDataColumnSelectionToItems, measureJsonUtf8Bytes } from './dataColumnSelection.js';
 import {
@@ -991,7 +992,8 @@ export const createCampaignNodeRunner = (deps) => {
 
     if (nodeType === 'read_form_submissions') {
       const limit = clampFormSubmissionsLimitUi(config.formSubmissionsLimit, 1000);
-      const response = await apiService.previewFormSubmissions(config.formId, { limit }, { signal });
+      const formIds = getFormIdsFromConfig(config);
+      const response = await previewFormSubmissionsForIds(apiService, formIds, { limit }, { signal });
       const data = response.data?.data;
       const rawRows = Array.isArray(data?.items) ? data.items : [];
       // Preview API LUÔN dùng fieldMap rỗng phía server (PR-6a getCampaignPreviewForForm) — áp
@@ -1006,7 +1008,7 @@ export const createCampaignNodeRunner = (deps) => {
       return {
         input: {
           operation: 'Get Form Submissions',
-          formId: config.formId || '',
+          formIds,
           fieldMap: config.fieldMap || {},
           formSubmissionsLimit: limit,
           dataSelectedColumns: Array.isArray(config.dataSelectedColumns) ? config.dataSelectedColumns : [],

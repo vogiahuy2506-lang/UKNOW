@@ -1,4 +1,5 @@
 import campaignBuilderApiService from '../services/campaignBuilderApi.service';
+import { getFormIdsFromConfig, previewFormSubmissionsForIds } from './readFormSubmissionsFormIds.js';
 import { validateChannelAttachments } from './channelAttachments';
 import { describeChannelStepsProblem } from './channelSteps';
 
@@ -492,7 +493,8 @@ export const createNodeConfigFormData = ({
   landingLeadsSlugs: Array.isArray(config.landingLeadsSlugs) ? config.landingLeadsSlugs : [],
   landingLeadsCustomFilters: Array.isArray(config.landingLeadsCustomFilters) ? config.landingLeadsCustomFilters : [],
   landingLeadsLimit: config.landingLeadsLimit || 1000,
-  formId: config.formId || '',
+  // PR-7b: node nhận NHIỀU biểu mẫu. Đồ thị cũ chỉ có `formId` được đổi thành `formIds` ngay khi mở khung (lưu lại là hết `formId` cũ).
+  formIds: getFormIdsFromConfig(config),
   /**
    * Ánh xạ trường form cho Họ tên/Email/SĐT — trống = lấy theo vai trò (role) trong form.
    * Khoá PHẢI trùng tên với contract backend (form.service.js getCampaignDataForForm) vì
@@ -797,16 +799,20 @@ export const handleNodeConfigSaveClick = async ({
   }
 
   if (nodeType === 'read_form_submissions') {
-    if (!String(formData.formId || '').trim()) {
-      toastNotifier.error('Vui lòng chọn một biểu mẫu trước khi lưu');
+    const formIds = getFormIdsFromConfig(formData);
+    if (formIds.length === 0) {
+      toastNotifier.error('Vui lòng chọn ít nhất một biểu mẫu trước khi lưu');
       return;
     }
     try {
       setIsLoadingTestPreview(true);
-      const response = await campaignBuilderApiService.previewFormSubmissions(formData.formId, { limit: 50 });
+      const response = await previewFormSubmissionsForIds(campaignBuilderApiService, formIds, { limit: 50 });
       const total = response?.data?.data?.pagination?.total ?? 0;
       toastNotifier.success(`Kết nối OK. Có ${total} người đã đồng ý nhận tin (xem trước tối đa 50 dòng)`);
-      onSave(formData);
+      // Lưu `formIds` đã chuẩn hoá; bỏ `formId` cũ nếu còn sót (backend ưu tiên `formIds`, nhưng để config sạch một nguồn).
+      const payload = { ...formData, formIds };
+      delete payload.formId;
+      onSave(payload);
     } catch (error) {
       console.error('Form submissions preview error:', error);
       const msg = error.response?.data?.message || error.message || 'Không thể kiểm tra cấu hình';

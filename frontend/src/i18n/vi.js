@@ -8367,9 +8367,17 @@ export default {
   },
 
   nodeConfigFormSubmissions: {
-    pageDescription: 'Lấy người đã điền và đồng ý nhận tin từ một biểu mẫu (form) đã tạo.',
+    pageDescription: 'Lấy người đã điền và đồng ý nhận tin từ một hoặc nhiều biểu mẫu (form) đã tạo.',
     selectFormLabel: 'Chọn biểu mẫu',
     selectFormPlaceholder: '-- Chọn biểu mẫu --',
+    selectFormHint: 'Chọn một hoặc nhiều biểu mẫu. Người điền nhiều biểu mẫu chỉ nhận tin một lần (lấy lần điền gần nhất).',
+    landingShortcutLabel: 'Chọn nhanh theo landing page',
+    landingShortcutPlaceholder: '-- Thêm mọi biểu mẫu của landing... --',
+    landingShortcutOption: '{title} ({count} biểu mẫu)',
+    selectedCount: 'Đã chọn {count} biểu mẫu',
+    clearSelection: 'Bỏ chọn tất cả',
+    multiFieldMapHint: 'Ánh xạ này áp cho mọi biểu mẫu đã chọn. Biểu mẫu nào không có trường được chọn sẽ lấy theo vai trò trong form.',
+    consentWarningNamed: 'Các biểu mẫu sau chưa hỏi đồng ý nhận tin nên không lấy được ai: {titles}.',
     loadingForms: 'Đang tải danh sách biểu mẫu...',
     loadFormsError: 'Không thể tải danh sách biểu mẫu',
     forbiddenError: 'Bạn cần quyền Biểu mẫu (Forms) để dùng node này',

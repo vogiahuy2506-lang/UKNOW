@@ -146,6 +146,31 @@ const campaignBuilderApiService = {
     return api.get(`/forms/${formId}/campaign-preview`, { params, ...options });
   },
 
+  /**
+   * Preview khi node chọn NHIỀU biểu mẫu (GET /api/forms/campaign-preview?formIds=1,2,3) — PR-7b. Cùng hình dạng trả về
+   * `previewFormSubmissions` (`{ items, columns, pagination }`); server khử trùng người điền nhiều biểu mẫu (giữ bản mới nhất).
+   *
+   * @param {Array<string|number>} formIds
+   * @param {{ limit?: number }} params
+   * @param {object} options axios options
+   */
+  previewFormsSubmissions(formIds, params = {}, options = {}) {
+    return api.get('/forms/campaign-preview', {
+      params: { ...params, formIds: (Array.isArray(formIds) ? formIds : []).join(',') },
+      ...options,
+    });
+  },
+
+  /**
+   * Landing của workspace kèm các biểu mẫu đang nhúng (GET /api/forms/landing-groups) — lối tắt «Mọi biểu mẫu của landing X» ở
+   * node read_form_submissions (PR-7b). Trả `{ data: [{ slug, title, formIds }] }`.
+   *
+   * @param {object} options axios options
+   */
+  listLandingFormGroups(options = {}) {
+    return api.get('/forms/landing-groups', options);
+  },
+
   previewGoogleSheet(payload, options = {}) {
     return api.post('/google-sheets/preview', payload, options);
   },
