@@ -377,10 +377,11 @@ async function withQuotaTransaction(ownerId, requestedBytes, work) {
 }
 
 /**
- * Ghi tệp đã xác nhận vào CHỖ CỦA BÀI NỘP: (1) sổ dung lượng của chủ — kiểm hạn mức và chèn dòng trong MỘT giao dịch có khoá chủ,
+ * Ghi tệp đã xác nhận vào CHỖ CỦA BÀI NỘP: (0) CHIẾM phiên ('used', một câu UPDATE nguyên tử) — cổng duy nhất để một uploadId không
+ * dùng được hai lần: hai bài nộp đua nhau thì một bên chiếm được, bên kia nhận 400 NGAY, chưa đụng sổ dung lượng hay kho,
+ * (1) sổ dung lượng của chủ — kiểm hạn mức và chèn dòng trong MỘT giao dịch có khoá chủ,
  * (2) sao chép đối tượng tạm sang  uploads/<chủ>/forms/<form>/submissions/<bài nộp>/<uuid>.<đuôi> (giữ bản tạm tới khi INSERT bài
- * nộp xong — INSERT lỗi thì khách nộp lại được mà không phải tải lại tệp), (3) chiếm phiên ('used') để một uploadId không dùng được
- * hai lần.
+ * nộp xong — INSERT lỗi thì `rollbackFileCommit` nhả phiên, khách nộp lại được mà không phải tải lại tệp).
  *
  * Trả `status` cho TẤT CẢ trường tệp của bài nộp (cùng một kết quả): 'received' | 'quota_exceeded' (chủ hết dung lượng) |
  * 'failed' (kho lỗi). Hai trạng thái sau KHÔNG ném lỗi — bài nộp vẫn được nhận, trường tệp đánh dấu chưa nhận được tệp.
@@ -444,6 +445,14 @@ export async function commitSubmissionFiles({ form, submissionId, verified }) {
     result.status = status;
   };
 
+  // (0) Chiếm phiên TRƯỚC mọi việc có tác dụng phụ. Chiếm thiếu (đã có bài nộp khác lấy) → nhả phần đã chiếm, từ chối.
+  const claimed = await formFileUploadRepository.markUsed(verified.allUploadIds, submissionId);
+  result.claimedUploadIds = claimed;
+  if (claimed.length !== verified.allUploadIds.length) {
+    await rollbackFileCommit(result);
+    throw httpError('Tệp đính kèm đã được dùng cho một bài nộp khác, vui lòng chọn tải lại', 400, 'INVALID_UPLOAD');
+  }
+
   // (1) Sổ dung lượng.
   let ledgerRows;
   try {
@@ -467,7 +476,6 @@ export async function commitSubmissionFiles({ form, submissionId, verified }) {
   } catch (error) {
     if (!(error instanceof StorageQuotaExceededError)) throw error;
     markAllFields(FILE_STATUS.QUOTA_EXCEEDED);
-    await claimUploads(verified.allUploadIds, submissionId, result);
     void notifyOwnerFileQuotaExceeded(form);
     return result;
   }
@@ -490,14 +498,6 @@ export async function commitSubmissionFiles({ form, submissionId, verified }) {
   }
   result.finalKeys = copiedKeys;
 
-  // (3) Chiếm phiên — một uploadId chỉ dùng được MỘT lần (hai bài nộp đua nhau: một bên thắng, bên kia bị từ chối).
-  const claimed = await formFileUploadRepository.markUsed(verified.allUploadIds, submissionId);
-  result.claimedUploadIds = claimed;
-  if (claimed.length !== verified.allUploadIds.length) {
-    await rollbackFileCommit(result);
-    throw httpError('Tệp đính kèm đã được dùng cho một bài nộp khác, vui lòng chọn tải lại', 400, 'INVALID_UPLOAD');
-  }
-
   const filesByField = new Map();
   planned.forEach((item, index) => {
     const list = filesByField.get(item.fieldKey) || [];
@@ -515,15 +515,6 @@ export async function commitSubmissionFiles({ form, submissionId, verified }) {
   }
   result.status = FILE_STATUS.RECEIVED;
   return result;
-}
-
-/** Chiếm phiên cho nhánh KHÔNG ghi tệp (hết dung lượng / kho lỗi): tệp tạm bị bỏ, cron dọn nốt. */
-async function claimUploads(uploadIds, submissionId, result) {
-  try {
-    result.claimedUploadIds = await formFileUploadRepository.markUsed(uploadIds, submissionId);
-  } catch (error) {
-    logError(`[FormFileUpload] Không chiếm được phiên tệp của bài nộp ${submissionId}: ${error?.message || error}`);
-  }
 }
 
 /**

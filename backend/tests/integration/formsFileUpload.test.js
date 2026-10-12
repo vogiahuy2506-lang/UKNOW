@@ -659,13 +659,16 @@ describe('nộp bài kèm tệp', () => {
     expect((await ledgerRows(owner.id)).filter((r) => r.state === 'active')).toHaveLength(1);
   });
 
-  it('hai bài nộp đua nhau cùng MỘT uploadId: đúng một bài thắng, bài kia 400, chỉ một tệp + một dòng sổ', async () => {
+  it('nhiều bài nộp đua nhau cùng MỘT uploadId: đúng một bài thắng, các bài kia 400, chỉ một tệp + một dòng sổ', async () => {
     const { owner, form } = await setup({ username: 'owner_ff_race' });
     const session = await uploadFile(form, { fileName: 'a.png', contentType: 'image/png', buffer: PNG });
     const answers = { [nameKeyOf(form)]: 'Lan', [fileKeyOf(form)]: [session.uploadId] };
 
-    const [r1, r2] = await Promise.all([submit(form, answers), submit(form, answers)]);
-    expect([r1.status, r2.status].sort()).toEqual([201, 400]);
+    // 3 bài đua nhau (không phải 2): cổng chiếm phiên là một câu UPDATE nguyên tử nên luôn đúng MỘT bài thắng, các bài còn lại 400
+    // ngay (chưa chạm sổ dung lượng / kho) — không có kết cục "cả hai cùng 201" hay "một bài 201 nhưng mất tệp".
+    const results = await Promise.all([submit(form, answers), submit(form, answers), submit(form, answers)]);
+    expect(results.map((r) => r.status).sort()).toEqual([201, 400, 400]);
+    expect(results.filter((r) => r.status === 400).every((r) => r.body.code === 'INVALID_UPLOAD')).toBe(true);
     expect(await getSubmissionRows(form.id)).toHaveLength(1);
     const active = (await ledgerRows(owner.id)).filter((r) => r.state === 'active');
     expect(active).toHaveLength(1);
