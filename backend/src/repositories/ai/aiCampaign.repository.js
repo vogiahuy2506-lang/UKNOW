@@ -1,26 +1,58 @@
 import db from '../../config/database.js';
 
 /**
- * PR-6 (PLAN_BIEU_MAU_TUY_BIEN_AI_LANDING_2026-10-11) — một landing nay có NHIỀU biểu mẫu (bảng chỉ mục `landing_page_forms`,
- * migration 297). Node `read_form_submissions` của chiến dịch chỉ nhận MỘT `formId`, nên mỗi landing đại diện bằng biểu mẫu
- * CHÍNH: chưa bị super admin tắt, ưu tiên biểu mẫu đã xuất bản (nháp không nhận bài nộp), rồi theo vị trí trong HTML.
- * LATERAL + LIMIT 1 giữ nguyên hình dạng "mỗi landing một dòng" của các truy vấn bên dưới (JOIN thẳng sẽ nhân dòng theo số biểu mẫu).
- *
- * NỢ ĐÃ BIẾT: landing có từ 2 biểu mẫu thì chiến dịch "gửi cho người đăng ký landing X" chỉ đọc người điền biểu mẫu chính — người
- * điền các biểu mẫu còn lại KHÔNG có trong danh sách (an toàn: gửi ít hơn, không gửi nhầm). Muốn đủ phải mở rộng node để nhận
- * nhiều formId hoặc lọc bài nộp theo `landing_page_slug`.
+ * PR-6/PR-7b (PLAN_BIEU_MAU_TUY_BIEN_AI_LANDING_2026-10-11) — một landing có NHIỀU biểu mẫu (bảng chỉ mục `landing_page_forms`,
+ * migration 297) và node `read_form_submissions` nhận `formIds`, nên mỗi landing đại diện bằng TẤT CẢ biểu mẫu chưa bị super admin
+ * tắt (`admin_disabled_at IS NULL`) và cùng workspace với landing, theo thứ tự trong HTML (`position`). Biểu mẫu nháp vẫn nằm trong
+ * danh sách (chưa nhận bài nộp thì chỉ đóng góp 0 người; xuất bản sau là có ngay) — trước PR-7b chỉ biểu mẫu "chính" được đọc nên
+ * người điền các biểu mẫu còn lại bị bỏ sót.
+ * LATERAL + array_agg giữ nguyên hình dạng "mỗi landing một dòng" của các truy vấn bên dưới (JOIN thẳng sẽ nhân dòng theo số biểu mẫu).
+ * `ids` là NULL khi landing không có biểu mẫu nào.
  */
-const PRIMARY_LANDING_FORM_LATERAL = `
+const LANDING_FORMS_LATERAL = `
   LEFT JOIN LATERAL (
-    SELECT fx.id
+    SELECT array_agg(fx.id ORDER BY lpf.position, fx.id) AS ids
     FROM landing_page_forms lpf
     JOIN forms fx ON fx.id = lpf.form_id
     WHERE lpf.landing_page_id = lp.id
       AND fx.admin_disabled_at IS NULL
       AND fx.workspace_owner_id = COALESCE(lp.workspace_owner_id, lp.id_user)
-    ORDER BY fx.is_published DESC, lpf.position, fx.id
-    LIMIT 1
   ) f ON TRUE`;
+
+/**
+ * Chuẩn hoá cột `ids` (bigint[] → pg trả mảng CHUỖI) của LANDING_FORMS_LATERAL thành `form_ids: number[]` ([] khi không có) và
+ * `form_id` = biểu mẫu đầu tiên (hoặc null) — `form_id` chỉ còn để biết "landing này có biểu mẫu", đừng dùng nó làm nguồn đọc.
+ */
+function withLandingFormIds(row) {
+  const { form_ids: rawIds, ...rest } = row;
+  const formIds = Array.isArray(rawIds) ? rawIds.map(Number) : [];
+  return { ...rest, form_id: formIds.length > 0 ? formIds[0] : null, form_ids: formIds };
+}
+
+/**
+ * Số NGƯỜI nhận của một landing thu khách bằng Biểu mẫu — khớp node `read_form_submissions`: một biểu mẫu → đếm bài nộp đã đồng ý
+ * (như cũ, node không khử trùng); từ hai biểu mẫu → khử trùng theo email (trim + chữ thường) hoặc 9 số cuối SĐT, đúng khoá
+ * `campaignItemPersonKey` (formCampaignItem.util.js). Dùng cột `respondent_*` (node cũng lấy theo role khi `fieldMap` rỗng — mặc định
+ * của chiến dịch do AI dựng).
+ */
+const LANDING_FORM_CONSENTED_COUNT_SQL = `
+         CASE
+           WHEN f.ids IS NULL THEN 0
+           WHEN cardinality(f.ids) = 1 THEN (
+             SELECT COUNT(*)::int FROM form_submissions s
+             WHERE s.form_id = f.ids[1] AND s.marketing_consent IS TRUE AND s.status <> 'cancelled'
+           )
+           ELSE (
+             SELECT COUNT(DISTINCT COALESCE(
+                      NULLIF(LOWER(BTRIM(s.respondent_email)), ''),
+                      CASE WHEN LENGTH(regexp_replace(s.respondent_phone, '[^0-9]', '', 'g')) >= 9
+                           THEN 'p:' || RIGHT(regexp_replace(s.respondent_phone, '[^0-9]', '', 'g'), 9) END,
+                      's:' || s.id::text
+                    ))::int
+             FROM form_submissions s
+             WHERE s.form_id = ANY(f.ids) AND s.marketing_consent IS TRUE AND s.status <> 'cancelled'
+           )
+         END`;
 
 class AiCampaignRepository {
   /**
@@ -150,9 +182,9 @@ class AiCampaignRepository {
   }
 
   /**
-   * PR-5b-2b — kèm `form_id` (Biểu mẫu CHÍNH đã gắn landing qua bảng chỉ mục `landing_page_forms`, chưa
-   * bị super admin tắt — xem PRIMARY_LANDING_FORM_LATERAL) để AI biết landing nào nên sinh `read_form_submissions` thay vì
-   * `read_landing_leads` khi soạn chiến dịch "gửi cho người đăng ký landing X".
+   * PR-5b-2b — kèm `form_ids` (TẤT CẢ Biểu mẫu đã gắn landing qua bảng chỉ mục `landing_page_forms`, chưa bị super admin tắt —
+   * xem LANDING_FORMS_LATERAL; PR-7b) để AI biết landing nào nên sinh `read_form_submissions` thay vì `read_landing_leads` khi
+   * soạn chiến dịch "gửi cho người đăng ký landing X". `form_id` = biểu mẫu đầu tiên, chỉ để biết "landing có biểu mẫu".
    *
    * Review "Neo PR-5b-2b" — lọc trước đây `WHERE id_user = $1`, KHÔNG phải chủ workspace: landing
    * do nhân viên tạo ghi `id_user = workspaceOwnerId` (landingPageAdmin.service.js `create()`) nên
@@ -162,7 +194,7 @@ class AiCampaignRepository {
    * đã dùng cho index riêng (`idx_landing_pages_effective_workspace_owner`), không đoán tên cột.
    *
    * @param {number} userId workspace owner id
-   * @returns {Promise<Array<{ slug: string, title: string, is_published: boolean, form_id: number|null }>>}
+   * @returns {Promise<Array<{ slug: string, title: string, is_published: boolean, form_id: number|null, form_ids: number[] }>>}
    */
   async getLandingPages(userId) {
     const result = await db.query(
@@ -170,26 +202,27 @@ class AiCampaignRepository {
          lp.slug,
          COALESCE(lp.title, lp.slug) AS title,
          lp.is_published,
-         f.id AS form_id
+         f.ids AS form_ids
        FROM landing_pages lp
-       ${PRIMARY_LANDING_FORM_LATERAL}
+       ${LANDING_FORMS_LATERAL}
        WHERE COALESCE(lp.workspace_owner_id, lp.id_user) = $1
        ORDER BY lp.updated_at DESC
        LIMIT 20`,
       [userId]
     );
-    return result.rows;
+    return result.rows.map(withLandingFormIds);
   }
 
   /**
    * Rà soát C P2-7 — danh sách landing cho THẺ CHỌN NGUỒN "Đăng ký từ Landing Page" của wizard. Khác `getLandingPages` (LIMIT 20, phục
    * vụ gợi ý trong prompt): thẻ chọn phải cho người dùng thấy MỌI landing của workspace (trần 100) kèm số người có thể nhận tin.
    *
-   * `form_consented_count`: landing thu người đăng ký bằng Biểu mẫu (PR-5b-2a) thì "người nhận" là bài nộp ĐÃ ĐỒNG Ý của form đó
-   * (đúng điều kiện `listConsentedSubmissionsForCampaign`), không phải bảng `leads`.
+   * `form_consented_count`: landing thu người đăng ký bằng Biểu mẫu (PR-5b-2a) thì "người nhận" là bài nộp ĐÃ ĐỒNG Ý của MỌI biểu
+   * mẫu của landing (đúng điều kiện `listConsentedSubmissionsForCampaign`; từ hai biểu mẫu thì đếm người đã khử trùng — xem
+   * LANDING_FORM_CONSENTED_COUNT_SQL), không phải bảng `leads`.
    *
    * @param {number} ownerId workspace owner id
-   * @returns {Promise<Array<{ slug: string, title: string, is_published: boolean, form_id: number|null, form_consented_count: number }>>}
+   * @returns {Promise<Array<{ slug: string, title: string, is_published: boolean, form_id: number|null, form_ids: number[], form_consented_count: number }>>}
    */
   async getLandingPickerPages(ownerId) {
     const result = await db.query(
@@ -197,19 +230,16 @@ class AiCampaignRepository {
          lp.slug,
          COALESCE(lp.title, lp.slug) AS title,
          lp.is_published,
-         f.id AS form_id,
-         CASE WHEN f.id IS NULL THEN 0 ELSE (
-           SELECT COUNT(*)::int FROM form_submissions s
-           WHERE s.form_id = f.id AND s.marketing_consent IS TRUE AND s.status <> 'cancelled'
-         ) END AS form_consented_count
+         f.ids AS form_ids,
+         ${LANDING_FORM_CONSENTED_COUNT_SQL} AS form_consented_count
        FROM landing_pages lp
-       ${PRIMARY_LANDING_FORM_LATERAL}
+       ${LANDING_FORMS_LATERAL}
        WHERE COALESCE(lp.workspace_owner_id, lp.id_user) = $1
        ORDER BY lp.updated_at DESC
        LIMIT 100`,
       [ownerId]
     );
-    return result.rows;
+    return result.rows.map(withLandingFormIds);
   }
 
   /**
@@ -233,27 +263,27 @@ class AiCampaignRepository {
   }
 
   /**
-   * PR-5b-2b — formId của Biểu mẫu gắn landing có slug này (chưa bị super admin tắt), thuộc ĐÚNG
-   * `ownerId`. `null` nếu landing không tồn tại/không thuộc `ownerId`/chưa có form gắn/form đã bị
-   * tắt. Tách khỏi `getLandingPages` (LIMIT 20 — landing cũ hơn 20 trang gần nhất sẽ tra hụt).
+   * PR-5b-2b/PR-7b — id của TẤT CẢ Biểu mẫu gắn landing có slug này (chưa bị super admin tắt, cùng workspace), theo thứ tự trong
+   * HTML landing, thuộc ĐÚNG `ownerId`. `[]` nếu landing không tồn tại/không thuộc `ownerId`/chưa có form gắn/mọi form đã bị tắt.
+   * Tách khỏi `getLandingPages` (LIMIT 20 — landing cũ hơn 20 trang gần nhất sẽ tra hụt).
    *
    * @param {number} ownerId workspace owner id
    * @param {string} slug
-   * @returns {Promise<number|null>}
+   * @returns {Promise<number[]>}
    */
-  async getFormIdForLandingSlug(ownerId, slug) {
+  async getFormIdsForLandingSlug(ownerId, slug) {
     const result = await db.query(
-      `SELECT f.id
+      `SELECT f.ids AS form_ids
        FROM landing_pages lp
-       ${PRIMARY_LANDING_FORM_LATERAL}
+       ${LANDING_FORMS_LATERAL}
        WHERE lp.slug = $1
          AND COALESCE(lp.workspace_owner_id, lp.id_user) = $2
-         AND f.id IS NOT NULL
+         AND f.ids IS NOT NULL
        LIMIT 1`,
       [slug, ownerId]
     );
-    const id = result.rows[0]?.id;
-    return id != null ? Number(id) : null;
+    const ids = result.rows[0]?.form_ids;
+    return Array.isArray(ids) ? ids.map(Number) : [];
   }
 
   /**

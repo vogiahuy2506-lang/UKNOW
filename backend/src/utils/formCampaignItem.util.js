@@ -6,6 +6,7 @@
  */
 
 import { isDisplayFieldType } from './formFieldTypes.util.js';
+import { normalizeContactEmail } from './customerContactMatch.util.js';
 
 /**
  * Khoá cố định của item chiến dịch (xem object `item` trong mapFormSubmissionToCampaignItem bên
@@ -149,4 +150,40 @@ export function mapFormSubmissionToCampaignItem(row, fields = [], fieldMap = {})
   }
 
   return item;
+}
+
+/**
+ * Khoá "cùng một người" để khử trùng khi node đọc NHIỀU biểu mẫu (PR-7b): email (trim + chữ thường) nếu có, không thì 9 chữ
+ * số cuối SĐT (cùng quy tắc chốt đồng ý PR-2 và `customerContactMatch.util.js`; SĐT ngắn hơn 9 số không đủ để nhận diện). Item
+ * không có email lẫn SĐT hợp lệ → `null` (không thể nhận diện, giữ nguyên).
+ *
+ * @param {{ email?: unknown, phone?: unknown }} item
+ * @returns {string|null}
+ */
+export function campaignItemPersonKey(item) {
+  const email = normalizeContactEmail(item?.email);
+  if (email) return `e:${email}`;
+  const digits = String(item?.phone ?? '').replace(/[^0-9]/g, '');
+  return digits.length >= 9 ? `p:${digits.slice(-9)}` : null;
+}
+
+/**
+ * Khử trùng item chiến dịch theo người, GIỮ BẢN MỚI NHẤT. Đầu vào PHẢI xếp mới nhất trước (bài nộp sau đè bài nộp trước);
+ * đầu ra giữ nguyên thứ tự đó. Người điền hai biểu mẫu → một item (dữ liệu của lần điền gần nhất).
+ *
+ * @param {Array<object>} itemsNewestFirst
+ * @returns {Array<object>}
+ */
+export function dedupeCampaignItemsKeepNewest(itemsNewestFirst) {
+  const seen = new Set();
+  const out = [];
+  for (const item of Array.isArray(itemsNewestFirst) ? itemsNewestFirst : []) {
+    const key = campaignItemPersonKey(item);
+    if (key !== null) {
+      if (seen.has(key)) continue;
+      seen.add(key);
+    }
+    out.push(item);
+  }
+  return out;
 }

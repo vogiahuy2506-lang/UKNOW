@@ -6,6 +6,7 @@
  */
 
 import { getNodeSubtype } from '../../utils/nodeSubtype.util.js';
+import { normalizeFormIdList } from '../../utils/campaignFormIds.util.js';
 
 const KNOWN_TRIGGER_SUBTYPES = new Set(['manual', 'manual_trigger']);
 const KNOWN_AUDIENCE_SUBTYPES = new Set([
@@ -180,11 +181,16 @@ export function deriveIntentFromGraph(nodes = [], connections = []) {
         recipientKind,
       };
     } else if (audSubtype === 'read_form_submissions') {
-      audience = {
-        type: 'form',
-        formId: audCfg.formId != null ? Number(audCfg.formId) : null,
-        recipientKind,
-      };
+      // PR-7b: node nhiều biểu mẫu (`formIds`) → giữ NGUYÊN danh sách khi mở lại chiến dịch để AI sửa (mất danh sách = sửa xong chỉ còn
+      // một biểu mẫu, người điền các biểu mẫu kia lặng lẽ rơi khỏi chiến dịch). Node cũ chỉ có `formId` giữ hình dạng như trước.
+      const nodeFormIds = normalizeFormIdList(audCfg.formIds);
+      audience = nodeFormIds.length > 0
+        ? { type: 'form', formId: nodeFormIds[0], formIds: nodeFormIds, recipientKind }
+        : {
+          type: 'form',
+          formId: audCfg.formId != null ? Number(audCfg.formId) : null,
+          recipientKind,
+        };
     } else if (audSubtype === 'get_all_friends') {
       audience = {
         type: 'zalo_contacts',

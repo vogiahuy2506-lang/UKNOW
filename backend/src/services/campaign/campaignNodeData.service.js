@@ -17,6 +17,7 @@ import {
 import { applyDataColumnSelectionToItems } from '../../utils/dataColumnSelection.util.js';
 import { isEmailHeader, isPhoneHeader } from '../../utils/columnHeaderMatch.util.js';
 import formService from '../form.service.js';
+import { normalizeCampaignFormIds } from '../../utils/campaignFormIds.util.js';
 import {
   collectContactLookupKeys,
   createCustomerContactIndex,
@@ -214,11 +215,13 @@ class CampaignNodeDataService {
         // NGUYÊN lên đây — KHÔNG bắt/nuốt thành rỗng, để campaignRun.service.js's catch-all
         // (_doExecuteCampaign) đánh failRun(runId, error.message), người dùng thấy lỗi rõ thay
         // vì chiến dịch chạy xong 0 người nhận trong im lặng (PR-6a phản biện điểm 4).
-        const formIdNum = Number.parseInt(config.formId, 10);
-        if (!Number.isFinite(formIdNum)) {
+        // PR-7b: node nhận `formIds` (nhiều biểu mẫu); đồ thị cũ chỉ có `formId` vẫn chạy y như trước
+        // (normalizeCampaignFormIds → mảng một phần tử → đường một biểu mẫu nguyên vẹn).
+        const formIdList = normalizeCampaignFormIds(config);
+        if (formIdList.length === 0) {
           throw new Error('Chưa chọn biểu mẫu cho node "Dữ liệu Biểu mẫu"');
         }
-        const { items: formItems } = await formService.getCampaignDataForForm(formIdNum, userId, {
+        const { items: formItems } = await formService.getCampaignDataForForms(formIdList, userId, {
           fieldMap: config.fieldMap,
           limit: config.formSubmissionsLimit,
         });

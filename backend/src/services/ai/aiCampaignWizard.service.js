@@ -1183,6 +1183,8 @@ export function buildLandingLeadsQuestion(picker, locale = 'vi') {
         title: landing.title,
         isPublished: Boolean(landing.isPublished),
         formId: landing.formId ?? null,
+        // PR-7b: mọi biểu mẫu của landing (số ở formConsentedCount là người đã khử trùng qua TẤT CẢ biểu mẫu đó).
+        formIds: Array.isArray(landing.formIds) ? landing.formIds : [],
         leadCount: Number(landing.leadCount) || 0,
         formConsentedCount: Number(landing.formConsentedCount) || 0,
       })),

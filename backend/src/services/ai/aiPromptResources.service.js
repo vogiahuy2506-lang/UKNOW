@@ -275,9 +275,10 @@ class AiPromptResourcesService {
         slug: r.slug,
         title: r.title,
         isPublished: r.is_published,
-        // PR-5b-2b — Biểu mẫu CHÍNH đã gắn landing này (bảng chỉ mục landing_page_forms; landing nhiều biểu mẫu → chỉ biểu mẫu chính), null nếu chưa
-        // gắn/đã bị super admin tắt. Prompt dùng field này để chọn read_form_submissions thay vì
-        // read_landing_leads.
+        // PR-5b-2b/PR-7b — TẤT CẢ Biểu mẫu đã gắn landing này (bảng chỉ mục landing_page_forms), [] nếu chưa gắn/đã bị super admin
+        // tắt. Prompt dùng field này để chọn read_form_submissions (config.formIds = đủ mọi id) thay vì read_landing_leads.
+        // `formId` = biểu mẫu đầu tiên (hoặc null), chỉ để biết "landing có biểu mẫu".
+        formIds: Array.isArray(r.form_ids) ? r.form_ids.map(Number) : [],
         formId: r.form_id != null ? Number(r.form_id) : null,
       }));
     } catch (e) {
@@ -292,11 +293,11 @@ class AiPromptResourcesService {
    * (không được suy ra "không có landing nào").
    *
    *  - `leadCount`: số lead (bảng `leads`, `marketing_consent IS NOT FALSE`) gắn landing đó — đúng điều kiện node `read_landing_leads`.
-   *  - `formConsentedCount`: landing thu người đăng ký bằng Biểu mẫu thì người nhận là bài nộp đã đồng ý của form (PR-5b-2).
+   *  - `formConsentedCount`: landing thu người đăng ký bằng Biểu mẫu thì người nhận là bài nộp đã đồng ý của MỌI biểu mẫu của landing (PR-5b-2, PR-7b).
    *  - `totalLeads`: mọi lead của workspace (kể cả lead không gắn landing) — chính là số người node đọc khi KHÔNG lọc slug.
    *
    * @param {number} ownerId workspace owner id
-   * @returns {Promise<{ landings: Array<{ slug: string, title: string, isPublished: boolean, formId: number|null, leadCount: number, formConsentedCount: number }>, totalLeads: number }|null>}
+   * @returns {Promise<{ landings: Array<{ slug: string, title: string, isPublished: boolean, formId: number|null, formIds: number[], leadCount: number, formConsentedCount: number }>, totalLeads: number }|null>}
    */
   async getLandingPickerOptions(ownerId) {
     if (!ownerId) return { landings: [], totalLeads: 0 };
@@ -327,6 +328,7 @@ class AiPromptResourcesService {
           title: String(row.title || slug),
           isPublished: Boolean(row.is_published),
           formId: row.form_id != null ? Number(row.form_id) : null,
+          formIds: Array.isArray(row.form_ids) ? row.form_ids.map(Number) : [],
           leadCount: countBySlug.get(slug) || 0,
           formConsentedCount: Number(row.form_consented_count) || 0,
         });

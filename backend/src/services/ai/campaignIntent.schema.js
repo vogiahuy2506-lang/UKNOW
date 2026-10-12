@@ -2,6 +2,7 @@ import { normalizeChannel } from './aiCampaignWizard.service.js';
 import { isAdapterCampaignChannel, isAdapterCampaignChannelEnabled, isChannelBlockedByPlan } from '../campaign/campaignChannelFlags.util.js';
 import { MAX_CHANNEL_STEPS, countDripSteps } from '../../utils/channelSteps.util.js';
 import { getNodeSubtype } from '../../utils/nodeSubtype.util.js';
+import { normalizeFormIdList } from '../../utils/campaignFormIds.util.js';
 
 /**
  * Schema OpenAPI subset cho CampaignIntentV1, tương thích trực tiếp với responseSchema của Gemini.
@@ -32,6 +33,8 @@ export const CAMPAIGN_INTENT_V1_SCHEMA = {
         url: { type: 'string' },
         slugs: { type: 'array', items: { type: 'string' } },
         formId: { type: 'integer' },
+        // PR-7b: landing có nhiều biểu mẫu → node đọc ĐỦ mọi biểu mẫu. Do server điền (landingAudienceResolver), model không tự bịa.
+        formIds: { type: 'array', items: { type: 'integer' } },
         groupIds: { type: 'array', items: { type: 'string' } },
         friendIds: { type: 'array', items: { type: 'string' } },
         recipientKind: { type: 'string', enum: ['email', 'phone'] },
@@ -449,7 +452,11 @@ export function isCompilableIntent(intent) {
       ) {
         missing.push('audience.slugs');
       }
-      if (intent.audience.type === 'form' && (intent.audience.formId == null || !Number.isInteger(Number(intent.audience.formId)))) {
+      if (
+        intent.audience.type === 'form'
+        && normalizeFormIdList(intent.audience.formIds).length === 0
+        && (intent.audience.formId == null || !Number.isInteger(Number(intent.audience.formId)))
+      ) {
         missing.push('audience.formId');
       }
     }

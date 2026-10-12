@@ -1002,7 +1002,7 @@ Tài khoản Zalo mặc định: ${firstZaloAccountId ?? 'null'}${await aiPrompt
 ${zaloGroups.length > 0 ? `👥 Nhóm Zalo:\n${zaloGroups.map(g => `  - "${g.groupName}"`).join('\n')}` : ''}
 
 🌐 Landing Pages (landingLeadsSlugs — dùng để lọc leads trong read_landing_leads):
-${landingPages.length > 0 ? landingPages.map(lp => `  - slug: "${lp.slug}" | "${lp.title}"${lp.isPublished ? '' : ' (chưa publish)'}${lp.formId ? ` — trang này thu người đăng ký bằng Biểu mẫu formId=${lp.formId}, dùng data/read_form_submissions thay vì read_landing_leads` : ''}`).join('\n') : '  (chưa có landing page nào)'}
+${landingPages.length > 0 ? landingPages.map(lp => `  - slug: "${lp.slug}" | "${lp.title}"${lp.isPublished ? '' : ' (chưa publish)'}${(lp.formIds && lp.formIds.length > 0) ? ` — trang này thu người đăng ký bằng ${lp.formIds.length > 1 ? `${lp.formIds.length} Biểu mẫu formIds=[${lp.formIds.join(', ')}] (đọc ĐỦ mọi id này)` : `Biểu mẫu formIds=[${lp.formIds[0]}]`}, dùng data/read_form_submissions thay vì read_landing_leads` : ''}`).join('\n') : '  (chưa có landing page nào)'}
 
 📝 Biểu mẫu (formId — dùng trong read_form_submissions, lấy người đã nộp và ĐỒNG Ý nhận tin):
 ${forms.length > 0 ? forms.map(f => `  - id: ${f.id} | "${f.title}"${f.consentEnabled ? ` (${f.consentedCount} người đã đồng ý)` : ' (form CHƯA hỏi đồng ý nhận tin — node sẽ không có ai)'}`).join('\n') : '  (chưa có biểu mẫu nào xuất bản)'}
@@ -1015,7 +1015,7 @@ NODE TYPES THỰC SỰ TỒN TẠI trong hệ thống (chỉ dùng các loại n
   - notPurchasedCourseIds: [id1, id2] → loại trừ khách ĐÃ mua các khóa này
 • data/read_sheet — đọc Google Sheet (config: sheetUrl BẮT BUỘC)
 • data/read_landing_leads — lấy leads từ landing page (config: landingLeadsSlugs: ["slug"] — lấy từ danh sách Landing Pages trong TÀI NGUYÊN)
-• data/read_form_submissions — lấy người đã nộp biểu mẫu và ĐỒNG Ý nhận tin (config: formId — lấy từ danh sách Biểu mẫu trong TÀI NGUYÊN)
+• data/read_form_submissions — lấy người đã nộp biểu mẫu và ĐỒNG Ý nhận tin (config: formIds: [id, ...] — lấy từ danh sách Biểu mẫu trong TÀI NGUYÊN; dạng cũ formId: <id> vẫn được nhận)
 • data/select_zalo_account — chọn TK Zalo (BẮT BUỘC trong MỌI chiến dịch Zalo, đặt trước node gửi)
 • data/get_all_friends — lấy danh sách bạn bè
 • data/get_all_groups — lấy danh sách nhóm
@@ -1578,7 +1578,7 @@ UPLOADED FILE CHO NỘI DUNG (contentMode = attached_file):
 - dataSource="sheet" + URL ĐÃ có trong message (https://docs.google.com/spreadsheets/...) → nodeSubtype: "read_sheet", config: { sheetUrl: "<url>", headerRow: 1, dataStartRow: 2 }, thêm ghi chú format trong nodeDescription
 - dataSource="sheet" + CHƯA có URL → type: "ask_more", missing_fields: ["Đường dẫn Google Sheet (URL)"], content: "Bạn vui lòng chia sẻ đường dẫn Google Sheet nhé? (URL bắt đầu bằng https://docs.google.com/...)"
 - dataSource="landing" + user CHƯA chọn landing page cụ thể + có nhiều landing page trong TÀI NGUYÊN → type: "ask_more", missing_fields: ["Landing page cần lấy leads"], content: "Bạn muốn lấy leads từ landing page nào? (liệt kê tên trang)\n${landingPages.map(lp => `- ${lp.title} (${lp.slug})`).join('\n')}"
-- dataSource="landing" + user đã chọn hoặc chỉ có 1 landing page → xem landing đó trong TÀI NGUYÊN "🌐 Landing Pages": CÓ ghi "formId=<id>" (trang thu người đăng ký bằng Biểu mẫu) → nodeSubtype: "read_form_submissions", config: { formId: <id> } (KHÔNG dùng read_landing_leads cho landing này — landing dựng bằng Biểu mẫu thì bảng leads không có ai, node đọc landing sẽ ra 0 người trong im lặng); KHÔNG ghi formId → nodeSubtype: "read_landing_leads", config: { landingLeadsSlugs: ["<slug>"] } như cũ.
+- dataSource="landing" + user đã chọn hoặc chỉ có 1 landing page → xem landing đó trong TÀI NGUYÊN "🌐 Landing Pages": CÓ ghi "formIds=[...]" (trang thu người đăng ký bằng Biểu mẫu) → nodeSubtype: "read_form_submissions", config: { formIds: [<ĐỦ mọi id trong danh sách formIds của landing đó>] } (landing có nhiều biểu mẫu thì PHẢI liệt kê đủ, bỏ sót id là bỏ sót người đã đăng ký; KHÔNG dùng read_landing_leads cho landing này — landing dựng bằng Biểu mẫu thì bảng leads không có ai, node đọc landing sẽ ra 0 người trong im lặng); KHÔNG ghi formIds → nodeSubtype: "read_landing_leads", config: { landingLeadsSlugs: ["<slug>"] } như cũ.
 - dataSource="landing" + không có landing page nào → type: "text", content: "Tài khoản chưa có landing page nào. Bạn cần tạo landing page trước để thu thập leads."
 - dataSource="form" + user CHƯA chọn biểu mẫu cụ thể + có nhiều biểu mẫu trong TÀI NGUYÊN → type: "ask_more", missing_fields: ["Biểu mẫu cần lấy người đã nộp"], content: "Bạn muốn lấy người đã nộp từ biểu mẫu nào? (liệt kê tên biểu mẫu)\n${forms.map(f => `- ${f.title} (id: ${f.id})`).join('\n')}"
 - dataSource="form" + user đã chọn hoặc chỉ có 1 biểu mẫu → nodeSubtype: "read_form_submissions", config: { formId: <id> }. Biểu mẫu đó có consentEnabled=false (xem TÀI NGUYÊN) → vẫn tạo node bình thường, nhưng PHẢI nói rõ trong content: "Lưu ý: biểu mẫu này chưa bật hỏi đồng ý nhận tin nên node sẽ không có ai."

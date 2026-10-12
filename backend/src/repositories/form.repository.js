@@ -1508,6 +1508,98 @@ class FormRepository {
     return result.rows[0]?.total || 0;
   }
 
+  /**
+   * Định nghĩa trường của các biểu mẫu thuộc `workspaceOwnerId` trong `formIds` (PR-7b — node chiến dịch đọc nhiều biểu mẫu).
+   * Id không tồn tại / thuộc workspace khác KHÔNG có trong kết quả (nơi gọi coi là "bị bỏ"). Cố ý không `COUNT(submissions)` như
+   * `findFormByIdAndOwner` — node chỉ cần `fields` để ánh xạ bài nộp. Thứ tự theo `formIds`.
+   *
+   * @param {number[]} formIds
+   * @param {number} workspaceOwnerId
+   * @returns {Promise<Array<{ id: number, title: string, fields: Array<object>, settings: object }>>}
+   */
+  async findFormsForCampaignByIdsAndOwner(formIds, workspaceOwnerId) {
+    const ids = Array.isArray(formIds) ? formIds : [];
+    if (ids.length === 0) return [];
+    const result = await db.query(
+      `SELECT f.id, f.title, f.fields, f.settings
+       FROM forms f
+       WHERE f.id = ANY($1::bigint[])
+         AND f.workspace_owner_id = $2
+       ORDER BY array_position($1::bigint[], f.id)`,
+      [ids, workspaceOwnerId]
+    );
+    return result.rows.map((row) => ({ ...row, id: Number(row.id) }));
+  }
+
+  /**
+   * Bài nộp đủ điều kiện của NHIỀU biểu mẫu (PR-7b) — cùng điều kiện `listConsentedSubmissionsForCampaign` (đúng chủ workspace,
+   * `marketing_consent IS TRUE`, `status <> 'cancelled'`) nhưng `form_id = ANY(...)`. Xếp MỚI NHẤT trước (khác hàm một biểu mẫu):
+   * nơi gọi khử trùng người điền nhiều biểu mẫu bằng cách giữ bản gặp đầu tiên, rồi đảo lại cũ trước. `limit` là trần quét an toàn
+   * (không phải số người nhận) — nơi gọi cắt theo số người sau khi khử trùng.
+   *
+   * @param {number[]} formIds
+   * @param {number} workspaceOwnerId
+   * @param {number} scanLimit
+   * @returns {Promise<Array<object>>}
+   */
+  async listConsentedSubmissionsForForms(formIds, workspaceOwnerId, scanLimit) {
+    const ids = Array.isArray(formIds) ? formIds : [];
+    if (ids.length === 0) return [];
+    const result = await db.query(
+      `SELECT
+         s.id,
+         s.form_id AS "formId",
+         s.answers,
+         s.respondent_name AS "respondentName",
+         s.respondent_email AS "respondentEmail",
+         s.respondent_phone AS "respondentPhone",
+         s.marketing_consent AS "marketingConsent",
+         s.appointment_at AS "appointmentAt",
+         s.created_at AS "createdAt"
+       FROM form_submissions s
+       WHERE s.form_id = ANY($1::bigint[])
+         AND s.workspace_owner_id = $2
+         AND s.marketing_consent IS TRUE
+         AND s.status <> 'cancelled'
+       ORDER BY s.created_at DESC, s.id DESC
+       LIMIT $3`,
+      [ids, workspaceOwnerId, scanLimit]
+    );
+    return result.rows.map((row) => ({ ...row, formId: Number(row.formId) }));
+  }
+
+  /**
+   * Landing của workspace kèm các biểu mẫu đang nhúng (chưa bị super admin tắt) — nguồn cho lối tắt "Mọi biểu mẫu của landing X"
+   * ở khung cấu hình node `read_form_submissions` (PR-7b). Chỉ landing có ít nhất một biểu mẫu. Chủ landing & biểu mẫu phải CÙNG
+   * workspace (bảng chỉ mục không tự chặn chéo workspace).
+   *
+   * @param {number} workspaceOwnerId
+   * @returns {Promise<Array<{ slug: string, title: string, formIds: number[] }>>}
+   */
+  async listLandingFormGroups(workspaceOwnerId) {
+    const result = await db.query(
+      `SELECT
+         lp.slug,
+         COALESCE(lp.title, lp.slug) AS title,
+         array_agg(f.id ORDER BY lpf.position, f.id) AS "formIds"
+       FROM landing_pages lp
+       JOIN landing_page_forms lpf ON lpf.landing_page_id = lp.id
+       JOIN forms f ON f.id = lpf.form_id
+       WHERE COALESCE(lp.workspace_owner_id, lp.id_user) = $1
+         AND f.workspace_owner_id = $1
+         AND f.admin_disabled_at IS NULL
+       GROUP BY lp.id
+       ORDER BY lp.updated_at DESC
+       LIMIT 100`,
+      [workspaceOwnerId]
+    );
+    return result.rows.map((row) => ({
+      slug: row.slug,
+      title: row.title,
+      formIds: (row.formIds || []).map(Number),
+    }));
+  }
+
   // ─── Super admin (PR-3a mục 9) ────────────────────────────────────────────────────────
 
   /**

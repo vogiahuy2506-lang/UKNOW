@@ -1,5 +1,50 @@
 import db from '../../config/database.js';
 
+/**
+ * Mảnh SQL TĨNH của chốt đồng ý (PR-2) — tách ra để (a) cả hai hàm công khai dùng chung một chỗ, (b) migration 301
+ * (index `idx_form_submissions_owner_email_key`, `idx_form_submissions_owner_phone_key`, `idx_leads_phone_key`,
+ * `idx_leads_email`) và test EXPLAIN (`tests/integration/consentLookupIndexes.test.js`) bám đúng biểu thức này. Đổi một ký
+ * tự ở đây mà không đổi index tương ứng thì Postgres quay về quét cả bảng cho TỪNG người nhận trong vòng gửi.
+ * Giá trị khớp luôn đi qua tham số `$2`.
+ */
+export const CONSENT_LEAD_EMAIL_MATCH_SQL = 'email = $2';
+export const CONSENT_FORM_EMAIL_MATCH_SQL = 'LOWER(respondent_email) = $2';
+export const CONSENT_LEAD_PHONE_MATCH_SQL = "RIGHT(regexp_replace(phone, '[^0-9]', '', 'g'), 9) = $2";
+export const CONSENT_FORM_PHONE_MATCH_SQL = "RIGHT(regexp_replace(respondent_phone, '[^0-9]', '', 'g'), 9) = $2";
+
+/**
+ * Câu truy vấn "bản ghi đồng ý MỚI NHẤT của một người" (xem `_isNewestConsentRefused`). Tham số: `$1` chủ workspace, `$2`
+ * giá trị khớp. `leadMatch` / `formMatch` chỉ được là các hằng `CONSENT_*_MATCH_SQL` ở trên (không bao giờ input người dùng).
+ *
+ * @param {string} leadMatch
+ * @param {string} formMatch
+ * @returns {string}
+ */
+export function buildNewestConsentSql(leadMatch, formMatch) {
+  return `SELECT marketing_consent
+         FROM (
+           SELECT marketing_consent,
+                  GREATEST(created_at, consent_withdrawn_at) AS decided_at,
+                  0 AS source_rank,
+                  id
+             FROM leads
+            WHERE (COALESCE(workspace_owner_id, id_user) = $1 OR id_user = $1)
+              AND marketing_consent IS NOT NULL
+              AND ${leadMatch}
+           UNION ALL
+           SELECT marketing_consent,
+                  GREATEST(created_at, consent_withdrawn_at) AS decided_at,
+                  1 AS source_rank,
+                  id
+             FROM form_submissions
+            WHERE workspace_owner_id = $1
+              AND marketing_consent IS NOT NULL
+              AND ${formMatch}
+         ) AS consent_records
+        ORDER BY decided_at DESC, source_rank DESC, id DESC
+        LIMIT 1`;
+}
+
 class CampaignEmailSenderRepository {
   /**
    * Fetch a customer's subscription and bounce status by email.
@@ -52,31 +97,7 @@ class CampaignEmailSenderRepository {
    * @returns {Promise<boolean>}
    */
   async _isNewestConsentRefused(userId, leadMatch, formMatch, matchValue) {
-    const result = await db.query(
-      `SELECT marketing_consent
-         FROM (
-           SELECT marketing_consent,
-                  GREATEST(created_at, consent_withdrawn_at) AS decided_at,
-                  0 AS source_rank,
-                  id
-             FROM leads
-            WHERE (COALESCE(workspace_owner_id, id_user) = $1 OR id_user = $1)
-              AND marketing_consent IS NOT NULL
-              AND ${leadMatch}
-           UNION ALL
-           SELECT marketing_consent,
-                  GREATEST(created_at, consent_withdrawn_at) AS decided_at,
-                  1 AS source_rank,
-                  id
-             FROM form_submissions
-            WHERE workspace_owner_id = $1
-              AND marketing_consent IS NOT NULL
-              AND ${formMatch}
-         ) AS consent_records
-        ORDER BY decided_at DESC, source_rank DESC, id DESC
-        LIMIT 1`,
-      [userId, matchValue]
-    );
+    const result = await db.query(buildNewestConsentSql(leadMatch, formMatch), [userId, matchValue]);
     if (result.rowCount === 0) return false;
     return result.rows[0].marketing_consent === false;
   }
@@ -93,8 +114,8 @@ class CampaignEmailSenderRepository {
   async isLeadConsentRefusedOrWithdrawn(userId, emailLower) {
     return this._isNewestConsentRefused(
       userId,
-      'email = $2',
-      'LOWER(respondent_email) = $2',
+      CONSENT_LEAD_EMAIL_MATCH_SQL,
+      CONSENT_FORM_EMAIL_MATCH_SQL,
       emailLower
     );
   }
@@ -114,8 +135,8 @@ class CampaignEmailSenderRepository {
     const last9 = digits.slice(-9);
     return this._isNewestConsentRefused(
       userId,
-      "RIGHT(regexp_replace(phone, '[^0-9]', '', 'g'), 9) = $2",
-      "RIGHT(regexp_replace(respondent_phone, '[^0-9]', '', 'g'), 9) = $2",
+      CONSENT_LEAD_PHONE_MATCH_SQL,
+      CONSENT_FORM_PHONE_MATCH_SQL,
       last9
     );
   }

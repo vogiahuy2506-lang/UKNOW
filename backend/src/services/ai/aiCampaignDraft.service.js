@@ -2,7 +2,8 @@ import aiCampaignDraftRepository from '../../repositories/ai/aiCampaignDraft.rep
 import aiCampaignRepository from '../../repositories/ai/aiCampaign.repository.js';
 import campaignNodeRegistryService from '../campaign/campaignNodeRegistry.service.js';
 import { getNodeSubtype } from '../../utils/nodeSubtype.util.js';
-import { resolveLandingAudienceToForm } from './landingAudienceResolver.service.js';
+import { resolveLandingAudienceToForms } from './landingAudienceResolver.service.js';
+import { normalizeCampaignFormIds, normalizeFormIdList } from '../../utils/campaignFormIds.util.js';
 import { resolveActorZaloAccessibleIds } from '../campaign/campaignZaloAccess.service.js';
 import { resolveActorChannelAccessibleRefs } from '../campaign/campaignChannelAccess.service.js';
 import { stripZaloAccountIdsNotAccessible } from '../../utils/campaignZaloAccountResolve.util.js';
@@ -657,6 +658,8 @@ class AiCampaignDraftService {
         if (st === 'read_form_submissions') {
           const cfg = node.config || node.settings || {};
           cfg.formId = effectiveFormId;
+          // PR-7b: biểu mẫu người dùng ĐÃ CHỌN (một biểu mẫu) thắng — `formIds` còn sót từ bản nháp khác sẽ đè nó (normalizer ưu tiên `formIds`).
+          delete cfg.formIds;
           node.config = cfg;
           console.log(`[AI Patch] Gán formId=${effectiveFormId} cho node read_form_submissions`);
         }
@@ -822,11 +825,11 @@ class AiCampaignDraftService {
   /**
    * PR-5b-2b — vá bản nháp tự do (mục 4 ở trên chỉ điền `landingLeadsSlugs` từ ngữ cảnh gate,
    * KHÔNG đổi loại node): sau khi LLM tự viết `read_landing_leads` với slug, nếu landing đó có
-   * Biểu mẫu gắn (PR-5b-2a) thì đổi thành `read_form_submissions` — cùng quyết định "đúng 1 slug"
-   * với đường ý định (`landingAudienceResolver.service.js`, một chỗ quyết định duy nhất). Không
+   * Biểu mẫu gắn (PR-5b-2a) thì đổi thành `read_form_submissions` với `formIds` = MỌI biểu mẫu của landing (PR-7b) — cùng
+   * quyết định "đúng 1 slug" với đường ý định (`landingAudienceResolver.service.js`, một chỗ quyết định duy nhất). Không
    * throw khi tra cứu lỗi — giữ nguyên `read_landing_leads`, fail-safe về hành vi cũ.
    *
-   * Gọi TRƯỚC `sanitizeFormOwnership` trong `prepareScript`: formId mới thêm ở đây vẫn đi qua lớp
+   * Gọi TRƯỚC `sanitizeFormOwnership` trong `prepareScript`: formIds mới thêm ở đây vẫn đi qua lớp
    * kiểm sở hữu đó như bất kỳ formId nào khác (phòng khi tra cứu ở đây có lỗi logic tương lai).
    *
    * @param {object} script
@@ -839,12 +842,12 @@ class AiCampaignDraftService {
       if (getNodeSubtype(node) !== 'read_landing_leads') continue;
       const cfg = node.config || node.settings || {};
       const slugs = Array.isArray(cfg.landingLeadsSlugs) ? cfg.landingLeadsSlugs : [];
-      const formId = await resolveLandingAudienceToForm(ownerUserId, slugs);
-      if (formId == null) continue;
+      const formIds = await resolveLandingAudienceToForms(ownerUserId, slugs);
+      if (formIds == null) continue;
       node.nodeSubtype = 'read_form_submissions';
       if (node.node_subtype !== undefined) node.node_subtype = 'read_form_submissions';
-      node.config = { formId };
-      console.log(`[AI Patch] Đổi read_landing_leads (slug=${slugs[0]}) sang read_form_submissions formId=${formId} — landing có Biểu mẫu gắn`);
+      node.config = { formIds };
+      console.log(`[AI Patch] Đổi read_landing_leads (slug=${slugs[0]}) sang read_form_submissions formIds=[${formIds.join(', ')}] — landing có Biểu mẫu gắn`);
     }
     return script;
   }
@@ -873,9 +876,11 @@ class AiCampaignDraftService {
     const formNodes = script.nodes.filter((n) => getNodeSubtype(n) === 'read_form_submissions');
     if (formNodes.length === 0) return script;
 
-    const formIdsInScript = formNodes
-      .map((n) => (n.config || n.settings || {}).formId)
-      .filter((id) => id != null);
+    // PR-7b: node có thể mang `formIds` (nhiều biểu mẫu) và/hoặc `formId` cũ — gom MỌI id trong cả hai trường để kiểm sở hữu một lượt.
+    const formIdsInScript = formNodes.flatMap((n) => {
+      const cfg = n.config || n.settings || {};
+      return [...normalizeFormIdList(cfg.formIds), ...normalizeCampaignFormIds({ formId: cfg.formId })];
+    });
 
     let ownedFormIds;
     try {
@@ -892,6 +897,18 @@ class AiCampaignDraftService {
       if (rawFormId != null && !ownedFormIds.has(Number(rawFormId))) {
         console.log(`[AI Patch] Bỏ formId=${rawFormId} khỏi node read_form_submissions — không thuộc workspace ${ownerUserId}`);
         delete cfg.formId;
+        node.config = cfg;
+      }
+      if (cfg.formIds !== undefined) {
+        // Chỉ giữ id THUỘC chủ workspace; id lạ (AI bịa / workspace khác) rơi khỏi danh sách. Hết sạch thì bỏ hẳn `formIds` để node
+        // rơi về "chưa chọn biểu mẫu" thay vì mang một mảng rỗng khó hiểu.
+        const requested = normalizeFormIdList(cfg.formIds);
+        const kept = requested.filter((id) => ownedFormIds.has(id));
+        if (kept.length !== requested.length) {
+          console.log(`[AI Patch] Bỏ formIds=[${requested.filter((id) => !ownedFormIds.has(id)).join(', ')}] khỏi node read_form_submissions — không thuộc workspace ${ownerUserId}`);
+        }
+        if (kept.length > 0) cfg.formIds = kept;
+        else delete cfg.formIds;
         node.config = cfg;
       }
     }

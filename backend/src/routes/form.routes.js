@@ -29,6 +29,9 @@ router.get('/submissions', formController.listWorkspaceSubmissions.bind(formCont
 router.post('/ai-draft', aiLimiter, assertAiCreditAvailable('form_draft'), formController.aiDraft.bind(formController));
 // PR-4b — cờ tính năng cho trình soạn. Cũng PHẢI trước '/:id'.
 router.get('/capabilities', formController.capabilities.bind(formController));
+// Node chiến dịch đọc NHIỀU biểu mẫu (PR-7b): preview gộp + lối tắt "mọi biểu mẫu của landing X". Cũng PHẢI đứng trước '/:id'.
+router.get('/campaign-preview', formController.campaignPreviewMulti.bind(formController));
+router.get('/landing-groups', formController.landingFormGroups.bind(formController));
 router.get('/:id', formController.get.bind(formController));
 router.put('/:id', formController.update.bind(formController));
 router.delete('/:id', formController.delete.bind(formController));

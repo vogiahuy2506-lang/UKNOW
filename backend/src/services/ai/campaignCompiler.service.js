@@ -13,6 +13,20 @@
 
 import { isCompilableIntent } from './campaignIntent.schema.js';
 import { extractTemplateVariableNames } from '../../utils/templateVariableAutoMap.util.js';
+import { normalizeFormIdList } from '../../utils/campaignFormIds.util.js';
+
+/**
+ * Config node `read_form_submissions` từ audience (PR-7b): audience có `formIds` (landing nhiều biểu mẫu → mọi biểu mẫu của landing)
+ * thì node nhận `formIds`; còn lại (người dùng chọn MỘT biểu mẫu ở wizard) giữ `formId` như cũ.
+ *
+ * @param {{ formId?: unknown, formIds?: unknown }} audience
+ * @returns {{ formIds: number[] }|{ formId: number|null }}
+ */
+function buildFormSubmissionsNodeConfig(audience) {
+  const formIds = normalizeFormIdList(audience?.formIds);
+  if (formIds.length > 0) return { formIds };
+  return { formId: audience?.formId != null ? Number(audience.formId) : null };
+}
 
 /**
  * Tự động sinh templateMappings cho bước gửi tin nếu nội dung chứa biến template {{...}}.
@@ -126,7 +140,7 @@ function buildAdapterAudienceNode(audience, prefix) {
     const id = `${prefix}_read_form_submissions_1`;
     return { node: { ...base, id, tempId: id, nodeSubtype: 'read_form_submissions', nodeName: 'Dữ liệu Biểu mẫu',
       nodeDescription: 'Lấy người đã nộp biểu mẫu và đồng ý nhận tin',
-      config: { formId: audience.formId != null ? Number(audience.formId) : null } } };
+      config: buildFormSubmissionsNodeConfig(audience) } };
   }
   return { node: null };
 }
@@ -345,9 +359,7 @@ function compileEmailOnceCampaign({ sender, audience, contentBrief, fileUsage, a
       nodeDescription: 'Lấy người đã nộp biểu mẫu và đồng ý nhận tin',
       positionX: 350,
       positionY: 200,
-      config: {
-        formId: audience.formId != null ? Number(audience.formId) : null,
-      },
+      config: buildFormSubmissionsNodeConfig(audience),
     });
   }
 
@@ -534,9 +546,7 @@ function compileEmailDripCampaign({ sender, audience, schedule, contentBrief, fi
       nodeDescription: 'Lấy người đã nộp biểu mẫu và đồng ý nhận tin',
       positionX: 350,
       positionY: 200,
-      config: {
-        formId: audience.formId != null ? Number(audience.formId) : null,
-      },
+      config: buildFormSubmissionsNodeConfig(audience),
     });
   }
 
@@ -769,9 +779,7 @@ function compileZaloPersonalOnceCampaign({ sender, audience, contentBrief, fileU
       nodeDescription: 'Lấy người đã nộp biểu mẫu và đồng ý nhận tin',
       positionX: 500,
       positionY: 200,
-      config: {
-        formId: audience.formId != null ? Number(audience.formId) : null,
-      },
+      config: buildFormSubmissionsNodeConfig(audience),
     });
   }
 
@@ -987,9 +995,7 @@ function compileZaloPersonalDripCampaign({ sender, audience, schedule, contentBr
       nodeDescription: 'Lấy người đã nộp biểu mẫu và đồng ý nhận tin',
       positionX: 500,
       positionY: 200,
-      config: {
-        formId: audience.formId != null ? Number(audience.formId) : null,
-      },
+      config: buildFormSubmissionsNodeConfig(audience),
     });
   }
 

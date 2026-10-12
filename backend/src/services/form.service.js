@@ -31,7 +31,8 @@ import { VIETQR_BANKS } from '../constants/vietQrBanks.js';
 import { sendSystemEmail, SENDER_NAME } from '../utils/systemEmail.util.js';
 import { logError } from '../utils/logger.util.js';
 import { escapeHtml } from '../utils/htmlEscape.util.js';
-import { mapFormSubmissionToCampaignItem } from '../utils/formCampaignItem.util.js';
+import { mapFormSubmissionToCampaignItem, dedupeCampaignItemsKeepNewest } from '../utils/formCampaignItem.util.js';
+import { normalizeFormIdList } from '../utils/campaignFormIds.util.js';
 import { clampLandingLeadsLimit } from '../utils/landingLeadsLimit.util.js';
 import { findStorageObjectByKey, activateFormAssetStorageObjects } from '../repositories/storage.repository.js';
 import { markDeletedAfterUnlink, registerWrittenStorageObject } from './storage/storageObject.service.js';
@@ -55,6 +56,9 @@ const MAX_PENDING_HOLDS_PER_IP_PER_FORM = 3;
 // payment_code trùng unique index uq_form_submissions_payment_code -> sinh lại, tối đa 5 lần.
 const MAX_PAYMENT_CODE_RETRIES = 5;
 const MAX_RECEIPT_BYTES = 2 * 1024 * 1024; // 2 MB (PR-5)
+// PR-7b: node chiến dịch đọc nhiều biểu mẫu quét tối đa chừng này bài nộp (mới nhất trước) rồi khử trùng theo người. Trần của
+// `clampLandingLeadsLimit` là 10.000 người; chừa chỗ cho người điền nhiều lần / nhiều biểu mẫu.
+const MULTI_FORM_SUBMISSION_SCAN_CAP = 30000;
 
 /**
  * Kiểm tra magic bytes của ảnh biên lai chuyển khoản (chỉ nhận JPEG, PNG, WebP).
@@ -2058,6 +2062,83 @@ class FormService {
   }
 
   /**
+   * Nạp NHIỀU biểu mẫu cho node chiến dịch (PR-7b) — định nghĩa trường của các biểu mẫu thuộc `workspaceOwnerId`, thứ tự theo
+   * `formIds`. Id không còn / thuộc workspace khác bị BỎ (không bao giờ đọc bài nộp của workspace khác) và ghi log; nếu KHÔNG còn
+   * biểu mẫu nào thì ném `FORM_NOT_FOUND` y như đường một biểu mẫu (chiến dịch báo lỗi rõ, không chạy ra 0 người trong im lặng).
+   *
+   * @param {Array<number|string>} formIds
+   * @param {number} workspaceOwnerId
+   * @returns {Promise<Array<{ id: number, title: string, fields: Array<object>, settings: object }>>}
+   */
+  async getOwnedFormsForCampaignOrThrow(formIds, workspaceOwnerId) {
+    const ids = normalizeFormIdList(formIds);
+    const forms = await formRepository.findFormsForCampaignByIdsAndOwner(ids, workspaceOwnerId);
+    if (forms.length === 0) {
+      throw createHttpError(
+        'Biểu mẫu đã bị xoá hoặc không thuộc quyền quản lý của bạn',
+        404,
+        'FORM_NOT_FOUND'
+      );
+    }
+    if (forms.length < ids.length) {
+      const kept = new Set(forms.map((f) => f.id));
+      console.warn(
+        `[FormService] Node chiến dịch bỏ ${ids.length - forms.length} biểu mẫu không còn / không thuộc workspace ${workspaceOwnerId}: `
+        + `${ids.filter((id) => !kept.has(id)).join(', ')}`
+      );
+    }
+    return forms;
+  }
+
+  /**
+   * Bài nộp đã đồng ý của NHIỀU biểu mẫu, đã ánh xạ item phẳng, khử trùng theo người (giữ bản MỚI NHẤT), xếp CŨ trước — dùng chung
+   * cho dữ liệu chạy thật và preview. `total` = số người sau khử trùng, trước khi cắt theo `limit`.
+   *
+   * @param {Array<{ id: number, fields: Array<object> }>} forms
+   * @param {number} workspaceOwnerId
+   * @param {object} fieldMap
+   * @returns {Promise<Array<object>>} tất cả item sau khử trùng, cũ trước
+   */
+  async _loadDedupedCampaignItems(forms, workspaceOwnerId, fieldMap) {
+    const rows = await formRepository.listConsentedSubmissionsForForms(
+      forms.map((f) => f.id),
+      workspaceOwnerId,
+      MULTI_FORM_SUBMISSION_SCAN_CAP
+    );
+    if (rows.length >= MULTI_FORM_SUBMISSION_SCAN_CAP) {
+      console.warn(`[FormService] Node chiến dịch chạm trần quét ${MULTI_FORM_SUBMISSION_SCAN_CAP} bài nộp (workspace ${workspaceOwnerId}) — bài cũ nhất có thể bị bỏ`);
+    }
+    const fieldsByForm = new Map(forms.map((f) => [f.id, f.fields]));
+    const newestFirst = rows.map((row) => mapFormSubmissionToCampaignItem(row, fieldsByForm.get(row.formId) || [], fieldMap));
+    return dedupeCampaignItemsKeepNewest(newestFirst).reverse();
+  }
+
+  /**
+   * Dữ liệu cho node chiến dịch "Lấy dữ liệu từ biểu mẫu" khi cấu hình có MỘT HOẶC NHIỀU biểu mẫu (PR-7b):
+   *  - đúng một biểu mẫu → `getCampaignDataForForm` NGUYÊN VẸN (đồ thị cũ chỉ có `formId` chạy y như trước, kể cả không khử trùng);
+   *  - từ hai biểu mẫu → bài nộp đã đồng ý của MỌI biểu mẫu cùng workspace, khử trùng theo email/SĐT (người điền nhiều biểu mẫu
+   *    chỉ ra MỘT item — bản mới nhất), xếp cũ trước, cắt theo `limit` (trần tổng như cũ, không phải trần mỗi biểu mẫu).
+   * `fieldMap` (nameKey/emailKey/phoneKey) là khoá trường áp CHUNG cho mọi biểu mẫu: biểu mẫu nào không có khoá đó thì item rơi về
+   * cột respondent_* đã ghi theo `role` lúc nộp (đúng quy tắc của `mapFormSubmissionToCampaignItem`); `fieldMap` rỗng = theo role.
+   *
+   * @param {Array<number|string>} formIds
+   * @param {number} workspaceOwnerId
+   * @param {{ fieldMap?: object, limit?: number|string }} [options]
+   * @returns {Promise<{ items: Array<object>, forms: Array<object> }>}
+   */
+  async getCampaignDataForForms(formIds, workspaceOwnerId, { fieldMap = {}, limit } = {}) {
+    const ids = normalizeFormIdList(formIds);
+    if (ids.length === 1) {
+      const { items, form } = await this.getCampaignDataForForm(ids[0], workspaceOwnerId, { fieldMap, limit });
+      return { items, forms: [form] };
+    }
+    const forms = await this.getOwnedFormsForCampaignOrThrow(ids, workspaceOwnerId);
+    const safeLimit = clampLandingLeadsLimit(limit, 1000);
+    const items = await this._loadDedupedCampaignItems(forms, workspaceOwnerId, fieldMap);
+    return { items: items.slice(0, safeLimit), forms };
+  }
+
+  /**
    * Preview bài nộp cho khung cấu hình node (PR-6b dùng) — mô phỏng lead.controller.js
    * preview (`:68-90`): `{ items, columns, pagination: { total, limit, fetched } }`.
    * `columns` lấy từ `fields` HIỆN TẠI của form (không phải fieldMap) để PR-6b hiện nhãn cho
@@ -2096,6 +2177,52 @@ class FormService {
         fetched: items.length,
       },
     };
+  }
+
+  /**
+   * Preview cho khung cấu hình node khi chọn NHIỀU biểu mẫu (PR-7b) — cùng hình dạng `getCampaignPreviewForForm`
+   * (`{ items, columns, pagination }`). `columns` = hợp các trường nhập của mọi biểu mẫu (trùng khoá giữ nhãn của biểu mẫu đứng
+   * trước). `fieldMap` luôn rỗng ở server, Builder tự áp lại ở client như preview một biểu mẫu.
+   *
+   * @param {Array<number|string>} formIds
+   * @param {number} workspaceOwnerId
+   * @param {{ limit?: number|string }} [options]
+   * @returns {Promise<{ items: Array<object>, columns: Array<object>, pagination: object }>}
+   */
+  async getCampaignPreviewForForms(formIds, workspaceOwnerId, { limit } = {}) {
+    const ids = normalizeFormIdList(formIds);
+    if (ids.length === 1) return this.getCampaignPreviewForForm(ids[0], workspaceOwnerId, { limit });
+    const forms = await this.getOwnedFormsForCampaignOrThrow(ids, workspaceOwnerId);
+    const safeLimit = clampLandingLeadsLimit(limit, 1000);
+    const all = await this._loadDedupedCampaignItems(forms, workspaceOwnerId, {});
+    const items = all.slice(0, safeLimit);
+
+    const columns = [];
+    const seenKeys = new Set();
+    for (const form of forms) {
+      for (const f of Array.isArray(form.fields) ? form.fields : []) {
+        // Khối hiển thị (tiêu đề / đoạn chữ / ngắt trang) không có dữ liệu để ánh xạ.
+        if (!f?.key || isDisplayFieldType(f.type) || seenKeys.has(f.key)) continue;
+        seenKeys.add(f.key);
+        columns.push({ key: f.key, label: f.label, type: f.type });
+      }
+    }
+
+    return {
+      items,
+      columns,
+      pagination: { total: all.length, limit: safeLimit, fetched: items.length },
+    };
+  }
+
+  /**
+   * Landing của workspace kèm các biểu mẫu đang nhúng — cho lối tắt "Mọi biểu mẫu của landing X" của node chiến dịch (PR-7b).
+   *
+   * @param {number} workspaceOwnerId
+   * @returns {Promise<Array<{ slug: string, title: string, formIds: number[] }>>}
+   */
+  async listLandingFormGroups(workspaceOwnerId) {
+    return formRepository.listLandingFormGroups(workspaceOwnerId);
   }
 
   // ─── Super admin (PR-3a mục 9) ────────────────────────────────────────────────────────

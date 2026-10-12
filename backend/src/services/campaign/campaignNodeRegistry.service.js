@@ -15,6 +15,7 @@ import {
   buildChannelNotInPlanMessage,
 } from './campaignChannelFlags.util.js';
 import { MAX_CHANNEL_STEPS, validateChannelSteps } from '../../utils/channelSteps.util.js';
+import { normalizeCampaignFormIds } from '../../utils/campaignFormIds.util.js';
 
 // P12 — node phụ thuộc kênh Zalo (tài khoản Zalo cá nhân): gửi + chọn tài khoản + lấy danh sách bạn/nhóm.
 const ZALO_PLAN_NODE_SUBTYPES = new Set([
@@ -243,14 +244,20 @@ class CampaignNodeRegistryService {
       read_form_submissions: {
         nodeType: 'data',
         name: 'Dữ liệu Biểu mẫu',
-        description: 'Lấy người đã điền và đồng ý nhận tin từ một biểu mẫu (form) đã tạo',
+        description: 'Lấy người đã điền và đồng ý nhận tin từ một hoặc nhiều biểu mẫu (form) đã tạo',
         color: '#FCE4EC',
         configRequired: true,
         configSchema: {
+          // PR-7b: node nhận NHIỀU biểu mẫu (`formIds`); `formId` là dạng cũ (đồ thị lưu trước đó) vẫn chạy.
+          // Bắt buộc có ÍT NHẤT một trong hai — kiểm riêng ở validateNodeConfig (required theo từng trường không diễn đạt được "một trong hai").
+          formIds: {
+            type: 'array',
+            label: 'Danh sách biểu mẫu',
+            description: 'Mảng id biểu mẫu (cùng workspace). Người điền nhiều biểu mẫu chỉ nhận một lần.',
+          },
           formId: {
             type: 'number',
-            required: true,
-            label: 'Biểu mẫu',
+            label: 'Biểu mẫu (dạng cũ — một biểu mẫu)',
           },
           fieldMap: {
             type: 'object',
@@ -268,7 +275,7 @@ class CampaignNodeRegistryService {
           },
         },
         exampleConfig: {
-          formId: null,
+          formIds: [],
           fieldMap: {},
           dataSelectedColumns: [],
           formSubmissionsLimit: 1000,
@@ -769,7 +776,7 @@ class CampaignNodeRegistryService {
     lines.push('  config: {}');
     lines.push('');
     lines.push('• nodeType: "data", nodeSubtype: "read_form_submissions"    ← người đã nộp Biểu mẫu và ĐỒNG Ý nhận tin');
-    lines.push('  config: { "formId": <ID_form> } (formId lấy từ danh sách Biểu mẫu trong TÀI NGUYÊN CÓ SẴN — BẮT BUỘC)');
+    lines.push('  config: { "formIds": [<ID_form>, ...] } (id lấy từ danh sách Biểu mẫu trong TÀI NGUYÊN CÓ SẴN — BẮT BUỘC; landing có nhiều biểu mẫu thì liệt kê ĐỦ mọi id của landing đó. Dạng cũ { "formId": <ID_form> } vẫn được nhận)');
     lines.push('');
     lines.push('• nodeType: "data", nodeSubtype: "select_zalo_account"');
     lines.push('  config: { "zaloAccountId": <ID> } (BẮT BUỘC trước get_all_friends/get_all_groups)');
@@ -898,6 +905,11 @@ class CampaignNodeRegistryService {
       if (fieldSchema.required && (config[field] === undefined || config[field] === null)) {
         errors.push(`Trường "${field}" là bắt buộc (${fieldSchema.label || field})`);
       }
+    }
+
+    // PR-7b — node đọc Biểu mẫu: cần ÍT NHẤT một biểu mẫu, ở dạng mới `formIds` hoặc dạng cũ `formId`.
+    if (subtype === 'read_form_submissions' && normalizeCampaignFormIds(config).length === 0) {
+      errors.push('Trường "formIds" là bắt buộc (chọn ít nhất một biểu mẫu)');
     }
 
     // P8a + P7 — node kênh adapter: 1 đến MAX_CHANNEL_STEPS bước, mỗi bước có nội dung (hoặc mẫu tin); bước 2+ có thể có

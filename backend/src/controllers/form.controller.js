@@ -8,6 +8,7 @@ import { getStorageBackend } from '../services/storage/storageBackend.js';
 import { draftForm } from '../services/ai/aiFormDraft.service.js';
 import { chargeAiCredit } from '../middleware/aiCredit.middleware.js';
 import { buildAiErrorPayload } from '../utils/aiErrorPayload.util.js';
+import { normalizeFormIdList } from '../utils/campaignFormIds.util.js';
 
 /**
  * PR-3a "Bổ sung 15/09": chỉ CHỦ workspace (không phải nhân viên) được đổi paymentConfig —
@@ -579,6 +580,58 @@ class FormController {
       return res.status(status).json({
         success: false,
         message: error.message || 'Không thể tải dữ liệu biểu mẫu cho chiến dịch',
+        code: error.code || 'INTERNAL_ERROR',
+      });
+    }
+  }
+
+  /**
+   * GET /api/forms/campaign-preview?formIds=1,2,3&limit= — PR-7b: preview khi node chọn NHIỀU biểu mẫu (một biểu mẫu vẫn dùng
+   * `/:id/campaign-preview`). Đặt TRƯỚC `/:id` trong form.routes.js.
+   */
+  async campaignPreviewMulti(req, res) {
+    try {
+      const workspaceContext = getWorkspaceContext(req.user);
+      const formIds = normalizeFormIdList(req.query?.formIds);
+      if (formIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Chưa chọn biểu mẫu',
+          code: 'INVALID_ID',
+        });
+      }
+
+      const result = await formService.getCampaignPreviewForForms(formIds, workspaceContext.workspaceOwnerId, {
+        limit: req.query?.limit,
+      });
+
+      return res.json({ success: true, data: result });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[FormController.campaignPreviewMulti]', error);
+      return res.status(status).json({
+        success: false,
+        message: error.message || 'Không thể tải dữ liệu biểu mẫu cho chiến dịch',
+        code: error.code || 'INTERNAL_ERROR',
+      });
+    }
+  }
+
+  /**
+   * GET /api/forms/landing-groups — PR-7b: landing của workspace kèm các biểu mẫu đang nhúng (lối tắt "Mọi biểu mẫu của landing X"
+   * ở node chiến dịch). Đặt TRƯỚC `/:id` trong form.routes.js.
+   */
+  async landingFormGroups(req, res) {
+    try {
+      const workspaceContext = getWorkspaceContext(req.user);
+      const groups = await formService.listLandingFormGroups(workspaceContext.workspaceOwnerId);
+      return res.json({ success: true, data: groups });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[FormController.landingFormGroups]', error);
+      return res.status(status).json({
+        success: false,
+        message: error.message || 'Không thể tải danh sách landing và biểu mẫu',
         code: error.code || 'INTERNAL_ERROR',
       });
     }
