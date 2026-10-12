@@ -76,8 +76,9 @@ const ENTRY = (key, settings = {}) => ({
 });
 
 const USERS = [
-  { id: 41, full_name: 'Khách A', email: 'a@example.com', status: 'active', plan_code: 'starter', role: 'user' },
-  { id: 42, full_name: 'Khách B', email: 'b@example.com', status: 'active', plan_code: 'pro', role: 'user' },
+  // Hình dạng THẬT của GET /admin/members (camelCase) — xem adminMembers.repository.js findAllMembers.
+  { id: 41, fullName: 'Khách A', email: 'a@example.com', status: 'active', planCode: 'starter', planName: 'Starter' },
+  { id: 42, fullName: 'Khách B', email: 'b@example.com', status: 'active', planCode: 'professional', planName: 'Professional' },
 ];
 
 const NOTIFICATION = {
@@ -104,8 +105,8 @@ const clickMode = async (name) => fireEvent.click(await screen.findByRole('tab',
 const openSettings = () => fireEvent.click(screen.getByRole('button', { name: 'Cài đặt' }));
 const dialog = () => screen.getByRole('dialog');
 const gotoSettingsTab = (name) => fireEvent.click(within(dialog()).getByRole('button', { name }));
-// Trong tab Đối tượng có thêm nút "Xong" của ô chọn người dùng: nút của modal luôn là nút cuối cùng.
-const closeSettings = () => fireEvent.click(within(dialog()).getAllByRole('button', { name: 'Xong' }).at(-1));
+// Danh sách người dùng của tab Đối tượng luôn hiện, không còn nút "Xong" riêng: chỉ có nút Xong của modal.
+const closeSettings = () => fireEvent.click(within(dialog()).getByRole('button', { name: 'Xong' }));
 
 async function openSendMode() {
   renderPage();
@@ -169,7 +170,6 @@ describe('NotificationCenter - bố cục trình soạn', () => {
       openSettings();
       fireEvent.click(within(dialog()).getByRole('checkbox', { name: /^Email/ }));
       gotoSettingsTab('Đối tượng');
-      fireEvent.click(await within(dialog()).findByRole('button', { name: /Chọn người dùng/ }));
       fireEvent.click(await within(dialog()).findByText('Khách A'));
       fireEvent.click(within(dialog()).getByText('Khách B'));
       closeSettings();
@@ -200,7 +200,6 @@ describe('NotificationCenter - bố cục trình soạn', () => {
       fireEvent.change(within(dialog()).getByLabelText(/Liên kết khi bấm/), { target: { value: ' /app/plans ' } });
       // Đối tượng: chọn 2 người từ danh sách thật
       gotoSettingsTab('Đối tượng');
-      fireEvent.click(await within(dialog()).findByRole('button', { name: /Chọn người dùng/ }));
       fireEvent.click(await within(dialog()).findByText('Khách A'));
       fireEvent.click(within(dialog()).getByText('Khách B'));
       // Lịch gửi: hẹn giờ
@@ -239,7 +238,6 @@ describe('NotificationCenter - bố cục trình soạn', () => {
       await openSendMode();
       openSettings();
       gotoSettingsTab('Đối tượng');
-      fireEvent.click(await within(dialog()).findByRole('button', { name: /Chọn người dùng/ }));
       fireEvent.click(await within(dialog()).findByText('Khách A'));
       gotoSettingsTab('Lịch gửi');
       fireEvent.click(within(dialog()).getByRole('button', { name: 'Lặp lại' }));
@@ -265,7 +263,6 @@ describe('NotificationCenter - bố cục trình soạn', () => {
       await openSendMode();
       openSettings();
       gotoSettingsTab('Đối tượng');
-      fireEvent.click(await within(dialog()).findByRole('button', { name: /Chọn người dùng/ }));
       fireEvent.click(await within(dialog()).findByText('Khách B'));
       closeSettings();
       fireEvent.click(screen.getByRole('button', { name: /Gửi ngay/ }));
@@ -300,7 +297,6 @@ describe('NotificationCenter - bố cục trình soạn', () => {
 
       openSettings();
       gotoSettingsTab('Đối tượng');
-      fireEvent.click(await within(dialog()).findByRole('button', { name: /Chọn người dùng/ }));
       fireEvent.click(await within(dialog()).findByText('Khách A'));
       closeSettings();
       fireEvent.click(screen.getByRole('button', { name: /Gửi ngay/ }));
@@ -396,7 +392,6 @@ describe('NotificationCenter - bố cục trình soạn', () => {
 
       openSettings();
       gotoSettingsTab('Đối tượng');
-      fireEvent.click(await within(dialog()).findByRole('button', { name: /Chọn người dùng/ }));
       fireEvent.click(await within(dialog()).findByText('Khách A'));
       closeSettings();
       fireEvent.click(screen.getByRole('button', { name: /Gửi ngay/ }));

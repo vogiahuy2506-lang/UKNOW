@@ -245,7 +245,7 @@ export function EditorSettingsModal({ open, onClose, title, subtitle, tabs, acti
         className="bg-white dark:bg-dk-surface rounded-2xl shadow-2xl w-full max-w-3xl lg:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-dk-border bg-gradient-to-r from-orange-50 dark:from-orange-950/40 to-white dark:to-dk-surface">
+        <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-dk-border bg-gradient-to-r from-orange-50 dark:from-orange-950/40 to-white dark:to-dk-surface">
           <div className="min-w-0">
             <h2 className="text-lg font-bold text-gray-900 dark:text-dk-text">{title || t('editorShell.settings')}</h2>
             {subtitle && <p className="text-xs text-gray-500 dark:text-dk-text2 mt-0.5">{subtitle}</p>}
@@ -255,7 +255,7 @@ export function EditorSettingsModal({ open, onClose, title, subtitle, tabs, acti
           </button>
         </div>
         {tabs?.length > 0 && (
-          <div className="px-6 pt-3 border-b border-gray-100 dark:border-dk-border flex gap-1 overflow-x-auto">
+          <div data-testid="editor-settings-tabs" className="shrink-0 px-6 pt-3 pb-px border-b border-gray-100 dark:border-dk-border flex gap-1 overflow-x-auto overflow-y-hidden">
             {tabs.map((tab) => (
               <button
                 key={tab.key}
@@ -273,8 +273,8 @@ export function EditorSettingsModal({ open, onClose, title, subtitle, tabs, acti
             ))}
           </div>
         )}
-        <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
-        {footer && <div className="px-6 py-3 border-t border-gray-100 dark:border-dk-border flex justify-end gap-2">{footer}</div>}
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5">{children}</div>
+        {footer && <div className="shrink-0 px-6 py-3 border-t border-gray-100 dark:border-dk-border flex justify-end gap-2">{footer}</div>}
       </div>
     </div>
   );
