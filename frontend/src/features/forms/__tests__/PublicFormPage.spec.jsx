@@ -182,6 +182,53 @@ describe('PublicFormPage — nền ngoài theo theme.backgroundColor', () => {
     const wrapper = container.firstChild;
     expect(wrapper.style.backgroundColor).toBe('');
   });
+
+  // PR-8b (12/10/2026) — ảnh nền phủ lớp tối: cùng quy tắc với màu nền (chỉ khi mở trực tiếp, không đè nền landing).
+  const imageForm = {
+    ...baseForm,
+    theme: {
+      backgroundColor: '#fdf2e9',
+      backgroundImageUrl: 'https://founderai.biz/lp-assets/uploads/7/forms/nen.jpg',
+      backgroundImageOverlay: 50,
+    },
+  };
+
+  it('PR-8b: mở trực tiếp + ảnh nền -> wrapper có ảnh nền kèm lớp tối 50%, phủ kín; màu nền vẫn giữ', async () => {
+    fetchPublicForm.mockResolvedValue(imageForm);
+
+    const { container } = renderPage('/f/pub_bg');
+
+    await waitFor(() => expect(screen.getByText('Form PR-5')).toBeInTheDocument());
+
+    const wrapper = container.firstChild;
+    const style = wrapper.getAttribute('style');
+    expect(style).toContain('https://founderai.biz/lp-assets/uploads/7/forms/nen.jpg');
+    expect(style).toContain('rgba(0, 0, 0, 0.5)');
+    expect(style).toContain('background-size: cover');
+    expect(wrapper.style.backgroundColor).toBe('rgb(253, 242, 233)');
+  });
+
+  it('PR-8b: ?embed=1 + ảnh nền -> wrapper KHÔNG có ảnh nền (không đè nền landing)', async () => {
+    fetchPublicForm.mockResolvedValue(imageForm);
+
+    const { container } = renderPage('/f/pub_bg?embed=1');
+
+    await waitFor(() => expect(screen.getByText('Form PR-5')).toBeInTheDocument());
+
+    const wrapper = container.firstChild;
+    expect(wrapper.getAttribute('style') || '').not.toContain('background');
+  });
+
+  it('PR-8b: URL ảnh nền lạ (javascript:) -> bỏ ảnh, không rò vào style', async () => {
+    fetchPublicForm.mockResolvedValue({ ...baseForm, theme: { backgroundImageUrl: 'javascript:alert(1)' } });
+
+    const { container } = renderPage('/f/pub_bg_bad');
+
+    await waitFor(() => expect(screen.getByText('Form PR-5')).toBeInTheDocument());
+
+    expect(container.firstChild.getAttribute('style') || '').not.toContain('javascript');
+    expect(container.firstChild.style.backgroundImage).toBe('');
+  });
 });
 
 /**

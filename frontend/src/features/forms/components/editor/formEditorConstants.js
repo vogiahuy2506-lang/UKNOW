@@ -409,6 +409,15 @@ export const DEFAULT_THEME = {
   bannerUrl: '',
   logoKey: '',
   logoUrl: '',
+  // PR-8b — giao diện thêm. '' = chưa đặt (khoá vắng mặt khi lưu -> giao diện mặc định hiện tại).
+  textColor: '',
+  buttonStyle: '',
+  buttonRadius: '',
+  cardRadius: '',
+  inputStyle: '',
+  backgroundImageKey: '',
+  backgroundImageUrl: '', // chỉ xem trước, không gửi lên server
+  backgroundImageOverlay: '', // '' = mặc định; số 0..80 khi chủ đã chọn
 };
 
 // Các tab của modal Cài đặt (thay cho các khối thu gọn xếp dọc của trình soạn cũ).
@@ -450,5 +459,11 @@ export const hasThemeCustomization = (th) =>
       th.layout ||
       th.bannerHeight ||
       th.bannerKey ||
-      th.logoKey
+      th.logoKey ||
+      th.textColor ||
+      th.buttonStyle ||
+      th.buttonRadius ||
+      th.cardRadius ||
+      th.inputStyle ||
+      th.backgroundImageKey
   );

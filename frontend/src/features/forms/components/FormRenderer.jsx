@@ -6,11 +6,42 @@ import FormFileField from './FormFileField';
 import { readFileConfig, validateClientFile, describeAllowedExtensions, formatFileSize } from '../utils/formFileKinds.util';
 import { vnToday, addDaysToDateStr, formatSlotDateLabel } from '../utils/bookingFormat.util';
 import { useFormFont } from '../utils/useFormFont';
-import { getReadableTextColor } from '../utils/formTheme.util';
+import { getReadableTextColor, isHexColor } from '../utils/formTheme.util';
 import { isDisplayFieldType, splitFormPages, RATING_MAX } from '../utils/formFieldTypes.util';
-import { buildFormFontFamily, FORM_BANNER_HEIGHTS, DEFAULT_FORM_BANNER_HEIGHT } from '../constants/formTheme';
+import {
+  buildFormFontFamily,
+  FORM_BANNER_HEIGHTS,
+  DEFAULT_FORM_BANNER_HEIGHT,
+  ALLOWED_FORM_BUTTON_RADII,
+  ALLOWED_FORM_CARD_RADII,
+} from '../constants/formTheme';
 
 const SLOT_ERROR_CODES = new Set(['FORM_SLOT_FULL', 'INVALID_APPOINTMENT_SLOT']);
+
+// PR-8b — bo góc nút / thẻ theo theme. Tên class viết NGUYÊN VĂN (không ghép chuỗi) để Tailwind JIT thấy lúc build.
+// `md` của cả hai = đúng class mặc định (`rounded-xl` nút, `rounded-2xl` thẻ), nên khoá vắng mặt -> DOM y như trước.
+const BUTTON_RADIUS_CLASS = {
+  none: 'rounded-none',
+  sm: 'rounded-md',
+  md: 'rounded-xl',
+  lg: 'rounded-2xl',
+  full: 'rounded-full',
+};
+const CARD_RADIUS_CLASS = {
+  none: 'rounded-none',
+  sm: 'rounded-lg',
+  md: 'rounded-2xl',
+  lg: 'rounded-3xl',
+};
+// Nút chính (gửi / Tiếp): đặc = chữ theo màu chủ đạo trên nền màu chủ đạo (như cũ, có bóng); viền = nền trong, viền + chữ
+// màu chủ đạo (không bóng).
+const BUTTON_SOLID_CLASS =
+  'text-[color:var(--form-primary-text,#ffffff)] bg-[color:var(--form-primary,#df5c0e)] hover:brightness-95';
+const BUTTON_OUTLINE_CLASS =
+  'text-[color:var(--form-primary,#df5c0e)] bg-transparent ring-2 ring-inset ring-[color:var(--form-primary,#df5c0e)] hover:bg-[color:var(--form-primary-tint,rgba(223,92,14,0.1))]';
+const INPUT_TONE_FILLED_CLASS = 'border-transparent bg-gray-100 focus:border-primary-500 focus:ring-primary-100';
+const INPUT_TONE_OUTLINE_CLASS = 'border-gray-300 focus:border-primary-500 focus:ring-primary-100';
+const INPUT_TONE_ERROR_CLASS = 'border-red-300 focus:ring-red-200';
 
 /**
  * Biểu mẫu bố cục rộng có thẻ sản phẩm: từ `md` trở lên chia 2 cột (trái thẻ sản phẩm, phải tiêu đề + ô điền), dưới `md`
@@ -144,6 +175,26 @@ export default function FormRenderer({
   const fontFamilyCss = buildFormFontFamily(theme.fontFamily);
   const isWideLayout = theme.layout === 'wide';
   const bannerHeight = FORM_BANNER_HEIGHTS[theme.bannerHeight] || FORM_BANNER_HEIGHTS[DEFAULT_FORM_BANNER_HEIGHT];
+
+  // PR-8b — màu chữ, kiểu nút, bo góc, kiểu ô nhập. Khoá vắng mặt/giá trị lạ -> đúng giao diện hiện tại (mọi chuỗi class bên dưới
+  // ở nhánh mặc định GIỐNG HỆT bản trước; xem FormRenderer.themeExtra.spec.jsx).
+  const textColor = isHexColor(theme.textColor) ? theme.textColor : null;
+  const textStyle = textColor ? { color: textColor } : undefined;
+  const isOutlineButton = theme.buttonStyle === 'outline';
+  const buttonRadiusClass = ALLOWED_FORM_BUTTON_RADII.includes(theme.buttonRadius)
+    ? BUTTON_RADIUS_CLASS[theme.buttonRadius]
+    : BUTTON_RADIUS_CLASS.md;
+  const cardRadiusClass = ALLOWED_FORM_CARD_RADII.includes(theme.cardRadius)
+    ? CARD_RADIUS_CLASS[theme.cardRadius]
+    : CARD_RADIUS_CLASS.md;
+  const isFilledInput = theme.inputStyle === 'filled';
+  const primaryButtonClass = `w-full py-3 px-6 ${buttonRadiusClass} font-medium ${
+    isOutlineButton ? BUTTON_OUTLINE_CLASS : BUTTON_SOLID_CLASS
+  } active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed${isOutlineButton ? '' : ' shadow-sm'}`;
+  const inputToneClass = (hasError) => {
+    if (hasError) return isFilledInput ? `${INPUT_TONE_ERROR_CLASS} bg-gray-100` : INPUT_TONE_ERROR_CLASS;
+    return isFilledInput ? INPUT_TONE_FILLED_CLASS : INPUT_TONE_OUTLINE_CLASS;
+  };
   const [bannerLoadFailed, setBannerLoadFailed] = useState(false);
   const [logoLoadFailed, setLogoLoadFailed] = useState(false);
 
@@ -163,6 +214,7 @@ export default function FormRenderer({
     ...(primaryTextColor ? { '--form-primary-text': primaryTextColor } : {}),
     ...(primaryTintColor ? { '--form-primary-tint': primaryTintColor } : {}),
     ...(fontFamilyCss ? { fontFamily: fontFamilyCss } : {}),
+    ...(textColor ? { color: textColor } : {}),
   };
   const cardWidthClass = isWideLayout ? 'max-w-2xl' : 'max-w-xl';
   const cardSurfaceClass = isWideLayout ? '' : 'shadow-sm border border-gray-100';
@@ -573,16 +625,16 @@ export default function FormRenderer({
   if (submittedSuccess) {
     return (
       <div
-        className={`w-full ${cardWidthClass} mx-auto p-6 bg-white text-slate-800 rounded-2xl ${cardSurfaceClass} text-center`}
+        className={`w-full ${cardWidthClass} mx-auto p-6 bg-white text-slate-800 ${cardRadiusClass} ${cardSurfaceClass} text-center`}
         style={themeRootStyle}
       >
         <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-50 text-green-600 flex items-center justify-center text-3xl font-bold">
           ✓
         </div>
-        <h3 className="text-xl font-semibold text-gray-900 mb-2">
+        <h3 className="text-xl font-semibold text-gray-900 mb-2" style={textStyle}>
           {t('publicForm.submitSuccess')}
         </h3>
-        <p className="text-gray-600 whitespace-pre-line leading-relaxed">
+        <p className="text-gray-600 whitespace-pre-line leading-relaxed" style={textStyle}>
           {successMessage}
         </p>
         {bookedInfo && (
@@ -617,7 +669,7 @@ export default function FormRenderer({
   // chế độ tối không kế thừa chữ sáng của body → chữ trắng trên ô trắng.
   return (
     <div
-      className={`w-full ${formCardWidthClass} mx-auto bg-white text-slate-800 rounded-2xl ${cardSurfaceClass} overflow-hidden overflow-x-hidden box-border`}
+      className={`w-full ${formCardWidthClass} mx-auto bg-white text-slate-800 ${cardRadiusClass} ${cardSurfaceClass} overflow-hidden overflow-x-hidden box-border`}
       style={themeRootStyle}
     >
       {/* Banner: full-bleed (tràn hết chiều rộng thẻ, không theo padding nội dung bên dưới) —
@@ -654,11 +706,14 @@ export default function FormRenderer({
               onError={() => setLogoLoadFailed(true)}
             />
           )}
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 break-words">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 break-words" style={textStyle}>
             {form?.title || t('forms.formTitle')}
           </h1>
           {form?.description && (
-            <p className="text-gray-600 text-sm sm:text-base whitespace-pre-line break-words leading-relaxed">
+            <p
+              className="text-gray-600 text-sm sm:text-base whitespace-pre-line break-words leading-relaxed"
+              style={textStyle}
+            >
               {form.description}
             </p>
           )}
@@ -732,7 +787,7 @@ export default function FormRenderer({
           if (type === 'heading') {
             return (
               <div key={key} data-block="heading" className={`min-w-0 pt-1 ${fullRowClass}`}>
-                <h2 className="text-lg font-semibold text-gray-900 break-words">{label}</h2>
+                <h2 className="text-lg font-semibold text-gray-900 break-words" style={textStyle}>{label}</h2>
                 {helpText && (
                   <p className="mt-0.5 text-sm text-gray-600 leading-snug whitespace-pre-line break-words">{helpText}</p>
                 )}
@@ -745,6 +800,7 @@ export default function FormRenderer({
                 key={key}
                 data-block="paragraph"
                 className={`min-w-0 text-sm text-gray-700 leading-relaxed whitespace-pre-line break-words ${fullRowClass}`}
+                style={textStyle}
               >
                 {label}
               </p>
@@ -764,6 +820,7 @@ export default function FormRenderer({
               <label
                 htmlFor={fieldControlId}
                 className="block text-sm font-medium text-gray-800 break-words"
+                style={textStyle}
               >
                 {label}
                 {required && !(type === 'file' && fileUploadsDisabled) && <span className="text-red-500 ml-1">*</span>}
@@ -808,11 +865,7 @@ export default function FormRenderer({
                   maxLength={500}
                   placeholder={inputPlaceholder}
                   aria-describedby={helpId}
-                  className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 ${
-                    fieldError
-                      ? 'border-red-300 focus:ring-red-200'
-                      : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
-                  }`}
+                  className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 ${inputToneClass(Boolean(fieldError))}`}
                   value={val}
                   onChange={(e) => handleFieldChange(key, e.target.value)}
                   disabled={isSubmitting || previewMode}
@@ -827,11 +880,7 @@ export default function FormRenderer({
                   maxLength={5000}
                   placeholder={inputPlaceholder}
                   aria-describedby={helpId}
-                  className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 resize-y ${
-                    fieldError
-                      ? 'border-red-300 focus:ring-red-200'
-                      : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
-                  }`}
+                  className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 resize-y ${inputToneClass(Boolean(fieldError))}`}
                   value={val}
                   onChange={(e) => handleFieldChange(key, e.target.value)}
                   disabled={isSubmitting || previewMode}
@@ -846,11 +895,7 @@ export default function FormRenderer({
                   maxLength={255}
                   placeholder={inputPlaceholder}
                   aria-describedby={helpId}
-                  className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 ${
-                    fieldError
-                      ? 'border-red-300 focus:ring-red-200'
-                      : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
-                  }`}
+                  className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 ${inputToneClass(Boolean(fieldError))}`}
                   value={val}
                   onChange={(e) => handleFieldChange(key, e.target.value)}
                   disabled={isSubmitting || previewMode}
@@ -865,11 +910,7 @@ export default function FormRenderer({
                   maxLength={50}
                   placeholder={inputPlaceholder}
                   aria-describedby={helpId}
-                  className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 ${
-                    fieldError
-                      ? 'border-red-300 focus:ring-red-200'
-                      : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
-                  }`}
+                  className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 ${inputToneClass(Boolean(fieldError))}`}
                   value={val}
                   onChange={(e) => handleFieldChange(key, e.target.value)}
                   disabled={isSubmitting || previewMode}
@@ -883,11 +924,7 @@ export default function FormRenderer({
                   type="number"
                   placeholder={inputPlaceholder}
                   aria-describedby={helpId}
-                  className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 ${
-                    fieldError
-                      ? 'border-red-300 focus:ring-red-200'
-                      : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
-                  }`}
+                  className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 ${inputToneClass(Boolean(fieldError))}`}
                   value={val}
                   onChange={(e) => handleFieldChange(key, e.target.value)}
                   disabled={isSubmitting || previewMode}
@@ -900,11 +937,7 @@ export default function FormRenderer({
                   id={fieldControlId}
                   type="date"
                   aria-describedby={helpId}
-                  className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 ${
-                    fieldError
-                      ? 'border-red-300 focus:ring-red-200'
-                      : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
-                  }`}
+                  className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 ${inputToneClass(Boolean(fieldError))}`}
                   value={val}
                   onChange={(e) => handleFieldChange(key, e.target.value)}
                   disabled={isSubmitting || previewMode}
@@ -916,11 +949,7 @@ export default function FormRenderer({
                 <select
                   id={fieldControlId}
                   aria-describedby={helpId}
-                  className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 bg-white ${
-                    fieldError
-                      ? 'border-red-300 focus:ring-red-200'
-                      : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
-                  }`}
+                  className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 ${isFilledInput ? '' : 'bg-white '}${inputToneClass(Boolean(fieldError))}`}
                   value={val}
                   onChange={(e) => handleFieldChange(key, e.target.value)}
                   disabled={isSubmitting || previewMode}
@@ -950,6 +979,7 @@ export default function FormRenderer({
                         key={optVal || i}
                         htmlFor={id}
                         className="flex items-center gap-2.5 cursor-pointer text-sm text-gray-700"
+                        style={textStyle}
                       >
                         <input
                           id={id}
@@ -981,6 +1011,7 @@ export default function FormRenderer({
                         key={optVal || i}
                         htmlFor={id}
                         className="flex items-center gap-2.5 cursor-pointer text-sm text-gray-700"
+                        style={textStyle}
                       >
                         <input
                           id={id}
@@ -1004,11 +1035,7 @@ export default function FormRenderer({
                   id={fieldControlId}
                   type="time"
                   aria-describedby={helpId}
-                  className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 ${
-                    fieldError
-                      ? 'border-red-300 focus:ring-red-200'
-                      : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
-                  }`}
+                  className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 ${inputToneClass(Boolean(fieldError))}`}
                   value={val}
                   onChange={(e) => handleFieldChange(key, e.target.value)}
                   disabled={isSubmitting || previewMode}
@@ -1055,6 +1082,7 @@ export default function FormRenderer({
                         key={choice}
                         htmlFor={id}
                         className="flex items-center gap-2.5 cursor-pointer text-sm text-gray-700"
+                        style={textStyle}
                       >
                         <input
                           id={id}
@@ -1102,7 +1130,7 @@ export default function FormRenderer({
         {/* Ô đồng ý tiếp thị: chỉ hiện khi consentEnabled = true (nhiều bước: ở trang cuối, cạnh nút gửi) */}
         {settings.consentEnabled === true && isLastPage && (
           <div className="pt-2">
-            <label className="flex items-start gap-3 cursor-pointer text-sm text-gray-700 select-none">
+            <label className="flex items-start gap-3 cursor-pointer text-sm text-gray-700 select-none" style={textStyle}>
               <input
                 type="checkbox"
                 checked={marketingConsent}
@@ -1124,7 +1152,7 @@ export default function FormRenderer({
               type="button"
               onClick={handleGoBack}
               disabled={isSubmitting}
-              className="shrink-0 py-3 px-5 rounded-xl font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`shrink-0 py-3 px-5 ${buttonRadiusClass} font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
             >
               {t('publicForm.step.back')}
             </button>
@@ -1138,7 +1166,7 @@ export default function FormRenderer({
               key="submit"
               type="submit"
               disabled={isSubmitting || previewMode}
-              className="w-full py-3 px-6 rounded-xl font-medium text-[color:var(--form-primary-text,#ffffff)] bg-[color:var(--form-primary,#df5c0e)] hover:brightness-95 active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+              className={primaryButtonClass}
             >
               {isSubmitting ? t('publicForm.submitting') : submitButtonText}
             </button>
@@ -1148,7 +1176,7 @@ export default function FormRenderer({
               type="button"
               onClick={handleGoNext}
               disabled={isSubmitting}
-              className="w-full py-3 px-6 rounded-xl font-medium text-[color:var(--form-primary-text,#ffffff)] bg-[color:var(--form-primary,#df5c0e)] hover:brightness-95 active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+              className={primaryButtonClass}
             >
               {t('publicForm.step.next')}
             </button>

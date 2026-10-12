@@ -435,6 +435,26 @@ describe('FormSubmissionStatusPage component', () => {
       expect(wrapper.style.backgroundColor).toBe('');
     });
 
+    it('PR-8b: theme.backgroundImageUrl -> trang QR cũng có ảnh nền + lớp tối (khớp biểu mẫu); nhúng thì không', async () => {
+      const themed = {
+        ...pendingPayment,
+        theme: { backgroundImageUrl: 'https://founderai.biz/lp-assets/uploads/7/forms/nen.jpg', backgroundImageOverlay: 20 },
+      };
+      fetchPublicSubmissionStatus.mockResolvedValue(themed);
+
+      const { container, unmount } = renderStatusPage('/f/pub_1/s/tok_1');
+      await waitFor(() => expect(screen.getByText('Form thu tiền giữ chỗ')).toBeInTheDocument());
+      const style = container.firstChild.getAttribute('style');
+      expect(style).toContain('https://founderai.biz/lp-assets/uploads/7/forms/nen.jpg');
+      expect(style).toContain('rgba(0, 0, 0, 0.2)');
+      unmount();
+
+      fetchPublicSubmissionStatus.mockResolvedValue(themed);
+      const embedded = renderStatusPage('/f/pub_1/s/tok_1?embed=1');
+      await waitFor(() => expect(screen.getByText('Form thu tiền giữ chỗ')).toBeInTheDocument());
+      expect(embedded.container.firstChild.getAttribute('style') || '').not.toContain('background-image');
+    });
+
     it('theme.logoUrl -> hiện logo phía trên tiêu đề; không có logoUrl -> không hiện', async () => {
       fetchPublicSubmissionStatus.mockResolvedValue({
         ...pendingPayment,

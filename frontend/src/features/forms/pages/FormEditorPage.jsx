@@ -368,6 +368,16 @@ export default function FormEditorPage() {
           bannerUrl: loadedTheme.bannerUrl || '',
           logoKey: loadedTheme.logoKey || '',
           logoUrl: loadedTheme.logoUrl || '',
+          textColor: loadedTheme.textColor || '',
+          buttonStyle: loadedTheme.buttonStyle || '',
+          buttonRadius: loadedTheme.buttonRadius || '',
+          cardRadius: loadedTheme.cardRadius || '',
+          inputStyle: loadedTheme.inputStyle || '',
+          backgroundImageKey: loadedTheme.backgroundImageKey || '',
+          backgroundImageUrl: loadedTheme.backgroundImageUrl || '',
+          backgroundImageOverlay: Number.isInteger(loadedTheme.backgroundImageOverlay)
+            ? loadedTheme.backgroundImageOverlay
+            : '',
         });
       })
       .catch((err) => {
@@ -1073,6 +1083,17 @@ export default function FormEditorPage() {
         ...(theme.bannerHeight ? { bannerHeight: theme.bannerHeight } : {}),
         ...(theme.bannerKey ? { bannerKey: theme.bannerKey } : {}),
         ...(theme.logoKey ? { logoKey: theme.logoKey } : {}),
+        // PR-8b — backend THAY CẢ theme mỗi lần lưu nên MỌI khoá đã đặt phải đi theo (kể cả khi chỉ đổi màu chủ đạo).
+        // Khoá rỗng vắng mặt = mặc định. Độ tối chỉ gửi kèm ảnh nền (backend cũng bỏ nếu không có ảnh).
+        ...(HEX_COLOR_RE.test(theme.textColor) ? { textColor: theme.textColor } : {}),
+        ...(theme.buttonStyle ? { buttonStyle: theme.buttonStyle } : {}),
+        ...(theme.buttonRadius ? { buttonRadius: theme.buttonRadius } : {}),
+        ...(theme.cardRadius ? { cardRadius: theme.cardRadius } : {}),
+        ...(theme.inputStyle ? { inputStyle: theme.inputStyle } : {}),
+        ...(theme.backgroundImageKey ? { backgroundImageKey: theme.backgroundImageKey } : {}),
+        ...(theme.backgroundImageKey && Number.isInteger(theme.backgroundImageOverlay)
+          ? { backgroundImageOverlay: theme.backgroundImageOverlay }
+          : {}),
       };
 
       const payload = {
@@ -1241,6 +1262,11 @@ export default function FormEditorPage() {
         bannerHeight: theme.bannerHeight || undefined,
         bannerUrl: theme.bannerUrl || undefined,
         logoUrl: theme.logoUrl || undefined,
+        textColor: HEX_COLOR_RE.test(theme.textColor) ? theme.textColor : undefined,
+        buttonStyle: theme.buttonStyle || undefined,
+        buttonRadius: theme.buttonRadius || undefined,
+        cardRadius: theme.cardRadius || undefined,
+        inputStyle: theme.inputStyle || undefined,
       },
       product: previewProduct,
       payment: previewPaymentEnabled
@@ -1365,6 +1391,8 @@ export default function FormEditorPage() {
               <FormPreviewPane
                 form={previewForm}
                 backgroundColor={HEX_COLOR_RE.test(theme.backgroundColor) ? theme.backgroundColor : undefined}
+                backgroundImageUrl={theme.backgroundImageKey ? theme.backgroundImageUrl || undefined : undefined}
+                backgroundImageOverlay={theme.backgroundImageOverlay}
                 device={previewDevice}
                 onDeviceChange={setPreviewDevice}
               />

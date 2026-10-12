@@ -11,6 +11,7 @@ import FormRenderer from '../components/FormRenderer';
 import { useFormEmbedResize } from '../hooks/useFormEmbedResize';
 import { formatVnd } from '../../../utils/vietqrParser';
 import { publicPaymentKeys } from '../utils/paymentPurpose.util';
+import { buildFormPageBackgroundStyle } from '../utils/formTheme.util';
 
 // PR-7a — biểu mẫu biết mình đến từ landing nào + UTM (PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md
 // mục PR-7): ánh xạ tên tham số URL (snake_case, chuẩn UTM) sang khoá payload (camelCase, khớp
@@ -212,11 +213,8 @@ export default function PublicFormPage() {
 
   // 5. Render biểu mẫu
   // Nền ngoài theo backgroundColor CHỈ khi mở trực tiếp (không nhúng) — nhúng vào landing
-  // không được tô đè nền trang chủ landing (PLAN PR-4b phản biện điểm 2).
-  const pageBackgroundStyle =
-    !embedMode && form?.theme?.backgroundColor
-      ? { backgroundColor: form.theme.backgroundColor }
-      : undefined;
+  // không được tô đè nền trang chủ landing (PLAN PR-4b phản biện điểm 2). PR-8b: thêm ảnh nền phủ lớp tối, cùng quy tắc.
+  const pageBackgroundStyle = buildFormPageBackgroundStyle(form?.theme, { embedMode });
 
   return (
     <div ref={embedRootRef} className={formWrapperClass} style={pageBackgroundStyle}>

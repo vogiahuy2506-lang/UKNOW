@@ -2,6 +2,7 @@ import { HiOutlineDesktopComputer, HiOutlineDeviceMobile } from 'react-icons/hi'
 import { useI18n } from '../../../../i18n';
 import { TopbarSegmented } from '../../../../components/editor/AdminEditorShell';
 import FormRenderer from '../FormRenderer';
+import { buildFormPageBackgroundStyle } from '../../utils/formTheme.util';
 
 // Bề rộng khung điện thoại (khớp màn hình rộng ~390px cần kiểm tra không tràn ngang).
 const MOBILE_FRAME_WIDTH = 390;
@@ -15,9 +16,18 @@ const noopSubmit = () => {};
  * Chuyển Máy tính / Điện thoại (khung rộng 390px). Biểu mẫu nhiều bước (khối ngắt trang) cũng xem được ngay ở đây:
  * Tiếp / Quay lại hoạt động, không kiểm trường bắt buộc, không gọi API nộp bài.
  */
-export default function FormPreviewPane({ form, backgroundColor, device, onDeviceChange }) {
+export default function FormPreviewPane({
+  form,
+  backgroundColor,
+  backgroundImageUrl,
+  backgroundImageOverlay,
+  device,
+  onDeviceChange,
+}) {
   const { t } = useI18n();
   const isMobile = device === 'mobile';
+  // Nền NGOÀI thẻ (màu + ảnh nền phủ lớp tối) — cùng hàm với trang công khai nên xem trước khớp với thứ khách thấy.
+  const canvasBackgroundStyle = buildFormPageBackgroundStyle({ backgroundColor, backgroundImageUrl, backgroundImageOverlay });
 
   return (
     <div className="p-3 sm:p-4 space-y-3 min-w-0" data-testid="form-preview-pane">
@@ -40,7 +50,7 @@ export default function FormPreviewPane({ form, backgroundColor, device, onDevic
       <div
         data-testid="form-preview-canvas"
         className="rounded-2xl border border-gray-200 dark:border-dk-border p-3 sm:p-5 overflow-x-hidden box-border bg-gray-50 dark:bg-dk-surface"
-        style={backgroundColor ? { backgroundColor } : undefined}
+        style={canvasBackgroundStyle}
       >
         <div
           data-testid="form-preview-frame"

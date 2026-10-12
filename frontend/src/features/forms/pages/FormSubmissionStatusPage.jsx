@@ -20,7 +20,7 @@ import { formatVnd, formatCountdown } from '../../../utils/vietqrParser';
 import { useFormEmbedResize } from '../hooks/useFormEmbedResize';
 import { useFormFont } from '../utils/useFormFont';
 import { buildFormFontFamily } from '../constants/formTheme';
-import { getReadableTextColor } from '../utils/formTheme.util';
+import { getReadableTextColor, buildFormPageBackgroundStyle } from '../utils/formTheme.util';
 
 const POLL_INTERVAL_MS = 30000;
 
@@ -308,7 +308,7 @@ export default function FormSubmissionStatusPage() {
     ...(primaryColor ? { '--form-primary': primaryColor } : {}),
     ...(primaryTextColor ? { '--form-primary-text': primaryTextColor } : {}),
     ...(fontFamilyCss ? { fontFamily: fontFamilyCss } : {}),
-    ...(!embedMode && theme.backgroundColor ? { backgroundColor: theme.backgroundColor } : {}),
+    ...(buildFormPageBackgroundStyle(theme, { embedMode }) || {}),
   };
 
   if (isLoading) {
