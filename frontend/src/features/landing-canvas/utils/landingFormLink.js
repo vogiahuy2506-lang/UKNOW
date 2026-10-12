@@ -13,6 +13,7 @@
  * Thuần (không React, không API) để test được.
  */
 import { FORM_SLOT_KINDS, listFormSlotMatches } from '../../landing-pages/utils/injectLandingEnhancements.js';
+import { findDraftForSlot } from './landingFormDrafts.js';
 
 export { FORM_SLOT_KINDS };
 
@@ -85,25 +86,34 @@ export function listFormBlocks(html) {
  *           'external' = khoá nhúng KHÔNG tra được (dán tay khoá của người khác / dữ liệu lệch) — vẫn xoá được khỏi trang;
  *           'new' = chỗ trống có loại, tạo lúc lưu; 'pending' = biểu mẫu có sẵn chờ gắn lúc lưu.
  * `blockIndex`: chỉ số khối trong HTML (cho remove/move); null với 'pending'.
+ * Dòng 'new' còn mang `slotIndex` (thứ tự CHỖ TRỐNG trong HTML, đếm cả chỗ trống trần — khác `blockIndex` vì không đếm khối nhúng) và
+ * `draft` (PR-7a): nháp biểu mẫu do AI soạn cho đúng chỗ trống đó (cùng chỉ số + cùng loại) hoặc null; có nháp thì `title` là tên nháp.
  *
- * @param {{ html: string, linkedForms?: Array<object>, pending?: Array<{ formId: number, publicKey?: string|null, title?: string|null }> }} params
+ * @param {{ html: string, linkedForms?: Array<object>, pending?: Array<{ formId: number, publicKey?: string|null, title?: string|null }>,
+ *   formDrafts?: Array<object> }} params
  */
-export function buildFormRows({ html, linkedForms = [], pending = [] }) {
+export function buildFormRows({ html, linkedForms = [], pending = [], formDrafts = [] }) {
   const byKey = new Map((Array.isArray(linkedForms) ? linkedForms : []).map((f) => [f.publicKey, f]));
   const blocks = listFormBlocks(html);
   const embeddedKeys = new Set(blocks.filter((b) => b.type === 'embed').map((b) => b.key));
+  let slotCounter = 0;
   const rows = blocks.map((block, blockIndex) => {
     if (block.type === 'slot') {
+      const slotIndex = slotCounter;
+      slotCounter += 1;
+      const draft = block.valid ? findDraftForSlot(formDrafts, slotIndex, block.kind) : null;
       return {
         id: `slot:${blockIndex}`,
         source: 'new',
         blockIndex,
+        slotIndex,
         kind: block.kind,
         bare: block.bare,
         valid: block.valid,
         rawKind: block.rawKind,
         formId: null,
-        title: null,
+        title: draft?.title ? String(draft.title) : null,
+        draft,
         publicKey: null,
         isPublished: true,
         needsPaymentSetup: false,

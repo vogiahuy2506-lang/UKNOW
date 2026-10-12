@@ -16,6 +16,8 @@ export const KEEP_UNDO_HTML_COUNT = 3;
  * `linkedFormsPending` (biểu mẫu CÓ SẴN vừa chọn từ mục Biểu mẫu, chờ bấm Lưu — landingFormLink.js, PR-6) CÓ trong nháp: đó là
  * thay đổi người dùng đã làm, mất khi F5 thì họ tưởng đã thêm mà thực ra chưa. (Biểu mẫu MỚI theo mẫu nằm sẵn trong HTML dưới dạng
  * chỗ trống có loại nên đã đi cùng `htmlContent`.) Trước PR-6 khoá này là `linkedFormChoice` — nháp cũ còn khoá đó bị bỏ qua.
+ * `formDrafts` (PR-7a): nháp biểu mẫu do AI soạn cho từng chỗ trống có loại (landingFormDrafts.js) — mất khi F5 thì Lưu chỉ còn mẫu backend
+ * (mất câu hỏi AI vừa soạn), nên đi cùng nháp landing. Nháp cũ (không có khoá) được coi là "không có nháp biểu mẫu nào".
  */
 export const DRAFT_FORM_FIELDS = [
   'title',
@@ -27,6 +29,7 @@ export const DRAFT_FORM_FIELDS = [
   'customDomainIsApex',
   'leadFormConfig',
   'linkedFormsPending',
+  'formDrafts',
 ];
 
 function getStorage() {
@@ -82,6 +85,8 @@ export function snapshotDraftForm(form) {
     linkedFormsPending: stableStringify(
       Array.isArray(picked.linkedFormsPending) && picked.linkedFormsPending.length > 0 ? picked.linkedFormsPending : []
     ),
+    // Như linkedFormsPending: null / thiếu / [] đều là "không có nháp biểu mẫu".
+    formDrafts: stableStringify(Array.isArray(picked.formDrafts) && picked.formDrafts.length > 0 ? picked.formDrafts : []),
   };
 }
 

@@ -54,6 +54,7 @@ describe('landingCanvasDraft — form', () => {
       'customDomainHostname',
       'customDomainIsApex',
       'domainType',
+      'formDrafts', // PR-7a: nháp biểu mẫu AI theo chỗ trống
       'htmlContent',
       'isPublished',
       'leadFormConfig',
@@ -61,6 +62,18 @@ describe('landingCanvasDraft — form', () => {
       'slug',
       'title',
     ]);
+  });
+  // PR-7a: nháp biểu mẫu AI theo chỗ trống sống qua F5 cùng nháp landing và làm bẩn như linkedFormsPending.
+  it('nháp biểu mẫu AI (formDrafts) vào nháp, làm bẩn; null / thiếu / [] = không đổi; nháp cũ không có khoá vẫn đọc được', () => {
+    const base = { title: 't', htmlContent: 'h', formDrafts: [] };
+    const snap = snapshotDraftForm(base);
+    expect(isDraftFormDirty({ ...base }, snap)).toBe(false);
+    expect(isDraftFormDirty({ ...base, formDrafts: null }, snap)).toBe(false);
+    expect(isDraftFormDirty({ title: 't', htmlContent: 'h' }, snap)).toBe(false);
+    const drafts = [{ slotIndex: 1, kind: 'booking', title: 'Đặt lịch khám răng', fields: [{ label: 'Họ tên', type: 'short_text' }] }];
+    expect(isDraftFormDirty({ ...base, formDrafts: drafts }, snap)).toBe(true);
+    expect(pickDraftForm({ ...base, formDrafts: drafts }).formDrafts).toEqual(drafts);
+    expect(pickDraftForm({ title: 't' }).formDrafts).toBeNull(); // nháp cũ: khoá thiếu → null → trang coi là không có nháp
   });
   it('biểu mẫu CÓ SẴN chờ gắn (linkedFormsPending) vào nháp và làm bẩn; null / thiếu / [] = không đổi', () => {
     const base = { title: 't', htmlContent: 'h', linkedFormsPending: [] };

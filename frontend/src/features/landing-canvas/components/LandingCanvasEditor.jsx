@@ -15,6 +15,7 @@ import {
 } from '../../landing-pages/services/landingPagesAdminApi.service.js';
 import { prepareLeadFormConfigForSave } from '../../landing-pages/utils/landingLeadFormConfig.js';
 import { buildLinkedFormsPayload } from '../utils/landingFormLink.js';
+import { buildFormDraftsPayload } from '../utils/landingFormDrafts.js';
 // Import components từ GitHub (landing-pages)
 import TemplateGallery from '../../landing-pages/components/TemplateGallery.jsx';
 import SaveTemplateModal from '../../landing-pages/components/SaveTemplateModal.jsx';
@@ -148,6 +149,8 @@ export default function LandingCanvasEditor({
           isPublished: form.isPublished,
           leadFormConfig,
           ...buildLinkedFormsPayload(form.linkedFormsPending),
+          // PR-7a: nháp biểu mẫu AI theo chỗ trống (còn khớp chỗ trống có loại trong HTML); không có nháp thì không gửi gì thêm.
+          ...buildFormDraftsPayload(form),
         });
         toast.success(t('landingPagesAdmin.updated'));
         if (updated?.warning) {
@@ -156,8 +159,13 @@ export default function LandingCanvasEditor({
         const updatedAt = updated?.updatedAt ?? null;
         // Lưu xong trình soạn đóng (onClose bên dưới) nên không cần đồng bộ lại biểu mẫu đang gắn vào state: mở lại thì tải
         // từ server (GET trả linkedForms).
-        const savedForm = { ...form, title: effectiveTitle };
-        if (titleOverride !== undefined) setForm((prev) => ({ ...prev, title: effectiveTitle }));
+        // PR-7a: lưu xong thì nháp biểu mẫu AI đã dùng xong (backend đã tạo biểu mẫu thật) — xoá khỏi state + mốc "bẩn".
+        const savedForm = { ...form, title: effectiveTitle, formDrafts: [] };
+        setForm((prev) => ({
+          ...prev,
+          ...(titleOverride !== undefined ? { title: effectiveTitle } : {}),
+          formDrafts: [],
+        }));
         setBaselineSnapshot(snapshotDraftForm(savedForm));
         draft.commitSaved({ updatedAt });
         if (navigateAfter) {
@@ -175,6 +183,8 @@ export default function LandingCanvasEditor({
           customDomainHostname: form.customDomainHostname,
           customDomainIsApex: form.customDomainIsApex,
           leadFormConfig,
+          // PR-7a: nháp biểu mẫu AI theo chỗ trống (xem nhánh cập nhật phía trên).
+          ...buildFormDraftsPayload(form),
         });
         toast.success(t('landingPagesAdmin.created'));
         // Câu 3 sếp hỏi 14/09 — create() giờ cũng trả `warning` (ô form chưa khai báo), y hệt
@@ -185,8 +195,12 @@ export default function LandingCanvasEditor({
         }
         const newId = created?.id ?? created?.data?.id;
         const updatedAt = created?.updatedAt ?? created?.data?.updatedAt ?? null;
-        const savedForm = { ...form, title: effectiveTitle };
-        if (titleOverride !== undefined) setForm((prev) => ({ ...prev, title: effectiveTitle }));
+        const savedForm = { ...form, title: effectiveTitle, formDrafts: [] };
+        setForm((prev) => ({
+          ...prev,
+          ...(titleOverride !== undefined ? { title: effectiveTitle } : {}),
+          formDrafts: [],
+        }));
         setBaselineSnapshot(snapshotDraftForm(savedForm));
         // Hội thoại chuyển sang khoá của trang vừa tạo (mở lại vẫn thấy cuộc trò chuyện).
         draft.commitSaved({ newId: newId ?? null, updatedAt });

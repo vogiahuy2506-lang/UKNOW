@@ -87,6 +87,7 @@ import {
   updateLandingPageAdmin,
   fetchLandingPageAdminById,
 } from '../landing-pages/services/landingPagesAdminApi.service.js';
+import { applyAiFormDrafts, buildFormDraftsPayload } from '../landing-canvas/utils/landingFormDrafts.js';
 
 const PLAN_SUPPORTED_CHANNELS = new Set(['email', 'zalo', 'zalo_group']);
 // Các `stage` server báo trên luồng sinh / sửa landing (khoá i18n aiChatbot.landingStage_<stage>); stage lạ thì không hiện chữ.
@@ -1800,7 +1801,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
    */
   const showGeneratedLandingCard = (resData, { update, sessionId }) => {
     refreshAiCredits();
-    const { title, html, css, leadFormDraft, leadFormConfig, messageId: newMessageId = null } = resData;
+    const { title, html, css, leadFormDraft, leadFormConfig, formDrafts, messageId: newMessageId = null } = resData;
     // B-18: sinh xong (đã trừ credit) mà không ghi được vào phiên → báo thật, và không tự sửa (không có tin để sửa).
     const savedToSession = resData.saved !== false;
     if (!savedToSession) toast(t('aiChatbot.landingNotSavedToSession'), { icon: '⚠️', duration: 8000 });
@@ -1813,6 +1814,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       data: {
         title, html, css,
         ...(leadFormDraft ? { leadFormDraft, leadFormConfig } : {}),
+        // PR-7a: nháp biểu mẫu AI theo chỗ trống có loại (chỉ khi AI_LANDING_FORM_MODE=form) — gửi kèm lúc "Lưu & xuất bản".
+        ...(Array.isArray(formDrafts) && formDrafts.length > 0 ? { formDrafts } : {}),
         layoutStatus: 'checking',
       },
     }]);
@@ -2680,6 +2683,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         isPublished: Boolean(formValues.isPublished),
         domainType: 'system',
         ...(page?.leadFormConfig ? { leadFormConfig: page.leadFormConfig } : {}),
+        // PR-7a: nháp biểu mẫu AI theo chỗ trống (chỉ nháp còn khớp một chỗ trống có loại trong HTML sắp lưu).
+        ...buildFormDraftsPayload({ htmlContent: fullHtml, formDrafts: page?.formDrafts }),
       };
     } else {
       current = await fetchLandingPageAdminById(existingId);
@@ -2693,6 +2698,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         htmlContent: useCardHtml ? fullHtml : current.htmlContent,
         isPublished: useCardHtml ? current.isPublished : Boolean(formValues.isPublished),
         leadFormConfig: current.leadFormConfig,
+        // PR-7a: chỉ khi đẩy HTML của thẻ lên (mode 'update') mới có chỗ trống mới cần nháp; 'toggle' giữ HTML trên server nên không kèm.
+        ...(useCardHtml ? buildFormDraftsPayload({ htmlContent: fullHtml, formDrafts: page?.formDrafts }) : {}),
       };
     }
 
@@ -2710,6 +2717,10 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     // trang soạn sau khi lưu từ chat), đồng bộ lại thẻ theo server ngay, kẻo lần "Cập nhật trang
     // đã lưu" SAU (cùng phiên, trước khi F5) lại vô tình đè mất bản sửa đó.
     const localPatch = { ...patch };
+    // PR-7a: nháp biểu mẫu AI đã dùng xong khi lưu (backend đã tạo biểu mẫu thật) — xoá khỏi thẻ, đúng như "xoá sau khi lưu thành công".
+    if (Array.isArray(page?.formDrafts) && page.formDrafts.length > 0 && (!existingId || mode === 'update')) {
+      localPatch.formDrafts = [];
+    }
     const htmlDrifted = mode === 'toggle' && current && current.htmlContent !== fullHtml;
     if (htmlDrifted) {
       localPatch.html = current.htmlContent;
@@ -3296,6 +3307,15 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           layoutStatus: 'checking',
           layoutFindings: [],
         };
+        // PR-7a: nháp biểu mẫu AI của thẻ = nháp cũ (đi theo chỗ trống của nó) + nháp của chỗ trống MỚI lượt này. Cờ tắt (server không trả mảng)
+        // thì không đụng tới.
+        const nextFormDrafts = applyAiFormDrafts({
+          current: pageData?.formDrafts,
+          incoming: response.data.formDrafts,
+          previousHtml: rawHtml,
+          nextHtml: html,
+        });
+        if (nextFormDrafts) updatedPage.formDrafts = nextFormDrafts;
 
         // Lọc theo mã máy `kind` do backend gắn (ai.controller editLandingHtml), không so chuỗi tiếng Việt.
         const refSkippedCount = Array.isArray(response.data.skippedAttachments)

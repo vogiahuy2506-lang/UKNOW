@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { runLayoutAudit, buildFullLandingHtml, describeFindingsForUser } from '../../ai/utils/layoutAudit.js';
 import { pickSectionTitle } from '../../ai/utils/landingLayoutFlow.js';
+import { applyAiFormDrafts } from '../utils/landingFormDrafts.js';
 import {
   generateLandingHtmlWithAi,
   editLandingHtmlWithAi,
@@ -319,11 +320,25 @@ export default function useCanvasConversation({
           const aiTitle = String(result?.title || result?.data?.title || result?.data?.data?.title || '')
             .trim()
             .slice(0, 200);
-          setForm((p) => ({
-            ...p,
-            htmlContent: suggestedHtml,
-            ...(isGenerate && aiTitle && !String(p.title || '').trim() ? { title: aiTitle } : {}),
-          }));
+          // PR-7a (AI_LANDING_FORM_MODE=form): server soạn nháp biểu mẫu cho chỗ trống có loại MỚI của lượt này (`data.formDrafts`, chỉ số theo
+          // HTML mới). Sinh trang mới thay hẳn nháp cũ; sửa trang thì nháp cũ đi theo chỗ trống của nó rồi hợp với nháp mới. Server cũ / cờ tắt
+          // không trả mảng → không đụng `formDrafts` (bộ bọc setForm của trang tự sắp hàng lại khi HTML đổi).
+          const incomingFormDrafts = result?.data?.formDrafts ?? result?.formDrafts;
+          setForm((p) => {
+            const nextDrafts = applyAiFormDrafts({
+              current: p.formDrafts,
+              incoming: incomingFormDrafts,
+              previousHtml: p.htmlContent,
+              nextHtml: suggestedHtml,
+              replaceAll: isGenerate,
+            });
+            return {
+              ...p,
+              htmlContent: suggestedHtml,
+              ...(isGenerate && aiTitle && !String(p.title || '').trim() ? { title: aiTitle } : {}),
+              ...(nextDrafts ? { formDrafts: nextDrafts } : {}),
+            };
+          });
           toast.success(tc('aiAppliedDirect'));
           setMessages((prev) =>
             prev.map((m) =>

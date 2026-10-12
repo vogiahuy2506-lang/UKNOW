@@ -348,6 +348,80 @@ describe('useCanvasConversation — điền tên trang từ AI (PLAN_LANDING_GIU
 });
 
 /**
+ * PR-7a (AI_LANDING_FORM_MODE=form): server soạn nháp biểu mẫu cho chỗ trống có loại MỚI của lượt AI và trả `data.formDrafts` (chỉ số theo HTML
+ * mới). Hook giữ chúng trong `form.formDrafts`: sinh trang mới thay hẳn nháp cũ, sửa trang thì nháp cũ đi theo chỗ trống của nó rồi hợp với
+ * nháp mới. Server cũ / cờ tắt không trả mảng → không đụng nháp đang có (bộ bọc setForm của trang tự sắp hàng lại).
+ */
+describe('useCanvasConversation — nháp biểu mẫu AI theo chỗ trống (PR-7a)', () => {
+  const slot = (kind) => `<div data-founderai-form-slot="${kind}"></div>`;
+  const page = (...kinds) => `<body>${kinds.map(slot).join('')}</body>`;
+  const draft = (slotIndex, kind, title) => ({ slotIndex, kind, title, fields: [{ label: 'Họ tên', type: 'short_text' }], needsAttention: [] });
+
+  const run = async ({ form, hasExistingHtml, response }) => {
+    if (hasExistingHtml) editLandingHtmlWithAi.mockResolvedValueOnce(response);
+    else generateLandingHtmlWithAi.mockResolvedValueOnce(response);
+    let formState = { ...form };
+    const setForm = vi.fn((updater) => {
+      formState = typeof updater === 'function' ? updater(formState) : updater;
+    });
+    const { result } = renderHook(() =>
+      useCanvasConversation({ form: formState, setForm, hasExistingHtml, openTab: vi.fn(), editingId: null })
+    );
+    await act(async () => {
+      await result.current.handleSend({ prompt: 'thêm form đặt lịch khám cho phòng khám nha khoa của tôi' });
+    });
+    return formState;
+  };
+
+  it('sinh trang mới: formDrafts của lượt thay hẳn nháp cũ', async () => {
+    const state = await run({
+      form: { title: '', htmlContent: '', formDrafts: [draft(0, 'survey', 'Nháp cũ')] },
+      hasExistingHtml: false,
+      response: { success: true, data: { html: page('booking', 'payment'), title: 'T', formDrafts: [draft(0, 'booking', 'Đặt lịch khám răng'), draft(1, 'payment', 'Giữ chỗ')] } },
+    });
+    expect(state.formDrafts.map((d) => [d.slotIndex, d.kind, d.title])).toEqual([[0, 'booking', 'Đặt lịch khám răng'], [1, 'payment', 'Giữ chỗ']]);
+  });
+
+  it('sinh trang mới mà server không trả nháp (cờ tắt / chỉ consult) → nháp cũ bị xoá', async () => {
+    const state = await run({
+      form: { title: '', htmlContent: '', formDrafts: [draft(0, 'booking', 'Nháp cũ')] },
+      hasExistingHtml: false,
+      response: { success: true, data: { html: '<div>Trang</div>', title: 'T' } },
+    });
+    expect(state.formDrafts).toEqual([]);
+  });
+
+  it('sửa trang: AI chèn chỗ trống survey TRƯỚC chỗ booking → nháp booking cũ dịch chỉ số 0→1, nháp survey mới ở 0', async () => {
+    const state = await run({
+      form: { title: 'T', htmlContent: page('booking'), formDrafts: [draft(0, 'booking', 'Đặt lịch cũ')] },
+      hasExistingHtml: true,
+      response: { success: true, data: { html: page('survey', 'booking'), formDrafts: [draft(0, 'survey', 'Khảo sát mới')] } },
+    });
+    expect(state.htmlContent).toBe(page('survey', 'booking'));
+    expect(state.formDrafts.map((d) => [d.slotIndex, d.kind, d.title])).toEqual([[0, 'survey', 'Khảo sát mới'], [1, 'booking', 'Đặt lịch cũ']]);
+  });
+
+  it('sửa trang mà server trả formDrafts rỗng (đổi màu nút) → nháp cũ giữ nguyên', async () => {
+    const state = await run({
+      form: { title: 'T', htmlContent: page('booking'), formDrafts: [draft(0, 'booking', 'Đặt lịch cũ')] },
+      hasExistingHtml: true,
+      response: { success: true, data: { html: page('booking'), formDrafts: [] } },
+    });
+    expect(state.formDrafts.map((d) => d.title)).toEqual(['Đặt lịch cũ']);
+  });
+
+  it('sửa trang mà server KHÔNG trả formDrafts (cờ tắt / server cũ) → hook không đụng khoá formDrafts', async () => {
+    const original = [draft(0, 'booking', 'Đặt lịch cũ')];
+    const state = await run({
+      form: { title: 'T', htmlContent: page('booking'), formDrafts: original },
+      hasExistingHtml: true,
+      response: { success: true, data: { html: page('booking') } },
+    });
+    expect(state.formDrafts).toBe(original);
+  });
+});
+
+/**
  * PR-9 (B-4): server báo tiến độ trên luồng sinh / sửa ('generating' | 'fixing') → hook ghi `stage` vào tin AI đang chờ
  * để ChatMessage hiện chữ thay cho "Thinking…"; xong thì tin chuyển sang trạng thái thường.
  */

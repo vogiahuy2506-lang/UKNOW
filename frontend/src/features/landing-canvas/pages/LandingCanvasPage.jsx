@@ -13,6 +13,7 @@ import {
 } from '../../landing-pages/utils/landingLeadFormConfig.js';
 import { restoreOriginalHttpAnchors } from '../../landing-pages/utils/injectLandingEnhancements.js';
 import { pickLinkedFormFields } from '../utils/landingFormLink.js';
+import { realignDraftsOnFormChange } from '../utils/landingFormDrafts.js';
 import { useI18n } from '../../../i18n';
 import { useAuthStore } from '../../../stores/authStore';
 import {
@@ -55,6 +56,8 @@ function buildServerForm(full) {
     ...pickLinkedFormFields(full),
     // Biểu mẫu CÓ SẴN vừa chọn từ mục Biểu mẫu, chờ bấm Lưu (landingFormLink.js); [] = không có.
     linkedFormsPending: [],
+    // Nháp biểu mẫu AI theo chỗ trống (PR-7a, landingFormDrafts.js): trang đã lưu thì không còn nháp nào.
+    formDrafts: [],
   };
 }
 
@@ -132,6 +135,8 @@ export default function LandingCanvasPage() {
       leadFormFieldErrors: {},
       linkedForms: [],
       linkedFormsPending: [],
+      // PR-7a: trợ lý AI chuyển sang kèm nháp biểu mẫu theo chỗ trống (nếu có).
+      formDrafts: Array.isArray(draft?.formDrafts) ? draft.formDrafts : [],
     };
   }, []);
 
@@ -146,6 +151,8 @@ export default function LandingCanvasPage() {
         : base.leadFormConfig,
       // Nháp cũ (trước PR-6) không có khoá này → pickDraftForm trả null: coi là "không có gì chờ gắn".
       linkedFormsPending: Array.isArray(picked.linkedFormsPending) ? picked.linkedFormsPending : [],
+      // Nháp cũ (trước PR-7a) không có khoá này → coi là không có nháp biểu mẫu nào.
+      formDrafts: Array.isArray(picked.formDrafts) ? picked.formDrafts : [],
     };
   }, []);
 
@@ -291,6 +298,15 @@ export default function LandingCanvasPage() {
     [editingId, navigate]
   );
 
+  // PR-7a: HTML đổi (AI thêm chỗ trống, bỏ / đổi chỗ một biểu mẫu trong danh sách, hoàn tác, gõ tay…) làm lệch chỉ số chỗ trống nên nháp biểu mẫu AI
+  // phải đi theo chỗ trống của nó — làm ở MỘT chỗ này thay vì ở từng nơi gọi setForm. Nơi gọi tự đặt `formDrafts` (lượt AI) thì giữ nguyên.
+  const setFormRealigned = useCallback((updater) => {
+    setForm((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      return realignDraftsOnFormChange(prev, next);
+    });
+  }, []);
+
   if (error) {
     return (
       <CanvasState
@@ -311,7 +327,7 @@ export default function LandingCanvasPage() {
       key={`${isNew ? 'new' : editingId}:${session.nonce}`}
       editingId={editingId}
       form={form}
-      setForm={setForm}
+      setForm={setFormRealigned}
       onClose={handleClose}
       scope={scope}
       baseline={session.baseline}

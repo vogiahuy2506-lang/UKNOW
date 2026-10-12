@@ -53,8 +53,13 @@ export default function LandingFormsList({ form, setForm, t, editingId = null })
   const canLink = Boolean(editingId);
 
   const rows = useMemo(
-    () => buildFormRows({ html: form?.htmlContent, linkedForms: form?.linkedForms, pending: form?.linkedFormsPending }),
-    [form?.htmlContent, form?.linkedForms, form?.linkedFormsPending]
+    () => buildFormRows({
+      html: form?.htmlContent,
+      linkedForms: form?.linkedForms,
+      pending: form?.linkedFormsPending,
+      formDrafts: form?.formDrafts,
+    }),
+    [form?.htmlContent, form?.linkedForms, form?.linkedFormsPending, form?.formDrafts]
   );
   const blockCount = rows.filter((r) => r.blockIndex != null).length;
   const limitReached = rows.length >= MAX_FORMS_PER_LANDING;
@@ -91,9 +96,9 @@ export default function LandingFormsList({ form, setForm, t, editingId = null })
 
   const rowTitle = (row) => {
     if (row.source === 'new') {
-      return row.valid
-        ? tf('leadFormConfig.formNewTitle', { kind: kindLabel(row.kind) })
-        : tf('leadFormConfig.formInvalidKindTitle', { kind: row.rawKind });
+      // PR-7a: chỗ trống đã có nháp do AI soạn thì hiện TÊN NHÁP ("Biểu mẫu mới: Đặt lịch khám răng") thay cho tên loại chung.
+      if (!row.valid) return tf('leadFormConfig.formInvalidKindTitle', { kind: row.rawKind });
+      return tf('leadFormConfig.formNewTitle', { kind: row.title || kindLabel(row.kind) });
     }
     if (row.source === 'external') return t('leadFormConfig.formExternalTitle');
     return row.title || tf('leadFormConfig.linkedFallbackTitle', { id: row.formId });
@@ -213,6 +218,14 @@ export default function LandingFormsList({ form, setForm, t, editingId = null })
                             {t('leadFormConfig.formBadgeNew')}
                           </span>
                         ) : null}
+                        {row.draft ? (
+                          <span
+                            data-testid="form-ai-draft-badge"
+                            className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-950/40 text-violet-800 dark:text-violet-300"
+                          >
+                            {t('leadFormConfig.formBadgeAiDraft')}
+                          </span>
+                        ) : null}
                         {row.source === 'pending' ? (
                           <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-950/40 text-orange-800 dark:text-orange-300">
                             {t('leadFormConfig.formBadgePending')}
@@ -292,6 +305,22 @@ export default function LandingFormsList({ form, setForm, t, editingId = null })
                       </a>
                     </span>
                   </p>
+                ) : null}
+                {row.draft && Array.isArray(row.draft.needsAttention) && row.draft.needsAttention.length > 0 ? (
+                  <div data-testid="ai-draft-attention" className="mt-2 space-y-1">
+                    {row.draft.needsAttention.includes('booking') ? (
+                      <p className="flex items-start gap-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-3 py-2 text-[12px] text-amber-800 dark:text-amber-300">
+                        <HiOutlineExclamation className="h-4 w-4 shrink-0 mt-px" />
+                        <span>{t('leadFormConfig.formAiDraftBooking')}</span>
+                      </p>
+                    ) : null}
+                    {row.draft.needsAttention.includes('payment') ? (
+                      <p className="flex items-start gap-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-3 py-2 text-[12px] text-amber-800 dark:text-amber-300">
+                        <HiOutlineExclamation className="h-4 w-4 shrink-0 mt-px" />
+                        <span>{t('leadFormConfig.formAiDraftPayment')}</span>
+                      </p>
+                    ) : null}
+                  </div>
                 ) : null}
                 {row.source === 'new' && !row.valid ? (
                   <p
