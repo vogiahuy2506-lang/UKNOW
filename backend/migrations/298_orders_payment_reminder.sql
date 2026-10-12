@@ -14,19 +14,19 @@
 -- LUU Y phoi hop: ban sua CHECK ben duoi la tap hop day du ca 5 khoa. Migration nao SAU 298 ma sua lai CHECK nay thi phai giu du ca
 -- 'order_payment_reminder', neu khong super admin se khong luu duoc mau thu nay.
 
-ALTER TABLE orders
-  ADD COLUMN IF NOT EXISTS payment_reminder_sent_at TIMESTAMPTZ;
-
-CREATE INDEX IF NOT EXISTS idx_orders_payment_reminder_scan
-  ON orders (created_at)
-  WHERE payment_reminder_sent_at IS NULL AND status = 'cancelled';
-
 -- allow-destructive-ddl: metadata-only SUPERSET CHECK (DROP+ADD trong cung transaction, khong table rewrite, khong data scan;
 -- gia tri moi bao trum gia tri cu nen moi row hien co van hop le).
 ALTER TABLE system_email_templates
   DROP CONSTRAINT IF EXISTS system_email_templates_key_check,
   ADD CONSTRAINT system_email_templates_key_check
     CHECK (template_key IN ('welcome', 'plan_expiring', 'plan_expired', 'employee_invitation', 'order_payment_reminder'));
+
+ALTER TABLE orders
+  ADD COLUMN IF NOT EXISTS payment_reminder_sent_at TIMESTAMPTZ;
+
+CREATE INDEX IF NOT EXISTS idx_orders_payment_reminder_scan
+  ON orders (created_at)
+  WHERE payment_reminder_sent_at IS NULL AND status = 'cancelled';
 
 INSERT INTO notification_event_settings (event_type, in_app_enabled, email_enabled, user_can_disable_email)
 VALUES

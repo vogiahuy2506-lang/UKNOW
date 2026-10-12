@@ -14,6 +14,7 @@ jest.unstable_mockModule('../../repositories/admin/systemEmailTemplate.repositor
   deleteSystemEmailTemplate: jest.fn(),
 }));
 const { SYSTEM_EMAIL_TEMPLATE_KEYS } = await import('../../services/email/welcomeEmailTemplate.service.js');
+const { lintMigrationSqlContent } = await import('../migrationSafety.util.js');
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const backendDir = path.resolve(here, '../../..');
@@ -60,6 +61,16 @@ describe('migration 298', () => {
     expect(sql.match(/\bDROP\b/gi)).toEqual(['DROP']);
     expect(sql).toMatch(/DROP CONSTRAINT IF EXISTS system_email_templates_key_check/);
     expect(sql).not.toMatch(/\bRENAME\b|SET NOT NULL|CONCURRENTLY|\bBEGIN\b|\bCOMMIT\b/i);
+  });
+
+  // Bo kiem "Migration Safety" (scripts/checkMigrationSafety.js, chay o CI) CHI cong nhan annotation allow-destructive-ddl dung truoc cau lenh dau tien
+  // cua file va chi mien dung cau DDL ngay sau no; annotation dat giua file (sau mot cau lenh khac) khong co hieu luc. Chay thang bo lint that o day
+  // de loi dat sai cho bi unit bat truoc khi toi CI.
+  it('qua bo kiem an toan migration THAT: annotation dung truoc cau lenh DDL dau tien va chi mien DROP CONSTRAINT do', () => {
+    const result = lintMigrationSqlContent(migration, '298_orders_payment_reminder.sql');
+    expect(result.violations).toEqual([]);
+    expect(result.ok).toBe(true);
+    expect(result.hasAnnotation).toBe(true);
   });
 
   it('inventory: orders co cot moi (sap xep), _meta khop tong that va ghi chu migration 298', () => {
