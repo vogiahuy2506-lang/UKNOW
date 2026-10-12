@@ -14,7 +14,6 @@ import {
   StorageQuotaExceededError,
 } from './storage/storageQuota.service.js';
 import { markDeletedAfterUnlink } from './storage/storageObject.service.js';
-import { notifyUsers } from './notification/notificationDispatch.service.js';
 import {
   FORM_FILE_HEAD_BYTES,
   FORM_FILE_KINDS,
@@ -96,6 +95,9 @@ function buildTempObjectKey({ ownerId, formId, uploadId, ext }) {
  */
 export async function notifyOwnerFileQuotaExceeded(form, now = new Date()) {
   try {
+    // Nạp muộn: form.service.js import module này, mà dispatcher kéo theo systemEmail + 3 repository thông báo — không cần trên đường nộp
+    // bài bình thường (chỉ khi chủ hết dung lượng), và nạp tĩnh sẽ buộc mọi spec mock systemEmail.util phải khai thêm export.
+    const { notifyUsers } = await import('./notification/notificationDispatch.service.js');
     const hourKey = new Date(now.getTime() + 7 * 60 * 60 * 1000).toISOString().slice(0, 13).replace(/\D/g, '');
     const title = String(form.title || '').slice(0, 120);
     await notifyUsers({
