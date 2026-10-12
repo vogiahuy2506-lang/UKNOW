@@ -209,7 +209,8 @@ describe('notificationDispatch', () => {
       mockListSettings.mockResolvedValue([]);
 
       // Ngoại lệ (quyết định 10/10): nhắc gia hạn plan_expiring / plan_expired mặc định BẬT email — test riêng bên dưới.
-      const bellOnly = NOTIFICATION_EVENT_KEYS.filter((key) => !['support_ticket_created', 'support_ticket_user_replied', 'plan_expiring', 'plan_expired'].includes(key));
+      // Ngoại lệ 12/10: order_payment_reminder (nhắc thanh toán lại đơn bỏ dở) cũng mặc định bật email — test riêng bên dưới.
+      const bellOnly = NOTIFICATION_EVENT_KEYS.filter((key) => !['support_ticket_created', 'support_ticket_user_replied', 'plan_expiring', 'plan_expired', 'order_payment_reminder'].includes(key));
       for (const eventType of bellOnly) {
         const result = await notifyUsers(base({ eventType }));
         expect(result.emailSent).toBe(0);
@@ -230,6 +231,20 @@ describe('notificationDispatch', () => {
         expect(mockSendSystemEmail).toHaveBeenCalledTimes(2);
         expect(await getEffectiveEventSettings(eventType)).toEqual({ inAppEnabled: true, emailEnabled: true, userCanDisableEmail: false });
       }
+    });
+
+    it('CHƯA có dòng cấu hình nào: order_payment_reminder mặc định BẬT email (chuông + email) nhưng người dùng TẮT được — người đã tắt chỉ nhận chuông', async () => {
+      mockListSettings.mockResolvedValue([]);
+      mockListEmailDisabledUserIds.mockResolvedValue(new Set([2]));
+
+      const result = await notifyUsers(base({ eventType: 'order_payment_reminder' }));
+
+      expect(result.inApp).toBe(2);
+      expect(result.emailSent).toBe(1);
+      expect(result.emailSkipped).toBe(1);
+      expect(mockSendSystemEmail).toHaveBeenCalledTimes(1);
+      expect(mockSendSystemEmail.mock.calls[0][0].to).toBe('u1@shop.vn');
+      expect(await getEffectiveEventSettings('order_payment_reminder')).toEqual({ inAppEnabled: true, emailEnabled: true, userCanDisableEmail: true });
     });
 
     it('email_enabled hệ thống tắt (campaign_run_completed) → không tra liên hệ, không gửi', async () => {

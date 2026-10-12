@@ -1325,6 +1325,28 @@ export const initScheduler = () => {
 
   console.log('[Scheduler] Đã khởi tạo PayOS order reconcile: mỗi 10 phút (phút 5/15/25/…)');
 
+  // ── Nhắc thanh toán lại đơn gói bỏ dở — mỗi 15 phút (PLAN_NHAC_THANH_TOAN_LAI_SAU_2_GIO_2026-10-12) ──
+  // Đơn cancelled vì PayOS hết hạn / khách huỷ, tuổi 2..72 giờ, chưa nhắc → 1 thư + 1 chuông kèm link /checkout?order=…
+  cron.schedule('*/15 * * * *', async () => {
+    try {
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      await cronJobRunRepository.recordRun('abandoned_checkout_reminder', async () => {
+        const { sendAbandonedCheckoutReminders } = await import('../services/payment/abandonedCheckoutReminder.service.js');
+        const result = await sendAbandonedCheckoutReminders();
+        if (result.sent > 0 || result.failed > 0) {
+          console.log(
+            `[Scheduler] Nhắc thanh toán lại: quét ${result.scanned}, gửi ${result.sent}, bỏ qua ${result.skipped}, lỗi ${result.failed}`
+          );
+        }
+        return result;
+      });
+    } catch (error) {
+      console.error('[Scheduler] Lỗi khi nhắc thanh toán lại đơn bỏ dở:', error.message);
+    }
+  }, { timezone: HANOI_TIME_ZONE });
+
+  console.log('[Scheduler] Đã khởi tạo Abandoned Checkout Reminder: nhắc thanh toán lại mỗi 15 phút');
+
   // ── PayOS expire stale pending — hourly at minute 25 (after reconcile ticks) ──
   cron.schedule('25 * * * *', async () => {
     try {

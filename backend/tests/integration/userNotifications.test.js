@@ -344,13 +344,13 @@ describe('API /api/notifications', () => {
     expect(ownerRes.body.data.items.map((item) => item.title)).toEqual(['Của chủ']);
   });
 
-  it('preferences: GET 13 mục (audience=user); PUT khoá → 400 và KHÔNG ghi; PUT cho phép → ghi DB, GET phản ánh emailEnabled hiệu lực', async () => {
+  it('preferences: GET 14 mục (audience=user); PUT khoá → 400 và KHÔNG ghi; PUT cho phép → ghi DB, GET phản ánh emailEnabled hiệu lực', async () => {
     await enableEmailFor('campaign_run_failed', 'campaign_approval_required');
     const user = await createUser({ username: 'api_pref' });
 
     const list = await as('get', '/api/notifications/preferences', user);
     expect(list.status).toBe(200);
-    expect(list.body.data).toHaveLength(13);
+    expect(list.body.data).toHaveLength(14);
     const failed = list.body.data.find((item) => item.eventType === 'campaign_run_failed');
     expect(failed).toMatchObject({ emailEnabled: true, userCanDisableEmail: true, inAppEnabled: true, systemEmailEnabled: true });
 
@@ -370,7 +370,7 @@ describe('API /api/notifications', () => {
 });
 
 describe('API /api/admin/notification-events', () => {
-  it('user thường → 403; admin GET đủ 15 mục; PUT ghi DB + có hiệu lực NGAY với dispatcher (xoá cache)', async () => {
+  it('user thường → 403; admin GET đủ 16 mục; PUT ghi DB + có hiệu lực NGAY với dispatcher (xoá cache)', async () => {
     const admin = await createUser({ username: 'ev_admin', role: 'admin' });
     const user = await createUser({ username: 'ev_user' });
 
@@ -378,7 +378,7 @@ describe('API /api/admin/notification-events', () => {
 
     const list = await as('get', '/api/admin/notification-events', admin);
     expect(list.status).toBe(200);
-    expect(list.body.data).toHaveLength(15);
+    expect(list.body.data).toHaveLength(16);
 
     // campaign_run_completed mặc định tắt email → bật qua API → dispatcher gửi email ngay (cache đã bị xoá).
     const before = await notifyUsers({ eventType: 'campaign_run_completed', userIds: [user.id], title: 'T', message: 'M' });

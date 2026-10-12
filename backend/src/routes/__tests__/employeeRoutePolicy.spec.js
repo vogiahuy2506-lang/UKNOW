@@ -158,6 +158,7 @@ jest.unstable_mockModule('../../controllers/payment.controller.js', () => {
     getInvoiceForOrder: controller.getInvoiceForOrder,
     downloadInvoicePdf: controller.downloadInvoicePdf,
     resolvePlanChangePreview: controller.resolvePlanChangePreview,
+    getReorderInfo: controller.getReorderInfo,
   };
 });
 
@@ -656,6 +657,7 @@ describe('Employee Route Policy & RBAC Enforcement Matrix', () => {
       const activateFree = await request(app).post('/api/payments/activate-free');
       const invoice = await request(app).get('/api/payments/invoice/ORDER123');
       const invoicePdf = await request(app).get('/api/payments/invoice/ORDER123/pdf');
+      const reorder = await request(app).get('/api/payments/orders/123456/reorder');
 
       expect(scheduledChange.status).toBe(403);
       expect(scheduledChange.body.code).toBe('OWNER_ONLY');
@@ -669,6 +671,8 @@ describe('Employee Route Policy & RBAC Enforcement Matrix', () => {
       expect(invoice.body.code).toBe('OWNER_ONLY');
       expect(invoicePdf.status).toBe(403);
       expect(invoicePdf.body.code).toBe('OWNER_ONLY');
+      expect(reorder.status).toBe(403);
+      expect(reorder.body.code).toBe('OWNER_ONLY');
     });
 
     it('allows owner in self context for payment operations', async () => {
@@ -680,6 +684,7 @@ describe('Employee Route Policy & RBAC Enforcement Matrix', () => {
       const activateFree = await request(app).post('/api/payments/activate-free');
       const invoice = await request(app).get('/api/payments/invoice/ORDER123');
       const invoicePdf = await request(app).get('/api/payments/invoice/ORDER123/pdf');
+      const reorder = await request(app).get('/api/payments/orders/123456/reorder');
 
       expect(scheduledChange.status).toBe(200);
       expect(createPayment.status).toBe(200);
@@ -687,6 +692,7 @@ describe('Employee Route Policy & RBAC Enforcement Matrix', () => {
       expect(activateFree.status).toBe(200);
       expect(invoice.status).toBe(200);
       expect(invoicePdf.status).toBe(200);
+      expect(reorder.status).toBe(200);
     });
   });
 

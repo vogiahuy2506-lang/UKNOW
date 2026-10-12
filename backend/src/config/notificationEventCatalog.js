@@ -150,6 +150,17 @@ export const NOTIFICATION_EVENTS = Object.freeze([
     defaults: { inApp: true, email: false },
     userCanDisableEmail: true,
   },
+  {
+    // Quyết định 12/10: kéo khách ngoài app quay lại thanh toán nên MẶC ĐỊNH BẬT EMAIL (ngoại lệ "chỉ chuông" như plan_expiring), nhưng khác
+    // plan_expiring ở chỗ khách TỰ TẮT được email — đây là thư chào hàng lại, không phải thông báo bắt buộc về gói đang dùng.
+    key: 'order_payment_reminder',
+    label: 'Nhắc thanh toán lại đơn gói chưa hoàn tất',
+    labelEn: 'Reminder to complete an unpaid plan order',
+    description: 'Nhắc một lần, khoảng 2 giờ sau khi bạn chọn gói nhưng chưa thanh toán xong (link thanh toán hết hạn hoặc bạn đã huỷ), kèm đường dẫn để thanh toán lại.',
+    audience: 'user',
+    defaults: { inApp: true, email: true },
+    userCanDisableEmail: true,
+  },
 ]);
 
 export const NOTIFICATION_EVENT_KEYS = Object.freeze(NOTIFICATION_EVENTS.map((event) => event.key));

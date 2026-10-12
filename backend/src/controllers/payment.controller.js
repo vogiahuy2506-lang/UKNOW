@@ -9,6 +9,7 @@ import { findPlanByCode, findPlanById, getPlanByUserId } from '../repositories/p
 import { findUserById, findActiveUserByEmail, findActiveBillingPeriod } from '../repositories/user/user.repository.js';
 import { scheduledPlanChangeRepository } from '../repositories/payment/scheduledPlanChange.repository.js';
 import { resolvePlanChange } from '../utils/planChange.util.js';
+import { getReorderInfoForOwner } from '../services/payment/abandonedCheckoutReminder.service.js';
 
 export const createPayment = async (req, res) => {
     try {
@@ -174,6 +175,29 @@ export const getInvoiceForOrder = async (req, res) => {
         }
         return res.json({ success: true, result });
     } catch (err) {
+        console.error(err);
+        return res.status(500).json({ success: false, message: 'Lỗi server' });
+    }
+};
+
+/**
+ * Dữ liệu dựng lại một lần thanh toán từ đơn cũ — đích của link trong thư/chuông nhắc thanh toán lại (`/checkout?order=<mã>`).
+ * Chỉ chủ đơn xem được (người khác nhận 404 như đơn không tồn tại). Lỗi nghiệp vụ: 409 ORDER_ALREADY_PAID, 410 PLAN_UNAVAILABLE,
+ * 422 ORDER_NOT_REORDERABLE — xem getReorderInfoForOwner.
+ */
+export const getReorderInfo = async (req, res) => {
+    try {
+        const { orderCode } = req.params;
+        if (!orderCode || !req.user?.id) {
+            return res.status(404).json({ success: false, message: 'Không tìm thấy đơn hàng', code: 'ORDER_NOT_FOUND' });
+        }
+        const result = await getReorderInfoForOwner(orderCode, req.user.id);
+        res.setHeader('Cache-Control', 'private, no-store');
+        return res.json({ success: true, result });
+    } catch (err) {
+        if (err?.status && err.status < 500) {
+            return res.status(err.status).json({ success: false, message: err.message, code: err.code });
+        }
         console.error(err);
         return res.status(500).json({ success: false, message: 'Lỗi server' });
     }

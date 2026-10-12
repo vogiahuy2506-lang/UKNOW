@@ -207,4 +207,39 @@ describe('Admin system email template API — đa khoá (plan_expiring/plan_expi
       )
     ).rejects.toMatchObject({ code: '23514' }); // check_violation
   });
+
+  // PLAN_NHAC_THANH_TOAN_LAI_SAU_2_GIO (12/10/2026) — khoá order_payment_reminder: whitelist code + CHECK DB (migration 298) cùng nhận khoá mới.
+  it('order_payment_reminder: GET mẫu mặc định + biến, PUT lưu được (CHECK DB cho phép khoá), preview render, biến của khoá khác bị từ chối', async () => {
+    const admin = await createUser({ role: 'admin', username: 'reminder_admin' });
+    const token = await loginAs(admin);
+    const auth = { Authorization: `Bearer ${token}` };
+
+    const got = await request(app).get('/api/admin/system-email-templates/order_payment_reminder').set(auth);
+    expect(got.status).toBe(200);
+    expect(got.body.data.isCustomized).toBe(false);
+    expect(got.body.data.subject).toContain('Hoàn tất thanh toán gói');
+    expect(got.body.data.bodyHtml).toContain('{{pay_url}}');
+    expect(got.body.data.variables).toEqual(
+      ['user_name', 'plan_name', 'billing_period_label', 'amount', 'order_code', 'pay_url', 'sender_name', 'support_email']
+    );
+
+    const template = { subject: 'Đừng bỏ lỡ {{plan_name}}', bodyHtml: '<p>{{user_name}}: <a href="{{pay_url}}">Thanh toán lại</a> ({{amount}})</p>' };
+    const saved = await request(app).put('/api/admin/system-email-templates/order_payment_reminder').set(auth).send(template);
+    expect(saved.status).toBe(200);
+    expect(saved.body.data).toMatchObject({ isCustomized: true, subject: template.subject });
+    const { rows } = await db.query(`SELECT template_key FROM system_email_templates WHERE template_key = 'order_payment_reminder'`);
+    expect(rows).toHaveLength(1);
+
+    const preview = await request(app).post('/api/admin/system-email-templates/order_payment_reminder/preview').set(auth).send(template);
+    expect(preview.status).toBe(200);
+    expect(preview.body.data.subject).toBe('Đừng bỏ lỡ Chuyên nghiệp');
+    expect(preview.body.data.html).toContain('/checkout?order=');
+
+    const bad = await request(app)
+      .put('/api/admin/system-email-templates/order_payment_reminder')
+      .set(auth)
+      .send({ subject: 'Chào', bodyHtml: '<p>{{days_left}}</p>' });
+    expect(bad.status).toBe(400);
+    expect(bad.body.message).toContain('Biến không được hỗ trợ');
+  });
 });

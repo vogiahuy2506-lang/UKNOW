@@ -9,6 +9,7 @@ import {
   getInvoiceForOrder,
   downloadInvoicePdf,
   resolvePlanChangePreview,
+  getReorderInfo,
 } from '../controllers/payment.controller.js';
 import {
   getScheduledPlanChange,
@@ -29,6 +30,8 @@ router.post('/webhook', webhookLimiter, webhook);
 router.post('/einvoice/webhook/:secret', webhookLimiter, einvoiceWebhook);
 router.get('/invoice/:orderCode', authMiddleware, requireSelfContext, getInvoiceForOrder);
 router.get('/invoice/:orderCode/pdf', authMiddleware, requireSelfContext, downloadInvoicePdf);
+// Dữ liệu thanh toán lại từ đơn cũ (đích link trong thư/chuông nhắc) — chỉ chủ đơn, như /invoice.
+router.get('/orders/:orderCode/reorder', authMiddleware, requireSelfContext, getReorderInfo);
 // Status is status-only (no PII). Auth optional so PayOS returnUrl works without SPA token;
 // when authenticated, ownership is still enforced. Rate-limited against probing — bucket riêng
 // paymentStatusLimiter (PR-7), không dùng chung publicLeadLimiter: CheckoutPage hỏi mỗi 3 giây

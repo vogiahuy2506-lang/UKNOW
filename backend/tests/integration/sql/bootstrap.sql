@@ -4212,6 +4212,20 @@ VALUES
   ('ai_unavailable',           true, false, true)
 ON CONFLICT (event_type) DO NOTHING;
 
+-- --- Migration 298: orders.payment_reminder_sent_at + khoa mau thu order_payment_reminder + su kien thong bao (PLAN_NHAC_THANH_TOAN_LAI_SAU_2_GIO PR-A) ---
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_reminder_sent_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_orders_payment_reminder_scan
+  ON orders (created_at)
+  WHERE payment_reminder_sent_at IS NULL AND status = 'cancelled';
+ALTER TABLE system_email_templates
+  DROP CONSTRAINT IF EXISTS system_email_templates_key_check,
+  ADD CONSTRAINT system_email_templates_key_check
+    CHECK (template_key IN ('welcome', 'plan_expiring', 'plan_expired', 'employee_invitation', 'order_payment_reminder'));
+INSERT INTO notification_event_settings (event_type, in_app_enabled, email_enabled, user_can_disable_email)
+VALUES
+  ('order_payment_reminder', true, true, true)
+ON CONFLICT (event_type) DO NOTHING;
+
 -- --- Migration 295: email_suppressions (PLAN_RA_SOAT_DOT3 PR-Q1: huy dang ky / hard bounce chan moi nguon nguoi nhan) ---
 CREATE TABLE IF NOT EXISTS email_suppressions (
   id                  BIGSERIAL    PRIMARY KEY,

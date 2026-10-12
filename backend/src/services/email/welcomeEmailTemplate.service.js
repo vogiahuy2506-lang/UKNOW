@@ -4,10 +4,12 @@ import {
   buildRenewalReminderEmail,
   buildPlanExpiredEmail,
   buildEmployeeInvitationEmail,
+  buildOrderPaymentReminderEmail,
   getDefaultWelcomeEmailTemplate,
   getDefaultPlanExpiringEmailTemplate,
   getDefaultPlanExpiredEmailTemplate,
   getDefaultEmployeeInvitationTemplate,
+  getDefaultOrderPaymentReminderEmailTemplate,
   sendSystemEmail,
 } from '../../utils/systemEmail.util.js';
 import {
@@ -42,6 +44,10 @@ const EMPLOYEE_INVITATION_VARIABLES = Object.freeze([
   'owner_name', 'user_email', 'activation_url', 'expiry_hours',
   'sender_name', 'support_email',
 ]);
+const ORDER_PAYMENT_REMINDER_VARIABLES = Object.freeze([
+  'user_name', 'plan_name', 'billing_period_label', 'amount', 'order_code', 'pay_url',
+  'sender_name', 'support_email',
+]);
 
 /**
  * Nguồn sự thật duy nhất cho khoá mẫu thư hợp lệ + danh sách biến mỗi khoá.
@@ -54,6 +60,7 @@ export const SYSTEM_EMAIL_TEMPLATE_VARIABLES = Object.freeze({
   plan_expiring: PLAN_EXPIRING_EMAIL_VARIABLES,
   plan_expired: PLAN_EXPIRED_EMAIL_VARIABLES,
   employee_invitation: EMPLOYEE_INVITATION_VARIABLES,
+  order_payment_reminder: ORDER_PAYMENT_REMINDER_VARIABLES,
 });
 
 export const SYSTEM_EMAIL_TEMPLATE_KEYS = Object.freeze(Object.keys(SYSTEM_EMAIL_TEMPLATE_VARIABLES));
@@ -63,6 +70,7 @@ const DEFAULT_TEMPLATE_GETTERS = Object.freeze({
   plan_expiring: getDefaultPlanExpiringEmailTemplate,
   plan_expired: getDefaultPlanExpiredEmailTemplate,
   employee_invitation: getDefaultEmployeeInvitationTemplate,
+  order_payment_reminder: getDefaultOrderPaymentReminderEmailTemplate,
 });
 
 const MAX_SUBJECT_LENGTH = 200;
@@ -200,6 +208,14 @@ const PREVIEW_SAMPLE_DATA = Object.freeze({
     activationUrl: 'https://founderai.biz/register?email=nhanvien.moi%40example.com&invite=sample_invitation_token',
     expiryHours: 48,
   }),
+  order_payment_reminder: () => ({
+    fullName: 'Nguyễn Minh Anh',
+    planName: 'Chuyên nghiệp',
+    billingPeriodLabel: 'thanh toán theo tháng',
+    amount: 1299000,
+    orderCode: '1234567890123456',
+    payUrl: 'https://founderai.biz/checkout?order=1234567890123456',
+  }),
 });
 
 const PREVIEW_BUILDERS = Object.freeze({
@@ -207,6 +223,7 @@ const PREVIEW_BUILDERS = Object.freeze({
   plan_expiring: (template, sample) => buildRenewalReminderEmail({ ...sample, template }),
   plan_expired: (template, sample) => buildPlanExpiredEmail({ ...sample, template }),
   employee_invitation: (template, sample) => buildEmployeeInvitationEmail({ ...sample, template }),
+  order_payment_reminder: (template, sample) => buildOrderPaymentReminderEmail({ ...sample, template }),
 });
 
 export function previewSystemEmailTemplate(templateKey, input) {

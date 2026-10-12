@@ -14,6 +14,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MIGRATION_289 = path.resolve(__dirname, '../../../migrations/289_notification_preferences_and_event_settings.sql');
 const MIGRATION_293 = path.resolve(__dirname, '../../../migrations/293_notification_default_in_app_only.sql');
 const MIGRATION_294 = path.resolve(__dirname, '../../../migrations/294_notification_events_legacy_emails.sql');
+const MIGRATION_298 = path.resolve(__dirname, '../../../migrations/298_orders_payment_reminder.sql');
 const BOOTSTRAP = path.resolve(__dirname, '../../../tests/integration/sql/bootstrap.sql');
 
 /**
@@ -39,12 +40,16 @@ const EXPECTED = {
   plan_expiring: ['user', true, true, false],
   plan_expired: ['user', true, true, false],
   ai_unavailable: ['user', true, false, true],
+  // 12/10/2026 — nhắc thanh toán lại đơn gói bỏ dở (migration 298). Mặc định BẬT email để kéo khách ngoài app quay lại, nhưng khách tự tắt được.
+  order_payment_reminder: ['user', true, true, true],
 };
 
 /** 9 khoá của PR-1 (migration 289 + 293). */
 const KEYS_PR1 = Object.keys(EXPECTED).slice(0, 9);
 /** 6 khoá của PR-6 (migration 294). */
-const KEYS_PR6 = Object.keys(EXPECTED).slice(9);
+const KEYS_PR6 = Object.keys(EXPECTED).slice(9, 15);
+/** Khoá nhắc thanh toán lại (migration 298). */
+const KEYS_PAYMENT_REMINDER = ['order_payment_reminder'];
 
 /** Giá trị email do migration 289 seed (lịch sử, KHÔNG đổi): email bật cho 7/9 sự kiện, 293 mới đưa về false. */
 const SEED_289_EMAIL = {
@@ -60,8 +65,8 @@ const SEED_289_EMAIL = {
 };
 
 describe('notificationEventCatalog', () => {
-  it('đúng 15 khoá của plan (9 của PR-1 + 6 của PR-6), không thừa không thiếu', () => {
-    expect(Object.keys(EXPECTED)).toHaveLength(15);
+  it('đúng 16 khoá của plan (9 của PR-1 + 6 của PR-6 + 1 nhắc thanh toán lại), không thừa không thiếu', () => {
+    expect(Object.keys(EXPECTED)).toHaveLength(16);
     expect([...NOTIFICATION_EVENT_KEYS].sort()).toEqual(Object.keys(EXPECTED).sort());
     expect(new Set(NOTIFICATION_EVENT_KEYS).size).toBe(NOTIFICATION_EVENT_KEYS.length);
   });
@@ -147,10 +152,27 @@ describe('seed của migration 289 + bootstrap.sql (lịch sử) và migration 2
     expect(fs.readFileSync(MIGRATION_294, 'utf8')).toMatch(/ON CONFLICT \(event_type\) DO NOTHING/);
   });
 
-  it('mọi khoá catalog đều có dòng seed trong 289 + 294 (không khoá nào rơi khỏi migration)', () => {
+  it('migration 298 seed đúng khoá nhắc thanh toán lại, khớp catalog (đổi catalog mà quên migration thì đỏ), ON CONFLICT DO NOTHING', () => {
+    const sql298 = fs.readFileSync(MIGRATION_298, 'utf8');
+    const rows = parseSeedRows(sql298);
+    expect(Object.keys(rows)).toEqual(KEYS_PAYMENT_REMINDER);
+    const event = getNotificationEvent('order_payment_reminder');
+    expect(rows.order_payment_reminder).toEqual([event.defaults.inApp, event.defaults.email, event.userCanDisableEmail]);
+    expect(sql298).toMatch(/ON CONFLICT \(event_type\) DO NOTHING/);
+  });
+
+  it('bootstrap.sql có khối Migration 298 với đúng dòng seed của migration', () => {
+    const boot = fs.readFileSync(BOOTSTRAP, 'utf8');
+    expect(boot).toContain('-- --- Migration 298');
+    const block = boot.split('-- --- Migration 298')[1].split('-- --- Migration')[0];
+    expect(parseSeedRows(block)).toEqual(parseSeedRows(fs.readFileSync(MIGRATION_298, 'utf8')));
+  });
+
+  it('mọi khoá catalog đều có dòng seed trong 289 + 294 + 298 (không khoá nào rơi khỏi migration)', () => {
     const seeded = {
       ...parseSeedRows(fs.readFileSync(MIGRATION_289, 'utf8')),
       ...parseSeedRows(fs.readFileSync(MIGRATION_294, 'utf8')),
+      ...parseSeedRows(fs.readFileSync(MIGRATION_298, 'utf8')),
     };
     expect(Object.keys(seeded).sort()).toEqual([...NOTIFICATION_EVENT_KEYS].sort());
   });
@@ -162,11 +184,11 @@ describe('seed của migration 289 + bootstrap.sql (lịch sử) và migration 2
     expect(parseSeedRows(block)).toEqual(parseSeedRows(fs.readFileSync(MIGRATION_294, 'utf8')));
   });
 
-  it('trạng thái hiệu lực sau 289 + 293 + 294: email = false, TRỪ plan_expiring / plan_expired (mặc định bật email)', () => {
+  it('trạng thái hiệu lực sau 289 + 293 + 294 + 298: email = false, TRỪ plan_expiring / plan_expired / order_payment_reminder (mặc định bật email)', () => {
     const sql293 = fs.readFileSync(MIGRATION_293, 'utf8');
     expect(sql293).toMatch(/UPDATE notification_event_settings\s+SET email_enabled = false/);
     const emailOn = NOTIFICATION_EVENTS.filter((event) => event.defaults.email).map((event) => event.key).sort();
-    expect(emailOn).toEqual(['plan_expired', 'plan_expiring']);
+    expect(emailOn).toEqual(['order_payment_reminder', 'plan_expired', 'plan_expiring']);
     // 294: đúng hai khoá đó bật email, bốn khoá còn lại chỉ chuông.
     const rows294 = parseSeedRows(fs.readFileSync(MIGRATION_294, 'utf8'));
     const emailOn294 = Object.entries(rows294).filter(([, [, email]]) => email).map(([key]) => key).sort();

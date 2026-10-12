@@ -1210,6 +1210,120 @@ export function buildEmployeeInvitationEmail({
   };
 }
 
+// ─── Nhắc thanh toán lại đơn gói bỏ dở (PLAN_NHAC_THANH_TOAN_LAI_SAU_2_GIO_2026-10-12) ──────────────────
+
+/**
+ * Đích của nút "Thanh toán lại" trong thư nhắc đơn bỏ dở: trang checkout kèm MÃ ĐƠN CŨ (`?order=`). Trang này đọc đơn cũ để biết gói + kỳ + mã
+ * giảm giá rồi tạo link PayOS MỚI khi khách bấm — KHÔNG đặt link PayOS vào thư (link sống ~20 phút, sau 2 giờ đã chết).
+ *
+ * Dựng URL cùng cách với `buildRenewalUrl()` (FRONTEND_URL, đọc lúc gọi) để thư luôn trỏ tuyệt đối về đúng môi trường.
+ *
+ * @param {string|number} orderCode
+ * @param {string} [baseUrl] gốc URL FE; bỏ trống thì lấy FRONTEND_URL
+ * @returns {string}
+ */
+export function buildCheckoutReorderUrl(orderCode, baseUrl) {
+  const base = String(baseUrl || process.env.FRONTEND_URL || 'http://localhost:5174').replace(/\/+$/, '');
+  return `${base}/checkout?order=${encodeURIComponent(String(orderCode ?? ''))}`;
+}
+
+/**
+ * Mẫu mặc định (có {{...}}) của thư nhắc thanh toán lại — super admin sửa được ở trang mẫu email hệ thống (khoá `order_payment_reminder`).
+ * Biến: user_name, plan_name, billing_period_label, amount, order_code, pay_url, sender_name, support_email
+ * (xem SYSTEM_EMAIL_TEMPLATE_VARIABLES ở welcomeEmailTemplate.service.js).
+ *
+ * @returns {{ subject: string, bodyHtml: string }}
+ */
+export function getDefaultOrderPaymentReminderEmailTemplate() {
+  return {
+    subject: '[{{sender_name}}] Hoàn tất thanh toán gói {{plan_name}}',
+    bodyHtml: `
+    <p style="margin:0 0 6px;font-size:16px;color:#374151;line-height:1.6">
+      Xin chào <strong style="color:#f97316">{{user_name}}</strong>,
+    </p>
+    <p style="margin:0 0 20px;font-size:15px;color:#6b7280;line-height:1.6">
+      Bạn đã chọn gói <strong>{{plan_name}}</strong> ({{billing_period_label}}) nhưng chưa hoàn tất thanh toán.
+      Link thanh toán trước đó đã hết hạn — bấm nút bên dưới để thanh toán lại, link mới có hiệu lực ngay.
+    </p>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;margin-bottom:24px">
+      <tr>
+        <td style="padding:14px 18px">
+          <p style="margin:0 0 4px;font-size:13px;color:#92400e">Đơn <strong>{{order_code}}</strong></p>
+          <p style="margin:0;font-size:20px;font-weight:700;color:#c2410c">{{amount}}</p>
+        </td>
+      </tr>
+    </table>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px">
+      <tr>
+        <td style="text-align:center">
+          <a href="{{pay_url}}"
+             style="display:inline-block;background:linear-gradient(135deg,#f97316,#ea580c);color:#fff;font-size:15px;font-weight:600;
+                    padding:14px 36px;border-radius:10px;text-decoration:none;box-shadow:0 4px 12px rgba(249,115,22,.35)">
+            Thanh toán lại →
+          </a>
+        </td>
+      </tr>
+    </table>
+
+    <p style="margin:0 0 6px;font-size:12px;color:#6b7280">
+      Nếu nút trên không mở được, bạn có thể copy link này vào trình duyệt:
+    </p>
+    <p style="margin:0 0 20px;font-size:11px;color:#9ca3af;word-break:break-all;background:#f9fafb;padding:8px 10px;border-radius:6px;border:1px solid #e5e7eb">
+      {{pay_url}}
+    </p>
+
+    <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;text-align:center">
+      Nếu bạn đã thanh toán hoặc không còn nhu cầu, hãy bỏ qua email này. Cần hỗ trợ, liên hệ
+      <a href="mailto:{{support_email}}" style="color:#f97316;text-decoration:none">{{support_email}}</a>.
+    </p>
+    `,
+  };
+}
+
+/**
+ * Dựng thư nhắc thanh toán lại. `template` là bản super admin đã sửa (loadCustomSystemEmailTemplate('order_payment_reminder')); null thì dùng mẫu
+ * mặc định ở trên. Mọi giá trị chèn vào HTML đều được escape (replaceSystemEmailVariables { html: true }) — tên gói / tên khách do người dùng đặt.
+ *
+ * @param {{ fullName?: string|null, planName?: string|null, billingPeriodLabel?: string|null, amount?: number|string|null, orderCode?: string|number|null, payUrl?: string|null, template?: {subject: string, bodyHtml: string}|null }} input
+ * @returns {{ subject: string, html: string }}
+ */
+export function buildOrderPaymentReminderEmail({
+  fullName,
+  planName,
+  billingPeriodLabel,
+  amount,
+  orderCode,
+  payUrl,
+  template = null,
+}) {
+  const defaultTemplate = getDefaultOrderPaymentReminderEmailTemplate();
+  const selectedTemplate = {
+    subject: template?.subject || defaultTemplate.subject,
+    bodyHtml: template?.bodyHtml || defaultTemplate.bodyHtml,
+  };
+  const amountNumber = Number(amount);
+  const values = {
+    user_name: fullName || 'bạn',
+    plan_name: planName || '',
+    billing_period_label: billingPeriodLabel || '',
+    amount: amount != null && Number.isFinite(amountNumber) ? `${amountNumber.toLocaleString('vi-VN')} đ` : '',
+    order_code: String(orderCode ?? ''),
+    pay_url: payUrl || buildCheckoutReorderUrl(orderCode),
+    sender_name: SENDER_NAME,
+    support_email: 'info@digiso.vn',
+  };
+  return {
+    subject: replaceSystemEmailVariables(selectedTemplate.subject, values).trim(),
+    html: buildBaseTemplate({
+      subtitle: 'Nhắc hoàn tất thanh toán',
+      content: replaceSystemEmailVariables(selectedTemplate.bodyHtml, values, { html: true }),
+      footerNote: 'Đây là email tự động từ hệ thống. Vui lòng không reply.',
+    }),
+  };
+}
+
 /**
  * Báo cho một tài khoản CÓ SẴN vừa bị chủ nhóm khác liên kết làm nhân viên (khác
  * buildEmployeeInvitationEmail: không token kích hoạt, họ đã có tài khoản rồi). Không đi qua cơ chế

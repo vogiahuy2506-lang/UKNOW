@@ -505,3 +505,117 @@ export const activateUserPlan = async (userId, planId, billingPeriod = 'monthly'
     }
     return activation;
 };
+
+// ─── Nhắc thanh toán lại đơn gói bỏ dở (PLAN_NHAC_THANH_TOAN_LAI_SAU_2_GIO_2026-10-12) ───────────────────────────
+
+/**
+ * Đơn "bỏ dở" cần nhắc thanh toán lại: khách tạo đơn GÓI THƯỜNG nhưng không trả tiền — link PayOS hết hạn hoặc khách huỷ ở PayOS.
+ *
+ * Điều kiện (mọi điều kiện đều có ca test ở tests/integration/abandonedCheckoutReminder.test.js):
+ *  - `status = 'cancelled'` VÀ note có `[OPS] PayOS ` — dấu cron đối soát ghi khi PayOS báo EXPIRED/CANCELLED
+ *    (payosReconcile.service.js). Đơn huỷ tay bởi admin, hoặc bị checkout mới thay thế ("[OPS] Replaced by newer checkout attempt") KHÔNG khớp.
+ *    KHÔNG gồm `pending` (khách có thể đang trả tiền) và KHÔNG gồm `failed`: `failed` là webhook/đối soát báo SAI SỐ TIỀN
+ *    (AMOUNT_MISMATCH, payment.service.js / payosReconcile.service.js) — tiền có thể đã vào tài khoản, thư "đơn chưa thanh toán" sẽ sai và nguy hiểm.
+ *  - note không có `PAID_AFTER_CANCELLED` (webhook báo đã trả SAU khi đơn bị huỷ — khách đã trả tiền, đang chờ người xử lý tay).
+ *  - chỉ gói thường (`plan_id` có, `custom_plan_config` và `topup_config` NULL, kênh payos): gói tự chọn / nạp thêm để đợt sau.
+ *  - gói còn bán (`plans.is_active`, không `is_custom`) và tài khoản còn `active`.
+ *  - tuổi đơn trong cửa sổ [olderThanMinutes, newerThanHours]: mặc định 2 giờ .. 72 giờ.
+ *  - chưa nhắc (`payment_reminder_sent_at IS NULL`).
+ *  - chỉ nhắc đơn MỚI NHẤT của khách: bỏ qua nếu sau đơn này khách đã có đơn `success`/`refunded` (đã mua rồi), đơn `pending` (đang trả tiền),
+ *    một đơn đã được nhắc, hoặc một đơn bỏ dở khác cùng loại (đơn mới đó sẽ được nhắc — khách không nhận hai thư cho một lần chần chừ).
+ *
+ * @param {{ olderThanMinutes?: number, newerThanHours?: number, limit?: number, queryable?: object }} [options]
+ * @returns {Promise<Array<{ id: number, order_code: string, user_id: string, plan_id: number, billing_period: string, amount: string, created_at: Date, plan_name: string }>>}
+ */
+export const findAbandonedOrdersForReminder = async ({
+    olderThanMinutes = 120,
+    newerThanHours = 72,
+    limit = 200,
+    queryable = db,
+} = {}) => {
+    const minutes = Math.max(1, Number(olderThanMinutes) || 120);
+    const hours = Math.max(1, Number(newerThanHours) || 72);
+    const max = Math.max(1, Math.min(1000, Number(limit) || 200));
+    const { rows } = await queryable.query(
+        `SELECT o.id, o.order_code, o.user_id, o.plan_id, o.billing_period, o.amount, o.created_at,
+                p.name AS plan_name
+         FROM orders o
+         JOIN plans p ON p.id = o.plan_id AND p.is_active = TRUE AND p.is_custom = FALSE
+         JOIN users u ON u.id = o.user_id AND u.status = 'active'
+         WHERE o.status = 'cancelled'
+           AND COALESCE(o.payment_method, 'payos') = 'payos'
+           AND o.payment_reminder_sent_at IS NULL
+           AND o.user_id IS NOT NULL
+           AND o.custom_plan_config IS NULL
+           AND o.topup_config IS NULL
+           AND o.note LIKE '%[OPS] PayOS %'
+           AND o.note NOT LIKE '%PAID_AFTER_CANCELLED%'
+           AND o.created_at <= NOW() - ($1 || ' minutes')::interval
+           AND o.created_at >  NOW() - ($2 || ' hours')::interval
+           AND NOT EXISTS (
+             SELECT 1
+             FROM orders n
+             WHERE n.user_id = o.user_id
+               AND n.id <> o.id
+               AND n.created_at > o.created_at
+               AND (
+                 n.status IN ('success', 'refunded', 'pending')
+                 OR n.payment_reminder_sent_at IS NOT NULL
+                 OR (
+                   n.status = 'cancelled'
+                   AND n.plan_id IS NOT NULL
+                   AND n.custom_plan_config IS NULL
+                   AND n.topup_config IS NULL
+                   AND n.note LIKE '%[OPS] PayOS %'
+                 )
+               )
+           )
+         ORDER BY o.created_at ASC
+         LIMIT $3`,
+        [String(minutes), String(hours), max]
+    );
+    return rows;
+};
+
+/**
+ * Đánh dấu đã nhắc — chỉ ghi lần đầu (idempotent: gọi lại không đổi mốc).
+ *
+ * @param {number|string} orderId
+ * @returns {Promise<boolean>} true nếu lần này mới ghi
+ */
+export const markPaymentReminderSent = async (orderId, queryable = db) => {
+    const { rowCount } = await queryable.query(
+        `UPDATE orders
+         SET payment_reminder_sent_at = NOW()
+         WHERE id = $1
+           AND payment_reminder_sent_at IS NULL`,
+        [orderId]
+    );
+    return rowCount > 0;
+};
+
+/**
+ * Thông tin để dựng lại một lần thanh toán từ đơn cũ (link trong thư nhắc: `/checkout?order=<order_code>`). CHỈ trả khi đơn thuộc `userId`:
+ * người khác hỏi mã đơn của chủ khác nhận null như đơn không tồn tại (không lộ việc mã có thật).
+ *
+ * `voucher_code` chỉ có nghĩa khi khách TỰ nhập mã (`discount_source` public_code / private_code); khuyến mãi tự động (automatic) do
+ * server áp lại ở lần thanh toán mới nên không trả về — tránh điền mã của một chương trình đã đổi.
+ *
+ * @param {string|number} orderCode
+ * @param {number|string} userId
+ * @returns {Promise<null|{ id: number, order_code: string, status: string, plan_id: number|null, billing_period: string, voucher_code: string|null, is_custom_plan: boolean, is_topup: boolean }>}
+ */
+export const findReorderInfo = async (orderCode, userId, queryable = db) => {
+    if (!/^\d{1,18}$/.test(String(orderCode ?? ''))) return null;
+    const { rows } = await queryable.query(
+        `SELECT id, order_code, status, plan_id, billing_period,
+                CASE WHEN discount_source IN ('public_code', 'private_code') THEN voucher_code ELSE NULL END AS voucher_code,
+                (custom_plan_config IS NOT NULL) AS is_custom_plan,
+                (topup_config IS NOT NULL OR note = 'topup') AS is_topup
+         FROM orders
+         WHERE order_code = $1
+           AND user_id = $2`,
+        [String(orderCode), userId]
+    );
+    return rows[0] || null;
+};

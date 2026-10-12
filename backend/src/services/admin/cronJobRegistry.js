@@ -41,6 +41,14 @@ export const CRON_JOBS = [
     tracked: true,
   },
   {
+    code: 'abandoned_checkout_reminder',
+    label: 'Nhắc thanh toán lại đơn bỏ dở',
+    schedule: 'Mỗi 15 phút',
+    description: 'Gửi một thư và một thông báo chuông cho khách có đơn gói bị huỷ vì link thanh toán hết hạn (tuổi đơn 2–72 giờ, chưa mua gì sau đó), kèm link mở lại trang thanh toán. Mỗi đơn nhắc tối đa một lần.',
+    impact: 'Khách chọn gói mà không trả tiền xong không được nhắc quay lại; mất doanh thu từ đơn bỏ dở.',
+    tracked: true,
+  },
+  {
     code: 'zalo_personal_bg_group_sync',
     label: 'Đồng bộ nhóm Zalo',
     schedule: 'Mỗi 10 phút (phút 5/15/25…)',

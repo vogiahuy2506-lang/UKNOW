@@ -7,6 +7,7 @@ const mockBuildWelcomeEmail = jest.fn();
 const mockBuildRenewalReminderEmail = jest.fn();
 const mockBuildPlanExpiredEmail = jest.fn();
 const mockBuildEmployeeInvitationEmail = jest.fn();
+const mockBuildOrderPaymentReminderEmail = jest.fn();
 const mockSendSystemEmail = jest.fn();
 
 // PR-2b (13/09/2026, PLAN_CANH_BAO_SAP_HET_HAN_GOI mục 4.2) — repository đã tổng quát hoá,
@@ -35,10 +36,15 @@ jest.unstable_mockModule('../../../utils/systemEmail.util.js', () => ({
     subject: 'Mặc định lời mời tham gia',
     bodyHtml: '<p>Lời mời từ {{owner_name}}</p>',
   })),
+  getDefaultOrderPaymentReminderEmailTemplate: jest.fn(() => ({
+    subject: 'Mặc định nhắc thanh toán lại',
+    bodyHtml: '<p>Đơn {{order_code}}</p>',
+  })),
   buildWelcomeEmail: mockBuildWelcomeEmail,
   buildRenewalReminderEmail: mockBuildRenewalReminderEmail,
   buildPlanExpiredEmail: mockBuildPlanExpiredEmail,
   buildEmployeeInvitationEmail: mockBuildEmployeeInvitationEmail,
+  buildOrderPaymentReminderEmail: mockBuildOrderPaymentReminderEmail,
   sendSystemEmail: mockSendSystemEmail,
 }));
 
@@ -173,10 +179,11 @@ describe('welcomeEmailTemplate.service — tổng quát hoá đa khoá (PR-2b vi
     mockBuildRenewalReminderEmail.mockReturnValue({ subject: 'Renewal rendered', html: '<p>Renewal</p>' });
     mockBuildPlanExpiredEmail.mockReturnValue({ subject: 'Expired rendered', html: '<p>Expired</p>' });
     mockBuildEmployeeInvitationEmail.mockReturnValue({ subject: 'Invitation rendered', html: '<p>Invitation</p>' });
+    mockBuildOrderPaymentReminderEmail.mockReturnValue({ subject: 'Reminder rendered', html: '<p>Reminder</p>' });
   });
 
-  it('SYSTEM_EMAIL_TEMPLATE_KEYS đúng 4 khoá — welcome, plan_expiring, plan_expired, employee_invitation', () => {
-    expect(SYSTEM_EMAIL_TEMPLATE_KEYS).toEqual(['welcome', 'plan_expiring', 'plan_expired', 'employee_invitation']);
+  it('SYSTEM_EMAIL_TEMPLATE_KEYS đúng 5 khoá — welcome, plan_expiring, plan_expired, employee_invitation, order_payment_reminder', () => {
+    expect(SYSTEM_EMAIL_TEMPLATE_KEYS).toEqual(['welcome', 'plan_expiring', 'plan_expired', 'employee_invitation', 'order_payment_reminder']);
   });
 
   it('getSystemEmailTemplate("plan_expiring") trả mẫu mặc định riêng khi chưa tùy chỉnh', async () => {
@@ -307,6 +314,47 @@ describe('welcomeEmailTemplate.service — tổng quát hoá đa khoá (PR-2b vi
       subject: 'Lời mời',
       bodyHtml: '<p>{{days_left}}</p>',
     })).toThrow('Biến không được hỗ trợ: days_left');
+  });
+
+  it('previewSystemEmailTemplate("order_payment_reminder") gọi buildOrderPaymentReminderEmail với dữ liệu mẫu', () => {
+    const result = previewSystemEmailTemplate('order_payment_reminder', {
+      subject: 'Hoàn tất gói {{plan_name}}',
+      bodyHtml: '<p>Đơn {{order_code}} — <a href="{{pay_url}}">Thanh toán lại</a></p>',
+    });
+    expect(result).toEqual({ subject: 'Reminder rendered', html: '<p>Reminder</p>' });
+    expect(mockBuildOrderPaymentReminderEmail).toHaveBeenCalledWith(expect.objectContaining({
+      template: {
+        subject: 'Hoàn tất gói {{plan_name}}',
+        bodyHtml: '<p>Đơn {{order_code}} — <a href="{{pay_url}}">Thanh toán lại</a></p>',
+      },
+      fullName: 'Nguyễn Minh Anh',
+      planName: 'Chuyên nghiệp',
+      orderCode: '1234567890123456',
+    }));
+  });
+
+  it('getSystemEmailTemplate("order_payment_reminder") trả mẫu mặc định riêng khi chưa tùy chỉnh', async () => {
+    mockFind.mockResolvedValue(null);
+    await expect(getSystemEmailTemplate('order_payment_reminder')).resolves.toEqual({
+      subject: 'Mặc định nhắc thanh toán lại',
+      bodyHtml: '<p>Đơn {{order_code}}</p>',
+      isCustomized: false,
+      updatedBy: null,
+      updatedAt: null,
+    });
+    expect(mockFind).toHaveBeenCalledWith('order_payment_reminder');
+  });
+
+  it('normalizeSystemEmailTemplate("order_payment_reminder") chấp nhận đủ 8 biến và từ chối biến của khoá khác', () => {
+    expect(() => normalizeSystemEmailTemplate('order_payment_reminder', {
+      subject: '[{{sender_name}}] Hoàn tất gói {{plan_name}}',
+      bodyHtml: '<p>{{user_name}}, kỳ {{billing_period_label}}, số tiền {{amount}}, đơn {{order_code}}, link {{pay_url}}, hỗ trợ {{support_email}}</p>',
+    })).not.toThrow();
+
+    expect(() => normalizeSystemEmailTemplate('order_payment_reminder', {
+      subject: 'Nhắc',
+      bodyHtml: '<p>{{days_left}} {{upgrade_url}}</p>',
+    })).toThrow('Biến không được hỗ trợ');
   });
 
   // Đây là hàm scheduler.js/subscriptionExpiry.service.js sẽ gọi trước khi gửi thư thật —
