@@ -367,6 +367,24 @@ export default function FormSubmissionStatusPage() {
 
         {status === 'pending_payment' && !holdExpired && payment && (
           <div className="space-y-4">
+            {/* Sản phẩm đang thanh toán (API chỉ trả khi biểu mẫu gắn sản phẩm đang bán và chủ chưa tắt thẻ sản phẩm). */}
+            {statusData.product?.name && (
+              <div data-testid="status-product-line" className="flex items-center justify-center gap-2.5 text-sm text-gray-600">
+                {statusData.product.imageUrl && (
+                  <img
+                    src={statusData.product.imageUrl}
+                    alt=""
+                    className="h-9 w-9 shrink-0 rounded-lg object-cover bg-gray-100"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                )}
+                <span className="min-w-0 break-words text-center">
+                  {t('publicForm.payment.payingFor', { name: statusData.product.name })}
+                </span>
+              </div>
+            )}
             <div className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm font-semibold">
               {countdownSeconds !== null && (
                 <span data-testid="hold-countdown">

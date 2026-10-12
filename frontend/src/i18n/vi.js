@@ -12108,7 +12108,10 @@ export default {
       },
       product: {
         title: 'Biểu mẫu này dành cho sản phẩm',
-        help: 'Gắn với một sản phẩm để trang Sản phẩm đếm số đăng ký, số đã trả và doanh thu của sản phẩm đó.',
+        help: 'Gắn với một sản phẩm: biểu mẫu tự hiện thẻ sản phẩm (ảnh, tên, giá, mô tả) cho khách, và trang Sản phẩm đếm số đăng ký, số đã trả, doanh thu của sản phẩm đó.',
+        showCardLabel: 'Hiện thẻ sản phẩm trên biểu mẫu',
+        showCardHint: 'Ảnh, tên, giá và mô tả lấy từ trang Sản phẩm, sửa ở đó biểu mẫu tự cập nhật. Tắt nếu landing page chứa biểu mẫu đã giới thiệu sản phẩm.',
+        defaultSubmitText: 'Đặt mua ngay',
         none: 'Không gắn sản phẩm',
         currentOption: 'Sản phẩm #{id} (đang gắn)',
         priceHint: 'Giá trên trang Sản phẩm: {price} — số tiền thu ở khối Thanh toán bạn tự nhập cho khớp.',
@@ -12474,6 +12477,11 @@ export default {
     retry: 'Thử lại',
     defaultSubmit: 'Gửi thông tin',
     defaultSuccess: 'Cảm ơn bạn đã gửi thông tin!',
+    // Thẻ sản phẩm trên biểu mẫu gắn sản phẩm (ProductShowcase).
+    product: {
+      showMore: 'Xem thêm',
+      showLess: 'Thu gọn',
+    },
     redirectFallbackLink: 'Tiếp tục',
     consentLabel: 'Tôi đồng ý nhận thông tin tư vấn và ưu đãi tiếp thị.',
     rateLimitError: 'Quá nhiều lần gửi form. Vui lòng thử lại sau 15 phút.',
@@ -12524,6 +12532,7 @@ export default {
       copyError: 'Không thể sao chép',
       copyAction: 'Sao chép',
       statusLoading: 'Đang tải trạng thái...',
+      payingFor: 'Bạn đang thanh toán cho: {name}',
       statusNotFoundTitle: 'Không tìm thấy bài nộp',
       statusNotFoundDesc: 'Đường dẫn không hợp lệ hoặc bài nộp không tồn tại.',
       appointmentLine: 'Giờ hẹn: {time}',

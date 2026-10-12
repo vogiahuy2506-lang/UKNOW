@@ -1,8 +1,10 @@
 import { useI18n } from '../../../../../i18n';
 
 /**
- * Tab "Sản phẩm" của modal Cài đặt: gắn biểu mẫu với một sản phẩm để trang Sản phẩm đếm Đăng ký / Đã trả / Doanh thu.
- * Chuyển NGUYÊN VĂN ô chọn sản phẩm của trình soạn cũ.
+ * Tab "Sản phẩm" của modal Cài đặt: gắn biểu mẫu với một sản phẩm. Gắn xong biểu mẫu tự hiện thẻ sản phẩm cho khách
+ * (công tắc bên dưới ô chọn tắt được) và trang Sản phẩm đếm Đăng ký / Đã trả / Doanh thu.
+ *
+ * `showProductCard` / `onShowProductCardChange`: công tắc "Hiện thẻ sản phẩm" (settings.showProductCard, mặc định bật).
  */
 export default function ProductTab({
   productId,
@@ -13,6 +15,8 @@ export default function ProductTab({
   payment,
   setPayment,
   isEmployee,
+  showProductCard = true,
+  onShowProductCardChange,
 }) {
   const { t } = useI18n();
 
@@ -36,6 +40,22 @@ export default function ProductTab({
           </option>
         ))}
       </select>
+      {productId !== '' && (
+        <div className="flex items-start justify-between gap-4 rounded-xl border border-slate-200 dark:border-dk-border px-3.5 py-3">
+          <div>
+            <div className="text-sm font-semibold text-slate-800 dark:text-dk-text">{t('forms.editorPage.product.showCardLabel')}</div>
+            <p className="text-xs text-slate-500 dark:text-dk-text2 mt-0.5">{t('forms.editorPage.product.showCardHint')}</p>
+          </div>
+          <input
+            type="checkbox"
+            data-testid="form-product-show-card"
+            aria-label={t('forms.editorPage.product.showCardLabel')}
+            checked={showProductCard}
+            onChange={(e) => onShowProductCardChange?.(e.target.checked)}
+            className="mt-1 h-4 w-4 rounded text-teal-600 dark:text-teal-400 focus:ring-teal-500 border-slate-300 dark:border-dk-border-strong"
+          />
+        </div>
+      )}
       {payment.enabled && selectedProductAmount !== null ? (
         <p data-testid="form-product-price-hint" className="text-xs text-slate-600 dark:text-dk-text bg-violet-50/60 dark:bg-violet-950/30 p-2.5 rounded-xl border border-violet-100 dark:border-violet-900/50">
           {t('forms.editorPage.product.priceHintAmount', { price: `${selectedProductAmount.toLocaleString('vi-VN')} đ` })}{' '}

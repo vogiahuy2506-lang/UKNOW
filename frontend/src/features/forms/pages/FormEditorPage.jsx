@@ -7,6 +7,7 @@ import productApiService from '../../products/services/productApi.service';
 import { PAYOS_BANK_BIN_MAP } from '../../../utils/payosBankBinMap';
 import { resolvePaymentPurpose } from '../utils/paymentPurpose.util';
 import { isDisplayFieldType } from '../utils/formFieldTypes.util';
+import { buildPreviewFormProduct } from '../utils/buildPreviewFormProduct.util';
 import { fetchFormById, createForm, updateForm, publishForm } from '../services/formAdminApi.service';
 import ShareModal from '../components/ShareModal';
 import FormTemplatePicker from '../components/FormTemplatePicker';
@@ -72,6 +73,10 @@ const makeField = (partial = {}) => ({
   width: 'full', // 'full' | 'half' (chỉ trường nhập); chỉ gửi lên server khi 'half'
   ...partial,
 });
+
+// Chữ nút gửi mặc định mà SERVER lưu khi chủ biểu mẫu để trống (backend normalizeFormSettings) — bản đã lưu luôn mang
+// chuỗi tiếng Việt này dù giao diện đang tiếng Anh, nên chọn sản phẩm phải nhận ra nó là "chưa tự đặt chữ".
+const SERVER_DEFAULT_SUBMIT_TEXT = 'Gửi thông tin';
 
 export default function FormEditorPage() {
   const { t } = useI18n();
@@ -175,10 +180,22 @@ export default function FormEditorPage() {
   const handleProductChange = (e) => {
     const nextId = e.target.value;
     setProductId(nextId);
+    const nextProduct = productOptions.find((p) => String(p.id) === nextId);
     // Chọn sản phẩm có giá số, thanh toán đang bật mà ô số tiền trống → tự điền (không bao giờ đè số đã có).
-    const amount = productPriceAmount(productOptions.find((p) => String(p.id) === nextId));
+    const amount = productPriceAmount(nextProduct);
     if (!isEmployee && payment.enabled && amount !== null) {
       setPayment((prev) => (prev.amount ? prev : { ...prev, amount: String(amount) }));
+    }
+    // Biểu mẫu gắn sản phẩm là biểu mẫu bán hàng: tiêu đề đang trống thì lấy tên sản phẩm; nút gửi còn là chữ mặc định
+    // thì đổi thành "Đặt mua ngay". Không bao giờ đè chữ người dùng đã gõ (giống ô số tiền ở trên).
+    if (nextProduct) {
+      const productName = String(nextProduct.productName || '').trim();
+      if (productName && !title.trim()) setTitle(productName);
+      setSettings((prev) => {
+        const current = String(prev.submitButtonText || '').trim();
+        const isDefaultText = current === '' || current === t('publicForm.defaultSubmit') || current === SERVER_DEFAULT_SUBMIT_TEXT;
+        return isDefaultText ? { ...prev, submitButtonText: t('forms.editorPage.product.defaultSubmitText') } : prev;
+      });
     }
   };
 
@@ -249,6 +266,8 @@ export default function FormEditorPage() {
           successMessage: data.settings?.successMessage || DEFAULT_SETTINGS.successMessage,
           redirectUrl: data.settings?.redirectUrl || '',
           consentText: data.settings?.consentText || '',
+          // Vắng khoá = HIỆN thẻ sản phẩm (mặc định bật); chỉ `false` tường minh mới tắt.
+          showProductCard: data.settings?.showProductCard !== false,
         });
 
         if (data.bookingConfig) {
@@ -784,6 +803,9 @@ export default function FormEditorPage() {
         successMessage: settings.successMessage?.trim() || t('publicForm.defaultSuccess'),
         redirectUrl: settings.redirectUrl?.trim() || null,
         ...(settings.consentText?.trim() ? { consentText: settings.consentText.trim() } : {}),
+        // Chỉ gửi khi TẮT (mặc định bật = vắng khoá): payload của mọi biểu mẫu khác giữ nguyên từng byte, và PUT ghi đè cả
+        // khối settings nên bật lại chỉ cần bỏ khoá.
+        ...(settings.showProductCard === false ? { showProductCard: false } : {}),
       };
 
       // Luôn gửi bookingConfig: đủ 6 khoá khi bật, null khi tắt (server lưu null -> mất khung
@@ -944,6 +966,17 @@ export default function FormEditorPage() {
     }
   };
 
+  // Thẻ sản phẩm của xem trước: theo đúng quy tắc API công khai — chỉ khi công tắc bật (mặc định bật) và sản phẩm đang bán
+  // (ảnh chỉ nhận http/https). Giá chính theo khối Thanh toán nháp (mục đích "đơn hàng" thì hiện số tiền đang nhập).
+  const showProductCard = settings.showProductCard !== false;
+  const previewProduct = useMemo(
+    () => (showProductCard ? buildPreviewFormProduct(selectedProduct) : null),
+    [showProductCard, selectedProduct]
+  );
+  const previewPaymentAmount = Number(payment.amount);
+  const previewPaymentEnabled = payment.enabled && Number.isFinite(previewPaymentAmount) && previewPaymentAmount > 0;
+  const previewPaymentPurpose = payment.purpose;
+
   // Xem trước SỐNG (cột phải): FormRenderer previewMode dựng từ state nháp hiện tại, KHÔNG phải bản đã lưu — gồm cả ô đồng ý
   // (theo consentEnabled / consentText thật) và bộ chọn lịch (khi bật đặt lịch, ở dạng mẫu không gọi mạng). Key của trường
   // chưa có key dùng uid phía trình duyệt (ổn định khi gõ nhãn) thay vì nhãn.
@@ -976,6 +1009,10 @@ export default function FormEditorPage() {
         bannerUrl: theme.bannerUrl || undefined,
         logoUrl: theme.logoUrl || undefined,
       },
+      product: previewProduct,
+      payment: previewPaymentEnabled
+        ? { enabled: true, amount: previewPaymentAmount, purpose: resolvePaymentPurpose(previewPaymentPurpose) }
+        : null,
     }),
     [
       title,
@@ -988,6 +1025,10 @@ export default function FormEditorPage() {
       booking.enabled,
       booking.daysAhead,
       theme,
+      previewProduct,
+      previewPaymentEnabled,
+      previewPaymentAmount,
+      previewPaymentPurpose,
       t,
     ]
   );
@@ -1123,6 +1164,8 @@ export default function FormEditorPage() {
           payment,
           setPayment,
           isEmployee,
+          showProductCard,
+          onShowProductCardChange: (checked) => setSettings((prev) => ({ ...prev, showProductCard: checked })),
         }}
       />
 

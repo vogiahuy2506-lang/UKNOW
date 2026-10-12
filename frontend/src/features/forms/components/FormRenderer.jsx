@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useI18n } from '../../../i18n';
 import BookingSlotPicker from './BookingSlotPicker';
+import ProductShowcase from './ProductShowcase';
 import { vnToday, addDaysToDateStr, formatSlotDateLabel } from '../utils/bookingFormat.util';
 import { useFormFont } from '../utils/useFormFont';
 import { getReadableTextColor } from '../utils/formTheme.util';
@@ -8,6 +9,20 @@ import { isDisplayFieldType, splitFormPages, RATING_MAX } from '../utils/formFie
 import { buildFormFontFamily, FORM_BANNER_HEIGHTS, DEFAULT_FORM_BANNER_HEIGHT } from '../constants/formTheme';
 
 const SLOT_ERROR_CODES = new Set(['FORM_SLOT_FULL', 'INVALID_APPOINTMENT_SLOT']);
+
+/**
+ * Biểu mẫu bố cục rộng có thẻ sản phẩm: từ `md` trở lên chia 2 cột (trái thẻ sản phẩm, phải tiêu đề + ô điền), dưới `md`
+ * xếp chồng. Không phải hai cột thì trả nguyên `children` (Fragment) — DOM của biểu mẫu không gắn sản phẩm giữ y hệt cũ.
+ */
+function ProductColumns({ twoColumn, showcase, children }) {
+  if (!twoColumn) return <>{children}</>;
+  return (
+    <div data-testid="form-product-layout" className="md:grid md:grid-cols-2 md:gap-8 md:items-start">
+      {showcase}
+      <div className="min-w-0">{children}</div>
+    </div>
+  );
+}
 
 /**
  * FormRenderer: Component hiển thị biểu mẫu công khai và xử lý nộp bài.
@@ -129,6 +144,13 @@ export default function FormRenderer({
   };
   const cardWidthClass = isWideLayout ? 'max-w-2xl' : 'max-w-xl';
   const cardSurfaceClass = isWideLayout ? '' : 'shadow-sm border border-gray-100';
+  // Thẻ sản phẩm (plan 12/10): `form.product` do API công khai trả sẵn (đã whitelist; chỉ khi sản phẩm đang bán và chủ chưa
+  // tắt công tắc), xem trước trong trình soạn dựng cùng hình dạng. Không có thì không có thẻ và bố cục không đổi gì.
+  const product = form?.product && typeof form.product === 'object' ? form.product : null;
+  // Khung điện thoại của xem trước (singleColumn) luôn xếp chồng dù viewport rộng — giống lưới trường ở dưới.
+  const isProductTwoColumn = Boolean(product) && isWideLayout && !singleColumn;
+  // Thẻ 2 cột cần thẻ ngoài rộng hơn; màn thành công giữ nguyên bề rộng cũ (cardWidthClass).
+  const formCardWidthClass = isProductTwoColumn ? 'max-w-2xl md:max-w-5xl' : cardWidthClass;
 
   const todayVn = vnToday();
   const maxDate = addDaysToDateStr(todayVn, daysAhead);
@@ -454,7 +476,7 @@ export default function FormRenderer({
   // chế độ tối không kế thừa chữ sáng của body → chữ trắng trên ô trắng.
   return (
     <div
-      className={`w-full ${cardWidthClass} mx-auto bg-white text-slate-800 rounded-2xl ${cardSurfaceClass} overflow-hidden overflow-x-hidden box-border`}
+      className={`w-full ${formCardWidthClass} mx-auto bg-white text-slate-800 rounded-2xl ${cardSurfaceClass} overflow-hidden overflow-x-hidden box-border`}
       style={themeRootStyle}
     >
       {/* Banner: full-bleed (tràn hết chiều rộng thẻ, không theo padding nội dung bên dưới) —
@@ -470,6 +492,17 @@ export default function FormRenderer({
         />
       )}
       <div className="p-4 sm:p-6">
+        <ProductColumns
+          twoColumn={isProductTwoColumn}
+          showcase={
+            <ProductShowcase
+              product={product}
+              formTitle={form?.title}
+              payment={form?.payment}
+              className="mb-6 md:mb-0"
+            />
+          }
+        >
         {/* Tiêu đề & mô tả biểu mẫu */}
         <div className="mb-6">
           {theme.logoUrl && !logoLoadFailed && (
@@ -489,6 +522,11 @@ export default function FormRenderer({
             </p>
           )}
         </div>
+
+        {/* Thẻ sản phẩm khi KHÔNG chia 2 cột (bố cục thường / màn hẹp của khung điện thoại): giữa tiêu đề và biểu mẫu */}
+        {product && !isProductTwoColumn && (
+          <ProductShowcase product={product} formTitle={form?.title} payment={form?.payment} className="mb-6" />
+        )}
 
         {/* Lỗi tổng thể từ server */}
       {externalError && (
@@ -951,6 +989,7 @@ export default function FormRenderer({
           )}
         </div>
       </form>
+        </ProductColumns>
       </div>
     </div>
   );
