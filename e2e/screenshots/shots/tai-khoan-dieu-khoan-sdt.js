@@ -36,7 +36,7 @@ async function openConsentDialog(page, baseURL) {
   return { other, dialog };
 }
 
-/** Tích đủ ba ô, bấm đồng ý, chờ hộp thoại số điện thoại hiện ra. */
+/** Tích ô đồng ý, bấm đồng ý, chờ hộp thoại số điện thoại hiện ra. */
 async function openPhoneDialog(page, baseURL) {
   const { other, dialog } = await openConsentDialog(page, baseURL);
   for (const box of await dialog.locator('input[type="checkbox"]').all()) await box.check();
@@ -66,7 +66,7 @@ export default {
   shots: [
     {
       name: 'hop-thoai-dong-y-dieu-khoan',
-      caption: 'hộp thoại Cập nhật thoả thuận điều khoản, ba ô tích và nút Đồng ý và tiếp tục',
+      caption: 'hộp thoại Cập nhật thoả thuận điều khoản, ô đồng ý và nút Đồng ý và tiếp tục',
       localOnly: true,
       async take(page, { baseURL }) {
         const { other, dialog } = await openConsentDialog(page, baseURL);
