@@ -328,6 +328,13 @@ export const DEFAULT_FORM_SLOT_KIND = 'consult';
  */
 export const MAX_FORMS_PER_LANDING = 20;
 
+/**
+ * PR-7a — số chỗ trống biểu mẫu AI được đặt TRONG MỘT LƯỢT (sinh trang: 1..3 chỗ trống; sửa trang: tối đa 3 chỗ trống MỚI). Mỗi chỗ trống
+ * có loại (không phải consult) tốn thêm một lời gọi model để soạn trường — trần này vừa khớp ý "tư vấn + đặt lịch + thu cọc" vừa chặn model
+ * nhồi chỗ trống. KHÁC trần kỹ thuật MAX_FORMS_PER_LANDING (tổng cả trang, kể cả người dùng thêm tay).
+ */
+export const MAX_AI_FORM_SLOTS_PER_TURN = 3;
+
 /** Thuộc tính `data-founderai-form-slot[=giá trị]` bên trong thẻ mở — tên viết hoa/thường đều được (HTML không phân biệt). */
 const FORM_SLOT_ATTR_VALUE_RE = /(?<![\w-])data-founderai-form-slot(?![\w-])(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>/]+)))?/i;
 

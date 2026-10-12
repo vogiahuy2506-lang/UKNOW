@@ -20,7 +20,7 @@ import {
   MAX_SUBMIT_BUTTON_TEXT_LENGTH,
   MAX_SUCCESS_MESSAGE_LENGTH,
 } from '../../utils/formDefinition.util.js';
-import { isDisplayFieldType } from '../../utils/formFieldTypes.util.js';
+import { isDisplayFieldType, AI_FORM_FIELD_TYPES } from '../../utils/formFieldTypes.util.js';
 import { buildStarterFormDraft } from '../../utils/formStarterTemplates.util.js';
 import { FORM_SLOT_KINDS } from '../../utils/landingHtmlInjection.util.js';
 
@@ -54,13 +54,10 @@ export const FORM_DRAFT_MODES = Object.freeze(['create', 'suggest_questions', 'r
 export const FORM_DRAFT_CREDIT_COST = 1;
 
 /**
- * Loại trường AI ĐƯỢC sinh. Liệt kê TƯỜNG MINH (không suy từ ALLOWED_FIELD_TYPES) để một loại mới thêm về sau — kể cả `file` của
- * PR-4b — không tự lọt vào đầu ra AI mà chưa ai dạy prompt về nó.
+ * Loại trường AI ĐƯỢC sinh — danh sách nằm ở `formFieldTypes.util.js` (PR-7a: bộ chuẩn hoá nháp lúc lưu landing dùng CHUNG, không kéo
+ * cả dịch vụ AI này vào). Giữ tên xuất cũ để nơi đã import không gãy.
  */
-export const AI_FORM_FIELD_TYPES = Object.freeze([
-  'short_text', 'long_text', 'email', 'phone', 'number', 'select', 'radio', 'checkbox', 'date', 'rating', 'yes_no', 'time',
-  'heading', 'paragraph', 'page_break',
-]);
+export { AI_FORM_FIELD_TYPES };
 
 const CHOICE_TYPES = Object.freeze(['select', 'radio', 'checkbox']);
 
@@ -846,6 +843,8 @@ async function loadProductContext(productId, ownerId) {
  * @param {object|null} [params.existingForm] `{ title, description, fields[] }` — bắt buộc cho `suggest_questions` / `rewrite`.
  * @param {'create'|'suggest_questions'|'rewrite'} [params.mode]
  * @param {string} [params.feature] tên tính năng ghi sổ token; mặc định `form_draft`.
+ * @param {AbortSignal|null} [params.signal] huỷ lời gọi model khi người dùng đóng kết nối (AI landing truyền); mặc định không có.
+ * @param {number|null} [params.timeoutMs] hạn chót của lời gọi model (ms, tối đa 85 giây); mặc định 85 giây như trợ lý chat.
  * @returns {Promise<{
  *   mode: string, kind: string|null, title: string|null, description: string|null, fields: object[], settings: object|null,
  *   bookingConfig: object|null, paymentConfig: null, needsAttention: string[], businessContextUsed: boolean,
@@ -862,6 +861,8 @@ export async function draftForm({
   existingForm = null,
   mode = 'create',
   feature = FORM_DRAFT_FEATURE,
+  signal = null,
+  timeoutMs = null,
 } = {}) {
   const request = parseRequest({ ownerId, description, kind, locale, existingForm, mode });
 
@@ -897,6 +898,9 @@ export async function draftForm({
     userId: ownerId,
     actorUserId,
     feature,
+    // Chỉ truyền khi nơi gọi cần (AI landing) — không thì lời gọi y hệt trước PR-7a.
+    ...(signal ? { signal } : {}),
+    ...(Number.isFinite(timeoutMs) && timeoutMs > 0 ? { timeoutMs } : {}),
   });
 
   // runChat đã `parseAiJson`: JSON hỏng không cứu được trở thành `{ parseFailed: true, content: <câu xin lỗi> }`.

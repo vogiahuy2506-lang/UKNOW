@@ -23,3 +23,30 @@ export function remainingTurnMs(deadlineAtMs) {
   if (!Number.isFinite(deadlineAtMs)) return null;
   return Math.max(1, Math.ceil(deadlineAtMs - Date.now()));
 }
+
+/**
+ * PR-7a — bước soạn nháp biểu mẫu cho từng chỗ trống có loại (booking / payment / survey / blank) NGAY SAU khi AI landing có HTML.
+ * Các nháp chạy SONG SONG nên thời gian thêm vào lượt ≈ thời gian của MỘT lời gọi model (thường 5–15 giây), không nhân theo số chỗ trống.
+ *
+ *  - `LANDING_FORM_DRAFT_MAX_MS`: trần cứng cho cả bước (quá thì bỏ nháp chưa xong, lúc lưu dùng mẫu backend — lượt không hỏng);
+ *  - `LANDING_FORM_DRAFT_RESERVE_MS`: phần ngân sách chừa lại cho ghi phiên / trừ credit / giao kết quả sau bước này;
+ *  - `LANDING_FORM_DRAFT_MIN_MS`: còn ít hơn mức này thì KHÔNG bắt đầu (một lời gọi model không kịp xong) — dùng mẫu luôn.
+ */
+export const LANDING_FORM_DRAFT_MAX_MS = 25000;
+export const LANDING_FORM_DRAFT_RESERVE_MS = 8000;
+export const LANDING_FORM_DRAFT_MIN_MS = 6000;
+
+/**
+ * Ngân sách (ms) cho bước soạn nháp biểu mẫu: min(trần cứng, phần ngân sách "quyết định" còn lại − chừa, phần ngân sách TỔNG của lượt còn
+ * lại − chừa). Trả 0 nếu còn dưới LANDING_FORM_DRAFT_MIN_MS (không đủ giờ để bắt đầu).
+ *
+ * @param {{ deadlineAtMs?: number|null, startedAtMs: number, timeBudgetMs: number, nowMs?: number }} params
+ *   `timeBudgetMs`: ngân sách dùng để QUYẾT ĐỊNH của lượt (lượt luồng: LANDING_TURN_TOTAL_MS; đường JSON cũ bị Cloudflare cắt ở 100 giây: 85 giây).
+ * @returns {number}
+ */
+export function resolveFormDraftBudgetMs({ deadlineAtMs = null, startedAtMs, timeBudgetMs, nowMs = Date.now() }) {
+  const byDecisionBudget = timeBudgetMs - (nowMs - startedAtMs) - LANDING_FORM_DRAFT_RESERVE_MS;
+  const byTurnDeadline = Number.isFinite(deadlineAtMs) ? deadlineAtMs - nowMs - LANDING_FORM_DRAFT_RESERVE_MS : Infinity;
+  const budget = Math.min(LANDING_FORM_DRAFT_MAX_MS, byDecisionBudget, byTurnDeadline);
+  return budget >= LANDING_FORM_DRAFT_MIN_MS ? Math.floor(budget) : 0;
+}

@@ -1380,6 +1380,36 @@ describe('ai.controller — sửa landing tự động / hoàn tác (PR-2 landin
       expect(saveAssistantMessage).not.toHaveBeenCalled();
     });
 
+    // PR-7a: AI_LANDING_FORM_MODE=form → nháp của thẻ = nháp cũ (đánh số lại theo HTML mới) + nháp của chỗ trống MỚI lượt này.
+    it('PR-7a — service trả formDrafts: ghi vào thẻ bản HỢP (nháp cũ dịch chỉ số + nháp mới), truyền userRequest là câu gốc', async () => {
+      const slot = (k) => `<div data-founderai-form-slot="${k}"></div>`;
+      const oldHtml = `<body>${slot('booking')}</body>`;
+      const newHtml = `<body>${slot('survey')}${slot('booking')}</body>`;
+      getLandingPageMessage.mockResolvedValue({
+        id: 900,
+        data: { title: 'Trang cũ', html: oldHtml, autoLayoutFixCount: 0, formDrafts: [{ slotIndex: 0, kind: 'booking', title: 'Đặt lịch cũ' }] },
+      });
+      const fresh = [{ slotIndex: 0, kind: 'survey', title: 'Khảo sát mới' }];
+      editHtml.mockResolvedValue({ title: 'Trang mới', html: newHtml, formDrafts: fresh });
+      const res = makeRes();
+      await aiController.editLandingHtml(
+        manualReq({ currentHtml: oldHtml, instruction: 'thêm khảo sát lên trên', layoutFindings: [] }),
+        res,
+      );
+      expect(editHtml.mock.calls[0][0].userRequest).toBe('thêm khảo sát lên trên');
+      expect(updateLandingPageMessage.mock.calls[0][2].formDrafts).toEqual([
+        { slotIndex: 0, kind: 'survey', title: 'Khảo sát mới' },
+        { slotIndex: 1, kind: 'booking', title: 'Đặt lịch cũ' },
+      ]);
+      // client nhận CHỈ nháp của chỗ trống mới (nó tự hợp với nháp đang giữ)
+      expect(res.json.mock.calls[0][0].data.formDrafts).toEqual(fresh);
+    });
+
+    it('PR-7a — cờ tắt (service không trả formDrafts) → dữ liệu thẻ không có khoá formDrafts', async () => {
+      await aiController.editLandingHtml(manualReq(), makeRes());
+      expect(updateLandingPageMessage.mock.calls[0][2]).not.toHaveProperty('formDrafts');
+    });
+
     // B-18 (rà soát AI 03/10): lượt sửa trả phí trừ credit TRƯỚC khi ghi phiên; ghi lỗi trước đây chỉ console.warn, response vẫn
     // `success` không dấu hiệu gì → bản đã trả tiền mất sau F5. Giờ response mang `data.saved === false` để FE báo thật.
     it.each([
@@ -1559,6 +1589,29 @@ describe('ai.controller — sửa landing tự động / hoàn tác (PR-2 landin
       expect(saveMessages).not.toHaveBeenCalled(); // không đổi saveMessages / không lưu hai lần
       expect(res.json).toHaveBeenCalledWith({ success: true, data: expect.objectContaining({ messageId: 4242 }) });
       expect(chargeAiCredit).toHaveBeenCalledTimes(1); // sinh trang vẫn trừ credit
+    });
+
+    // PR-7a: nháp biểu mẫu theo chỗ trống (chỉ có khi AI_LANDING_FORM_MODE=form) đi cùng thẻ landing vào phiên để tải lại vẫn còn.
+    it('PR-7a — service trả formDrafts → trả cho client VÀ lưu vào dữ liệu thẻ; truyền userRequest (câu gốc) cho service', async () => {
+      const formDrafts = [{ slotIndex: 1, kind: 'booking', title: 'Đặt lịch khám răng', description: null, fields: [], settings: null, bookingConfig: null, needsAttention: ['booking'] }];
+      generateLanding.mockResolvedValue({ title: 'Trang khoá học', html: '<div>Nội dung</div>', formDrafts });
+      saveMessagesReturningIds.mockResolvedValue({ userMessageId: 4241, assistantMessageId: 4242 });
+      const res = makeRes();
+      await aiController.generateLandingHtml(genReq({ prompt: '  Landing nha khoa đặt lịch  ' }), res);
+      expect(generateLanding.mock.calls[0][0].userRequest).toBe('Landing nha khoa đặt lịch');
+      expect(saveMessagesReturningIds.mock.calls[0][3].data.formDrafts).toEqual(formDrafts);
+      expect(res.json.mock.calls[0][0].data.formDrafts).toEqual(formDrafts);
+    });
+
+    it('PR-7a — không có nháp (cờ tắt hoặc chỉ consult) → dữ liệu thẻ không có khoá formDrafts', async () => {
+      saveMessagesReturningIds.mockResolvedValue({ userMessageId: 1, assistantMessageId: 2 });
+      await aiController.generateLandingHtml(genReq(), makeRes());
+      expect(saveMessagesReturningIds.mock.calls[0][3].data).not.toHaveProperty('formDrafts');
+
+      generateLanding.mockResolvedValue({ title: 'T', html: '<div>x</div>', formDrafts: [] });
+      saveMessagesReturningIds.mockClear();
+      await aiController.generateLandingHtml(genReq(), makeRes());
+      expect(saveMessagesReturningIds.mock.calls[0][3].data).not.toHaveProperty('formDrafts');
     });
 
     it('lưu hỏng (null hoặc ném lỗi) → không có messageId, response vẫn thành công', async () => {

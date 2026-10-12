@@ -1,4 +1,9 @@
-import { hasMalformedFormSlot, listFormSlotKinds } from './landingHtmlInjection.util.js';
+import {
+  hasMalformedFormSlot,
+  listFormSlotKinds,
+  MAX_FORMS_PER_LANDING,
+  MAX_AI_FORM_SLOTS_PER_TURN,
+} from './landingHtmlInjection.util.js';
 import { scanHtmlTags, getAttr } from './landingHtmlScan.util.js';
 
 /**
@@ -230,13 +235,15 @@ export function extractHtmlFromModelText(text) {
  * Ngăn chặn các lỗi: AI cắt ngang do quá token, AI viết lại từ đầu làm mất layout/nội dung,
  * AI làm mất form đăng ký sẵn có, hoặc AI lạm dụng inline style.
  *
- * @param {{ currentHtml: string, newHtml: string, finishReason?: string, strategy?: string }} params
+ * @param {{ currentHtml: string, newHtml: string, finishReason?: string, strategy?: string, allowAddFormSlots?: boolean }} params
  *   `strategy` = chiến lược đã tạo `newHtml` (aiLandingPage.service.js: 'patch' | 'patch_full_html' | 'patch_fallback_full' |
  *   'full'). 'patch' bỏ qua chốt "teo dưới 60%" nhưng có sàn riêng 25% (B-14, PATCH_MIN_KEEP_RATIO).
+ *   `allowAddFormSlots` (PR-7a, chỉ khi `AI_LANDING_FORM_MODE=form`): AI được THÊM chỗ trống biểu mẫu có loại khi người dùng xin
+ *   "thêm form đặt lịch" — chỗ trống cũ vẫn phải còn nguyên (không bớt, không đổi loại). Mặc định false = so ĐA TẬP loại như PR-6.
  * @returns {boolean}
  * @throws {Error & { status: number }}
  */
-export function validateEditHtmlOutput({ currentHtml, newHtml, finishReason, strategy }) {
+export function validateEditHtmlOutput({ currentHtml, newHtml, finishReason, strategy, allowAddFormSlots = false }) {
   const current = String(currentHtml || '').trim();
   const next = String(newHtml || '').trim();
 
@@ -383,7 +390,28 @@ export function validateEditHtmlOutput({ currentHtml, newHtml, finishReason, str
   // thì AI đổi `booking` thành trần (= `consult`) hay đổi hai chỗ trống `booking`+`payment` thành `consult`+`consult` vẫn lọt
   // — landing publish ra biểu mẫu SAI LOẠI. Đường vá lẫn đường viết lại đều đi qua hàm này (finalizeEdit).
   const oldSlotKinds = listFormSlotKinds(current);
-  if (oldSlotKinds.length >= 1) {
+  if (allowAddFormSlots) {
+    // PR-7a (`AI_LANDING_FORM_MODE=form`) — người dùng có thể xin THÊM biểu mẫu ("thêm form đặt lịch") nên số chỗ trống được TĂNG,
+    // nhưng không được GIẢM hay đổi loại: mỗi loại phải còn ít nhất bằng bản cũ (đổi `booking` thành trần = `consult`, hay
+    // `booking`+`payment` thành `consult`+`consult` vẫn bị bắt vì thiếu loại cũ). Thêm chỗ trống thì không được kèm `<form>` tự viết,
+    // chỗ trống thêm phải đúng dạng + đúng loại, tối đa MAX_AI_FORM_SLOTS_PER_TURN chỗ MỚI mỗi lượt và không vượt trần kỹ thuật cả trang.
+    const newSlotKinds = listFormSlotKinds(next);
+    const countOf = (kinds, kind) => kinds.filter((k) => k === kind).length;
+    const lostKind = [...new Set(oldSlotKinds)].some((kind) => countOf(newSlotKinds, kind) < countOf(oldSlotKinds, kind));
+    const added = newSlotKinds.length - oldSlotKinds.length;
+    const oldFormTagCount = (current.match(/<form\b/gi) || []).length;
+    const newFormTagCount = (next.match(/<form\b/gi) || []).length;
+    const tooMany = added > MAX_AI_FORM_SLOTS_PER_TURN
+      || newSlotKinds.length + listFormEmbedKeys(next).length > MAX_FORMS_PER_LANDING;
+    const writtenFormWithNewSlot = (oldSlotKinds.length >= 1 || added > 0) && newFormTagCount > oldFormTagCount;
+    // Sai dạng (nội dung con / loại lạ): đang có chỗ trống thì chặn như cũ; chưa có thì chặn khi LƯỢT NÀY mới đưa lỗi vào.
+    const malformed = hasMalformedFormSlot(next) && (oldSlotKinds.length >= 1 || !hasMalformedFormSlot(current));
+    if (lostKind || tooMany || writtenFormWithNewSlot || malformed) {
+      const err = new Error('AI đã làm mất hoặc sửa sai chỗ trống chờ Biểu mẫu. Vui lòng thử lại.');
+      err.status = 422;
+      throw err;
+    }
+  } else if (oldSlotKinds.length >= 1) {
     const newSlotKinds = listFormSlotKinds(next);
     const oldFormTagCount = (current.match(/<form\b/gi) || []).length;
     const newFormTagCount = (next.match(/<form\b/gi) || []).length;

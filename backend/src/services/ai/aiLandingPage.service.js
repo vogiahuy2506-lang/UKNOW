@@ -31,10 +31,18 @@ import {
   LANDING_UNSAFE_OUTPUT_CODE,
 } from '../../utils/landingHtmlSafety.util.js';
 import { OCCUPATION_VALUES, INTEREST_AREA_VALUES } from '../../utils/landingLeadFormConfig.util.js';
-import { countFormSlots, hasMalformedFormSlot } from '../../utils/landingHtmlInjection.util.js';
+import {
+  countFormSlots,
+  hasMalformedFormSlot,
+  findInvalidFormSlotKinds,
+  MAX_AI_FORM_SLOTS_PER_TURN,
+} from '../../utils/landingHtmlInjection.util.js';
+import { buildFormSlotKindGuide } from '../../utils/landingFormSlotIntent.util.js';
+import { findNewFormSlots } from '../../utils/landingFormDrafts.util.js';
+import { FORM_STARTER_KIND_LABELS } from '../../utils/formStarterTemplates.util.js';
 import { normalizeChangeSummary, MAX_AUTO_LAYOUT_FIX_HTML_CHARS } from '../../utils/landingLayoutFindings.util.js';
 import { isClientAbortError } from '../../utils/aiAbort.util.js';
-import { LANDING_TURN_TOTAL_MS, remainingTurnMs } from '../../utils/landingTurnBudget.util.js';
+import { LANDING_TURN_TOTAL_MS, remainingTurnMs, resolveFormDraftBudgetMs } from '../../utils/landingTurnBudget.util.js';
 
 /**
  * Phòng bệnh từ gốc (PLAN_LANDING_TU_KIEM_HIEN_THI_TU_SUA mục 10.5): sự cố 20/09 do AI đặt cột ngày
@@ -556,6 +564,53 @@ export function validateLandingImageUrls({ html, assets = [], allowedSourceText 
   return { unusedAssets, allowlistUrls };
 }
 
+/**
+ * PR-7a — mô tả đưa cho dịch vụ AI soạn biểu mẫu (`draftForm`, tối đa 1000 ký tự): loại biểu mẫu + tên trang + CHÍNH CÂU CHỮ của người
+ * dùng (cắt cho vừa) + tóm tắt brief. Chữ người dùng làm phẳng về một dòng và bỏ ký tự điều khiển; `draftForm` tự đóng khung đoạn này
+ * như dữ liệu của khách (không phải lệnh).
+ *
+ * @param {{ kind: string, title?: string, userRequest?: string, briefSummary?: string }} params
+ * @returns {string}
+ */
+export function buildSlotFormDraftDescription({ kind, title = '', userRequest = '', briefSummary = '' }) {
+  const flat = (value) => String(value ?? '').replace(/[\u0000-\u001F\u007F-\u009F\u2028\u2029\s]+/g, ' ').trim();
+  const head = `Biểu mẫu loại "${FORM_STARTER_KIND_LABELS[kind] || kind}" nằm trong landing page${flat(title) ? ` "${flat(title).slice(0, 120)}"` : ''}.`;
+  const tail = flat(briefSummary).slice(0, 200);
+  const room = 1000 - head.length - tail.length - 60;
+  const request = flat(userRequest).slice(0, Math.max(0, room));
+  return [head, request ? `Yêu cầu của người dùng cho landing: ${request}` : '', tail].filter(Boolean).join(' ').slice(0, 1000);
+}
+
+/**
+ * PR-7a — tóm tắt brief wizard (khối LANDING_BRIEF DATA của `buildLandingBriefContext`) thành một câu ngắn: tên sản phẩm + mục tiêu trang.
+ * Không có gì để tóm tắt → chuỗi rỗng.
+ *
+ * @param {string|null} landingBriefContext
+ * @returns {string}
+ */
+export function summarizeBriefForFormDraft(landingBriefContext) {
+  const text = String(landingBriefContext || '');
+  if (!text) return '';
+  const product = text.match(/selectedProduct\.name:\s*"""([\s\S]*?)"""/)?.[1]?.trim();
+  const goal = text.match(/^pageGoal:\s*([A-Za-z_]+)/m)?.[1];
+  return [product ? `Sản phẩm / dịch vụ: ${product}.` : '', goal ? `Mục tiêu trang: ${goal}.` : ''].filter(Boolean).join(' ');
+}
+
+/** Chờ `promise` tối đa `ms`; quá hạn (hoặc lỗi) → null. Không bao giờ ném, không để lại rejection chưa bắt. */
+async function settleWithin(promise, ms) {
+  let timer = null;
+  const guarded = Promise.resolve(promise).catch(() => null);
+  const deadline = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(null), ms);
+    timer.unref?.();
+  });
+  try {
+    return await Promise.race([guarded, deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 class AiLandingPageService {
   /**
    * Sinh một tài liệu HTML5 đầy đủ (Tailwind CDN), JSON { title, html }.
@@ -565,8 +620,12 @@ class AiLandingPageService {
    * lượt thử có `timeoutMs` riêng. Không truyền → tự đặt LANDING_TURN_TOTAL_MS từ lúc vào hàm. `signal` = người dùng đóng kết nối
    * thì huỷ lời gọi Gemini đang chạy. `onStage('generating'|'fixing')` báo tiến độ cho luồng NDJSON.
    *
-   * @param {{ userId: number, prompt: string, titleHint?: string, landingBriefContext?: string|null, contentLocale?: string, leadFormConfig?: object|null, signal?: AbortSignal|null, deadlineAtMs?: number|null, onStage?: ((stage: string) => void)|null, streamed?: 0|1 }} opts
-   * @returns {Promise<{ title: string, html: string }>}
+   * PR-7a (`AI_LANDING_FORM_MODE=form`): sau khi có HTML, mỗi chỗ trống biểu mẫu có loại (booking / payment / survey / blank) được soạn nháp
+   * trường bằng `draftForm` (song song, có hạn chót) và trả trong `formDrafts` — xem `attachFormDrafts`. `userRequest` = câu chữ gốc của
+   * người dùng (không kèm câu dặn của hệ thống) để làm mô tả cho nháp; thiếu thì dùng `prompt`.
+   *
+   * @param {{ userId: number, prompt: string, titleHint?: string, landingBriefContext?: string|null, contentLocale?: string, leadFormConfig?: object|null, signal?: AbortSignal|null, deadlineAtMs?: number|null, onStage?: ((stage: string) => void)|null, streamed?: 0|1, userRequest?: string }} opts
+   * @returns {Promise<{ title: string, html: string, formDrafts?: object[] }>}
    */
   async generate({
     userId,
@@ -582,6 +641,7 @@ class AiLandingPageService {
     deadlineAtMs = null,
     onStage = null,
     streamed = 0,
+    userRequest = '',
   }) {
     const turnDeadlineAtMs = Number.isFinite(deadlineAtMs) ? deadlineAtMs : Date.now() + LANDING_TURN_TOTAL_MS;
     const locale = normalizeAssistantLocale(contentLocale, 'vi');
@@ -615,18 +675,23 @@ class AiLandingPageService {
       ? `8) Ảnh: CHỈ dùng các URL trong ẢNH ĐÃ TẢI LÊN, mỗi URL ít nhất một lần${referenceOnlyException}, bằng <img src="..." alt="..." class="..."> (logo ở header, banner làm hero...). Không có ảnh nào được cấp thì không dùng <img>, không bịa URL, không dùng ảnh placeholder.`
       : '8) Tránh ảnh placeholder URL giả; nếu cần hình minh họa, chỉ được dùng Logo URL của hồ sơ doanh nghiệp nếu có, không dùng ảnh nào khác; nếu không có logo thì dùng gradient/icon Unicode hoặc bỏ ảnh.';
 
-    // PR-5b-2a — AI_LANDING_FORM_MODE=form: AI KHÔNG còn tự viết <form>, chỉ đặt một chỗ trống;
+    // PR-5b-2a — AI_LANDING_FORM_MODE=form: AI KHÔNG còn tự viết <form>, chỉ đặt chỗ trống (PR-7a: 1..3 chỗ, có loại);
     // backend tự tạo/tái dùng Biểu mẫu lúc LƯU landing rồi thay chỗ trống bằng khối nhúng thật
     // (landingPageAdmin.service.js). leadFormConfig (occupation/interestArea/customFields) không
     // còn ý nghĩa ở đường sinh HTML nữa — nó điều khiển FIELDS của Biểu mẫu được tạo lúc lưu
     // (landingLeadFormToFormFields.util.js), không phải input trực tiếp trong HTML AI viết.
     const formMode = isAiLandingFormMode();
+    // PR-7a (PLAN_BIEU_MAU_TUY_BIEN_AI_LANDING_2026-10-11): không còn "ĐÚNG MỘT chỗ trống trần" — AI đặt 1..MAX_AI_FORM_SLOTS_PER_TURN chỗ trống
+    // CÓ LOẠI theo ý người dùng (đặt lịch → booking, thu cọc → payment, khảo sát → survey, còn lại → consult). Bảng cụm từ dạy model nằm
+    // ở landingFormSlotIntent.util.js (cùng bảng với đáp án của bộ câu thử), không viết lại ở đây.
     const formRule = formMode
-      ? `6) Trang phải có ĐÚNG MỘT chỗ trống cho biểu mẫu đăng ký, đặt tại vị trí form (ví dụ sau khối CTA chính, trong <section>), theo ĐÚNG cấu trúc sau (giữ nguyên tên thuộc tính, được đổi class của <section> theo văn phong trang):
+      ? `6) Trang phải có từ 1 đến ${MAX_AI_FORM_SLOTS_PER_TURN} CHỖ TRỐNG cho biểu mẫu — mỗi chỗ trống là MỘT biểu mẫu riêng do hệ thống tự tạo sau khi trang được lưu — đặt tại vị trí phù hợp (ví dụ sau khối CTA chính, trong <section>). Mỗi chỗ trống là một thẻ rỗng, theo ĐÚNG cấu trúc sau (giữ nguyên tên thuộc tính, thay LOẠI bằng đúng một giá trị ở danh sách bên dưới, được đổi class của <section> bao quanh theo văn phong trang):
    <section>
-     <div data-founderai-form-slot></div>
+     <div data-founderai-form-slot="LOẠI"></div>
    </section>
-   Bắt buộc: đúng MỘT thẻ <div data-founderai-form-slot></div> trong toàn trang, không thêm thuộc tính nào khác vào div này, không thêm nội dung con bên trong nó. TUYỆT ĐỐI KHÔNG viết bất kỳ thẻ <form> nào trong trang, KHÔNG thêm script hay input/label/button nào liên quan tới thu thập thông tin — hệ thống sẽ tự thay chỗ trống này bằng biểu mẫu thật sau khi trang được lưu.`
+   Chọn LOẠI theo ý người dùng:
+${buildFormSlotKindGuide()}
+   Yêu cầu nhắc tới nhiều mục đích thì đặt nhiều chỗ trống, mỗi loại tối đa MỘT chỗ trống, tổng không quá ${MAX_AI_FORM_SLOTS_PER_TURN}. Không chắc thì dùng consult. Bắt buộc: thẻ <div> phải rỗng, không thêm thuộc tính nào khác vào div này, không thêm nội dung con bên trong nó. TUYỆT ĐỐI KHÔNG viết bất kỳ thẻ <form> nào trong trang, KHÔNG thêm script hay input/label/button nào liên quan tới thu thập thông tin — hệ thống sẽ tự thay mỗi chỗ trống bằng biểu mẫu thật sau khi trang được lưu.`
       : `6) Trang phải có ĐÚNG MỘT form đăng ký lead thật (không phải placeholder), đặt tại vị trí form (ví dụ sau khối CTA chính, trong <section>), theo ĐÚNG cấu trúc sau (giữ nguyên tên thuộc tính, được đổi class/label/nội dung chữ theo văn phong trang):
    <form data-founderai-capture>
      <input type="text" name="name" placeholder="..." required />
@@ -806,6 +871,13 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
           err.status = 422;
           throw err;
         }
+        // PR-7a — loại ngoài danh sách (`="contact"`) báo đúng nguyên nhân, không gộp vào "sai dạng" bên dưới.
+        const invalidKinds = findInvalidFormSlotKinds(html);
+        if (invalidKinds.length > 0) {
+          const err = new Error(`AI đặt chỗ trống biểu mẫu với loại không hợp lệ (${invalidKinds.map((v) => `"${v}"`).join(', ')}). Vui lòng thử lại.`);
+          err.status = 422;
+          throw err;
+        }
         // Review PR-5b-2a nợ 1 — chỗ trống có thuộc tính data-founderai-form-slot nhưng dạng sai
         // (ví dụ có nội dung con) không được ÂM THẦM đếm là 0 rồi báo "thiếu chỗ trống" (gây hiểu
         // lầm — AI CÓ viết, chỉ sai dạng); báo đúng nguyên nhân.
@@ -814,12 +886,13 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
           err.status = 422;
           throw err;
         }
+        // PR-7a — 1..MAX_AI_FORM_SLOTS_PER_TURN chỗ trống có loại hợp lệ (trước đây: đúng 1).
         const slotCount = countFormSlots(html);
-        if (slotCount !== 1) {
+        if (slotCount < 1 || slotCount > MAX_AI_FORM_SLOTS_PER_TURN) {
           const err = new Error(
             slotCount === 0
               ? 'AI không tạo chỗ trống cho biểu mẫu (thiếu data-founderai-form-slot). Vui lòng thử lại.'
-              : `AI tạo ${slotCount} chỗ trống biểu mẫu thay vì đúng 1. Vui lòng thử lại.`
+              : `AI tạo ${slotCount} chỗ trống biểu mẫu, nhiều hơn mức cho phép (tối đa ${MAX_AI_FORM_SLOTS_PER_TURN}). Vui lòng thử lại.`
           );
           err.status = 422;
           throw err;
@@ -966,7 +1039,19 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
       }
 
       logLandingAiLifecycle({ event: 'done', outcome: 'success', ...telemetry, userId, actorUserId, clientClosed: clientClosedField({ streamed, signal }) });
-      return generationResult;
+      // PR-7a: nháp biểu mẫu cho từng chỗ trống có loại. Không bao giờ ném (lỗi / hết giờ chỉ làm mất nháp, lúc lưu dùng mẫu backend).
+      return await this.attachFormDrafts(generationResult, {
+        oldHtml: '',
+        userId,
+        actorUserId,
+        userRequest: userRequest || prompt,
+        briefSummary: summarizeBriefForFormDraft(landingBriefContext),
+        locale,
+        signal,
+        deadlineAtMs: turnDeadlineAtMs,
+        startedAtMs: telemetry.startedAt,
+        timeBudgetMs: streamed ? LANDING_TURN_TOTAL_MS : EDIT_TIME_BUDGET_MS,
+      });
     } catch (error) {
       if (error?.code === LANDING_UNSAFE_OUTPUT_CODE) telemetry.unsafeKinds = describeUnsafeKinds(error.details?.findings || []);
       logLandingAiLifecycle({
@@ -983,14 +1068,109 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
   }
 
   /**
+   * PR-7a — soạn nháp biểu mẫu cho các chỗ trống MỚI có loại (booking / payment / survey / blank) của `result.html` và gắn vào
+   * `result.formDrafts = [{ slotIndex, kind, title, description, fields, settings, bookingConfig, needsAttention }]`.
+   *
+   *  - Chỉ chạy khi `AI_LANDING_FORM_MODE=form`. Cờ tắt → trả `result` nguyên vẹn (không thêm khoá nào, không gọi model).
+   *  - "Mới" = chỗ trống không có ở `oldHtml` sau khi sắp hàng theo chuỗi loại (`findNewFormSlots`); sinh trang mới thì `oldHtml` rỗng.
+   *    `slotIndex` = thứ tự chỗ trống trong `result.html`, đếm cả chỗ trống trần.
+   *  - `consult` KHÔNG gọi model: biểu mẫu tư vấn dựng từ `leadFormConfig` lúc lưu (giữ nghề nghiệp / lĩnh vực / câu hỏi riêng).
+   *  - Các chỗ trống soạn SONG SONG (`Promise.all`), mỗi lời gọi nhận cùng hạn chót (`resolveFormDraftBudgetMs`: tối đa 25 giây, chừa 8 giây
+   *    cho ghi phiên / trừ credit, không vượt ngân sách của lượt) + tín hiệu huỷ của lượt. Một nháp lỗi / hết giờ → bỏ nháp đó, lúc lưu
+   *    dùng mẫu backend; lượt KHÔNG hỏng và KHÔNG trừ thêm credit (nháp gọi thẳng `draftForm`, không qua route có trừ credit).
+   *  - Không bao giờ ném.
+   *
+   * @param {{ html?: string }} result kết quả của generate() / editHtml()
+   * @param {{ oldHtml?: string, userId: number, actorUserId?: number|null, userRequest?: string, briefSummary?: string, locale?: string,
+   *   signal?: AbortSignal|null, deadlineAtMs?: number|null, startedAtMs?: number, timeBudgetMs?: number }} ctx
+   * @returns {Promise<object>} chính `result`
+   */
+  async attachFormDrafts(result, {
+    oldHtml = '',
+    userId,
+    actorUserId = null,
+    userRequest = '',
+    briefSummary = '',
+    locale = 'vi',
+    signal = null,
+    deadlineAtMs = null,
+    startedAtMs = Date.now(),
+    timeBudgetMs = EDIT_TIME_BUDGET_MS,
+  } = {}) {
+    try {
+      if (!isAiLandingFormMode() || !result || typeof result.html !== 'string') return result;
+      result.formDrafts = [];
+      const toDraft = findNewFormSlots(oldHtml, result.html)
+        .filter((slot) => slot.kind !== 'consult')
+        .slice(0, MAX_AI_FORM_SLOTS_PER_TURN);
+      if (toDraft.length === 0) return result;
+
+      const began = Date.now();
+      const budgetMs = resolveFormDraftBudgetMs({ deadlineAtMs, startedAtMs, timeBudgetMs, nowMs: began });
+      if (budgetMs === 0 || signal?.aborted) {
+        console.log(`[LandingAI] formDrafts slots=${toDraft.length} ok=0 failed=0 skipped=${budgetMs === 0 ? 'budget' : 'aborted'} budgetMs=${budgetMs}`);
+        return result;
+      }
+
+      // Nạp lười: dịch vụ nháp kéo theo cả bộ gọi model + hồ sơ doanh nghiệp, đường không bật cờ không cần.
+      const { draftForm } = await import('./aiFormDraft.service.js');
+      const settled = await Promise.all(toDraft.map(async (slot) => {
+        const draft = await settleWithin(
+          draftForm({
+            ownerId: userId,
+            actorUserId,
+            description: buildSlotFormDraftDescription({
+              kind: slot.kind,
+              title: result.title,
+              userRequest,
+              briefSummary,
+            }),
+            kind: slot.kind,
+            locale,
+            mode: 'create',
+            feature: 'landing_page',
+            signal,
+            timeoutMs: budgetMs,
+          }),
+          budgetMs,
+        );
+        if (!draft || draft.kind !== slot.kind || !Array.isArray(draft.fields)) return null;
+        return {
+          slotIndex: slot.slotIndex,
+          kind: slot.kind,
+          title: draft.title ?? null,
+          description: draft.description ?? null,
+          fields: draft.fields,
+          settings: draft.settings ?? null,
+          bookingConfig: draft.bookingConfig ?? null,
+          needsAttention: Array.isArray(draft.needsAttention) ? draft.needsAttention : [],
+        };
+      }));
+      result.formDrafts = settled.filter(Boolean).sort((a, b) => a.slotIndex - b.slotIndex);
+      console.log(
+        `[LandingAI] formDrafts slots=${toDraft.length} ok=${result.formDrafts.length} failed=${toDraft.length - result.formDrafts.length} `
+        + `kinds=${toDraft.map((s) => s.kind).join(',')} budgetMs=${budgetMs} ms=${Date.now() - began}`,
+      );
+      return result;
+    } catch (error) {
+      console.warn(`[LandingAI] formDrafts bỏ qua do lỗi: ${String(error?.message || error).slice(0, 200)}`);
+      return result;
+    }
+  }
+
+  /**
    * Chỉnh sửa landing page HTML5 hiện tại theo yêu cầu, giữ nguyên cấu trúc/nội dung không đổi.
    *
    * PR-9: `deadlineAtMs` / `signal` / `onStage` / `streamed` như `generate`. `timeBudgetMs` = ngân sách dùng để QUYẾT ĐỊNH
    * (timeout lượt vá, có còn đủ giờ cho dự phòng viết-lại-cả-trang / sinh lại vì ảnh bịa không): đường luồng truyền
    * LANDING_TURN_TOTAL_MS (không còn bị Cloudflare cắt ở 100 giây), đường JSON cũ giữ EDIT_TIME_BUDGET_MS (85 giây).
    *
-   * @param {{ userId: number, currentHtml: string, instruction: string, contentLocale?: string, actorUserId?: number|null, signal?: AbortSignal|null, deadlineAtMs?: number|null, timeBudgetMs?: number, onStage?: ((stage: string) => void)|null, streamed?: 0|1 }} opts
-   * @returns {Promise<{ title: string, html: string }>}
+   * PR-7a (`AI_LANDING_FORM_MODE=form`): người dùng xin "thêm form đặt lịch" thì AI THÊM chỗ trống có loại (chốt sửa cho phép tăng, không cho
+   * bớt / đổi loại chỗ trống cũ); chỗ trống MỚI có loại được soạn nháp như `generate` (`formDrafts`, chỉ cho chỗ trống mới). `userRequest` =
+   * câu gốc của người dùng (không kèm số đo hiển thị) làm mô tả cho nháp; thiếu thì dùng `instruction`.
+   *
+   * @param {{ userId: number, currentHtml: string, instruction: string, contentLocale?: string, actorUserId?: number|null, signal?: AbortSignal|null, deadlineAtMs?: number|null, timeBudgetMs?: number, onStage?: ((stage: string) => void)|null, streamed?: 0|1, userRequest?: string }} opts
+   * @returns {Promise<{ title: string, html: string, formDrafts?: object[] }>}
    */
   async editHtml({
     userId,
@@ -1008,6 +1188,7 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
     timeBudgetMs = EDIT_TIME_BUDGET_MS,
     onStage = null,
     streamed = 0,
+    userRequest = '',
   }) {
     const turnDeadlineAtMs = Number.isFinite(deadlineAtMs) ? deadlineAtMs : Date.now() + LANDING_TURN_TOTAL_MS;
     const rawCurrent = String(currentHtml || '').trim();
@@ -1049,9 +1230,16 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
     // form`, PR-5b-2a) thì prompt phải dặn AI giữ nguyên chỗ trống đó, KHÔNG tự viết form thay
     // thế. Chỉ thêm khi bản hiện tại thật sự có chỗ trống — trang không dùng form-mode thì prompt
     // giữ NGUYÊN VĂN như trước PR này (nghiệm thu "prompt y hệt trước PR").
+    const formMode = isAiLandingFormMode();
     const currentHasFormSlot = countFormSlots(rawCurrent) >= 1;
     const formSlotEditRule = currentHasFormSlot
       ? '2c) TRANG ĐANG CÓ CHỖ TRỐNG CHỜ BIỂU MẪU (thẻ <div data-founderai-form-slot></div>, chưa lưu thành khối nhúng thật): GIỮ NGUYÊN VĂN thẻ đó — không xoá, không thêm bất kỳ nội dung con nào bên trong (kể cả text/element), không tự viết <form>/<input>/nút "Gửi"/"Đăng ký" để thay thế; chỗ trống này sẽ được hệ thống thay bằng Biểu mẫu thật khi người dùng lưu trang. NGOẠI LỆ 2b ở trên (thêm trường vào form đăng ký) KHÔNG áp dụng cho trang này.\n'
+      : '';
+
+    // PR-7a — CHỈ khi `AI_LANDING_FORM_MODE=form` (cờ tắt → chuỗi rỗng, prompt y hệt từng byte như trước): giữ nguyên mọi chỗ trống / khối nhúng
+    // Biểu mẫu, và nếu người dùng xin THÊM biểu mẫu thì thêm chỗ trống CÓ LOẠI (bảng cụm từ cùng nguồn với prompt SINH).
+    const formModeEditRule = formMode && !autoLayoutFix
+      ? `2e) BIỂU MẪU CỦA TRANG (trang dùng Biểu mẫu thay cho form viết tay): mọi chỗ trống biểu mẫu (thẻ <div data-founderai-form-slot="..."></div>, bỏ giá trị = consult) và mọi khối nhúng Biểu mẫu đang có phải GIỮ NGUYÊN VĂN, kể cả khi sửa màu, chữ hay bố cục. CHỈ khi người dùng NÓI RÕ muốn THÊM một biểu mẫu mới (ví dụ "thêm form đặt lịch", "thêm biểu mẫu khảo sát") thì THÊM đúng một thẻ rỗng <div data-founderai-form-slot="LOẠI"></div> cho mỗi biểu mẫu được xin (tối đa ${MAX_AI_FORM_SLOTS_PER_TURN} thẻ mới mỗi lượt), đặt trong một <section> hợp lý của trang; chọn LOẠI theo ý người dùng:\n${buildFormSlotKindGuide()}\nKhông viết thẻ <form>/<input>/<label>/<button> cho biểu mẫu mới, không thêm script, không thêm nội dung bên trong thẻ — hệ thống tự thay mỗi chỗ trống bằng biểu mẫu thật khi người dùng lưu trang. NGOẠI LỆ 2b KHÔNG áp dụng cho chỗ trống / khối nhúng Biểu mẫu.\n`
       : '';
 
     // Câu 3 sếp hỏi 14/09 ("dữ liệu điền vào form sẽ lưu về chỗ nào?") — đường SỬA trang trước
@@ -1088,7 +1276,7 @@ QUY TẮC CHỈNH SỬA TỐI QUAN TRỌNG:
 1) Dưới đây là HTML hiện tại của trang. Nhiệm vụ của bạn là CHỈ thay đổi đúng phần người dùng yêu cầu.
 2) Giữ NGUYÊN VĂN mọi phần còn lại: cấu trúc trang, thứ tự các section, nội dung chữ, class Tailwind, và form đăng ký lead hiện có của trang — comment "${LANDING_FORM_PLACEHOLDER}" (trang cũ), hoặc thẻ iframe form nhúng "/embed/lead-form/..." (trang cũ), hoặc form có thuộc tính "data-founderai-capture" cùng đủ 3 trường name="name"/"email"/"phone" và checkbox name="marketingConsent" (trang mới) — GIỮ NGUYÊN VĂN toàn bộ form đó, không đổi tên thuộc tính, không xóa trường nào. Nếu trang có khối nhúng Biểu mẫu (thẻ section mang thuộc tính data-founderai-form-section, bên trong có div mang thuộc tính data-founderai-form, thẻ noscript, và thẻ script nạp form-embed.js) thì GIỮ NGUYÊN VĂN toàn bộ khối đó — không đổi giá trị thuộc tính data-founderai-form, không xóa hay sửa thẻ script form-embed.js bên trong; được phép DI CHUYỂN cả khối nguyên vẹn sang vị trí khác trong trang nếu người dùng yêu cầu. Tuyệt đối KHÔNG tự ý viết lại, xóa bỏ hay tái cấu trúc các section không được yêu cầu.
 2b) NGOẠI LỆ CỦA QUY TẮC 2 — khi yêu cầu là THÊM một trường mới vào form đăng ký (ví dụ: "thêm ô Tên công ty vào form", "thêm trường Quy mô kiểu chọn với 3 lựa chọn..."): đây là thay đổi ĐƯỢC PHÉP trên chính form đó. Thêm ĐÚNG các thẻ input/textarea/select/radio/checkbox được yêu cầu vào BÊN TRONG form "data-founderai-capture" hiện có (đặt sau các trường đang có, trước nút submit) — KHÔNG tạo form thứ 2, KHÔNG đổi thuộc tính "data-founderai-capture", và bắt buộc GIỮ NGUYÊN mọi trường đang có (name/email/phone/marketingConsent và mọi trường cf_* khác) — chỉ THÊM, không xoá, không đổi tên trường nào khác ngoài trường mới được yêu cầu.
-${declaredFieldsRule}${formSlotEditRule}3) ${rule3}
+${declaredFieldsRule}${formSlotEditRule}${formModeEditRule}3) ${rule3}
 
 QUY TẮC KỸ THUẬT:
 1) ${techRule1}
@@ -1159,6 +1347,8 @@ ${exampleLine}`;
         finishReason,
         // B-14: bản vá (ghép tất định) không bị chốt "teo dưới 60%" — xoá mục theo yêu cầu là hợp lệ.
         strategy: telemetry.strategy,
+        // PR-7a: cờ bật → AI được THÊM chỗ trống biểu mẫu có loại (không được bớt / đổi loại). Lượt tự sửa miễn phí thì không bao giờ.
+        allowAddFormSlots: formMode && !autoLayoutFix,
       });
 
       // B-1 (2) — chốt an toàn: so với bản hiện tại, AI không được THÊM đường lấy trộm dữ liệu / chạy mã từ nguồn
@@ -1474,7 +1664,19 @@ ${exampleLine}`;
       }
 
       logLandingAiLifecycle({ event: 'done', outcome: 'success', ...telemetry, userId, actorUserId, clientClosed: clientClosedField({ streamed, signal }) });
-      return editResult;
+      // PR-7a: nháp cho chỗ trống MỚI có loại. Lượt tự sửa hiển thị là miễn phí → không bao giờ gọi thêm model.
+      if (autoLayoutFix) return editResult;
+      return await this.attachFormDrafts(editResult, {
+        oldHtml: rawCurrent,
+        userId,
+        actorUserId,
+        userRequest: userRequest || instr,
+        locale,
+        signal,
+        deadlineAtMs: turnDeadlineAtMs,
+        startedAtMs: telemetry.startedAt,
+        timeBudgetMs,
+      });
     } catch (error) {
       if (error?.code === LANDING_UNSAFE_OUTPUT_CODE) telemetry.unsafeKinds = describeUnsafeKinds(error.details?.findings || []);
       logLandingAiLifecycle({

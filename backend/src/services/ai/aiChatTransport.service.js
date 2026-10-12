@@ -88,6 +88,8 @@ const droppedGoogleUrlNote = () => ({
  * @param {string} [params.feature='smart_chat'] — tên tính năng ghi vào sổ token (`usage_logs`) VÀ sổ lỗi bền (`ai_call_events`). Mặc định 'smart_chat'
  *   (trợ lý chiến dịch); các nơi gọi khác (vd viết chỉ dẫn chatbot) truyền tên riêng để chi phí/lỗi không lẫn với trợ lý (D-23).
  * @param {number|null} [params.actorUserId] — người bấm thật khi `userId` là CHỦ workspace (ghi vào metadata sổ token). Thiếu = không ghi.
+ * @param {AbortSignal|null} [params.signal] — huỷ lời gọi Gemini đang chạy từ ngoài (khách đóng kết nối). Mặc định không có.
+ * @param {number} [params.timeoutMs] — hạn chót TỔNG của lượt gọi (gồm thử lại + model dự phòng); không bao giờ vượt ASSISTANT_TIMEOUT_MS.
  * @param {boolean} [params.summarizeRecipientLists] — (C P1-6 (d), 04/10/2026) wizard đang ở bước nguồn người nhận (Sheet/tệp): tệp
  *   Excel/CSV và link Google Sheet ở TIN HIỆN TẠI mà bộ đọc người nhận tất định nhận ra là DANH SÁCH NGƯỜI NHẬN thì KHÔNG đính
  *   nguyên văn (tới 300 dòng Sheet / cả tệp không trần — tên/SĐT/email khách cuối) mà chỉ đính bản tóm tắt: số email/SĐT hợp lệ, số
@@ -106,6 +108,8 @@ export async function runChat({
   summarizeRecipientLists = false,
   feature = 'smart_chat',
   actorUserId = null,
+  signal = null,
+  timeoutMs = ASSISTANT_TIMEOUT_MS,
 } = {}) {
   const fileOwnerId = ownerUserId ?? userId;
   const googleUrlCache = new Map();
@@ -267,8 +271,11 @@ export async function runChat({
       topP: null,
       maxOutputTokens,
       thinkingBudget: null,
-      timeoutMs: ASSISTANT_TIMEOUT_MS,
-      totalTimeoutMs: ASSISTANT_TIMEOUT_MS,
+      // PR-7a: nơi gọi KHÔNG phải trợ lý chat (nháp biểu mẫu trong một lượt AI landing) tự đặt hạn chót riêng + huỷ khi khách đóng kết nối;
+      // mặc định giữ nguyên 85 giây và không có tín hiệu huỷ như trước.
+      timeoutMs: Math.min(ASSISTANT_TIMEOUT_MS, timeoutMs),
+      totalTimeoutMs: Math.min(ASSISTANT_TIMEOUT_MS, timeoutMs),
+      ...(signal ? { signal } : {}),
       feature,
       ownerUserId: userId,
       actorUserId,

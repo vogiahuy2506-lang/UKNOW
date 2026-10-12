@@ -31,6 +31,7 @@ import {
   validateAdminLeadFormConfig,
 } from '../../utils/landingLeadFormConfig.util.js';
 import { buildFormFieldsFromLeadFormConfig } from '../../utils/landingLeadFormToFormFields.util.js';
+import { sanitizeIncomingFormDrafts, buildFormInputFromDraft } from '../../utils/landingFormDrafts.util.js';
 import { auditLandingCaptureFields, buildCaptureFieldAuditWarning } from '../../utils/landingCaptureFieldAudit.util.js';
 import { autoDeclareLandingCaptureFields } from '../../utils/landingCaptureFieldAutoDeclare.util.js';
 import { getWorkspaceContext, getWorkspaceScope } from '../../utils/workspaceContext.util.js';
@@ -352,20 +353,50 @@ class LandingPageAdminService {
    *    null` (QĐ4: không bao giờ tự điền tiền / tài khoản); `booking` = khung giờ mẫu.
    *  Cài đặt luôn `consentEnabled: true, notifyOwner: true` như biểu mẫu tạo từ landing trước nay.
    *
+   * PR-7a — NHÁP AI theo chỗ trống (`formDrafts`, do TRÌNH DUYỆT gửi kèm lúc lưu nên KHÔNG tin): chỗ trống loại booking / payment / survey /
+   * blank có nháp cùng `slotIndex` và cùng loại thì dựng biểu mẫu từ nháp sau khi nháp đi qua bộ chuẩn hoá thật (`buildFormInputFromDraft`:
+   * `paymentConfig` luôn null, đồng ý + báo chủ luôn bật, trường lạ / loại lạ → bỏ nháp) và lấy tiêu đề của nháp thay cho "<tên trang> - <loại>".
+   * Nháp hỏng / sai loại / không có → mẫu backend như PR-6 (và nếu tạo từ nháp vẫn lỗi thì cũng quay về mẫu — nháp không bao giờ làm hỏng lượt
+   * lưu). `consult` luôn dựng từ leadFormConfig (không dùng nháp).
+   *
    * Lỗi giữa chừng → xoá các biểu mẫu ĐÃ tạo trong lượt này (chưa có bài nộp nào) rồi ném lại: không để mồ côi.
    *
-   * @param {{ kinds: string[], workspaceOwnerId: number, createdByUserId: number, baseTitle: string, leadForm: object }} params
+   * @param {{ kinds: string[], slotIndexes?: number[], formDrafts?: Map<number, { kind: string, draft: object }>, workspaceOwnerId: number,
+   *   createdByUserId: number, baseTitle: string, leadForm: object }} params
+   *   `slotIndexes[i]` = chỉ số (trong HTML đang lưu, đếm cả chỗ trống trần) của chỗ trống `kinds[i]`; thiếu thì coi là 0, 1, 2…
    * @returns {Promise<Array<{ form: object, kind: string }>>} cùng thứ tự `kinds`
    */
-  async createFormsForSlots({ kinds, workspaceOwnerId, createdByUserId, baseTitle, leadForm }) {
+  async createFormsForSlots({ kinds, slotIndexes = null, formDrafts = null, workspaceOwnerId, createdByUserId, baseTitle, leadForm }) {
     const created = [];
     const perKindCount = {};
     try {
-      for (const kind of kinds) {
+      for (let position = 0; position < kinds.length; position += 1) {
+        const kind = kinds[position];
         perKindCount[kind] = (perKindCount[kind] || 0) + 1;
         const title = buildSlotFormTitle(baseTitle, kind, perKindCount[kind]);
-        let form;
-        if (kind === 'consult') {
+        let form = null;
+        const slotIndex = Array.isArray(slotIndexes) ? slotIndexes[position] : position;
+        const entry = kind !== 'consult' && formDrafts ? formDrafts.get(slotIndex) : null;
+        const fromDraft = entry && entry.kind === kind ? buildFormInputFromDraft(entry.draft, kind) : null;
+        if (fromDraft) {
+          try {
+            form = await formService.createForm({
+              workspaceOwnerId,
+              createdByUserId,
+              title: fromDraft.title || title,
+              description: fromDraft.description,
+              fields: fromDraft.fields,
+              settings: fromDraft.settings,
+              bookingConfig: fromDraft.bookingConfig,
+              paymentConfig: null,
+            });
+          } catch (draftError) {
+            console.warn(`[LandingPageAdmin] Nháp AI của chỗ trống ${slotIndex} (${kind}) không tạo được, dùng mẫu: ${String(draftError?.message || draftError).slice(0, 160)}`);
+            form = null;
+          }
+        }
+        // Chưa dựng được từ nháp AI → mẫu như PR-6.
+        if (!form && kind === 'consult') {
           form = await formService.createForm({
             workspaceOwnerId,
             createdByUserId,
@@ -373,7 +404,7 @@ class LandingPageAdminService {
             fields: buildFormFieldsFromLeadFormConfig(leadForm),
             settings: { consentEnabled: true, notifyOwner: true },
           });
-        } else {
+        } else if (!form) {
           const draft = buildStarterFormDraft(kind);
           form = await formService.createForm({
             workspaceOwnerId,
@@ -477,6 +508,8 @@ class LandingPageAdminService {
     const rawHtml = body?.htmlContent ?? '';
     assertFormSlotsValid(rawHtml);
     const slots = listFormSlots(rawHtml);
+    // PR-7a — nháp biểu mẫu AI theo chỗ trống (từ trình duyệt, chưa tin): lọc sơ ở đây, chuẩn hoá thật trong createFormsForSlots.
+    const formDrafts = sanitizeIncomingFormDrafts(body?.formDrafts);
     /** @type {Array<{ form: object, kind: string }>} */
     let createdForms = [];
     let htmlContent;
@@ -487,6 +520,7 @@ class LandingPageAdminService {
         const baseTitle = String(body?.title || '').trim().slice(0, 200) || slug || 'Biểu mẫu landing';
         createdForms = await this.createFormsForSlots({
           kinds: slots.map((s) => s.kind),
+          formDrafts,
           workspaceOwnerId: context.workspaceOwnerId,
           createdByUserId: context.actorUserId,
           baseTitle,
@@ -648,7 +682,7 @@ class LandingPageAdminService {
     const requestedForms = await this.loadLinkableForms({ ids: linkInput.ids, resourceOwnerId, context });
 
     // slotPlan[i] = chỗ trống thứ i + biểu mẫu sẽ vào đó (null = phải tạo mới).
-    const slotPlan = slots.map((slot) => ({ slot, form: null }));
+    const slotPlan = slots.map((slot, index) => ({ slot, form: null, index }));
     /** Biểu mẫu có sẵn cần nối vào cuối trang (HTML chưa nhúng, không có chỗ trống dành riêng). */
     const toAppend = [];
     if (linkInput.mode === 'legacySingle') {
@@ -693,6 +727,8 @@ class LandingPageAdminService {
       }
     }
     const slotsToCreate = slotPlan.filter((p) => !p.form);
+    // PR-7a — nháp biểu mẫu AI theo chỗ trống (từ trình duyệt, chưa tin); `slotIndex` của nháp tính trên TOÀN BỘ chỗ trống của HTML đang lưu.
+    const formDrafts = sanitizeIncomingFormDrafts(body?.formDrafts);
     // Biểu mẫu có sẵn (chọn tay hoặc tái dùng) còn NHÁP → xuất bản trong cùng transaction lưu landing: khối nhúng vào form nháp
     // = khách bấm vào thấy "không tìm thấy biểu mẫu".
     const existingForms = [...requestedForms, ...slotPlan.filter((p) => p.form).map((p) => p.form)];
@@ -716,6 +752,8 @@ class LandingPageAdminService {
           || slug || current.slug || 'Biểu mẫu landing';
         createdForms = await this.createFormsForSlots({
           kinds: slotsToCreate.map((p) => p.slot.kind),
+          slotIndexes: slotsToCreate.map((p) => p.index),
+          formDrafts,
           workspaceOwnerId: resourceOwnerId,
           createdByUserId: context.actorUserId,
           baseTitle,

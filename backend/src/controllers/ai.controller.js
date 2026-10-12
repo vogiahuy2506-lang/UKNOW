@@ -54,6 +54,7 @@ import { buildAiErrorPayload } from '../utils/aiErrorPayload.util.js';
 import { runLandingAiTurn } from '../services/ai/aiLandingTurn.service.js';
 import { recordAssistantTurnFailure, recordPlanSlotOutcome, recordAssistantParseFailure } from '../services/ai/assistantTurnFailure.service.js';
 import { findLandingAiInputTooLong } from '../utils/landingAiInputLimits.util.js';
+import { mergeFormDrafts, realignFormDrafts } from '../utils/landingFormDrafts.util.js';
 import { checkUserResourceLimit } from '../utils/userResourceLimit.util.js';
 import {
   EXTRA_CONTEXT_TOO_LONG_CODE,
@@ -1594,6 +1595,8 @@ class AiController {
             leadFormConfig,
             assets,
             documents,
+            // PR-7a: câu chữ GỐC của người dùng (không kèm câu dặn của hệ thống) — mô tả cho nháp biểu mẫu của từng chỗ trống có loại.
+            userRequest: String(prompt).trim(),
             // B-4 / B-20: hạn chót tổng của lượt + huỷ lời gọi Gemini khi người dùng đóng kết nối + báo tiến độ cho luồng.
             signal: turn.signal,
             deadlineAtMs: turn.deadlineAtMs,
@@ -1639,6 +1642,8 @@ class AiController {
                   // (editLandingHtml coi tin KHÔNG có bộ đếm là hết lượt — xem chú thích ở đó).
                   autoLayoutFixCount: 0,
                   ...(leadFormDraft ? { leadFormDraft, leadFormConfig: data.leadFormConfig } : {}),
+                  // PR-7a: nháp biểu mẫu theo chỗ trống (chỉ có khi AI_LANDING_FORM_MODE=form) — tải lại phiên vẫn còn để Lưu dùng.
+                  ...(Array.isArray(data.formDrafts) && data.formDrafts.length > 0 ? { formDrafts: data.formDrafts } : {}),
                 },
               };
               const saveCard = skipUserMessage
@@ -1915,6 +1920,8 @@ class AiController {
             assets,
             documents,
             leadFormConfig,
+            // PR-7a: câu gốc của người dùng (không kèm số đo hiển thị) — mô tả cho nháp biểu mẫu của chỗ trống MỚI.
+            userRequest: userInstruction,
             autoLayoutFix: isAutoFix,
             layoutFindingsCount: layoutFindings.length,
             // B-4 / B-20: hạn chót tổng của lượt + huỷ lời gọi Gemini khi người dùng đóng kết nối + báo tiến độ cho luồng.
@@ -1962,12 +1969,21 @@ class AiController {
               // Sửa do người dùng (đã trừ credit) đặt lại bộ đếm về 0 — mỗi hành động trả phí được 2 lượt
               // tự sửa miễn phí; không đặt lại thì lượt sinh trang đã ăn hết trần và các lần sửa sau
               // không bao giờ được tự sửa nữa.
+              // PR-7a: nháp biểu mẫu của thẻ = nháp cũ (đánh số lại theo HTML mới) + nháp của chỗ trống MỚI lượt này. Chỉ khi cờ bật
+              // (`data.formDrafts` là mảng) — cờ tắt thì dữ liệu thẻ không đổi một khoá nào.
+              const baseHtmlForDrafts = typeof landingMessage?.data?.html === 'string' && landingMessage.data.html
+                ? landingMessage.data.html
+                : String(currentHtml);
+              const sessionFormDrafts = Array.isArray(data.formDrafts)
+                ? mergeFormDrafts(realignFormDrafts(landingMessage?.data?.formDrafts, baseHtmlForDrafts, data.html), data.formDrafts)
+                : null;
               const saved = await aiSessionRepo.updateLandingPageMessage(sid, req.user.id, {
                 title: data.title,
                 html: data.html,
                 previousHtml: isAutoFix ? autoFixBaseHtml : String(currentHtml),
                 ...(landingMessage?.data?.title ? { previousTitle: String(landingMessage.data.title) } : {}),
                 autoLayoutFixCount: isAutoFix ? autoFixUsed + 1 : 0,
+                ...(sessionFormDrafts ? { formDrafts: sessionFormDrafts } : {}),
               }, landingMessage?.id ?? messageId).catch((err) => {
                 console.warn('[AI.editLandingHtml] Failed to update landing_page message:', err.message);
                 return false;

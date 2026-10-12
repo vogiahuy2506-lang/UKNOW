@@ -751,16 +751,19 @@ describe('aiLandingPageService.generate — AI_LANDING_FORM_MODE=form (PR-5b-2a)
     ).rejects.toMatchObject({ status: 422, message: expect.stringMatching(/sai dạng/) });
   });
 
-  it('công tắc BẬT: HTML có 2 chỗ trống → 422', async () => {
+  // PR-7a: không còn "đúng 1 chỗ trống" — 1..3 chỗ trống có loại hợp lệ; vượt 3 mới 422 (ca 2 chỗ trống hợp lệ: aiLandingPage.formSlots.spec.js).
+  it('công tắc BẬT: HTML có 4 chỗ trống (vượt trần 3 của một lượt) → 422', async () => {
     process.env.AI_LANDING_FORM_MODE = 'form';
-    const htmlTwoSlots = validSlotHtml.replace(
+    const htmlFourSlots = validSlotHtml.replace(
       '</section>',
-      '</section><section><div data-founderai-form-slot></div></section>'
+      '</section><section><div data-founderai-form-slot="booking"></div></section>'
+      + '<section><div data-founderai-form-slot="payment"></div></section>'
+      + '<section><div data-founderai-form-slot="survey"></div></section>'
     );
-    mockGenerateReturns(htmlTwoSlots);
+    mockGenerateReturns(htmlFourSlots);
     await expect(
       aiLandingPageService.generate({ userId: 1, prompt: 'landing khoá học' })
-    ).rejects.toMatchObject({ status: 422, message: expect.stringMatching(/2 chỗ trống/) });
+    ).rejects.toMatchObject({ status: 422, message: expect.stringMatching(/4 chỗ trống/) });
   });
 
   it('đọc công tắc LÚC GỌI, không lúc nạp module — bật rồi tắt ngay trong cùng file test phải đổi hành vi ngay', async () => {
