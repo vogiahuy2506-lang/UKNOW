@@ -9,6 +9,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, jest } from '@jest/globals';
 import request from 'supertest';
+import http from 'http';
 import path from 'path';
 import os from 'os';
 import { promises as fs } from 'fs';
@@ -423,6 +424,32 @@ describe('PUT .../uploads/:uploadId/content (kho cục bộ)', () => {
     const res = await putBytes(session.uploadUrl, Buffer.alloc(1 * MB + 1, 0x61), 'image/png');
     expect(res.status).toBe(413);
     expect(res.body.code).toBe('FILE_TOO_LARGE');
+    expect(await existsOnDisk(`uploads/${owner.id}/forms/${form.id}/tmp/${session.uploadId}.png`)).toBe(false);
+  });
+
+  it('PUT KHÔNG khai Content-Length (chunked) vẫn bị cắt ở trần 1 MB giữa dòng: 413 và tệp ghi dở bị xoá (trần ở luồng ghi, không chỉ ở tiêu đề)', async () => {
+    const { owner, form } = await setup({ username: 'owner_ff_put3b' });
+    const session = await newSession(form, { size: 1000 });
+    const server = app.listen(0);
+    try {
+      const { port } = server.address();
+      const status = await new Promise((resolve, reject) => {
+        const req = http.request(
+          { host: '127.0.0.1', port, method: 'PUT', path: session.uploadUrl, headers: { 'Content-Type': 'image/png', 'Transfer-Encoding': 'chunked' } },
+          (res) => {
+            res.resume();
+            res.on('end', () => resolve(res.statusCode));
+          }
+        );
+        req.on('error', reject);
+        req.write(Buffer.alloc(600 * 1024, 0x61));
+        req.write(Buffer.alloc(600 * 1024, 0x61));
+        req.end();
+      });
+      expect(status).toBe(413);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
     expect(await existsOnDisk(`uploads/${owner.id}/forms/${form.id}/tmp/${session.uploadId}.png`)).toBe(false);
   });
 
