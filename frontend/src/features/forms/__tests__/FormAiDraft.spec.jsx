@@ -387,6 +387,27 @@ describe('FormEditorPage — nháp AI đổ vào trình soạn', () => {
       { label: 'Hài lòng?', type: 'yes_no', required: false },
     ]);
   });
+
+  // Review PR-5 12/10: lựa chọn dạng {label, value} (hình dạng chuẩn hoá của backend) KHÔNG được thành "[object Object]".
+  it('nháp có lựa chọn dạng {label, value} → hiện đúng chữ, payload lưu lựa chọn là chữ', async () => {
+    formAdminApi.aiDraftForm.mockResolvedValue({
+      ...CONSULT_DRAFT,
+      fields: [
+        { label: 'Họ và tên', type: 'short_text', required: true, role: 'name' },
+        { label: 'Bé đã học chưa?', type: 'radio', required: false, options: [{ label: 'Chưa', value: 'chua' }, { label: 'Rồi', value: 'roi' }] },
+      ],
+    });
+    renderCreate();
+    typeDescription('x');
+    clickCreateWithAi();
+    await screen.findByDisplayValue(CONSULT_DRAFT.title);
+    expect(screen.queryByText('[object Object]')).toBeNull();
+    save();
+    await waitFor(() => expect(formAdminApi.createForm).toHaveBeenCalled());
+    const radio = formAdminApi.createForm.mock.calls[0][0].fields.find((f) => f.type === 'radio');
+    expect(JSON.stringify(radio.options)).not.toContain('[object Object]');
+    expect(JSON.stringify(radio.options)).toContain('Chưa');
+  });
 });
 
 describe('FormEditorPage — "AI gợi ý câu hỏi"', () => {

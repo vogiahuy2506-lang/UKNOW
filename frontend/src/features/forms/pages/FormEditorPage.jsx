@@ -376,6 +376,10 @@ export default function FormEditorPage() {
   // sửa tuỳ ý rồi mới bấm Lưu (đường lưu cũ, không có API riêng).
   // `draft.paymentConfig` (backend luôn trả null) KHÔNG được đụng tới: AI không bao giờ điền tiền / tài khoản nhận tiền — loại thu tiền
   // chỉ kèm `needsAttention: ['payment']` để nhắc chủ tự khai ở tab Thanh toán (nhân viên không khai được nên không nhắc họ).
+  // Nháp AI trả lựa chọn dạng chuỗi, nhưng chấp nhận cả {label, value} (hình dạng chuẩn hoá của backend) như đường nạp biểu mẫu —
+  // `String(object)` ra "[object Object]" (review PR-5 12/10).
+  const aiOptionToText = (opt) => (opt && typeof opt === 'object' ? String(opt.label || opt.value || '') : String(opt ?? ''));
+
   const handleAiDraft = (draft) => {
     const built = (Array.isArray(draft?.fields) ? draft.fields : []).map((f) => {
       const type = f.type || 'short_text';
@@ -388,7 +392,7 @@ export default function FormEditorPage() {
         placeholder: String(f.placeholder || ''),
         helpText: String(f.helpText || ''),
         width: !isBlock && f.width === 'half' ? 'half' : 'full',
-        options: OPTION_FIELD_TYPES.includes(type) && Array.isArray(f.options) ? f.options.map(String) : [],
+        options: OPTION_FIELD_TYPES.includes(type) && Array.isArray(f.options) ? f.options.map(aiOptionToText) : [],
       });
     });
     if (built.length === 0) {
@@ -449,7 +453,7 @@ export default function FormEditorPage() {
         placeholder: String(f.placeholder || ''),
         helpText: String(f.helpText || ''),
         width: f.width === 'half' ? 'half' : 'full',
-        options: OPTION_FIELD_TYPES.includes(type) && Array.isArray(f.options) ? f.options.map(String) : [],
+        options: OPTION_FIELD_TYPES.includes(type) && Array.isArray(f.options) ? f.options.map(aiOptionToText) : [],
       });
     });
     // Vai trò (tên / email / SĐT) chỉ một trường — gợi ý trùng vai trò với trường đã có thì bỏ vai trò của gợi ý, không cướp của trường cũ.
