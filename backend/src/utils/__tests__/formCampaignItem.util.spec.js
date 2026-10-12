@@ -98,4 +98,36 @@ describe('formCampaignItem.util - mapFormSubmissionToCampaignItem', () => {
     const item = mapFormSubmissionToCampaignItem(rowWithReservedAnswerKey, fieldsWithReservedKey, {});
     expect(item.email).toBe('a@example.com');
   });
+
+  it('PR-4: khối hiển thị (heading / paragraph / page_break) không thành khoá của item dù answers lỡ có khoá trùng; rating / yes_no / time thành khoá phẳng', () => {
+    const fieldsWithBlocks = [
+      ...fields,
+      { key: 'f_h', type: 'heading', label: 'Phần 1', role: null },
+      { key: 'f_p', type: 'paragraph', label: 'Hướng dẫn', role: null },
+      { key: 'f_pb', type: 'page_break', label: 'Bước 2', role: null },
+      { key: 'f_rate', type: 'rating', label: 'Sao', role: null },
+      { key: 'f_yn', type: 'yes_no', label: 'Dùng thử?', role: null },
+      { key: 'f_time', type: 'time', label: 'Giờ', role: null },
+    ];
+    const row = {
+      ...baseRow,
+      answers: {
+        ...baseRow.answers,
+        // Dữ liệu bẩn: khối hiển thị không bao giờ có câu trả lời, nhưng nếu có thì vẫn phải bị bỏ qua
+        f_h: { label: 'Phần 1', type: 'heading', value: 'x' },
+        f_p: { label: 'Hướng dẫn', type: 'paragraph', value: 'y' },
+        f_pb: { label: 'Bước 2', type: 'page_break', value: 'z' },
+        f_rate: { label: 'Sao', type: 'rating', value: 4 },
+        f_yn: { label: 'Dùng thử?', type: 'yes_no', value: 'yes' },
+        f_time: { label: 'Giờ', type: 'time', value: '09:30' },
+      },
+    };
+    const item = mapFormSubmissionToCampaignItem(row, fieldsWithBlocks, {});
+    expect(item).not.toHaveProperty('f_h');
+    expect(item).not.toHaveProperty('f_p');
+    expect(item).not.toHaveProperty('f_pb');
+    expect(item.f_rate).toBe(4);
+    expect(item.f_yn).toBe('yes');
+    expect(item.f_time).toBe('09:30');
+  });
 });

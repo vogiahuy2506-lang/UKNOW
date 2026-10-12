@@ -1,7 +1,12 @@
 import crypto from 'crypto';
 import { isReservedCampaignItemFieldKey } from './formCampaignItem.util.js';
+import { isDisplayFieldType } from './formFieldTypes.util.js';
 import { VIETQR_BANKS } from '../constants/vietQrBanks.js';
 
+export { DISPLAY_FIELD_TYPES, isDisplayFieldType } from './formFieldTypes.util.js';
+
+// 9 loại gốc + 3 loại nhập mới (rating, yes_no, time) + 3 khối hiển thị (heading, paragraph, page_break) —
+// PLAN_BIEU_MAU_TUY_BIEN_AI_LANDING_2026-10-11, PR-4. Khối hiển thị xem formFieldTypes.util.js.
 export const ALLOWED_FIELD_TYPES = Object.freeze([
   'short_text',
   'long_text',
@@ -12,11 +17,27 @@ export const ALLOWED_FIELD_TYPES = Object.freeze([
   'radio',
   'checkbox',
   'date',
+  'rating',
+  'yes_no',
+  'time',
+  'heading',
+  'paragraph',
+  'page_break',
 ]);
 
 export const ALLOWED_ROLES = Object.freeze(['name', 'email', 'phone']);
-export const MAX_FIELDS = 30;
+// Loại nhập KHÔNG nhận `role` (số sao / có-không / giờ không thể là tên, email hay SĐT người nộp).
+const NO_ROLE_INPUT_TYPES = Object.freeze(['rating', 'yes_no', 'time']);
+export const ALLOWED_FIELD_WIDTHS = Object.freeze(['full', 'half']);
+// Trần số trường NHẬP (khách điền) và số khối HIỂN THỊ (tiêu đề / đoạn chữ / ngắt trang) — tách riêng để
+// dàn trang không ăn vào hạn mức câu hỏi.
+export const MAX_INPUT_FIELDS = 30;
+export const MAX_DISPLAY_BLOCKS = 20;
+// Tên cũ của MAX_INPUT_FIELDS — giữ để nơi đã import không gãy.
+export const MAX_FIELDS = MAX_INPUT_FIELDS;
 export const MAX_LABEL_LENGTH = 200;
+// Nội dung đoạn chữ (`paragraph`) nằm trong `label` nên có trần riêng, dài hơn nhãn thường.
+export const MAX_PARAGRAPH_LENGTH = 2000;
 // Chữ hướng dẫn nhỏ hiện dưới nhãn/ô nhập (PLAN_BIEU_MAU_TUY_BIEN_AI_LANDING_2026-10-11, PR-3).
 export const MAX_HELP_TEXT_LENGTH = 300;
 export const MAX_OPTIONS = 50;
@@ -78,8 +99,21 @@ export function normalizeFormFields(rawFields) {
     throw createValidationError('Danh sách trường của biểu mẫu phải là một mảng');
   }
 
-  if (rawFields.length > MAX_FIELDS) {
-    throw createValidationError(`Biểu mẫu không được vượt quá ${MAX_FIELDS} trường`);
+  // Đếm riêng trường nhập và khối hiển thị (mục không phải đối tượng tính là trường nhập — vòng lặp dưới sẽ báo
+  // lỗi "không hợp lệ" ngay sau đó).
+  let inputCount = 0;
+  let displayCount = 0;
+  for (const raw of rawFields) {
+    if (raw && typeof raw === 'object' && isDisplayFieldType(raw.type)) displayCount += 1;
+    else inputCount += 1;
+  }
+  if (inputCount > MAX_INPUT_FIELDS) {
+    throw createValidationError(`Biểu mẫu không được vượt quá ${MAX_INPUT_FIELDS} trường nhập liệu (đang có ${inputCount})`);
+  }
+  if (displayCount > MAX_DISPLAY_BLOCKS) {
+    throw createValidationError(
+      `Biểu mẫu không được vượt quá ${MAX_DISPLAY_BLOCKS} khối hiển thị — tiêu đề, đoạn chữ, ngắt trang (đang có ${displayCount})`
+    );
   }
 
   const usedKeys = new Set();
@@ -97,26 +131,53 @@ export function normalizeFormFields(rawFields) {
       throw createValidationError(`Kiểu trường "${type}" không được hỗ trợ`);
     }
 
+    const isDisplay = isDisplayFieldType(type);
+    const isParagraph = type === 'paragraph';
+
+    // `label`: nhãn câu hỏi / chữ tiêu đề / NỘI DUNG đoạn chữ (paragraph, trần 2000) / tiêu đề bước (page_break —
+    // loại duy nhất được để trống).
     const label = String(field.label || '').trim();
-    if (!label) {
-      throw createValidationError(`Nhãn trường thứ ${i + 1} không được để trống`);
+    if (!label && type !== 'page_break') {
+      throw createValidationError(
+        isParagraph
+          ? `Nội dung đoạn chữ thứ ${i + 1} không được để trống`
+          : `Nhãn trường thứ ${i + 1} không được để trống`
+      );
     }
-    if (label.length > MAX_LABEL_LENGTH) {
+    if (isParagraph) {
+      if (label.length > MAX_PARAGRAPH_LENGTH) {
+        throw createValidationError(`Nội dung đoạn chữ "${label.slice(0, 30)}..." vượt quá ${MAX_PARAGRAPH_LENGTH} ký tự`);
+      }
+    } else if (label.length > MAX_LABEL_LENGTH) {
       throw createValidationError(`Nhãn trường "${label.slice(0, 30)}..." vượt quá ${MAX_LABEL_LENGTH} ký tự`);
     }
 
-    const required = Boolean(field.required);
-    const placeholder = field.placeholder ? String(field.placeholder).trim().slice(0, MAX_LABEL_LENGTH) : '';
+    // Khối hiển thị không có giá trị nên không thể bắt buộc / không có gợi ý trong ô.
+    const required = isDisplay ? false : Boolean(field.required);
+    const placeholder = !isDisplay && field.placeholder ? String(field.placeholder).trim().slice(0, MAX_LABEL_LENGTH) : '';
     // Chữ hướng dẫn: kiểm như nhãn — quá dài thì báo lỗi rõ thay vì cắt lặng lẽ (người dùng nhìn thấy chữ này).
-    const helpText = field.helpText ? String(field.helpText).trim() : '';
+    // paragraph / page_break không có chữ phụ (nội dung đã nằm ở `label`).
+    const helpText = isParagraph || type === 'page_break' || !field.helpText ? '' : String(field.helpText).trim();
     if (helpText.length > MAX_HELP_TEXT_LENGTH) {
       throw createValidationError(
         `Chữ hướng dẫn của trường "${label.slice(0, 30)}..." vượt quá ${MAX_HELP_TEXT_LENGTH} ký tự`
       );
     }
 
+    // Độ rộng: chỉ trường nhập; vắng/rỗng = full. Khối hiển thị luôn full (bỏ qua giá trị gửi lên).
+    let width = 'full';
+    if (!isDisplay && field.width !== undefined && field.width !== null && field.width !== '') {
+      const w = String(field.width).trim().toLowerCase();
+      if (!ALLOWED_FIELD_WIDTHS.includes(w)) {
+        throw createValidationError(
+          `Độ rộng của trường "${label.slice(0, 30)}" không hợp lệ (chỉ nhận ${ALLOWED_FIELD_WIDTHS.join(' hoặc ')})`
+        );
+      }
+      width = w;
+    }
+
     let role = null;
-    if (field.role) {
+    if (field.role && !isDisplay && !NO_ROLE_INPUT_TYPES.includes(type)) {
       const r = String(field.role).trim().toLowerCase();
       if (ALLOWED_ROLES.includes(r)) {
         if (usedRoles.has(r)) {
@@ -190,6 +251,8 @@ export function normalizeFormFields(rawFields) {
       helpText,
       role,
       options,
+      // Chỉ ghi khi 'half' — vắng khoá = full, nên dữ liệu/payload của trường cũ không đổi một byte.
+      ...(width === 'half' ? { width } : {}),
     });
   }
 

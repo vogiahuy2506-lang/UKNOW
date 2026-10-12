@@ -17,6 +17,7 @@ import {
 } from '../utils/formDefinition.util.js';
 import { getPaymentWording } from '../utils/formPaymentWording.util.js';
 import { validateFormSubmission } from '../utils/formSubmission.util.js';
+import { isDisplayFieldType } from '../utils/formFieldTypes.util.js';
 import {
   todayVn,
   toAppointmentAt,
@@ -1818,11 +1819,14 @@ class FormService {
     ]);
 
     const items = rows.map((row) => mapFormSubmissionToCampaignItem(row, form.fields, {}));
-    const columns = (Array.isArray(form.fields) ? form.fields : []).map((f) => ({
-      key: f.key,
-      label: f.label,
-      type: f.type,
-    }));
+    // Khối hiển thị (tiêu đề / đoạn chữ / ngắt trang) không có dữ liệu để ánh xạ — không đưa vào danh sách cột.
+    const columns = (Array.isArray(form.fields) ? form.fields : [])
+      .filter((f) => !isDisplayFieldType(f?.type))
+      .map((f) => ({
+        key: f.key,
+        label: f.label,
+        type: f.type,
+      }));
 
     return {
       items,

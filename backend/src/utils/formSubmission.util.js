@@ -1,6 +1,9 @@
 import { parseMarketingConsent } from '../services/lead/lead.service.js';
+import { isDisplayFieldType, RATING_MAX, YES_NO_VALUES } from './formFieldTypes.util.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Giờ 24h dạng HH:MM (đúng giá trị `<input type="time">` trả về, không có giây).
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 function createSubmissionValidationError(message, code = 'INVALID_SUBMISSION') {
   const err = new Error(message);
@@ -27,6 +30,10 @@ function normalizePhone(raw) {
  * - Kiểm tra các trường bắt buộc (required).
  * - Kiểm tra định dạng email theo regex lead.service.js:25.
  * - Kiểm tra lựa chọn (select, radio, checkbox) phải thuộc options.
+ * - rating: số nguyên 1..5; yes_no: "yes"|"no"; time: HH:MM 24h.
+ * - Khối hiển thị (heading, paragraph, page_break) KHÔNG có câu trả lời: bỏ qua hoàn toàn, kể cả khi client
+ *   gửi kèm giá trị cho khoá của chúng. Việc chia trang chỉ là chuyện hiển thị — server luôn kiểm TẤT CẢ
+ *   trường bắt buộc, không phụ thuộc trang nào.
  * - Trích xuất respondent_name, respondent_email, respondent_phone theo role.
  * - Trích xuất marketingConsent qua parseMarketingConsent.
  *
@@ -53,6 +60,7 @@ export function validateFormSubmission(fields = [], rawAnswers = {}, rawBody = {
 
   for (const field of fields) {
     const { key, type, label, required, options = [], role } = field;
+    if (isDisplayFieldType(type)) continue;
     const val = safeAnswers[key];
 
     // Kiểm tra trường bắt buộc
@@ -101,6 +109,25 @@ export function validateFormSubmission(fields = [], rawAnswers = {}, rawBody = {
         throw createSubmissionValidationError(`Ngày "${val}" không hợp lệ`);
       }
       finalValue = dateStr;
+    } else if (type === 'rating') {
+      // Chỉ nhận số nguyên thật (hoặc chuỗi số nguyên): `true`/`[3]`/"4.5" không lọt qua Number().
+      const num = typeof val === 'number' ? val : (typeof val === 'string' && /^\d+$/.test(val.trim()) ? Number(val.trim()) : NaN);
+      if (!Number.isInteger(num) || num < 1 || num > RATING_MAX) {
+        throw createSubmissionValidationError(`Trường "${label}" phải là số sao từ 1 đến ${RATING_MAX}`);
+      }
+      finalValue = num;
+    } else if (type === 'yes_no') {
+      const yn = typeof val === 'string' ? val.trim().toLowerCase() : '';
+      if (!YES_NO_VALUES.includes(yn)) {
+        throw createSubmissionValidationError(`Trường "${label}" chỉ nhận lựa chọn Có hoặc Không`);
+      }
+      finalValue = yn;
+    } else if (type === 'time') {
+      const timeStr = typeof val === 'string' ? val.trim() : '';
+      if (!TIME_RE.test(timeStr)) {
+        throw createSubmissionValidationError(`Giờ "${val}" không hợp lệ (định dạng HH:MM, 24 giờ)`);
+      }
+      finalValue = timeStr;
     } else if (type === 'select' || type === 'radio') {
       const strVal = String(val).trim();
       if (!validOptionValues.has(strVal)) {

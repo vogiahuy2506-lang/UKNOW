@@ -5,6 +5,8 @@
  * Hàm thuần — không đụng DB, dễ test độc lập.
  */
 
+import { isDisplayFieldType } from './formFieldTypes.util.js';
+
 /**
  * Khoá cố định của item chiến dịch (xem object `item` trong mapFormSubmissionToCampaignItem bên
  * dưới) — trường form KHÔNG được có field.key trùng các khoá này, nếu không giá trị đã chuẩn hoá
@@ -140,6 +142,8 @@ export function mapFormSubmissionToCampaignItem(row, fields = [], fieldMap = {})
   for (const field of safeFields) {
     const key = field?.key;
     if (!key || isReservedCampaignItemFieldKey(key)) continue;
+    // Khối hiển thị (tiêu đề / đoạn chữ / ngắt trang) không có câu trả lời — không thành cột của item.
+    if (isDisplayFieldType(field?.type)) continue;
     const value = readAnswerValue(answers, key);
     if (value !== null) item[key] = value;
   }

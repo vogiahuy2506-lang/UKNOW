@@ -11,6 +11,10 @@ import {
   ALLOWED_ROLES,
   ALLOWED_FORM_FONTS,
   MAX_FIELDS,
+  MAX_INPUT_FIELDS,
+  MAX_DISPLAY_BLOCKS,
+  MAX_PARAGRAPH_LENGTH,
+  MAX_LABEL_LENGTH,
   MAX_HELP_TEXT_LENGTH,
   MAX_CONSENT_TEXT_LENGTH,
 } from '../formDefinition.util.js';
@@ -33,7 +37,7 @@ describe('formDefinition.util', () => {
     expect(() => normalizeFormFields(fields)).toThrow(`Biểu mẫu không được vượt quá ${MAX_FIELDS} trường`);
   });
 
-  it('ném lỗi nếu kiểu trường không nằm trong 9 kiểu cho phép', () => {
+  it('ném lỗi nếu kiểu trường không nằm trong các kiểu cho phép', () => {
     expect(() =>
       normalizeFormFields([
         { type: 'file_upload', label: 'Tệp đính kèm' },
@@ -41,8 +45,9 @@ describe('formDefinition.util', () => {
     ).toThrow('Kiểu trường "file_upload" không được hỗ trợ');
   });
 
-  it('hỗ trợ đủ 9 kiểu trường hợp lệ', () => {
-    expect(ALLOWED_FIELD_TYPES.length).toBe(9);
+  it('hỗ trợ đủ 9 kiểu trường gốc (PR-4 thêm 6 loại mới: 15 loại)', () => {
+    // 9 loại gốc + rating/yes_no/time + heading/paragraph/page_break (PR-4) — chi tiết loại mới ở describe riêng bên dưới.
+    expect(ALLOWED_FIELD_TYPES.length).toBe(15);
     const validFields = [
       { type: 'short_text', label: 'Họ tên' },
       { type: 'long_text', label: 'Ghi chú' },
@@ -184,6 +189,143 @@ describe('formDefinition.util - normalizeFormFields: helpText & placeholder (PR-
   it('placeholder được lưu (đã trim, cắt 200 ký tự) — trình soạn mới đã có ô nhập', () => {
     const [f] = normalizeFormFields([{ type: 'short_text', label: 'Họ tên', placeholder: `  ${'p'.repeat(250)}  ` }]);
     expect(f.placeholder).toHaveLength(200);
+  });
+});
+
+describe('formDefinition.util - normalizeFormFields: loại trường & bố cục mới (PR-4)', () => {
+  const shortText = (i) => ({ type: 'short_text', label: `Câu ${i}` });
+
+  it('rating / yes_no / time là trường nhập: giữ required, KHÔNG options, KHÔNG role (role gửi lên bị bỏ)', () => {
+    const [rating, yesNo, time] = normalizeFormFields([
+      { type: 'rating', label: 'Mức hài lòng', required: true, role: 'name', options: ['a', 'b'] },
+      { type: 'yes_no', label: 'Bạn đã dùng thử?', role: 'email' },
+      { type: 'time', label: 'Giờ liên hệ', role: 'phone', placeholder: ' 09:00 ' },
+    ]);
+    expect(rating).toMatchObject({ type: 'rating', label: 'Mức hài lòng', required: true, role: null, options: [] });
+    expect(yesNo).toMatchObject({ type: 'yes_no', required: false, role: null, options: [] });
+    expect(time).toMatchObject({ type: 'time', role: null, options: [] });
+    // Bỏ role thì vai trò vẫn còn dùng được cho trường khác (không bị "chiếm" bởi trường bị bỏ)
+    const withRealRole = normalizeFormFields([
+      { type: 'rating', label: 'Sao', role: 'name' },
+      { type: 'short_text', label: 'Tên', role: 'name' },
+    ]);
+    expect(withRealRole[1].role).toBe('name');
+  });
+
+  it('khối hiển thị heading / paragraph / page_break: KHÔNG required, KHÔNG role, KHÔNG options, KHÔNG placeholder, luôn full', () => {
+    const blocks = normalizeFormFields([
+      { type: 'heading', label: 'Thông tin liên hệ', required: true, role: 'name', options: ['x'], placeholder: 'p', width: 'half' },
+      { type: 'paragraph', label: 'Điền đủ các ô bên dưới nhé.', required: true, role: 'email', options: ['x'], width: 'half' },
+      { type: 'page_break', label: 'Bước 2', required: true, role: 'phone', options: ['x'], width: 'half' },
+    ]);
+    for (const block of blocks) {
+      expect(block).toMatchObject({ required: false, role: null, options: [], placeholder: '' });
+      expect(block).not.toHaveProperty('width');
+      expect(block.key).toMatch(/^f_[a-f0-9]{8}$/);
+    }
+    expect(blocks.map((b) => b.type)).toEqual(['heading', 'paragraph', 'page_break']);
+    // Vai trò gửi kèm khối hiển thị không "chiếm chỗ" của trường thật
+    const roleStillFree = normalizeFormFields([
+      { type: 'heading', label: 'Tiêu đề', role: 'name' },
+      { type: 'short_text', label: 'Tên', role: 'name' },
+    ]);
+    expect(roleStillFree[1].role).toBe('name');
+  });
+
+  it('heading: nhãn bắt buộc (≤200), giữ helpText làm mô tả phụ; paragraph và page_break bỏ helpText', () => {
+    const [heading, paragraph, pageBreak] = normalizeFormFields([
+      { type: 'heading', label: 'Phần 1', helpText: ' Mô tả phụ ' },
+      { type: 'paragraph', label: 'Nội dung', helpText: 'bị bỏ' },
+      { type: 'page_break', label: 'Bước 2', helpText: 'bị bỏ' },
+    ]);
+    expect(heading.helpText).toBe('Mô tả phụ');
+    expect(paragraph.helpText).toBe('');
+    expect(pageBreak.helpText).toBe('');
+
+    expect(() => normalizeFormFields([{ type: 'heading', label: '   ' }])).toThrow('Nhãn trường thứ 1 không được để trống');
+    expect(() => normalizeFormFields([{ type: 'heading', label: 'a'.repeat(MAX_LABEL_LENGTH + 1) }])).toThrow('vượt quá 200 ký tự');
+    expect(() =>
+      normalizeFormFields([{ type: 'heading', label: 'Phần', helpText: 'a'.repeat(MAX_HELP_TEXT_LENGTH + 1) }])
+    ).toThrow('Chữ hướng dẫn của trường "Phần..." vượt quá 300 ký tự');
+  });
+
+  it('paragraph: nội dung nằm trong `label`, trần 2000 ký tự (không phải 200), không được rỗng', () => {
+    expect(MAX_PARAGRAPH_LENGTH).toBe(2000);
+    const text = 'x'.repeat(MAX_PARAGRAPH_LENGTH);
+    const [ok] = normalizeFormFields([{ type: 'paragraph', label: text }]);
+    expect(ok.label).toHaveLength(MAX_PARAGRAPH_LENGTH);
+
+    expect(() => normalizeFormFields([{ type: 'paragraph', label: 'x'.repeat(MAX_PARAGRAPH_LENGTH + 1) }])).toThrow(
+      'Nội dung đoạn chữ'
+    );
+    expect(() => normalizeFormFields([{ type: 'paragraph', label: '  ' }])).toThrow(
+      'Nội dung đoạn chữ thứ 1 không được để trống'
+    );
+    // Loại khác vẫn bị trần 200 như cũ
+    expect(() => normalizeFormFields([{ type: 'short_text', label: 'x'.repeat(201) }])).toThrow('vượt quá 200 ký tự');
+  });
+
+  it('page_break: nhãn (tiêu đề bước) là tuỳ chọn — để trống vẫn hợp lệ; các loại khác vẫn bắt buộc nhãn', () => {
+    const [pb] = normalizeFormFields([{ type: 'page_break' }]);
+    expect(pb).toMatchObject({ type: 'page_break', label: '', required: false });
+    expect(() => normalizeFormFields([{ type: 'rating', label: '' }])).toThrow('không được để trống');
+  });
+
+  it('giới hạn: đủ 30 trường nhập + 20 khối hiển thị thì nhận; trường nhập thứ 31 / khối thứ 21 bị từ chối với thông báo riêng', () => {
+    expect(MAX_INPUT_FIELDS).toBe(30);
+    expect(MAX_FIELDS).toBe(30);
+    expect(MAX_DISPLAY_BLOCKS).toBe(20);
+
+    const inputs = Array.from({ length: 30 }, (_, i) => shortText(i + 1));
+    const blocks = Array.from({ length: 20 }, (_, i) => ({ type: i % 2 ? 'page_break' : 'heading', label: `Khối ${i + 1}` }));
+    // Khối hiển thị KHÔNG ăn vào hạn mức câu hỏi: 30 + 20 = 50 mục vẫn hợp lệ
+    expect(normalizeFormFields([...inputs, ...blocks])).toHaveLength(50);
+
+    expect(() => normalizeFormFields([...inputs, shortText(31)])).toThrow(
+      'Biểu mẫu không được vượt quá 30 trường nhập liệu'
+    );
+    // 31 trường nhập vẫn bị chặn dù chen khối hiển thị; thông báo nói về trường nhập, không phải khối
+    expect(() => normalizeFormFields([...inputs, shortText(31), ...blocks.slice(0, 3)])).toThrow('30 trường nhập liệu');
+
+    expect(() => normalizeFormFields([...inputs, ...blocks, { type: 'paragraph', label: 'Thừa' }])).toThrow(
+      'Biểu mẫu không được vượt quá 20 khối hiển thị'
+    );
+    // Hai khối thừa với 5 trường nhập: lỗi nói về khối, không nhầm sang trường nhập
+    expect(() => normalizeFormFields([shortText(1), ...blocks, { type: 'heading', label: 'Thừa' }])).toThrow('khối hiển thị');
+  });
+
+  it('width: chỉ trường nhập; half được giữ, full/vắng thì KHÔNG có khoá width (dữ liệu trường cũ không đổi), giá trị lạ bị từ chối', () => {
+    const [half, full, absent, blank, shouted] = normalizeFormFields([
+      { type: 'short_text', label: 'A', width: 'half' },
+      { type: 'short_text', label: 'B', width: 'full' },
+      { type: 'short_text', label: 'C' },
+      { type: 'short_text', label: 'D', width: '' },
+      { type: 'rating', label: 'E', width: ' HALF ' },
+    ]);
+    expect(half.width).toBe('half');
+    expect(full).not.toHaveProperty('width');
+    expect(absent).not.toHaveProperty('width');
+    expect(blank).not.toHaveProperty('width');
+    expect(shouted.width).toBe('half');
+
+    expect(() => normalizeFormFields([{ type: 'short_text', label: 'F', width: 'third' }])).toThrow(
+      'Độ rộng của trường "F" không hợp lệ'
+    );
+    expect(() => normalizeFormFields([{ type: 'select', label: 'G', width: 2, options: ['a'] }])).toThrow('Độ rộng');
+  });
+
+  it('trường cũ (9 loại gốc) đi qua chuẩn hoá cho ra ĐÚNG hình dạng cũ — không thêm khoá width', () => {
+    const [f] = normalizeFormFields([{ key: 'f_old', type: 'short_text', label: 'Họ tên', required: true, role: 'name' }]);
+    expect(f).toEqual({
+      key: 'f_old',
+      type: 'short_text',
+      label: 'Họ tên',
+      required: true,
+      placeholder: '',
+      helpText: '',
+      role: 'name',
+      options: [],
+    });
   });
 });
 

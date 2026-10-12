@@ -191,3 +191,91 @@ describe('formSubmission.util', () => {
     });
   });
 });
+
+describe('formSubmission.util - loại trường & khối hiển thị mới (PR-4)', () => {
+  const fields = [
+    { key: 'f_name', type: 'short_text', label: 'Họ tên', required: true, role: 'name' },
+    { key: 'f_h', type: 'heading', label: 'Phần 1', required: true },
+    { key: 'f_p', type: 'paragraph', label: 'Hướng dẫn điền', required: true },
+    { key: 'f_rate', type: 'rating', label: 'Mức hài lòng', required: false },
+    { key: 'f_yn', type: 'yes_no', label: 'Đã dùng thử?', required: false },
+    { key: 'f_time', type: 'time', label: 'Giờ liên hệ', required: false },
+    { key: 'f_pb', type: 'page_break', label: 'Bước 2', required: true },
+    { key: 'f_note', type: 'short_text', label: 'Ghi chú bước 2', required: true },
+  ];
+  const ok = { f_name: 'Lan', f_note: 'ổn' };
+
+  describe('khối hiển thị bị bỏ qua', () => {
+    it('heading / paragraph / page_break không bao giờ vào answers, kể cả khi client gửi kèm giá trị cho khoá của chúng', () => {
+      const result = validateFormSubmission(
+        fields,
+        { ...ok, f_h: 'hack', f_p: 'hack', f_pb: 'hack' },
+        {}
+      );
+      expect(Object.keys(result.answers).sort()).toEqual(['f_name', 'f_note']);
+    });
+
+    it('khối hiển thị lỡ mang required=true (dữ liệu bẩn) cũng không bắt khách điền', () => {
+      expect(() => validateFormSubmission(fields, ok, {})).not.toThrow();
+    });
+  });
+
+  describe('trường bắt buộc ở trang sau vẫn kiểm phía server', () => {
+    it('thiếu trường bắt buộc nằm SAU page_break (trang 2) → lỗi, dù trang 1 đủ', () => {
+      expect(() => validateFormSubmission(fields, { f_name: 'Lan' }, {})).toThrow('Trường "Ghi chú bước 2" là bắt buộc');
+    });
+  });
+
+  describe('rating', () => {
+    it.each([1, 3, 5, '4'])('nhận %p', (v) => {
+      const r = validateFormSubmission(fields, { ...ok, f_rate: v }, {});
+      expect(r.answers.f_rate).toEqual({ label: 'Mức hài lòng', type: 'rating', value: Number(v) });
+    });
+
+    it.each([0, 6, -1, 4.5, '4.5', 'năm', true, [3], {}, 1e3])('từ chối ngoài 1..5 hoặc không phải số nguyên: %p', (v) => {
+      expect(() => validateFormSubmission(fields, { ...ok, f_rate: v }, {})).toThrow('phải là số sao từ 1 đến 5');
+    });
+
+    it('bắt buộc mà không chọn → báo bắt buộc; không bắt buộc và bỏ trống → không có trong answers', () => {
+      const required = [{ key: 'f_r', type: 'rating', label: 'Sao', required: true }];
+      expect(() => validateFormSubmission(required, {}, {})).toThrow('Trường "Sao" là bắt buộc');
+      expect(validateFormSubmission(fields, ok, {}).answers).not.toHaveProperty('f_rate');
+    });
+  });
+
+  describe('yes_no', () => {
+    it.each(['yes', 'no', ' YES ', 'No'])('nhận %p (chuẩn hoá về yes|no)', (v) => {
+      const r = validateFormSubmission(fields, { ...ok, f_yn: v }, {});
+      expect(r.answers.f_yn.value).toBe(String(v).trim().toLowerCase());
+      expect(r.answers.f_yn.type).toBe('yes_no');
+    });
+
+    it.each(['true', 'có', 'maybe', true, false, 1, ['yes']])('từ chối %p', (v) => {
+      expect(() => validateFormSubmission(fields, { ...ok, f_yn: v }, {})).toThrow('chỉ nhận lựa chọn Có hoặc Không');
+    });
+
+    it('trường bắt buộc: trả lời "no" là hợp lệ (bắt buộc = phải trả lời, không phải phải đồng ý)', () => {
+      const required = [{ key: 'f_y', type: 'yes_no', label: 'Đồng ý?', required: true }];
+      expect(validateFormSubmission(required, { f_y: 'no' }, {}).answers.f_y.value).toBe('no');
+      expect(() => validateFormSubmission(required, {}, {})).toThrow('Trường "Đồng ý?" là bắt buộc');
+    });
+  });
+
+  describe('time', () => {
+    it.each(['00:00', '09:05', '23:59', ' 14:30 '])('nhận %p', (v) => {
+      const r = validateFormSubmission(fields, { ...ok, f_time: v }, {});
+      expect(r.answers.f_time.value).toBe(String(v).trim());
+    });
+
+    it.each(['24:00', '9:05', '12:60', '12:5', '12:30:15', '1230', 'abc', '12-30', 1230])('từ chối %p', (v) => {
+      expect(() => validateFormSubmission(fields, { ...ok, f_time: v }, {})).toThrow('không hợp lệ (định dạng HH:MM');
+    });
+  });
+
+  it('trường cũ không đổi hành vi khi form có thêm khối hiển thị', () => {
+    const result = validateFormSubmission(fields, { ...ok, f_rate: 5, f_yn: 'yes', f_time: '08:00' }, { marketingConsent: 'true' });
+    expect(result.respondentName).toBe('Lan');
+    expect(result.marketingConsent).toBe(true);
+    expect(Object.keys(result.answers).sort()).toEqual(['f_name', 'f_note', 'f_rate', 'f_time', 'f_yn']);
+  });
+});
