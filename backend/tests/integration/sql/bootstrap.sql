@@ -3699,6 +3699,8 @@ CREATE TABLE IF NOT EXISTS system_email_templates (
 CREATE TABLE IF NOT EXISTS subscription_reminder_settings (
   id          BOOLEAN     PRIMARY KEY DEFAULT TRUE CHECK (id),
   days_before INTEGER[]   NOT NULL DEFAULT '{7,3}',
+  -- Migration 299: mốc nhắc riêng cho gói năm (days_before = gói tháng).
+  days_before_yearly INTEGER[] NOT NULL DEFAULT '{30,7,3}',
   updated_by  BIGINT      REFERENCES users(id) ON DELETE SET NULL,
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
