@@ -4248,6 +4248,10 @@ export default {
     createOrderFailed: 'Không thể tạo đơn hàng. Vui lòng thử lại.',
     transactionCancelled: 'Giao dịch đã bị hủy',
     statusCheckDelayed: 'Hệ thống đang kiểm tra thanh toán chậm hơn một chút. Trang sẽ tự chuyển khi nhận được tiền, bạn không cần tải lại.',
+    reorderLoading: 'Đang tải đơn hàng của bạn...',
+    reorderAlreadyPaid: 'Đơn này đã được thanh toán.',
+    reorderPlanUnavailable: 'Gói trong đơn này hiện không còn bán. Vui lòng chọn gói khác.',
+    reorderLoadFailed: 'Không tải được đơn hàng cũ. Vui lòng chọn gói để thanh toán.',
     changePlan: 'Thay đổi gói dịch vụ',
     registrationDetails: 'Chi tiết đăng ký',
     membershipPlan: 'Gói thành viên',
@@ -11518,6 +11522,7 @@ export default {
       plan_expiring: 'Email nhắc sắp hết hạn gói',
       plan_expired: 'Email báo đã hết hạn gói',
       employee_invitation: 'Email mời nhân viên tham gia',
+      order_payment_reminder: 'Email nhắc thanh toán lại đơn gói bỏ dở',
     },
     // Nhãn ngắn cho thanh trên (nhãn đầy đủ ở trên làm tooltip).
     templateKeysShort: {
@@ -11525,6 +11530,7 @@ export default {
       plan_expiring: 'Sắp hết hạn',
       plan_expired: 'Đã hết hạn',
       employee_invitation: 'Mời nhân viên',
+      order_payment_reminder: 'Nhắc thanh toán',
     },
     templateMeta: {
       welcome: {
@@ -11551,6 +11557,12 @@ export default {
         behaviorNote: 'Áp dụng khi chủ tài khoản thêm email nhân viên mới. Người nhận bấm nút hoặc liên kết để đăng ký/kích hoạt tài khoản hoặc đăng nhập Google.',
         previewFrameTitle: 'Bản xem trước email mời nhân viên',
       },
+      order_payment_reminder: {
+        title: 'Email nhắc thanh toán lại đơn gói bỏ dở',
+        subtitle: 'Chỉnh nội dung email nhắc khách đã chọn gói nhưng chưa thanh toán xong, kèm nút mở lại trang thanh toán.',
+        behaviorNote: 'Gửi tự động khoảng 2 giờ (tối đa 72 giờ) sau khi link thanh toán hết hạn hoặc khách huỷ, mỗi đơn một lần; không gửi nếu khách đã mua gói sau đó. Khách tắt được loại email này trong Cài đặt thông báo. Các email đã gửi trước đây không thay đổi.',
+        previewFrameTitle: 'Bản xem trước email nhắc thanh toán lại',
+      },
     },
     variableLabels: {
       userName: 'Tên thành viên',
@@ -11568,6 +11580,10 @@ export default {
       ownerName: 'Tên người mời (chủ tài khoản)',
       activationUrl: 'Đường dẫn kích hoạt / đăng ký',
       expiryHours: 'Số giờ hiệu lực của liên kết',
+      billingPeriodLabel: 'Kỳ thanh toán (theo tháng / theo năm)',
+      amount: 'Số tiền của đơn',
+      orderCode: 'Mã đơn hàng',
+      payUrl: 'Đường dẫn thanh toán lại',
     },
   },
 
