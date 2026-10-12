@@ -136,6 +136,14 @@ export default function FieldShowIfEditor({ field, idx, fields, issues, onUpdate
         )}
       </div>
 
+      {conditions.length > 0 && ['name', 'email', 'phone'].includes(field.role) && (
+        // Review PR-8a 12/10: ô mang vai trò định danh mà bị ẩn thì bài nộp thiếu tên/email/SĐT người nộp — chỉ cảnh báo, không chặn
+        // (vd hợp lệ: chỉ hiện ô Email khi khách chọn nhận tin qua email).
+        <p className="text-[11px] text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl p-2.5" data-testid="showif-role-warning">
+          {t('forms.editorPage.showIf.roleWarning')}
+        </p>
+      )}
+
       {conditions.length === 0 && sources.length === 0 && (
         <p className="text-[11px] text-gray-500 dark:text-dk-text2 bg-gray-50 dark:bg-dk-inset rounded-xl p-2.5" data-testid="showif-no-source">
           {t('forms.editorPage.showIf.noSource')}

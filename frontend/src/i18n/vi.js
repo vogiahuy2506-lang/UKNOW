@@ -12351,6 +12351,7 @@ export default {
       },
       showIf: {
         title: 'Điều kiện hiển thị',
+        roleWarning: 'Ô này là thông tin liên hệ của người nộp (họ tên / email / số điện thoại). Khi ô bị ẩn, bài nộp sẽ thiếu thông tin này và không dùng được để gửi tin cho khách.',
         hint: 'Chỉ hiện ô này khi khách trả lời các câu hỏi phía trên theo cách bạn chọn. Không đặt điều kiện thì ô luôn hiện. Ô đang ẩn không bắt buộc và câu trả lời của nó không được lưu.',
         add: 'Thêm điều kiện hiển thị',
         addAnother: 'Thêm điều kiện',

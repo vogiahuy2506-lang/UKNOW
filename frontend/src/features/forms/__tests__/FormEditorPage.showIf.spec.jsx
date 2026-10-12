@@ -113,6 +113,19 @@ describe('FormEditorPage — Điều kiện hiển thị (PR-8a)', () => {
     expect(row().getByLabelText('Giá trị')).toHaveDisplayValue('Spa');
   });
 
+  // Review PR-8a 12/10: ô mang vai trò định danh (tên/email/SĐT) bị đặt điều kiện ẩn → cảnh báo bài nộp có thể thiếu thông tin liên hệ.
+  it('ô có vai trò định danh mà có điều kiện hiển thị → hiện cảnh báo thiếu thông tin liên hệ; ô thường có điều kiện → không cảnh báo', async () => {
+    await renderEdit(formWith([
+      SELECT_FIELD,
+      { key: 'f_phone', label: 'Số điện thoại', type: 'phone', required: false, role: 'phone', options: [], showIf: { match: 'all', conditions: [{ fieldKey: 'f_svc', operator: 'equals', value: 'Spa' }] } },
+      { ...NOTE_FIELD, showIf: { match: 'all', conditions: [{ fieldKey: 'f_svc', operator: 'equals', value: 'Spa' }] } },
+    ]));
+    selectFieldRow(1);
+    expect(screen.getByTestId('showif-role-warning')).toHaveTextContent('thông tin liên hệ');
+    selectFieldRow(2);
+    expect(screen.queryByTestId('showif-role-warning')).not.toBeInTheDocument();
+  });
+
   it('VÒNG TRÒN nạp → lưu: điều kiện giữ nguyên từng khoá (kể cả value dạng số của sao / số)', async () => {
     const full = formWith([
       { key: 'f_star', label: 'Điểm', type: 'rating', required: false, options: [] },

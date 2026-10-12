@@ -12339,6 +12339,7 @@ Feel free to ask me anything!`,
       },
       showIf: {
         title: 'Display condition',
+        roleWarning: 'This field holds the respondent contact info (name / email / phone). When it is hidden, the submission will lack this info and cannot be used to message the customer.',
         hint: 'Show this field only when the respondent answers the questions above the way you choose. With no condition the field always shows. A hidden field is not required and its answer is not saved.',
         add: 'Add display condition',
         addAnother: 'Add condition',
