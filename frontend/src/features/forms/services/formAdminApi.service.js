@@ -143,3 +143,37 @@ export async function aiDraftForm(payload) {
   return res.data?.data;
 }
 
+/**
+ * Tính năng đang bật cho trình soạn (PR-4b): `fileUploadsEnabled` = cho thêm trường "Tải tệp" (cờ FORM_FILE_UPLOAD_ENABLED ở backend).
+ * Lỗi mạng/khác → coi là TẮT, không ném (trình soạn vẫn dùng bình thường, chỉ ẩn loại trường mới).
+ *
+ * @returns {Promise<{ fileUploadsEnabled: boolean }>}
+ */
+export async function fetchFormCapabilities() {
+  try {
+    const res = await api.get('/forms/capabilities');
+    return { fileUploadsEnabled: Boolean(res.data?.data?.fileUploadsEnabled) };
+  } catch {
+    return { fileUploadsEnabled: false };
+  }
+}
+
+/**
+ * Link tải NGẮN HẠN (vài phút) cho một tệp khách đã tải lên bài nộp (PR-4b). Chỉ chủ / nhân viên có quyền `forms`;
+ * workspace khác → 404. Trả `{ url, fileName, expiresAt }` — `url` đầy đủ (ghép sau base API), mở bằng thẻ <a> để trình duyệt tải về
+ * (tệp có thể tới 1 GB nên KHÔNG tải qua axios/blob).
+ *
+ * @param {number|string} formId
+ * @param {number|string} submissionId
+ * @param {string} fieldKey
+ * @param {number} index vị trí tệp trong câu trả lời của trường
+ * @returns {Promise<{ url: string, fileName: string, expiresAt: string }>}
+ */
+export async function fetchSubmissionFileLink(formId, submissionId, fieldKey, index) {
+  const res = await api.get(
+    `/forms/${formId}/submissions/${submissionId}/files/${encodeURIComponent(fieldKey)}/${index}/link`
+  );
+  const data = res.data?.data || {};
+  const base = String(api.defaults?.baseURL || '/api').replace(/\/+$/, '');
+  return { url: `${base}${data.path || ''}`, fileName: data.fileName || '', expiresAt: data.expiresAt || null };
+}

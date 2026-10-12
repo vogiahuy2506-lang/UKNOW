@@ -2,6 +2,8 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { useI18n } from '../../../i18n';
 import BookingSlotPicker from './BookingSlotPicker';
 import ProductShowcase from './ProductShowcase';
+import FormFileField from './FormFileField';
+import { readFileConfig, validateClientFile, describeAllowedExtensions, formatFileSize } from '../utils/formFileKinds.util';
 import { vnToday, addDaysToDateStr, formatSlotDateLabel } from '../utils/bookingFormat.util';
 import { useFormFont } from '../utils/useFormFont';
 import { getReadableTextColor } from '../utils/formTheme.util';
@@ -44,6 +46,10 @@ function ProductColumns({ twoColumn, showcase, children }) {
  *   Khi có redirectUrl, chuyển hướng CẢ TRANG NGOÀI (`window.top`) thay vì chỉ mỗi iframe —
  *   thất bại (top bị chặn/không truy cập được) thì hiện màn thành công kèm link `target="_top"`
  *   thay vì im lặng chuyển hướng mỗi iframe (khách chỉ thấy iframe đổi trang, trang ngoài đứng yên).
+ * @param {(field: object, file: File, options: { onProgress: (percent: number) => void, signal: AbortSignal }) => Promise<{ uploadId?: string, quotaExceeded?: boolean, skipToken?: string }>} [props.onUploadFile]
+ *   - PR-4b: tải MỘT tệp của trường `file` (xin URL ký + PUT thẳng lên kho). Renderer không tự gọi API (giữ decoupled) — không truyền thì
+ *   ô tệp bị khoá. Trả `{ uploadId }` khi xong, hoặc `{ quotaExceeded: true, skipToken }` khi chủ biểu mẫu hết dung lượng (khách vẫn gửi được
+ *   biểu mẫu, kể cả trường bắt buộc). `form.fileUploads.enabled === false` (cờ backend tắt) → thay ô chọn tệp bằng câu "tạm chưa nhận tệp".
  * @param {boolean} [props.singleColumn] - PR-4: ép MỘT cột dù viewport rộng (khung "Điện thoại" của xem trước trong
  *   trình soạn: breakpoint `sm:` đo theo viewport chứ không theo khung 390px). Trang công khai/bản nhúng không truyền —
  *   tự theo viewport: ≥ sm hai cột (trường `width:'half'` đứng chung hàng), < sm một cột.
@@ -61,10 +67,17 @@ export default function FormRenderer({
   loadSlots,
   embedMode = false,
   singleColumn = false,
+  onUploadFile,
 }) {
   const { t, locale } = useI18n();
 
   const [answers, setAnswers] = useState({});
+  // PR-4b — trường `file`: tệp KHÔNG nằm trong `answers` (chỉ gửi uploadId lúc nộp). fileItems[key] = danh sách tệp đã chọn của
+  // trường; fileSkips[key] = dấu server cấp khi chủ hết dung lượng (cho phép bỏ qua trường bắt buộc).
+  const [fileItems, setFileItems] = useState({});
+  const [fileSkips, setFileSkips] = useState({});
+  const uploadControllersRef = useRef(new Map());
+  const fileSeqRef = useRef(0);
   const [marketingConsent, setMarketingConsent] = useState(false);
   const [clientErrors, setClientErrors] = useState({});
   const [submittedSuccess, setSubmittedSuccess] = useState(false);
@@ -93,6 +106,15 @@ export default function FormRenderer({
   // Đếm thứ tự request tải slots — đổi tuần liên tiếp có thể khiến phản hồi về KHÔNG đúng thứ
   // tự (mạng chậm/nhanh xen kẽ); chỉ áp kết quả của request mới nhất, bỏ phản hồi cũ tới muộn.
   const loadSlotsSeqRef = useRef(0);
+
+  // Rời trang giữa lúc đang tải tệp: huỷ các yêu cầu PUT còn dở.
+  useEffect(() => {
+    const controllers = uploadControllersRef.current;
+    return () => {
+      controllers.forEach((controller) => controller.abort());
+      controllers.clear();
+    };
+  }, []);
 
   const fields = Array.isArray(form?.fields) ? form.fields : [];
   // Chia trang theo page_break. Không có trường nào để hiện (mảng rỗng) vẫn cần 1 trang trống để còn nút gửi.
@@ -236,6 +258,99 @@ export default function FormRenderer({
     }
   };
 
+  // ─── Trường `file` (PR-4b) ────────────────────────────────────────────────────────────────────────
+
+  const fileUploadsDisabled = form?.fileUploads?.enabled === false;
+
+  const patchFileItem = (key, id, patch) => {
+    setFileItems((prev) => ({
+      ...prev,
+      [key]: (prev[key] || []).map((item) => (item.id === id ? { ...item, ...patch } : item)),
+    }));
+  };
+
+  const dropFileItem = (key, id) => {
+    setFileItems((prev) => ({ ...prev, [key]: (prev[key] || []).filter((item) => item.id !== id) }));
+  };
+
+  const clearFieldError = (key) => {
+    setClientErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const describeUploadError = (err) => {
+    const code = err?.response?.data?.code;
+    if (['FILE_TYPE_FORBIDDEN', 'FILE_TYPE_NOT_ALLOWED', 'FILE_TOO_LARGE', 'INVALID_FILE_SIZE', 'FILE_UPLOAD_DISABLED'].includes(code)) {
+      return t(`publicForm.file.serverError.${code}`);
+    }
+    if (err?.response?.status === 429) return t('publicForm.file.rateLimited');
+    return t('publicForm.file.uploadFailed');
+  };
+
+  const startFileUpload = async (field, file) => {
+    fileSeqRef.current += 1;
+    const id = `file-${fileSeqRef.current}`;
+    const controller = new AbortController();
+    uploadControllersRef.current.set(id, controller);
+    setFileItems((prev) => ({
+      ...prev,
+      [field.key]: [...(prev[field.key] || []), { id, name: file.name, size: file.size, status: 'uploading', progress: 0 }],
+    }));
+    try {
+      const result = await onUploadFile(field, file, {
+        onProgress: (percent) => patchFileItem(field.key, id, { progress: percent }),
+        signal: controller.signal,
+      });
+      if (result?.quotaExceeded) {
+        // Chủ hết dung lượng: bỏ tệp này, ghi nhớ dấu để trường (kể cả bắt buộc) không chặn việc gửi biểu mẫu.
+        dropFileItem(field.key, id);
+        setFileSkips((prev) => ({ ...prev, [field.key]: result.skipToken }));
+        return;
+      }
+      patchFileItem(field.key, id, { status: 'done', progress: 100, uploadId: result.uploadId });
+    } catch (err) {
+      if (controller.signal.aborted) return; // khách tự xoá tệp giữa chừng
+      patchFileItem(field.key, id, { status: 'error', error: describeUploadError(err) });
+    } finally {
+      uploadControllersRef.current.delete(id);
+    }
+  };
+
+  const handleFilesSelected = (field, picked) => {
+    const config = readFileConfig(field.fileConfig);
+    let activeCount = (fileItems[field.key] || []).filter((item) => item.status !== 'error').length;
+    let message = '';
+    for (const file of picked) {
+      if (activeCount >= config.maxFiles) {
+        message = t('publicForm.file.tooMany', { count: config.maxFiles });
+        break;
+      }
+      const check = validateClientFile(file, config);
+      if (!check.ok) {
+        message = t(`publicForm.file.error.${check.reason}`, {
+          name: file.name,
+          types: describeAllowedExtensions(config.kinds),
+          size: formatFileSize(config.maxBytes, locale),
+        });
+        continue;
+      }
+      activeCount += 1;
+      startFileUpload(field, file);
+    }
+    if (message) setClientErrors((prev) => ({ ...prev, [field.key]: message }));
+    else clearFieldError(field.key);
+  };
+
+  const handleRemoveFile = (key, id) => {
+    uploadControllersRef.current.get(id)?.abort();
+    dropFileItem(key, id);
+    clearFieldError(key);
+  };
+
   const handleCheckboxItemToggle = (key, optVal) => {
     const current = Array.isArray(answers[key]) ? answers[key] : [];
     const exists = current.includes(optVal);
@@ -251,6 +366,20 @@ export default function FormRenderer({
     for (const field of list) {
       const { key, label, required, type } = field;
       if (isDisplayFieldType(type)) continue;
+
+      // Trường tệp: không kiểm theo `answers`. Đang tải dở thì chặn; bắt buộc mà chưa có tệp thì báo — TRỪ khi chủ biểu mẫu hết dung
+      // lượng (đã có dấu skip) hoặc tính năng đang tắt: lúc đó khách vẫn gửi được các ô còn lại.
+      if (type === 'file') {
+        if (fileUploadsDisabled) continue;
+        const items = fileItems[key] || [];
+        if (items.some((item) => item.status === 'uploading')) {
+          errors[key] = t('publicForm.file.waitUploading');
+        } else if (required && !items.some((item) => item.status === 'done') && !fileSkips[key]) {
+          errors[key] = t('publicForm.validation.required', { label });
+        }
+        continue;
+      }
+
       const val = answers[key];
 
       // Kiểm tra bắt buộc
@@ -353,9 +482,21 @@ export default function FormRenderer({
       // Bẫy bot: lấy giá trị thật từ input honeypot không điều khiển
       const honeypotVal = honeypotRef.current ? honeypotRef.current.value : '';
 
+      // Tệp: gửi danh sách uploadId đã tải xong; trường không có tệp mà có dấu skip (chủ hết dung lượng) thì gửi dấu.
+      const fileSkip = {};
+      if (!fileUploadsDisabled) {
+        for (const field of fields) {
+          if (field.type !== 'file') continue;
+          const uploadIds = (fileItems[field.key] || []).filter((item) => item.status === 'done').map((item) => item.uploadId);
+          if (uploadIds.length > 0) cleanAnswers[field.key] = uploadIds;
+          else if (fileSkips[field.key]) fileSkip[field.key] = fileSkips[field.key];
+        }
+      }
+
       const payload = {
         answers: cleanAnswers,
         _hp_website: honeypotVal,
+        ...(Object.keys(fileSkip).length > 0 ? { fileSkip } : {}),
       };
 
       // Chỉ gửi marketingConsent khi form bật settings.consentEnabled
@@ -625,7 +766,7 @@ export default function FormRenderer({
                 className="block text-sm font-medium text-gray-800 break-words"
               >
                 {label}
-                {required && <span className="text-red-500 ml-1">*</span>}
+                {required && !(type === 'file' && fileUploadsDisabled) && <span className="text-red-500 ml-1">*</span>}
               </label>
 
               {helpText && (
@@ -633,6 +774,31 @@ export default function FormRenderer({
                   {helpText}
                 </p>
               )}
+
+              {/* file (PR-4b): ô chọn tệp + tiến độ; cờ backend tắt → câu "tạm chưa nhận tệp" */}
+              {type === 'file' &&
+                (fileUploadsDisabled ? (
+                  <p
+                    role="status"
+                    data-testid={`file-unavailable-${key}`}
+                    className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
+                  >
+                    {t('publicForm.file.unavailable')}
+                  </p>
+                ) : (
+                  <FormFileField
+                    field={field}
+                    config={readFileConfig(field.fileConfig)}
+                    items={fileItems[key] || []}
+                    quotaSkipped={Boolean(fileSkips[key]) && !(fileItems[key] || []).some((item) => item.status === 'done')}
+                    error={Boolean(fieldError)}
+                    disabled={isSubmitting || previewMode || typeof onUploadFile !== 'function'}
+                    controlId={fieldControlId}
+                    describedBy={helpId}
+                    onSelect={(picked) => handleFilesSelected(field, picked)}
+                    onRemove={(id) => handleRemoveFile(key, id)}
+                  />
+                ))}
 
               {/* short_text */}
               {type === 'short_text' && (

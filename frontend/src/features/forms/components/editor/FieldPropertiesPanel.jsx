@@ -12,6 +12,14 @@ import {
   OPTION_FIELD_TYPES,
   PLACEHOLDER_FIELD_TYPES,
 } from './formEditorConstants';
+import {
+  FORM_FILE_KIND_IDS,
+  FORM_FILE_KIND_EXTS,
+  MIN_FORM_FILE_MB,
+  MAX_FORM_FILE_MB,
+  MIN_FORM_FILE_COUNT,
+  MAX_FORM_FILE_COUNT,
+} from '../../utils/formFileKinds.util';
 
 const inputBase =
   'w-full px-3.5 py-2.5 bg-white dark:bg-dk-bg rounded-xl border text-sm text-slate-900 dark:text-dk-text placeholder:text-slate-400 dark:placeholder:text-dk-muted focus:outline-none focus:ring-4 transition shadow-2xs';
@@ -31,6 +39,7 @@ export default function FieldPropertiesPanel({
   field,
   idx,
   errors,
+  fileUploadsEnabled = false,
   onUpdateField,
   onAddOption,
   onUpdateOption,
@@ -44,6 +53,17 @@ export default function FieldPropertiesPanel({
   const supportsRole = !isBlock && !NO_ROLE_FIELD_TYPES.includes(field.type);
   const supportsHelpText = !isParagraph && !isPageBreak;
   const hasOptions = OPTION_FIELD_TYPES.includes(field.type);
+  const isFile = field.type === 'file';
+  const fileConfig = field.fileConfig || { kinds: [], maxMb: '', maxFiles: '' };
+  const fileKindsError = errors[`field_${idx}_fileKinds`];
+  const fileSizeError = errors[`field_${idx}_fileSize`];
+  const fileCountError = errors[`field_${idx}_fileCount`];
+  const toggleFileKind = (kindId) => {
+    const kinds = fileConfig.kinds.includes(kindId)
+      ? fileConfig.kinds.filter((k) => k !== kindId)
+      : FORM_FILE_KIND_IDS.filter((k) => k === kindId || fileConfig.kinds.includes(k));
+    onUpdateField(idx, 'fileConfig', { ...fileConfig, kinds });
+  };
   const supportsPlaceholder = PLACEHOLDER_FIELD_TYPES.includes(field.type);
   const labelError = errors[`field_${idx}_label`];
   const optionsError = errors[`field_${idx}_options`];
@@ -119,7 +139,9 @@ export default function FieldPropertiesPanel({
           >
             {FIELD_TYPE_GROUPS.map((group) => (
               <optgroup key={group.id} label={t(group.labelKey)}>
-                {FIELD_TYPES.filter((ft) => ft.group === group.id).map((ft) => (
+                {FIELD_TYPES.filter(
+                  (ft) => ft.group === group.id && (!ft.requiresFileFlag || fileUploadsEnabled || field.type === ft.value)
+                ).map((ft) => (
                   <option key={ft.value} value={ft.value}>
                     {t(ft.labelKey)}
                   </option>
@@ -230,6 +252,83 @@ export default function FieldPropertiesPanel({
           </div>
         )}
       </div>
+
+      {/* Trường tải tệp: nhóm tệp nhận / dung lượng tối đa mỗi tệp / số tệp tối đa. Loại nguy hiểm (exe, html, svg…) không có trong danh sách. */}
+      {isFile && (
+        <div className="pt-3 border-t border-gray-200/80 dark:border-dk-border space-y-3" data-testid="file-config-panel">
+          <fieldset>
+            <legend className="text-xs font-semibold text-gray-700 dark:text-dk-text mb-1.5">
+              {t('forms.editorPage.properties.fileKindsLabel')}
+            </legend>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+              {FORM_FILE_KIND_IDS.map((kindId) => (
+                <label
+                  key={kindId}
+                  className="flex items-start gap-2 cursor-pointer select-none text-sm text-gray-700 dark:text-dk-text px-2.5 py-1.5 rounded-xl hover:bg-gray-100/80 dark:hover:bg-dk-raised transition"
+                >
+                  <input
+                    type="checkbox"
+                    checked={fileConfig.kinds.includes(kindId)}
+                    onChange={() => toggleFileKind(kindId)}
+                    className="mt-0.5 h-4 w-4 rounded text-orange-600 dark:text-orange-400 focus:ring-orange-500 border-gray-300 dark:border-dk-border-strong"
+                  />
+                  <span className="min-w-0">
+                    <span className="font-medium">{t(`forms.editorPage.properties.fileKind.${kindId}`)}</span>
+                    <span className="block text-[11px] text-gray-500 dark:text-dk-text2 break-words">
+                      {FORM_FILE_KIND_EXTS[kindId].map((ext) => `.${ext}`).join(' ')}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            {fileKindsError && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{fileKindsError}</p>}
+          </fieldset>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor={`${idPrefix}-file-mb`} className="block text-xs font-semibold text-gray-700 dark:text-dk-text mb-1">
+                {t('forms.editorPage.properties.fileMaxSizeLabel')}
+              </label>
+              <input
+                id={`${idPrefix}-file-mb`}
+                type="number"
+                inputMode="decimal"
+                min={MIN_FORM_FILE_MB}
+                max={MAX_FORM_FILE_MB}
+                step="any"
+                value={fileConfig.maxMb}
+                onChange={(e) => onUpdateField(idx, 'fileConfig', { ...fileConfig, maxMb: e.target.value })}
+                className={`${inputBase} ${fileSizeError ? inputErr : inputOk}`}
+              />
+              <p className="text-[11px] text-gray-500 dark:text-dk-text2 mt-1">
+                {t('forms.editorPage.properties.fileMaxSizeHint', { min: MIN_FORM_FILE_MB, max: MAX_FORM_FILE_MB })}
+              </p>
+              {fileSizeError && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{fileSizeError}</p>}
+            </div>
+            <div>
+              <label htmlFor={`${idPrefix}-file-count`} className="block text-xs font-semibold text-gray-700 dark:text-dk-text mb-1">
+                {t('forms.editorPage.properties.fileMaxFilesLabel')}
+              </label>
+              <input
+                id={`${idPrefix}-file-count`}
+                type="number"
+                inputMode="numeric"
+                min={MIN_FORM_FILE_COUNT}
+                max={MAX_FORM_FILE_COUNT}
+                step="1"
+                value={fileConfig.maxFiles}
+                onChange={(e) => onUpdateField(idx, 'fileConfig', { ...fileConfig, maxFiles: e.target.value })}
+                className={`${inputBase} ${fileCountError ? inputErr : inputOk}`}
+              />
+              <p className="text-[11px] text-gray-500 dark:text-dk-text2 mt-1">
+                {t('forms.editorPage.properties.fileMaxFilesHint', { min: MIN_FORM_FILE_COUNT, max: MAX_FORM_FILE_COUNT })}
+              </p>
+              {fileCountError && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{fileCountError}</p>}
+            </div>
+          </div>
+          <p className="text-[11px] text-gray-500 dark:text-dk-text2">{t('forms.editorPage.properties.fileStorageNote')}</p>
+        </div>
+      )}
 
       {/* Danh sách lựa chọn options (nếu là select, radio, checkbox) */}
       {hasOptions && (

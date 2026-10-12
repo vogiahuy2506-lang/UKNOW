@@ -14,6 +14,7 @@ import {
   HiOutlineMenuAlt1,
   HiOutlineMenuAlt2,
   HiOutlineScissors,
+  HiOutlinePaperClip,
 } from 'react-icons/hi';
 import { DEFAULT_PAYMENT_PURPOSE } from '../../utils/paymentPurpose.util';
 
@@ -35,6 +36,9 @@ export const FIELD_TYPES = [
   { value: 'rating', labelKey: 'forms.types.rating', group: 'question' },
   { value: 'yes_no', labelKey: 'forms.types.yes_no', group: 'question' },
   { value: 'time', labelKey: 'forms.types.time', group: 'question' },
+  // PR-4b: `requiresFileFlag` = chỉ hiện khi backend bật FORM_FILE_UPLOAD_ENABLED (GET /forms/capabilities); trường file đã
+  // có sẵn trong biểu mẫu thì loại này vẫn hiện để select không rỗng.
+  { value: 'file', labelKey: 'forms.types.file', group: 'question', requiresFileFlag: true },
   { value: 'heading', labelKey: 'forms.types.heading', group: 'layout' },
   { value: 'paragraph', labelKey: 'forms.types.paragraph', group: 'layout' },
   { value: 'page_break', labelKey: 'forms.types.page_break', group: 'layout' },
@@ -213,6 +217,21 @@ export const QUICK_FIELD_PRESETS = [
     required: false,
     icon: HiOutlineClock,
   },
+  // ── PR-4b: khách tải tệp ── chỉ hiện trong menu khi cờ backend bật (`requiresFileFlag`).
+  {
+    id: 'file',
+    titleKey: 'forms.editorPage.quickAdd.file',
+    descKey: 'forms.editorPage.quickAdd.fileDesc',
+    labelKey: 'forms.editorPage.quickAdd.fileLabel',
+    title: 'Tải tệp',
+    desc: 'Khách đính kèm ảnh, PDF hoặc tài liệu',
+    type: 'file',
+    group: 'question',
+    role: '',
+    required: false,
+    requiresFileFlag: true,
+    icon: HiOutlinePaperClip,
+  },
   // ── PR-4: khối bố cục (không có giá trị) ── page_break: nhãn mặc định để TRỐNG (tiêu đề bước là tuỳ chọn).
   {
     id: 'heading',
@@ -283,7 +302,7 @@ export const MAX_CONSENT_TEXT_LENGTH = 500;
 export const OPTION_FIELD_TYPES = ['select', 'radio', 'checkbox'];
 export const PLACEHOLDER_FIELD_TYPES = ['short_text', 'long_text', 'email', 'phone', 'number'];
 // Loại nhập KHÔNG nhận vai trò định danh (số sao / có-không / giờ không thể là tên, email, SĐT) — khớp backend.
-export const NO_ROLE_FIELD_TYPES = ['rating', 'yes_no', 'time'];
+export const NO_ROLE_FIELD_TYPES = ['rating', 'yes_no', 'time', 'file'];
 
 // Hợp đồng đặt lịch (bookingConfig) — chép từ backend/src/utils/formDefinition.util.js
 // normalizeBookingConfig, hằng số dòng 265-275 (PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md,

@@ -39,7 +39,9 @@ export function getSubmissionDisplayStatus(submission, now = Date.now()) {
  * @param {Record<string, unknown>|null|undefined} answers
  * @param {Array<{ key?: string, label?: string, type?: string }>|null|undefined} formFields
  * @param {(key: string) => string} [t]
- * @returns {Array<{ key: string, label: string, value: string }>}
+ * Trường tệp (PR-4b): mục kèm `files` (tên/cỡ — KHÔNG có khoá kho) và `fileStatus` để modal vẽ nút Tải về; `value` vẫn là tên tệp nối bằng ", ".
+ *
+ * @returns {Array<{ key: string, label: string, value: string, type?: string, files?: Array<{ name: string, size?: number }>, fileStatus?: string }>}
  */
 export function buildAnswerEntries(answers, formFields, t) {
   const fields = Array.isArray(formFields) ? formFields : [];
@@ -61,11 +63,19 @@ export function buildAnswerEntries(answers, formFields, t) {
       const snapshotLabel = isSnapshot && typeof item.label === 'string' ? item.label.trim() : '';
       // Loại để định dạng: ưu tiên loại trong ảnh chụp lúc nộp, thiếu thì lấy loại hiện tại của trường.
       const type = (isSnapshot && typeof item.type === 'string' ? item.type : '') || typeByKey.get(key);
-      return {
+      const entry = {
         key,
         label: snapshotLabel || labelByKey.get(key) || key,
         value: formatAnswerForDisplay(type, isSnapshot ? item.value : item, t),
       };
+      if (type === 'file') {
+        entry.type = 'file';
+        entry.files = isSnapshot && Array.isArray(item.files)
+          ? item.files.map((file) => ({ name: String(file?.name ?? ''), size: file?.size }))
+          : [];
+        entry.fileStatus = isSnapshot && typeof item.fileStatus === 'string' ? item.fileStatus : '';
+      }
+      return entry;
     })
     .sort((a, b) => {
       const orderA = order.has(a.key) ? order.get(a.key) : Number.MAX_SAFE_INTEGER;

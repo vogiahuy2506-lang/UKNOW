@@ -8,7 +8,15 @@ import { PAYOS_BANK_BIN_MAP } from '../../../utils/payosBankBinMap';
 import { resolvePaymentPurpose } from '../utils/paymentPurpose.util';
 import { isDisplayFieldType } from '../utils/formFieldTypes.util';
 import { buildPreviewFormProduct } from '../utils/buildPreviewFormProduct.util';
-import { fetchFormById, createForm, updateForm, publishForm } from '../services/formAdminApi.service';
+import { fetchFormById, createForm, updateForm, publishForm, fetchFormCapabilities } from '../services/formAdminApi.service';
+import {
+  readFileConfig,
+  makeDefaultFileConfig,
+  MIN_FORM_FILE_MB,
+  MAX_FORM_FILE_MB,
+  MIN_FORM_FILE_COUNT,
+  MAX_FORM_FILE_COUNT,
+} from '../utils/formFileKinds.util';
 import ShareModal from '../components/ShareModal';
 import FormTemplatePicker from '../components/FormTemplatePicker';
 import { FORM_TEMPLATES, buildFormFromTemplate } from '../constants/formTemplates';
@@ -61,6 +69,27 @@ const nextFieldUid = () => {
   fieldUidSeq += 1;
   return `fld_${fieldUidSeq}`;
 };
+const BYTES_PER_MB = 1024 * 1024;
+
+// Trường `file`: trong state trình soạn dung lượng/số tệp giữ dạng CHUỖI (gõ dở "1." không bị ép lại); chuyển sang số ở payload.
+// `fileConfig` chỉ có giá trị ở trường loại `file`, các loại khác luôn null.
+const toEditorFileConfig = (raw) => {
+  const cfg = readFileConfig(raw);
+  return {
+    kinds: cfg.kinds,
+    maxMb: String(Number((cfg.maxBytes / BYTES_PER_MB).toFixed(2))),
+    maxFiles: String(cfg.maxFiles),
+  };
+};
+const toPayloadFileConfig = (editorCfg) => {
+  const cfg = editorCfg || toEditorFileConfig(null);
+  return {
+    kinds: [...(cfg.kinds || [])],
+    maxBytes: Math.round(Number(cfg.maxMb) * BYTES_PER_MB),
+    maxFiles: Number(cfg.maxFiles),
+  };
+};
+
 const makeField = (partial = {}) => ({
   uid: nextFieldUid(),
   key: '', // trường mới key rỗng để server tự sinh
@@ -72,6 +101,7 @@ const makeField = (partial = {}) => ({
   helpText: '',
   options: [],
   width: 'full', // 'full' | 'half' (chỉ trường nhập); chỉ gửi lên server khi 'half'
+  fileConfig: null, // chỉ trường `file`: { kinds, maxMb, maxFiles } (xem toEditorFileConfig)
   ...partial,
 });
 
@@ -115,6 +145,8 @@ export default function FormEditorPage() {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isTogglingPublish, setIsTogglingPublish] = useState(false);
   const [fields, setFields] = useState([]);
+  // PR-4b: backend có bật tính năng nhận tệp từ khách không (cờ FORM_FILE_UPLOAD_ENABLED). Tắt → ẩn loại "Tải tệp" khỏi menu.
+  const [fileUploadsEnabled, setFileUploadsEnabled] = useState(false);
   // Trường đang chọn để sửa (theo uid để không lệch khi đổi thứ tự / chèn / xoá). Không còn trường nào khớp thì rơi về trường đầu.
   const [selectedUid, setSelectedUid] = useState(null);
   const activeUid = fields.some((f) => f.uid === selectedUid) ? selectedUid : (fields[0]?.uid ?? null);
@@ -257,6 +289,7 @@ export default function FormEditorPage() {
                   placeholder: f.placeholder || '',
                   helpText: f.helpText || '',
                   width: f.width === 'half' ? 'half' : 'full',
+                  fileConfig: f.type === 'file' ? toEditorFileConfig(f.fileConfig) : null,
                   options: Array.isArray(f.options)
                     ? f.options.map((opt) => (typeof opt === 'object' ? opt.label || opt.value : opt))
                     : [],
@@ -343,6 +376,22 @@ export default function FormEditorPage() {
       })
       .finally(() => setIsLoading(false));
   }, [id, isEditMode, navigate, t]);
+
+  // Cờ tính năng nhận tệp từ khách. Lỗi/thiếu hàm → coi là TẮT (chỉ ẩn loại trường mới, trình soạn vẫn dùng bình thường).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const caps = await fetchFormCapabilities();
+        if (!cancelled) setFileUploadsEnabled(Boolean(caps?.fileUploadsEnabled));
+      } catch {
+        if (!cancelled) setFileUploadsEnabled(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Bước chọn mẫu (chỉ ở chế độ tạo mới): điền sẵn trường + cài đặt (+ bật đặt lịch / thanh toán) vào
   // ĐÚNG các state trình soạn đang dùng, rồi vào trình soạn. Lưu đi đường lưu cũ, không có API riêng.
@@ -572,6 +621,7 @@ export default function FormEditorPage() {
       required: Boolean(preset.required),
       role: preset.role || '',
       options: localizedOptions,
+      fileConfig: preset.type === 'file' ? toEditorFileConfig(makeDefaultFileConfig()) : null,
     });
     setFields((prev) => [...prev, field]);
     focusField(field.uid);
@@ -594,7 +644,14 @@ export default function FormEditorPage() {
     const source = fields[idx];
     if (!source) return;
     if (exceedsTypeLimit(source.type)) return;
-    const copy = { ...source, uid: nextFieldUid(), key: '', role: '', options: [...(source.options || [])] };
+    const copy = {
+      ...source,
+      uid: nextFieldUid(),
+      key: '',
+      role: '',
+      options: [...(source.options || [])],
+      fileConfig: source.fileConfig ? { ...source.fileConfig, kinds: [...source.fileConfig.kinds] } : null,
+    };
     setFields((prev) => {
       const next = [...prev];
       next.splice(idx + 1, 0, copy);
@@ -643,6 +700,14 @@ export default function FormEditorPage() {
         copy[idx].options = [];
       } else if (key === 'type' && OPTION_FIELD_TYPES.includes(value) && copy[idx].options.length === 0) {
         copy[idx].options = [t('forms.editorPage.defaultOption1'), t('forms.editorPage.defaultOption2')];
+      }
+
+      // Sang/ra khỏi loại `file`: cấu hình tệp chỉ tồn tại ở trường file (mới sang file → mặc định Ảnh + PDF, 10 MB, 1 tệp).
+      if (key === 'type') {
+        copy[idx] = {
+          ...copy[idx],
+          fileConfig: value === 'file' ? (copy[idx].fileConfig || toEditorFileConfig(makeDefaultFileConfig())) : null,
+        };
       }
 
       // Sang khối bố cục: bỏ mọi thuộc tính chỉ có nghĩa với trường nhập (bắt buộc / vai trò / gợi ý / độ rộng).
@@ -746,6 +811,21 @@ export default function FormEditorPage() {
       if (OPTION_FIELD_TYPES.includes(f.type)) {
         if (!f.options || f.options.length === 0) {
           errs[`field_${i}_options`] = t('forms.editorPage.validationOptionsRequired');
+        }
+      }
+
+      if (f.type === 'file') {
+        const cfg = f.fileConfig || {};
+        if (!Array.isArray(cfg.kinds) || cfg.kinds.length === 0) {
+          errs[`field_${i}_fileKinds`] = t('forms.editorPage.validationFileKinds');
+        }
+        const mb = Number(cfg.maxMb);
+        if (String(cfg.maxMb ?? '').trim() === '' || !Number.isFinite(mb) || mb < MIN_FORM_FILE_MB || mb > MAX_FORM_FILE_MB) {
+          errs[`field_${i}_fileSize`] = t('forms.editorPage.validationFileSize', { min: MIN_FORM_FILE_MB, max: MAX_FORM_FILE_MB });
+        }
+        const count = Number(cfg.maxFiles);
+        if (!Number.isInteger(count) || count < MIN_FORM_FILE_COUNT || count > MAX_FORM_FILE_COUNT) {
+          errs[`field_${i}_fileCount`] = t('forms.editorPage.validationFileCount', { min: MIN_FORM_FILE_COUNT, max: MAX_FORM_FILE_COUNT });
         }
       }
 
@@ -936,6 +1016,10 @@ export default function FormEditorPage() {
         // Độ rộng CHỈ gửi khi 'half' (full = mặc định, vắng khoá) — payload trường cũ không đổi một byte.
         if (!isBlock && f.width === 'half') {
           item.width = 'half';
+        }
+        // Trường tệp: nhóm tệp / dung lượng tối đa mỗi tệp (byte) / số tệp tối đa (backend chuẩn hoá + kiểm lại).
+        if (f.type === 'file') {
+          item.fileConfig = toPayloadFileConfig(f.fileConfig);
         }
         return item;
       });
@@ -1139,7 +1223,10 @@ export default function FormEditorPage() {
         placeholder: f.placeholder,
         helpText: f.helpText,
         width: f.width,
+        ...(f.type === 'file' ? { fileConfig: toPayloadFileConfig(f.fileConfig) } : {}),
       })),
+      // Xem trước theo ĐÚNG những gì khách sẽ thấy: cờ tắt thì ô tệp thay bằng câu "tạm chưa nhận tệp".
+      ...(fields.some((f) => f.type === 'file') ? { fileUploads: { enabled: fileUploadsEnabled } } : {}),
       settings: {
         submitButtonText: settings.submitButtonText,
         successMessage: settings.successMessage,
@@ -1175,6 +1262,7 @@ export default function FormEditorPage() {
       previewPaymentEnabled,
       previewPaymentAmount,
       previewPaymentPurpose,
+      fileUploadsEnabled,
       t,
     ]
   );
@@ -1257,6 +1345,7 @@ export default function FormEditorPage() {
                 errors={errors}
                 selectedUid={activeUid}
                 setupHints={setupHints}
+                fileUploadsEnabled={fileUploadsEnabled}
                 onDismissSetupHints={() => setSetupHints({ booking: false, payment: false })}
                 onOpenSettings={openSettingsTab}
                 onSelect={setSelectedUid}

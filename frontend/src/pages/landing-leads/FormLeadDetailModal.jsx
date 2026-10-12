@@ -5,6 +5,7 @@ import { HiOutlineExternalLink, HiOutlineX } from 'react-icons/hi';
 import { useI18n } from '../../i18n';
 import LandingLeadConsentBadge from '../../features/landing/components/LandingLeadConsentBadge.jsx';
 import { buildAnswerEntries } from '../../features/forms/utils/formLeads.util.js';
+import FormAnswerFiles from '../../features/forms/components/FormAnswerFiles.jsx';
 import FormLeadStatusBadge from './FormLeadStatusBadge.jsx';
 
 const VIETNAM_TIME_ZONE = 'Asia/Ho_Chi_Minh';
@@ -145,7 +146,17 @@ export default function FormLeadDetailModal({ submission, formFields = [], onClo
               {answerEntries.map((entry) => (
                 <li key={entry.key} className="text-sm text-slate-900 dark:text-dk-text break-words whitespace-pre-line">
                   <span className="font-semibold text-slate-600 dark:text-dk-text2">{entry.label}:</span>{' '}
-                  <span>{entry.value || '—'}</span>
+                  {entry.type === 'file' ? (
+                    <FormAnswerFiles
+                      formId={submission.formId}
+                      submissionId={submission.id}
+                      fieldKey={entry.key}
+                      files={entry.files}
+                      fileStatus={entry.fileStatus}
+                    />
+                  ) : (
+                    <span>{entry.value || '—'}</span>
+                  )}
                 </li>
               ))}
             </ul>

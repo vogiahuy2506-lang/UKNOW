@@ -17,6 +17,7 @@ export const STORAGE_CATEGORIES = Object.freeze([
   { value: 'landing_asset', labelKey: 'mediaLibrary.categoryLandingAsset', color: 'bg-purple-50 text-purple-700 border-purple-100', darkColor: 'dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800' },
   { value: 'form_asset', labelKey: 'mediaLibrary.categoryFormAsset', color: 'bg-cyan-50 text-cyan-700 border-cyan-100', darkColor: 'dark:bg-cyan-950/40 dark:text-cyan-300 dark:border-cyan-800' },
   { value: 'form_receipt', labelKey: 'mediaLibrary.categoryFormReceipt', color: 'bg-cyan-50 text-cyan-700 border-cyan-100', darkColor: 'dark:bg-cyan-950/40 dark:text-cyan-300 dark:border-cyan-800' },
+  { value: 'form_file', labelKey: 'mediaLibrary.categoryFormFile', color: 'bg-cyan-50 text-cyan-700 border-cyan-100', darkColor: 'dark:bg-cyan-950/40 dark:text-cyan-300 dark:border-cyan-800' },
   { value: 'logo', labelKey: 'mediaLibrary.categoryLogo', color: 'bg-pink-50 text-pink-700 border-pink-100', darkColor: 'dark:bg-pink-950/40 dark:text-pink-300 dark:border-pink-800' },
   { value: 'campaign', labelKey: 'mediaLibrary.categoryCampaign', color: 'bg-amber-50 text-amber-700 border-amber-100', darkColor: 'dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800' },
   { value: 'quick_send', labelKey: 'mediaLibrary.categoryQuickSend', color: 'bg-amber-50 text-amber-700 border-amber-100', darkColor: 'dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800' },

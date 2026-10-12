@@ -24,6 +24,7 @@ import {
 import { formatAppointmentAtVn, vnToday } from '../utils/bookingFormat.util';
 import { isDisplayFieldType } from '../utils/formFieldTypes.util';
 import { formatAnswerForDisplay, isDisplayBlockAnswer } from '../utils/formAnswerDisplay.util';
+import FormAnswerFiles from '../components/FormAnswerFiles';
 import { formatVnd } from '../../../utils/vietqrParser';
 
 // PR-3b: pending_payment nhận thêm — chủ có thể huỷ một lượt còn đang chờ chuyển khoản (nhả
@@ -573,6 +574,22 @@ export default function FormSubmissionsPage() {
                                   ? item.type
                                   : formTypeByKey.get(fKey);
                               const displayVal = formatAnswerForDisplay(answerType, value, t);
+
+                              // Trường tệp (PR-4b): tên + cỡ + nút Tải về cho từng tệp, hoặc câu giải thích khi chưa nhận được tệp.
+                              if (answerType === 'file') {
+                                return (
+                                  <div key={fKey} className="text-xs leading-relaxed break-words">
+                                    <span className="font-semibold text-gray-700 dark:text-dk-text">{label}: </span>
+                                    <FormAnswerFiles
+                                      formId={id}
+                                      submissionId={sub.id}
+                                      fieldKey={fKey}
+                                      files={item?.files}
+                                      fileStatus={item?.fileStatus}
+                                    />
+                                  </div>
+                                );
+                              }
 
                               return (
                                 <div key={fKey} className="text-xs leading-relaxed break-words">

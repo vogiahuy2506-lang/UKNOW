@@ -5,6 +5,7 @@ import {
   fetchPublicForm,
   submitPublicForm,
   fetchPublicSlots,
+  uploadPublicFormFile,
 } from '../services/formPublicApi.service';
 import FormRenderer from '../components/FormRenderer';
 import { useFormEmbedResize } from '../hooks/useFormEmbedResize';
@@ -81,6 +82,12 @@ export default function PublicFormPage() {
 
   const loadSlots = useCallback(
     (from, days) => fetchPublicSlots(publicKey, { from, days }),
+    [publicKey]
+  );
+
+  // PR-4b — tải một tệp của trường `file`: xin URL ký + PUT thẳng lên kho (không qua backend).
+  const handleUploadFile = useCallback(
+    (field, file, options) => uploadPublicFormFile(publicKey, field, file, options),
     [publicKey]
   );
 
@@ -224,6 +231,7 @@ export default function PublicFormPage() {
         isSubmitting={isSubmitting}
         externalError={submitError}
         loadSlots={form?.booking?.enabled ? loadSlots : undefined}
+        onUploadFile={handleUploadFile}
         embedMode={embedMode}
       />
     </div>

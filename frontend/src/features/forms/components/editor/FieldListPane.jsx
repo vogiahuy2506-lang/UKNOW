@@ -27,6 +27,7 @@ export default function FieldListPane({
   errors,
   selectedUid,
   setupHints,
+  fileUploadsEnabled = false,
   onDismissSetupHints,
   onOpenSettings,
   onSelect,
@@ -55,6 +56,9 @@ export default function FieldListPane({
   };
 
   const showHints = Boolean(setupHints?.booking || setupHints?.payment);
+
+  // Loại cần cờ backend (hiện là "Tải tệp") chỉ có trong menu khi cờ bật.
+  const availablePresets = QUICK_FIELD_PRESETS.filter((preset) => !preset.requiresFileFlag || fileUploadsEnabled);
 
   // Đếm riêng trường NHẬP (x/30) và khối bố cục (tiêu đề / đoạn chữ / ngắt trang). Số thứ tự "Trường #n" chỉ tính trường
   // nhập; khối bố cục có số riêng (dùng cho nhãn đọc màn hình).
@@ -163,7 +167,7 @@ export default function FieldListPane({
           <span>{t('forms.editorPage.quickAdd.title')}</span>
         </div>
         <div className="flex flex-wrap gap-2">
-          {QUICK_FIELD_PRESETS.filter((preset) => preset.common).map(renderPresetButton)}
+          {availablePresets.filter((preset) => preset.common).map(renderPresetButton)}
           <button
             type="button"
             aria-expanded={showMoreFieldTypes}
@@ -177,7 +181,7 @@ export default function FieldListPane({
         {showMoreFieldTypes && (
           <div className="mt-3 space-y-3" data-testid="form-more-field-types">
             {FIELD_TYPE_GROUPS.map((group) => {
-              const presets = QUICK_FIELD_PRESETS.filter((preset) => !preset.common && preset.group === group.id);
+              const presets = availablePresets.filter((preset) => !preset.common && preset.group === group.id);
               if (presets.length === 0) return null;
               return (
                 <div key={group.id}>
@@ -366,6 +370,7 @@ export default function FieldListPane({
                     field={field}
                     idx={idx}
                     errors={errors}
+                    fileUploadsEnabled={fileUploadsEnabled}
                     onUpdateField={onUpdateField}
                     onAddOption={onAddOption}
                     onUpdateOption={onUpdateOption}

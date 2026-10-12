@@ -14,6 +14,7 @@ export const REFERENCE_LABEL_KEYS = Object.freeze({
   email_template: 'mediaLibrary.reference.email_template',
   form: 'mediaLibrary.reference.form',
   form_payment_receipt: 'mediaLibrary.reference.form_payment_receipt',
+  form_submission_file: 'mediaLibrary.reference.form_submission_file',
   help_article: 'mediaLibrary.reference.help_article',
   landing: 'mediaLibrary.reference.landing',
   landing_page: 'mediaLibrary.reference.landing_page',
