@@ -1,5 +1,6 @@
 import express from 'express';
 import formController from '../controllers/form.controller.js';
+import formSubmissionExportController from '../controllers/formSubmissionExport.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 import { aiLimiter } from '../middleware/rateLimiter.middleware.js';
 import { assertAiCreditAvailable } from '../middleware/aiCredit.middleware.js';
@@ -23,6 +24,8 @@ router.post('/', formController.create.bind(formController));
 router.post('/assets', formController.uploadAsset.bind(formController));
 // PHẢI đứng TRƯỚC '/:id' — không thì 'submissions' bị hiểu là :id (parseInt → NaN → 400).
 router.get('/submissions', formController.listWorkspaceSubmissions.bind(formController));
+// Xuất CSV tab "Từ biểu mẫu" (PR-8c) — cùng bộ lọc với '/submissions'. Cũng trước '/:id'.
+router.get('/submissions/export.csv', formSubmissionExportController.exportWorkspaceCsv.bind(formSubmissionExportController));
 // AI soạn biểu mẫu (PR-5): trả NHÁP, không ghi CSDL. Cùng chuỗi kiểm AI như "AI viết hộ" chatbot: giới hạn tần suất 20/phút → cổng credit
 // (hết lượt / gói hết hạn / nhân viên vượt hạn mức → 402/403 trước khi gọi Google) → controller trừ 1 credit SAU khi nháp thành công.
 // Quyền `forms` đã áp cho cả router ở trên. Đặt trước '/:id' như '/submissions'.
@@ -37,6 +40,8 @@ router.put('/:id', formController.update.bind(formController));
 router.delete('/:id', formController.delete.bind(formController));
 router.put('/:id/publish', formController.publish.bind(formController));
 router.get('/:id/submissions', formController.submissions.bind(formController));
+// Xuất CSV trang bài nộp của MỘT biểu mẫu (PR-8c).
+router.get('/:id/submissions/export.csv', formSubmissionExportController.exportFormCsv.bind(formSubmissionExportController));
 router.get('/:id/submissions/:submissionId/receipt', formController.getSubmissionReceipt.bind(formController));
 router.get(
   '/:id/submissions/:submissionId/files/:fieldKey/:index/link',

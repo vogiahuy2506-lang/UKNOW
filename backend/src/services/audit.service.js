@@ -213,6 +213,11 @@ export const AUDIT_ACTIONS = {
 
   // Workspace — forms (PR-3a)
   FORM_PAYMENT_CONFIG_UPDATED: 'FORM_PAYMENT_CONFIG_UPDATED',
+  // PR-8c: xuất CSV dữ liệu cá nhân của khách. Ghi TRƯỚC khi gửi byte đầu tiên. details gồm exportType, formId, filters, rowCount, totalMatched,
+  // truncated. entity = form (entity_id = id biểu mẫu khi xuất từ trang bài nộp, NULL khi xuất cả workspace từ tab Từ biểu mẫu) hoặc lead.
+  // KHÔNG dùng dấu ngoặc nhọn trong chú thích của khối này: auditLogLabels.spec.js đọc khối AUDIT_ACTIONS dạng văn bản tới dấu ngoặc nhọn đóng đầu tiên.
+  FORM_SUBMISSIONS_EXPORTED: 'FORM_SUBMISSIONS_EXPORTED',
+  LANDING_LEADS_EXPORTED: 'LANDING_LEADS_EXPORTED',
 
   // System — forms (PR-3a, super admin)
   FORM_DISABLED: 'FORM_DISABLED',
@@ -249,6 +254,7 @@ export const AUDIT_ENTITY_TYPES = {
   AI_SESSION: 'ai_session',
   EINVOICE: 'einvoice',
   FORM: 'form',
+  LEAD: 'lead',
   AI_MODEL: 'ai_model',
   ORDER: 'order',
 };

@@ -1,6 +1,9 @@
 import leadService from '../services/lead/lead.service.js';
 import { clampLandingLeadsLimit } from '../utils/landingLeadsLimit.util.js';
 import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
+import { logWorkspace, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
+import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
+import { summarizeLeadFiltersForAudit } from '../services/leadCsvExport.service.js';
 
 /**
  * Parse query chung cho preview và danh sách admin (lọc lead landing).
@@ -8,7 +11,7 @@ import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
  * @param {Record<string, unknown>} q
  * @returns {object}
  */
-function parseLandingLeadFilters(q) {
+export function parseLandingLeadFilters(q) {
   let occupations = [];
   let interests = [];
   let landingSlugs = [];
@@ -189,6 +192,21 @@ class LeadController {
         isSuperAdmin: workspaceContext.isSuperAdmin,
       };
       const { buffer, total, exportedCount, truncated } = await leadService.exportAdminFilteredXlsx(base);
+      // PR-8c: xuất dữ liệu cá nhân của khách → ghi nhật ký hoạt động (như bản CSV, leadExport.controller.js).
+      await logWorkspace(
+        getWorkspaceAuditContext(req),
+        AUDIT_ACTIONS.LANDING_LEADS_EXPORTED,
+        AUDIT_ENTITY_TYPES.LEAD,
+        null,
+        {
+          exportType: 'landing_leads_xlsx',
+          formId: null,
+          filters: summarizeLeadFiltersForAudit(base),
+          rowCount: exportedCount,
+          totalMatched: total,
+          truncated,
+        }
+      );
 
       const now = new Date();
       const pad = (n) => String(n).padStart(2, '0');

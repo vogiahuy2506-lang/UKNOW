@@ -3,7 +3,8 @@ import { clampLandingLeadsLimit } from '../utils/landingLeadsLimit.util.js';
 import { expandLandingSlugsForSqlFilter } from '../utils/landingPageSlugCanonical.util.js';
 import { appendCustomFieldFilterSql } from '../utils/landingLeadCustomFilters.util.js';
 
-function buildLeadWhere(filters) {
+/** Dùng chung với leadExport.repository.js (xuất CSV) để file xuất lọc ĐÚNG như danh sách. */
+export function buildLeadWhere(filters) {
   const useDateRange = Boolean(filters.useDateRange);
   const dateFrom = String(filters.dateFrom || '').trim();
   const dateTo = String(filters.dateTo || '').trim();

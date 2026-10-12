@@ -1,5 +1,6 @@
 import express from 'express';
 import leadController from '../controllers/lead.controller.js';
+import leadExportController from '../controllers/leadExport.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 import { requirePermission, requireActivePlan, requirePasswordChange, requirePhone } from '../middleware/authorization.middleware.js';
 import { leadUnsubscribeLimiter } from '../middleware/rateLimiter.middleware.js';
@@ -27,6 +28,11 @@ router.get(
  * GET /api/leads/export — tải Excel theo bộ lọc (đặt trước `/` để không bị nhầm path).
  */
 router.get('/export', requirePermission('leads'), leadController.exportXlsx.bind(leadController));
+
+/**
+ * GET /api/leads/export.csv — tải CSV (UTF-8 có BOM, tối đa 20.000 dòng, ghi nhật ký hoạt động). PR-8c biểu mẫu.
+ */
+router.get('/export.csv', requirePermission('leads'), leadExportController.exportCsv.bind(leadExportController));
 
 /**
  * GET /api/leads — danh sách lead landing (phân trang + lọc). Đặt sau /preview để không đụng path.
