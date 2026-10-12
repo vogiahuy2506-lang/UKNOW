@@ -1193,7 +1193,7 @@ export default {
     help: 'Toggle Occupation and Interest; add your own questions. AI includes these fields when it generates or edits the page — if an existing page is missing a field, use the "Ask AI to add this field" button.',
     // List of MANY forms on the page (PR-6; replaces "Basic form / Use an existing form" from PR-F).
     formsTitle: 'Forms on this page',
-    formsDesc: 'Each form is a block on the page: consultation, booking, payment, survey... Add as many as you like (up to {max}) and use the up/down buttons to reorder. Changes apply when you press Save.',
+    formsDesc: 'Each form is a block on the page: consultation, booking, payment, survey... Add as many as you like and use the up/down buttons to reorder. Changes apply when you press Save.',
     formsEmpty: 'This page has no forms yet. Press "Add form" to add one, or use the basic lead form below.',
     formKinds: {
       consult: 'Consultation sign-up',

@@ -147,7 +147,7 @@ export default function LandingFormsList({ form, setForm, t, editingId = null })
           <h4 className="text-[14px] font-bold text-gray-900 dark:text-dk-text">
             {t('leadFormConfig.formsTitle')}
             <span data-testid="forms-count" className="ml-2 text-[12px] font-normal text-gray-500 dark:text-dk-text2">
-              ({rows.length}/{MAX_FORMS_PER_LANDING})
+              ({rows.length})
             </span>
           </h4>
           <p className="mt-0.5 text-[12px] leading-relaxed text-gray-600 dark:text-dk-text2">

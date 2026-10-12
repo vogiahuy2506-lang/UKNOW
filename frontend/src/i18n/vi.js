@@ -1194,7 +1194,7 @@ export default {
     help: 'Bật/tắt Nghề nghiệp và Lĩnh vực; thêm câu hỏi riêng. AI sẽ đưa đúng các trường này vào form khi tạo/sửa trang — trang đã có sẵn mà thiếu trường thì dùng nút "Nhờ AI thêm ô này".',
     // Danh sách NHIỀU biểu mẫu của trang (PLAN_BIEU_MAU_TUY_BIEN_AI_LANDING_2026-10-11 PR-6; thay "Form cơ bản / Dùng biểu mẫu đã tạo" của PR-F).
     formsTitle: 'Biểu mẫu của trang',
-    formsDesc: 'Mỗi biểu mẫu là một khối trên trang: tư vấn, đặt lịch, thu tiền, khảo sát... Thêm bao nhiêu tuỳ ý (tối đa {max}), dùng nút lên/xuống để đổi vị trí. Mọi thay đổi áp dụng khi bạn bấm Lưu trang.',
+    formsDesc: 'Mỗi biểu mẫu là một khối trên trang: tư vấn, đặt lịch, thu tiền, khảo sát... Thêm bao nhiêu tuỳ ý, dùng nút lên/xuống để đổi vị trí. Mọi thay đổi áp dụng khi bạn bấm Lưu trang.',
     formsEmpty: 'Trang chưa có biểu mẫu nào. Bấm "Thêm biểu mẫu" để thêm, hoặc dùng form thu khách cơ bản ở bên dưới.',
     formKinds: {
       consult: 'Đăng ký tư vấn',

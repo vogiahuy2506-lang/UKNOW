@@ -67,7 +67,7 @@ describe('LandingFormsList — hiển thị', () => {
     const { container } = renderList();
 
     expect(screen.getByTestId('forms-empty')).toBeInTheDocument();
-    expect(screen.getByTestId('forms-count')).toHaveTextContent('(0/20)');
+    expect(screen.getByTestId('forms-count')).toHaveTextContent('(0)');
     expect(screen.getByRole('button', { name: 'Thêm biểu mẫu' })).toHaveAttribute('aria-expanded', 'false');
     expect(rows()).toHaveLength(0);
     expect(fetchForms).not.toHaveBeenCalled();
@@ -81,7 +81,7 @@ describe('LandingFormsList — hiển thị', () => {
     });
 
     expect(rowTitles()).toEqual(['Đăng ký tư vấn', 'Thu cọc khoá học', 'Biểu mẫu tự chọn']);
-    expect(screen.getByTestId('forms-count')).toHaveTextContent('(3/20)');
+    expect(screen.getByTestId('forms-count')).toHaveTextContent('(3)');
     const badges = screen.getAllByTestId('form-kind-badge').map((b) => b.textContent);
     expect(badges).toEqual(['Đăng ký tư vấn', 'Thu tiền / đặt cọc', 'Biểu mẫu có sẵn']);
     expect(within(rows()[2]).getByText('Bản nháp')).toBeInTheDocument();
@@ -215,7 +215,7 @@ describe('LandingFormsList — thêm biểu mẫu', () => {
     expect(latest.htmlContent.indexOf('"booking"')).toBeGreaterThan(latest.htmlContent.indexOf('K11'));
     expect(latest.htmlContent.indexOf('"booking"')).toBeLessThan(latest.htmlContent.indexOf('<footer>'));
     expect(rowTitles()).toEqual(['Đăng ký tư vấn', 'Biểu mẫu mới: Đặt lịch hẹn', 'Biểu mẫu mới: Thu tiền / đặt cọc']);
-    expect(screen.getByTestId('forms-count')).toHaveTextContent('(3/20)');
+    expect(screen.getByTestId('forms-count')).toHaveTextContent('(3)');
     await waitFor(() => expect(fetchForms).toHaveBeenCalledTimes(1)); // chỉ lần tải danh sách khi mở khung
   });
 
@@ -281,7 +281,7 @@ describe('LandingFormsList — thêm biểu mẫu', () => {
     renderList({ htmlContent: PAGE(slots) });
 
     expect(rows()).toHaveLength(20);
-    expect(screen.getByTestId('forms-count')).toHaveTextContent('(20/20)');
+    expect(screen.getByTestId('forms-count')).toHaveTextContent('(20)');
     expect(screen.getByTestId('forms-limit')).toHaveTextContent('Trang đã đủ 20 biểu mẫu');
     fireEvent.click(screen.getByTestId('add-form-toggle'));
     for (const kind of ['consult', 'booking', 'payment', 'survey', 'blank']) {
