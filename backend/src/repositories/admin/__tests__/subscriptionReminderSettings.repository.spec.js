@@ -14,7 +14,7 @@ describe('subscriptionReminderSettings.repository', () => {
   });
 
   it('findSettings SELECT đúng bảng, không tham số', async () => {
-    const row = { days_before: [7, 3], updated_by: null, updated_at: null };
+    const row = { days_before: [7, 3], days_before_yearly: [30, 7, 3], updated_by: null, updated_at: null };
     query.mockResolvedValueOnce({ rows: [row] });
 
     const result = await findSettings();
@@ -22,6 +22,8 @@ describe('subscriptionReminderSettings.repository', () => {
     expect(result).toEqual(row);
     const [sql] = query.mock.calls[0];
     expect(sql).toMatch(/FROM\s+subscription_reminder_settings/i);
+    // Cột gói năm phải nằm trong SELECT — thiếu thì DTO luôn rơi về mặc định dù admin đã lưu giá trị khác.
+    expect(sql).toMatch(/days_before_yearly/);
   });
 
   it('findSettings trả null khi không có dòng (không throw) — ví dụ bảng vừa bị truncate ở test', async () => {
@@ -33,16 +35,28 @@ describe('subscriptionReminderSettings.repository', () => {
   // tests/integration/helpers/db.js xoá theo mà không tự gieo lại — UPSERT là bắt buộc, không
   // phải chọn phong cách. UPDATE thuần sẽ ảnh hưởng 0 dòng trong tình huống đó.
   it('saveSettings dùng INSERT ... ON CONFLICT (id) DO UPDATE, không phải UPDATE thuần', async () => {
-    const returned = { days_before: [10, 5], updated_by: 9, updated_at: '2026-09-13T00:00:00.000Z' };
+    const returned = { days_before: [10, 5], days_before_yearly: [30, 7], updated_by: 9, updated_at: '2026-09-13T00:00:00.000Z' };
     query.mockResolvedValueOnce({ rows: [returned] });
 
-    const result = await saveSettings({ daysBefore: [10, 5], updatedBy: 9 });
+    const result = await saveSettings({ daysBefore: [10, 5], daysBeforeYearly: [30, 7], updatedBy: 9 });
 
     expect(result).toEqual(returned);
     const [sql, params] = query.mock.calls[0];
     expect(sql).toMatch(/INSERT INTO subscription_reminder_settings/i);
     expect(sql).toMatch(/ON CONFLICT\s*\(id\)\s*DO UPDATE/i);
-    expect(params).toEqual([[10, 5], 9]);
+    expect(params).toEqual([[10, 5], 9, [30, 7]]);
+  });
+
+  // Client cũ không gửi daysBeforeYearly: tham số $3 phải là NULL và nhánh UPDATE phải COALESCE về giá trị đang lưu,
+  // nếu không PUT của client cũ sẽ ghi đè mất mốc gói năm. Hành vi thật chốt ở integration (adminSubscriptionReminderSettings).
+  it('saveSettings thiếu daysBeforeYearly → tham số NULL + UPDATE giữ giá trị cũ bằng COALESCE (không ghi đè cột gói năm)', async () => {
+    query.mockResolvedValueOnce({ rows: [{ days_before: [5] }] });
+
+    await saveSettings({ daysBefore: [5], updatedBy: 9 });
+
+    const [sql, params] = query.mock.calls[0];
+    expect(params).toEqual([[5], 9, null]);
+    expect(sql).toMatch(/days_before_yearly\s*=\s*COALESCE\(\$3::int\[\],\s*subscription_reminder_settings\.days_before_yearly\)/);
   });
 
   it('dùng queryable truyền vào (transaction client) thay vì db mặc định', async () => {

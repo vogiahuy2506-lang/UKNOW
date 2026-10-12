@@ -165,11 +165,14 @@ function buildSentRecordAfterSend(rawSent, expiresAt, day) {
 }
 
 /**
- * Gửi email nhắc nhở sắp hết hạn gói theo danh sách mốc cấu hình được (mặc định [7,3], xem
- * subscriptionReminderSettings.service.js):
- * 1. Đọc mẫu 'plan_expiring' tuỳ chỉnh + danh sách mốc, MỘT lần cho cả lượt cron.
- * 2. Với mỗi mốc `d` (sắp giảm dần): quét user hết hạn trong cửa sổ (d-1, d] — rộng đúng 24 giờ,
- *    khớp chu kỳ cron chạy mỗi ngày một lần (cửa sổ (d, d) rộng 0 giây sẽ không ai được gửi).
+ * Gửi email nhắc nhở sắp hết hạn gói theo danh sách mốc cấu hình được (mặc định gói tháng [7,3], gói năm
+ * [30,7,3], xem subscriptionReminderSettings.service.js):
+ * 1. Đọc mẫu 'plan_expiring' tuỳ chỉnh + hai danh sách mốc, MỘT lần cho cả lượt cron.
+ * 2. Hai vòng theo KỲ gói (PLAN_MOC_NHAC_HAN_THEO_KY_2026-10-12.md B4): mốc gói tháng quét user kỳ tháng, mốc gói
+ *    năm quét user kỳ năm (phân loại ở findUsersExpiringInWindow, cycle) — một user chỉ thuộc đúng một kỳ nên không
+ *    bao giờ nhận hai bộ mốc. Trong mỗi vòng, với mỗi mốc `d` (sắp giảm dần): quét user hết hạn trong cửa sổ
+ *    (d-1, d] — rộng đúng 24 giờ, khớp chu kỳ cron chạy mỗi ngày một lần (cửa sổ (d, d) rộng 0 giây sẽ không ai
+ *    được gửi).
  * 3. Lọc tiếp bằng subscription_reminders_sent — mốc đã gửi trong chu kỳ hiện tại thì bỏ qua.
  * 4. Bọc try/catch cho từng user: lỗi 1 user không làm đứt chuỗi và không ảnh hưởng người khác.
  * 5. Chỉ markReminderSent khi gửi email thành công. KHÔNG còn dùng subscription_reminder_count
@@ -182,21 +185,34 @@ function buildSentRecordAfterSend(rawSent, expiresAt, day) {
  * không mất số liệu (synced vẫn cộng đúng), nhưng không tách riêng được mốc 3/4/5. Đây là giới
  * hạn thật của hợp đồng 2-khoá cũ, plan không nói tới; nêu ở báo cáo.
  *
+ * Từ khi có mốc theo kỳ (B4): "mốc đầu tiên" tính RIÊNG cho từng danh sách — mốc xa nhất của danh sách gói tháng VÀ
+ * mốc xa nhất của danh sách gói năm đều dồn vào remindedWeek; các mốc còn lại của cả hai dồn vào remindedThreeDay.
+ * `remindedYearly` là phần đếm RIÊNG của thư kỳ năm (mọi mốc) để giám sát — nó là TẬP CON của hai khoá trên, nên
+ * KHÔNG được cộng thêm vào `synced` (xem buildSubscriptionCronResult).
+ *
  * @param {{ renewalUrl?: string, queryable?: object }} [options]
- * @returns {Promise<{ remindedWeek: number, remindedThreeDay: number, failed: number }>}
+ * @returns {Promise<{ remindedWeek: number, remindedThreeDay: number, remindedYearly: number, failed: number }>}
  */
 export async function sendExpiringReminders({ renewalUrl, queryable = db } = {}) {
-  const [planExpiringTemplate, { daysBefore }] = await Promise.all([
+  // daysBeforeYearly = [] khi thiếu: getReminderSettings luôn trả đủ hai danh sách; mặc định chỉ để chống cấu hình thiếu trường.
+  const [planExpiringTemplate, { daysBefore, daysBeforeYearly = [] }] = await Promise.all([
     loadCustomSystemEmailTemplate('plan_expiring'),
     getReminderSettings(),
   ]);
   let remindedWeek = 0;
   let remindedThreeDay = 0;
+  let remindedYearly = 0;
   let failed = 0;
 
-  for (let index = 0; index < daysBefore.length; index += 1) {
-    const day = daysBefore[index];
-    const candidates = await findUsersExpiringInWindow(day - 1, day, queryable);
+  // Mỗi phần tử = một mốc của một kỳ; `index` là vị trí TRONG danh sách của kỳ đó (mốc xa nhất = 0). Thứ tự: hết mốc
+  // gói tháng rồi mới tới mốc gói năm.
+  const passes = [
+    ...daysBefore.map((day, index) => ({ cycle: 'monthly', day, index })),
+    ...daysBeforeYearly.map((day, index) => ({ cycle: 'yearly', day, index })),
+  ];
+
+  for (const { cycle, day, index } of passes) {
+    const candidates = await findUsersExpiringInWindow(day - 1, day, { cycle, queryable });
     for (const user of candidates) {
       if (hasSentDay(user.subscription_reminders_sent, user.subscription_expires_at, day)) continue;
       try {
@@ -238,10 +254,11 @@ export async function sendExpiringReminders({ renewalUrl, queryable = db } = {})
         );
         if (index === 0) remindedWeek++;
         else remindedThreeDay++;
-        console.log(`[Subscription] Nhắc mốc ${day} ngày → ${user.email} (còn ${daysLeft} ngày)`);
+        if (cycle === 'yearly') remindedYearly++;
+        console.log(`[Subscription] Nhắc mốc ${day} ngày (${cycle}) → ${user.email} (còn ${daysLeft} ngày)`);
       } catch (err) {
         failed++;
-        console.error(`[Subscription] Gửi nhắc hạn mốc ${day} ngày thất bại cho ${user.email}:`, err.message);
+        console.error(`[Subscription] Gửi nhắc hạn mốc ${day} ngày (${cycle}) thất bại cho ${user.email}:`, err.message);
       }
     }
   }
@@ -249,6 +266,7 @@ export async function sendExpiringReminders({ renewalUrl, queryable = db } = {})
   return {
     remindedWeek,
     remindedThreeDay,
+    remindedYearly,
     failed,
   };
 }
@@ -265,14 +283,18 @@ export async function sendExpiringReminders({ renewalUrl, queryable = db } = {})
  * Năm khoá `expired`, `remindedWeek`, `remindedThreeDay`, `lockedUsers`, `synced` là hợp đồng với
  * bảng giám sát — đổi tên chúng là làm mù dashboard, nên phải có chỗ canh.
  *
+ * `remindedYearly` (PLAN_MOC_NHAC_HAN_THEO_KY_2026-10-12.md B4) là khoá THÊM để giám sát thư kỳ năm. Nó là tập con
+ * của remindedWeek/remindedThreeDay (thư gói năm đã nằm trong hai số đó) nên KHÔNG cộng vào `synced` — cộng nữa là
+ * đếm đôi mỗi thư gói năm.
+ *
  * @param {{
  *   expiryResult: { expiredCount?: number },
- *   reminderResult: { remindedWeek?: number, remindedThreeDay?: number },
+ *   reminderResult: { remindedWeek?: number, remindedThreeDay?: number, remindedYearly?: number },
  *   lockedUsers?: number,
  *   reminderWeek?: number,
  *   reminderThree?: number,
  * }} input
- * @returns {{ expired: number, remindedWeek: number, remindedThreeDay: number,
+ * @returns {{ expired: number, remindedWeek: number, remindedThreeDay: number, remindedYearly: number,
  *   lockedUsers: number, reminderWeek: number, reminderThree: number, synced: number }}
  */
 export function buildSubscriptionCronResult({
@@ -285,11 +307,13 @@ export function buildSubscriptionCronResult({
   const expired = Number(expiryResult.expiredCount) || 0;
   const remindedWeek = Number(reminderResult.remindedWeek) || 0;
   const remindedThreeDay = Number(reminderResult.remindedThreeDay) || 0;
+  const remindedYearly = Number(reminderResult.remindedYearly) || 0;
 
   return {
     expired,
     remindedWeek,
     remindedThreeDay,
+    remindedYearly,
     lockedUsers,
     reminderWeek,
     reminderThree,

@@ -9,6 +9,8 @@
 import { describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
 import {
   findExpiringUsers,
+  findUsersExpiringInWindow,
+  YEARLY_CYCLE_MIN_DAYS,
   findExpiredUsers,
   expireUserPlan,
   incrementReminderCount,
@@ -93,6 +95,78 @@ describe('findExpiringUsers(minDays, maxDays, reminderThreshold)', () => {
 
     const rows = await findExpiringUsers(3, 7, 3);
     expect(rows).toHaveLength(0);
+  });
+});
+
+// ===========================================================================
+// findUsersExpiringInWindow — PLAN_MOC_NHAC_HAN_THEO_KY_2026-10-12.md B3: phân loại KỲ gói bằng SQL thật
+// ===========================================================================
+describe('findUsersExpiringInWindow(minDays, maxDays, { cycle })', () => {
+  const days = (n) => new Date(Date.now() + n * 86400000);
+
+  /** Kích hoạt gói với thời hạn `termDays` ngày, còn `daysLeft` ngày nữa hết hạn (plan_activated_at = expires - term). */
+  async function activateWithTerm(userId, planId, daysLeft, termDays) {
+    const expiresAt = days(daysLeft);
+    await setSubscription(userId, planId, expiresAt);
+    if (termDays === null) return;
+    await db.query(
+      `UPDATE users SET plan_activated_at = $2::timestamptz - make_interval(days => $3::int) WHERE id = $1`,
+      [userId, expiresAt, termDays]
+    );
+  }
+
+  async function seed() {
+    const plan = await createPlan({ code: 'win-cycle' });
+    const yearly = await createUser({ username: 'cycle-year' });
+    const monthly = await createUser({ username: 'cycle-month' });
+    const unknown = await createUser({ username: 'cycle-null' });
+    await activateWithTerm(yearly.id, plan.id, 29.5, 365);
+    await activateWithTerm(monthly.id, plan.id, 29.5, 30);
+    await activateWithTerm(unknown.id, plan.id, 29.5, null);
+    return { yearly: Number(yearly.id), monthly: Number(monthly.id), unknown: Number(unknown.id) };
+  }
+
+  const idsOf = (rows) => rows.map((r) => Number(r.id)).sort((a, b) => a - b);
+
+  it('ngưỡng là 300 ngày (hằng YEARLY_CYCLE_MIN_DAYS được export để service/test cùng nhìn)', () => {
+    expect(YEARLY_CYCLE_MIN_DAYS).toBe(300);
+  });
+
+  it("cycle 'yearly' chỉ trả kỳ năm; 'monthly' trả kỳ tháng VÀ user thiếu plan_activated_at; 'all' (mặc định) trả cả ba", async () => {
+    const { yearly, monthly, unknown } = await seed();
+
+    expect(idsOf(await findUsersExpiringInWindow(29, 30, { cycle: 'yearly' }))).toEqual([yearly]);
+    expect(idsOf(await findUsersExpiringInWindow(29, 30, { cycle: 'monthly' }))).toEqual([monthly, unknown].sort((a, b) => a - b));
+    expect(idsOf(await findUsersExpiringInWindow(29, 30, { cycle: 'all' }))).toEqual([yearly, monthly, unknown].sort((a, b) => a - b));
+    // Không truyền options = hành vi cũ (không lọc kỳ).
+    expect(idsOf(await findUsersExpiringInWindow(29, 30))).toEqual([yearly, monthly, unknown].sort((a, b) => a - b));
+  });
+
+  it('biên ngưỡng: kỳ 299 ngày vẫn là THÁNG, kỳ 300 ngày là NĂM (>= 300)', async () => {
+    const plan = await createPlan({ code: 'win-edge' });
+    const t299 = await createUser({ username: 'term-299' });
+    const t300 = await createUser({ username: 'term-300' });
+    await activateWithTerm(t299.id, plan.id, 29.5, 299);
+    await activateWithTerm(t300.id, plan.id, 29.5, 300);
+
+    expect(idsOf(await findUsersExpiringInWindow(29, 30, { cycle: 'yearly' }))).toEqual([Number(t300.id)]);
+    expect(idsOf(await findUsersExpiringInWindow(29, 30, { cycle: 'monthly' }))).toEqual([Number(t299.id)]);
+  });
+
+  it('cửa sổ ngày và các điều kiện cũ (role, status, còn gói) vẫn áp dụng cùng bộ lọc kỳ', async () => {
+    const plan = await createPlan({ code: 'win-keep' });
+    const inWindow = await createUser({ username: 'k-in' });
+    const outWindow = await createUser({ username: 'k-out' });
+    const inactive = await createUser({ username: 'k-inactive', status: 'inactive' });
+    await activateWithTerm(inWindow.id, plan.id, 29.5, 365);
+    await activateWithTerm(outWindow.id, plan.id, 40, 365);
+    await activateWithTerm(inactive.id, plan.id, 29.5, 365);
+
+    expect(idsOf(await findUsersExpiringInWindow(29, 30, { cycle: 'yearly' }))).toEqual([Number(inWindow.id)]);
+  });
+
+  it("cycle lạ → ném lỗi (gõ nhầm 'year' không được âm thầm thành 'không lọc kỳ')", async () => {
+    await expect(findUsersExpiringInWindow(29, 30, { cycle: 'year' })).rejects.toThrow(/cycle không hợp lệ/);
   });
 });
 

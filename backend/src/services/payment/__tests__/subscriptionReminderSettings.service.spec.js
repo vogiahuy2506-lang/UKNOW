@@ -10,6 +10,7 @@ jest.unstable_mockModule('../../../repositories/admin/subscriptionReminderSettin
 
 const {
   DEFAULT_REMINDER_DAYS_BEFORE,
+  DEFAULT_REMINDER_DAYS_BEFORE_YEARLY,
   normalizeReminderDaysBefore,
   getReminderSettings,
   updateReminderSettings,
@@ -25,6 +26,16 @@ describe('subscriptionReminderSettings.service', () => {
   describe('normalizeReminderDaysBefore', () => {
     it('mặc định [7,3] đúng như hôm nay', () => {
       expect(DEFAULT_REMINDER_DAYS_BEFORE).toEqual([7, 3]);
+    });
+
+    it('mặc định gói năm [30,7,3] — nhắc trước ít nhất 30 ngày (chốt 12/10)', () => {
+      expect(DEFAULT_REMINDER_DAYS_BEFORE_YEARLY).toEqual([30, 7, 3]);
+    });
+
+    it('dùng chung luật cho danh sách gói năm: [30,30] → 400, thông báo lỗi nêu đúng tên trường', () => {
+      expect(() => normalizeReminderDaysBefore([30, 30], 'daysBeforeYearly')).toThrow(/trùng mốc/);
+      expect(() => normalizeReminderDaysBefore('x', 'daysBeforeYearly')).toThrow(/^daysBeforeYearly phải là một danh sách/);
+      expect(normalizeReminderDaysBefore([3, 30, 7], 'daysBeforeYearly')).toEqual([30, 7, 3]);
     });
 
     it('danh sách rỗng là hợp lệ (tắt hết nhắc trước hạn)', () => {
@@ -76,37 +87,81 @@ describe('subscriptionReminderSettings.service', () => {
   });
 
   describe('getReminderSettings', () => {
-    it('ca 1 — có dòng cấu hình → trả đúng daysBefore đã lưu', async () => {
-      mockFindSettings.mockResolvedValue({ days_before: [10, 5], updated_by: 9, updated_at: '2026-09-13T00:00:00.000Z' });
+    it('ca 1 — có dòng cấu hình → trả đúng daysBefore + daysBeforeYearly đã lưu', async () => {
+      mockFindSettings.mockResolvedValue({
+        days_before: [10, 5], days_before_yearly: [60, 30], updated_by: 9, updated_at: '2026-09-13T00:00:00.000Z',
+      });
 
       const result = await getReminderSettings();
 
-      expect(result).toEqual({ daysBefore: [10, 5], updatedBy: 9, updatedAt: '2026-09-13T00:00:00.000Z' });
+      expect(result).toEqual({
+        daysBefore: [10, 5], daysBeforeYearly: [60, 30], updatedBy: 9, updatedAt: '2026-09-13T00:00:00.000Z',
+      });
     });
 
-    it('chưa có dòng nào (bảng rỗng, ví dụ vừa truncate ở test) → mặc định [7,3]', async () => {
+    it('dòng cấu hình thiếu cột gói năm (chưa có giá trị) → gói năm rơi về [30,7,3], gói tháng giữ nguyên', async () => {
+      mockFindSettings.mockResolvedValue({ days_before: [10, 5], updated_by: null, updated_at: null });
+
+      const result = await getReminderSettings();
+
+      expect(result.daysBefore).toEqual([10, 5]);
+      expect(result.daysBeforeYearly).toEqual([30, 7, 3]);
+    });
+
+    it('chưa có dòng nào (bảng rỗng, ví dụ vừa truncate ở test) → mặc định [7,3] và gói năm [30,7,3]', async () => {
       mockFindSettings.mockResolvedValue(null);
 
       const result = await getReminderSettings();
 
-      expect(result).toEqual({ daysBefore: [7, 3], updatedBy: null, updatedAt: null });
+      expect(result).toEqual({ daysBefore: [7, 3], daysBeforeYearly: [30, 7, 3], updatedBy: null, updatedAt: null });
     });
 
     it('ca 10 (đột biến bắt buộc: đọc lỗi phải rơi về mặc định, KHÔNG được ném) — DB lỗi tạm thời → vẫn trả [7,3], không throw', async () => {
       mockFindSettings.mockRejectedValue(new Error('relation "subscription_reminder_settings" does not exist'));
 
-      await expect(getReminderSettings()).resolves.toEqual({ daysBefore: [7, 3], updatedBy: null, updatedAt: null });
+      await expect(getReminderSettings()).resolves.toEqual({
+        daysBefore: [7, 3], daysBeforeYearly: [30, 7, 3], updatedBy: null, updatedAt: null,
+      });
     });
   });
 
   describe('updateReminderSettings', () => {
     it('validate rồi lưu, trả DTO từ dòng vừa ghi', async () => {
-      mockSaveSettings.mockResolvedValue({ days_before: [10, 5, 2], updated_by: 9, updated_at: '2026-09-13T00:00:00.000Z' });
+      mockSaveSettings.mockResolvedValue({
+        days_before: [10, 5, 2], days_before_yearly: [30, 7, 3, 1], updated_by: 9, updated_at: '2026-09-13T00:00:00.000Z',
+      });
 
-      const result = await updateReminderSettings({ daysBefore: [2, 10, 5] }, 9);
+      const result = await updateReminderSettings({ daysBefore: [2, 10, 5], daysBeforeYearly: [1, 30, 3, 7] }, 9);
 
-      expect(mockSaveSettings).toHaveBeenCalledWith({ daysBefore: [10, 5, 2], updatedBy: 9 });
-      expect(result).toEqual({ daysBefore: [10, 5, 2], updatedBy: 9, updatedAt: '2026-09-13T00:00:00.000Z' });
+      expect(mockSaveSettings).toHaveBeenCalledWith({ daysBefore: [10, 5, 2], daysBeforeYearly: [30, 7, 3, 1], updatedBy: 9 });
+      expect(result).toEqual({
+        daysBefore: [10, 5, 2], daysBeforeYearly: [30, 7, 3, 1], updatedBy: 9, updatedAt: '2026-09-13T00:00:00.000Z',
+      });
+    });
+
+    it('client cũ chỉ gửi daysBefore → daysBeforeYearly để undefined xuống repository (= giữ giá trị đang lưu), không phải []', async () => {
+      mockSaveSettings.mockResolvedValue({ days_before: [5], days_before_yearly: [45], updated_by: 9, updated_at: null });
+
+      await updateReminderSettings({ daysBefore: [5] }, 9);
+
+      const [arg] = mockSaveSettings.mock.calls[0];
+      expect(arg.daysBefore).toEqual([5]);
+      expect(arg.daysBeforeYearly).toBeUndefined();
+    });
+
+    it('daysBeforeYearly [] là hợp lệ (tắt nhắc trước hạn cho gói năm) và được chuyển xuống nguyên là []', async () => {
+      mockSaveSettings.mockResolvedValue({ days_before: [7, 3], days_before_yearly: [], updated_by: 9, updated_at: null });
+
+      await updateReminderSettings({ daysBefore: [7, 3], daysBeforeYearly: [] }, 9);
+
+      expect(mockSaveSettings.mock.calls[0][0].daysBeforeYearly).toEqual([]);
+    });
+
+    it('daysBeforeYearly sai (trùng mốc [30,30], hoặc không phải mảng) → 400, KHÔNG gọi saveSettings', async () => {
+      await expect(updateReminderSettings({ daysBefore: [7], daysBeforeYearly: [30, 30] }, 9)).rejects.toMatchObject({ status: 400 });
+      await expect(updateReminderSettings({ daysBefore: [7], daysBeforeYearly: 'x' }, 9)).rejects.toMatchObject({ status: 400 });
+      await expect(updateReminderSettings({ daysBefore: [7], daysBeforeYearly: null }, 9)).rejects.toMatchObject({ status: 400 });
+      expect(mockSaveSettings).not.toHaveBeenCalled();
     });
 
     it('nhập sai (ví dụ trùng mốc) → 400, KHÔNG gọi saveSettings', async () => {

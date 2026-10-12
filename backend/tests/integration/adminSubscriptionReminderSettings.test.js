@@ -137,6 +137,84 @@ describe('Admin subscription reminder settings API', () => {
     expect(response.status).toBe(400);
   });
 
+  // PLAN_MOC_NHAC_HAN_THEO_KY_2026-10-12.md B2 — mốc nhắc riêng cho gói năm (daysBeforeYearly).
+  describe('mốc gói năm (daysBeforeYearly)', () => {
+    const URL = '/api/admin/subscription-reminder-settings';
+    const put = (token, body) => request(app).put(URL).set('Authorization', `Bearer ${token}`).send(body);
+    const read = (token) => request(app).get(URL).set('Authorization', `Bearer ${token}`);
+
+    it('GET khi chưa ai sửa → daysBefore [7,3] (gói tháng, y hệt cũ) và daysBeforeYearly [30,7,3]', async () => {
+      const admin = await createUser({ role: 'admin', username: 'reminder_admin_yearly_default' });
+      const token = await loginAs(admin);
+
+      const response = await read(token);
+
+      expect(response.status).toBe(200);
+      expect(response.body.data).toMatchObject({ daysBefore: [7, 3], daysBeforeYearly: [30, 7, 3] });
+    });
+
+    it('PUT cả hai danh sách → 200, GET đọc lại đúng, cột days_before_yearly trong DB đúng', async () => {
+      const admin = await createUser({ role: 'admin', username: 'reminder_admin_yearly_save' });
+      const token = await loginAs(admin);
+
+      const saved = await put(token, { daysBefore: [7, 3, 1], daysBeforeYearly: [1, 30, 3, 7] });
+      expect(saved.status).toBe(200);
+      expect(saved.body.data.daysBefore).toEqual([7, 3, 1]);
+      expect(saved.body.data.daysBeforeYearly).toEqual([30, 7, 3, 1]);
+
+      const after = await read(token);
+      expect(after.body.data).toMatchObject({ daysBefore: [7, 3, 1], daysBeforeYearly: [30, 7, 3, 1] });
+      const persisted = await db.query('SELECT days_before, days_before_yearly FROM subscription_reminder_settings WHERE id');
+      expect(persisted.rows[0]).toEqual({ days_before: [7, 3, 1], days_before_yearly: [30, 7, 3, 1] });
+    });
+
+    it('PUT CHỈ daysBefore (client cũ) → daysBeforeYearly ĐANG LƯU được giữ nguyên, không bị xoá/ghi về mặc định', async () => {
+      const admin = await createUser({ role: 'admin', username: 'reminder_admin_yearly_keep' });
+      const token = await loginAs(admin);
+      await put(token, { daysBefore: [7, 3], daysBeforeYearly: [60, 30, 14] });
+
+      const legacy = await put(token, { daysBefore: [5] });
+
+      expect(legacy.status).toBe(200);
+      expect(legacy.body.data.daysBefore).toEqual([5]);
+      expect(legacy.body.data.daysBeforeYearly).toEqual([60, 30, 14]);
+      const persisted = await db.query('SELECT days_before, days_before_yearly FROM subscription_reminder_settings WHERE id');
+      expect(persisted.rows[0]).toEqual({ days_before: [5], days_before_yearly: [60, 30, 14] });
+    });
+
+    it('PUT daysBeforeYearly [] → 200, tắt nhắc trước hạn cho gói năm (lưu thật là mảng rỗng, không phải mặc định)', async () => {
+      const admin = await createUser({ role: 'admin', username: 'reminder_admin_yearly_empty' });
+      const token = await loginAs(admin);
+
+      const saved = await put(token, { daysBefore: [7, 3], daysBeforeYearly: [] });
+
+      expect(saved.status).toBe(200);
+      expect(saved.body.data.daysBeforeYearly).toEqual([]);
+      expect((await read(token)).body.data.daysBeforeYearly).toEqual([]);
+    });
+
+    it('PUT daysBeforeYearly [30,30] / [0] / [400] / 6 mốc / không phải mảng → 400 (cùng luật với gói tháng), DB không đổi', async () => {
+      const admin = await createUser({ role: 'admin', username: 'reminder_admin_yearly_bad' });
+      const token = await loginAs(admin);
+
+      const dup = await put(token, { daysBefore: [7], daysBeforeYearly: [30, 30] });
+      expect(dup.status).toBe(400);
+      expect(dup.body.message).toContain('trùng mốc');
+      const low = await put(token, { daysBefore: [7], daysBeforeYearly: [0] });
+      expect(low.status).toBe(400);
+      expect(low.body.message).toContain('1 đến 365 ngày');
+      const high = await put(token, { daysBefore: [7], daysBeforeYearly: [400] });
+      expect(high.status).toBe(400);
+      const many = await put(token, { daysBefore: [7], daysBeforeYearly: [1, 2, 3, 4, 5, 6] });
+      expect(many.status).toBe(400);
+      expect(many.body.message).toContain('Tối đa 5 mốc');
+      const notArray = await put(token, { daysBefore: [7], daysBeforeYearly: 'khong-phai-mang' });
+      expect(notArray.status).toBe(400);
+
+      expect((await read(token)).body.data).toMatchObject({ daysBefore: [7, 3], daysBeforeYearly: [30, 7, 3], updatedAt: null });
+    });
+  });
+
   // Chốt chặn ở đúng lớp DB (id BOOLEAN PRIMARY KEY CHECK (id)) — độc lập với validate tầng
   // route/service: dù bỏ qua API, không thể có 2 dòng cấu hình cùng lúc.
   it('INSERT trực tiếp dòng thứ hai (id = FALSE) vào subscription_reminder_settings → DB từ chối (CHECK còn hiệu lực)', async () => {

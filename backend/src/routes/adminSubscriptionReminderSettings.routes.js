@@ -17,6 +17,8 @@ router.get('/', controller.getSettings);
 router.put(
   '/',
   body('daysBefore').isArray().withMessage('daysBefore phải là danh sách'),
+  // Gói năm (PLAN_MOC_NHAC_HAN_THEO_KY B2): KHÔNG gửi = giữ giá trị cũ (client cũ); có gửi thì phải là mảng.
+  body('daysBeforeYearly').optional().isArray().withMessage('daysBeforeYearly phải là danh sách'),
   handleValidationErrors,
   controller.updateSettings
 );

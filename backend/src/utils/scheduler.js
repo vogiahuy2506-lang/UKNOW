@@ -927,10 +927,11 @@ export const initScheduler = () => {
         }
 
         // 2 & 3. Nhắc hạn: gửi thư nhắc lần 1 (7 ngày) và lần 2 (3 ngày) qua service
-        let reminderResult = { remindedWeek: 0, remindedThreeDay: 0, failed: 0 };
+        let reminderResult = { remindedWeek: 0, remindedThreeDay: 0, remindedYearly: 0, failed: 0 };
         try {
           const { sendExpiringReminders } = await import('../services/payment/subscriptionExpiry.service.js');
           reminderResult = await sendExpiringReminders({ renewalUrl });
+          console.log(`[Subscription] Nhắc hạn: week=${reminderResult.remindedWeek} three=${reminderResult.remindedThreeDay} yearly=${reminderResult.remindedYearly} failed=${reminderResult.failed}`);
         } catch (reminderErr) {
           console.error('[Subscription] Lỗi khi gửi thư nhắc hạn:', reminderErr.message);
         }

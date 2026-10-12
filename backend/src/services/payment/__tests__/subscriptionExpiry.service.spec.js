@@ -430,12 +430,12 @@ describe('subscriptionExpiry.service — Xử lý gói hết hạn và thư T-0 
 
       const result = await sendExpiringReminders({ renewalUrl: 'https://app.uknow.vn/app/billing' });
 
-      expect(result).toEqual({ remindedWeek: 2, remindedThreeDay: 1, failed: 0 });
+      expect(result).toEqual({ remindedWeek: 2, remindedThreeDay: 1, remindedYearly: 0, failed: 0 });
 
       // Bắt buộc đúng cửa sổ (d-1, d) cho từng mốc — bảo vệ Bẫy 2/đột biến 3: đổi (d-1,d) thành
       // (d,d) thì tham số gọi lệch, ca này bắt được ngay dù repository bị mock (không cần DB thật).
-      expect(mockSubscriptionRepo.findUsersExpiringInWindow).toHaveBeenNthCalledWith(1, 6, 7, expect.anything());
-      expect(mockSubscriptionRepo.findUsersExpiringInWindow).toHaveBeenNthCalledWith(2, 2, 3, expect.anything());
+      expect(mockSubscriptionRepo.findUsersExpiringInWindow).toHaveBeenNthCalledWith(1, 6, 7, { cycle: 'monthly', queryable: expect.anything() });
+      expect(mockSubscriptionRepo.findUsersExpiringInWindow).toHaveBeenNthCalledWith(2, 2, 3, { cycle: 'monthly', queryable: expect.anything() });
 
       expect(mockSendSystemEmail).toHaveBeenCalledTimes(3);
       expect(mockSubscriptionRepo.markReminderSent).toHaveBeenCalledTimes(3);
@@ -460,11 +460,11 @@ describe('subscriptionExpiry.service — Xử lý gói hết hạn và thư T-0 
 
       const result = await sendExpiringReminders();
 
-      expect(mockSubscriptionRepo.findUsersExpiringInWindow).toHaveBeenNthCalledWith(1, 9, 10, expect.anything());
-      expect(mockSubscriptionRepo.findUsersExpiringInWindow).toHaveBeenNthCalledWith(2, 4, 5, expect.anything());
-      expect(mockSubscriptionRepo.findUsersExpiringInWindow).toHaveBeenNthCalledWith(3, 1, 2, expect.anything());
+      expect(mockSubscriptionRepo.findUsersExpiringInWindow).toHaveBeenNthCalledWith(1, 9, 10, { cycle: 'monthly', queryable: expect.anything() });
+      expect(mockSubscriptionRepo.findUsersExpiringInWindow).toHaveBeenNthCalledWith(2, 4, 5, { cycle: 'monthly', queryable: expect.anything() });
+      expect(mockSubscriptionRepo.findUsersExpiringInWindow).toHaveBeenNthCalledWith(3, 1, 2, { cycle: 'monthly', queryable: expect.anything() });
       expect(mockSendSystemEmail).toHaveBeenCalledTimes(3);
-      expect(result).toEqual({ remindedWeek: 1, remindedThreeDay: 2, failed: 0 });
+      expect(result).toEqual({ remindedWeek: 1, remindedThreeDay: 2, remindedYearly: 0, failed: 0 });
     });
 
     it('Ca 3: đổi cấu hình thành [] → 0 thư nhắc trước hạn, không truy vấn danh sách nào', async () => {
@@ -474,7 +474,7 @@ describe('subscriptionExpiry.service — Xử lý gói hết hạn và thư T-0 
 
       expect(mockSubscriptionRepo.findUsersExpiringInWindow).not.toHaveBeenCalled();
       expect(mockSendSystemEmail).not.toHaveBeenCalled();
-      expect(result).toEqual({ remindedWeek: 0, remindedThreeDay: 0, failed: 0 });
+      expect(result).toEqual({ remindedWeek: 0, remindedThreeDay: 0, remindedYearly: 0, failed: 0 });
     });
 
     it('Ca 4 (quan trọng nhất) — khách đã nhận mốc 7, sếp đổi cấu hình thành [3] → khách VẪN nhận thư 3 ngày', async () => {
@@ -518,7 +518,7 @@ describe('subscriptionExpiry.service — Xử lý gói hết hạn và thư T-0 
       expect(mockSendSystemEmail).toHaveBeenCalledTimes(1);
       expect(mockSendSystemEmail).toHaveBeenCalledWith(expect.objectContaining({ to: 'u602@example.com' }));
       expect(mockSubscriptionRepo.markReminderSent).not.toHaveBeenCalledWith(601, expect.anything(), expect.anything());
-      expect(result).toEqual({ remindedWeek: 1, remindedThreeDay: 0, failed: 0 });
+      expect(result).toEqual({ remindedWeek: 1, remindedThreeDay: 0, remindedYearly: 0, failed: 0 });
     });
 
     it('Ca 6 (đột biến bắt buộc: bỏ so cycle với subscription_expires_at phải làm ca này đỏ) — khách gia hạn rồi lại sắp hết hạn → nhận lại đủ mốc của chu kỳ mới', async () => {
@@ -569,7 +569,7 @@ describe('subscriptionExpiry.service — Xử lý gói hết hạn và thư T-0 
 
       const result = await sendExpiringReminders({ renewalUrl: 'https://app.uknow.vn/app/billing' });
 
-      expect(result).toEqual({ remindedWeek: 1, remindedThreeDay: 0, failed: 1 });
+      expect(result).toEqual({ remindedWeek: 1, remindedThreeDay: 0, remindedYearly: 0, failed: 1 });
       expect(mockSendSystemEmail).toHaveBeenCalledTimes(2);
       expect(mockSubscriptionRepo.markReminderSent).not.toHaveBeenCalledWith(304, expect.anything(), expect.anything());
       expect(mockSubscriptionRepo.markReminderSent).toHaveBeenCalledWith(305, expect.anything(), expect.anything());
@@ -612,11 +612,118 @@ describe('subscriptionExpiry.service — Xử lý gói hết hạn và thư T-0 
 
       const result = await sendExpiringReminders();
 
-      expect(result).toEqual({ remindedWeek: 25, remindedThreeDay: 25, failed: 0 });
+      expect(result).toEqual({ remindedWeek: 25, remindedThreeDay: 25, remindedYearly: 0, failed: 0 });
       expect(mockGetReminderSettings).toHaveBeenCalledTimes(1);
       expect(mockLoadCustomSystemEmailTemplate).toHaveBeenCalledTimes(1);
       expect(mockSendSystemEmail).toHaveBeenCalledTimes(50);
       expect(mockSubscriptionRepo.markReminderSent).toHaveBeenCalledTimes(50);
+    });
+
+    // ── PLAN_MOC_NHAC_HAN_THEO_KY_2026-10-12.md (B3/B4) — mốc tách theo kỳ gói ──────────────────────────────────
+    describe('mốc theo kỳ (gói tháng / gói năm)', () => {
+      /** Repo giả trả theo (kỳ, mốc trên) thay vì theo thứ tự gọi — ca nào cũng đọc được "ai ở vòng nào". */
+      function stubWindows(byKey) {
+        mockSubscriptionRepo.findUsersExpiringInWindow.mockImplementation(async (_min, max, options) => (
+          byKey[`${options?.cycle}:${max}`] || []
+        ));
+      }
+
+      it('Y1: mặc định gói tháng [7,3] + gói năm [30,7,3] → quét tháng trước, năm sau, mỗi lời gọi truyền ĐÚNG cycle', async () => {
+        mockGetReminderSettings.mockResolvedValue({
+          daysBefore: [7, 3], daysBeforeYearly: [30, 7, 3], updatedBy: null, updatedAt: null,
+        });
+
+        await sendExpiringReminders();
+
+        const calls = mockSubscriptionRepo.findUsersExpiringInWindow.mock.calls.map(([min, max, options]) => [min, max, options.cycle]);
+        expect(calls).toEqual([
+          [6, 7, 'monthly'], [2, 3, 'monthly'],
+          [29, 30, 'yearly'], [6, 7, 'yearly'], [2, 3, 'yearly'],
+        ]);
+        expect(mockSubscriptionRepo.findUsersExpiringInWindow).toHaveBeenNthCalledWith(
+          3, 29, 30, { cycle: 'yearly', queryable: expect.anything() }
+        );
+      });
+
+      it('Y2: user kỳ năm ở mốc 30 → nhận thư, markReminderSent days [30], remindedYearly 1; khoá chuông riêng theo mốc d30', async () => {
+        const expiresAt = new Date(Date.now() + 30 * 86400000).toISOString();
+        mockGetReminderSettings.mockResolvedValue({
+          daysBefore: [7, 3], daysBeforeYearly: [30, 7, 3], updatedBy: null, updatedAt: null,
+        });
+        stubWindows({ 'yearly:30': [user({ id: 1101, email: 'year1101@example.com', subscription_expires_at: expiresAt })] });
+
+        const result = await sendExpiringReminders();
+
+        expect(result).toEqual({ remindedWeek: 1, remindedThreeDay: 0, remindedYearly: 1, failed: 0 });
+        expect(mockSendSystemEmail).toHaveBeenCalledTimes(1);
+        expect(mockSubscriptionRepo.markReminderSent).toHaveBeenCalledWith(
+          1101, { cycle: expiresAt, days: [30] }, expect.anything()
+        );
+        const call = mockNotifyUsers.mock.calls[0][0];
+        expect(call.metadata.milestone).toBe(30);
+        expect(call.dedupeKey).toMatch(/^plan_expiring:1101:\d{8}:d30$/);
+      });
+
+      it('Y3 (đột biến: remindedYearly không đếm phải làm ca này đỏ): mốc xa nhất MỖI danh sách → remindedWeek, các mốc còn lại → remindedThreeDay, remindedYearly chỉ đếm thư kỳ năm', async () => {
+        mockGetReminderSettings.mockResolvedValue({
+          daysBefore: [7, 3], daysBeforeYearly: [30, 7], updatedBy: null, updatedAt: null,
+        });
+        stubWindows({
+          'monthly:7': [user({ id: 1201, email: 'm1201@example.com' })],
+          'monthly:3': [user({ id: 1202, email: 'm1202@example.com' })],
+          'yearly:30': [user({ id: 1203, email: 'y1203@example.com' })],
+          'yearly:7': [user({ id: 1204, email: 'y1204@example.com' }), user({ id: 1205, email: 'y1205@example.com' })],
+        });
+
+        const result = await sendExpiringReminders();
+
+        // week = 7(tháng) + 30(năm) = 2; three = 3(tháng) + 7(năm) x2 = 3; yearly = 30 + 7 x2 = 3.
+        expect(result).toEqual({ remindedWeek: 2, remindedThreeDay: 3, remindedYearly: 3, failed: 0 });
+        expect(mockSendSystemEmail).toHaveBeenCalledTimes(5);
+      });
+
+      it('Y4: gói năm đã nhận mốc 30 trong CÙNG chu kỳ → không gửi lại (hasSentDay vẫn khoá theo expiry + mốc)', async () => {
+        const expiresAt = new Date(Date.now() + 30 * 86400000).toISOString();
+        mockGetReminderSettings.mockResolvedValue({
+          daysBefore: [], daysBeforeYearly: [30], updatedBy: null, updatedAt: null,
+        });
+        stubWindows({
+          'yearly:30': [user({
+            id: 1301, email: 'y1301@example.com', subscription_expires_at: expiresAt,
+            subscription_reminders_sent: { cycle: expiresAt, days: [30] },
+          })],
+        });
+
+        const result = await sendExpiringReminders();
+
+        expect(mockSendSystemEmail).not.toHaveBeenCalled();
+        expect(mockSubscriptionRepo.markReminderSent).not.toHaveBeenCalled();
+        expect(result).toEqual({ remindedWeek: 0, remindedThreeDay: 0, remindedYearly: 0, failed: 0 });
+      });
+
+      it('Y5: daysBeforeYearly = [] → không truy vấn kỳ năm; cấu hình cũ THIẾU trường daysBeforeYearly cũng không đổ', async () => {
+        mockGetReminderSettings.mockResolvedValue({ daysBefore: [7], daysBeforeYearly: [], updatedBy: null, updatedAt: null });
+        await sendExpiringReminders();
+        expect(mockSubscriptionRepo.findUsersExpiringInWindow.mock.calls.map(([, , o]) => o.cycle)).toEqual(['monthly']);
+
+        mockSubscriptionRepo.findUsersExpiringInWindow.mockClear();
+        mockGetReminderSettings.mockResolvedValue({ daysBefore: [7], updatedBy: null, updatedAt: null });
+        await expect(sendExpiringReminders()).resolves.toMatchObject({ remindedYearly: 0, failed: 0 });
+        expect(mockSubscriptionRepo.findUsersExpiringInWindow.mock.calls.map(([, , o]) => o.cycle)).toEqual(['monthly']);
+      });
+
+      it('Y6: thư kỳ năm gửi hỏng → failed++, KHÔNG markReminderSent, KHÔNG tính vào remindedYearly', async () => {
+        mockGetReminderSettings.mockResolvedValue({
+          daysBefore: [], daysBeforeYearly: [30], updatedBy: null, updatedAt: null,
+        });
+        stubWindows({ 'yearly:30': [user({ id: 1401, email: 'y1401@example.com' })] });
+        mockNotifyUsers.mockRejectedValueOnce(new Error('boom'));
+
+        const result = await sendExpiringReminders();
+
+        expect(result).toEqual({ remindedWeek: 0, remindedThreeDay: 0, remindedYearly: 0, failed: 1 });
+        expect(mockSubscriptionRepo.markReminderSent).not.toHaveBeenCalled();
+      });
     });
 
     it('Mô phỏng luồng cron đầy đủ (PR-2a + nhắc hạn) → có người lỗi thư nhắc thì cả hai bước vẫn RESOLVE (bước khoá tài nguyên phía sau không bị chặn)', async () => {
@@ -637,7 +744,7 @@ describe('subscriptionExpiry.service — Xử lý gói hết hạn và thư T-0 
       const reminderResult = await sendExpiringReminders();
 
       expect(expiryResult.expiredCount).toBe(1);
-      expect(reminderResult).toEqual({ remindedWeek: 1, remindedThreeDay: 1, failed: 1 });
+      expect(reminderResult).toEqual({ remindedWeek: 1, remindedThreeDay: 1, remindedYearly: 0, failed: 1 });
     });
   });
 
@@ -786,7 +893,7 @@ describe('subscriptionExpiry.service — Xử lý gói hết hạn và thư T-0 
       const result = await sendExpiringReminders();
 
       expect(mockSubscriptionRepo.markReminderSent).toHaveBeenCalledWith(902, expect.objectContaining({ days: [7] }), expect.anything());
-      expect(result).toEqual({ remindedWeek: 1, remindedThreeDay: 0, failed: 0 });
+      expect(result).toEqual({ remindedWeek: 1, remindedThreeDay: 0, remindedYearly: 0, failed: 0 });
     });
 
     it('plan_expiring: trùng khoá / admin tắt cả hai kênh (mọi số = 0) → vẫn đóng mốc, không failed', async () => {
@@ -817,7 +924,7 @@ describe('subscriptionExpiry.service — Xử lý gói hết hạn và thư T-0 
 
       const result = await sendExpiringReminders();
 
-      expect(result).toEqual({ remindedWeek: 1, remindedThreeDay: 0, failed: 1 });
+      expect(result).toEqual({ remindedWeek: 1, remindedThreeDay: 0, remindedYearly: 0, failed: 1 });
       expect(mockSubscriptionRepo.markReminderSent).not.toHaveBeenCalledWith(905, expect.anything(), expect.anything());
       expect(mockSubscriptionRepo.markReminderSent).toHaveBeenCalledWith(906, expect.anything(), expect.anything());
     });
@@ -840,21 +947,24 @@ describe('buildSubscriptionCronResult — hợp đồng 5 khoá với dashboard 
 
     const result = buildSubscriptionCronResult({
       expiryResult: { expiredCount: 2 },
-      reminderResult: { remindedWeek: 3, remindedThreeDay: 4 },
+      reminderResult: { remindedWeek: 3, remindedThreeDay: 4, remindedYearly: 2 },
       lockedUsers: 5,
       reminderWeek: 6,
       reminderThree: 7,
     });
 
     // Đổi tên bất kỳ khoá nào trong 5 khoá giám sát là làm mù dashboard → ca này phải đỏ.
+    // PLAN_MOC_NHAC_HAN_THEO_KY B4: THÊM `remindedYearly`, không đổi/bỏ khoá cũ.
     expect(Object.keys(result).sort()).toEqual([
-      'expired', 'lockedUsers', 'remindedThreeDay', 'remindedWeek',
+      'expired', 'lockedUsers', 'remindedThreeDay', 'remindedWeek', 'remindedYearly',
       'reminderThree', 'reminderWeek', 'synced',
     ]);
     expect(result.expired).toBe(2);
     expect(result.remindedWeek).toBe(3);
     expect(result.remindedThreeDay).toBe(4);
+    expect(result.remindedYearly).toBe(2);
     expect(result.lockedUsers).toBe(5);
+    // remindedYearly (2) là TẬP CON của remindedWeek/remindedThreeDay → KHÔNG cộng vào synced (đếm đôi).
     expect(result.synced).toBe(2 + 3 + 4 + 5 + 6 + 7);
   });
 

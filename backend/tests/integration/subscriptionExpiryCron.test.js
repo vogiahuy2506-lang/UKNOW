@@ -23,6 +23,7 @@ const { recordRun } = await import('../../src/repositories/admin/cronJobRun.repo
 const {
   processExpiredSubscriptions,
   sendExpiringReminders,
+  buildSubscriptionCronResult,
 } = await import('../../src/services/payment/subscriptionExpiry.service.js');
 const {
   truncateAll,
@@ -381,3 +382,153 @@ describe('sendExpiringReminders — Nhắc hạn còn 7 ngày & 3 ngày (PR tác
   });
 });
 
+/**
+ * PLAN_MOC_NHAC_HAN_THEO_KY_2026-10-12.md — gói năm nhắc trước ít nhất 30 ngày, gói tháng KHÔNG nhận mốc 30.
+ * Chạy trên Postgres thật: phân loại kỳ nằm trong SQL (plan_activated_at vs subscription_expires_at), mock repo sẽ che mất lỗi.
+ */
+describe('sendExpiringReminders — mốc theo kỳ gói (tháng / năm)', () => {
+  const DAY = 86400000;
+
+  /** Gói còn `daysLeft` ngày, mua với thời hạn `termDays` ngày (termDays = null thì KHÔNG ghi plan_activated_at). */
+  async function subscribe(userId, planId, daysLeft, termDays) {
+    const expiresAt = new Date(Date.now() + daysLeft * DAY);
+    await setSubscription(userId, planId, expiresAt, 0);
+    if (termDays !== null) {
+      await db.query(
+        `UPDATE users SET plan_activated_at = $2::timestamptz - make_interval(days => $3::int) WHERE id = $1`,
+        [userId, expiresAt, termDays]
+      );
+    }
+    return expiresAt;
+  }
+
+  async function sentDays(userId) {
+    const { rows } = await db.query('SELECT subscription_reminders_sent FROM users WHERE id = $1', [userId]);
+    return rows[0].subscription_reminders_sent.days;
+  }
+
+  async function seedYearlyMonthlyUnknown() {
+    const plan = await createPlan({ code: 'p-cycle', name: 'Gói Theo Kỳ' });
+    const yearly = await createUser({ username: 'cycle-yearly', email: 'cycle-yearly@example.com' });
+    const monthly = await createUser({ username: 'cycle-monthly', email: 'cycle-monthly@example.com' });
+    const unknown = await createUser({ username: 'cycle-unknown', email: 'cycle-unknown@example.com' });
+    await subscribe(yearly.id, plan.id, 29.5, 365);
+    await subscribe(monthly.id, plan.id, 29.5, 30);
+    await subscribe(unknown.id, plan.id, 29.5, null);
+    return { yearly, monthly, unknown };
+  }
+
+  beforeEach(async () => {
+    await saveSettings({ daysBefore: [7, 3], daysBeforeYearly: [30, 7, 3], updatedBy: null });
+  });
+
+  it('user kỳ năm còn 30 ngày nhận thư mốc 30; user kỳ tháng cùng hạn và user thiếu plan_activated_at KHÔNG nhận', async () => {
+    const { yearly, monthly, unknown } = await seedYearlyMonthlyUnknown();
+
+    const result = await sendExpiringReminders({ renewalUrl: 'https://app.uknow.vn/billing' });
+
+    expect(result).toEqual({ remindedWeek: 1, remindedThreeDay: 0, remindedYearly: 1, failed: 0 });
+    expect(mockSendMail).toHaveBeenCalledTimes(1);
+    expect(mockSendMail.mock.calls[0][0].to).toBe('cycle-yearly@example.com');
+    expect(await sentDays(yearly.id)).toEqual([30]);
+    // Hai user còn lại không có dấu vết nhắc nào, cả chuông lẫn cột ghi nhớ.
+    expect(await sentDays(monthly.id)).toBeUndefined();
+    expect(await sentDays(unknown.id)).toBeUndefined();
+    const bells = await db.query('SELECT user_id FROM user_notifications WHERE event_type = $1', ['plan_expiring']);
+    expect(bells.rows.map((r) => Number(r.user_id))).toEqual([Number(yearly.id)]);
+    const bell = await db.query('SELECT dedupe_key FROM user_notifications WHERE user_id = $1', [yearly.id]);
+    expect(bell.rows[0].dedupe_key).toMatch(/^plan_expiring:\d+:\d{8}:d30$/);
+  });
+
+  it('chạy lại hôm sau (cron chạy tiếp) → 0 thư thêm', async () => {
+    const { yearly } = await seedYearlyMonthlyUnknown();
+    await sendExpiringReminders();
+    mockSendMail.mockClear();
+
+    const again = await sendExpiringReminders();
+
+    expect(again).toEqual({ remindedWeek: 0, remindedThreeDay: 0, remindedYearly: 0, failed: 0 });
+    expect(mockSendMail).not.toHaveBeenCalled();
+    expect(await sentDays(yearly.id)).toEqual([30]);
+  });
+
+  it('user kỳ năm còn 6.5 ngày nhận thư mốc 7 của danh sách gói năm; đến khi còn 2.5 ngày nhận tiếp mốc 3, days tích luỹ [7,3]', async () => {
+    const plan = await createPlan({ code: 'p-cycle-7', name: 'Gói Năm Mốc 7' });
+    const user = await createUser({ username: 'cycle-year-7', email: 'cycle-year-7@example.com' });
+    const expiresAt = await subscribe(user.id, plan.id, 6.5, 365);
+
+    const first = await sendExpiringReminders();
+    expect(first).toEqual({ remindedWeek: 0, remindedThreeDay: 1, remindedYearly: 1, failed: 0 });
+    expect(mockSendMail).toHaveBeenCalledTimes(1);
+    expect(await sentDays(user.id)).toEqual([7]);
+
+    // Giả lập "4 ngày sau" mà vẫn CÙNG chu kỳ gói: lùi hạn 4 ngày (còn 2.5 ngày), giữ kỳ 365 ngày, cập nhật cycle đã ghi nhớ cho khớp hạn mới.
+    const sooner = new Date(expiresAt.getTime() - 4 * DAY);
+    await db.query(
+      `UPDATE users SET subscription_expires_at = $2,
+              plan_activated_at = $2::timestamptz - make_interval(days => 365),
+              subscription_reminders_sent = jsonb_set(subscription_reminders_sent, '{cycle}', to_jsonb($3::text))
+       WHERE id = $1`,
+      [user.id, sooner, sooner.toISOString()]
+    );
+    mockSendMail.mockClear();
+    const second = await sendExpiringReminders();
+    expect(second).toEqual({ remindedWeek: 0, remindedThreeDay: 1, remindedYearly: 1, failed: 0 });
+    expect(await sentDays(user.id)).toEqual([7, 3]);
+  });
+
+  it('ngưỡng kỳ 300 ngày trên DB thật: kỳ 299 ngày (tháng) KHÔNG nhận mốc 30 của gói năm, kỳ 300 ngày nhận', async () => {
+    const plan = await createPlan({ code: 'p-cycle-edge', name: 'Gói Biên Ngưỡng' });
+    const t299 = await createUser({ username: 'edge-299', email: 'edge-299@example.com' });
+    const t300 = await createUser({ username: 'edge-300', email: 'edge-300@example.com' });
+    await subscribe(t299.id, plan.id, 29.5, 299);
+    await subscribe(t300.id, plan.id, 29.5, 300);
+
+    const result = await sendExpiringReminders();
+
+    expect(result.remindedYearly).toBe(1);
+    expect(mockSendMail).toHaveBeenCalledTimes(1);
+    expect(mockSendMail.mock.calls[0][0].to).toBe('edge-300@example.com');
+  });
+
+  it('đổi cấu hình gói năm thành [] → kỳ năm không nhận mốc nào; gói tháng vẫn theo danh sách của nó', async () => {
+    const { yearly } = await seedYearlyMonthlyUnknown();
+    await saveSettings({ daysBefore: [7, 3], daysBeforeYearly: [], updatedBy: null });
+
+    const result = await sendExpiringReminders();
+
+    expect(result).toEqual({ remindedWeek: 0, remindedThreeDay: 0, remindedYearly: 0, failed: 0 });
+    expect(mockSendMail).not.toHaveBeenCalled();
+    expect(await sentDays(yearly.id)).toBeUndefined();
+  });
+
+  it('cron_job_runs.result: vẫn đủ 5 khoá giám sát kiểu số, THÊM remindedYearly; synced không đếm đôi thư gói năm', async () => {
+    await seedYearlyMonthlyUnknown();
+
+    await recordRun('subscription_reminder', async () => {
+      const expiryResult = await processExpiredSubscriptions({ renewalUrl: 'https://app.uknow.vn/billing' });
+      const reminderResult = await sendExpiringReminders({ renewalUrl: 'https://app.uknow.vn/billing' });
+      // Dựng bằng chính hàm scheduler.js dùng (buildSubscriptionCronResult), không tự dựng lại object trong test.
+      return buildSubscriptionCronResult({ expiryResult, reminderResult });
+    });
+
+    const run = await db.query(
+      `SELECT status, result FROM cron_job_runs WHERE job_code = 'subscription_reminder' ORDER BY started_at DESC LIMIT 1`
+    );
+    expect(run.rows[0].status).toBe('success');
+    const { result } = run.rows[0];
+    for (const key of ['expired', 'remindedWeek', 'remindedThreeDay', 'lockedUsers', 'synced']) {
+      expect(typeof result[key]).toBe('number');
+    }
+    expect(result).toEqual({
+      expired: 0,
+      remindedWeek: 1,
+      remindedThreeDay: 0,
+      remindedYearly: 1,
+      lockedUsers: 0,
+      reminderWeek: 0,
+      reminderThree: 0,
+      synced: 1,
+    });
+  });
+});
