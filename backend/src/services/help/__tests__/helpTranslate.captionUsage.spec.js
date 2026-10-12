@@ -25,7 +25,7 @@ jest.unstable_mockModule('../helpCenter.service.js', () => ({
   _clearCapabilityMapCache: jest.fn(),
 }));
 
-const { translateHelpArticle } = await import('../helpTranslate.service.js');
+const { translateHelpArticle, HELP_TRANSLATE_MAX_OUTPUT_TOKENS } = await import('../helpTranslate.service.js');
 
 const raw = (total) => ({ usageMetadata: { promptTokenCount: 3, candidatesTokenCount: total - 3, totalTokenCount: total } });
 
@@ -69,5 +69,13 @@ describe('dịch bài trợ giúp — ghi token dịch chú thích', () => {
     helpRepo.listMedia.mockResolvedValue([{ type: 'image', url: '/a.png', caption: '  ', sort_order: 0 }]);
     await translateHelpArticle(1, { locale: 'en', actorUserId: 5 });
     expect(record.mock.calls.map((c) => c[2].feature)).toEqual(['help_translate']);
+  });
+
+  // 13/10/2026: bài `bieu-mau` ~22.000 ký tự HTML bị cắt ở 8192 token → JSON đứt → 422 mọi lần. Trần dịch bài phải đủ lớn.
+  it('dịch thân bài gọi model với trần đầu ra đủ cho bài dài (≥ 32768 token), không còn 8192', async () => {
+    await translateHelpArticle(1, { locale: 'en', actorUserId: 5 });
+    const call = generateGeminiText.mock.calls.find((c) => c[0].feature === 'help_translate');
+    expect(HELP_TRANSLATE_MAX_OUTPUT_TOKENS).toBeGreaterThanOrEqual(32768);
+    expect(call[0].maxOutputTokens).toBe(HELP_TRANSLATE_MAX_OUTPUT_TOKENS);
   });
 });

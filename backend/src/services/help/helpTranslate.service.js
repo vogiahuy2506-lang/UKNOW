@@ -6,6 +6,10 @@ import { glossaryPromptBlock } from './helpGlossary.js';
 import { reindexArticle, _clearCapabilityMapCache } from './helpCenter.service.js';
 import * as helpRepo from '../../repositories/help/helpArticle.repository.js';
 
+// Bản dịch là TOÀN BỘ thân bài HTML bọc trong JSON. 8192 token cắt cụt bài dài (13/10/2026: bài `bieu-mau` ~22.000 ký tự
+// HTML → JSON đứt giữa chừng → "AI dịch trả về JSON không hợp lệ" lặp lại mọi lần). Model hệ thống (Gemini 2.5) nhận tới 65.536.
+export const HELP_TRANSLATE_MAX_OUTPUT_TOKENS = 32768;
+
 function normalizeLocale(locale) {
   return String(locale || 'en').trim().toLowerCase() === 'en' ? 'en' : 'vi';
 }
@@ -73,14 +77,14 @@ ${glossaryPromptBlock()}
   try {
     ({ text, modelName, raw } = await generateGeminiText({
       ...baseArgs,
-      maxOutputTokens: 8192,
+      maxOutputTokens: HELP_TRANSLATE_MAX_OUTPUT_TOKENS,
       thinkingBudget: 0,
     }));
   } catch (err) {
     if (!isThinkingBudgetRejection(err)) throw err;
     ({ text, modelName, raw } = await generateGeminiText({
       ...baseArgs,
-      maxOutputTokens: 8192,
+      maxOutputTokens: HELP_TRANSLATE_MAX_OUTPUT_TOKENS,
     }));
   }
 
