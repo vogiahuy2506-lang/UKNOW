@@ -12236,6 +12236,8 @@ export default {
         widthLabel: 'Độ rộng',
         widthFull: 'Cả dòng',
         widthHalf: 'Nửa dòng (ghép 2 ô một hàng)',
+        widthBadgeHalf: 'Nửa dòng',
+        headingPlaceholder: 'Ví dụ: Thông tin liên hệ',
         headingLabel: 'Chữ tiêu đề',
         headingHelpLabel: 'Mô tả phụ (không bắt buộc)',
         headingHelpExample: 'Ví dụ: Chỉ mất khoảng 1 phút',

@@ -1,10 +1,14 @@
 import { HiOutlineTrash } from 'react-icons/hi';
 import { useI18n } from '../../../../i18n';
+import { isDisplayFieldType } from '../../utils/formFieldTypes.util';
 import {
   FIELD_TYPES,
+  FIELD_TYPE_GROUPS,
   MAX_HELP_TEXT_LENGTH,
   MAX_LABEL_LENGTH,
+  MAX_PARAGRAPH_LENGTH,
   MAX_PLACEHOLDER_LENGTH,
+  NO_ROLE_FIELD_TYPES,
   OPTION_FIELD_TYPES,
   PLACEHOLDER_FIELD_TYPES,
 } from './formEditorConstants';
@@ -15,8 +19,13 @@ const inputOk = 'border-gray-200 dark:border-dk-border focus:border-orange-500 f
 const inputErr = 'border-red-300 dark:border-red-500/60 focus:ring-red-100 dark:focus:ring-red-950/30';
 
 /**
- * Bảng thuộc tính của TRƯỜNG ĐANG CHỌN: nhãn, loại, vai trò, bắt buộc, gợi ý trong ô (placeholder), chữ hướng dẫn, lựa chọn.
+ * Bảng thuộc tính của TRƯỜNG ĐANG CHỌN: nhãn, loại, vai trò, độ rộng, bắt buộc, gợi ý trong ô (placeholder), chữ hướng dẫn, lựa chọn.
  * Chuyển từ thẻ trường của trình soạn cũ (nhãn / loại / vai trò / bắt buộc / lựa chọn nguyên văn) + thêm placeholder & helpText.
+ *
+ * PR-4: ẨN ô không áp dụng. Khối bố cục (heading / paragraph / page_break) không có Bắt buộc / Vai trò / Gợi ý trong ô /
+ * Độ rộng / Lựa chọn; paragraph và page_break cũng không có chữ hướng dẫn. Nhãn đổi nghĩa theo loại: heading = chữ tiêu
+ * đề, paragraph = NỘI DUNG đoạn chữ (lưu trong `label`, tối đa 2000), page_break = tiêu đề bước (tuỳ chọn, được để trống).
+ * rating / yes_no / time không có Vai trò.
  */
 export default function FieldPropertiesPanel({
   field,
@@ -28,6 +37,12 @@ export default function FieldPropertiesPanel({
   onRemoveOption,
 }) {
   const { t } = useI18n();
+  const isBlock = isDisplayFieldType(field.type);
+  const isHeading = field.type === 'heading';
+  const isParagraph = field.type === 'paragraph';
+  const isPageBreak = field.type === 'page_break';
+  const supportsRole = !isBlock && !NO_ROLE_FIELD_TYPES.includes(field.type);
+  const supportsHelpText = !isParagraph && !isPageBreak;
   const hasOptions = OPTION_FIELD_TYPES.includes(field.type);
   const supportsPlaceholder = PLACEHOLDER_FIELD_TYPES.includes(field.type);
   const labelError = errors[`field_${idx}_label`];
@@ -39,20 +54,55 @@ export default function FieldPropertiesPanel({
   return (
     <div className="space-y-4" data-testid="field-properties-panel">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* Nhãn trường */}
+        {/* Nhãn trường — đổi nghĩa theo loại (xem chú thích đầu file) */}
         <div className="sm:col-span-2">
           <label htmlFor={`${idPrefix}-label`} className="block text-xs font-semibold text-gray-700 dark:text-dk-text mb-1">
-            {t('forms.fieldLabel')} <span className="text-red-500 dark:text-red-400">*</span>
+            {isHeading
+              ? t('forms.editorPage.properties.headingLabel')
+              : isParagraph
+                ? t('forms.editorPage.properties.paragraphLabel')
+                : isPageBreak
+                  ? t('forms.editorPage.properties.pageBreakLabel')
+                  : t('forms.fieldLabel')}{' '}
+            {!isPageBreak && <span className="text-red-500 dark:text-red-400">*</span>}
           </label>
-          <input
-            id={`${idPrefix}-label`}
-            type="text"
-            maxLength={MAX_LABEL_LENGTH}
-            value={field.label}
-            onChange={(e) => onUpdateField(idx, 'label', e.target.value)}
-            placeholder={t('forms.editorPage.fieldLabelPlaceholder')}
-            className={`${inputBase} font-medium ${labelError ? inputErr : inputOk}`}
-          />
+          {isParagraph ? (
+            <>
+              <textarea
+                id={`${idPrefix}-label`}
+                rows={4}
+                maxLength={MAX_PARAGRAPH_LENGTH}
+                value={field.label}
+                onChange={(e) => onUpdateField(idx, 'label', e.target.value)}
+                placeholder={t('forms.editorPage.properties.paragraphPlaceholder')}
+                className={`${inputBase} resize-y ${labelError ? inputErr : inputOk}`}
+              />
+              <div className="flex justify-end mt-1">
+                <span className="text-[11px] text-gray-400 dark:text-dk-muted shrink-0">
+                  {(field.label || '').length}/{MAX_PARAGRAPH_LENGTH}
+                </span>
+              </div>
+            </>
+          ) : (
+            <input
+              id={`${idPrefix}-label`}
+              type="text"
+              maxLength={MAX_LABEL_LENGTH}
+              value={field.label}
+              onChange={(e) => onUpdateField(idx, 'label', e.target.value)}
+              placeholder={
+                isHeading
+                  ? t('forms.editorPage.properties.headingPlaceholder')
+                  : isPageBreak
+                    ? t('forms.editorPage.properties.pageBreakPlaceholder')
+                    : t('forms.editorPage.fieldLabelPlaceholder')
+              }
+              className={`${inputBase} font-medium ${labelError ? inputErr : inputOk}`}
+            />
+          )}
+          {isPageBreak && (
+            <p className="text-[11px] text-gray-500 dark:text-dk-text2 mt-1">{t('forms.editorPage.properties.pageBreakHint')}</p>
+          )}
           {labelError && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{labelError}</p>}
         </div>
 
@@ -67,31 +117,55 @@ export default function FieldPropertiesPanel({
             onChange={(e) => onUpdateField(idx, 'type', e.target.value)}
             className={`${inputBase} font-medium ${inputOk}`}
           >
-            {FIELD_TYPES.map((ft) => (
-              <option key={ft.value} value={ft.value}>
-                {t(ft.labelKey)}
-              </option>
+            {FIELD_TYPE_GROUPS.map((group) => (
+              <optgroup key={group.id} label={t(group.labelKey)}>
+                {FIELD_TYPES.filter((ft) => ft.group === group.id).map((ft) => (
+                  <option key={ft.value} value={ft.value}>
+                    {t(ft.labelKey)}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </div>
 
-        {/* Vai trò role */}
-        <div>
-          <label htmlFor={`${idPrefix}-role`} className="block text-xs font-semibold text-gray-700 dark:text-dk-text mb-1">
-            {t('forms.role')}
-          </label>
-          <select
-            id={`${idPrefix}-role`}
-            value={field.role || ''}
-            onChange={(e) => onUpdateField(idx, 'role', e.target.value)}
-            className={`${inputBase} ${inputOk}`}
-          >
-            <option value="">{t('forms.roleNone')}</option>
-            <option value="name">{t('forms.roleName')}</option>
-            <option value="email">{t('forms.roleEmail')}</option>
-            <option value="phone">{t('forms.rolePhone')}</option>
-          </select>
-        </div>
+        {/* Vai trò role — chỉ loại có thể là tên / email / SĐT (không phải khối bố cục, sao, có-không, giờ) */}
+        {supportsRole && (
+          <div>
+            <label htmlFor={`${idPrefix}-role`} className="block text-xs font-semibold text-gray-700 dark:text-dk-text mb-1">
+              {t('forms.role')}
+            </label>
+            <select
+              id={`${idPrefix}-role`}
+              value={field.role || ''}
+              onChange={(e) => onUpdateField(idx, 'role', e.target.value)}
+              className={`${inputBase} ${inputOk}`}
+            >
+              <option value="">{t('forms.roleNone')}</option>
+              <option value="name">{t('forms.roleName')}</option>
+              <option value="email">{t('forms.roleEmail')}</option>
+              <option value="phone">{t('forms.rolePhone')}</option>
+            </select>
+          </div>
+        )}
+
+        {/* Độ rộng: Cả dòng / Nửa dòng — chỉ trường nhập (khối bố cục luôn cả dòng) */}
+        {!isBlock && (
+          <div>
+            <label htmlFor={`${idPrefix}-width`} className="block text-xs font-semibold text-gray-700 dark:text-dk-text mb-1">
+              {t('forms.editorPage.properties.widthLabel')}
+            </label>
+            <select
+              id={`${idPrefix}-width`}
+              value={field.width === 'half' ? 'half' : 'full'}
+              onChange={(e) => onUpdateField(idx, 'width', e.target.value)}
+              className={`${inputBase} ${inputOk}`}
+            >
+              <option value="full">{t('forms.editorPage.properties.widthFull')}</option>
+              <option value="half">{t('forms.editorPage.properties.widthHalf')}</option>
+            </select>
+          </div>
+        )}
 
         {/* Gợi ý trong ô nhập (placeholder) — chỉ loại có ô nhập chữ */}
         {supportsPlaceholder && (
@@ -112,10 +186,11 @@ export default function FieldPropertiesPanel({
           </div>
         )}
 
-        {/* Chữ hướng dẫn dưới nhãn */}
+        {/* Chữ hướng dẫn dưới nhãn (heading: mô tả phụ; paragraph / page_break: không có) */}
+        {supportsHelpText && (
         <div className="sm:col-span-2">
           <label htmlFor={`${idPrefix}-help`} className="block text-xs font-semibold text-gray-700 dark:text-dk-text mb-1">
-            {t('forms.editorPage.properties.helpTextLabel')}
+            {isHeading ? t('forms.editorPage.properties.headingHelpLabel') : t('forms.editorPage.properties.helpTextLabel')}
           </label>
           <textarea
             id={`${idPrefix}-help`}
@@ -123,30 +198,37 @@ export default function FieldPropertiesPanel({
             maxLength={MAX_HELP_TEXT_LENGTH}
             value={field.helpText || ''}
             onChange={(e) => onUpdateField(idx, 'helpText', e.target.value)}
-            placeholder={t('forms.editorPage.properties.helpTextExample')}
+            placeholder={
+              isHeading ? t('forms.editorPage.properties.headingHelpExample') : t('forms.editorPage.properties.helpTextExample')
+            }
             className={`${inputBase} resize-y ${helpTextError ? inputErr : inputOk}`}
           />
           <div className="flex items-start justify-between gap-2 mt-1">
-            <p className="text-[11px] text-gray-500 dark:text-dk-text2">{t('forms.editorPage.properties.helpTextHint')}</p>
+            <p className="text-[11px] text-gray-500 dark:text-dk-text2">
+              {isHeading ? '' : t('forms.editorPage.properties.helpTextHint')}
+            </p>
             <span className="text-[11px] text-gray-400 dark:text-dk-muted shrink-0">
               {(field.helpText || '').length}/{MAX_HELP_TEXT_LENGTH}
             </span>
           </div>
           {helpTextError && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{helpTextError}</p>}
         </div>
+        )}
 
-        {/* Bắt buộc check */}
-        <div className="sm:col-span-2">
-          <label className="inline-flex items-center gap-2 cursor-pointer select-none text-sm text-gray-700 dark:text-dk-text px-3 py-2 rounded-xl hover:bg-gray-100/80 dark:hover:bg-dk-raised transition">
-            <input
-              type="checkbox"
-              checked={field.required}
-              onChange={(e) => onUpdateField(idx, 'required', e.target.checked)}
-              className="h-4 w-4 rounded text-orange-600 dark:text-orange-400 focus:ring-orange-500 border-gray-300 dark:border-dk-border-strong"
-            />
-            <span className="font-medium">{t('forms.required')}</span>
-          </label>
-        </div>
+        {/* Bắt buộc check — khối bố cục không có giá trị nên không có ô này */}
+        {!isBlock && (
+          <div className="sm:col-span-2">
+            <label className="inline-flex items-center gap-2 cursor-pointer select-none text-sm text-gray-700 dark:text-dk-text px-3 py-2 rounded-xl hover:bg-gray-100/80 dark:hover:bg-dk-raised transition">
+              <input
+                type="checkbox"
+                checked={field.required}
+                onChange={(e) => onUpdateField(idx, 'required', e.target.checked)}
+                className="h-4 w-4 rounded text-orange-600 dark:text-orange-400 focus:ring-orange-500 border-gray-300 dark:border-dk-border-strong"
+              />
+              <span className="font-medium">{t('forms.required')}</span>
+            </label>
+          </div>
+        )}
       </div>
 
       {/* Danh sách lựa chọn options (nếu là select, radio, checkbox) */}

@@ -12,7 +12,8 @@ const noopSubmit = () => {};
  * Cột PHẢI của trình soạn: xem trước SỐNG dùng chính FormRenderer của trang công khai (previewMode — mọi ô bị khoá,
  * nút gửi không làm gì, KHÔNG gọi API nộp bài). Dựng từ state nháp hiện tại chứ không phải bản đã lưu, nên thấy ngay
  * ô đồng ý (theo cài đặt thật), bộ chọn lịch (khi bật đặt lịch), chữ hướng dẫn, placeholder, màu, font, banner, logo.
- * Chuyển Máy tính / Điện thoại (khung rộng 390px).
+ * Chuyển Máy tính / Điện thoại (khung rộng 390px). Biểu mẫu nhiều bước (khối ngắt trang) cũng xem được ngay ở đây:
+ * Tiếp / Quay lại hoạt động, không kiểm trường bắt buộc, không gọi API nộp bài.
  */
 export default function FormPreviewPane({ form, backgroundColor, device, onDeviceChange }) {
   const { t } = useI18n();
@@ -51,7 +52,8 @@ export default function FormPreviewPane({ form, backgroundColor, device, onDevic
               : 'w-full'
           }
         >
-          <FormRenderer form={form} onSubmit={noopSubmit} previewMode />
+          {/* Khung điện thoại rộng 390px nhưng breakpoint `sm:` đo theo viewport → ép 1 cột để thấy đúng bố cục mobile */}
+          <FormRenderer form={form} onSubmit={noopSubmit} previewMode singleColumn={isMobile} />
         </div>
       </div>
     </div>

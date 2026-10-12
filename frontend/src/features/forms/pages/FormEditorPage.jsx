@@ -6,6 +6,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import productApiService from '../../products/services/productApi.service';
 import { PAYOS_BANK_BIN_MAP } from '../../../utils/payosBankBinMap';
 import { resolvePaymentPurpose } from '../utils/paymentPurpose.util';
+import { isDisplayFieldType } from '../utils/formFieldTypes.util';
 import { fetchFormById, createForm, updateForm, publishForm } from '../services/formAdminApi.service';
 import ShareModal from '../components/ShareModal';
 import FormTemplatePicker from '../components/FormTemplatePicker';
@@ -35,10 +36,13 @@ import {
   MIN_HOLD_MINUTES,
   MAX_HOLD_MINUTES,
   MAX_FIELDS,
+  MAX_DISPLAY_BLOCKS,
   MAX_OPTIONS,
   MAX_PLACEHOLDER_LENGTH,
   MAX_HELP_TEXT_LENGTH,
+  MAX_PARAGRAPH_LENGTH,
   MAX_CONSENT_TEXT_LENGTH,
+  NO_ROLE_FIELD_TYPES,
   OPTION_FIELD_TYPES,
   PLACEHOLDER_FIELD_TYPES,
   HEX_COLOR_RE,
@@ -65,6 +69,7 @@ const makeField = (partial = {}) => ({
   placeholder: '',
   helpText: '',
   options: [],
+  width: 'full', // 'full' | 'half' (chỉ trường nhập); chỉ gửi lên server khi 'half'
   ...partial,
 });
 
@@ -228,6 +233,7 @@ export default function FormEditorPage() {
                   role: f.role || '',
                   placeholder: f.placeholder || '',
                   helpText: f.helpText || '',
+                  width: f.width === 'half' ? 'half' : 'full',
                   options: Array.isArray(f.options)
                     ? f.options.map((opt) => (typeof opt === 'object' ? opt.label || opt.value : opt))
                     : [],
@@ -353,23 +359,36 @@ export default function FormEditorPage() {
     document.getElementById(`field-row-${uid}`)?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
   }, [fields]);
 
+  // Trần theo từng nhóm (khớp backend): tối đa MAX_FIELDS trường NHẬP và MAX_DISPLAY_BLOCKS khối bố cục (tiêu đề / đoạn
+  // chữ / ngắt trang) — khối bố cục không ăn vào hạn mức câu hỏi. Trả true (kèm thông báo) nếu thêm một trường `type` nữa
+  // sẽ vượt trần của nhóm đó.
+  const exceedsTypeLimit = (type) => {
+    if (isDisplayFieldType(type)) {
+      if (fields.filter((f) => isDisplayFieldType(f.type)).length >= MAX_DISPLAY_BLOCKS) {
+        toast.error(t('forms.editorPage.maxBlocks'));
+        return true;
+      }
+      return false;
+    }
+    if (fields.filter((f) => !isDisplayFieldType(f.type)).length >= MAX_FIELDS) {
+      toast.error(t('forms.editorPage.maxFields'));
+      return true;
+    }
+    return false;
+  };
+
   // Thêm trường mới
   const handleAddField = () => {
-    if (fields.length >= MAX_FIELDS) {
-      toast.error(t('forms.editorPage.maxFields'));
-      return;
-    }
-    const field = makeField({ label: t('forms.editorPage.newFieldLabel', { index: fields.length + 1 }) });
+    if (exceedsTypeLimit('short_text')) return;
+    const inputCount = fields.filter((f) => !isDisplayFieldType(f.type)).length;
+    const field = makeField({ label: t('forms.editorPage.newFieldLabel', { index: inputCount + 1 }) });
     setFields((prev) => [...prev, field]);
     focusField(field.uid);
   };
 
   // Thêm trường thông dụng 1-chạm từ thư viện mẫu
   const handleAddQuickField = (preset) => {
-    if (fields.length >= MAX_FIELDS) {
-      toast.error(t('forms.editorPage.maxFields'));
-      return;
-    }
+    if (exceedsTypeLimit(preset.type)) return;
     const localizedTitle = preset.titleKey ? t(preset.titleKey) : preset.title;
     let localizedOptions = [];
     if (preset.optionsKey === 'items') {
@@ -380,8 +399,10 @@ export default function FormEditorPage() {
       localizedOptions = [...preset.options];
     }
 
+    // Nhãn mặc định: tên nút, trừ khi preset khai nhãn riêng (labelKey) hoặc để trống (page_break — tiêu đề bước là tuỳ chọn).
+    const defaultLabel = preset.emptyLabel ? '' : preset.labelKey ? t(preset.labelKey) : localizedTitle;
     const field = makeField({
-      label: localizedTitle,
+      label: defaultLabel,
       type: preset.type,
       required: Boolean(preset.required),
       role: preset.role || '',
@@ -405,12 +426,9 @@ export default function FormEditorPage() {
   // Nhân bản trường: chèn bản sao NGAY DƯỚI, key rỗng (server tự sinh), KHÔNG nhân bản vai trò
   // (mỗi vai trò name/email/phone chỉ gán cho tối đa 1 trường).
   const handleDuplicateField = (idx) => {
-    if (fields.length >= MAX_FIELDS) {
-      toast.error(t('forms.editorPage.maxFields'));
-      return;
-    }
     const source = fields[idx];
     if (!source) return;
+    if (exceedsTypeLimit(source.type)) return;
     const copy = { ...source, uid: nextFieldUid(), key: '', role: '', options: [...(source.options || [])] };
     setFields((prev) => {
       const next = [...prev];
@@ -447,6 +465,10 @@ export default function FormEditorPage() {
 
   // Cập nhật thuộc tính trường
   const handleUpdateField = (idx, key, value) => {
+    // Đổi giữa trường nhập <-> khối bố cục: nhóm đích đã đủ trần thì chặn (kèm thông báo), giữ nguyên trường.
+    if (key === 'type' && fields[idx] && isDisplayFieldType(fields[idx].type) !== isDisplayFieldType(value) && exceedsTypeLimit(value)) {
+      return;
+    }
     setFields((prev) => {
       const copy = [...prev];
       copy[idx] = { ...copy[idx], [key]: value };
@@ -456,6 +478,14 @@ export default function FormEditorPage() {
         copy[idx].options = [];
       } else if (key === 'type' && OPTION_FIELD_TYPES.includes(value) && copy[idx].options.length === 0) {
         copy[idx].options = [t('forms.editorPage.defaultOption1'), t('forms.editorPage.defaultOption2')];
+      }
+
+      // Sang khối bố cục: bỏ mọi thuộc tính chỉ có nghĩa với trường nhập (bắt buộc / vai trò / gợi ý / độ rộng).
+      // Sang sao / có-không / giờ: bỏ vai trò (các loại này không thể là tên, email, SĐT).
+      if (key === 'type' && isDisplayFieldType(value)) {
+        copy[idx] = { ...copy[idx], required: false, role: '', placeholder: '', width: 'full', options: [] };
+      } else if (key === 'type' && NO_ROLE_FIELD_TYPES.includes(value)) {
+        copy[idx] = { ...copy[idx], role: '' };
       }
 
       // Đổi role: kiểm tra trùng lặp
@@ -522,14 +552,27 @@ export default function FormEditorPage() {
       errs.description = t('forms.editorPage.validationDescMax');
     }
 
-    if (fields.length === 0) {
+    // Khối bố cục (tiêu đề / đoạn chữ / ngắt trang) không tính: biểu mẫu phải có ít nhất 1 trường để khách điền.
+    if (fields.every((f) => isDisplayFieldType(f.type))) {
       errs.fields = t('forms.editorPage.validationFieldsRequired');
     }
 
     // Validate từng trường
     for (let i = 0; i < fields.length; i++) {
       const f = fields[i];
-      if (!f.label || !f.label.trim()) {
+      if (f.type === 'paragraph') {
+        // Nội dung đoạn chữ nằm trong `label` (trần 2000, không phải 200).
+        if (!f.label || !f.label.trim()) {
+          errs[`field_${i}_label`] = t('forms.editorPage.validationParagraphRequired');
+        } else if (f.label.trim().length > MAX_PARAGRAPH_LENGTH) {
+          errs[`field_${i}_label`] = t('forms.editorPage.validationParagraphMax');
+        }
+      } else if (f.type === 'page_break') {
+        // Tiêu đề bước là tuỳ chọn — chỉ kiểm độ dài.
+        if (f.label && f.label.trim().length > 200) {
+          errs[`field_${i}_label`] = t('forms.editorPage.validationFieldLabelMax');
+        }
+      } else if (!f.label || !f.label.trim()) {
         errs[`field_${i}_label`] = t('forms.editorPage.validationFieldLabelRequired');
       } else if (f.label.trim().length > 200) {
         errs[`field_${i}_label`] = t('forms.editorPage.validationFieldLabelMax');
@@ -541,10 +584,10 @@ export default function FormEditorPage() {
         }
       }
 
-      if (f.helpText && f.helpText.trim().length > MAX_HELP_TEXT_LENGTH) {
+      if (f.type !== 'paragraph' && f.type !== 'page_break' && f.helpText && f.helpText.trim().length > MAX_HELP_TEXT_LENGTH) {
         errs[`field_${i}_helpText`] = t('forms.editorPage.validationHelpTextMax');
       }
-      if (f.placeholder && f.placeholder.trim().length > MAX_PLACEHOLDER_LENGTH) {
+      if (!isDisplayFieldType(f.type) && f.placeholder && f.placeholder.trim().length > MAX_PLACEHOLDER_LENGTH) {
         errs[`field_${i}_placeholder`] = t('forms.editorPage.validationPlaceholderMax');
       }
     }
@@ -698,16 +741,19 @@ export default function FormEditorPage() {
     try {
       // Chuẩn bị payload: giữ nguyên key cũ nếu có (bắt buộc theo PR-1b contract)
       const payloadFields = fields.map((f) => {
+        const isBlock = isDisplayFieldType(f.type);
         const item = {
           label: f.label.trim(),
           type: f.type,
-          required: Boolean(f.required),
+          // Khối bố cục không có giá trị nên không bao giờ bắt buộc.
+          required: isBlock ? false : Boolean(f.required),
         };
         // Giữ key cũ nếu có (trường mới key rỗng)
         if (f.key && String(f.key).trim()) {
           item.key = f.key.trim();
         }
-        if (f.role) {
+        // Vai trò chỉ cho loại có thể là tên/email/SĐT (khối bố cục, sao, có-không, giờ thì không).
+        if (f.role && !isBlock && !NO_ROLE_FIELD_TYPES.includes(f.type)) {
           item.role = f.role;
         }
         // placeholder / helpText CHỈ gửi khi có chữ (trường cũ không có thì payload y như trước đây);
@@ -715,11 +761,16 @@ export default function FormEditorPage() {
         if (PLACEHOLDER_FIELD_TYPES.includes(f.type) && f.placeholder && f.placeholder.trim()) {
           item.placeholder = f.placeholder.trim();
         }
-        if (f.helpText && f.helpText.trim()) {
+        // helpText: trường nhập + tiêu đề phần (mô tả phụ). Đoạn chữ / ngắt trang không có chữ phụ.
+        if (f.helpText && f.helpText.trim() && f.type !== 'paragraph' && f.type !== 'page_break') {
           item.helpText = f.helpText.trim();
         }
         if (OPTION_FIELD_TYPES.includes(f.type)) {
           item.options = f.options.map((opt) => String(opt).trim()).filter(Boolean);
+        }
+        // Độ rộng CHỈ gửi khi 'half' (full = mặc định, vắng khoá) — payload trường cũ không đổi một byte.
+        if (!isBlock && f.width === 'half') {
+          item.width = 'half';
         }
         return item;
       });
@@ -908,6 +959,7 @@ export default function FormEditorPage() {
         options: f.options,
         placeholder: f.placeholder,
         helpText: f.helpText,
+        width: f.width,
       })),
       settings: {
         submitButtonText: settings.submitButtonText,

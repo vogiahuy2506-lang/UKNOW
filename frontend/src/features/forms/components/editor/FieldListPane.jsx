@@ -12,7 +12,8 @@ import {
 } from 'react-icons/hi';
 import { useI18n } from '../../../../i18n';
 import FieldPropertiesPanel from './FieldPropertiesPanel';
-import { FIELD_TYPES, MAX_FIELDS, QUICK_FIELD_PRESETS } from './formEditorConstants';
+import { isDisplayFieldType } from '../../utils/formFieldTypes.util';
+import { FIELD_TYPES, FIELD_TYPE_GROUPS, MAX_FIELDS, QUICK_FIELD_PRESETS } from './formEditorConstants';
 
 /**
  * Cột TRÁI của trình soạn: hàng "Thêm nhanh" + danh sách trường (chọn để sửa, kéo-thả HTML5 trên máy tính, nút lên/xuống
@@ -54,6 +55,29 @@ export default function FieldListPane({
   };
 
   const showHints = Boolean(setupHints?.booking || setupHints?.payment);
+
+  // Đếm riêng trường NHẬP (x/30) và khối bố cục (tiêu đề / đoạn chữ / ngắt trang). Số thứ tự "Trường #n" chỉ tính trường
+  // nhập; khối bố cục có số riêng (dùng cho nhãn đọc màn hình).
+  let inputSeq = 0;
+  let blockSeq = 0;
+  const ordinals = fields.map((f) => (isDisplayFieldType(f.type) ? { block: ++blockSeq } : { input: ++inputSeq }));
+  const inputCount = inputSeq;
+  const blockCount = blockSeq;
+
+  const renderPresetButton = (preset) => {
+    const Icon = preset.icon;
+    return (
+      <button
+        key={preset.id || preset.title}
+        type="button"
+        onClick={() => onAddQuickField(preset)}
+        className="inline-flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-dk-raised hover:bg-orange-50 dark:hover:bg-orange-950/40 text-slate-700 dark:text-dk-text hover:text-orange-700 dark:hover:text-orange-400 border border-slate-200 dark:border-dk-border hover:border-orange-300 dark:hover:border-orange-500/50 rounded-xl text-xs font-semibold transition-all shadow-2xs hover:shadow-xs active:scale-95 group"
+      >
+        <Icon className="w-3.5 h-3.5 text-slate-500 dark:text-dk-text2 group-hover:text-orange-600 dark:group-hover:text-orange-400 transition" />
+        <span>{preset.titleKey ? t(preset.titleKey) : preset.title}</span>
+      </button>
+    );
+  };
 
   return (
     <div className="p-3 sm:p-4 space-y-4 min-w-0" data-testid="form-field-list-pane">
@@ -108,8 +132,16 @@ export default function FieldListPane({
             <div className="flex items-center gap-2">
               <h2 className="text-base font-bold text-slate-900 dark:text-dk-text">{t('forms.fields')}</h2>
               <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 border border-indigo-200/80 dark:border-indigo-900/60">
-                {fields.length}/{MAX_FIELDS}
+                {inputCount}/{MAX_FIELDS}
               </span>
+              {blockCount > 0 && (
+                <span
+                  data-testid="form-block-count"
+                  className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-400 border border-teal-100 dark:border-teal-900/60"
+                >
+                  {t('forms.editorPage.fieldList.blockCount', { count: blockCount })}
+                </span>
+              )}
             </div>
             <p className="text-xs text-slate-500 dark:text-dk-text2 mt-0.5">{t('forms.editorPage.maxFieldsHelp')}</p>
           </div>
@@ -131,20 +163,7 @@ export default function FieldListPane({
           <span>{t('forms.editorPage.quickAdd.title')}</span>
         </div>
         <div className="flex flex-wrap gap-2">
-          {QUICK_FIELD_PRESETS.filter((preset) => preset.common || showMoreFieldTypes).map((preset) => {
-            const Icon = preset.icon;
-            return (
-              <button
-                key={preset.id || preset.title}
-                type="button"
-                onClick={() => onAddQuickField(preset)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-dk-raised hover:bg-orange-50 dark:hover:bg-orange-950/40 text-slate-700 dark:text-dk-text hover:text-orange-700 dark:hover:text-orange-400 border border-slate-200 dark:border-dk-border hover:border-orange-300 dark:hover:border-orange-500/50 rounded-xl text-xs font-semibold transition-all shadow-2xs hover:shadow-xs active:scale-95 group"
-              >
-                <Icon className="w-3.5 h-3.5 text-slate-500 dark:text-dk-text2 group-hover:text-orange-600 dark:group-hover:text-orange-400 transition" />
-                <span>{preset.titleKey ? t(preset.titleKey) : preset.title}</span>
-              </button>
-            );
-          })}
+          {QUICK_FIELD_PRESETS.filter((preset) => preset.common).map(renderPresetButton)}
           <button
             type="button"
             aria-expanded={showMoreFieldTypes}
@@ -154,6 +173,23 @@ export default function FieldListPane({
             {showMoreFieldTypes ? t('forms.editorPage.quickAdd.fewerTypes') : t('forms.editorPage.quickAdd.moreTypes')}
           </button>
         </div>
+        {/* "Loại khác…": phần còn lại chia hai nhóm — Câu hỏi (trường nhập) và Bố cục (tiêu đề, đoạn chữ, ngắt trang) */}
+        {showMoreFieldTypes && (
+          <div className="mt-3 space-y-3" data-testid="form-more-field-types">
+            {FIELD_TYPE_GROUPS.map((group) => {
+              const presets = QUICK_FIELD_PRESETS.filter((preset) => !preset.common && preset.group === group.id);
+              if (presets.length === 0) return null;
+              return (
+                <div key={group.id}>
+                  <div className="text-[11px] font-bold text-orange-900/80 dark:text-orange-300/80 uppercase tracking-wider mb-1.5">
+                    {t(group.labelKey)}
+                  </div>
+                  <div className="flex flex-wrap gap-2">{presets.map(renderPresetButton)}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {errors.fields && (
@@ -171,6 +207,9 @@ export default function FieldListPane({
           const selected = field.uid === selectedUid;
           const hasError = Object.keys(errors).some((k) => k.startsWith(`field_${idx}_`));
           const typeLabel = t(FIELD_TYPES.find((ft) => ft.value === field.type)?.labelKey || 'forms.types.short_text');
+          const isBlock = isDisplayFieldType(field.type);
+          // page_break không bắt buộc nhãn: hàng trống nhãn hiện "Sang trang mới" thay vì dấu gạch.
+          const rowLabel = field.label || (field.type === 'page_break' ? t('forms.editorPage.fieldList.pageBreakRow') : '—');
           const isDropTarget = dragOverIdx === idx && dragFromRef.current !== null && dragFromRef.current !== idx;
 
           return (
@@ -192,7 +231,7 @@ export default function FieldListPane({
                 resetDrag();
                 if (from !== idx) onReorderField(from, idx);
               }}
-              className={`rounded-2xl border bg-white dark:bg-dk-raised transition-all ${
+              className={`rounded-2xl border ${isBlock ? 'bg-teal-50/40 dark:bg-dk-inset border-dashed' : 'bg-white dark:bg-dk-raised'} transition-all ${
                 isDropTarget
                   ? 'border-orange-400 ring-2 ring-orange-300/60 dark:ring-orange-500/30'
                   : selected
@@ -229,25 +268,48 @@ export default function FieldListPane({
                 <button
                   type="button"
                   onClick={() => onSelect(field.uid)}
-                  aria-label={t('forms.editorPage.fieldList.selectField', { index: idx + 1, label: field.label })}
+                  aria-label={
+                    isBlock
+                      ? t('forms.editorPage.fieldList.selectBlock', { index: ordinals[idx].block, label: rowLabel })
+                      : t('forms.editorPage.fieldList.selectField', { index: ordinals[idx].input, label: field.label })
+                  }
                   aria-current={selected ? 'true' : undefined}
                   className="flex-1 min-w-0 text-left flex items-center gap-2 flex-wrap rounded-xl px-1.5 py-1 hover:bg-slate-50 dark:hover:bg-dk-strong/50 transition"
                 >
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-dk-strong text-slate-700 dark:text-dk-text border border-slate-200/80 dark:border-dk-border shrink-0">
-                    {t('forms.editorPage.fieldIndex', { index: idx + 1 })}
+                  {!isBlock && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-dk-strong text-slate-700 dark:text-dk-text border border-slate-200/80 dark:border-dk-border shrink-0">
+                      {t('forms.editorPage.fieldIndex', { index: ordinals[idx].input })}
+                    </span>
+                  )}
+                  <span
+                    className={`text-sm font-semibold truncate min-w-0 max-w-full ${
+                      isBlock && !field.label ? 'italic text-slate-500 dark:text-dk-text2' : 'text-slate-900 dark:text-dk-text'
+                    }`}
+                  >
+                    {rowLabel}
                   </span>
-                  <span className="text-sm font-semibold text-slate-900 dark:text-dk-text truncate min-w-0 max-w-full">
-                    {field.label || '—'}
-                  </span>
-                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/60 shrink-0">
+                  {/* Khối bố cục mang huy hiệu màu khác (không có "Bắt buộc"/vai trò) để phân biệt với câu hỏi */}
+                  <span
+                    data-testid={isBlock ? `field-block-badge-${idx}` : undefined}
+                    className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border shrink-0 ${
+                      isBlock
+                        ? 'bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-400 border-teal-100 dark:border-teal-900/60'
+                        : 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 border-indigo-100 dark:border-indigo-900/60'
+                    }`}
+                  >
                     {typeLabel}
                   </span>
-                  {field.required && (
+                  {!isBlock && field.width === 'half' && (
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-dk-strong text-slate-600 dark:text-dk-text2 border border-slate-200/80 dark:border-dk-border shrink-0">
+                      {t('forms.editorPage.properties.widthBadgeHalf')}
+                    </span>
+                  )}
+                  {!isBlock && field.required && (
                     <span className="text-[11px] font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 border border-rose-200/80 dark:border-rose-900/60 px-2 py-0.5 rounded-md shrink-0">
                       {t('forms.required')}
                     </span>
                   )}
-                  {field.role && (
+                  {!isBlock && field.role && (
                     <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-900/60 px-2 py-0.5 rounded-md shrink-0">
                       {field.role}
                     </span>
