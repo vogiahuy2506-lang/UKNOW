@@ -284,8 +284,18 @@ const UI_LABELS_IN_ARTICLES = [
   ['landing-page', 'leadFormConfig.addField', 'Thêm câu hỏi'],
   ['landing-page', 'leadFormConfig.askAiAdd', 'Nhờ AI thêm ô này'],
   // PR-F: hai cách thu thông tin + chọn biểu mẫu có sẵn (LeadFormConfigPanel).
-  ['landing-page', 'leadFormConfig.modeBasic', 'Form cơ bản'],
-  ['landing-page', 'leadFormConfig.modeLinked', 'Dùng biểu mẫu đã tạo'],
+  // PR-6 (12/10/2026): "Form cơ bản / Dùng biểu mẫu đã tạo" → danh sách NHIỀU biểu mẫu của trang.
+  ['landing-page', 'leadFormConfig.formsTitle', 'Biểu mẫu của trang'],
+  ['landing-page', 'leadFormConfig.formAdd', 'Thêm biểu mẫu'],
+  ['landing-page', 'leadFormConfig.formAddExistingTitle', 'Dùng biểu mẫu đã tạo'],
+  ['landing-page', 'leadFormConfig.formAddExistingButton', 'Thêm vào trang'],
+  ['landing-page', 'leadFormConfig.formAddNewTitle', 'Tạo mới theo mẫu'],
+  ['landing-page', 'leadFormConfig.formRemove', 'Bỏ khỏi trang'],
+  ['landing-page', 'leadFormConfig.pickerRefresh', 'Làm mới'],
+  ['landing-page', 'leadFormConfig.pickerCreate', '+ Tạo biểu mẫu mới'],
+  // PR-1 (11/10/2026): "Khách hàng từ Landing page" → "Khách để lại thông tin" (2 tab).
+  ['landing-page', 'nav.leadList', 'Khách để lại thông tin'],
+  ['landing-page', 'landingLeads.tabForms', 'Từ biểu mẫu'],
   ['landing-page', 'leadFormConfig.pickerCreate', '+ Tạo biểu mẫu mới'],
   ['landing-page', 'leadFormConfig.pickerRefresh', 'Làm mới'],
   ['landing-page', 'forms.submissions', 'Bài nộp'],
