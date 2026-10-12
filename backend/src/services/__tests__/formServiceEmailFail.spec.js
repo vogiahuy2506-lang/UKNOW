@@ -7,6 +7,11 @@ jest.unstable_mockModule('../../utils/systemEmail.util.js', () => ({
   SENDER_NAME: 'UKNOW Campaign',
 }));
 
+// PR-8c: bài nộp thành công bắn chuông "Có bài nộp mới" (nạp muộn dispatcher thật → kéo systemEmail.util, mock ở trên không có
+// buildNotificationEmail). Spec này không kiểm chuông — giả ranh giới để khỏi nạp dispatcher thật và khỏi ồn log.
+const fireFormSubmissionBell = jest.fn();
+jest.unstable_mockModule('../formSubmissionBell.service.js', () => ({ fireFormSubmissionBell: (...args) => fireFormSubmissionBell(...args) }));
+
 const mockForm = {
   id: 1,
   workspaceOwnerId: 10,
@@ -53,6 +58,20 @@ jest.unstable_mockModule('../../repositories/form.repository.js', () => ({
 const { default: formService } = await import('../form.service.js');
 
 describe('form.service - fire-and-forget email & SMTP error resilience', () => {
+  it('bài nộp xong thì bắn chuông "Có bài nộp mới" đúng 1 lần, kèm biểu mẫu + bài nộp + người nộp (PR-8c)', async () => {
+    fireFormSubmissionBell.mockClear();
+    sendEmailImpl = jest.fn().mockResolvedValue(undefined);
+
+    await formService.submitPublicForm('pub_test_123456', { answers: { f_name: 'Khách hàng chuông' } }, '127.0.0.1');
+
+    expect(fireFormSubmissionBell).toHaveBeenCalledTimes(1);
+    expect(fireFormSubmissionBell.mock.calls[0][0]).toMatchObject({
+      form: { id: 1, workspaceOwnerId: 10, title: 'Form Test SMTP' },
+      submission: { id: 99 },
+      respondentName: 'Khách hàng chuông',
+    });
+  });
+
   it('vẫn hoàn tất bài nộp thành công (201) khi hàm sendSystemEmail ném lỗi', async () => {
     sendEmailImpl = jest.fn().mockRejectedValue(new Error('SMTP connection failed: 554 Transaction Failed'));
 

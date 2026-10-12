@@ -7,6 +7,10 @@ jest.unstable_mockModule('../../utils/systemEmail.util.js', () => ({
   SENDER_NAME: 'UKNOW Campaign',
 }));
 
+// PR-8c: bài nộp thành công bắn chuông "Có bài nộp mới" (nạp muộn dispatcher thật → kéo systemEmail.util, mock ở trên không có
+// buildNotificationEmail). Spec này không kiểm chuông — giả ranh giới để khỏi nạp dispatcher thật và khỏi ồn log.
+jest.unstable_mockModule('../formSubmissionBell.service.js', () => ({ fireFormSubmissionBell: jest.fn() }));
+
 const repo = {
   findFormByPublicKey: jest.fn(),
   createSubmission: jest.fn(),

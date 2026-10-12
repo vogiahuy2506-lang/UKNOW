@@ -4283,3 +4283,8 @@ CREATE INDEX IF NOT EXISTS idx_form_file_uploads_owner_pending
 INSERT INTO notification_event_settings (event_type, in_app_enabled, email_enabled, user_can_disable_email)
 VALUES ('form_file_quota_exceeded', true, false, true)
 ON CONFLICT (event_type) DO NOTHING;
+
+-- --- Migration 302: su kien chuong form_submission_received (PLAN_BIEU_MAU_TUY_BIEN_AI_LANDING PR-8c: co bai nop moi o bieu mau) ---
+INSERT INTO notification_event_settings (event_type, in_app_enabled, email_enabled, user_can_disable_email)
+VALUES ('form_submission_received', true, false, true)
+ON CONFLICT (event_type) DO NOTHING;

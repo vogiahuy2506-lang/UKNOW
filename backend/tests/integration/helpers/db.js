@@ -7,6 +7,7 @@ import bcrypt from 'bcryptjs';
 import db from '../../../src/config/database.js';
 import { _clearQuotaCache } from '../../../src/utils/userSendLimit.util.js';
 import { _resetSharedZaloRateLimiterForTests } from '../../../src/services/campaign/zaloOutboundRateLimiterSingleton.js';
+import { settlePendingFormSubmissionBells } from '../../../src/services/formSubmissionBell.service.js';
 
 /**
  * Truncate hết bảng dữ liệu giữa các test để bảo đảm test idempotent.
@@ -151,6 +152,9 @@ async function truncateAllTables() {
 }
 
 export async function truncateAll() {
+  // PR-8c: chuông "Có bài nộp mới" bắn fire-and-forget sau MỌI bài nộp công khai (của bất kỳ suite nào). Chờ chúng ghi xong TRƯỚC khi
+  // TRUNCATE — không thì chuông trễ rơi vào ca sau (id user đánh lại từ 1, dòng chuông gắn nhầm người). Bài học PR-4b.
+  await settlePendingFormSubmissionBells();
   // RESTART IDENTITY tái sử dụng user id giữa các test — phải xóa quota cache
   // (TTL 10s, key theo billingUserId) để limits/counts của test trước không
   // rò sang test sau trong cùng process (runInBand dùng chung process cho mọi file).

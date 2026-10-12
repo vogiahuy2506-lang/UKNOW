@@ -16,6 +16,7 @@ const MIGRATION_293 = path.resolve(__dirname, '../../../migrations/293_notificat
 const MIGRATION_294 = path.resolve(__dirname, '../../../migrations/294_notification_events_legacy_emails.sql');
 const MIGRATION_298 = path.resolve(__dirname, '../../../migrations/298_orders_payment_reminder.sql');
 const MIGRATION_300 = path.resolve(__dirname, '../../../migrations/300_form_file_uploads.sql');
+const MIGRATION_302 = path.resolve(__dirname, '../../../migrations/302_form_submission_notification_event.sql');
 const BOOTSTRAP = path.resolve(__dirname, '../../../tests/integration/sql/bootstrap.sql');
 
 /**
@@ -45,6 +46,8 @@ const EXPECTED = {
   order_payment_reminder: ['user', true, true, true],
   // PR-4b biểu mẫu (12/10/2026) — chủ hết dung lượng khi khách tải tệp, migration 300. Chỉ chuông (mặc định chung), user tắt được email.
   form_file_quota_exceeded: ['user', true, false, true],
+  // PR-8c biểu mẫu (12/10/2026) — có bài nộp mới, gộp theo biểu mẫu / 10 phút, migration 302. Chỉ chuông: thư báo riêng của biểu mẫu (notifyOwner) đã có.
+  form_submission_received: ['user', true, false, true],
 };
 
 /** 9 khoá của PR-1 (migration 289 + 293). */
@@ -55,6 +58,8 @@ const KEYS_PR6 = Object.keys(EXPECTED).slice(9, 15);
 const KEYS_PAYMENT_REMINDER = ['order_payment_reminder'];
 /** Khoá của PR-4b biểu mẫu (migration 300). */
 const KEYS_PR4B = ['form_file_quota_exceeded'];
+/** Khoá của PR-8c biểu mẫu (migration 302). */
+const KEYS_PR8C = ['form_submission_received'];
 
 /** Giá trị email do migration 289 seed (lịch sử, KHÔNG đổi): email bật cho 7/9 sự kiện, 293 mới đưa về false. */
 const SEED_289_EMAIL = {
@@ -70,8 +75,8 @@ const SEED_289_EMAIL = {
 };
 
 describe('notificationEventCatalog', () => {
-  it('đúng 16 khoá của plan (9 của PR-1 + 6 của PR-6 + 1 nhắc thanh toán lại), không thừa không thiếu', () => {
-    expect(Object.keys(EXPECTED)).toHaveLength(17);
+  it('đúng 18 khoá (9 của PR-1 + 6 của PR-6 + 1 nhắc thanh toán lại + 1 hết dung lượng tệp + 1 bài nộp mới), không thừa không thiếu', () => {
+    expect(Object.keys(EXPECTED)).toHaveLength(18);
     expect([...NOTIFICATION_EVENT_KEYS].sort()).toEqual(Object.keys(EXPECTED).sort());
     expect(new Set(NOTIFICATION_EVENT_KEYS).size).toBe(NOTIFICATION_EVENT_KEYS.length);
   });
@@ -184,6 +189,27 @@ describe('seed của migration 289 + bootstrap.sql (lịch sử) và migration 2
     expect(parseSeedRows(block)).toEqual(parseSeedRows(fs.readFileSync(MIGRATION_300, 'utf8')));
   });
 
+  it('migration 302 seed đúng khoá bài nộp mới của PR-8c, khớp catalog, ON CONFLICT DO NOTHING', () => {
+    const sql302 = fs.readFileSync(MIGRATION_302, 'utf8');
+    const rows = parseSeedRows(sql302);
+    expect(Object.keys(rows).sort()).toEqual([...KEYS_PR8C].sort());
+    for (const key of KEYS_PR8C) {
+      const event = getNotificationEvent(key);
+      expect(event).not.toBeNull();
+      expect(rows[key]).toEqual([event.defaults.inApp, event.defaults.email, event.userCanDisableEmail]);
+    }
+    expect(sql302).toMatch(/ON CONFLICT \(event_type\) DO NOTHING/);
+    // Chỉ INSERT: không DROP / ALTER / DELETE / UPDATE (migration chạy lại không lỗi, không ghi đè cấu hình super admin đã chỉnh).
+    expect(sql302.replace(/^--.*$/gm, '')).not.toMatch(/\b(DROP|ALTER|DELETE|UPDATE|TRUNCATE)\b/i);
+  });
+
+  it('bootstrap.sql có khối Migration 302 với đúng dòng seed của migration', () => {
+    const boot = fs.readFileSync(BOOTSTRAP, 'utf8');
+    expect(boot).toContain('-- --- Migration 302');
+    const block = boot.split('-- --- Migration 302')[1].split('-- --- Migration')[0];
+    expect(parseSeedRows(block)).toEqual(parseSeedRows(fs.readFileSync(MIGRATION_302, 'utf8')));
+  });
+
   it('bootstrap.sql có khối Migration 298 với đúng dòng seed của migration', () => {
     const boot = fs.readFileSync(BOOTSTRAP, 'utf8');
     expect(boot).toContain('-- --- Migration 298');
@@ -191,12 +217,13 @@ describe('seed của migration 289 + bootstrap.sql (lịch sử) và migration 2
     expect(parseSeedRows(block)).toEqual(parseSeedRows(fs.readFileSync(MIGRATION_298, 'utf8')));
   });
 
-  it('mọi khoá catalog đều có dòng seed trong 289 + 294 + 298 + 300 (không khoá nào rơi khỏi migration)', () => {
+  it('mọi khoá catalog đều có dòng seed trong 289 + 294 + 298 + 300 + 302 (không khoá nào rơi khỏi migration)', () => {
     const seeded = {
       ...parseSeedRows(fs.readFileSync(MIGRATION_289, 'utf8')),
       ...parseSeedRows(fs.readFileSync(MIGRATION_294, 'utf8')),
       ...parseSeedRows(fs.readFileSync(MIGRATION_298, 'utf8')),
       ...parseSeedRows(fs.readFileSync(MIGRATION_300, 'utf8')),
+      ...parseSeedRows(fs.readFileSync(MIGRATION_302, 'utf8')),
     };
     expect(Object.keys(seeded).sort()).toEqual([...NOTIFICATION_EVENT_KEYS].sort());
   });

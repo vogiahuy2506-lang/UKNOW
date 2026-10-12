@@ -48,6 +48,7 @@ import { renderLeadUnsubscribeHtml } from '../utils/leadUnsubscribeHtml.util.js'
 import { isFormFileUploadEnabled } from '../utils/formFileKinds.util.js';
 import { createFormFileDownloadToken } from '../utils/formFileToken.util.js';
 import formFileUploadService, { buildSubmissionFilesPrefix } from './formFileUpload.service.js';
+import { fireFormSubmissionBell } from './formSubmissionBell.service.js';
 
 const MAX_SLOTS_DAYS_PARAM = 31;
 const DEFAULT_SLOTS_DAYS_PARAM = 7;
@@ -1360,6 +1361,16 @@ class FormService {
     }
     // PR-4b: bài nộp đã có → xoá tệp tạm (lỗi chỉ log, cron dọn nốt).
     await formFileUploadService.finalizeFileCommit(fileCommit);
+
+    // PR-8c: chuông "Có bài nộp mới" cho chủ (gộp theo biểu mẫu / 10 phút). Fire-and-forget theo mẫu Set promise + settle — không chờ,
+    // không bao giờ ném lỗi ra đường khách; bài nộp đã nằm trong DB nên chuông lỗi chỉ để lại một dòng log.
+    fireFormSubmissionBell({
+      form,
+      submission,
+      respondentName: validated.respondentName,
+      respondentEmail: validated.respondentEmail,
+      respondentPhone: validated.respondentPhone,
+    });
 
     let qrString = null;
     let paymentOptions = [];

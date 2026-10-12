@@ -12,6 +12,7 @@
  * PR-6 (10/10/2026): 6 khoá cuối (hết hạn mức, khách để lại liên hệ, kênh mất kết nối, gói sắp hết hạn / đã hết hạn, AI không sẵn sàng)
  * là 5 loại email cũ đưa vào chuông. Migration 294 seed 6 dòng — thêm khoá vào catalog mà quên migration thì spec catalog đỏ.
  * PR-4b biểu mẫu (12/10/2026): khoá `form_file_quota_exceeded` (khách tải tệp nhưng chủ hết dung lượng) — migration 300 seed dòng của nó.
+ * PR-8c biểu mẫu (12/10/2026): khoá `form_submission_received` (có bài nộp mới, gộp theo biểu mẫu/10 phút) — migration 302 seed dòng của nó.
  * NGOẠI LỆ "chỉ chuông": `plan_expiring` / `plan_expired` MẶC ĐỊNH BẬT EMAIL (quyết định 10/10): khách không đăng nhập thì không thấy chuông,
  * mất nhắc gia hạn là mất doanh thu; super admin vẫn tắt được ở tab "Cấu hình kênh".
  */
@@ -167,6 +168,17 @@ export const NOTIFICATION_EVENTS = Object.freeze([
     label: 'Biểu mẫu chưa nhận được tệp vì hết dung lượng',
     labelEn: 'Form could not receive a file: storage full',
     description: 'Báo khi khách đính kèm tệp vào biểu mẫu nhưng tài khoản đã hết dung lượng lưu trữ nên tệp chưa được lưu (các ô khác của khách vẫn được ghi nhận). Nhắc tối đa một lần mỗi giờ cho mỗi biểu mẫu.',
+    audience: 'user',
+    defaults: { inApp: true, email: false },
+    userCanDisableEmail: true,
+  },
+  {
+    // PR-8c biểu mẫu (12/10/2026), migration 302. Mặc định CHỈ chuông: thư báo của từng biểu mẫu ("Báo cho tôi qua email" — settings.notifyOwner)
+    // đã có riêng và chạy độc lập, bật thêm email ở đây sẽ báo hai lần.
+    key: 'form_submission_received',
+    label: 'Có bài nộp mới ở biểu mẫu',
+    labelEn: 'New form submission',
+    description: 'Báo khi có khách nộp biểu mẫu của bạn, bấm vào để mở thẳng trang bài nộp của biểu mẫu đó. Gộp để khỏi dồn thông báo: mỗi biểu mẫu tối đa một thông báo trong 10 phút, nêu người nộp đầu tiên của khoảng đó.',
     audience: 'user',
     defaults: { inApp: true, email: false },
     userCanDisableEmail: true,

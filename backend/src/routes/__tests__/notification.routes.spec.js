@@ -218,6 +218,7 @@ describe('/api/notifications', () => {
         'ai_unavailable',
         'order_payment_reminder',
         'form_file_quota_exceeded',
+        'form_submission_received',
       ]);
     });
 

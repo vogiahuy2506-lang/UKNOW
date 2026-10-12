@@ -55,13 +55,13 @@ describe('/api/admin/notification-events', () => {
 
   const byKeyOf = (items) => Object.fromEntries(items.map((item) => [item.key, item]));
 
-  it('GET → đủ 17 mục catalog; chưa có dòng DB thì settings = mặc định + isDefault:true; có dòng thì lấy dòng DB', async () => {
+  it('GET → đủ 18 mục catalog; chưa có dòng DB thì settings = mặc định + isDefault:true; có dòng thì lấy dòng DB', async () => {
     mockListSettings.mockResolvedValue([dbRow('campaign_run_completed', { emailEnabled: true })]);
 
     const res = await request(app).get('/api/admin/notification-events').set('Authorization', 'Bearer admin');
 
     expect(res.status).toBe(200);
-    expect(res.body.data).toHaveLength(17);
+    expect(res.body.data).toHaveLength(18);
     expect(byKeyOf(res.body.data).plan_expiring.catalogUserCanDisableEmail).toBe(false);
     expect(byKeyOf(res.body.data).ai_unavailable.audience).toBe('user');
     const byKey = Object.fromEntries(res.body.data.map((item) => [item.key, item]));
