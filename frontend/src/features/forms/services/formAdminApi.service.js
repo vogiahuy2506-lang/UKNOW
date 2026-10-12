@@ -120,3 +120,26 @@ export async function fetchSubmissionReceiptBlob(formId, submissionId) {
   return res.data;
 }
 
+/**
+ * PR-5 (AI soạn biểu mẫu) — `POST /api/forms/ai-draft`. CHỈ trả NHÁP, không ghi gì vào CSDL; mỗi lần gọi trừ 1 lượt AI của chủ
+ * workspace (chỉ gọi khi người dùng bấm, không tự gọi). Ba chế độ:
+ *  - `create`: dựng biểu mẫu từ `description` (+ `kind` tuỳ chọn) → `{ title, description, fields, settings, bookingConfig, kind, needsAttention }`
+ *  - `suggest_questions`: gợi ý THÊM câu hỏi cho `existingForm` → `{ fields }` (chỉ câu mới)
+ *  - `rewrite`: viết lại nhãn / chữ hướng dẫn / lựa chọn của `existingForm` → `{ fields }` (cùng số lượng, cùng thứ tự)
+ *
+ * @param {{
+ *   mode?: 'create'|'suggest_questions'|'rewrite',
+ *   description?: string,
+ *   kind?: 'consult'|'booking'|'payment'|'survey'|'blank',
+ *   productId?: number,
+ *   locale?: 'vi'|'en',
+ *   existingForm?: { title?: string, description?: string, fields: object[] },
+ * }} payload
+ * @returns {Promise<object>} nháp
+ */
+export async function aiDraftForm(payload) {
+  // Gemini có thể mất vài chục giây (server chờ tối đa 85 giây) — cùng timeout với "AI viết hộ" chatbot.
+  const res = await api.post('/forms/ai-draft', payload, { timeout: 120000 });
+  return res.data?.data;
+}
+

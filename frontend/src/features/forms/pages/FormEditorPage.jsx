@@ -17,6 +17,7 @@ import FormEditorTopbar from '../components/editor/FormEditorTopbar';
 import FieldListPane from '../components/editor/FieldListPane';
 import FormPreviewPane from '../components/editor/FormPreviewPane';
 import FormSettingsModal from '../components/editor/FormSettingsModal';
+import FormAiTools from '../components/editor/FormAiTools';
 import {
   DEFAULT_SETTINGS,
   DEFAULT_BOOKING,
@@ -118,6 +119,11 @@ export default function FormEditorPage() {
   const [selectedUid, setSelectedUid] = useState(null);
   const activeUid = fields.some((f) => f.uid === selectedUid) ? selectedUid : (fields[0]?.uid ?? null);
   const scrollTargetUidRef = useRef(null);
+  // Bản mới nhất của `fields` cho các lời gọi bất đồng bộ của nút AI (kết quả về sau vài chục giây, closure cũ đã lỗi thời).
+  const fieldsRef = useRef(fields);
+  fieldsRef.current = fields;
+  // Hoàn tác 1 bước cho "AI viết lại câu chữ": chữ cũ của các trường vừa bị đổi, theo uid. null = không có gì để hoàn tác.
+  const [rewriteUndo, setRewriteUndo] = useState(null);
   const [settings, setSettings] = useState(() => ({
     ...DEFAULT_SETTINGS,
     submitButtonText: t('publicForm.defaultSubmit'),
@@ -364,6 +370,142 @@ export default function FormEditorPage() {
     // Mẫu bật tính năng nào thì nhắc khai tiếp (khung giờ / tài khoản nhận tiền) ngay đầu danh sách trường.
     setSetupHints({ booking: Boolean(built.bookingWeeklySlots), payment: Boolean(built.enablePayment) });
     setTemplateChosen(true);
+  };
+
+  // AI dựng nháp từ mô tả (PR-5): đổ vào ĐÚNG các state trình soạn như bước chọn mẫu rồi vào trình soạn. CHƯA lưu — người dùng xem lại,
+  // sửa tuỳ ý rồi mới bấm Lưu (đường lưu cũ, không có API riêng).
+  // `draft.paymentConfig` (backend luôn trả null) KHÔNG được đụng tới: AI không bao giờ điền tiền / tài khoản nhận tiền — loại thu tiền
+  // chỉ kèm `needsAttention: ['payment']` để nhắc chủ tự khai ở tab Thanh toán (nhân viên không khai được nên không nhắc họ).
+  const handleAiDraft = (draft) => {
+    const built = (Array.isArray(draft?.fields) ? draft.fields : []).map((f) => {
+      const type = f.type || 'short_text';
+      const isBlock = isDisplayFieldType(type);
+      return makeField({
+        label: String(f.label || ''),
+        type,
+        required: !isBlock && Boolean(f.required),
+        role: isBlock || NO_ROLE_FIELD_TYPES.includes(type) ? '' : f.role || '',
+        placeholder: String(f.placeholder || ''),
+        helpText: String(f.helpText || ''),
+        width: !isBlock && f.width === 'half' ? 'half' : 'full',
+        options: OPTION_FIELD_TYPES.includes(type) && Array.isArray(f.options) ? f.options.map(String) : [],
+      });
+    });
+    if (built.length === 0) {
+      toast.error(t('forms.editorPage.ai.picker.emptyResult'));
+      return;
+    }
+    setFields(built);
+    setSelectedUid(built[0].uid);
+    setRewriteUndo(null);
+    setTitle(String(draft.title || '').slice(0, 200));
+    setDescription(String(draft.description || ''));
+
+    const s = draft.settings || {};
+    setSettings((prev) => ({
+      ...prev,
+      notifyOwner: typeof s.notifyOwner === 'boolean' ? s.notifyOwner : prev.notifyOwner,
+      consentEnabled: typeof s.consentEnabled === 'boolean' ? s.consentEnabled : prev.consentEnabled,
+      sendConfirmation: typeof s.sendConfirmation === 'boolean' ? s.sendConfirmation : prev.sendConfirmation,
+      submitButtonText: typeof s.submitButtonText === 'string' && s.submitButtonText.trim() ? s.submitButtonText : prev.submitButtonText,
+      successMessage: typeof s.successMessage === 'string' && s.successMessage.trim() ? s.successMessage : prev.successMessage,
+    }));
+
+    const bc = draft.bookingConfig;
+    if (bc && bc.enabled) {
+      setBooking({
+        ...DEFAULT_BOOKING,
+        enabled: true,
+        weeklySlots: { ...DEFAULT_WEEKLY_SLOTS, ...bc.weeklySlots },
+        slotCapacity: bc.slotCapacity === null || bc.slotCapacity === undefined ? '' : String(bc.slotCapacity),
+        daysAhead: bc.daysAhead ?? DEFAULT_BOOKING.daysAhead,
+        minNoticeMinutes: bc.minNoticeMinutes ?? DEFAULT_BOOKING.minNoticeMinutes,
+        closedDates: Array.isArray(bc.closedDates) ? bc.closedDates : [],
+      });
+    }
+
+    const needs = Array.isArray(draft.needsAttention) ? draft.needsAttention : [];
+    setSetupHints({ booking: needs.includes('booking') && Boolean(bc?.enabled), payment: needs.includes('payment') && !isEmployee });
+    setTemplateChosen(true);
+    toast.success(t('forms.editorPage.ai.draftReady'));
+  };
+
+  // "AI gợi ý câu hỏi": thêm các câu người dùng đã tích vào CUỐI danh sách (cắt theo trần trường nhập). Trả số trường thực sự thêm.
+  const handleAddAiFields = (suggested) => {
+    const current = fieldsRef.current;
+    const room = Math.max(0, MAX_FIELDS - current.filter((f) => !isDisplayFieldType(f.type)).length);
+    const accepted = suggested.slice(0, room);
+    if (accepted.length === 0) {
+      toast.error(t('forms.editorPage.maxFields'));
+      return 0;
+    }
+    const added = accepted.map((f) => {
+      const type = f.type || 'short_text';
+      return makeField({
+        label: String(f.label || ''),
+        type,
+        required: Boolean(f.required),
+        role: NO_ROLE_FIELD_TYPES.includes(type) ? '' : f.role || '',
+        placeholder: String(f.placeholder || ''),
+        helpText: String(f.helpText || ''),
+        width: f.width === 'half' ? 'half' : 'full',
+        options: OPTION_FIELD_TYPES.includes(type) && Array.isArray(f.options) ? f.options.map(String) : [],
+      });
+    });
+    // Vai trò (tên / email / SĐT) chỉ một trường — gợi ý trùng vai trò với trường đã có thì bỏ vai trò của gợi ý, không cướp của trường cũ.
+    const taken = new Set(current.map((f) => f.role).filter(Boolean));
+    const safe = added.map((f) => {
+      if (f.role && taken.has(f.role)) return { ...f, role: '' };
+      if (f.role) taken.add(f.role);
+      return f;
+    });
+    setFields([...current, ...safe]);
+    focusField(safe[0].uid);
+    toast.success(t(accepted.length < suggested.length ? 'forms.editorPage.ai.tools.suggest.addedCapped' : 'forms.editorPage.ai.tools.suggest.added', { count: safe.length }));
+    return safe.length;
+  };
+
+  // "AI viết lại câu chữ": áp CHỮ (nhãn, hướng dẫn, gợi ý ô, lựa chọn) lên đúng trường theo uid; key/loại/bắt buộc/vai trò/thứ tự không đổi.
+  // Lưu chữ cũ để hoàn tác 1 bước. Trả số trường thực sự đổi chữ.
+  const handleApplyAiRewrite = (patches) => {
+    const byUid = new Map(patches.map((p) => [p.uid, p]));
+    const undo = {};
+    const next = fieldsRef.current.map((f) => {
+      const p = byUid.get(f.uid);
+      if (!p || f.type === 'page_break') return f;
+      const patch = {};
+      if (p.label && p.label !== f.label) patch.label = p.label;
+      if (f.helpText && p.helpText && p.helpText !== f.helpText && f.type !== 'paragraph') patch.helpText = p.helpText;
+      if (f.placeholder && p.placeholder && p.placeholder !== f.placeholder) patch.placeholder = p.placeholder;
+      // Lựa chọn: chỉ đổi khi trường VẪN là loại có lựa chọn và còn đúng số mục lúc AI đọc (người dùng có thể đã sửa trong lúc chờ).
+      if (
+        OPTION_FIELD_TYPES.includes(f.type) &&
+        Array.isArray(p.options) &&
+        p.options.length === f.options.length &&
+        p.options.some((o, i) => o !== f.options[i])
+      ) {
+        patch.options = p.options;
+      }
+      if (Object.keys(patch).length === 0) return f;
+      undo[f.uid] = { label: f.label, helpText: f.helpText, placeholder: f.placeholder, options: [...f.options] };
+      return { ...f, ...patch };
+    });
+    const changed = Object.keys(undo).length;
+    if (changed === 0) {
+      toast.error(t('forms.editorPage.ai.tools.rewrite.nothing'));
+      return 0;
+    }
+    setFields(next);
+    setRewriteUndo(undo);
+    toast.success(t('forms.editorPage.ai.tools.rewrite.done', { count: changed }));
+    return changed;
+  };
+
+  const handleUndoAiRewrite = () => {
+    if (!rewriteUndo) return;
+    setFields((prev) => prev.map((f) => (rewriteUndo[f.uid] ? { ...f, ...rewriteUndo[f.uid] } : f)));
+    setRewriteUndo(null);
+    toast.success(t('forms.editorPage.ai.tools.rewrite.undone'));
   };
 
   // Chọn trường để sửa + cuộn hàng của nó vào tầm nhìn (sau khi danh sách dựng lại).
@@ -1050,6 +1192,7 @@ export default function FormEditorPage() {
       <div className="h-full overflow-auto p-2 md:p-3">
         <FormTemplatePicker
           onSelect={handleSelectTemplate}
+          onAiDraft={handleAiDraft}
           onBack={() => navigate('/app/forms')}
           isEmployee={isEmployee}
         />
@@ -1095,6 +1238,16 @@ export default function FormEditorPage() {
         <div className="h-full overflow-y-auto lg:overflow-hidden">
           <div className="grid grid-cols-1 lg:grid-cols-2 lg:h-full">
             <div className="min-w-0 lg:overflow-y-auto">
+              <FormAiTools
+                title={title}
+                description={description}
+                fields={fields}
+                productId={productId}
+                onAddFields={handleAddAiFields}
+                onApplyRewrite={handleApplyAiRewrite}
+                canUndo={Boolean(rewriteUndo)}
+                onUndo={handleUndoAiRewrite}
+              />
               <FieldListPane
                 fields={fields}
                 errors={errors}
