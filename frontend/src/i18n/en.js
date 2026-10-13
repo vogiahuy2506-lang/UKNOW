@@ -12420,11 +12420,17 @@ Feel free to ask me anything!`,
         creditNote: 'Each use costs 1 AI credit',
         draftReady: 'AI drafted your form — review it, then click Save',
         picker: {
+          // `title`, `create`, `orPickTemplate` are no longer shown on the template step (13/10/2026 layout now mirrors the landing
+          // page creator: badge/heading/createButton/templatesHeading). Kept because the backend helpSeedQuality.spec pins the Vietnamese
+          // wording against the `bieu-mau` / `dat-lich-giu-cho` help articles — update those together, then delete.
           title: 'Let AI draft the form for you',
-          subtitle: 'Describe the form you need and AI builds suitable questions. Review and edit freely, then click Save.',
+          badge: 'AI form assistant',
+          heading: 'What form do you want to create today?',
+          subtitle: 'Describe the form you need — AI builds the questions, you review before saving.',
           label: 'Describe the form you need',
           placeholder: 'E.g. Trial class sign-up form for kids learning English, ask the child\'s age and free time slots',
-          examplesLabel: 'Quick ideas — click to fill in:',
+          shortcutHint: 'Press Enter to send • Shift + Enter for a new line',
+          examplesLabel: 'Ideas:',
           examples: {
             englishTrial: {
               label: 'Trial class sign-up',
@@ -12444,6 +12450,7 @@ Feel free to ask me anything!`,
             },
           },
           create: 'Create with AI',
+          createButton: 'Create form',
           creating: 'AI is drafting your form...',
           creatingHint: 'Usually takes 10–30 seconds, please wait a moment.',
           descriptionRequired: 'Please describe the form you need',
@@ -12451,6 +12458,7 @@ Feel free to ask me anything!`,
           emptyResult: 'AI could not draft any questions — describe the form in more detail and try again',
           failed: 'AI could not draft the form. Try again or pick one of the ready-made templates below.',
           orPickTemplate: 'Or pick a ready-made template:',
+          templatesHeading: 'Or start from a ready-made template:',
         },
         tools: {
           title: 'AI writing help',
@@ -12544,7 +12552,11 @@ Feel free to ask me anything!`,
         fileLabel: 'Attach a file',
       },
       templates: {
+        topbarTitle: 'New form',
         subtitle: 'Pick a template to start with ready-made fields and settings. You can still add, remove and edit everything afterwards.',
+        count: '{count} ready-made templates',
+        blankQuestion: 'Prefer to build it yourself?',
+        blankButton: 'Blank form',
         fields: {
           phone: 'Phone number',
           email: 'Email address',

@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  HiOutlineArrowLeft,
   HiOutlineCalendar,
   HiOutlineCash,
   HiOutlineChatAlt2,
   HiOutlineClipboardList,
   HiOutlineDocument,
+  HiOutlineDocumentText,
+  HiOutlineLightBulb,
+  HiOutlinePaperAirplane,
   HiOutlineSparkles,
 } from 'react-icons/hi';
+import { EditorTopbar } from '../../../components/editor/AdminEditorShell';
 import { useI18n } from '../../../i18n';
 import { FORM_TEMPLATES } from '../constants/formTemplates';
 import { aiDraftForm } from '../services/formAdminApi.service';
@@ -17,6 +20,8 @@ import { getAiDraftErrorMessage } from '../utils/aiDraftError.util';
 const MAX_AI_DESCRIPTION_LENGTH = 1000;
 // Bốn câu mô tả mẫu bấm điền nhanh — chữ nằm ở i18n (`forms.editorPage.ai.picker.examples.<id>.{label,text}`).
 const AI_EXAMPLE_IDS = ['englishTrial', 'clinicBooking', 'courseDeposit', 'satisfactionSurvey'];
+// Mẫu "Trống" không nằm trong lưới thẻ mà đứng ở hàng cuối ("Muốn tự soạn từ đầu?").
+const BLANK_TEMPLATE_ID = 'blank';
 
 const TEMPLATE_ICONS = {
   consult: HiOutlineChatAlt2,
@@ -27,11 +32,15 @@ const TEMPLATE_ICONS = {
 };
 
 /**
- * Bước đầu khi TẠO biểu mẫu mới: nhờ AI dựng từ mô tả, hoặc chọn một mẫu dựng sẵn (hoặc "Trống").
+ * Bước đầu khi TẠO biểu mẫu mới: nhờ AI dựng từ mô tả, hoặc chọn một mẫu dựng sẵn (hoặc "Biểu mẫu trống").
  * Chỉ hiện ở /app/forms/new — sửa biểu mẫu cũ đi thẳng vào trình soạn.
  *
+ * Bố cục (13/10/2026) CHÉP từ màn tạo landing page (`landing-canvas/components/CanvasChatPanel.jsx`, khối `CenteredStudioView`):
+ * thanh trên gọn → hero căn giữa → khung soạn lớn (Enter gửi, Shift+Enter xuống dòng) → chip gợi ý → lưới thẻ mẫu gọn → hàng cuối
+ * "Muốn tự soạn từ đầu?". Chỉ chép KIỂU, không dùng chung component với landing (hai luồng khác nhau).
+ *
  * AI (PR-5): `POST /forms/ai-draft` chỉ trả NHÁP — `onAiDraft(draft)` đổ nháp vào trình soạn, KHÔNG lưu; người dùng xem lại rồi
- * bấm Lưu. Lỗi (hết lượt AI, AI trả về hỏng…) hiện ngay tại ô AI, các mẫu thường bên dưới vẫn chọn được.
+ * bấm Lưu. Lỗi (hết lượt AI, AI trả về hỏng…) hiện ngay dưới khung soạn, các mẫu thường bên dưới vẫn chọn được.
  *
  * @param {{
  *   onSelect: (templateId: string) => void,
@@ -94,141 +103,194 @@ export default function FormTemplatePicker({ onSelect, onAiDraft, onBack, isEmpl
     }
   };
 
+  // Enter = gửi, Shift+Enter = xuống dòng (như ô soạn của landing). Gõ tiếng Việt bằng bộ gõ có lúc Enter chỉ để chốt chữ đang gõ
+  // dở (`isComposing`) — đó không phải lệnh gửi, nếu không sẽ trừ một lượt AI khi người dùng chưa nhập xong.
+  const handleDescriptionKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent?.isComposing) {
+      e.preventDefault();
+      handleDraft();
+    }
+  };
+
+  const blankTemplate = FORM_TEMPLATES.find((template) => template.id === BLANK_TEMPLATE_ID);
+  const gridTemplates = FORM_TEMPLATES.filter((template) => template.id !== BLANK_TEMPLATE_ID);
+
   return (
-    <div className="space-y-6" data-testid="form-template-picker">
-      <div className="flex items-center gap-3 py-3.5 border-b border-gray-100 dark:border-dk-border">
-        <button
-          type="button"
-          onClick={onBack}
-          className="p-2.5 rounded-xl border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-raised hover:bg-gray-50 dark:hover:bg-dk-strong text-gray-600 dark:text-dk-text hover:text-gray-900 dark:hover:text-dk-text shadow-2xs transition-all"
-          title={t('forms.submissionsPage.backToForms')}
-        >
-          <HiOutlineArrowLeft className="w-5 h-5" />
-        </button>
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-dk-text">{t('forms.createNew')}</h1>
-          <p className="text-xs sm:text-sm text-gray-500 dark:text-dk-text2 mt-0.5">{t('forms.editorPage.templates.subtitle')}</p>
-        </div>
-      </div>
+    <div className="flex flex-col h-full min-h-0 bg-gray-50 dark:bg-dk-bg overflow-hidden" data-testid="form-template-picker">
+      <EditorTopbar
+        onBack={onBack}
+        backTitle={t('forms.submissionsPage.backToForms')}
+        icon={HiOutlineDocumentText}
+        title={t('forms.editorPage.templates.topbarTitle')}
+      />
 
-      {onAiDraft && (
-        <section
-          data-testid="form-ai-draft-card"
-          aria-busy={isDrafting}
-          className="rounded-2xl border border-violet-200 dark:border-violet-900/50 bg-violet-50/60 dark:bg-violet-950/20 p-4 sm:p-5 space-y-3"
-        >
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white shadow-md shadow-violet-500/25 flex items-center justify-center shrink-0">
-              <HiOutlineSparkles className="w-5 h-5" />
+      <div className="flex-1 min-h-0 overflow-y-auto bg-gradient-to-b from-gray-50/70 via-white to-orange-50/20 dark:from-dk-bg dark:via-dk-surface dark:to-dk-bg flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8">
+        <div className="w-full max-w-3xl my-auto py-6">
+          <div className="w-full flex flex-col items-center text-center">
+            {onAiDraft ? (
+              <>
+                {/* Badge lấp lánh */}
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-orange-500/10 border border-orange-200/60 dark:border-orange-500/30 text-orange-700 dark:text-orange-400 text-xs font-semibold mb-3 shadow-2xs backdrop-blur-sm animate-pulse">
+                  <HiOutlineSparkles className="w-4 h-4 text-orange-500 dark:text-orange-400" />
+                  <span>{t('forms.editorPage.ai.picker.badge')}</span>
+                </div>
+
+                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-gray-900 dark:text-dk-text tracking-tight leading-tight">
+                  {t('forms.editorPage.ai.picker.heading')}
+                </h1>
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-dk-text2 max-w-xl mt-2 leading-relaxed">
+                  {t('forms.editorPage.ai.picker.subtitle')}
+                </p>
+
+                <section data-testid="form-ai-draft-card" aria-busy={isDrafting} className="w-full mt-6 text-left">
+                  {/* Khung soạn lớn ở giữa */}
+                  <div className="bg-white dark:bg-dk-surface rounded-2xl border border-gray-200/90 dark:border-dk-border shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.4)] hover:shadow-[0_12px_36px_rgb(0,0,0,0.09)] focus-within:border-orange-400 dark:focus-within:border-orange-500 focus-within:ring-4 focus-within:ring-orange-500/10 transition-all p-3 sm:p-4">
+                    <label htmlFor="form-ai-description" className="sr-only">
+                      {t('forms.editorPage.ai.picker.label')}
+                    </label>
+                    <div className="flex flex-col sm:flex-row sm:items-end gap-2">
+                      <textarea
+                        id="form-ai-description"
+                        data-testid="form-ai-description"
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        onKeyDown={handleDescriptionKeyDown}
+                        maxLength={MAX_AI_DESCRIPTION_LENGTH}
+                        rows={3}
+                        disabled={isDrafting}
+                        placeholder={t('forms.editorPage.ai.picker.placeholder')}
+                        className="flex-1 min-w-0 resize-none bg-gray-50/60 dark:bg-dk-inset hover:bg-white dark:hover:bg-dk-surface focus:bg-white dark:focus:bg-dk-inset border border-gray-200 dark:border-dk-border focus:border-orange-500 dark:focus:border-orange-500 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-gray-900 dark:text-dk-text placeholder:text-gray-400 dark:placeholder:text-dk-muted focus:outline-none focus:ring-2 focus:ring-orange-500/15 disabled:bg-gray-50 dark:disabled:bg-dk-bg disabled:opacity-60 disabled:cursor-not-allowed transition-all"
+                        style={{ maxHeight: 180 }}
+                      />
+                      <button
+                        type="button"
+                        data-testid="form-ai-draft-submit"
+                        onClick={handleDraft}
+                        disabled={isDrafting}
+                        className="inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:from-orange-600 hover:to-amber-600 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed transition-all shrink-0 shadow-xs text-xs font-bold"
+                      >
+                        {isDrafting ? (
+                          <>
+                            <span className="inline-block animate-spin rounded-full h-4 w-4 border-2 border-white/40 border-t-white" aria-hidden="true" />
+                            <span>{t('forms.editorPage.ai.picker.creating')}</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>{t('forms.editorPage.ai.picker.createButton')}</span>
+                            <HiOutlinePaperAirplane className="w-4 h-4 -rotate-45" aria-hidden="true" />
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] text-gray-400 dark:text-dk-muted mt-2 px-1 select-none">
+                      <span>{t('forms.editorPage.ai.picker.shortcutHint')}</span>
+                      <span>{isDrafting ? t('forms.editorPage.ai.picker.creatingHint') : t('forms.editorPage.ai.creditNote')}</span>
+                    </div>
+                  </div>
+
+                  {error && (
+                    <p role="alert" data-testid="form-ai-draft-error" className="mt-3 text-xs text-red-600 dark:text-red-400 p-3 bg-red-50 dark:bg-red-950/40 rounded-xl">
+                      {error}
+                    </p>
+                  )}
+
+                  {/* Gợi ý nhanh: bấm chỉ điền sẵn mô tả — KHÔNG tự gửi, không tốn lượt AI. */}
+                  <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                    <span className="text-[11px] font-semibold text-gray-500 dark:text-dk-text2">{t('forms.editorPage.ai.picker.examplesLabel')}</span>
+                    {AI_EXAMPLE_IDS.map((id) => (
+                      <button
+                        key={id}
+                        type="button"
+                        disabled={isDrafting}
+                        data-testid={`form-ai-example-${id}`}
+                        onClick={() => {
+                          setDescription(t(`forms.editorPage.ai.picker.examples.${id}.text`));
+                          setError('');
+                        }}
+                        className="px-3 py-1.5 rounded-full border border-gray-200/90 dark:border-dk-border bg-white dark:bg-dk-raised text-xs font-medium text-gray-700 dark:text-dk-text hover:border-orange-400 dark:hover:border-orange-500/60 hover:text-orange-600 dark:hover:text-orange-400 hover:bg-orange-50 dark:hover:bg-dk-strong transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        {t(`forms.editorPage.ai.picker.examples.${id}.label`)}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              </>
+            ) : (
+              <>
+                <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-dk-text tracking-tight leading-tight">{t('forms.createNew')}</h1>
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-dk-text2 max-w-xl mt-2 leading-relaxed">{t('forms.editorPage.templates.subtitle')}</p>
+              </>
+            )}
+
+            {/* Mẫu có sẵn */}
+            <div className="w-full mt-8 text-left">
+              {onAiDraft && (
+                <div className="flex items-center justify-between mb-3 px-1">
+                  <span className="text-xs font-bold text-gray-600 dark:text-dk-text uppercase tracking-wider flex items-center gap-1.5">
+                    <HiOutlineLightBulb className="w-4 h-4 text-amber-500 dark:text-amber-400" />
+                    {t('forms.editorPage.ai.picker.templatesHeading')}
+                  </span>
+                  <span className="text-[11px] text-gray-400 dark:text-dk-muted font-medium">
+                    {t('forms.editorPage.templates.count', { count: gridTemplates.length })}
+                  </span>
+                </div>
+              )}
+
+              <div data-testid="form-template-grid" className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {gridTemplates.map((template) => {
+                  const Icon = TEMPLATE_ICONS[template.id] || HiOutlineDocument;
+                  const locked = template.ownerOnly && isEmployee;
+                  return (
+                    <button
+                      key={template.id}
+                      type="button"
+                      // Đang chờ AI thì khoá luôn các mẫu: chọn mẫu giữa chừng rồi nháp AI về sau là một đường đua không ai muốn.
+                      disabled={locked || isDrafting}
+                      onClick={() => onSelect(template.id)}
+                      data-testid={`form-template-${template.id}`}
+                      className="group relative flex items-start gap-3 p-3.5 rounded-xl border border-gray-200/90 dark:border-dk-border bg-white dark:bg-dk-surface hover:border-orange-400 dark:hover:border-orange-500/60 hover:shadow-sm dark:hover:bg-dk-raised hover:scale-[1.01] transition-all text-left cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-none disabled:hover:border-gray-200/90 dark:disabled:hover:border-dk-border dark:disabled:hover:bg-dk-surface"
+                    >
+                      <span className="w-9 h-9 rounded-lg bg-orange-50 dark:bg-orange-500/15 text-orange-600 dark:text-orange-400 flex items-center justify-center shrink-0 group-hover:bg-orange-100 dark:group-hover:bg-orange-500/25 transition-all">
+                        <Icon className="w-5 h-5" />
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs sm:text-sm font-bold text-gray-900 dark:text-dk-text group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors truncate">
+                          {t(template.nameKey)}
+                        </div>
+                        <p className="text-[11px] text-gray-500 dark:text-dk-text2 mt-0.5 line-clamp-2 leading-relaxed">{t(template.descKey)}</p>
+                        {locked && (
+                          <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-1.5 leading-relaxed">{t('forms.editorPage.payment.employeeReadOnlyNotice')}</p>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <div className="min-w-0">
-              <h2 className="text-base font-bold text-gray-900 dark:text-dk-text">{t('forms.editorPage.ai.picker.title')}</h2>
-              <p className="text-xs text-gray-600 dark:text-dk-text2 mt-0.5 leading-relaxed">{t('forms.editorPage.ai.picker.subtitle')}</p>
-            </div>
-          </div>
 
-          <div className="space-y-1.5">
-            <label htmlFor="form-ai-description" className="text-xs font-semibold text-gray-700 dark:text-dk-text block">
-              {t('forms.editorPage.ai.picker.label')}
-            </label>
-            <textarea
-              id="form-ai-description"
-              data-testid="form-ai-description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              maxLength={MAX_AI_DESCRIPTION_LENGTH}
-              rows={3}
-              disabled={isDrafting}
-              placeholder={t('forms.editorPage.ai.picker.placeholder')}
-              className="input resize-y min-h-[84px] text-sm w-full disabled:opacity-60"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <p className="text-[11px] font-semibold text-gray-500 dark:text-dk-text2">{t('forms.editorPage.ai.picker.examplesLabel')}</p>
-            <div className="flex flex-wrap gap-2">
-              {AI_EXAMPLE_IDS.map((id) => (
+            {/* Hàng cuối: tự soạn từ đầu */}
+            {blankTemplate && (
+              <div
+                data-testid="form-template-blank-row"
+                className="w-full mt-7 pt-5 border-t border-gray-200/60 dark:border-dk-border flex flex-wrap items-center justify-center gap-3 text-xs text-gray-500 dark:text-dk-text2"
+              >
+                <span className="text-gray-400 dark:text-dk-muted">{t('forms.editorPage.templates.blankQuestion')}</span>
                 <button
-                  key={id}
                   type="button"
                   disabled={isDrafting}
-                  data-testid={`form-ai-example-${id}`}
-                  onClick={() => {
-                    setDescription(t(`forms.editorPage.ai.picker.examples.${id}.text`));
-                    setError('');
-                  }}
-                  className="px-3 py-1.5 rounded-full border border-violet-200 dark:border-violet-800/60 bg-white dark:bg-dk-raised text-xs font-medium text-violet-700 dark:text-violet-300 hover:bg-violet-100/70 dark:hover:bg-dk-strong transition disabled:opacity-60"
+                  onClick={() => onSelect(blankTemplate.id)}
+                  data-testid={`form-template-${blankTemplate.id}`}
+                  title={t(blankTemplate.descKey)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-gray-200 dark:border-dk-border/80 bg-white dark:bg-dk-raised hover:bg-gray-50 dark:hover:bg-dk-strong hover:border-gray-300 dark:hover:border-dk-border-strong text-gray-700 dark:text-dk-text font-semibold transition-all shadow-2xs cursor-pointer active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100"
                 >
-                  {t(`forms.editorPage.ai.picker.examples.${id}.label`)}
+                  <HiOutlineDocument className="w-4 h-4 text-gray-500 dark:text-dk-text2" aria-hidden="true" />
+                  <span>{t('forms.editorPage.templates.blankButton')}</span>
                 </button>
-              ))}
-            </div>
-          </div>
-
-          {error && (
-            <p role="alert" data-testid="form-ai-draft-error" className="text-xs text-red-600 dark:text-red-400 p-3 bg-red-50 dark:bg-red-950/40 rounded-xl">
-              {error}
-            </p>
-          )}
-
-          <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2">
-            <span className="text-[11px] text-gray-500 dark:text-dk-text2">
-              {isDrafting ? t('forms.editorPage.ai.picker.creatingHint') : t('forms.editorPage.ai.creditNote')}
-            </span>
-            <button
-              type="button"
-              data-testid="form-ai-draft-submit"
-              onClick={handleDraft}
-              disabled={isDrafting}
-              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white text-sm font-bold shadow-xs transition disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {isDrafting ? (
-                <>
-                  <span className="inline-block animate-spin rounded-full h-4 w-4 border-2 border-white/40 border-t-white" aria-hidden="true" />
-                  <span>{t('forms.editorPage.ai.picker.creating')}</span>
-                </>
-              ) : (
-                <>
-                  <HiOutlineSparkles className="w-4 h-4" />
-                  <span>{t('forms.editorPage.ai.picker.create')}</span>
-                </>
-              )}
-            </button>
-          </div>
-        </section>
-      )}
-
-      {onAiDraft && (
-        <p className="text-xs font-semibold text-gray-500 dark:text-dk-text2 -mb-2">{t('forms.editorPage.ai.picker.orPickTemplate')}</p>
-      )}
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {FORM_TEMPLATES.map((template) => {
-          const Icon = TEMPLATE_ICONS[template.id] || HiOutlineDocument;
-          const locked = template.ownerOnly && isEmployee;
-          return (
-            <button
-              key={template.id}
-              type="button"
-              // Đang chờ AI thì khoá luôn các mẫu: chọn mẫu giữa chừng rồi nháp AI về sau là một đường đua không ai muốn.
-              disabled={locked || isDrafting}
-              onClick={() => onSelect(template.id)}
-              data-testid={`form-template-${template.id}`}
-              className="text-left p-5 rounded-2xl border border-gray-200/90 dark:border-dk-border bg-white dark:bg-dk-surface shadow-xs hover:border-orange-300 dark:hover:border-orange-500/50 hover:shadow-sm active:scale-[0.99] transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:border-gray-200/90 dark:disabled:hover:border-dk-border disabled:hover:shadow-xs space-y-3"
-            >
-              <div className="inline-flex p-2.5 rounded-xl bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400">
-                <Icon className="w-6 h-6" />
               </div>
-              <div>
-                <div className="text-base font-bold text-gray-900 dark:text-dk-text">{t(template.nameKey)}</div>
-                <p className="text-xs text-gray-500 dark:text-dk-text2 mt-1 leading-relaxed">{t(template.descKey)}</p>
-                {locked && (
-                  <p className="text-xs text-amber-700 dark:text-amber-400 mt-2">{t('forms.editorPage.payment.employeeReadOnlyNotice')}</p>
-                )}
-              </div>
-            </button>
-          );
-        })}
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -12432,11 +12432,17 @@ export default {
         creditNote: 'Mỗi lần dùng 1 lượt AI',
         draftReady: 'AI đã soạn nháp biểu mẫu — xem lại rồi bấm Lưu nhé',
         picker: {
+          // `title`, `create`, `orPickTemplate` không còn dùng trên màn chọn mẫu (13/10/2026 đổi bố cục giống tạo landing:
+          // badge/heading/createButton/templatesHeading). CÒN GIỮ vì helpSeedQuality.spec (backend) ghim chữ này với bài hướng dẫn
+          // `bieu-mau` / `dat-lich-giu-cho` — đổi bài hướng dẫn cùng spec đó rồi mới xoá.
           title: 'Để AI soạn biểu mẫu giúp bạn',
-          subtitle: 'Mô tả biểu mẫu bạn cần, AI dựng sẵn các câu hỏi phù hợp. Bạn xem lại, chỉnh sửa thoải mái rồi mới bấm Lưu.',
+          badge: 'Trợ lý AI soạn biểu mẫu',
+          heading: 'Bạn muốn tạo biểu mẫu gì hôm nay?',
+          subtitle: 'Mô tả biểu mẫu bạn cần — AI dựng sẵn các câu hỏi, bạn xem lại rồi mới lưu.',
           label: 'Mô tả biểu mẫu bạn cần',
           placeholder: 'VD: Form đăng ký học thử tiếng Anh cho trẻ, hỏi tuổi bé và khung giờ rảnh',
-          examplesLabel: 'Gợi ý nhanh — bấm để điền sẵn:',
+          shortcutHint: 'Nhấn Enter để gửi • Shift + Enter để xuống dòng',
+          examplesLabel: 'Gợi ý:',
           examples: {
             englishTrial: {
               label: 'Đăng ký học thử',
@@ -12456,6 +12462,7 @@ export default {
             },
           },
           create: 'Tạo bằng AI',
+          createButton: 'Tạo biểu mẫu',
           creating: 'AI đang soạn biểu mẫu...',
           creatingHint: 'Thường mất 10–30 giây, bạn vui lòng chờ một chút.',
           descriptionRequired: 'Vui lòng mô tả biểu mẫu bạn cần',
@@ -12463,6 +12470,7 @@ export default {
           emptyResult: 'AI chưa soạn được câu hỏi nào, bạn mô tả rõ hơn rồi thử lại nhé',
           failed: 'AI chưa soạn được biểu mẫu. Bạn thử lại hoặc chọn một mẫu có sẵn bên dưới nhé.',
           orPickTemplate: 'Hoặc chọn một mẫu có sẵn:',
+          templatesHeading: 'Hoặc bắt đầu từ mẫu có sẵn:',
         },
         tools: {
           title: 'AI hỗ trợ soạn',
@@ -12556,7 +12564,11 @@ export default {
         fileLabel: 'Đính kèm tệp',
       },
       templates: {
+        topbarTitle: 'Biểu mẫu mới',
         subtitle: 'Chọn một mẫu để có sẵn các ô và cài đặt phù hợp. Sau đó bạn vẫn thêm, bớt, sửa mọi thứ được.',
+        count: '{count} mẫu có sẵn',
+        blankQuestion: 'Muốn tự soạn từ đầu?',
+        blankButton: 'Biểu mẫu trống',
         fields: {
           phone: 'Số điện thoại',
           email: 'Địa chỉ Email',

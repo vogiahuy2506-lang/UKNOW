@@ -1399,7 +1399,7 @@ export default function FormEditorPage() {
   // Biểu mẫu MỚI bắt đầu bằng chọn mẫu; sửa biểu mẫu cũ thì không có bước này.
   if (!isEditMode && !templateChosen) {
     return (
-      <div className="h-full overflow-auto p-2 md:p-3">
+      <div className="h-full">
         <FormTemplatePicker
           onSelect={handleSelectTemplate}
           onAiDraft={handleAiDraft}
