@@ -97,7 +97,7 @@ describe('chuông "Có bài nộp mới"', () => {
     expect(bells[0].link).toBe(`/app/forms/${form.id}/submissions`);
     expect(bells[0].severity).toBe('info');
     expect(bells[0].read_at).toBeNull();
-    expect(bells[0].metadata).toMatchObject({ formId: String(form.id), formTitle: 'Đăng ký tư vấn' });
+    expect(bells[0].metadata).toMatchObject({ formId: String(form.id), formTitle: 'Đăng ký tư vấn', workspaceOwnerId: String(owner.id) });
     expect(bells[0].dedupe_key).toMatch(new RegExp(`^form_submission:${form.id}:\\d+$`));
   });
 
@@ -262,6 +262,8 @@ describe('chuông "Có bài nộp mới" — nhân viên có quyền forms', () 
     expect(staffBells[0].title).toContain('Đăng ký tư vấn');
     expect(staffBells[0].message).toContain('Nguyễn Văn An');
     expect(staffBells[0].link).toBe(`/app/forms/${form.id}/submissions`);
+    // Chuông của nhân viên mang id CHỦ (không phải id nhân viên): frontend đổi sang không gian của chủ trước khi mở link.
+    expect(staffBells[0].metadata.workspaceOwnerId).toBe(String(owner.id));
     expect(staffBells[0].read_at).toBeNull();
     expect(staffBells[0].dedupe_key).toMatch(new RegExp(`^form_submission:${form.id}:\\d+$`));
     const ownerBells = await bellsOf(owner.id);

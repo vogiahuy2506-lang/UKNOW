@@ -111,6 +111,9 @@ export async function notifyFormSubmission(input, now = new Date()) {
       metadata: {
         formId: String(form.id),
         formTitle: title,
+        // Chuông đi tới cả nhân viên: frontend đọc trường này để đổi sang đúng không gian làm việc của chủ trước khi mở `link`
+        // (nhân viên có gói riêng mặc định ở không gian cá nhân, mở biểu mẫu của chủ ngoài không gian đó là 404).
+        workspaceOwnerId: String(ownerId),
         ...(submission?.id != null ? { firstSubmissionId: String(submission.id) } : {}),
       },
       dedupeKey: buildFormSubmissionBellDedupeKey(form.id, now),

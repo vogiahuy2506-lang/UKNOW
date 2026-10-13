@@ -285,3 +285,122 @@ describe('NotificationBell — dropdown', () => {
     expect(screen.queryByText('Campaign failed')).not.toBeInTheDocument();
   });
 });
+
+describe('NotificationBell — chuông mang không gian làm việc (PLAN_CHUONG_DOI_KHONG_GIAN)', () => {
+  const FORM_LINK = '/app/forms/41/submissions';
+  const OWNER_ID = 10;
+  const member = (extra = {}) => ({
+    ownerId: OWNER_ID,
+    ownerName: 'Công ty A',
+    permissions: { forms: true },
+    acceptedAt: '2026-01-01T00:00:00Z',
+    ...extra,
+  });
+  const realSwitchContext = useAuthStore.getState().switchContext;
+  const formBell = (id, workspaceOwnerId = String(OWNER_ID)) =>
+    makeNotification(id, { eventType: 'form_submission_received', link: FORM_LINK, metadata: { formId: '41', workspaceOwnerId } });
+
+  const seedWorkspace = ({ memberships = [member()], activeContext = { type: 'self' }, switchContext } = {}) =>
+    useAuthStore.setState({
+      isAuthenticated: true,
+      user: { id: 7, role: 'user', memberships },
+      activeContext,
+      ...(switchContext ? { switchContext } : {}),
+    });
+
+  /** Mở chuông rồi bấm một dòng. */
+  const clickBell = async (title) => {
+    const user = userEvent.setup();
+    await renderBellReady();
+    await user.click(screen.getByTestId('notification-bell'));
+    await user.click(screen.getByText(title));
+  };
+
+  afterEach(() => {
+    useAuthStore.setState({ switchContext: realSwitchContext, activeContext: { type: 'self' } });
+  });
+
+  it('THỨ TỰ: switchContext(chủ) phải XONG rồi mới navigate tới link — navigate không chạy khi switchContext còn dở', async () => {
+    let finishSwitch;
+    const switchContext = vi.fn(() => new Promise((resolve) => { finishSwitch = resolve; }));
+    seedWorkspace({ switchContext });
+    installFakeServer(api, [formBell(61)]);
+    await clickBell('Tiêu đề 61');
+
+    await waitFor(() => expect(switchContext).toHaveBeenCalledWith(String(OWNER_ID)));
+    // Cho microtask/timer chạy thêm: nếu code điều hướng không chờ, navigate đã bị gọi ở đây.
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+    expect(mockNavigate).not.toHaveBeenCalled();
+
+    await act(async () => { finishSwitch(); });
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith(FORM_LINK));
+    expect(switchContext.mock.invocationCallOrder[0]).toBeLessThan(mockNavigate.mock.invocationCallOrder[0]);
+    expect(api.markRead).toHaveBeenCalledWith(61); // đánh dấu đã đọc vẫn diễn ra như cũ
+  });
+
+  it('store thật: khi navigate chạy thì activeContext ĐÃ là không gian của chủ (nên PermissionRoute của trang đích thấy đúng quyền)', async () => {
+    seedWorkspace();
+    let contextAtNavigate = null;
+    mockNavigate.mockImplementation(() => { contextAtNavigate = useAuthStore.getState().activeContext; });
+    installFakeServer(api, [formBell(62)]);
+    await clickBell('Tiêu đề 62');
+
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith(FORM_LINK));
+    expect(contextAtNavigate).toMatchObject({ type: 'employee', ownerId: OWNER_ID, permissions: { forms: true } });
+  });
+
+  it('chuông về không gian CỦA CHÍNH MÌNH khi đang ở công ty khác → switchContext(null) trước navigate', async () => {
+    const switchContext = vi.fn().mockResolvedValue(undefined);
+    seedWorkspace({ activeContext: { type: 'employee', ownerId: OWNER_ID }, switchContext });
+    installFakeServer(api, [formBell(63, '7')]);
+    await clickBell('Tiêu đề 63');
+
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith(FORM_LINK));
+    expect(switchContext).toHaveBeenCalledWith(null);
+    expect(switchContext.mock.invocationCallOrder[0]).toBeLessThan(mockNavigate.mock.invocationCallOrder[0]);
+  });
+
+  it('chuông không có workspaceOwnerId / đã đúng không gian → KHÔNG gọi switchContext, vẫn điều hướng', async () => {
+    const switchContext = vi.fn().mockResolvedValue(undefined);
+    seedWorkspace({ activeContext: { type: 'employee', ownerId: OWNER_ID }, switchContext });
+    installFakeServer(api, [
+      makeNotification(64, { link: '/app/delivery-monitor' }),
+      formBell(65),
+    ]);
+    const user = userEvent.setup();
+    await renderBellReady();
+
+    await user.click(screen.getByTestId('notification-bell'));
+    await user.click(screen.getByText('Tiêu đề 64'));
+    await waitFor(() => expect(mockNavigate).toHaveBeenLastCalledWith('/app/delivery-monitor'));
+    await user.click(screen.getByTestId('notification-bell'));
+    await user.click(screen.getByText('Tiêu đề 65'));
+    await waitFor(() => expect(mockNavigate).toHaveBeenLastCalledWith(FORM_LINK));
+
+    expect(switchContext).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['bị khoá (isLocked)', { isLocked: true }],
+    ['chưa chấp nhận lời mời (acceptedAt null)', { acceptedAt: null }],
+  ])('membership %s → KHÔNG đổi không gian (tránh 403 → đăng xuất), vẫn điều hướng', async (_label, extra) => {
+    const switchContext = vi.fn().mockResolvedValue(undefined);
+    seedWorkspace({ memberships: [member(extra)], switchContext });
+    installFakeServer(api, [formBell(66)]);
+    await clickBell('Tiêu đề 66');
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith(FORM_LINK));
+    expect(switchContext).not.toHaveBeenCalled();
+  });
+
+  it('switchContext bị lỗi → vẫn điều hướng tới link', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const switchContext = vi.fn().mockRejectedValue(new Error('mạng đứt'));
+    seedWorkspace({ switchContext });
+    installFakeServer(api, [formBell(67)]);
+    await clickBell('Tiêu đề 67');
+
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith(FORM_LINK));
+    expect(switchContext).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalled();
+  });
+});

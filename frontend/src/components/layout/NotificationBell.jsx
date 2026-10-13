@@ -10,6 +10,7 @@ import {
   useNotificationsQuery,
 } from '../../hooks/queries/useNotificationsQuery';
 import NotificationItem from '../../features/notifications/components/NotificationItem';
+import { ensureNotificationWorkspace } from '../../features/notifications/utils/ensureNotificationWorkspace';
 import { openNotificationLink } from '../../features/notifications/utils/openNotificationLink';
 import {
   notificationPreferencesPath,
@@ -26,7 +27,7 @@ const BADGE_MAX = 99;
  */
 export default function NotificationBell() {
   const { t } = useI18n();
-  const { user } = useAuthStore();
+  const { user, activeContext, switchContext } = useAuthStore();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
@@ -55,9 +56,11 @@ export default function NotificationBell() {
   const unreadCount = Number(query.data?.unreadCount) || 0;
   const badgeText = unreadCount > BADGE_MAX ? `${BADGE_MAX}+` : String(unreadCount);
 
-  const handleSelect = (item) => {
+  const handleSelect = async (item) => {
     if (!item.read) markRead.mutate(item.id);
     setOpen(false);
+    // Chuông của chủ tới tay nhân viên (hoặc ngược lại): đổi đúng không gian XONG rồi mới mở link, nếu không link 404.
+    await ensureNotificationWorkspace(item, { user, activeContext, switchContext });
     openNotificationLink(item.link, navigate);
   };
 

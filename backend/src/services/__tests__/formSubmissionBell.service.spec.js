@@ -93,17 +93,28 @@ describe('notifyFormSubmission', () => {
     expect(notifyUsers.mock.calls[2][0].messageEn).toContain('A customer');
   });
 
-  it('metadata chỉ gồm id/tên biểu mẫu + id bài nộp đầu — KHÔNG có thông tin cá nhân của người nộp', async () => {
+  it('metadata chỉ gồm id/tên biểu mẫu + id chủ không gian + id bài nộp đầu — KHÔNG có thông tin cá nhân của người nộp', async () => {
     await notifyFormSubmission(
       { form: FORM, submission: { id: 900 }, respondentName: 'Nguyễn An', respondentEmail: 'an@x.vn', respondentPhone: '0901234567' },
       NOW
     );
     const { metadata } = notifyUsers.mock.calls[0][0];
-    expect(metadata).toEqual({ formId: '41', formTitle: 'Đăng ký tư vấn', firstSubmissionId: '900' });
+    expect(metadata).toEqual({ formId: '41', formTitle: 'Đăng ký tư vấn', workspaceOwnerId: '7', firstSubmissionId: '900' });
     const json = JSON.stringify(metadata);
     expect(json).not.toContain('Nguyễn An');
     expect(json).not.toContain('an@x.vn');
     expect(json).not.toContain('0901234567');
+  });
+
+  it('metadata.workspaceOwnerId = id CHỦ biểu mẫu dạng chuỗi (frontend dùng nó để đổi đúng không gian trước khi mở link) — kể cả khi chuông có nhân viên nhận', async () => {
+    listActiveMemberIdsWithPermission.mockResolvedValue([11, 12]);
+    await notifyFormSubmission({ form: { ...FORM, workspaceOwnerId: '7' } }, NOW);
+    const arg = notifyUsers.mock.calls[0][0];
+    expect(arg.userIds).toEqual([7, 11, 12]);
+    expect(arg.metadata.workspaceOwnerId).toBe('7');
+    expect(typeof arg.metadata.workspaceOwnerId).toBe('string');
+    // Không có bài nộp → vẫn mang workspaceOwnerId (không phụ thuộc firstSubmissionId).
+    expect(arg.metadata).toEqual({ formId: '41', formTitle: 'Đăng ký tư vấn', workspaceOwnerId: '7' });
   });
 
   it('tên biểu mẫu / người nộp quá dài bị cắt', async () => {

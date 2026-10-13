@@ -11,6 +11,7 @@ import {
   useNotificationsQuery,
 } from '../../hooks/queries/useNotificationsQuery';
 import NotificationItem from '../../features/notifications/components/NotificationItem';
+import { ensureNotificationWorkspace } from '../../features/notifications/utils/ensureNotificationWorkspace';
 import { openNotificationLink } from '../../features/notifications/utils/openNotificationLink';
 import { notificationPreferencesPath } from '../../features/notifications/utils/notificationPaths';
 
@@ -22,7 +23,7 @@ const PAGE_SIZE = 20;
  */
 export default function NotificationsPage() {
   const { t } = useI18n();
-  const { user } = useAuthStore();
+  const { user, activeContext, switchContext } = useAuthStore();
   const navigate = useNavigate();
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [page, setPage] = useState(1);
@@ -45,8 +46,10 @@ export default function NotificationsPage() {
     setPage(1);
   };
 
-  const handleSelect = (item) => {
+  const handleSelect = async (item) => {
     if (!item.read) markRead.mutate(item.id);
+    // Chuông của chủ tới tay nhân viên (hoặc ngược lại): đổi đúng không gian XONG rồi mới mở link, nếu không link 404.
+    await ensureNotificationWorkspace(item, { user, activeContext, switchContext });
     openNotificationLink(item.link, navigate);
   };
 

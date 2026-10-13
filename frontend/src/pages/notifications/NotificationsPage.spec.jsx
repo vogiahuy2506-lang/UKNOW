@@ -1,8 +1,8 @@
 /**
  * Trang Thông báo (PR-2 thông báo, 10/10/2026): danh sách phân trang + lọc chưa đọc, bấm dòng → markRead + điều hướng.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import {
@@ -106,6 +106,57 @@ describe('NotificationsPage', () => {
 
     expect(api.markRead).toHaveBeenCalledWith(9);
     expect(mockNavigate).toHaveBeenCalledWith('/app/billing');
+  });
+
+  describe('chuông mang không gian làm việc (PLAN_CHUONG_DOI_KHONG_GIAN)', () => {
+    const FORM_LINK = '/app/forms/41/submissions';
+    const realSwitchContext = useAuthStore.getState().switchContext;
+    const formBell = (id, workspaceOwnerId = '10') =>
+      makeNotification(id, { eventType: 'form_submission_received', link: FORM_LINK, metadata: { formId: '41', workspaceOwnerId } });
+    const seedWorkspace = (switchContext, memberships = [{ ownerId: 10, ownerName: 'Công ty A', acceptedAt: '2026-01-01T00:00:00Z' }]) =>
+      useAuthStore.setState({
+        isAuthenticated: true,
+        user: { id: 7, role: 'user', memberships },
+        activeContext: { type: 'self' },
+        switchContext,
+      });
+
+    afterEach(() => {
+      useAuthStore.setState({ switchContext: realSwitchContext, activeContext: { type: 'self' } });
+    });
+
+    it('THỨ TỰ: switchContext(chủ) xong rồi mới navigate tới link', async () => {
+      let finishSwitch;
+      const switchContext = vi.fn(() => new Promise((resolve) => { finishSwitch = resolve; }));
+      seedWorkspace(switchContext);
+      installFakeServer(api, [formBell(71)]);
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.click(await screen.findByText('Tiêu đề 71'));
+      await waitFor(() => expect(switchContext).toHaveBeenCalledWith('10'));
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+      expect(mockNavigate).not.toHaveBeenCalled();
+
+      await act(async () => { finishSwitch(); });
+      await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith(FORM_LINK));
+      expect(switchContext.mock.invocationCallOrder[0]).toBeLessThan(mockNavigate.mock.invocationCallOrder[0]);
+      expect(api.markRead).toHaveBeenCalledWith(71);
+    });
+
+    it('membership bị khoá → không đổi không gian, vẫn điều hướng; chuông thường không đụng switchContext', async () => {
+      const switchContext = vi.fn().mockResolvedValue(undefined);
+      seedWorkspace(switchContext, [{ ownerId: 10, isLocked: true, acceptedAt: '2026-01-01T00:00:00Z' }]);
+      installFakeServer(api, [formBell(72), makeNotification(73, { link: '/app/billing' })]);
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.click(await screen.findByText('Tiêu đề 72'));
+      await waitFor(() => expect(mockNavigate).toHaveBeenLastCalledWith(FORM_LINK));
+      await user.click(screen.getByText('Tiêu đề 73'));
+      await waitFor(() => expect(mockNavigate).toHaveBeenLastCalledWith('/app/billing'));
+      expect(switchContext).not.toHaveBeenCalled();
+    });
   });
 
   it('"Đánh dấu đã đọc hết" → gọi read-all; nút khoá khi không còn chưa đọc', async () => {
