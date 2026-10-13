@@ -62,8 +62,9 @@ describe('maskMediaUrls / restoreMediaUrls', () => {
     expect(restoreMediaUrls('<img src="__MEDIA_0__">', [URL_A, URL_B])).toBeNull();
   });
 
-  it('lặp một mã → null (ảnh nhân đôi)', () => {
-    expect(restoreMediaUrls('<img src="__MEDIA_0__"><img src="__MEDIA_0__">', [URL_A, URL_B])).toBeNull();
+  it('lặp một mã (dù đủ mọi mã) → null (ảnh nhân đôi)', () => {
+    // Đủ cả hai mã, chỉ thừa một lần __MEDIA_0__ — tách riêng khỏi ca "thiếu" để bắt đúng lỗi lặp.
+    expect(restoreMediaUrls('<img src="__MEDIA_0__"><img src="__MEDIA_1__"><img src="__MEDIA_0__">', [URL_A, URL_B])).toBeNull();
   });
 
   it('mã lạ (vượt số URL) → null', () => {
