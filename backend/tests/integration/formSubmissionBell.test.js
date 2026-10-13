@@ -2,7 +2,9 @@
  * Integration: chuông "Có bài nộp mới" của Biểu mẫu — PLAN_BIEU_MAU_TUY_BIEN_AI_LANDING_2026-10-11, PR-8c.
  *
  * HTTP thật + DB thật + dispatcher thật: nộp bài công khai → 1 chuông cho CHỦ (nêu tên biểu mẫu + người nộp đầu, bấm mở trang bài nộp);
- * 3 bài trong 10 phút → vẫn 1 chuông; biểu mẫu khác → chuông riêng; công tắc chuông của super admin tắt được; nhân viên KHÔNG nhận (chỉ chủ);
+ * 3 bài trong 10 phút → vẫn 1 chuông; biểu mẫu khác → chuông riêng; công tắc chuông của super admin tắt được;
+ * NHÂN VIÊN của workspace có quyền `forms` (đang active, đã chấp nhận lời mời, tài khoản dùng được, không bị khoá) cũng nhận 1 chuông — người
+ * không có quyền / bị inactive / chưa chấp nhận / bị khoá / thuộc workspace khác thì KHÔNG; tra nhân viên lỗi vẫn báo chủ và vẫn 201;
  * chuông lỗi KHÔNG làm hỏng bài nộp (vẫn 201 + bài nằm trong DB); migration 302 chạy lại không lỗi và không ghi đè cấu hình super admin.
  *
  * Chuông bắn fire-and-forget (Set promise) nên MỌI ca gọi `settlePendingFormSubmissionBells()` trước khi đọc DB — và `afterEach` cũng gọi,
@@ -164,22 +166,18 @@ describe('chuông "Có bài nộp mới"', () => {
     expect(bells[1].message).toContain('Khách Hai');
   });
 
-  it('chỉ CHỦ nhận chuông: nhân viên có quyền forms KHÔNG nhận; chủ workspace khác không nhận', async () => {
+  it('người ngoài workspace không nhận chuông: chủ workspace khác, và người dùng chưa liên quan', async () => {
     await waitForSafeBellWindow();
     const owner = await createUser({ username: 'bell_owner_only' });
-    const employee = await createUser({ username: 'bell_employee' });
+    const otherOwner = await createUser({ username: 'bell_other_owner' });
     const stranger = await createUser({ username: 'bell_stranger' });
-    await db.query(
-      `INSERT INTO user_members (owner_id, employee_id, permissions, status) VALUES ($1, $2, $3::jsonb, 'active')`,
-      [owner.id, employee.id, JSON.stringify({ forms: true })]
-    );
     const form = await createPublishedForm(await loginAs(owner));
 
     await submit(form, 'Khách lạ');
     await settlePendingFormSubmissionBells();
 
     expect(await bellsOf(owner.id)).toHaveLength(1);
-    expect(await bellsOf(employee.id)).toHaveLength(0);
+    expect(await bellsOf(otherOwner.id)).toHaveLength(0);
     expect(await bellsOf(stranger.id)).toHaveLength(0);
   });
 
@@ -230,6 +228,197 @@ describe('chuông "Có bài nộp mới"', () => {
       emailEnabled: false,
       userCanDisableEmail: true,
     });
+  });
+});
+
+/**
+ * Thêm một dòng `user_members`. `accepted: false` dựng lời mời liên kết CHƯA chấp nhận (accepted_at NULL — migration 257).
+ * `permissions` truyền nguyên (kể cả giá trị không phải boolean) để ghim việc quyền phải bật ĐÚNG `true`.
+ */
+async function addMember(owner, employee, { permissions = { forms: true }, status = 'active', accepted = true } = {}) {
+  const { rows } = await db.query(
+    `INSERT INTO user_members (owner_id, employee_id, permissions, status, accepted_at)
+     VALUES ($1, $2, $3::jsonb, $4, CASE WHEN $5::boolean THEN NOW() ELSE NULL END)
+     RETURNING id`,
+    [owner.id, employee.id, JSON.stringify(permissions), status, accepted]
+  );
+  return Number(rows[0].id);
+}
+
+describe('chuông "Có bài nộp mới" — nhân viên có quyền forms', () => {
+  it('nhân viên đang hiệu lực CÓ quyền forms nhận đúng 1 chuông (cùng nội dung + link với chủ); chủ vẫn nhận', async () => {
+    await waitForSafeBellWindow();
+    const owner = await createUser({ username: 'staff_bell_owner' });
+    const staff = await createUser({ username: 'staff_bell_staff' });
+    await addMember(owner, staff, { permissions: { forms: true, customers: true } });
+    const form = await createPublishedForm(await loginAs(owner));
+
+    const res = await submit(form, 'Nguyễn Văn An');
+    expect(res.status).toBe(201);
+    await settlePendingFormSubmissionBells();
+
+    const staffBells = await bellsOf(staff.id);
+    expect(staffBells).toHaveLength(1);
+    expect(staffBells[0].title).toContain('Đăng ký tư vấn');
+    expect(staffBells[0].message).toContain('Nguyễn Văn An');
+    expect(staffBells[0].link).toBe(`/app/forms/${form.id}/submissions`);
+    expect(staffBells[0].read_at).toBeNull();
+    expect(staffBells[0].dedupe_key).toMatch(new RegExp(`^form_submission:${form.id}:\\d+$`));
+    const ownerBells = await bellsOf(owner.id);
+    expect(ownerBells).toHaveLength(1);
+    expect(ownerBells[0].dedupe_key).toBe(staffBells[0].dedupe_key);
+  });
+
+  it('chỉ người ĐỦ điều kiện nhận: thiếu quyền forms / forms=false / forms="true"(chuỗi) / inactive / chưa chấp nhận lời mời / tài khoản bị vô hiệu / bị khoá do hạ gói / workspace khác', async () => {
+    await waitForSafeBellWindow();
+    const owner = await createUser({ username: 'filter_owner' });
+    const otherOwner = await createUser({ username: 'filter_other_owner' });
+    const ok = await createUser({ username: 'filter_ok' });
+    const noKey = await createUser({ username: 'filter_no_key' });
+    const falseKey = await createUser({ username: 'filter_false_key' });
+    const stringKey = await createUser({ username: 'filter_string_key' });
+    const memberInactive = await createUser({ username: 'filter_member_inactive' });
+    const pendingInvite = await createUser({ username: 'filter_pending_invite' });
+    const userInactive = await createUser({ username: 'filter_user_inactive', status: 'inactive' });
+    const locked = await createUser({ username: 'filter_locked' });
+    const otherWorkspace = await createUser({ username: 'filter_other_workspace' });
+
+    await addMember(owner, ok);
+    await addMember(owner, noKey, { permissions: { customers: true } });
+    await addMember(owner, falseKey, { permissions: { forms: false } });
+    await addMember(owner, stringKey, { permissions: { forms: 'true' } });
+    await addMember(owner, memberInactive, { status: 'inactive' });
+    await addMember(owner, pendingInvite, { accepted: false });
+    await addMember(owner, userInactive);
+    const lockedMembershipId = await addMember(owner, locked);
+    await db.query(
+      `INSERT INTO topup_locked_resources (user_id, resource_key, resource_id) VALUES ($1, 'employees', $2)`,
+      [owner.id, lockedMembershipId]
+    );
+    await addMember(otherOwner, otherWorkspace); // có quyền forms nhưng ở workspace KHÁC
+    const form = await createPublishedForm(await loginAs(owner));
+
+    const res = await submit(form, 'Khách');
+    expect(res.status).toBe(201);
+    await settlePendingFormSubmissionBells();
+
+    // Gom số chuông của MỌI người vào một đối tượng để lệch thì diff nêu đích danh ai nhận nhầm / ai bị sót.
+    const everyone = [owner, ok, noKey, falseKey, stringKey, memberInactive, pendingInvite, userInactive, locked, otherWorkspace, otherOwner];
+    const counts = Object.fromEntries(await Promise.all(everyone.map(async (user) => [user.username, (await bellsOf(user.id)).length])));
+    expect(counts).toEqual({
+      filter_owner: 1,
+      filter_ok: 1,
+      filter_no_key: 0,
+      filter_false_key: 0,
+      filter_string_key: 0,
+      filter_member_inactive: 0,
+      filter_pending_invite: 0,
+      filter_user_inactive: 0,
+      filter_locked: 0,
+      filter_other_workspace: 0,
+      filter_other_owner: 0,
+    });
+  });
+
+  it('3 bài nộp trong 10 phút → MỖI người nhận (chủ + 2 nhân viên) vẫn đúng 1 chuông, nêu người nộp đầu tiên', async () => {
+    await waitForSafeBellWindow();
+    const owner = await createUser({ username: 'merge_owner' });
+    const staffA = await createUser({ username: 'merge_staff_a' });
+    const staffB = await createUser({ username: 'merge_staff_b' });
+    await addMember(owner, staffA);
+    await addMember(owner, staffB);
+    const form = await createPublishedForm(await loginAs(owner));
+
+    for (const name of ['Khách Một', 'Khách Hai', 'Khách Ba']) {
+      const res = await submit(form, name);
+      expect(res.status).toBe(201);
+      await settlePendingFormSubmissionBells();
+    }
+
+    const bellsByUser = {};
+    for (const user of [owner, staffA, staffB]) bellsByUser[user.username] = await bellsOf(user.id);
+    expect(Object.fromEntries(Object.entries(bellsByUser).map(([name, bells]) => [name, bells.length]))).toEqual({
+      merge_owner: 1,
+      merge_staff_a: 1,
+      merge_staff_b: 1,
+    });
+    for (const bells of Object.values(bellsByUser)) expect(bells[0].message).toContain('Khách Một');
+  });
+
+  it('nhân viên chấp nhận lời mời SAU bài nộp đầu thì nhận chuông từ bài nộp kế tiếp (không báo bù bài cũ)', async () => {
+    await waitForSafeBellWindow();
+    const owner = await createUser({ username: 'accept_owner' });
+    const staff = await createUser({ username: 'accept_staff' });
+    await addMember(owner, staff, { accepted: false });
+    const form = await createPublishedForm(await loginAs(owner));
+
+    await submit(form, 'Khách Một');
+    await settlePendingFormSubmissionBells();
+    expect(await bellsOf(staff.id)).toHaveLength(0);
+
+    await db.query(`UPDATE user_members SET accepted_at = NOW() WHERE employee_id = $1`, [staff.id]);
+    // Sang cửa sổ 10 phút kế tiếp (dời khoá chuông chủ về cửa sổ cũ) để chủ + nhân viên cùng được xét lại.
+    await db.query(`UPDATE user_notifications SET dedupe_key = $2 WHERE user_id = $1`, [owner.id, `form_submission:${form.id}:1`]);
+    await submit(form, 'Khách Hai');
+    await settlePendingFormSubmissionBells();
+
+    const bells = await bellsOf(staff.id);
+    expect(bells).toHaveLength(1);
+    expect(bells[0].message).toContain('Khách Hai');
+  });
+
+  it('super admin tắt chuông của sự kiện → không ai nhận (cả chủ lẫn nhân viên), bài nộp vẫn 201', async () => {
+    await waitForSafeBellWindow();
+    const owner = await createUser({ username: 'off_owner' });
+    const staff = await createUser({ username: 'off_staff' });
+    await addMember(owner, staff);
+    const form = await createPublishedForm(await loginAs(owner));
+    await db.query(
+      `INSERT INTO notification_event_settings (event_type, in_app_enabled, email_enabled, user_can_disable_email)
+       VALUES ($1, false, false, true)
+       ON CONFLICT (event_type) DO UPDATE SET in_app_enabled = false`,
+      [FORM_SUBMISSION_BELL_EVENT]
+    );
+    clearEventSettingsCache();
+
+    const res = await submit(form, 'Khách');
+    expect(res.status).toBe(201);
+    await settlePendingFormSubmissionBells();
+
+    expect(await bellsOf(owner.id)).toHaveLength(0);
+    expect(await bellsOf(staff.id)).toHaveLength(0);
+  });
+
+  it('tra nhân viên LỖI → chủ VẪN nhận chuông, bài nộp VẪN 201 và nằm trong DB, nhân viên không nhận (chỉ log)', async () => {
+    await waitForSafeBellWindow();
+    const owner = await createUser({ username: 'lookup_fail_owner' });
+    const staff = await createUser({ username: 'lookup_fail_staff' });
+    await addMember(owner, staff);
+    const form = await createPublishedForm(await loginAs(owner));
+
+    const realQuery = db.query;
+    let lookupRejected = 0;
+    jest.spyOn(db, 'query').mockImplementation((text, params) => {
+      if (typeof text === 'string' && text.includes('FROM user_members um') && Array.isArray(params) && params.includes('forms')) {
+        lookupRejected += 1;
+        return Promise.reject(new Error('DB nhân viên sập'));
+      }
+      return realQuery.call(db, text, params);
+    });
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const res = await submit(form, 'Khách vẫn nộp được');
+    expect(res.status).toBe(201);
+    expect(res.body.data.accessToken).toBeTruthy();
+    await settlePendingFormSubmissionBells();
+
+    expect(lookupRejected).toBe(1); // phép tra nhân viên đã chạy và đã bị làm hỏng thật
+    const ownerBells = await bellsOf(owner.id);
+    expect(ownerBells).toHaveLength(1);
+    expect(ownerBells[0].message).toContain('Khách vẫn nộp được');
+    expect(await bellsOf(staff.id)).toHaveLength(0);
+    const { rows } = await db.query(`SELECT respondent_name FROM form_submissions WHERE form_id = $1`, [form.id]);
+    expect(rows.map((r) => r.respondent_name)).toEqual(['Khách vẫn nộp được']);
   });
 });
 

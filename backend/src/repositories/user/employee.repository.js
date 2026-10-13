@@ -51,6 +51,48 @@ export async function countActiveEmployees(ownerId) {
   return parseInt(result.rows[0].count, 10);
 }
 
+/**
+ * Id nhân viên ĐANG HIỆU LỰC của workspace `ownerId` mà quyền `permissionKey` đang bật — dùng để báo (chuông) đúng những người
+ * thật sự làm việc được với một tính năng. "Hiệu lực" lấy NGUYÊN điều kiện của `resolveUserContext` (auth.middleware.js, nhánh
+ * `X-Owner-Context`) + `requirePermission` (authorization.middleware.js), để người nhận chuông ⊆ người bấm vào link của chuông
+ * mà không bị 403:
+ *   - `user_members.status = 'active'` và `accepted_at IS NOT NULL` (lời mời liên kết đã được chấp nhận — migration 257);
+ *   - quyền bật ĐÚNG boolean `true` (middleware so `=== true`; chuỗi "true" hay số 1 KHÔNG tính) — toán tử `->` trả jsonb nên so với
+ *     `'true'::jsonb`, KHÔNG dùng `->>` (nó ép chuỗi và nhận nhầm "true");
+ *   - tài khoản nhân viên còn dùng được: `users.status IN ('active','pending_activation')` (cùng tập với authMiddleware và
+ *     `userNotification.repository.insertMany`);
+ *   - không bị khoá do chủ vượt hạn mức nhân viên của gói (`topup_locked_resources`, `EMPLOYEE_LOCKED` ở middleware).
+ * Khoá quyền đi qua tham số `$2`, không ghép vào SQL.
+ *
+ * @param {number|string} ownerId chủ workspace
+ * @param {string} permissionKey khoá trong `user_members.permissions` (vd `forms`)
+ * @returns {Promise<number[]>} id nhân viên, tăng dần; rỗng nếu tham số không hợp lệ
+ */
+export async function listActiveMemberIdsWithPermission(ownerId, permissionKey) {
+  const owner = Number(ownerId);
+  const key = typeof permissionKey === 'string' ? permissionKey.trim() : '';
+  if (!Number.isSafeInteger(owner) || owner <= 0 || !key) return [];
+  const { rows } = await db.query(
+    `SELECT um.employee_id AS "employeeId"
+       FROM user_members um
+       JOIN users u ON u.id = um.employee_id
+      WHERE um.owner_id = $1
+        AND um.status = 'active'
+        AND um.accepted_at IS NOT NULL
+        AND (um.permissions -> $2::text) = 'true'::jsonb
+        AND u.status IN ('active', 'pending_activation')
+        AND NOT EXISTS (
+          SELECT 1 FROM topup_locked_resources tlr
+           WHERE tlr.user_id = um.owner_id
+             AND tlr.resource_key = 'employees'
+             AND tlr.resource_id = um.id
+        )
+      ORDER BY um.employee_id`,
+    [owner, key]
+  );
+  return rows.map((row) => Number(row.employeeId));
+}
+
 export async function findOwnerPlanLimit(ownerId) {
   const result = await db.query(
     `SELECT p.max_employees

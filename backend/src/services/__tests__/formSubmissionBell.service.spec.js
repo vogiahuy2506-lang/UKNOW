@@ -1,21 +1,27 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
 /**
- * Chuông "Có bài nộp mới" của Biểu mẫu (PR-8c): người nhận, nội dung, chiến lược gộp 10 phút, và — quan trọng nhất — KHÔNG BAO GIỜ làm hỏng
- * hay làm chậm bài nộp. Dispatcher (`notifyUsers`) được giả ở đúng ranh giới; chuỗi thật với DB nằm ở tests/integration/formSubmissionBell.test.js.
+ * Chuông "Có bài nộp mới" của Biểu mẫu (PR-8c): người nhận (chủ + nhân viên có quyền `forms`), nội dung, chiến lược gộp 10 phút, và — quan trọng
+ * nhất — KHÔNG BAO GIỜ làm hỏng hay làm chậm bài nộp, KHÔNG BAO GIỜ để lỗi tra nhân viên làm mất chuông của chủ. Dispatcher (`notifyUsers`) và
+ * repository nhân viên được giả ở đúng ranh giới; chuỗi thật với DB nằm ở tests/integration/formSubmissionBell.test.js.
  */
 const notifyUsers = jest.fn();
 jest.unstable_mockModule('../notification/notificationDispatch.service.js', () => ({
   notifyUsers: (...args) => notifyUsers(...args),
+}));
+const listActiveMemberIdsWithPermission = jest.fn();
+jest.unstable_mockModule('../../repositories/user/employee.repository.js', () => ({
+  listActiveMemberIdsWithPermission: (...args) => listActiveMemberIdsWithPermission(...args),
 }));
 const logError = jest.fn();
 jest.unstable_mockModule('../../utils/logger.util.js', () => ({ logError: (...args) => logError(...args) }));
 
 const {
   FORM_SUBMISSION_BELL_EVENT,
+  FORM_SUBMISSION_BELL_PERMISSION,
   FORM_SUBMISSION_BELL_WINDOW_MS,
   buildFormSubmissionBellDedupeKey,
-  notifyOwnerFormSubmission,
+  notifyFormSubmission,
   fireFormSubmissionBell,
   settlePendingFormSubmissionBells,
 } = await import('../formSubmissionBell.service.js');
@@ -25,6 +31,8 @@ const FORM = { id: 41, workspaceOwnerId: 7, title: 'Đăng ký tư vấn' };
 beforeEach(() => {
   notifyUsers.mockReset();
   notifyUsers.mockResolvedValue({ inApp: 1, emailSent: 0, emailSkipped: 0, emailFailed: 0 });
+  listActiveMemberIdsWithPermission.mockReset();
+  listActiveMemberIdsWithPermission.mockResolvedValue([]);
   logError.mockReset();
 });
 
@@ -50,11 +58,11 @@ describe('buildFormSubmissionBellDedupeKey — gộp theo biểu mẫu + cửa s
   });
 });
 
-describe('notifyOwnerFormSubmission', () => {
+describe('notifyFormSubmission', () => {
   const NOW = new Date('2026-10-12T03:04:05.000Z');
 
-  it('gửi đúng sự kiện cho CHỦ biểu mẫu, link mở thẳng trang bài nộp của biểu mẫu đó', async () => {
-    await notifyOwnerFormSubmission({ form: FORM, submission: { id: 900 }, respondentName: 'Nguyễn An' }, NOW);
+  it('gửi đúng sự kiện (khi không có nhân viên nào đủ điều kiện thì chỉ CHỦ), link mở thẳng trang bài nộp của biểu mẫu đó', async () => {
+    await notifyFormSubmission({ form: FORM, submission: { id: 900 }, respondentName: 'Nguyễn An' }, NOW);
     expect(notifyUsers).toHaveBeenCalledTimes(1);
     const arg = notifyUsers.mock.calls[0][0];
     expect(arg.eventType).toBe(FORM_SUBMISSION_BELL_EVENT);
@@ -66,7 +74,7 @@ describe('notifyOwnerFormSubmission', () => {
   });
 
   it('nội dung nêu tên biểu mẫu + người nộp (vi và en)', async () => {
-    await notifyOwnerFormSubmission({ form: FORM, respondentName: 'Nguyễn An' }, NOW);
+    await notifyFormSubmission({ form: FORM, respondentName: 'Nguyễn An' }, NOW);
     const arg = notifyUsers.mock.calls[0][0];
     expect(arg.title).toContain('Đăng ký tư vấn');
     expect(arg.message).toContain('Nguyễn An');
@@ -76,17 +84,17 @@ describe('notifyOwnerFormSubmission', () => {
   });
 
   it('người nộp: tên → email → SĐT; không có gì thì nói "một khách"', async () => {
-    await notifyOwnerFormSubmission({ form: FORM, respondentEmail: 'an@x.vn', respondentPhone: '0901' }, NOW);
+    await notifyFormSubmission({ form: FORM, respondentEmail: 'an@x.vn', respondentPhone: '0901' }, NOW);
     expect(notifyUsers.mock.calls[0][0].message).toContain('an@x.vn');
-    await notifyOwnerFormSubmission({ form: FORM, respondentPhone: '0901234567' }, NOW);
+    await notifyFormSubmission({ form: FORM, respondentPhone: '0901234567' }, NOW);
     expect(notifyUsers.mock.calls[1][0].message).toContain('0901234567');
-    await notifyOwnerFormSubmission({ form: FORM }, NOW);
+    await notifyFormSubmission({ form: FORM }, NOW);
     expect(notifyUsers.mock.calls[2][0].message).toContain('Một khách');
     expect(notifyUsers.mock.calls[2][0].messageEn).toContain('A customer');
   });
 
   it('metadata chỉ gồm id/tên biểu mẫu + id bài nộp đầu — KHÔNG có thông tin cá nhân của người nộp', async () => {
-    await notifyOwnerFormSubmission(
+    await notifyFormSubmission(
       { form: FORM, submission: { id: 900 }, respondentName: 'Nguyễn An', respondentEmail: 'an@x.vn', respondentPhone: '0901234567' },
       NOW
     );
@@ -99,25 +107,91 @@ describe('notifyOwnerFormSubmission', () => {
   });
 
   it('tên biểu mẫu / người nộp quá dài bị cắt', async () => {
-    await notifyOwnerFormSubmission({ form: { ...FORM, title: 'T'.repeat(500) }, respondentName: 'N'.repeat(500) }, NOW);
+    await notifyFormSubmission({ form: { ...FORM, title: 'T'.repeat(500) }, respondentName: 'N'.repeat(500) }, NOW);
     const arg = notifyUsers.mock.calls[0][0];
     expect(arg.metadata.formTitle.length).toBe(120);
     expect(arg.message.length).toBeLessThan(500);
   });
 
   it('không có chủ hợp lệ / không có id biểu mẫu → không gọi dispatcher, không ném', async () => {
-    await expect(notifyOwnerFormSubmission({ form: { id: 1, workspaceOwnerId: null } }, NOW)).resolves.toBeUndefined();
-    await expect(notifyOwnerFormSubmission({ form: { id: null, workspaceOwnerId: 7 } }, NOW)).resolves.toBeUndefined();
-    await expect(notifyOwnerFormSubmission({}, NOW)).resolves.toBeUndefined();
-    await expect(notifyOwnerFormSubmission(undefined, NOW)).resolves.toBeUndefined();
+    await expect(notifyFormSubmission({ form: { id: 1, workspaceOwnerId: null } }, NOW)).resolves.toBeUndefined();
+    await expect(notifyFormSubmission({ form: { id: null, workspaceOwnerId: 7 } }, NOW)).resolves.toBeUndefined();
+    await expect(notifyFormSubmission({}, NOW)).resolves.toBeUndefined();
+    await expect(notifyFormSubmission(undefined, NOW)).resolves.toBeUndefined();
     expect(notifyUsers).not.toHaveBeenCalled();
   });
 
   it('dispatcher ném lỗi → hàm KHÔNG ném, chỉ log', async () => {
     notifyUsers.mockRejectedValue(new Error('DB sập'));
-    await expect(notifyOwnerFormSubmission({ form: FORM }, NOW)).resolves.toBeUndefined();
+    await expect(notifyFormSubmission({ form: FORM }, NOW)).resolves.toBeUndefined();
     expect(logError).toHaveBeenCalledTimes(1);
     expect(String(logError.mock.calls[0][0])).toContain('DB sập');
+  });
+});
+
+describe('notifyFormSubmission — người nhận: chủ + nhân viên có quyền forms', () => {
+  const NOW = new Date('2026-10-13T03:04:05.000Z');
+
+  it('quyền dùng để tra nhân viên là `forms` — cùng khoá requirePermission("forms") của form.routes.js', () => {
+    expect(FORM_SUBMISSION_BELL_PERMISSION).toBe('forms');
+  });
+
+  it('hỏi repository đúng (chủ của biểu mẫu, quyền forms) và gửi MỘT lần cho chủ + nhân viên, chủ đứng đầu', async () => {
+    listActiveMemberIdsWithPermission.mockResolvedValue([11, 12]);
+    await notifyFormSubmission({ form: FORM, respondentName: 'Nguyễn An' }, NOW);
+    expect(listActiveMemberIdsWithPermission).toHaveBeenCalledTimes(1);
+    expect(listActiveMemberIdsWithPermission).toHaveBeenCalledWith(7, 'forms');
+    expect(notifyUsers).toHaveBeenCalledTimes(1);
+    expect(notifyUsers.mock.calls[0][0].userIds).toEqual([7, 11, 12]);
+    // Cùng một khoá gộp cho mọi người nhận: dispatcher chống trùng theo (người nhận, khoá) nên mỗi người vẫn đúng 1 chuông / 10 phút.
+    expect(notifyUsers.mock.calls[0][0].dedupeKey).toBe(buildFormSubmissionBellDedupeKey(41, NOW));
+  });
+
+  it('khử trùng: nhân viên trùng nhau / trùng chủ / id chuỗi / id rác không làm lọt hay nhân đôi người nhận', async () => {
+    listActiveMemberIdsWithPermission.mockResolvedValue([7, 11, '11', 12, 0, -3, 'abc', null, undefined, 1.5]);
+    await notifyFormSubmission({ form: FORM }, NOW);
+    expect(notifyUsers.mock.calls[0][0].userIds).toEqual([7, 11, 12]);
+  });
+
+  it('id chủ là chuỗi số ("7") vẫn thành số 7 và không bị nhân đôi khi repository trả cả 7', async () => {
+    listActiveMemberIdsWithPermission.mockResolvedValue([7, 11]);
+    await notifyFormSubmission({ form: { ...FORM, workspaceOwnerId: '7' } }, NOW);
+    expect(listActiveMemberIdsWithPermission).toHaveBeenCalledWith(7, 'forms');
+    expect(notifyUsers.mock.calls[0][0].userIds).toEqual([7, 11]);
+  });
+
+  it('tra nhân viên LỖI → vẫn gửi cho CHỦ (đúng 1 lần), chỉ log, không ném', async () => {
+    listActiveMemberIdsWithPermission.mockRejectedValue(new Error('DB nhân viên sập'));
+    await expect(notifyFormSubmission({ form: FORM, respondentName: 'Nguyễn An' }, NOW)).resolves.toBeUndefined();
+    expect(notifyUsers).toHaveBeenCalledTimes(1);
+    expect(notifyUsers.mock.calls[0][0].userIds).toEqual([7]);
+    expect(logError).toHaveBeenCalledTimes(1);
+    expect(String(logError.mock.calls[0][0])).toContain('DB nhân viên sập');
+  });
+
+  it('repository trả giá trị lạ (không phải mảng) → chỉ chủ, không ném', async () => {
+    listActiveMemberIdsWithPermission.mockResolvedValue(undefined);
+    await notifyFormSubmission({ form: FORM }, NOW);
+    expect(notifyUsers.mock.calls[0][0].userIds).toEqual([7]);
+    listActiveMemberIdsWithPermission.mockResolvedValue({ 0: 11, length: 1 });
+    await notifyFormSubmission({ form: FORM }, NOW);
+    expect(notifyUsers.mock.calls[1][0].userIds).toEqual([7]);
+  });
+
+  it('không có chủ hợp lệ → không tra nhân viên, không gửi (nhân viên không bao giờ được nhận thay chủ)', async () => {
+    listActiveMemberIdsWithPermission.mockResolvedValue([11]);
+    await notifyFormSubmission({ form: { id: 1, workspaceOwnerId: null } }, NOW);
+    await notifyFormSubmission({ form: { id: 1, workspaceOwnerId: 'abc' } }, NOW);
+    expect(listActiveMemberIdsWithPermission).not.toHaveBeenCalled();
+    expect(notifyUsers).not.toHaveBeenCalled();
+  });
+
+  it('dispatcher lỗi sau khi tra được nhân viên → vẫn không ném, chỉ log', async () => {
+    listActiveMemberIdsWithPermission.mockResolvedValue([11]);
+    notifyUsers.mockRejectedValue(new Error('DB chuông sập'));
+    await expect(notifyFormSubmission({ form: FORM }, NOW)).resolves.toBeUndefined();
+    expect(logError).toHaveBeenCalledTimes(1);
+    expect(String(logError.mock.calls[0][0])).toContain('DB chuông sập');
   });
 });
 

@@ -269,6 +269,8 @@ const UI_LABELS_IN_ARTICLES = [
   // PR-8c (12/10/2026): nút xuất CSV ở trang Bài nộp và ở cả hai tab của màn "Khách để lại thông tin".
   ['bieu-mau', 'csvExport.button', 'Xuất CSV'],
   ['landing-page', 'csvExport.button', 'Xuất CSV'],
+  // Chuông bài nộp mới gửi cả nhân viên có quyền này (13/10/2026) — bài bieu-mau nhắc đúng nhãn quyền ở màn Nhân viên.
+  ['bieu-mau', 'employee.permissions.forms', 'Biểu mẫu thu thập'],
   ['dat-lich-giu-cho', 'forms.editorPage.booking.title', 'Đặt lịch hẹn'],
   ['dat-lich-giu-cho', 'forms.editorPage.payment.title', 'Thanh toán'],
   // PR-9 (12/10/2026): trình soạn mới (PR-3/4/5) — hai cột (câu hỏi | Xem trước), hộp Cài đặt có tab, AI soạn nháp / gợi ý / viết lại,
