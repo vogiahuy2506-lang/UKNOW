@@ -1129,7 +1129,8 @@ describe('FormEditorPage component', () => {
       expect(screen.getByRole('button', { name: /Đặt lịch hẹn/ })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Thu tiền \/ đặt cọc/ })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Khảo sát/ })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Trống/ })).toBeInTheDocument();
+      // 13/10/2026: mẫu Trống không còn là thẻ trong lưới mà là nút "Biểu mẫu trống" ở hàng cuối.
+      expect(screen.getByRole('button', { name: /Biểu mẫu trống/ })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /Lưu biểu mẫu/i })).not.toBeInTheDocument();
     });
 
