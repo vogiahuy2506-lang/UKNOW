@@ -124,7 +124,9 @@ export default function FormTemplatePicker({ onSelect, onAiDraft, onBack, isEmpl
         title={t('forms.editorPage.templates.topbarTitle')}
       />
 
-      <div className="flex-1 min-h-0 overflow-y-auto bg-gradient-to-b from-gray-50/70 via-white to-orange-50/20 dark:from-dk-bg dark:via-dk-surface dark:to-dk-bg flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8">
+      <div className="flex-1 min-h-0 overflow-y-auto bg-gradient-to-b from-gray-50/70 via-white to-orange-50/20 dark:from-dk-bg dark:via-dk-surface dark:to-dk-bg flex flex-col items-center p-4 sm:p-6 lg:p-8" data-testid="form-template-scroll">
+        {/* Căn giữa dọc bằng my-auto, KHÔNG justify-center ở khung cuộn: nội dung cao hơn màn (điện thoại) thì justify-center đẩy
+            phần đầu (badge + tiêu đề) lên trên mép, không cuộn tới được. */}
         <div className="w-full max-w-3xl my-auto py-6">
           <div className="w-full flex flex-col items-center text-center">
             {onAiDraft ? (

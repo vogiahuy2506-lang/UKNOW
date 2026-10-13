@@ -198,3 +198,13 @@ describe('FormTemplatePicker — Enter gửi, Shift+Enter xuống dòng', () => 
     expect(screen.queryByTestId('form-ai-draft-error')).not.toBeInTheDocument();
   });
 });
+
+describe('FormTemplatePicker — bố cục cuộn', () => {
+  it('khung cuộn KHÔNG dùng justify-center (nội dung cao hơn màn sẽ bị cắt mất phần đầu); khối trong căn giữa bằng my-auto', () => {
+    renderPicker();
+    const scroller = screen.getByTestId('form-template-scroll');
+    expect(scroller.className).not.toMatch(/\bjustify-center\b/);
+    expect(scroller.className).toMatch(/\boverflow-y-auto\b/);
+    expect(scroller.firstElementChild.className).toMatch(/\bmy-auto\b/);
+  });
+});
