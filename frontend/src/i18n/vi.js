@@ -12432,10 +12432,6 @@ export default {
         creditNote: 'Mỗi lần dùng 1 lượt AI',
         draftReady: 'AI đã soạn nháp biểu mẫu — xem lại rồi bấm Lưu nhé',
         picker: {
-          // `title`, `create`, `orPickTemplate` không còn dùng trên màn chọn mẫu (13/10/2026 đổi bố cục giống tạo landing:
-          // badge/heading/createButton/templatesHeading). CÒN GIỮ vì helpSeedQuality.spec (backend) ghim chữ này với bài hướng dẫn
-          // `bieu-mau` / `dat-lich-giu-cho` — đổi bài hướng dẫn cùng spec đó rồi mới xoá.
-          title: 'Để AI soạn biểu mẫu giúp bạn',
           badge: 'Trợ lý AI soạn biểu mẫu',
           heading: 'Bạn muốn tạo biểu mẫu gì hôm nay?',
           subtitle: 'Mô tả biểu mẫu bạn cần — AI dựng sẵn các câu hỏi, bạn xem lại rồi mới lưu.',
@@ -12461,7 +12457,6 @@ export default {
               text: 'Khảo sát mức độ hài lòng của khách sau khi mua hàng, có chấm sao và ô góp ý',
             },
           },
-          create: 'Tạo bằng AI',
           createButton: 'Tạo biểu mẫu',
           creating: 'AI đang soạn biểu mẫu...',
           creatingHint: 'Thường mất 10–30 giây, bạn vui lòng chờ một chút.',
@@ -12469,7 +12464,6 @@ export default {
           descriptionTooLong: 'Mô tả không được quá {max} ký tự',
           emptyResult: 'AI chưa soạn được câu hỏi nào, bạn mô tả rõ hơn rồi thử lại nhé',
           failed: 'AI chưa soạn được biểu mẫu. Bạn thử lại hoặc chọn một mẫu có sẵn bên dưới nhé.',
-          orPickTemplate: 'Hoặc chọn một mẫu có sẵn:',
           templatesHeading: 'Hoặc bắt đầu từ mẫu có sẵn:',
         },
         tools: {

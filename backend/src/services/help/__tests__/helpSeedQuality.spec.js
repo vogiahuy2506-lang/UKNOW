@@ -245,7 +245,7 @@ const UI_LABELS_IN_ARTICLES = [
   ['bieu-mau', 'forms.editorPage.templates.booking.name', 'Đặt lịch hẹn'],
   ['bieu-mau', 'forms.editorPage.templates.payment.name', 'Thu tiền / đặt cọc'],
   ['bieu-mau', 'forms.editorPage.templates.survey.name', 'Khảo sát'],
-  ['bieu-mau', 'forms.editorPage.templates.blank.name', 'Trống'],
+  // Mẫu trống không còn nằm trong lưới mẫu (13/10/2026): bài nhắc nút "Biểu mẫu trống" ở hàng cuối, xem dòng blankButton.
   ['bieu-mau', 'forms.editorPage.quickAdd.moreTypes', 'Loại khác…'],
   ['bieu-mau', 'forms.editorPage.afterSubmit.title', 'Sau khi gửi'],
   ['bieu-mau', 'forms.editorPage.theme.title', 'Giao diện'],
@@ -275,10 +275,11 @@ const UI_LABELS_IN_ARTICLES = [
   ['dat-lich-giu-cho', 'forms.editorPage.payment.title', 'Thanh toán'],
   // PR-9 (12/10/2026): trình soạn mới (PR-3/4/5) — hai cột (câu hỏi | Xem trước), hộp Cài đặt có tab, AI soạn nháp / gợi ý / viết lại,
   // độ rộng nửa dòng, chữ hướng dẫn, loại ô mới, ngắt trang nhiều bước.
-  ['bieu-mau', 'forms.editorPage.ai.picker.title', 'Để AI soạn biểu mẫu giúp bạn'],
-  ['bieu-mau', 'forms.editorPage.ai.picker.label', 'Mô tả biểu mẫu bạn cần'],
-  ['bieu-mau', 'forms.editorPage.ai.picker.create', 'Tạo bằng AI'],
-  ['bieu-mau', 'forms.editorPage.ai.picker.orPickTemplate', 'Hoặc chọn một mẫu có sẵn:'],
+  // 13/10/2026: màn tạo biểu mẫu theo bố cục màn tạo landing (hero + ô mô tả lớn + mẫu có sẵn + hàng "Biểu mẫu trống").
+  ['bieu-mau', 'forms.editorPage.ai.picker.heading', 'Bạn muốn tạo biểu mẫu gì hôm nay?'],
+  ['bieu-mau', 'forms.editorPage.ai.picker.createButton', 'Tạo biểu mẫu'],
+  ['bieu-mau', 'forms.editorPage.ai.picker.templatesHeading', 'Hoặc bắt đầu từ mẫu có sẵn:'],
+  ['bieu-mau', 'forms.editorPage.templates.blankButton', 'Biểu mẫu trống'],
   ['bieu-mau', 'forms.editorPage.ai.picker.examples.englishTrial.label', 'Đăng ký học thử'],
   ['bieu-mau', 'forms.editorPage.ai.picker.examples.clinicBooking.label', 'Đặt lịch tư vấn'],
   ['bieu-mau', 'forms.editorPage.ai.picker.examples.courseDeposit.label', 'Đặt cọc khoá học'],
@@ -361,7 +362,7 @@ const UI_LABELS_IN_ARTICLES = [
   ['dat-lich-giu-cho', 'forms.editorPage.settings.tabs.payment', 'Thanh toán'],
   ['dat-lich-giu-cho', 'forms.editorPage.setupHint.booking', 'Khai khung giờ đặt lịch'],
   ['dat-lich-giu-cho', 'forms.editorPage.setupHint.payment', 'Khai số tiền và tài khoản nhận tiền'],
-  ['dat-lich-giu-cho', 'forms.editorPage.ai.picker.create', 'Tạo bằng AI'],
+  ['dat-lich-giu-cho', 'forms.editorPage.ai.picker.createButton', 'Tạo biểu mẫu'],
   ['dat-lich-giu-cho', 'forms.editorPage.payment.methodBank', 'Chuyển khoản ngân hàng'],
   ['dat-lich-giu-cho', 'forms.editorPage.payment.methodMomo', 'Ví MoMo'],
   ['dat-lich-giu-cho', 'forms.editorPage.payment.momoQrModeLabel', 'Cách tạo mã QR MoMo'],

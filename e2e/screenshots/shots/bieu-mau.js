@@ -9,7 +9,7 @@
  * Giao diện trình soạn từ 12/10/2026 (PLAN_BIEU_MAU_TUY_BIEN_AI_LANDING PR-3/4/5): hai cột — trái là danh sách câu hỏi
  * (kèm khung "AI hỗ trợ soạn"), phải là khung "Xem trước" cố định; thanh trên cùng có nút "Cài đặt" mở HỘP "Cài đặt biểu
  * mẫu" gồm sáu tab (Thông tin chung / Sau khi gửi / Đặt lịch hẹn / Thanh toán / Giao diện / Sản phẩm). Biểu mẫu MỚI bắt đầu
- * bằng bước chọn mẫu, có khung "Để AI soạn biểu mẫu giúp bạn" (ảnh chụp KHÔNG bấm "Tạo bằng AI" nên không tốn lượt AI).
+ * bằng màn "Bạn muốn tạo biểu mẫu gì hôm nay?" có ô mô tả lớn cho AI (ảnh chụp KHÔNG bấm "Tạo biểu mẫu" nên không tốn lượt AI).
  * Mọi ảnh trình soạn mở biểu mẫu mẫu ĐÃ LƯU (/edit); các thao tác thêm ô / đổi độ rộng chỉ nằm trong state trang, không bấm
  * Lưu nên không đổi DB. Ảnh bước chọn mẫu sau khi chọn mẫu nằm ở shots/dat-lich-giu-cho.js.
  *
@@ -62,10 +62,10 @@ export default {
     },
     {
       name: 'ai-soan-bieu-mau',
-      caption: 'bước đầu khi tạo biểu mẫu mới, khoanh đỏ khung "Để AI soạn biểu mẫu giúp bạn" cùng ô mô tả và nút "Tạo bằng AI"',
+      caption: 'bước đầu khi tạo biểu mẫu mới, khoanh đỏ ô mô tả lớn ở giữa và nút "Tạo biểu mẫu"',
       localOnly: true,
       async take(page) {
-        // Không bấm "Tạo bằng AI": chỉ điền sẵn câu mô tả bằng một gợi ý nhanh, nên không tốn lượt AI và không cần khoá Gemini.
+        // Không bấm "Tạo biểu mẫu": chỉ điền sẵn câu mô tả bằng một gợi ý nhanh, nên không tốn lượt AI và không cần khoá Gemini.
         await page.goto('/app/forms/new');
         const card = page.getByTestId('form-ai-draft-card');
         await card.waitFor({ state: 'visible', timeout: 30_000 });
