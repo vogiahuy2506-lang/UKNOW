@@ -69,17 +69,6 @@ export default function AdminAiModelsPage() {
     );
   }, [models, showAll]);
 
-  const currentFallbackModel = useMemo(
-    () => models.find((m) => m.isFallback),
-    [models]
-  );
-  const currentFallbackId = currentFallbackModel ? toModelId(currentFallbackModel) : '';
-
-  const fallbackCandidateModels = useMemo(
-    () => models.filter((m) => m.supportsGenerateContent && !m.isEnabled),
-    [models]
-  );
-
   const retiredSystemModel = useMemo(
     () => models.find((m) => m.isEnabled && !m.supportsGenerateContent),
     [models]
@@ -182,6 +171,16 @@ export default function AdminAiModelsPage() {
     }
   };
 
+  const handleFallbackToggle = (model) => {
+    const modelId = toModelId(model);
+    if (!modelId || model.isEnabled || !model.supportsGenerateContent) return;
+    if (model.isFallback) {
+      handleFallbackChange(null);
+    } else {
+      handleFallbackChange(modelId);
+    }
+  };
+
   return (
     <PageContainer
       title={t('adminAiModels.title')}
@@ -241,32 +240,6 @@ export default function AdminAiModelsPage() {
         </div>
       )}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-dk-border dark:bg-dk-surface">
-        <label htmlFor="fallback-model-select" className="block text-sm font-semibold text-slate-800 dark:text-dk-text">
-          {t('adminAiModels.fallbackTitle')}
-        </label>
-        <div className="mt-2 max-w-md">
-          <select
-            id="fallback-model-select"
-            className="input h-10 w-full dark:border-dk-border dark:bg-dk-inset dark:text-dk-text"
-            value={currentFallbackId}
-            disabled={savingFallback || loading}
-            onChange={(e) => handleFallbackChange(e.target.value || null)}
-          >
-            <option value="">{t('adminAiModels.fallbackNone')}</option>
-            {fallbackCandidateModels.map((m) => {
-              const id = toModelId(m);
-              return (
-                <option key={id} value={id}>
-                  {m.displayName ? `${m.displayName} (${id})` : id}
-                </option>
-              );
-            })}
-          </select>
-          <p className="mt-1.5 text-xs text-slate-500 dark:text-dk-text2">{t('adminAiModels.fallbackHint')}</p>
-        </div>
-      </div>
-
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-dk-border dark:bg-dk-surface">
         <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 dark:border-dk-border sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
@@ -293,7 +266,7 @@ export default function AdminAiModelsPage() {
                   <th className="px-5 py-3">{t('adminAiModels.model')}</th>
                   <th className="px-5 py-3">{t('adminAiModels.displayName')}</th>
                   <th className="px-5 py-3">{t('adminAiModels.pricePerAnswer')}</th>
-                  <th className="px-5 py-3">{t('adminAiModels.systemModelColumn')}</th>
+                  <th className="px-5 py-3">{t('adminAiModels.roleColumn') || t('adminAiModels.systemModelColumn')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-dk-border">
@@ -387,21 +360,55 @@ export default function AdminAiModelsPage() {
                         )}
                       </td>
                       <td className="px-5 py-4">
-                        <label className={`inline-flex items-center gap-2 ${model.supportsGenerateContent ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}>
-                          <input
-                            type="radio"
-                            name="system-model"
-                            className="h-4 w-4 border-slate-300 text-orange-600 dark:border-dk-border dark:bg-dk-inset"
-                            checked={Boolean(model.isEnabled)}
-                            disabled={busy || !model.supportsGenerateContent}
-                            onChange={() => chooseSystemModel(model)}
-                          />
-                          <span className={model.isEnabled ? 'font-semibold text-emerald-700 dark:text-emerald-400' : 'text-slate-500 dark:text-dk-text2'}>
-                            {model.isEnabled
-                              ? (t('adminAiModels.systemModelActive') || 'Đang dùng')
-                              : (t('adminAiModels.systemModelPick') || 'Chọn')}
-                          </span>
-                        </label>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => chooseSystemModel(model)}
+                            disabled={busy || !model.supportsGenerateContent || model.isEnabled}
+                            aria-pressed={Boolean(model.isEnabled)}
+                            title={
+                              model.isEnabled
+                                ? (t('adminAiModels.primaryActiveTitle') || 'Model chính đang hoạt động')
+                                : !model.supportsGenerateContent
+                                ? t('adminAiModels.notSupported')
+                                : (t('adminAiModels.setPrimaryTitle') || 'Chọn làm model chính')
+                            }
+                            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                              model.isEnabled
+                                ? 'bg-orange-500 text-white shadow-sm ring-2 ring-orange-400/30 dark:bg-orange-600'
+                                : model.supportsGenerateContent && !busy
+                                ? 'border border-slate-200 text-slate-600 hover:border-orange-400 hover:text-orange-600 hover:bg-orange-50 dark:border-dk-border dark:text-dk-text2 dark:hover:bg-dk-raised dark:hover:text-dk-text'
+                                : 'border border-slate-200 text-slate-300 opacity-40 cursor-not-allowed dark:border-dk-border dark:text-dk-muted'
+                            }`}
+                          >
+                            {t('adminAiModels.rolePrimary') || 'Chính'}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleFallbackToggle(model)}
+                            disabled={savingFallback || !model.supportsGenerateContent || model.isEnabled}
+                            aria-pressed={Boolean(model.isFallback)}
+                            title={
+                              model.isEnabled
+                                ? (t('adminAiModels.cannotFallbackPrimary') || 'Model chính không thể làm model dự phòng')
+                                : model.isFallback
+                                ? (t('adminAiModels.fallbackActiveTitle') || 'Model dự phòng (bấm để huỷ)')
+                                : !model.supportsGenerateContent
+                                ? t('adminAiModels.notSupported')
+                                : (t('adminAiModels.setFallbackTitle') || 'Chọn làm model dự phòng')
+                            }
+                            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                              model.isFallback
+                                ? 'bg-amber-500 text-white shadow-sm ring-2 ring-amber-400/30 dark:bg-amber-600'
+                                : model.supportsGenerateContent && !model.isEnabled && !savingFallback
+                                ? 'border border-slate-200 text-slate-600 hover:border-amber-400 hover:text-amber-600 hover:bg-amber-50 dark:border-dk-border dark:text-dk-text2 dark:hover:bg-dk-raised dark:hover:text-dk-text'
+                                : 'border border-slate-200 text-slate-300 opacity-40 cursor-not-allowed dark:border-dk-border dark:text-dk-muted'
+                            }`}
+                          >
+                            {t('adminAiModels.roleFallback') || 'Phụ'}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

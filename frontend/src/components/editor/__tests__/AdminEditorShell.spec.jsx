@@ -68,4 +68,14 @@ describe('AdminEditorShell', () => {
     rerender(<I18nProvider><TopbarSaveButton onClick={() => {}} saving /></I18nProvider>);
     expect(screen.getByRole('button', { name: 'Đang lưu...' })).toBeDisabled();
   });
+
+  it('EditorTopbar: hiển thị nút Quay lại khi có onBack, bấm nút gọi hàm onBack', () => {
+    const onBack = vi.fn();
+    wrap(<EditorTopbar onBack={onBack} title="Tiêu đề" />);
+    const backBtn = screen.getByRole('button', { name: /Quay lại/i });
+    expect(backBtn).toBeInTheDocument();
+    fireEvent.click(backBtn);
+    expect(onBack).toHaveBeenCalled();
+  });
 });
+

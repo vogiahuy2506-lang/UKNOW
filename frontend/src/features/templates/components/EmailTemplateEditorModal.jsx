@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import {
+  HiOutlineArrowLeft,
   HiOutlineEye,
   HiOutlinePaperClip,
   HiOutlinePencil,
@@ -36,15 +37,15 @@ const LabelPicker = ({ value, labels, onChange }) => {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full px-3 py-2 bg-gray-50 dark:bg-dk-inset border border-gray-300 dark:border-dk-border rounded-lg focus:bg-white dark:focus:bg-dk-inset focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all text-left flex items-center gap-2"
+        className="w-full px-3 py-1.5 bg-white dark:bg-dk-inset border border-gray-200 dark:border-dk-border rounded-xl shadow-2xs focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all text-left flex items-center gap-2"
       >
         {selected ? (
           <>
             <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: selected.color }} />
-            <span className="text-sm text-gray-800 dark:text-dk-text flex-1">{selected.name}</span>
+            <span className="text-xs sm:text-sm text-gray-800 dark:text-dk-text flex-1 truncate">{selected.name}</span>
           </>
         ) : (
-          <span className="text-sm text-gray-400 dark:text-dk-muted flex-1">{value || 'Chọn nhãn...'}</span>
+          <span className="text-xs sm:text-sm text-gray-400 dark:text-dk-muted flex-1 truncate">{value || 'Chọn nhãn...'}</span>
         )}
         <HiOutlineChevronDown className={`w-4 h-4 text-gray-400 dark:text-dk-muted flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
@@ -162,6 +163,15 @@ const EmailTemplateEditorModal = ({
     setEditorTab('content');
   };
 
+  const handleClose = () => {
+    if (typeof onClose === 'function') {
+      onClose();
+    } else {
+      setShowEditorModal(false);
+      setEditingTemplate(null);
+    }
+  };
+
   if (!showEditorModal) return null;
 
   return createPortal(
@@ -169,37 +179,81 @@ const EmailTemplateEditorModal = ({
       className="fixed z-[9999] bg-white dark:bg-dk-bg shadow-xl border-l border-gray-200 dark:border-dk-border flex flex-col overflow-hidden"
       style={{ left: 'var(--sidebar-w, 0px)', right: 0, top: 0, bottom: 0 }}
     >
-      <div className="px-6 py-4 border-b border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-primary-100 dark:bg-primary-950/40 flex items-center justify-center text-primary-600 dark:text-primary-400">
+      {/* 52px Topbar chuẩn thiết kế AdminEditorShell / LandingCanvasTopbar */}
+      <div className="h-[52px] bg-white dark:bg-dk-surface border-b border-gray-200/90 dark:border-dk-border flex items-center justify-between px-3 sm:px-4 shrink-0 select-none shadow-2xs z-20 gap-2">
+        {/* Trái: Nút Quay lại + Icon badge cam + Tiêu đề / Phụ đề */}
+        <div className="flex items-center gap-2 min-w-0 shrink">
+          <button
+            type="button"
+            onClick={handleClose}
+            title={t('common.back')}
+            aria-label={t('common.back')}
+            className="p-1.5 rounded-xl border border-slate-200/80 dark:border-dk-border bg-slate-50 dark:bg-dk-raised text-slate-600 dark:text-dk-text hover:text-slate-900 dark:hover:text-dk-text transition-all shadow-2xs shrink-0"
+          >
+            <HiOutlineArrowLeft className="w-4 h-4" />
+          </button>
+          <span className="w-8 h-8 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
             <HiOutlinePencil className="w-4 h-4" />
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-dk-text">
+          </span>
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-gray-900 dark:text-dk-text truncate">
               {editingTemplate ? t('emailTemplateEditor.editTemplate') : t('emailTemplateEditor.createTemplate')}
-            </h3>
-            <p className="text-xs text-gray-500 dark:text-dk-text2">{t('emailTemplateEditor.fillInfoAndDesign')}</p>
+            </div>
+            <div className="text-[11px] text-gray-500 dark:text-dk-text2 truncate hidden sm:block">
+              {t('emailTemplateEditor.fillInfoAndDesign')}
+            </div>
           </div>
         </div>
-        <button
-          onClick={() => {
-            if (typeof onClose === 'function') {
-              onClose();
-            } else {
-              setShowEditorModal(false);
-              setEditingTemplate(null);
-            }
-          }}
-          className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 dark:hover:bg-dk-raised text-gray-400 dark:text-dk-muted hover:text-gray-600 dark:hover:text-dk-text transition-colors"
-        >
-          ✕
-        </button>
+
+        {/* Giữa: Chuyển đổi tab Nội dung / Thiết lập biến */}
+        <div className="flex items-center gap-1 p-1 bg-gray-100/90 dark:bg-dk-raised rounded-xl border border-transparent dark:border-dk-border">
+          <button
+            type="button"
+            onClick={() => setEditorTab('content')}
+            className={`px-3 py-1 text-xs sm:text-sm font-medium rounded-lg transition-all ${
+              editorTab === 'content'
+                ? 'bg-white dark:bg-dk-bg text-gray-900 dark:text-dk-text shadow-2xs font-semibold'
+                : 'text-gray-500 dark:text-dk-text2 hover:text-gray-900 dark:hover:text-dk-text'
+            }`}
+          >
+            {t('emailTemplateEditor.content')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setEditorTab('variables')}
+            className={`px-3 py-1 text-xs sm:text-sm font-medium rounded-lg transition-all ${
+              editorTab === 'variables'
+                ? 'bg-white dark:bg-dk-bg text-gray-900 dark:text-dk-text shadow-2xs font-semibold'
+                : 'text-gray-500 dark:text-dk-text2 hover:text-gray-900 dark:hover:text-dk-text'
+            }`}
+          >
+            {t('emailTemplateEditor.setupVariables')}
+          </button>
+        </div>
+
+        {/* Phải: Nút Hủy và Nút Lưu / Tạo template */}
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={handleClose}
+            className="px-3 py-1.5 rounded-xl border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-raised text-xs sm:text-sm font-medium text-gray-700 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-surface transition-colors"
+          >
+            {t('common.cancel')}
+          </button>
+          <button
+            type="submit"
+            form="email-template-editor-form"
+            className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 active:scale-95 text-white text-xs sm:text-sm font-medium shadow-xs hover:shadow transition-all flex items-center gap-1.5 cursor-pointer"
+          >
+            {editingTemplate ? t('emailTemplateEditor.saveChanges') : t('emailTemplateEditor.createTemplate')}
+          </button>
+        </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden">
-        <div className="p-4 border-b border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface grid grid-cols-12 gap-4">
-          <div className="col-span-4 space-y-1">
-            <label className="text-sm font-medium text-gray-700 dark:text-dk-text">{t('emailTemplateEditor.templateName')}</label>
+      <form id="email-template-editor-form" onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-gray-200/80 dark:border-dk-border bg-slate-50/70 dark:bg-dk-surface/70 grid grid-cols-12 gap-3 items-center shrink-0">
+          <div className="col-span-12 sm:col-span-4 space-y-1">
+            <label className="text-xs font-medium text-gray-700 dark:text-dk-text">{t('emailTemplateEditor.templateName')}</label>
             <input
               type="text"
               value={formData.templateName}
@@ -209,14 +263,14 @@ const EmailTemplateEditorModal = ({
                   templateName: e.target.value,
                 }))
               }
-              className="w-full px-3 py-2 bg-gray-50 dark:bg-dk-inset border border-gray-300 dark:border-dk-border text-gray-900 dark:text-dk-text placeholder:text-gray-400 dark:placeholder:text-dk-muted rounded-lg focus:bg-white dark:focus:bg-dk-inset focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+              className="w-full px-3 py-1.5 bg-white dark:bg-dk-inset border border-gray-200 dark:border-dk-border text-xs sm:text-sm text-gray-900 dark:text-dk-text placeholder:text-gray-400 dark:placeholder:text-dk-muted rounded-xl shadow-2xs focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
               placeholder={t('emailTemplateEditor.templateNamePlaceholder')}
               required
             />
           </div>
           {!hideSubjectField && (
-            <div className="col-span-6 space-y-1">
-              <label className="text-sm font-medium text-gray-700 dark:text-dk-text">{subjectLabel || t('emailTemplateEditor.emailSubject')}</label>
+            <div className="col-span-12 sm:col-span-5 space-y-1">
+              <label className="text-xs font-medium text-gray-700 dark:text-dk-text">{subjectLabel || t('emailTemplateEditor.emailSubject')}</label>
               <input
                 type="text"
                 value={formData.subject}
@@ -226,14 +280,14 @@ const EmailTemplateEditorModal = ({
                 onChange={(e) =>
                   updateSubjectValue(e.target.value, e.target.selectionStart || 0)
                 }
-                className="w-full px-3 py-2 bg-gray-50 dark:bg-dk-inset border border-gray-300 dark:border-dk-border text-gray-900 dark:text-dk-text placeholder:text-gray-400 dark:placeholder:text-dk-muted rounded-lg focus:bg-white dark:focus:bg-dk-inset focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                className="w-full px-3 py-1.5 bg-white dark:bg-dk-inset border border-gray-200 dark:border-dk-border text-xs sm:text-sm text-gray-900 dark:text-dk-text placeholder:text-gray-400 dark:placeholder:text-dk-muted rounded-xl shadow-2xs focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
                 placeholder={t('emailTemplateEditor.subjectPlaceholder')}
                 required
               />
             </div>
           )}
-          <div className={`space-y-1 ${hideSubjectField ? 'col-span-8' : 'col-span-2'}`}>
-            <label className="text-sm font-medium text-gray-700 dark:text-dk-text">{t('emailTemplateEditor.category')}</label>
+          <div className={`space-y-1 ${hideSubjectField ? 'col-span-12 sm:col-span-8' : 'col-span-12 sm:col-span-3'}`}>
+            <label className="text-xs font-medium text-gray-700 dark:text-dk-text">{t('emailTemplateEditor.category')}</label>
             <LabelPicker
               value={formData.category}
               labels={labels}
@@ -242,24 +296,15 @@ const EmailTemplateEditorModal = ({
           </div>
         </div>
 
-        <div className="flex-1 flex overflow-hidden">
-          <div className="flex-1 flex flex-col h-full overflow-hidden">
-            <div className="flex items-center justify-between border-b border-gray-200 dark:border-dk-border px-4 py-3 bg-white dark:bg-dk-surface">
-              <div className="flex space-x-1 bg-gray-100 dark:bg-dk-raised p-1 rounded-lg">
-                <button
-                  type="button"
-                  onClick={() => setEditorTab('content')}
-                  className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${editorTab === 'content' ? 'bg-white dark:bg-dk-bg text-gray-900 dark:text-dk-text shadow-sm' : 'text-gray-500 dark:text-dk-text2 hover:text-gray-700 dark:hover:text-dk-text'}`}
-                >
-                  {t('emailTemplateEditor.content')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditorTab('variables')}
-                  className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${editorTab === 'variables' ? 'bg-white dark:bg-dk-bg text-gray-900 dark:text-dk-text shadow-sm' : 'text-gray-500 dark:text-dk-text2 hover:text-gray-700 dark:hover:text-dk-text'}`}
-                >
-                  {t('emailTemplateEditor.setupVariables')}
-                </button>
+        <div className="flex-1 flex min-h-0 overflow-hidden">
+          <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden">
+            <div className="flex items-center justify-between border-b border-gray-200 dark:border-dk-border px-4 py-2 bg-white dark:bg-dk-surface shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500 dark:text-dk-text2 font-medium">
+                  {editorTab === 'content'
+                    ? (templateKindLabel === 'zalo' ? 'Nội dung tin nhắn' : 'Nội dung email')
+                    : `${t('emailTemplateEditor.setupVariables')} (${variables.length})`}
+                </span>
               </div>
               {editorTab === 'content' && (
                 <div className="flex items-center gap-2">
@@ -846,26 +891,6 @@ const EmailTemplateEditorModal = ({
               )}
             </div>
           </div>
-        </div>
-
-        <div className="p-4 border-t border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={() => {
-              if (typeof onClose === 'function') {
-                onClose();
-              } else {
-                setShowEditorModal(false);
-                setEditingTemplate(null);
-              }
-            }}
-            className="px-4 py-2 rounded-lg border border-gray-300 dark:border-dk-border text-gray-700 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised transition-colors"
-          >
-            {t('common.cancel')}
-          </button>
-          <button type="submit" className="px-4 py-2 rounded-lg bg-primary-500 text-white hover:bg-primary-600 shadow-sm transition-all">
-            {editingTemplate ? t('emailTemplateEditor.saveChanges') : t('emailTemplateEditor.createTemplate')}
-          </button>
         </div>
       </form>
     </div>,

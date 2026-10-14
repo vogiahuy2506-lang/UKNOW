@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   HiOutlineAdjustments,
+  HiOutlineArrowLeft,
   HiOutlineCheck,
   HiOutlineChevronDown,
-  HiOutlineChevronLeft,
   HiOutlineCog,
   HiOutlineRefresh,
   HiOutlineX,
@@ -37,6 +37,8 @@ export function AdminEditorShell({ topbar, children, className = '' }) {
  * `right` cho các nút (TopbarSettingsButton, TopbarToolsMenu, TopbarButton, TopbarSaveButton).
  */
 export function EditorTopbar({ onBack, backTitle, icon: Icon, title, subtitle, center, right }) {
+  const { t } = useI18n();
+  const resolvedBackTitle = backTitle || t('common.back');
   return (
     <div className="h-[52px] bg-white dark:bg-dk-surface border-b border-gray-200/90 dark:border-dk-border flex items-center justify-between px-3 sm:px-4 shrink-0 select-none shadow-2xs z-20 gap-2">
       <div className="flex items-center gap-2 min-w-0 shrink">
@@ -44,11 +46,11 @@ export function EditorTopbar({ onBack, backTitle, icon: Icon, title, subtitle, c
           <button
             type="button"
             onClick={onBack}
-            title={backTitle}
-            aria-label={backTitle}
-            className="p-1.5 rounded-xl text-gray-500 dark:text-dk-text2 hover:text-gray-900 dark:hover:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-raised transition-colors shrink-0"
+            title={resolvedBackTitle}
+            aria-label={resolvedBackTitle}
+            className="p-1.5 rounded-xl border border-slate-200/80 dark:border-dk-border bg-slate-50 dark:bg-dk-raised text-slate-600 dark:text-dk-text hover:text-slate-900 dark:hover:text-dk-text transition-all shadow-2xs shrink-0"
           >
-            <HiOutlineChevronLeft className="w-5 h-5" />
+            <HiOutlineArrowLeft className="w-4 h-4" />
           </button>
         )}
         {Icon && (

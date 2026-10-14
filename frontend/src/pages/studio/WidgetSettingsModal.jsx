@@ -256,7 +256,7 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
 
           {/* Right: settings for active tab */}
           <div className="flex-1 overflow-y-auto overscroll-contain">
-            <div className="p-6 md:p-8 space-y-5 max-w-2xl">
+            <div className="p-6 md:p-8 space-y-5">
               <div className="flex items-center gap-2">
                 <activeTabMeta.icon className="w-5 h-5 text-primary-600 dark:text-primary-400" />
                 <h3 className="text-base font-semibold text-slate-900 dark:text-dk-text">{t(activeTabMeta.labelKey)}</h3>

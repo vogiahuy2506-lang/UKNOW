@@ -14,7 +14,7 @@ import { HiOutlineArrowLeft } from 'react-icons/hi';
  * @param {string} [props.backLabel] - nhãn (aria-label) nút quay lại; trang truyền `t(...)` để theo ngôn ngữ,
  *   mặc định tiếng Việt. Không gọi `useI18n` ở đây để component dùng được ngoài I18nProvider.
  */
-export default function PageHeader({ icon: Icon, title, subtitle, actions, onBack, backLabel = 'Quay lại' }) {
+export default function PageHeader({ icon: Icon, title, subtitle, actions, actionsRef, onBack, backLabel = 'Quay lại' }) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div className="min-w-0 flex items-center gap-3.5">
@@ -46,7 +46,15 @@ export default function PageHeader({ icon: Icon, title, subtitle, actions, onBac
           )}
         </div>
       </div>
-      {actions && <div className="flex items-center gap-2 flex-wrap shrink-0">{actions}</div>}
+      {(actions || actionsRef) && (
+        <div
+          ref={actionsRef}
+          id="page-header-actions"
+          className="flex items-center gap-2 flex-wrap shrink-0 empty:hidden"
+        >
+          {actions}
+        </div>
+      )}
     </div>
   );
 }

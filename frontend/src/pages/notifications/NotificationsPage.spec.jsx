@@ -171,12 +171,42 @@ describe('NotificationsPage', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Đánh dấu đã đọc hết' })).toBeDisabled());
   });
 
-  it('nút "Tuỳ chọn thông báo" → /app/settings/notifications', async () => {
+  it('chuyển sang tab "Tuỳ chọn thông báo" → hiển thị bảng cài đặt tuỳ chọn', async () => {
     installFakeServer(api, []);
+    api.getPreferences.mockResolvedValue([
+      {
+        eventType: 'campaign_run_failed',
+        label: 'Chiến dịch chạy lỗi',
+        labelEn: 'Campaign run failed',
+        inAppEnabled: true,
+        emailEnabled: true,
+        userCanDisableEmail: true,
+        systemEmailEnabled: true,
+      },
+    ]);
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(await screen.findByRole('button', { name: 'Tuỳ chọn thông báo' }));
-    expect(mockNavigate).toHaveBeenCalledWith('/app/settings/notifications');
+    const tab = await screen.findByRole('tab', { name: /Tuỳ chọn thông báo/ });
+    await user.click(tab);
+
+    expect(await screen.findByTestId('preference-row-campaign_run_failed')).toBeInTheDocument();
+    expect(api.getPreferences).toHaveBeenCalledTimes(1);
+  });
+
+  it('khi URL có ?tab=preferences → mở sẵn tab tuỳ chọn thông báo', async () => {
+    installFakeServer(api, []);
+    api.getPreferences.mockResolvedValue([]);
+    const Wrapper = withQueryClient(createQueryClient());
+    render(
+      <Wrapper>
+        <MemoryRouter initialEntries={['/app/notifications?tab=preferences']}>
+          <NotificationsPage />
+        </MemoryRouter>
+      </Wrapper>
+    );
+
+    expect(await screen.findByRole('tab', { name: /Tuỳ chọn thông báo/ })).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByRole('table')).toBeInTheDocument();
   });
 });

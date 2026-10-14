@@ -103,3 +103,23 @@ describe('MainLayout — trình soạn Biểu mẫu là trang soạn tràn màn 
     }
   );
 });
+
+describe('MainLayout — các trang soạn quản trị là editor tràn màn (isAdminEditor)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it.each(['/admin/landing-customizer', '/admin/welcome-email', '/admin/notification-center'])(
+    '%s → <main> không đệm, tràn màn và không banner credit',
+    (path) => {
+      renderAt(path);
+
+      const classes = screen.getByRole('main').className.split(' ');
+      expect(classes).not.toContain('p-2');
+      expect(classes).toContain('rounded-none');
+      expect(classes).toContain('border-0');
+      expect(screen.queryByTestId('credit-banner')).not.toBeInTheDocument();
+    }
+  );
+});
+

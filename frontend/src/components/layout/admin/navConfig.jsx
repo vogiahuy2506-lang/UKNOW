@@ -29,6 +29,7 @@ import {
   HiOutlineShoppingCart,
   HiOutlineCollection,
   HiOutlineSupport,
+  HiOutlineCreditCard,
 } from 'react-icons/hi';
 
 /**
@@ -100,10 +101,12 @@ export const userMenuItems = (t) => [
   { key: 'forms', name: t('nav.forms'), defaultCategory: 'landing_page', path: '/app/forms', icon: HiOutlineClipboardList, permission: ['forms'] },
   { key: 'billing_overview', name: t('nav.billingOverview'), defaultCategory: 'billing', path: '/app/billing', icon: HiOutlineClipboardList, ownerOnly: true },
   { key: 'buy_topup', name: t('nav.buyTopup'), defaultCategory: 'billing', path: '/app/topup', icon: HiOutlinePlusCircle, ownerOnly: true },
+  { key: 'order_history', name: t('nav.orderHistory'), defaultCategory: 'billing', path: '/app/billing?tab=orders', icon: HiOutlineCreditCard, ownerOnly: true },
   { key: 'affiliate_program', name: t('nav.affiliateProgram'), defaultCategory: 'main', path: '/app/affiliate', icon: HiOutlineCurrencyDollar, ownerOnly: true },
   { key: 'business_profile', name: t('nav.businessProfile'), defaultCategory: 'settings', path: '/app/settings/ai-profile', icon: HiOutlineOfficeBuilding, ownerOnly: true },
   { key: 'employees', name: t('nav.employees'), defaultCategory: 'settings', path: '/app/settings/employees', icon: HiOutlineUserGroup, ownerOnly: true },
   { key: 'media_library', name: t('nav.mediaLibrary'), defaultCategory: 'settings', path: '/app/settings/media-library', icon: HiOutlinePhotograph, permission: ['media_library_view'] },
+  { key: 'notifications', name: t('nav.notifications'), defaultCategory: 'settings', path: '/app/notifications', icon: HiOutlineBell },
   { key: 'audit_logs', name: t('nav.auditLogs'), defaultCategory: 'settings', path: '/app/settings/audit-logs', icon: HiOutlineClipboard, ownerOnly: true },
   // Không permission, không ownerOnly: nhân viên cũng gửi được góp ý (ticket thuộc người đăng nhập).
   { key: 'support', name: t('nav.support'), defaultCategory: 'settings', path: '/app/support', icon: HiOutlineSupport },

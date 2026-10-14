@@ -19,8 +19,16 @@ const BillingHubPage = () => {
   const [profileData, setProfileData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const initialTab = searchParams.get('tab') === 'locks' ? 'locks' : 'overview';
+  const tabParam = searchParams.get('tab');
+  const initialTab = tabParam === 'locks' || tabParam === 'orders' ? tabParam : 'overview';
   const [activeTab, setActiveTab] = useState(initialTab);
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'locks' || tab === 'orders' || tab === 'overview') {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     let cancelled = false;

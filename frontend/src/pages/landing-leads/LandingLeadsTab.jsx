@@ -12,7 +12,9 @@ import {
   HiOutlineChevronLeft,
   HiOutlineChevronRight,
   HiOutlineEye,
+  HiOutlineDownload,
 } from 'react-icons/hi';
+import { PageHeaderActions } from '../../components/common/PageContainer';
 import useLandingLeadsList from '../../features/landing/hooks/useLandingLeadsList.js';
 import { LandingLeadsAdminFilters } from '../../features/landing/components/LandingLeadsAdminFilters.jsx';
 import {
@@ -167,17 +169,38 @@ export default function LandingLeadsTab() {
 
   return (
     <div className="space-y-6">
-      {/* Filter trigger (drawer) + Export Excel · tìm nhanh + làm mới */}
+      <PageHeaderActions>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={isExporting}
+            className="btn btn-secondary"
+          >
+            <HiOutlineDownload className="w-4 h-4 mr-1.5" aria-hidden="true" />
+            <span>{isExporting ? t('landingLeads.exporting') : t('landingLeads.exportExcel')}</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            disabled={isExportingCsv}
+            title={t('csvExport.buttonHint')}
+            data-testid="landing-leads-export-csv"
+            className="btn btn-secondary"
+          >
+            <HiOutlineDownload className="w-4 h-4 mr-1.5" aria-hidden="true" />
+            <span>{isExportingCsv ? t('csvExport.exporting') : t('csvExport.button')}</span>
+          </button>
+        </div>
+      </PageHeaderActions>
+
+      {/* Filter trigger (drawer) · tìm nhanh + làm mới */}
       <div className="flex flex-wrap items-center gap-2">
         <LandingLeadsAdminFilters
           draftFilters={draftFilters}
           setDraftFilters={setDraftFilters}
           onApply={applyFilters}
           onReset={resetFilters}
-          onExportExcel={handleExport}
-          isExporting={isExporting}
-          onExportCsv={handleExportCsv}
-          isExportingCsv={isExportingCsv}
           appliedCount={appliedCount}
         />
         <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">

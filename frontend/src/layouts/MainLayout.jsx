@@ -160,7 +160,37 @@ const MainLayout = ({ children = null }) => {
   // 11/10/2026: trình soạn Biểu mẫu (tạo mới / sửa) cũng là trang soạn tràn màn: danh sách trường bên trái, xem trước cố định
   // bên phải, Cài đặt là modal (features/forms/pages/FormEditorPage.jsx) — không đệm, không bo góc, không banner credit.
   const isFormEditor = /^\/app\/forms\/(new|[^/]+\/edit)\/?$/.test(location.pathname);
-  const showAiSidePanel = aiPanelOpen && !isAiHomePage && !isLandingCanvas;
+  // 14/10/2026: Trung tâm chiến dịch (/admin/notification-center) chỉ ẩn header khi ở tab "Soạn mẫu" (tab=templates).
+  const [ncMode, setNcMode] = useState('history');
+  useEffect(() => {
+    const handler = (e) => {
+      if (typeof e?.detail === 'string') setNcMode(e.detail);
+    };
+    window.addEventListener('notification-center:mode-change', handler);
+    return () => window.removeEventListener('notification-center:mode-change', handler);
+  }, []);
+
+  useEffect(() => {
+    setNcMode('history');
+  }, [location.pathname]);
+
+  const isNotificationCenterTemplates =
+    location.pathname.startsWith('/admin/notification-center') &&
+    (ncMode === 'templates' || new URLSearchParams(location.search).get('tab') === 'templates');
+  // Trang soạn bài viết hướng dẫn (/admin/help-articles/new, /admin/help-articles/:id): giấu sidebar để tối đa không gian cho 2 cột soạn + xem trước
+  const isHelpArticleEditor = /^\/admin\/help-articles\/[^/]+$/.test(location.pathname);
+
+  // Các trang soạn tràn màn: ẩn Header toàn cục, kéo topbar lên sát đỉnh
+  // - Landing Canvas
+  // - Form Editor (/app/forms/new, /app/forms/:id/edit)
+  // - Trang soạn quản trị: Tuỳ chỉnh landing, Email chào mừng, hoặc Trung tâm thông báo khi ở tab Soạn mẫu
+  const shouldHideHeader =
+    isLandingCanvas ||
+    isFormEditor ||
+    (/^\/admin\/(landing-customizer|welcome-email)\/?$/.test(location.pathname)) ||
+    isNotificationCenterTemplates;
+  const shouldHideSidebar = isHelpArticleEditor;
+  const showAiSidePanel = aiPanelOpen && !isAiHomePage && !shouldHideHeader;
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -244,8 +274,8 @@ const MainLayout = ({ children = null }) => {
     return () => window.removeEventListener('app:collapse-sidebar', handleCollapseSidebar);
   }, [setSidebarOpen]);
 
-  const isBuilderPage = isFullLayout || isLandingCanvas || isFormEditor;
-  const isSpecialPage = isFullLayout || isInboxPage || isAiHomePage || isChatbotStudio || isLandingCanvas || isAdminEditor || isFormEditor;
+  const isBuilderPage = isFullLayout || isLandingCanvas || isFormEditor || isAdminEditor || isHelpArticleEditor;
+  const isSpecialPage = isFullLayout || isInboxPage || isAiHomePage || isChatbotStudio || isLandingCanvas || isAdminEditor || isFormEditor || isHelpArticleEditor;
 
   // Persist sidebar width for full-screen editors
   useEffect(() => {
@@ -305,11 +335,11 @@ const MainLayout = ({ children = null }) => {
           isEmployee={activeContext?.type === 'employee'}
         />
 
-        {!isAiHomePage && !isChatbotStudio && !isLandingCanvas && (
+        {!isAiHomePage && !isChatbotStudio && !shouldHideHeader && (
           <AiChatbot isOpen={aiPanelOpen} onToggle={() => setAiPanelOpen(false)} />
         )}
 
-        {!aiPanelOpen && !isAiHomePage && !isChatbotStudio && !isLandingCanvas && (
+        {!aiPanelOpen && !isAiHomePage && !isChatbotStudio && !shouldHideHeader && (
           <button
             onClick={() => setAiPanelOpen(true)}
             className="fixed bottom-6 right-6 w-14 h-14 bg-orange-500 text-white rounded-full shadow-2xl z-30 flex items-center justify-center hover:scale-110 active:scale-95 transition-all"
@@ -324,8 +354,8 @@ const MainLayout = ({ children = null }) => {
   // Desktop layout
   return (
     <div className="h-screen overflow-hidden bg-[#f9fafb] dark:bg-dk-inset flex flex-col transition-colors" style={{ zoom: 1 }}>
-      {/* Topbar: full-width, fixed top (ẩn khi ở Studio Landing Canvas để giải phóng không gian dọc) */}
-      {!isLandingCanvas && (
+      {/* Topbar: full-width, fixed top (ẩn khi ở Studio Landing Canvas hoặc trang soạn mẫu quản trị để giải phóng không gian dọc) */}
+      {!shouldHideHeader && (
         <div
           className="fixed top-0 left-0 right-0 z-40 bg-white dark:bg-dk-bg flex items-center border-b border-gray-200/80 dark:border-dk-border/80 transition-all duration-300"
           style={{
@@ -337,20 +367,30 @@ const MainLayout = ({ children = null }) => {
         </div>
       )}
 
-      {/* Sidebar: starts below topbar (hoặc top 0 khi ở Landing Canvas) */}
-      <Sidebar
-        isOpen={sidebarOpen}
-        width={sidebarOpen ? SIDEBAR_WIDTH_EXPANDED : SIDEBAR_WIDTH_COLLAPSED}
-        onToggle={() => setSidebarOpen(!sidebarOpen)}
-        topOffset={isLandingCanvas ? 0 : HEADER_HEIGHT}
-      />
+      {/* Sidebar: starts below topbar (hoặc top 0 khi ở Landing Canvas / Admin Editor; ẩn khi ở Help Article Editor) */}
+      {!shouldHideSidebar && (
+        <Sidebar
+          isOpen={sidebarOpen}
+          width={sidebarOpen ? SIDEBAR_WIDTH_EXPANDED : SIDEBAR_WIDTH_COLLAPSED}
+          onToggle={() => setSidebarOpen(!sidebarOpen)}
+          topOffset={shouldHideHeader ? 0 : HEADER_HEIGHT}
+        />
+      )}
 
       <div
         className={`flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden${!isPanelResizing ? ' transition-all duration-300' : ''}`}
         style={{
-          marginLeft: sidebarOpen ? SIDEBAR_WIDTH_EXPANDED : SIDEBAR_WIDTH_COLLAPSED,
+          marginLeft: shouldHideSidebar
+            ? 0
+            : (sidebarOpen ? SIDEBAR_WIDTH_EXPANDED : SIDEBAR_WIDTH_COLLAPSED),
           marginRight: showAiSidePanel && !isMobile ? aiPanelWidth : 0,
-          padding: isLandingCanvas ? 0 : `${HEADER_HEIGHT + 6}px 6px 6px ${SIDEBAR_GAP}px`,
+          padding: shouldHideHeader
+            ? 0
+            : (isAdminEditor
+                ? `${HEADER_HEIGHT}px 0 0 0`
+                : (shouldHideSidebar
+                    ? `${HEADER_HEIGHT + 6}px 6px 6px 6px`
+                    : `${HEADER_HEIGHT + 6}px 6px 6px ${SIDEBAR_GAP}px`)),
         }}
       >
         {!isBuilderPage && <CreditWarningBanner />}
@@ -371,7 +411,7 @@ const MainLayout = ({ children = null }) => {
       </div>
 
       {/* AI Side Panel */}
-      {!isAiHomePage && !isLandingCanvas && (
+      {!isAiHomePage && !shouldHideHeader && (
         <AiChatbot
           isOpen={aiPanelOpen}
           onToggle={() => setAiPanelOpen(false)}
@@ -383,7 +423,7 @@ const MainLayout = ({ children = null }) => {
       )}
 
       {/* AI Toggle Bar (Desktop) */}
-      {!aiPanelOpen && !isChatbotStudio && !isAiHomePage && !isLandingCanvas && (
+      {!aiPanelOpen && !isChatbotStudio && !isAiHomePage && !shouldHideHeader && (
         <div className="fixed top-0 right-0 h-full w-1 z-50 group cursor-pointer"
           onClick={() => setAiPanelOpen(true)}
           title={t('mainLayout.openAIAssistant')}

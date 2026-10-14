@@ -1,4 +1,24 @@
+import { createContext, useContext, useState } from 'react';
+import { createPortal } from 'react-dom';
 import PageHeader from './PageHeader';
+
+export const PageHeaderActionsContext = createContext(undefined);
+
+/**
+ * Đưa các nút hành động của trang con / tab lên ngang hàng với tiêu đề PageHeader.
+ * - Khi nằm trong PageContainer: teleport vào container actions của PageHeader.
+ * - Khi nằm ngoài PageContainer (ví dụ test tab độc lập): render inline bình thường.
+ */
+export function PageHeaderActions({ children }) {
+  const targetNode = useContext(PageHeaderActionsContext);
+  if (targetNode === undefined) {
+    return children;
+  }
+  if (targetNode) {
+    return createPortal(children, targetNode);
+  }
+  return null;
+}
 
 /**
  * Khung trang dùng chung cho các màn hình trong /app.
@@ -25,21 +45,25 @@ export default function PageContainer({
   className = '',
   children,
 }) {
+  const [actionsNode, setActionsNode] = useState(null);
   const hasHeader = Boolean(title || icon || onBack);
 
   return (
-    <div className={`space-y-6 ${className}`.trim()}>
-      {hasHeader && (
-        <PageHeader
-          icon={icon}
-          title={title}
-          subtitle={subtitle}
-          actions={actions}
-          onBack={onBack}
-          backLabel={backLabel}
-        />
-      )}
-      {children}
-    </div>
+    <PageHeaderActionsContext.Provider value={actionsNode}>
+      <div className={`space-y-6 ${className}`.trim()}>
+        {hasHeader && (
+          <PageHeader
+            icon={icon}
+            title={title}
+            subtitle={subtitle}
+            actions={actions}
+            actionsRef={setActionsNode}
+            onBack={onBack}
+            backLabel={backLabel}
+          />
+        )}
+        {children}
+      </div>
+    </PageHeaderActionsContext.Provider>
   );
 }

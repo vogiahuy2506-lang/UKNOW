@@ -83,12 +83,12 @@ describe('AdminAiModelsPage — Fallback model selection and retired warnings (P
     expect(badge).toBeInTheDocument();
   });
 
-  it('ô chọn model dự phòng có "Không dùng", B, C; KHÔNG có A; D không hỗ trợ cũng không có', async () => {
+  it('nút vai trò: A là Chính nên nút Phụ bị vô hiệu hoá; B có nút Phụ bật; D không hỗ trợ thì nút disabled', async () => {
     const models = [
-      { modelId: 'model-a', displayName: 'Model A', isEnabled: true, isFallback: false, supportsGenerateContent: true },
-      { modelId: 'model-b', displayName: 'Model B', isEnabled: false, isFallback: true, supportsGenerateContent: true },
-      { modelId: 'model-c', displayName: 'Model C', isEnabled: false, isFallback: false, supportsGenerateContent: true },
-      { modelId: 'model-d', displayName: 'Model D', isEnabled: false, isFallback: false, supportsGenerateContent: false },
+      { modelId: 'model-a', displayName: 'Model A', isEnabled: true, isFallback: false, supportsGenerateContent: true, thinking: true },
+      { modelId: 'model-b', displayName: 'Model B', isEnabled: false, isFallback: true, supportsGenerateContent: true, thinking: true },
+      { modelId: 'model-c', displayName: 'Model C', isEnabled: false, isFallback: false, supportsGenerateContent: true, thinking: true },
+      { modelId: 'model-d', displayName: 'Model D', isEnabled: false, isFallback: true, supportsGenerateContent: false },
     ];
     mockList.mockResolvedValueOnce(listResponse(models));
 
@@ -96,25 +96,31 @@ describe('AdminAiModelsPage — Fallback model selection and retired warnings (P
 
     await waitFor(() => {
       expect(screen.getByText('model-a')).toBeInTheDocument();
+      expect(screen.getByText('model-d')).toBeInTheDocument();
     });
 
-    const select = screen.getByLabelText('Model dự phòng');
-    const options = Array.from(select.querySelectorAll('option')).map((opt) => ({
-      value: opt.value,
-      text: opt.textContent,
-    }));
+    const rowA = screen.getByText('model-a').closest('tr');
+    const rowB = screen.getByText('model-b').closest('tr');
+    const rowD = screen.getByText('model-d').closest('tr');
 
-    expect(options.map((o) => o.value)).toEqual(['', 'model-b', 'model-c']);
-    expect(options.find((o) => o.value === 'model-a')).toBeUndefined();
-    expect(options.find((o) => o.value === 'model-d')).toBeUndefined();
-    expect(select.value).toBe('model-b');
+    // A đang là Chính -> nút Chính disabled (đang dùng), nút Phụ disabled (không thể làm dự phòng)
+    expect(within(rowA).getByRole('button', { name: 'Chính' })).toBeDisabled();
+    expect(within(rowA).getByRole('button', { name: 'Phụ' })).toBeDisabled();
+
+    // B đang là Phụ -> nút Phụ có aria-pressed="true", nút Chính bật
+    expect(within(rowB).getByRole('button', { name: 'Phụ' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(rowB).getByRole('button', { name: 'Chính' })).not.toBeDisabled();
+
+    // D không hỗ trợ generateContent -> cả 2 nút disabled
+    expect(within(rowD).getByRole('button', { name: 'Chính' })).toBeDisabled();
+    expect(within(rowD).getByRole('button', { name: 'Phụ' })).toBeDisabled();
   });
 
-  it('chọn C -> gọi setFallbackModel("model-c") và huy hiệu chuyển sang C', async () => {
+  it('bấm nút "Phụ" của C -> gọi setFallbackModel("model-c") và nút Phụ ở C bật, có huy hiệu', async () => {
     const models = [
       { modelId: 'model-a', displayName: 'Model A', isEnabled: true, isFallback: false, supportsGenerateContent: true },
       { modelId: 'model-b', displayName: 'Model B', isEnabled: false, isFallback: true, supportsGenerateContent: true },
-      { modelId: 'model-c', displayName: 'Model C', isEnabled: false, isFallback: false, supportsGenerateContent: true },
+      { modelId: 'model-c', displayName: 'Model C', isEnabled: false, isFallback: false, supportsGenerateContent: true, thinking: true },
     ];
     mockList.mockResolvedValueOnce(listResponse(models));
     mockSetFallbackModel.mockResolvedValueOnce({ data: { success: true, data: { fallbackModel: 'model-c' } } });
@@ -122,28 +128,26 @@ describe('AdminAiModelsPage — Fallback model selection and retired warnings (P
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText('model-a')).toBeInTheDocument();
+      expect(screen.getByText('model-c')).toBeInTheDocument();
     });
 
-    const select = screen.getByLabelText('Model dự phòng');
-    fireEvent.change(select, { target: { value: 'model-c' } });
+    const rowC = screen.getByText('model-c').closest('tr');
+    const btnPhuC = within(rowC).getByRole('button', { name: 'Phụ' });
+    fireEvent.click(btnPhuC);
 
     await waitFor(() => {
       expect(mockSetFallbackModel).toHaveBeenCalledWith('model-c');
     });
 
     expect(toast.success).toHaveBeenCalledWith('Đã đặt model-c làm model dự phòng');
-    expect(select.value).toBe('model-c');
-
-    // C hiện lên trong bảng và có huy hiệu Dự phòng
-    expect(screen.getByText('model-c')).toBeInTheDocument();
-    expect(screen.getByText('Dự phòng')).toBeInTheDocument();
+    expect(btnPhuC).toHaveAttribute('aria-pressed', 'true');
+    expect(within(rowC).getByText('Dự phòng')).toBeInTheDocument();
   });
 
-  it('chọn "Không dùng" -> gọi setFallbackModel(null)', async () => {
+  it('bấm huỷ ở nút "Phụ" đang bật của B -> gọi setFallbackModel(null)', async () => {
     const models = [
-      { modelId: 'model-a', displayName: 'Model A', isEnabled: true, isFallback: false, supportsGenerateContent: true },
-      { modelId: 'model-b', displayName: 'Model B', isEnabled: false, isFallback: true, supportsGenerateContent: true },
+      { modelId: 'model-a', displayName: 'Model A', isEnabled: true, isFallback: false, supportsGenerateContent: true, thinking: true },
+      { modelId: 'model-b', displayName: 'Model B', isEnabled: false, isFallback: true, supportsGenerateContent: true, thinking: true },
     ];
     mockList.mockResolvedValueOnce(listResponse(models));
     mockSetFallbackModel.mockResolvedValueOnce({ data: { success: true, data: { fallbackModel: null } } });
@@ -151,26 +155,31 @@ describe('AdminAiModelsPage — Fallback model selection and retired warnings (P
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText('model-a')).toBeInTheDocument();
+      expect(screen.getByText('model-b')).toBeInTheDocument();
     });
 
-    const select = screen.getByLabelText('Model dự phòng');
-    fireEvent.change(select, { target: { value: '' } });
+    const rowB = screen.getByText('model-b').closest('tr');
+    const btnPhuB = within(rowB).getByRole('button', { name: 'Phụ' });
+    expect(btnPhuB).toHaveAttribute('aria-pressed', 'true');
+
+    // Bấm lại để huỷ
+    fireEvent.click(btnPhuB);
 
     await waitFor(() => {
       expect(mockSetFallbackModel).toHaveBeenCalledWith(null);
     });
 
     expect(toast.success).toHaveBeenCalledWith('Đã bỏ model dự phòng');
-    expect(select.value).toBe('');
+    const updatedRowB = screen.getByText('model-b').closest('tr');
+    expect(within(updatedRowB).getByRole('button', { name: 'Phụ' })).toHaveAttribute('aria-pressed', 'false');
     expect(screen.queryByText('Dự phòng')).not.toBeInTheDocument();
   });
 
-  it('API ném lỗi kèm message -> ô chọn trả về B; toast.error nhận đúng message server', async () => {
+  it('API ném lỗi kèm message -> nút Phụ giữ nguyên trạng thái cũ; toast.error nhận đúng message server', async () => {
     const models = [
       { modelId: 'model-a', displayName: 'Model A', isEnabled: true, isFallback: false, supportsGenerateContent: true },
       { modelId: 'model-b', displayName: 'Model B', isEnabled: false, isFallback: true, supportsGenerateContent: true },
-      { modelId: 'model-c', displayName: 'Model C', isEnabled: false, isFallback: false, supportsGenerateContent: true },
+      { modelId: 'model-c', displayName: 'Model C', isEnabled: false, isFallback: false, supportsGenerateContent: true, thinking: true },
     ];
     mockList.mockResolvedValueOnce(listResponse(models));
     mockSetFallbackModel.mockRejectedValueOnce({
@@ -180,23 +189,24 @@ describe('AdminAiModelsPage — Fallback model selection and retired warnings (P
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText('model-a')).toBeInTheDocument();
+      expect(screen.getByText('model-c')).toBeInTheDocument();
     });
 
-    const select = screen.getByLabelText('Model dự phòng');
-    expect(select.value).toBe('model-b');
-
-    fireEvent.change(select, { target: { value: 'model-c' } });
+    const rowC = screen.getByText('model-c').closest('tr');
+    const btnPhuC = within(rowC).getByRole('button', { name: 'Phụ' });
+    fireEvent.click(btnPhuC);
 
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith('Model dự phòng không hợp lệ');
     });
 
-    // Ô chọn phải được khôi phục về B
-    expect(select.value).toBe('model-b');
+    // Trạng thái B vẫn là Phụ, C không phải là Phụ
+    const rowB = screen.getByText('model-b').closest('tr');
+    expect(within(rowB).getByRole('button', { name: 'Phụ' })).toHaveAttribute('aria-pressed', 'true');
+    expect(btnPhuC).toHaveAttribute('aria-pressed', 'false');
   });
 
-  it('chọn B làm model hệ thống -> B mất huy hiệu dự phòng; ô chọn về "Không dùng"', async () => {
+  it('chọn B làm model hệ thống -> B thành model Chính, mất huy hiệu dự phòng và nút Phụ bị disabled', async () => {
     const models = [
       { modelId: 'model-a', displayName: 'Model A', isEnabled: true, isFallback: false, supportsGenerateContent: true },
       { modelId: 'model-b', displayName: 'Model B', isEnabled: false, isFallback: true, supportsGenerateContent: true },
@@ -210,20 +220,20 @@ describe('AdminAiModelsPage — Fallback model selection and retired warnings (P
       expect(screen.getByText('model-b')).toBeInTheDocument();
     });
 
-    const radioButtons = screen.getAllByRole('radio');
-    // Radio thứ hai thuộc về model-b
-    fireEvent.click(radioButtons[1]);
+    const rowB = screen.getByText('model-b').closest('tr');
+    const btnChinhB = within(rowB).getByRole('button', { name: 'Chính' });
+    fireEvent.click(btnChinhB);
 
     await waitFor(() => {
       expect(mockSetSystemModel).toHaveBeenCalledWith('model-b');
     });
 
-    // B không còn huy hiệu dự phòng
+    // B thành Chính, mất huy hiệu dự phòng
+    expect(btnChinhB).toHaveAttribute('aria-pressed', 'true');
     expect(screen.queryByText('Dự phòng')).not.toBeInTheDocument();
 
-    // Ô chọn tự về "Không dùng"
-    const select = screen.getByLabelText('Model dự phòng');
-    expect(select.value).toBe('');
+    // Nút Phụ của B bị disable vì model Chính không thể làm dự phòng
+    expect(within(rowB).getByRole('button', { name: 'Phụ' })).toBeDisabled();
   });
 
   it('A bật nhưng !supportsGenerateContent, B dự phòng -> dải cảnh báo nêu A và nêu B đang chạy', async () => {

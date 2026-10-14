@@ -350,7 +350,18 @@ const VARIABLES = ['user_name', 'user_email', 'user_plan', 'product_name', 'curr
 
 export default function NotificationCenter() {
   const { t } = useI18n();
-  const [activeTab, setActiveTab] = useState('history');
+  const [activeTab, setActiveTabState] = useState('history');
+  const setActiveTab = useCallback((tab) => {
+    setActiveTabState(tab);
+    window.dispatchEvent(new CustomEvent('notification-center:mode-change', { detail: tab }));
+  }, []);
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('notification-center:mode-change', { detail: 'history' }));
+    return () => {
+      window.dispatchEvent(new CustomEvent('notification-center:mode-change', { detail: 'history' }));
+    };
+  }, []);
   const [busy, setBusy] = useState(false);
   // Modal Cài đặt (11/10/2026): kênh gửi / đối tượng / lịch gửi / cấu hình kênh theo sự kiện. Chỉ là chỗ ĐẶT các điều khiển —
   // giá trị (channels, targeting, schedule…) vẫn nằm ở state của trang như trước.

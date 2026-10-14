@@ -16,6 +16,7 @@ import {
   HiOutlineX,
 } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
+import { PageHeaderActions } from '../../../components/common/PageContainer';
 import ConfirmModal from '../../../components/common/ConfirmModal';
 import customerApiService from '../services/customerApi.service';
 import { formatDateOnly, getCustomerDisplayName } from '../utils/customerDisplay.helpers';
@@ -196,30 +197,31 @@ export default function AllCustomersTab() {
           </select>
           <button type="submit" className="btn btn-secondary shrink-0">{t('common.search')}</button>
         </form>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="text-xs text-slate-500 dark:text-dk-text2">
-            {hasFilters && (
-              <button type="button" onClick={clearFilters} className="font-medium text-orange-600 hover:underline">
-                {t('customers.all.clearFilters')}
-              </button>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" className="btn btn-secondary" onClick={handleExport} disabled={isExporting}>
-              <HiOutlineDownload className="w-4 h-4 mr-1.5" aria-hidden="true" />
-              {isExporting ? t('customers.exportFlow.exporting') : t('customers.exportFlow.button')}
-            </button>
-            <button type="button" className="btn btn-secondary" onClick={() => setShowImport(true)}>
-              <HiOutlineUpload className="w-4 h-4 mr-1.5" aria-hidden="true" />
-              {t('customers.importCustomers')}
-            </button>
-            <button type="button" className="btn btn-primary" onClick={() => setFormState({ open: true, customer: null })}>
-              <HiOutlinePlus className="w-4 h-4 mr-1.5" aria-hidden="true" />
-              {t('customers.addCustomer')}
+        {hasFilters && (
+          <div className="text-xs text-slate-500 dark:text-dk-text2 pt-0.5">
+            <button type="button" onClick={clearFilters} className="font-medium text-orange-600 hover:underline">
+              {t('customers.all.clearFilters')}
             </button>
           </div>
-        </div>
+        )}
       </div>
+
+      <PageHeaderActions>
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" className="btn btn-secondary" onClick={handleExport} disabled={isExporting}>
+            <HiOutlineDownload className="w-4 h-4 mr-1.5" aria-hidden="true" />
+            {isExporting ? t('customers.exportFlow.exporting') : t('customers.exportFlow.button')}
+          </button>
+          <button type="button" className="btn btn-secondary" onClick={() => setShowImport(true)}>
+            <HiOutlineUpload className="w-4 h-4 mr-1.5" aria-hidden="true" />
+            {t('customers.importCustomers')}
+          </button>
+          <button type="button" className="btn btn-primary" onClick={() => setFormState({ open: true, customer: null })}>
+            <HiOutlinePlus className="w-4 h-4 mr-1.5" aria-hidden="true" />
+            {t('customers.addCustomer')}
+          </button>
+        </div>
+      </PageHeaderActions>
 
       <div className="card bg-white dark:bg-dk-surface border-slate-200 dark:border-dk-border">
         <div className="table-container">

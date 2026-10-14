@@ -7,6 +7,11 @@ import {
   HiOutlineXCircle,
   HiOutlineRefresh,
   HiOutlinePaperClip,
+  HiOutlineChevronRight,
+  HiOutlineClock,
+  HiOutlineMoon,
+  HiOutlineX,
+  HiOutlinePlus,
 } from 'react-icons/hi';
 import { useI18n } from '../../i18n';
 import api from '../../services/api';
@@ -32,6 +37,18 @@ import {
   shouldStopBatchOnHttpError,
 } from './quickSendAdapter.util';
 
+function formatFileSize(bytes) {
+  if (!bytes) return '';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let unitIndex = 0;
+  let size = bytes;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+  return `${size.toFixed(1)} ${units[unitIndex]}`;
+}
+
 const DEFERRED_REASON_I18N_KEYS = {
   quiet_hours: 'quickSend.deferredReasonQuietHours',
   rate_limited: 'quickSend.deferredReasonRateLimited',
@@ -48,27 +65,34 @@ const CHANNELS_SETTINGS_PATH = '/app/settings/channels';
 
 /**
  * W7a — Gửi nhanh cho kênh adapter (Telegram / WhatsApp), trình duyệt lặp MỖI REQUEST MỘT NGƯỜI
- * (POST /campaigns/quick-send/:channel). Panel tự chứa: chọn tài khoản, người nhận (đã nhắn tới / nhập tay),
- * nội dung, ước tính, vòng gửi có giãn cách + xử lý `deferred`. P8b: thêm nguồn "Nhóm" (Telegram: chat id âm; WhatsApp:
- * jid `@g.us`) — danh sách đọc trực tiếp từ kênh, tải khi người dùng bấm (có thể chậm tới ~20s).
+ * (POST /campaigns/quick-send/:channel). Hỗ trợ cả 2 chế độ:
+ * 1. Chế độ đồng bộ 3 bước (khi truyền `step` và `onStepChange`): Bước 1 Người nhận -> Bước 2 Nội dung -> Bước 3 Xem trước.
+ * 2. Chế độ panel tự chứa (khi không truyền `step`): hiển thị toàn bộ trên một trang cho các test đơn vị độc lập.
  *
- * Gắn `key={channel}` ở chỗ dùng để đổi kênh Telegram <-> WhatsApp không mang người nhận/khoá sang kênh kia.
- *
- * @param {{ channel: 'telegram'|'whatsapp', channelLabel?: string, isEmployeeContext?: boolean }} props
- *   `isEmployeeContext`: do trang cha (đã đọc authStore) truyền xuống — panel không import authStore để spec giả `services/api` vẫn chạy.
+ * @param {{ channel: 'telegram'|'whatsapp', channelLabel?: string, isEmployeeContext?: boolean, step?: string, onStepChange?: (step: string) => void }} props
  */
-const QuickSendAdapterPanel = ({ channel, channelLabel, isEmployeeContext = false }) => {
+const QuickSendAdapterPanel = ({
+  channel,
+  channelLabel,
+  isEmployeeContext = false,
+  step,
+  onStepChange,
+  defaultRecipientMode,
+}) => {
   const { t } = useI18n();
   const navigate = useNavigate();
   const cfg = ADAPTER_CHANNELS[channel];
   const label = channelLabel || (channel === 'whatsapp' ? 'WhatsApp' : 'Telegram');
+  const isStepMode = Boolean(step && onStepChange);
 
   const [accounts, setAccounts] = useState([]);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
   const [accountsFailed, setAccountsFailed] = useState(false);
   const [selectedRef, setSelectedRef] = useState('');
 
-  const [recipientMode, setRecipientMode] = useState(RECIPIENT_MODES.CONVERSATIONS);
+  const [recipientMode, setRecipientMode] = useState(
+    () => defaultRecipientMode || (isStepMode ? RECIPIENT_MODES.MANUAL : RECIPIENT_MODES.CONVERSATIONS)
+  );
   const [conversations, setConversations] = useState([]);
   const [isLoadingConversations, setIsLoadingConversations] = useState(false);
   const [conversationsFailed, setConversationsFailed] = useState(false);
@@ -258,7 +282,19 @@ const QuickSendAdapterPanel = ({ channel, channelLabel, isEmployeeContext = fals
     [templateAttachments, extraAttachments]
   );
   const attachmentProblem = validateChannelAttachments(allAttachments, channel);
-  const canSend = phase === 'compose'
+  const canProceedToStep2 = Boolean(
+    selectedRef
+    && recipients.length > 0
+    && !overLimit
+    && (recipientMode !== RECIPIENT_MODES.MANUAL || parsedManual.invalid.length === 0)
+  );
+  const canProceedToStep3 = Boolean(
+    trimmedMessage.length > 0
+    && message.length <= cfg.maxMessageLength
+    && !isUploadingAttachment
+    && !attachmentProblem
+  );
+  const canSend = (phase === 'compose' || isStepMode)
     && !attachmentProblem
     && Boolean(selectedRef)
     && recipients.length > 0
@@ -510,6 +546,7 @@ const QuickSendAdapterPanel = ({ channel, channelLabel, isEmployeeContext = fals
     if (sendGuardRef.current || list.length === 0) return;
     sendGuardRef.current = true;
     setPhase('sending');
+    onStepChange?.('sending');
     try {
       const outcome = await runSendLoop(list);
       if (outcome.aborted) return;
@@ -525,6 +562,7 @@ const QuickSendAdapterPanel = ({ channel, channelLabel, isEmployeeContext = fals
         stopError: outcome.stopError,
       });
       setPhase('done');
+      onStepChange?.('done');
       if (outcome.success > 0 && !outcome.deferredStop && !outcome.stopError && outcome.fail === 0) {
         toast.success(t('quickSendAdapter.sendSuccessToast', { count: outcome.success }));
       }
@@ -532,6 +570,7 @@ const QuickSendAdapterPanel = ({ channel, channelLabel, isEmployeeContext = fals
       console.error('[QuickSendAdapter] send loop error', err);
       toast.error(err?.response?.data?.message || t('quickSendAdapter.sendFailedToast'));
       setPhase('compose');
+      onStepChange?.('preview');
     } finally {
       sendGuardRef.current = false;
     }
@@ -550,6 +589,7 @@ const QuickSendAdapterPanel = ({ channel, channelLabel, isEmployeeContext = fals
   const handleStartOver = () => {
     setResult(null);
     setPhase('compose');
+    onStepChange?.('recipients');
     setSelectedKeys(new Set());
     setSelectedGroupKeys(new Set());
     setManualText('');
@@ -557,6 +597,7 @@ const QuickSendAdapterPanel = ({ channel, channelLabel, isEmployeeContext = fals
     setTemplateId('');
     setTemplateAttachments([]);
     setExtraAttachments([]);
+    setRecipientMode(defaultRecipientMode || (isStepMode ? RECIPIENT_MODES.MANUAL : RECIPIENT_MODES.CONVERSATIONS));
   };
 
   const estimateText = (() => {
@@ -656,283 +697,492 @@ const QuickSendAdapterPanel = ({ channel, channelLabel, isEmployeeContext = fals
     );
   }
 
-  return (
-    <div className="space-y-6" data-testid="quick-send-adapter-panel">
-      {/* Tài khoản gửi */}
-      <div className={cardClass}>
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-dk-text mb-4">{t('quickSendAdapter.accountTitle', { channel: label })}</h2>
-        {isLoadingAccounts ? (
-          <div className="flex items-center justify-center py-6">
-            <div className="h-6 w-6 rounded-full border-2 border-orange-500 border-t-transparent animate-spin" />
-          </div>
-        ) : accountsFailed ? (
-          <p className="text-sm text-red-600 dark:text-red-400">{t('quickSendAdapter.accountsLoadFailed')}</p>
-        ) : accounts.length === 0 ? (
-          <div className="space-y-3">
-            <p className="text-sm text-gray-500 dark:text-dk-text2">
-              {isEmployeeContext
-                ? t('quickSendAdapter.noAccountsAssigned', { channel: label })
-                : t('quickSendAdapter.noAccounts', { channel: label })}
-            </p>
-            <button
-              type="button"
-              onClick={() => navigate(CHANNELS_SETTINGS_PATH)}
-              className="px-4 py-2 text-sm font-medium text-orange-700 dark:text-orange-400 border border-orange-300 dark:border-orange-500/30 rounded-lg hover:bg-orange-50 dark:hover:bg-orange-950/30"
+  const renderAccountCard = () => (
+    <div className={cardClass}>
+      <h2 className="text-lg font-semibold text-gray-900 dark:text-dk-text mb-4">{t('quickSend.selectSenderAccount')}</h2>
+      {isLoadingAccounts ? (
+        <div className="flex items-center justify-center py-6">
+          <div className="h-6 w-6 rounded-full border-2 border-orange-500 border-t-transparent animate-spin" />
+        </div>
+      ) : accountsFailed ? (
+        <p className="text-sm text-red-600 dark:text-red-400">{t('quickSendAdapter.accountsLoadFailed')}</p>
+      ) : accounts.length === 0 ? (
+        <div className="space-y-3">
+          <p className="text-sm text-gray-500 dark:text-dk-text2">
+            {isEmployeeContext
+              ? t('quickSendAdapter.noAccountsAssigned', { channel: label })
+              : t('quickSendAdapter.noAccounts', { channel: label })}
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate(CHANNELS_SETTINGS_PATH)}
+            className="px-4 py-2 text-sm font-medium text-orange-700 dark:text-orange-400 border border-orange-300 dark:border-orange-500/30 rounded-lg hover:bg-orange-50 dark:hover:bg-orange-950/30 transition"
+          >
+            {t('quickSendAdapter.goConnect')}
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {accounts.map((account) => (
+            <label
+              key={account.ref}
+              className={`flex items-center gap-3 p-3 rounded-lg border-2 transition ${
+                selectedRef === account.ref
+                  ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/30'
+                  : 'border-gray-200 dark:border-dk-border hover:border-gray-300 dark:hover:border-dk-border dark:bg-dk-raised/40'
+              } ${account.usable ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed'}`}
             >
-              {t('quickSendAdapter.goConnect')}
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {accounts.map((account) => (
-              <label
-                key={account.ref}
-                className={`flex items-center gap-3 p-3 rounded-lg border-2 transition ${
-                  selectedRef === account.ref ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/20' : 'border-gray-200 dark:border-dk-border'
-                } ${account.usable ? 'cursor-pointer hover:border-gray-300 dark:hover:border-dk-border' : 'opacity-60 cursor-not-allowed'}`}
-              >
-                <input
-                  type="radio"
-                  name="quick-send-adapter-account"
-                  checked={selectedRef === account.ref}
-                  disabled={!account.usable}
-                  onChange={() => setSelectedRef(account.ref)}
-                  className="text-orange-500"
-                />
-                <span className="font-medium text-gray-900 dark:text-dk-text">{account.name}</span>
-                {!account.usable && (
-                  <span className="text-xs text-amber-600 dark:text-amber-400">{t('quickSendAdapter.accountOffline')}</span>
+              <input
+                type="radio"
+                name="quick-send-adapter-account"
+                checked={selectedRef === account.ref}
+                disabled={!account.usable}
+                onChange={() => setSelectedRef(account.ref)}
+                className="w-4 h-4 text-orange-500"
+              />
+              <div className="flex-1">
+                <p className="font-medium text-gray-900 dark:text-dk-text">{account.name}</p>
+                {account.ref && account.ref !== account.name && (
+                  <p className="text-sm text-gray-500 dark:text-dk-text2">{account.ref}</p>
                 )}
-              </label>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Người nhận */}
-      <div className={cardClass}>
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-dk-text mb-4">{t('quickSendAdapter.recipientsTitle')}</h2>
-        <div className="flex gap-2 mb-4">
-          {[RECIPIENT_MODES.CONVERSATIONS, RECIPIENT_MODES.MANUAL, RECIPIENT_MODES.GROUPS].map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              onClick={() => setRecipientMode(mode)}
-              className={`px-4 py-2 text-sm font-medium rounded-lg border-2 transition ${
-                recipientMode === mode ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/20 text-orange-700 dark:text-orange-400' : 'border-gray-200 dark:border-dk-border text-gray-600 dark:text-dk-text2 hover:border-gray-300 dark:hover:border-dk-border hover:bg-slate-50 dark:hover:bg-dk-raised'
-              }`}
-            >
-              {mode === RECIPIENT_MODES.CONVERSATIONS && t('quickSendAdapter.modeConversations')}
-              {mode === RECIPIENT_MODES.GROUPS && t('quickSendAdapter.modeGroups')}
-              {mode === RECIPIENT_MODES.MANUAL
-                && t(channel === 'whatsapp' ? 'quickSendAdapter.modeManualWhatsApp' : 'quickSendAdapter.modeManualTelegram')}
-            </button>
+              </div>
+              {!account.usable ? (
+                <span className="text-xs text-amber-600 dark:text-amber-400">{t('quickSendAdapter.accountOffline')}</span>
+              ) : (account.isDefault || account.is_default) ? (
+                <span className="text-xs bg-green-100 text-green-700 dark:bg-emerald-950/40 dark:text-emerald-300 px-2 py-1 rounded">
+                  {t('quickSend.default')}
+                </span>
+              ) : null}
+            </label>
           ))}
         </div>
+      )}
+    </div>
+  );
 
-        {recipientMode === RECIPIENT_MODES.GROUPS ? (
-          <div data-testid="quick-send-adapter-groups" className="space-y-3">
-            <p className="text-xs text-gray-500 dark:text-dk-text2">{t('quickSendAdapter.groupsHint', { channel: label })}</p>
-            {!selectedAccount ? (
-              <p className="text-sm text-gray-500 dark:text-dk-text2">{t('quickSendAdapter.pickAccountFirst')}</p>
-            ) : (
+  const renderRecipientsCard = () => (
+    <div className={cardClass}>
+      <div className="flex items-center gap-2 mb-4">
+        <HiOutlinePlus className="w-5 h-5 text-orange-500" />
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-dk-text">{t('quickSend.manualInput')}</h2>
+      </div>
+
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-2">
+          {t('quickSend.zaloRecipientTypeLabel')}
+        </label>
+        <div className="flex flex-wrap gap-x-4 gap-y-2">
+          {[
+            { mode: RECIPIENT_MODES.MANUAL, labelKey: channel === 'whatsapp' ? 'quickSendAdapter.modeManualWhatsApp' : 'quickSendAdapter.modeManualTelegram' },
+            { mode: RECIPIENT_MODES.CONVERSATIONS, labelKey: 'quickSendAdapter.modeConversations' },
+            { mode: RECIPIENT_MODES.GROUPS, labelKey: 'quickSendAdapter.modeGroups' },
+          ].map(({ mode, labelKey }) => {
+            const isSelected = recipientMode === mode;
+            return (
               <button
+                key={mode}
                 type="button"
-                onClick={handleLoadGroups}
-                disabled={groupsStatus === 'loading'}
-                className="px-3 py-1.5 text-sm font-semibold bg-white dark:bg-dk-raised border border-gray-300 dark:border-dk-border text-gray-700 dark:text-dk-text rounded-lg hover:bg-gray-50 dark:hover:bg-dk-strong disabled:opacity-60"
+                onClick={() => setRecipientMode(mode)}
+                className="flex items-center gap-2 text-sm text-gray-700 dark:text-dk-text cursor-pointer hover:text-gray-900 dark:hover:text-dk-text transition-colors"
               >
-                {groupsStatus === 'loaded' ? t('quickSendAdapter.groupsReload') : t('quickSendAdapter.groupsLoad')}
-              </button>
-            )}
-            {groupsStatus === 'loading' && (
-              <p role="status" className="text-sm text-gray-500 dark:text-dk-text2">{t('quickSendAdapter.groupsLoading')}</p>
-            )}
-            {groupsStatus === 'error' && (
-              <p role="alert" className="text-sm text-red-600 dark:text-red-400">{t('quickSendAdapter.groupsLoadFailed')}</p>
-            )}
-            {groupsStatus === 'loaded' && groups.length === 0 && (
-              <p className="text-sm text-gray-500 dark:text-dk-text2">{t('quickSendAdapter.groupsEmpty')}</p>
-            )}
-            {groupsStatus === 'loaded' && groups.length > 0 && (
-              <div>
-                <input
-                  type="text"
-                  value={groupsFilter}
-                  onChange={(e) => setGroupsFilter(e.target.value)}
-                  placeholder={t('quickSendAdapter.groupsFilterPlaceholder')}
-                  className="w-full px-3 py-2 mb-2 border border-gray-300 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
-                />
-                <div className="text-sm text-gray-500 dark:text-dk-text2 mb-2">
-                  {t('quickSendAdapter.selectedCount', { count: selectedGroupKeys.size, total: groups.length })}
-                </div>
-                <div className="max-h-72 overflow-y-auto border border-gray-200 dark:border-dk-border rounded-lg divide-y divide-gray-100 dark:divide-dk-border">
-                  {visibleGroups.map((g) => (
-                    <label key={g.recipientKey} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-dk-raised/60">
-                      <input
-                        type="checkbox"
-                        checked={selectedGroupKeys.has(g.recipientKey)}
-                        onChange={() => toggleGroupKey(g.recipientKey)}
-                        className="text-orange-500"
-                      />
-                      <span className="flex-1 truncate text-sm text-gray-900 dark:text-dk-text">{g.name || g.recipientKey}</span>
-                      {g.membersCount != null && (
-                        <span className="text-xs text-gray-400 dark:text-dk-muted">{t('telegramNodeSend.groupsMembers', { count: g.membersCount })}</span>
-                      )}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        ) : recipientMode === RECIPIENT_MODES.CONVERSATIONS ? (
-          isLoadingConversations ? (
-            <div className="flex items-center justify-center py-6">
-              <div className="h-6 w-6 rounded-full border-2 border-orange-500 border-t-transparent animate-spin" />
-            </div>
-          ) : conversationsFailed ? (
-            <p className="text-sm text-red-600 dark:text-red-400">{t('quickSendAdapter.conversationsLoadFailed')}</p>
-          ) : !selectedAccount ? (
-            <p className="text-sm text-gray-500 dark:text-dk-text2">{t('quickSendAdapter.pickAccountFirst')}</p>
-          ) : conversations.length === 0 ? (
-            <p className="text-sm text-gray-500 dark:text-dk-text2">{t('quickSendAdapter.conversationsEmpty')}</p>
-          ) : (
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <button type="button" onClick={toggleAll} className="text-sm text-orange-600 dark:text-orange-400 hover:underline">
-                  {allSelected ? t('quickSendAdapter.clearAll') : t('quickSendAdapter.selectAll')}
-                </button>
-                <span className="text-sm text-gray-500 dark:text-dk-text2">
-                  {t('quickSendAdapter.selectedCount', { count: selectedKeys.size, total: conversations.length })}
+                <span
+                  className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
+                    isSelected
+                      ? 'border-orange-500 bg-white dark:bg-dk-surface'
+                      : 'border-gray-300 dark:border-dk-border bg-white dark:bg-dk-surface'
+                  }`}
+                  aria-hidden="true"
+                >
+                  {isSelected && (
+                    <span className="w-2 h-2 rounded-full bg-orange-500" />
+                  )}
                 </span>
+                <span>{t(labelKey)}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {recipientMode === RECIPIENT_MODES.GROUPS ? (
+        <div data-testid="quick-send-adapter-groups" className="space-y-3">
+          <p className="text-xs text-gray-500 dark:text-dk-text2">{t('quickSendAdapter.groupsHint', { channel: label })}</p>
+          {!selectedAccount ? (
+            <p className="text-sm text-amber-600 dark:text-amber-400">{t('quickSendAdapter.pickAccountFirst')}</p>
+          ) : (
+            <button
+              type="button"
+              onClick={handleLoadGroups}
+              disabled={groupsStatus === 'loading'}
+              className="px-3 py-1.5 text-sm font-semibold bg-white dark:bg-dk-raised border border-gray-300 dark:border-dk-border text-gray-700 dark:text-dk-text rounded-lg hover:bg-gray-50 dark:hover:bg-dk-strong disabled:opacity-60 transition"
+            >
+              {groupsStatus === 'loaded' ? t('quickSendAdapter.groupsReload') : t('quickSendAdapter.groupsLoad')}
+            </button>
+          )}
+          {groupsStatus === 'loading' && (
+            <p role="status" className="text-sm text-gray-500 dark:text-dk-text2">{t('quickSendAdapter.groupsLoading')}</p>
+          )}
+          {groupsStatus === 'error' && (
+            <p role="alert" className="text-sm text-red-600 dark:text-red-400">{t('quickSendAdapter.groupsLoadFailed')}</p>
+          )}
+          {groupsStatus === 'loaded' && groups.length === 0 && (
+            <p className="text-sm text-gray-500 dark:text-dk-text2">{t('quickSendAdapter.groupsEmpty')}</p>
+          )}
+          {groupsStatus === 'loaded' && groups.length > 0 && (
+            <div>
+              <input
+                type="text"
+                value={groupsFilter}
+                onChange={(e) => setGroupsFilter(e.target.value)}
+                placeholder={t('quickSendAdapter.groupsFilterPlaceholder')}
+                className="w-full px-3 py-2 mb-2 border border-gray-200 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+              />
+              <div className="text-sm text-gray-500 dark:text-dk-text2 mb-2">
+                {t('quickSendAdapter.selectedCount', { count: selectedGroupKeys.size, total: groups.length })}
               </div>
               <div className="max-h-72 overflow-y-auto border border-gray-200 dark:border-dk-border rounded-lg divide-y divide-gray-100 dark:divide-dk-border">
-                {conversations.map((c) => (
-                  <label key={c.recipientKey} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-dk-raised/60">
+                {visibleGroups.map((g) => (
+                  <label key={g.recipientKey} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-dk-raised/60">
                     <input
                       type="checkbox"
-                      checked={selectedKeys.has(c.recipientKey)}
-                      onChange={() => toggleKey(c.recipientKey)}
-                      className="text-orange-500"
+                      checked={selectedGroupKeys.has(g.recipientKey)}
+                      onChange={() => toggleGroupKey(g.recipientKey)}
+                      className="w-4 h-4 text-orange-500 rounded"
                     />
-                    <span className="text-sm text-gray-900 dark:text-dk-text">{c.name || c.recipientKey}</span>
-                    {c.name && <span className="text-xs text-gray-400 dark:text-dk-muted">{c.recipientKey}</span>}
+                    <span className="flex-1 truncate text-sm text-gray-900 dark:text-dk-text">{g.name || g.recipientKey}</span>
+                    {g.membersCount != null && (
+                      <span className="text-xs text-gray-400 dark:text-dk-muted">{t('telegramNodeSend.groupsMembers', { count: g.membersCount })}</span>
+                    )}
                   </label>
                 ))}
               </div>
             </div>
-          )
+          )}
+        </div>
+      ) : recipientMode === RECIPIENT_MODES.CONVERSATIONS ? (
+        isLoadingConversations ? (
+          <div className="flex items-center justify-center py-6">
+            <div className="h-6 w-6 rounded-full border-2 border-orange-500 border-t-transparent animate-spin" />
+          </div>
+        ) : conversationsFailed ? (
+          <p className="text-sm text-red-600 dark:text-red-400">{t('quickSendAdapter.conversationsLoadFailed')}</p>
+        ) : !selectedAccount ? (
+          <p className="text-sm text-amber-600 dark:text-amber-400">{t('quickSendAdapter.pickAccountFirst')}</p>
+        ) : conversations.length === 0 ? (
+          <p className="text-sm text-gray-500 dark:text-dk-text2">{t('quickSendAdapter.conversationsEmpty')}</p>
         ) : (
           <div>
-            <textarea
-              value={manualText}
-              onChange={(e) => setManualText(e.target.value)}
-              rows={5}
-              placeholder={t(channel === 'whatsapp' ? 'quickSendAdapter.manualPlaceholderWhatsApp' : 'quickSendAdapter.manualPlaceholderTelegram')}
-              className="w-full px-4 py-2.5 border border-gray-300 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
-            />
-            <p className="text-xs text-gray-500 dark:text-dk-text2 mt-1">
-              {t(channel === 'whatsapp' ? 'quickSendAdapter.manualHintWhatsApp' : 'quickSendAdapter.manualHintTelegram')}
-            </p>
-            {parsedManual.invalid.length > 0 && (
-              <p className="text-sm text-red-600 dark:text-red-400 mt-2" data-testid="quick-send-adapter-invalid">
-                {t('quickSendAdapter.manualInvalidLines', { lines: parsedManual.invalid.join(', ') })}
-              </p>
-            )}
+            <div className="flex items-center justify-between mb-2">
+              <button type="button" onClick={toggleAll} className="text-sm text-orange-600 dark:text-orange-400 hover:underline">
+                {allSelected ? t('quickSendAdapter.clearAll') : t('quickSendAdapter.selectAll')}
+              </button>
+              <span className="text-sm text-gray-500 dark:text-dk-text2">
+                {t('quickSendAdapter.selectedCount', { count: selectedKeys.size, total: conversations.length })}
+              </span>
+            </div>
+            <div className="max-h-72 overflow-y-auto border border-gray-200 dark:border-dk-border rounded-lg divide-y divide-gray-100 dark:divide-dk-border">
+              {conversations.map((c) => (
+                <label key={c.recipientKey} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-dk-raised/60">
+                  <input
+                    type="checkbox"
+                    checked={selectedKeys.has(c.recipientKey)}
+                    onChange={() => toggleKey(c.recipientKey)}
+                    className="w-4 h-4 text-orange-500 rounded"
+                  />
+                  <span className="text-sm text-gray-900 dark:text-dk-text">{c.name || c.recipientKey}</span>
+                  {c.name && <span className="text-xs text-gray-400 dark:text-dk-muted">{c.recipientKey}</span>}
+                </label>
+              ))}
+            </div>
           </div>
-        )}
-
-        {overLimit && (
-          <p className="text-sm text-red-600 dark:text-red-400 mt-3" data-testid="quick-send-adapter-over-limit">
-            {t('quickSendAdapter.maxRecipients', { max: cfg.maxRecipients, count: recipients.length })}
+        )
+      ) : (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-dk-text mb-2">
+            {channel === 'whatsapp'
+              ? t('quickSend.manualPhones')
+              : (t('quickSendAdapter.manualChatIds') || 'Danh sách Chat ID (mỗi dòng 1 ID)')}
+          </label>
+          <textarea
+            value={manualText}
+            onChange={(e) => setManualText(e.target.value)}
+            rows={6}
+            placeholder={t(channel === 'whatsapp' ? 'quickSendAdapter.manualPlaceholderWhatsApp' : 'quickSendAdapter.manualPlaceholderTelegram')}
+            className="w-full px-3 py-2 border border-gray-200 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+          />
+          <p className="text-xs text-gray-500 dark:text-dk-text2 mt-2">
+            {t('quickSend.manualInputHint')}
           </p>
-        )}
-      </div>
-
-      {/* Nội dung */}
-      <div className={cardClass}>
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-dk-text mb-4">{t('quickSendAdapter.messageTitle')}</h2>
-        <div className="mb-4">
-          <ChannelTemplateAttachmentPicker
-            channel={channel}
-            templates={templates}
-            fetchTemplateById={async (id) => {
-              const res = await zaloTemplateApiService.getTemplateById(id);
-              return res?.data?.data || null;
-            }}
-            templateId={templateId}
-            attachments={allAttachments}
-            onApply={handleApplyTemplate}
-            onRemoveAttachment={handleRemoveAttachment}
-            status={templatesStatus}
-          />
+          {parsedManual.invalid.length > 0 && (
+            <p className="text-sm text-red-600 dark:text-red-400 mt-2" data-testid="quick-send-adapter-invalid">
+              {t('quickSendAdapter.manualInvalidLines', { lines: parsedManual.invalid.join(', ') })}
+            </p>
+          )}
         </div>
-        <textarea
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          rows={6}
-          placeholder={t('quickSendAdapter.messagePlaceholder')}
-          className="w-full px-4 py-2.5 border border-gray-300 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+      )}
+
+      {overLimit && (
+        <p className="text-sm text-red-600 dark:text-red-400 mt-3" data-testid="quick-send-adapter-over-limit">
+          {t('quickSendAdapter.maxRecipients', { max: cfg.maxRecipients, count: recipients.length })}
+        </p>
+      )}
+    </div>
+  );
+
+  const renderMessageCard = () => (
+    <div className={cardClass}>
+      <h2 className="text-lg font-semibold text-gray-900 dark:text-dk-text mb-4">{t('quickSendAdapter.messageTitle')}</h2>
+      <div className="mb-4">
+        <ChannelTemplateAttachmentPicker
+          channel={channel}
+          templates={templates}
+          fetchTemplateById={async (id) => {
+            const res = await zaloTemplateApiService.getTemplateById(id);
+            return res?.data?.data || null;
+          }}
+          templateId={templateId}
+          attachments={allAttachments}
+          onApply={handleApplyTemplate}
+          onRemoveAttachment={handleRemoveAttachment}
+          status={templatesStatus}
         />
-        <div className="flex justify-between text-xs mt-1">
-          <span className="text-gray-500 dark:text-dk-text2">{t('quickSendAdapter.messageHint')}</span>
-          <span className={message.length > cfg.maxMessageLength ? 'text-red-600 dark:text-red-400' : 'text-gray-400 dark:text-dk-muted'}>
-            {t('quickSendAdapter.messageCounter', { count: message.length, max: cfg.maxMessageLength })}
-          </span>
-        </div>
+      </div>
+      <textarea
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+        rows={6}
+        placeholder={t('quickSendAdapter.messagePlaceholder')}
+        className="w-full px-3 py-2 border border-gray-200 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+      />
+      <div className="flex justify-between text-xs mt-1">
+        <span className="text-gray-500 dark:text-dk-text2">{t('quickSendAdapter.messageHint')}</span>
+        <span className={message.length > cfg.maxMessageLength ? 'text-red-600 dark:text-red-400' : 'text-gray-400 dark:text-dk-muted'}>
+          {t('quickSendAdapter.messageCounter', { count: message.length, max: cfg.maxMessageLength })}
+        </span>
+      </div>
 
-        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-dk-border">
-          <input
-            ref={attachmentInputRef}
-            type="file"
-            multiple
-            accept={ATTACHMENT_ACCEPT}
-            onChange={handleAttachmentSelect}
-            className="hidden"
-            data-testid="quick-send-adapter-file-input"
-          />
-          <button
-            type="button"
-            onClick={() => attachmentInputRef.current?.click()}
-            disabled={isUploadingAttachment}
-            className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-dk-border rounded-lg text-sm text-gray-700 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised disabled:opacity-50 disabled:cursor-not-allowed transition"
-          >
-            {isUploadingAttachment ? (
-              <span className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <HiOutlinePaperClip className="w-4 h-4" />
-            )}
-            {t('quickSend.attachmentAdd')}
-          </button>
+      <div className="mt-4 pt-4 border-t border-gray-200 dark:border-dk-border">
+        <input
+          ref={attachmentInputRef}
+          type="file"
+          multiple
+          accept={ATTACHMENT_ACCEPT}
+          onChange={handleAttachmentSelect}
+          className="hidden"
+          data-testid="quick-send-adapter-file-input"
+        />
+        <button
+          type="button"
+          onClick={() => attachmentInputRef.current?.click()}
+          disabled={isUploadingAttachment}
+          className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-dk-border rounded-lg text-sm text-gray-700 dark:text-dk-text hover:bg-gray-50 dark:hover:bg-dk-raised disabled:opacity-50 disabled:cursor-not-allowed transition"
+        >
+          {isUploadingAttachment ? (
+            <span className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <HiOutlinePaperClip className="w-4 h-4" />
+          )}
+          {t('quickSend.attachmentAdd')}
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderEstimateAndSendCard = () => (
+    <div className={cardClass}>
+      {recipients.length > 0 && !overLimit && (
+        <div className="flex items-center justify-between text-sm mb-3">
+          <span className="text-gray-600 dark:text-dk-text2">{t('quickSend.estimatedDuration')}</span>
+          <span className="font-medium text-gray-900 dark:text-dk-text" data-testid="quick-send-adapter-estimate">{estimateText}</span>
+        </div>
+      )}
+      {estimate?.quietHours?.startFormatted && (
+        <p className="text-xs text-gray-500 dark:text-dk-text2 mb-3">
+          {t('quickSendAdapter.quietHoursNote', {
+            start: estimate.quietHours.startFormatted,
+            end: estimate.quietHours.endFormatted,
+          })}
+        </p>
+      )}
+      <button
+        type="button"
+        onClick={handleSend}
+        disabled={!canSend}
+        className="w-full px-6 py-3 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <HiOutlinePaperAirplane className="w-5 h-5" />
+        {t('quickSendAdapter.sendButton', { count: recipients.length })}
+      </button>
+    </div>
+  );
+
+  const renderPreviewCard = () => (
+    <div className={cardClass}>
+      <h2 className="text-lg font-semibold text-gray-900 dark:text-dk-text mb-4">{t('quickSend.previewAndSend')}</h2>
+
+      {/* Tóm tắt */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="p-4 bg-gray-50 dark:bg-dk-raised/60 rounded-lg">
+          <p className="text-xs text-gray-500 dark:text-dk-text2">{t('quickSend.channel')}</p>
+          <p className="text-base font-semibold text-gray-900 dark:text-dk-text capitalize mt-1">{label}</p>
+        </div>
+        <div className="p-4 bg-gray-50 dark:bg-dk-raised/60 rounded-lg">
+          <p className="text-xs text-gray-500 dark:text-dk-text2">{t('quickSend.senderAccount') || 'Tài khoản gửi'}</p>
+          <p className="text-base font-semibold text-gray-900 dark:text-dk-text truncate mt-1">
+            {selectedAccount?.name || selectedAccount?.ref || '-'}
+          </p>
+        </div>
+        <div className="p-4 bg-gray-50 dark:bg-dk-raised/60 rounded-lg">
+          <p className="text-xs text-gray-500 dark:text-dk-text2">{t('quickSend.recipients')}</p>
+          <p className="text-base font-semibold text-gray-900 dark:text-dk-text mt-1">{recipients.length}</p>
+        </div>
+        <div className="p-4 bg-orange-50/60 dark:bg-orange-950/20 border border-orange-100 dark:border-orange-500/20 rounded-lg">
+          <p className="text-xs text-orange-600 dark:text-orange-400 font-medium flex items-center gap-1">
+            <HiOutlineClock className="w-3.5 h-3.5" />
+            {t('quickSend.estimatedDuration')}
+          </p>
+          <p className="text-base font-semibold text-orange-900 dark:text-orange-300 mt-1" data-testid="quick-send-adapter-estimate">
+            {estimateText || t('quickSend.immediate')}
+          </p>
         </div>
       </div>
 
-      {/* Ước tính + gửi */}
-      <div className={cardClass}>
-        {recipients.length > 0 && !overLimit && (
-          <div className="flex items-center justify-between text-sm mb-3">
-            <span className="text-gray-600 dark:text-dk-text2">{t('quickSend.estimatedDuration')}</span>
-            <span className="font-medium text-gray-900 dark:text-dk-text" data-testid="quick-send-adapter-estimate">{estimateText}</span>
-          </div>
-        )}
-        {estimate?.quietHours?.startFormatted && (
-          <p className="text-xs text-gray-500 dark:text-dk-text2 mb-3">
+      {/* Nhắc nhở giữ tab mở */}
+      <p className="text-xs text-gray-400 dark:text-dk-muted mb-4 flex items-center gap-1.5">
+        <HiOutlineClock className="w-3.5 h-3.5 shrink-0" />
+        {t('quickSend.keepPageOpenNotice')}
+      </p>
+
+      {/* Cảnh báo giờ yên lặng nếu có */}
+      {estimate?.quietHours?.startFormatted && (
+        <div className="mb-6 p-3.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 flex items-start gap-2.5 text-xs text-indigo-900 dark:text-indigo-200">
+          <HiOutlineMoon className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
+          <span className="leading-relaxed">
             {t('quickSendAdapter.quietHoursNote', {
               start: estimate.quietHours.startFormatted,
               end: estimate.quietHours.endFormatted,
             })}
+          </span>
+        </div>
+      )}
+
+      {/* Xem trước nội dung tin nhắn */}
+      <div className="p-4 bg-gray-50 dark:bg-dk-raised/60 rounded-lg mb-4">
+        <p className="text-sm font-medium text-gray-700 dark:text-dk-text mb-2">
+          {t('quickSend.customMessageContentLabel')}
+        </p>
+        <div className="whitespace-pre-wrap font-sans text-sm text-gray-900 dark:text-dk-text">
+          {message}
+        </div>
+      </div>
+
+      {/* Danh sách tệp đính kèm xem trước nếu có */}
+      {allAttachments.length > 0 && (
+        <div className="p-4 bg-gray-50 dark:bg-dk-raised/60 rounded-lg mb-4">
+          <p className="text-sm font-medium text-gray-700 dark:text-dk-text mb-2 flex items-center gap-1.5">
+            <HiOutlinePaperClip className="w-4 h-4 text-gray-500 dark:text-dk-text2" />
+            {t('quickSend.attachments')} ({allAttachments.length})
           </p>
-        )}
+          <div className="flex flex-wrap gap-2">
+            {allAttachments.map((att, idx) => (
+              <span
+                key={att.key || idx}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white dark:bg-dk-surface rounded-lg border border-gray-200 dark:border-dk-border text-xs text-gray-700 dark:text-dk-text font-medium"
+              >
+                <HiOutlinePaperClip className="w-3.5 h-3.5 text-gray-400 dark:text-dk-muted shrink-0" />
+                <span className="truncate max-w-[200px]">{att.originalName || att.name || att.key}</span>
+                {att.size ? <span className="text-gray-400 dark:text-dk-muted">({formatFileSize(att.size)})</span> : null}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Nút hành động */}
+      <div className="flex justify-between items-center pt-4 border-t border-gray-200 dark:border-dk-border">
+        <button
+          type="button"
+          onClick={() => onStepChange('template')}
+          className="px-6 py-3 border border-gray-300 dark:border-dk-border text-gray-700 dark:text-dk-text font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-dk-raised transition"
+        >
+          {t('quickSend.back')}
+        </button>
         <button
           type="button"
           onClick={handleSend}
           disabled={!canSend}
-          className="w-full px-6 py-3 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-6 py-3 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <HiOutlinePaperAirplane className="w-5 h-5" />
           {t('quickSendAdapter.sendButton', { count: recipients.length })}
         </button>
       </div>
+    </div>
+  );
+
+  if (isStepMode) {
+    if (step === 'recipients') {
+      return (
+        <div className="space-y-6" data-testid="quick-send-adapter-panel">
+          {renderAccountCard()}
+          {renderRecipientsCard()}
+          <div className="flex justify-end pt-2">
+            <button
+              type="button"
+              onClick={() => onStepChange('template')}
+              disabled={!canProceedToStep2}
+              className="px-6 py-3 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {t('quickSend.next')}
+              <HiOutlineChevronRight className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    if (step === 'template') {
+      return (
+        <div className="space-y-6" data-testid="quick-send-adapter-panel">
+          {renderMessageCard()}
+          <div className="flex justify-between items-center pt-2">
+            <button
+              type="button"
+              onClick={() => onStepChange('recipients')}
+              className="px-6 py-3 border border-gray-300 dark:border-dk-border text-gray-700 dark:text-dk-text font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-dk-raised transition"
+            >
+              {t('quickSend.back')}
+            </button>
+            <button
+              type="button"
+              onClick={() => onStepChange('preview')}
+              disabled={!canProceedToStep3}
+              className="px-6 py-3 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {t('quickSend.next')}
+              <HiOutlineChevronRight className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    if (step === 'preview') {
+      return (
+        <div className="space-y-6" data-testid="quick-send-adapter-panel">
+          {renderPreviewCard()}
+        </div>
+      );
+    }
+  }
+
+  // Chế độ cũ (không truyền step/onStepChange): hiện toàn bộ trên 1 trang
+  return (
+    <div className="space-y-6" data-testid="quick-send-adapter-panel">
+      {renderAccountCard()}
+      {renderRecipientsCard()}
+      {renderMessageCard()}
+      {renderEstimateAndSendCard()}
     </div>
   );
 };

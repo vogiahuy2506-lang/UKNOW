@@ -88,7 +88,7 @@ describe('QuickSend — thẻ kênh adapter', () => {
     expect(screen.queryByTestId('quick-send-channel-telegram')).toBeNull();
   });
 
-  it('có telegram + whatsapp -> 2 thẻ; chọn Telegram -> panel + ẩn thanh bước; quay về Zalo -> panel biến mất', async () => {
+  it('có telegram + whatsapp -> 2 thẻ; chọn Telegram -> panel đồng bộ 3 bước và giữ thanh bước; quay về Zalo -> panel biến mất', async () => {
     campaignApiService.getChannels.mockResolvedValue({
       data: { data: { channels: [
         { key: 'telegram', sendNodeSubtype: 'send_telegram', label: 'Telegram' },
@@ -102,7 +102,10 @@ describe('QuickSend — thẻ kênh adapter', () => {
 
     fireEvent.click(telegramCard);
     expect(await screen.findByTestId('quick-send-adapter-panel')).toBeInTheDocument();
-    expect(screen.queryByText('quickSend.stepRecipients')).toBeNull();
+    // Thanh bước đồng bộ 3 bước luôn hiển thị
+    expect(screen.getByText('quickSend.stepRecipients')).toBeInTheDocument();
+    expect(screen.getByText('quickSend.stepTemplate')).toBeInTheDocument();
+    expect(screen.getByText('quickSend.stepPreview')).toBeInTheDocument();
     expect(campaignBuilderApiService.getTelegramAccountsForBuilder).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByText('Zalo'));
@@ -117,5 +120,50 @@ describe('QuickSend — thẻ kênh adapter', () => {
     render(<QuickSend />);
     expect(await screen.findByTestId('quick-send-channel-whatsapp')).toBeInTheDocument();
     expect(screen.queryByTestId('quick-send-channel-telegram')).toBeNull();
+  });
+
+  it('kênh adapter Telegram chuyển bước 1 -> 2 -> 3 -> quay lại mượt mà không mất dữ liệu', async () => {
+    campaignApiService.getChannels.mockResolvedValue({
+      data: { data: { channels: [{ key: 'telegram', sendNodeSubtype: 'send_telegram', label: 'Telegram' }] } },
+    });
+    campaignBuilderApiService.getTelegramAccountsForBuilder.mockResolvedValue({
+      data: { data: [{ id: 1, botUsername: 'bot_alpha', name: 'Bot Alpha', ref: 'bot_alpha' }] },
+    });
+
+    render(<QuickSend />);
+    const telegramCard = await screen.findByTestId('quick-send-channel-telegram');
+    fireEvent.click(telegramCard);
+
+    // Bước 1: Người nhận
+    expect(await screen.findByText('Bot Alpha')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('quickSendAdapter.modeManualTelegram'));
+    const textarea = screen.getByPlaceholderText('quickSendAdapter.manualPlaceholderTelegram');
+    fireEvent.change(textarea, { target: { value: '123456789' } });
+
+    // Bấm tiếp tục sang bước 2
+    const nextBtn1 = screen.getByText('quickSend.next');
+    expect(nextBtn1).not.toBeDisabled();
+    fireEvent.click(nextBtn1);
+
+    // Bước 2: Soạn nội dung
+    expect(await screen.findByText('quickSendAdapter.messageTitle')).toBeInTheDocument();
+    const messageInput = screen.getByPlaceholderText('quickSendAdapter.messagePlaceholder');
+    fireEvent.change(messageInput, { target: { value: 'Xin chao Telegram' } });
+
+    // Bấm tiếp tục sang bước 3
+    const nextBtn2 = screen.getByText('quickSend.next');
+    expect(nextBtn2).not.toBeDisabled();
+    fireEvent.click(nextBtn2);
+
+    // Bước 3: Xem trước
+    expect(await screen.findByText('quickSend.previewAndSend')).toBeInTheDocument();
+    expect(screen.getByText('Xin chao Telegram')).toBeInTheDocument();
+    expect(screen.getByText('Bot Alpha')).toBeInTheDocument();
+
+    // Bấm quay lại bước 2
+    const backBtn = screen.getByText('quickSend.back');
+    fireEvent.click(backBtn);
+    expect(await screen.findByText('quickSendAdapter.messageTitle')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Xin chao Telegram')).toBeInTheDocument();
   });
 });

@@ -12,6 +12,7 @@ import {
   HiOutlineX,
   HiOutlineSearch,
   HiOutlineCalendar,
+  HiOutlineDownload,
 } from 'react-icons/hi';
 import { fetchLandingLeadsSlugFilterOptions } from '../utils/landingLeadsSlugFilterOptions.js';
 import { fetchLandingLeadsCustomFieldDefinitions } from '../services/landingLeadsAdminApi.service.js';
@@ -369,9 +370,10 @@ export function LandingLeadsAdminFilters({
           type="button"
           onClick={() => onExportExcel()}
           disabled={isExporting}
-          className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-2 text-sm font-medium text-emerald-800 dark:text-emerald-300 shadow-sm hover:bg-emerald-100 dark:hover:bg-emerald-900/40 disabled:opacity-50"
+          className="btn btn-secondary"
         >
-          {isExporting ? t('landingLeads.exporting') : t('landingLeads.exportExcel')}
+          <HiOutlineDownload className="w-4 h-4 mr-1.5" aria-hidden="true" />
+          <span>{isExporting ? t('landingLeads.exporting') : t('landingLeads.exportExcel')}</span>
         </button>
       ) : null}
 
@@ -382,9 +384,10 @@ export function LandingLeadsAdminFilters({
           disabled={isExportingCsv}
           title={t('csvExport.buttonHint')}
           data-testid="landing-leads-export-csv"
-          className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-2 text-sm font-medium text-emerald-800 dark:text-emerald-300 shadow-sm hover:bg-emerald-100 dark:hover:bg-emerald-900/40 disabled:opacity-50"
+          className="btn btn-secondary"
         >
-          {isExportingCsv ? t('csvExport.exporting') : t('csvExport.button')}
+          <HiOutlineDownload className="w-4 h-4 mr-1.5" aria-hidden="true" />
+          <span>{isExportingCsv ? t('csvExport.exporting') : t('csvExport.button')}</span>
         </button>
       ) : null}
 

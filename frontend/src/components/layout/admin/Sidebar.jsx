@@ -34,12 +34,19 @@ function SubmenuPanel({ item, onClose }) {
   const isBuilderPage = location.pathname.includes('/app/campaigns/') && location.pathname.includes('/builder');
 
   const getActiveChild = (child) => {
-    if (child.external) return false;
+    if (child.external || !child.path) return false;
+    const [childBasePath, childQuery] = child.path.split('?');
     if (child.path === '/app/campaigns/new') {
       return isBuilderPage || location.pathname === '/app/campaigns/new';
     }
-    if (child.end) return location.pathname === child.path;
-    return location.pathname === child.path || location.pathname.startsWith(child.path + '/');
+    if (childQuery) {
+      return location.pathname === childBasePath && location.search.includes(childQuery);
+    }
+    if (childBasePath === '/app/billing') {
+      return location.pathname === '/app/billing' && !location.search.includes('tab=orders');
+    }
+    if (child.end) return location.pathname === childBasePath;
+    return location.pathname === childBasePath || location.pathname.startsWith(childBasePath + '/');
   };
 
   const handleAction = (child) => {
@@ -159,6 +166,26 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
     return true;
   };
 
+  const isParentActive = (item) => {
+    if (!item.children) return false;
+    return item.children.some((child) => {
+      if (child.external || !child.path) return false;
+      const [childBasePath, childQuery] = child.path.split('?');
+      if (childQuery) {
+        return location.pathname === childBasePath && location.search.includes(childQuery);
+      }
+      if (childBasePath === '/app/billing') {
+        return location.pathname === '/app/billing' && !location.search.includes('tab=orders');
+      }
+      if (child.end) return location.pathname === childBasePath;
+      return location.pathname === childBasePath || location.pathname.startsWith(childBasePath + '/');
+    })
+      // PR-1 (PLAN_MENU_CHUYEN_MUC_APP_2026-09-12, việc 4) — so theo `key` chuyên mục thay vì
+      // tên đã dịch: super admin đổi tên "Chiến dịch" (PR-2) không còn làm hỏng highlight khi
+      // ở /app/campaigns/:id/builder (route không nằm trong children vì :id động).
+      || (item.key === 'app-category-campaigns' && location.pathname.includes('/app/campaigns/') && location.pathname.includes('/builder'));
+  };
+
   const applyLayoutCategories = (rawCats, rawLinks) => {
     const cats = Array.isArray(rawCats) ? rawCats : [];
     const linksList = Array.isArray(rawLinks) ? rawLinks : [];
@@ -178,15 +205,15 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
         return { ...item, children: item.children.filter(filterItem) };
       })
       .filter((item) => filterItem(item) && (!item.children || item.children.length > 0));
-    const activeParent = visible.find((item) => item.children && (
-      item.children.some((child) => {
-        if (child.end) return location.pathname === child.path;
-        return location.pathname === child.path || location.pathname.startsWith(child.path + '/');
-      })
-      || (item.key === 'app-category-campaigns' && location.pathname.includes('/app/campaigns/') && location.pathname.includes('/builder'))
-    ));
+    const activeParent = visible.find((item) => item.children && isParentActive(item));
     if (activeParent) {
-      setExpandedGroupKey(getMenuItemKey(activeParent));
+      const activeKey = getMenuItemKey(activeParent);
+      setExpandedGroupKeys((prev) => {
+        if (prev.has(activeKey)) return prev;
+        const next = new Set(prev);
+        next.add(activeKey);
+        return next;
+      });
     }
   };
 
@@ -253,35 +280,39 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
     })
     .filter((item) => filterItem(item) && (!item.children || item.children.length > 0));
 
-  const isParentActive = (item) => {
-    if (!item.children) return false;
-    return item.children.some((child) => {
-      if (child.end) return location.pathname === child.path;
-      return location.pathname === child.path || location.pathname.startsWith(child.path + '/');
-    })
-      // PR-1 (PLAN_MENU_CHUYEN_MUC_APP_2026-09-12, việc 4) — so theo `key` chuyên mục thay vì
-      // tên đã dịch: super admin đổi tên "Chiến dịch" (PR-2) không còn làm hỏng highlight khi
-      // ở /app/campaigns/:id/builder (route không nằm trong children vì :id động).
-      || (item.key === 'app-category-campaigns' && location.pathname.includes('/app/campaigns/') && location.pathname.includes('/builder'));
-  };
-
-  const [expandedGroupKey, setExpandedGroupKey] = useState(() => {
+  const [expandedGroupKeys, setExpandedGroupKeys] = useState(() => {
     const activeParent = visibleMenuItems.find((item) => item.children && isParentActive(item));
-    return activeParent ? getMenuItemKey(activeParent) : null;
+    return new Set(activeParent ? [getMenuItemKey(activeParent)] : []);
   });
 
   useEffect(() => {
     setFloatingItem(null);
     const activeParent = visibleMenuItems.find((item) => item.children && isParentActive(item));
-    setExpandedGroupKey(activeParent ? getMenuItemKey(activeParent) : null);
+    if (activeParent) {
+      const activeKey = getMenuItemKey(activeParent);
+      setExpandedGroupKeys((prev) => {
+        if (prev.has(activeKey)) return prev;
+        const next = new Set(prev);
+        next.add(activeKey);
+        return next;
+      });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname]);
+  }, [location.pathname, location.search]);
 
   const handleParentClick = (item) => {
     const itemKey = getMenuItemKey(item);
     if (isDesktopExpanded || isMobile) {
       if (item.children) {
-        setExpandedGroupKey((prev) => (prev === itemKey ? null : itemKey));
+        setExpandedGroupKeys((prev) => {
+          const next = new Set(prev);
+          if (next.has(itemKey)) {
+            next.delete(itemKey);
+          } else {
+            next.add(itemKey);
+          }
+          return next;
+        });
       } else {
         navigate(item.path);
         handleNavClose();
@@ -301,11 +332,21 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
   const renderChildItems = (children) => {
     return children.map((child) => {
       const isBuilderPage = location.pathname.includes('/app/campaigns/') && location.pathname.includes('/builder');
-      const isActiveChild = child.external
-        ? false
-        : child.path === '/app/campaigns/new'
-        ? isBuilderPage || location.pathname === '/app/campaigns/new'
-        : (child.end ? location.pathname === child.path : location.pathname === child.path || location.pathname.startsWith(child.path + '/'));
+      const [childBasePath, childQuery] = (child.path || '').split('?');
+      let isActiveChild = false;
+      if (!child.external && child.path) {
+        if (child.path === '/app/campaigns/new') {
+          isActiveChild = isBuilderPage || location.pathname === '/app/campaigns/new';
+        } else if (childQuery) {
+          isActiveChild = location.pathname === childBasePath && location.search.includes(childQuery);
+        } else if (childBasePath === '/app/billing') {
+          isActiveChild = location.pathname === '/app/billing' && !location.search.includes('tab=orders');
+        } else if (child.end) {
+          isActiveChild = location.pathname === childBasePath;
+        } else {
+          isActiveChild = location.pathname === childBasePath || location.pathname.startsWith(childBasePath + '/');
+        }
+      }
       const displayName = child.path === '/app/campaigns/new' && isBuilderPage && location.pathname !== '/app/campaigns/new'
         ? t('sidebar.editCampaign')
         : child.name;
@@ -457,7 +498,7 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
 
               if (item.children) {
                 const isGroupActive = isParentActive(item);
-                const isExpanded = expandedGroupKey === itemKey;
+                const isExpanded = expandedGroupKeys.has(itemKey);
 
                 return (
                   <div key={itemKey}>

@@ -9,6 +9,7 @@ import {
   HiOutlineX,
 } from 'react-icons/hi';
 import { useI18n } from '../../i18n';
+import { PageHeaderActions } from '../../components/common/PageContainer';
 import {
   exportWorkspaceSubmissionsCsv,
   fetchForms,
@@ -205,18 +206,21 @@ export default function FormLeadsTab() {
             {t('landingLeads.formsTab.clearFilters')}
           </button>
         ) : null}
-        <div className="flex items-center gap-2 sm:ml-auto">
+        <PageHeaderActions>
           <button
             type="button"
             onClick={handleExportCsv}
             disabled={isExporting || hasInvalidRange}
             title={t('csvExport.buttonHint')}
             data-testid="form-leads-export-csv"
-            className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-raised hover:bg-slate-50 dark:hover:bg-dk-surface text-xs font-semibold text-slate-700 dark:text-dk-text transition-colors shadow-2xs disabled:opacity-50"
+            className="btn btn-secondary"
           >
-            <HiOutlineDownload className="w-4 h-4" />
+            <HiOutlineDownload className="w-4 h-4 mr-1.5" />
             <span>{isExporting ? t('csvExport.exporting') : t('csvExport.button')}</span>
           </button>
+        </PageHeaderActions>
+
+        <div className="flex items-center gap-2 sm:ml-auto">
           <button
             type="button"
             onClick={() => setReloadToken((n) => n + 1)}

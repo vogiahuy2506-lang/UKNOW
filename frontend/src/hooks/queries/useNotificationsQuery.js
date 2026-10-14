@@ -43,7 +43,9 @@ export const useMarkNotificationRead = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id) => notificationApi.markRead(id),
-    onSuccess: (_data, id) => {
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: NOTIFICATION_LIST_KEY });
+      const previousSnapshots = queryClient.getQueriesData({ queryKey: NOTIFICATION_LIST_KEY });
       patchListCaches(queryClient, (old) => {
         const target = old.items.find((item) => item.id === id);
         if (!target || target.read) return old;
@@ -53,6 +55,14 @@ export const useMarkNotificationRead = () => {
           items: old.items.map((item) => (item.id === id ? { ...item, read: true } : item)),
         };
       });
+      return { previousSnapshots };
+    },
+    onError: (_err, _id, context) => {
+      if (context?.previousSnapshots) {
+        context.previousSnapshots.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
     },
     // Trang khác / bộ lọc khác không chứa dòng này nên không patch được `unreadCount` — để server nói số thật.
     onSettled: () => queryClient.invalidateQueries({ queryKey: NOTIFICATION_LIST_KEY }),
@@ -63,12 +73,22 @@ export const useMarkAllNotificationsRead = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => notificationApi.markAllRead(),
-    onSuccess: () => {
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: NOTIFICATION_LIST_KEY });
+      const previousSnapshots = queryClient.getQueriesData({ queryKey: NOTIFICATION_LIST_KEY });
       patchListCaches(queryClient, (old) => ({
         ...old,
         unreadCount: 0,
         items: old.items.map((item) => (item.read ? item : { ...item, read: true })),
       }));
+      return { previousSnapshots };
+    },
+    onError: (_err, _variables, context) => {
+      if (context?.previousSnapshots) {
+        context.previousSnapshots.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: NOTIFICATION_LIST_KEY }),
   });

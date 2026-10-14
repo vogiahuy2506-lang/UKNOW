@@ -876,7 +876,7 @@ const QuickSend = () => {
       const isEmail = selectedChannel === CHANNEL_TYPES.EMAIL;
       const { html, text } = isEmail ? resolveEmailBody() : { html: null, text: '' };
       const zaloMsg = !isEmail ? resolveZaloBody() : '';
-      const subject = activeContent.subject || activeTemplate?.subject || 'Thử nghiệm gửi nhanh UKNOW';
+      const subject = activeContent.subject || activeTemplate?.subject || 'Thử nghiệm gửi nhanh Founder AI';
 
       const testPayloadData = {
         channel: selectedChannel,
@@ -1365,6 +1365,7 @@ const QuickSend = () => {
 
   const handleChannelChange = (nextChannel) => {
     if (nextChannel === selectedChannel) return;
+    setCurrentStep(QUICK_SEND_STEPS.RECIPIENTS);
     const wasEmail = selectedChannel === CHANNEL_TYPES.EMAIL;
     const willBeEmail = nextChannel === CHANNEL_TYPES.EMAIL;
     if (wasEmail !== willBeEmail) {
@@ -1469,12 +1470,17 @@ const QuickSend = () => {
           subtitle={t('quickSend.subtitle')}
         />
 
-        {/* Step Indicators — kênh adapter có giao diện một trang riêng, không đi qua các bước này */}
-        {!isAdapterChannel && (
+        {/* Step Indicators */}
         <div className="flex items-center gap-2 overflow-x-auto pb-4 border-b border-gray-200 dark:border-dk-border">
           {steps.map((step, index) => {
-            const isActive = step.key === currentStep;
-            const isCompleted = index < currentStepIndex || currentStep === QUICK_SEND_STEPS.DONE;
+            const isActive = step.key === currentStep || (currentStep === QUICK_SEND_STEPS.SENDING && index === steps.length - 1);
+            const effectiveStepIndex =
+              currentStep === QUICK_SEND_STEPS.SENDING
+                ? steps.length - 1
+                : currentStep === QUICK_SEND_STEPS.DONE
+                ? steps.length
+                : currentStepIndex;
+            const isCompleted = index < effectiveStepIndex || currentStep === QUICK_SEND_STEPS.DONE;
             const Icon = step.icon;
             return (
               <div key={step.key} className="flex items-center shrink-0">
@@ -1501,7 +1507,6 @@ const QuickSend = () => {
             );
           })}
         </div>
-        )}
       </div>
 
       {/* Content */}
@@ -1646,20 +1651,23 @@ const QuickSend = () => {
                 onClose={() => setLockedChannelModal(null)}
               />
             )}
+          </div>
+        )}
 
-            {isAdapterChannel && (
-              <QuickSendAdapterPanel
-                key={selectedChannel}
-                channel={selectedChannel}
-                channelLabel={adapterChannels.find((c) => c.key === selectedChannel)?.label}
-                isEmployeeContext={isEmployeeContext}
-              />
-            )}
-
-            {!isAdapterChannel && (
-            <>
-
-            {/* Sender Account Selection */}
+        {isAdapterChannel ? (
+          <QuickSendAdapterPanel
+            key={selectedChannel}
+            channel={selectedChannel}
+            channelLabel={adapterChannels.find((c) => c.key === selectedChannel)?.label}
+            isEmployeeContext={isEmployeeContext}
+            step={currentStep}
+            onStepChange={setCurrentStep}
+          />
+        ) : (
+          <>
+            {currentStep === QUICK_SEND_STEPS.RECIPIENTS && (
+              <div className="space-y-6">
+                {/* Sender Account Selection */}
             {selectedChannel === CHANNEL_TYPES.EMAIL ? (
               <div className="bg-white dark:bg-dk-surface rounded-xl border border-gray-200 dark:border-dk-border p-6">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-dk-text mb-4">{t('quickSend.selectSenderAccount')}</h2>
@@ -1981,21 +1989,19 @@ const QuickSend = () => {
               )}
             </div>
 
-            {/* Next Button */}
-            <div className="flex justify-end">
-              <button
-                onClick={() => setCurrentStep(QUICK_SEND_STEPS.TEMPLATE)}
-                disabled={!hasManualRecipients()}
-                className="px-6 py-3 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                {t('quickSend.next')}
-                <HiOutlineChevronRight className="w-5 h-5" />
-              </button>
-            </div>
-            </>
+                {/* Next Button */}
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => setCurrentStep(QUICK_SEND_STEPS.TEMPLATE)}
+                    disabled={!hasManualRecipients()}
+                    className="px-6 py-3 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {t('quickSend.next')}
+                    <HiOutlineChevronRight className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
             )}
-          </div>
-        )}
 
         {/* Content Selection */}
         {currentStep === QUICK_SEND_STEPS.TEMPLATE && (
@@ -2478,6 +2484,8 @@ const QuickSend = () => {
               </button>
             </div>
           </div>
+        )}
+          </>
         )}
       </div>
     </div>

@@ -52,6 +52,7 @@ const TEXT_AREA_CLASS = 'w-full rounded-lg border border-gray-300 dark:border-dk
 export default function HtmlFullPageEditor({ editorMode = 'html', onEditorModeChange }) {
   const { t } = useI18n();
   const th = (key, params) => t(`landingCustomizer.editor.html.${key}`, params);
+
   const [selectedPage, setSelectedPage] = useState('hero');
   const [langTab, setLangTab] = useState('vi');
   const [form, setForm] = useState(EMPTY_FORM);
