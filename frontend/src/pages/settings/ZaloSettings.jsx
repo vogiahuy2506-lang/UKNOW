@@ -892,7 +892,7 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
                   </div>
                   <div>
                     <p className="font-semibold text-violet-900 dark:text-violet-200 mb-1">Tên miền riêng là gì?</p>
-                    <p className="text-sm text-violet-700 dark:text-violet-300">Thay vì dùng link mặc định <code className="bg-violet-100 dark:bg-violet-900/50 text-violet-900 dark:text-violet-200 px-1.5 py-0.5 rounded text-xs">app.uknow.vn/chat/&#123;id&#125;</code>, bạn có thể dùng domain riêng như <code className="bg-violet-100 dark:bg-violet-900/50 text-violet-900 dark:text-violet-200 px-1.5 py-0.5 rounded text-xs">senna.founderai.biz</code> để tạo thương hiệu chuyên nghiệp hơn.</p>
+                    <p className="text-sm text-violet-700 dark:text-violet-300">Thay vì dùng link mặc định <code className="bg-violet-100 dark:bg-violet-900/50 text-violet-900 dark:text-violet-200 px-1.5 py-0.5 rounded text-xs">app.founderai.biz/chat/&#123;id&#125;</code>, bạn có thể dùng domain riêng như <code className="bg-violet-100 dark:bg-violet-900/50 text-violet-900 dark:text-violet-200 px-1.5 py-0.5 rounded text-xs">senna.founderai.biz</code> để tạo thương hiệu chuyên nghiệp hơn.</p>
                   </div>
                 </div>
               </div>

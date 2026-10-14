@@ -246,7 +246,7 @@ const LandingPreviewCard = ({ title, features, locale = 'vi' }) => {
         </div>
         <div className="flex-1 flex justify-center">
           <div className="bg-white dark:bg-dk-surface rounded-md px-3 py-1 text-[11px] text-slate-400 dark:text-dk-muted border border-slate-200 dark:border-dk-border w-48 text-center truncate">
-            uknow.vn/landing-{title.split(' ').slice(0, 3).join('-').toLowerCase()}
+            founderai.biz/landing-{title.split(' ').slice(0, 3).join('-').toLowerCase()}
           </div>
         </div>
         <div className="w-12" />

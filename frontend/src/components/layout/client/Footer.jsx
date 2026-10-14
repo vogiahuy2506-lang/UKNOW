@@ -65,12 +65,9 @@ export default function Footer() {
                 alt="Founder AI" 
                 className="w-10 h-10 object-contain drop-shadow-sm" 
               />
-              <div className="flex flex-col">
-                <span className="text-xl font-bold tracking-tight text-white group-hover:text-orange-400 transition-colors">
-                  UKNOW
-                </span>
-                <span className="text-[10px] text-slate-400 -mt-1 font-medium tracking-wide">CAMPAIGN</span>
-              </div>
+              <span className="text-xl font-bold tracking-tight text-white group-hover:text-orange-400 transition-colors">
+                Founder AI
+              </span>
             </Link>
             <p className="text-[15px] leading-relaxed text-slate-400 max-w-xs">
               {t('footer.publicBrandDesc')}
@@ -104,7 +101,7 @@ export default function Footer() {
           </div>
 
           {/* Link columns */}
-          {COLUMNS(t).map((col) => (
+          {COLUMNS(t).map((col, idx) => (
             <div key={col.title} className="flex flex-col gap-5">
               <h4 className="text-[13px] font-bold uppercase tracking-wider text-slate-400">{col.title}</h4>
               <ul className="flex flex-col gap-3">
@@ -130,6 +127,23 @@ export default function Footer() {
                   </li>
                 ))}
               </ul>
+              {idx === COLUMNS(t).length - 1 && (
+                <div className="mt-4">
+                  <a
+                    href="http://online.gov.vn"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block hover:opacity-90 transition-opacity"
+                    title="Đã thông báo với Bộ Công Thương"
+                  >
+                    <img
+                      src="/logo-bct.png"
+                      alt="Đã thông báo Bộ Công Thương"
+                      className="h-10 w-auto object-contain"
+                    />
+                  </a>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -137,10 +151,7 @@ export default function Footer() {
         {/* Bottom bar */}
         <div className="mt-16 pt-8 border-t border-slate-800">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-slate-400">
-            <div className="flex items-center gap-2">
-              <img src={founderaiLogo} alt="Founder AI" className="w-5 h-5 object-contain opacity-80" />
-              <p>{t('footer.publicBottomCopyright') || '© 2026 Founder AI - Đồng sáng lập cho doanh nghiệp một người'}</p>
-            </div>
+            <p>{t('footer.publicBottomCopyright') || '© 2026 Founder AI - Đồng sáng lập cho doanh nghiệp một người'}</p>
             <div className="flex items-center gap-6">
               <a href="/privacy-policy" className="hover:text-white transition-colors">
                 {t('footer.publicPrivacyLink') || 'Chính sách bảo mật'}

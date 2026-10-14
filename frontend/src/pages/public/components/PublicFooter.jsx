@@ -13,12 +13,9 @@ export default function PublicFooter() {
           <div className="md:col-span-2">
             <Link to="/" className="flex items-center gap-3 mb-4 w-fit group">
               <img src={founderaiLogo} alt="Founder AI" className="w-10 h-10 object-contain drop-shadow-sm" />
-              <div className="flex flex-col">
-                <span className="text-xl font-bold tracking-tight text-white group-hover:text-orange-400 transition-colors">
-                  UKNOW
-                </span>
-                <span className="text-[10px] text-slate-400 -mt-1 font-medium tracking-wide">CAMPAIGN</span>
-              </div>
+              <span className="text-xl font-bold tracking-tight text-white group-hover:text-orange-400 transition-colors">
+                Founder AI
+              </span>
             </Link>
             <p className="text-slate-400 text-sm leading-relaxed max-w-md mb-4">
               {t('footer.publicBrandDesc')}
@@ -71,6 +68,21 @@ export default function PublicFooter() {
               <li><a href="/register" className="hover:text-orange-400 transition-colors">{t('footer.register')}</a></li>
               <li><a href="/login" className="hover:text-orange-400 transition-colors">{t('footer.login')}</a></li>
             </ul>
+            <div className="mt-6">
+              <a
+                href="http://online.gov.vn"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block hover:opacity-90 transition-opacity"
+                title="Đã thông báo với Bộ Công Thương"
+              >
+                <img
+                  src="/logo-bct.png"
+                  alt="Đã thông báo Bộ Công Thương"
+                  className="h-10 w-auto object-contain"
+                />
+              </a>
+            </div>
           </div>
         </div>
       </div>
@@ -78,10 +90,7 @@ export default function PublicFooter() {
       <div className="border-t border-slate-800 dark:border-dk-border">
         <div className="max-w-6xl mx-auto px-6 py-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-slate-500">
-            <div className="flex items-center gap-2">
-              <img src={founderaiLogo} alt="Founder AI" className="w-5 h-5 object-contain opacity-80" />
-              <p>{t('footer.publicBottomCopyright')}</p>
-            </div>
+            <p>{t('footer.publicBottomCopyright')}</p>
             <div className="flex items-center gap-6">
               <a href="/privacy-policy" className="hover:text-white transition-colors">{t('footer.publicPrivacyLink')}</a>
               <a href="/public-dpa" className="hover:text-white transition-colors">{t('footer.publicDpaLink')}</a>

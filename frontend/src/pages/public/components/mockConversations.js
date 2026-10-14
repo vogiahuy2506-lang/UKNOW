@@ -48,7 +48,7 @@ export const MOCK_CONVERSATIONS = {
         },
         {
           role: 'bot',
-          content: 'Đã kết nối thành công tài khoản **UKNOW Official**!\n\nBây giờ, bạn muốn gửi tin nhắn đến đối tượng nào?',
+          content: 'Đã kết nối thành công tài khoản **Founder AI Official**!\n\nBây giờ, bạn muốn gửi tin nhắn đến đối tượng nào?',
           cards: [
             {
               type: 'data_source_picker',
@@ -86,7 +86,7 @@ export const MOCK_CONVERSATIONS = {
         },
         {
           role: 'bot',
-          content: 'Đây là mẫu tin nhắn tôi đã soạn cho bạn:\n\n---\n**CHƯƠNG TRÌNH KHUYẾN MÃI ĐẶC BIỆT**\n\nXin chào {{name}}!\n\nUKNOW gửi bạn ưu đãi **GIẢM 30%** cho tất cả các khóa học trong tháng này.\n\n🎁 Mã giảm giá: **SUMMER30**\n⏰ Hạn sử dụng: 30/08/2026\n\nĐăng ký ngay: https://uknow.vn/dang-ky\n\n---\n\nBạn có muốn điều chỉnh gì không?',
+          content: 'Đây là mẫu tin nhắn tôi đã soạn cho bạn:\n\n---\n**CHƯƠNG TRÌNH KHUYẾN MÃI ĐẶC BIỆT**\n\nXin chào {{name}}!\n\nFounder AI gửi bạn ưu đãi **GIẢM 30%** cho tất cả các khóa học trong tháng này.\n\n🎁 Mã giảm giá: **SUMMER30**\n⏰ Hạn sử dụng: 30/08/2026\n\nĐăng ký ngay: https://founderai.biz/dang-ky\n\n---\n\nBạn có muốn điều chỉnh gì không?',
           cards: [
             {
               type: 'action_buttons',
@@ -176,7 +176,7 @@ export const MOCK_CONVERSATIONS = {
         },
         {
           role: 'bot',
-          content: 'Đây là mẫu tin nhắn tôi đã soạn cho bạn:\n\n---\n🔥 **SUMMER SALE - GIẢM 25%**\n\nXin chào {{name}}!\n\nUKNOW gửi bạn deal hè cực hot! 🌞\n\n✨ **Giảm ngay 25%** cho tất cả khóa học\n📅 Chương trình kết thúc: **31/08/2026**\n🎯 Áp dụng: Tất cả khóa học\n\n👉 Đăng ký ngay: https://uknow.vn/summer\n\n---\n\n📊 **Tối ưu cho Zalo:**\n- Ưu tiên emoji để thu hút sự chú ý\n- CTA rõ ràng, dễ nhấn\n- Thời hạn tạo cảm giác gấp',
+          content: 'Đây là mẫu tin nhắn tôi đã soạn cho bạn:\n\n---\n🔥 **SUMMER SALE - GIẢM 25%**\n\nXin chào {{name}}!\n\nFounder AI gửi bạn deal hè cực hot! 🌞\n\n✨ **Giảm ngay 25%** cho tất cả khóa học\n📅 Chương trình kết thúc: **31/08/2026**\n🎯 Áp dụng: Tất cả khóa học\n\n👉 Đăng ký ngay: https://founderai.biz/summer\n\n---\n\n📊 **Tối ưu cho Zalo:**\n- Ưu tiên emoji để thu hút sự chú ý\n- CTA rõ ràng, dễ nhấn\n- Thời hạn tạo cảm giác gấp',
           cards: [
             {
               type: 'action_buttons',
@@ -362,7 +362,7 @@ export const MOCK_CONVERSATIONS = {
         },
         {
           role: 'bot',
-          content: 'Successfully connected **UKNOW Official** account!\n\nNow, who would you like to send messages to?',
+          content: 'Successfully connected **Founder AI Official** account!\n\nNow, who would you like to send messages to?',
           cards: [
             {
               type: 'data_source_picker',
@@ -400,7 +400,7 @@ export const MOCK_CONVERSATIONS = {
         },
         {
           role: 'bot',
-          content: 'Here\'s the message template I\'ve drafted for you:\n\n---\n**SPECIAL PROMOTION**\n\nHello {{name}}!\n\nUKNOW brings you **30% OFF** on all courses this month.\n\n🎁 Coupon code: **SUMMER30**\n⏰ Valid until: 08/30/2026\n\nRegister now: https://uknow.vn/register\n\n---\n\nWould you like to make any adjustments?',
+          content: 'Here\'s the message template I\'ve drafted for you:\n\n---\n**SPECIAL PROMOTION**\n\nHello {{name}}!\n\nFounder AI brings you **30% OFF** on all courses this month.\n\n🎁 Coupon code: **SUMMER30**\n⏰ Valid until: 08/30/2026\n\nRegister now: https://founderai.biz/register\n\n---\n\nWould you like to make any adjustments?',
           cards: [
             {
               type: 'action_buttons',
@@ -490,7 +490,7 @@ export const MOCK_CONVERSATIONS = {
         },
         {
           role: 'bot',
-          content: 'Here\'s the message template I\'ve drafted for you:\n\n---\n🔥 **SUMMER SALE - 25% OFF**\n\nHello {{name}}!\n\nUKNOW brings you an amazing summer deal! 🌞\n\n✨ **25% OFF** on all courses\n📅 Offer ends: **08/31/2026**\n🎯 Valid for: All courses\n\n👉 Register now: https://uknow.vn/summer\n\n---\n\n📊 **Optimized for Zalo:**\n- Emojis to grab attention\n- Clear, easy-to-tap CTA\n- Urgency with deadline',
+          content: 'Here\'s the message template I\'ve drafted for you:\n\n---\n🔥 **SUMMER SALE - 25% OFF**\n\nHello {{name}}!\n\nFounder AI brings you an amazing summer deal! 🌞\n\n✨ **25% OFF** on all courses\n📅 Offer ends: **08/31/2026**\n🎯 Valid for: All courses\n\n👉 Register now: https://founderai.biz/summer\n\n---\n\n📊 **Optimized for Zalo:**\n- Emojis to grab attention\n- Clear, easy-to-tap CTA\n- Urgency with deadline',
           cards: [
             {
               type: 'action_buttons',

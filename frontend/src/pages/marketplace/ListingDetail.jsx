@@ -1117,7 +1117,7 @@ const ListingDetail = ({ id: idProp, onClose, onAfterPurchase }) => {
                   <HiOutlineCheckCircle className="w-6 h-6" />
                 </div>
                 <p className="text-sm font-bold text-gray-900 dark:text-dk-text">Đã kiểm duyệt</p>
-                <p className="text-xs text-gray-500 dark:text-dk-text2 mt-1">Template đạt chuẩn UKNOW</p>
+                <p className="text-xs text-gray-500 dark:text-dk-text2 mt-1">Template đạt chuẩn Founder AI</p>
               </div>
 
               <button className="w-full text-gray-400 dark:text-dk-muted hover:text-gray-600 dark:hover:text-dk-text2 py-2 text-sm inline-flex items-center justify-center gap-1.5">
