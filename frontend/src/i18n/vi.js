@@ -3796,6 +3796,7 @@ export default {
         ai: 'Tạo bằng trợ lý AI',
         ai_compiler: 'Tạo bằng trợ lý AI',
         ai_compiler_slot_filling: 'Tạo bằng trợ lý AI',
+        simple: 'Tạo từng bước',
       },
       campaignStatus: {
         draft: 'Bản nháp',

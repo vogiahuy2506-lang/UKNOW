@@ -3783,6 +3783,7 @@ export default {
         ai: 'Created by AI assistant',
         ai_compiler: 'Created by AI assistant',
         ai_compiler_slot_filling: 'Created by AI assistant',
+        simple: 'Step-by-step',
       },
       campaignStatus: {
         draft: 'Draft',
