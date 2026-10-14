@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { FaFacebookF, FaLinkedinIn, FaYoutube } from 'react-icons/fa';
 import { useI18n } from '../../../i18n';
+import founderaiLogo from '../../../assets/icons/founderai-logo.png';
 
 /**
  * Footer - Cho các trang public: HeroPage, ContactPage, PricingPage
@@ -58,12 +59,18 @@ export default function Footer() {
           
           {/* Brand column */}
           <div className="flex flex-col gap-6">
-            <Link to="/" className="w-fit">
+            <Link to="/" className="flex items-center gap-3 w-fit group">
               <img 
-                src="/logo-digiso.png" 
-                alt="DIGISO" 
-                className="h-10 w-auto object-contain brightness-0 invert" 
+                src={founderaiLogo} 
+                alt="Founder AI" 
+                className="w-10 h-10 object-contain drop-shadow-sm" 
               />
+              <div className="flex flex-col">
+                <span className="text-xl font-bold tracking-tight text-white group-hover:text-orange-400 transition-colors">
+                  UKNOW
+                </span>
+                <span className="text-[10px] text-slate-400 -mt-1 font-medium tracking-wide">CAMPAIGN</span>
+              </div>
             </Link>
             <p className="text-[15px] leading-relaxed text-slate-400 max-w-xs">
               {t('footer.publicBrandDesc')}
@@ -130,7 +137,10 @@ export default function Footer() {
         {/* Bottom bar */}
         <div className="mt-16 pt-8 border-t border-slate-800">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-slate-400">
-            <p>{t('footer.publicBottomCopyright') || '© 2026 Founder AI - Đồng sáng lập cho doanh nghiệp một người'}</p>
+            <div className="flex items-center gap-2">
+              <img src={founderaiLogo} alt="Founder AI" className="w-5 h-5 object-contain opacity-80" />
+              <p>{t('footer.publicBottomCopyright') || '© 2026 Founder AI - Đồng sáng lập cho doanh nghiệp một người'}</p>
+            </div>
             <div className="flex items-center gap-6">
               <a href="/privacy-policy" className="hover:text-white transition-colors">
                 {t('footer.publicPrivacyLink') || 'Chính sách bảo mật'}
