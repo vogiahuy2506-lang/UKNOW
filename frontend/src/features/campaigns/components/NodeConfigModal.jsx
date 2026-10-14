@@ -72,7 +72,7 @@ const NodeConfigModal = ({
   campaignId = null,
   campaignType = '',
 }) => {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const nodeType = node?.data?.nodeType;
   const existingConfig = node?.data?.config || {};
 
@@ -539,6 +539,7 @@ const NodeConfigModal = ({
   const allConfigs = getAllNodeConfigs();
   const config = allConfigs.find((n) => n.type === nodeType);
   const Icon = config?.icon || HiOutlineLightningBolt;
+  const configLabel = (locale === 'vi' && config?.nameVi) || config?.name;
 
   const handleMappingTemplateSelect = async (templateId) => {
     await handleMappingTemplateSelectHelper({
@@ -832,7 +833,7 @@ const NodeConfigModal = ({
               />
             </div>
             <div className="text-sm text-gray-500 dark:text-dk-text2">
-              {t('campaignBuilder.pendingConfig', { name: config?.name || nodeType })}
+              {t('campaignBuilder.pendingConfig', { name: configLabel || nodeType })}
             </div>
           </div>
         );
@@ -851,7 +852,7 @@ const NodeConfigModal = ({
           </div>
           <div>
             <span className="text-sm text-gray-500 dark:text-dk-text2">{t('campaignBuilder.configuring')}</span>
-            <span className="text-primary-600 dark:text-primary-400 font-medium ml-1">{config?.name || t('campaignBuilder.nodeName')}</span>
+            <span className="text-primary-600 dark:text-primary-400 font-medium ml-1">{configLabel || t('campaignBuilder.nodeName')}</span>
           </div>
           <button onClick={onClose} className="ml-auto p-1 hover:bg-gray-100 dark:hover:bg-dk-raised text-gray-500 dark:text-dk-text2 rounded-lg">
             <HiOutlineX className="w-5 h-5" />
