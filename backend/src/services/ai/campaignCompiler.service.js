@@ -146,6 +146,31 @@ function buildAdapterAudienceNode(audience, prefix) {
 }
 
 /**
+ * Độ trễ của một bước nhỏ giọt (drip) email / Zalo cá nhân / Zalo nhóm, TÍNH TỪ BƯỚC TRƯỚC.
+ *
+ * Bước đầu (ngày 1, tin 1) không trễ. Bước sau: 1 ngày nếu mỗi ngày 1 tin; nếu nhiều tin mỗi ngày thì
+ * tin kế tiếp TRONG CÙNG NGÀY cách `floor(24 / slotsPerDay)` giờ, còn tin đầu của ngày mới cách phần còn lại
+ * để mỗi ngày tròn đúng 24 giờ (slotsPerDay = 2 → 0, 12, 12, 12 giờ; slotsPerDay = 3 → 0, 8, 8, 8, ...).
+ * Không dồn dư sang ngày kế như `round`: slotsPerDay = 5 → 4h x 4 rồi 8h, không phải 5h x 5 = 25 giờ/ngày.
+ *
+ * Mọi bước sau PHẢI đi kèm `delayFrom: 'prev'` ở nơi gọi. Runtime coi thiếu `delayFrom` là 'start'
+ * (campaignRun.service.js computeStepDueAt / waitForScheduledStep) nên mọi bước 2..N cùng đến hạn tại
+ * "lần gửi đầu + delay" — chiến dịch 401 trên prod (Zalo nhóm, 3 bước) gửi bước 2 và bước 3 cách nhau 83 giây.
+ *
+ * @param {{ day: number, slot: number, slotsPerDay: number }} args day/slot đánh số từ 1
+ * @returns {{ delayValue: number, delayUnit: 'days'|'hours' }}
+ */
+function computeDripStepDelay({ day, slot, slotsPerDay }) {
+  const perDay = Math.max(1, Math.floor(Number(slotsPerDay) || 1));
+  if (day === 1 && slot === 1) return { delayValue: 0, delayUnit: 'days' };
+  if (perDay === 1) return { delayValue: 1, delayUnit: 'days' };
+  const gapHours = Math.max(1, Math.floor(24 / perDay));
+  if (slot > 1) return { delayValue: gapHours, delayUnit: 'hours' };
+  // Tin đầu của ngày mới: phần còn lại của 24 giờ (tối thiểu 1 giờ khi slotsPerDay > 24).
+  return { delayValue: Math.max(1, 24 - (perDay - 1) * gapHours), delayUnit: 'hours' };
+}
+
+/**
  * P8a + P7 — Telegram / WhatsApp: gửi MỘT LẦN (1 bước) hoặc chuỗi drip (ngày × tin/ngày bước, bước sau có độ trễ
  * kể từ bước trước: 1 ngày, hoặc 24/slotsPerDay giờ khi có nhiều tin mỗi ngày).
  * Graph: Trigger -> [Audience (chỉ WhatsApp khi nguồn là node dữ liệu)] -> send_telegram | send_whatsapp.
@@ -558,8 +583,7 @@ function compileEmailDripCampaign({ sender, audience, schedule, contentBrief, fi
   let stepIdx = 0;
   for (let day = 1; day <= totalDays; day++) {
     for (let slot = 1; slot <= slotsPerDay; slot++) {
-      const delayValue = day === 1 && slot === 1 ? 0 : 1;
-      const delayUnit = 'days';
+      const { delayValue, delayUnit } = computeDripStepDelay({ day, slot, slotsPerDay });
       emailSteps.push({
         templateId: null,
         emailSubject: '',
@@ -1007,13 +1031,13 @@ function compileZaloPersonalDripCampaign({ sender, audience, schedule, contentBr
   let stepIdx = 0;
   for (let day = 1; day <= totalDays; day++) {
     for (let slot = 1; slot <= slotsPerDay; slot++) {
-      const delayValue = day === 1 && slot === 1 ? 0 : 1;
-      const delayUnit = 'days';
+      const { delayValue, delayUnit } = computeDripStepDelay({ day, slot, slotsPerDay });
       zaloPersonalTemplateSteps.push({
         templateId: null,
         message: '',
         delayValue,
         delayUnit,
+        delayFrom: 'prev',
         enableLinkTracking: true,
         templateMappings: buildCompilerTemplateMappings('', audienceNodeId),
         ...(stepAttachments.length > 0 ? { attachments: stepAttachments } : {}),
@@ -1315,13 +1339,13 @@ function compileZaloGroupDripCampaign({ sender, audience, schedule, contentBrief
   let stepIdx = 0;
   for (let day = 1; day <= totalDays; day++) {
     for (let slot = 1; slot <= slotsPerDay; slot++) {
-      const delayValue = day === 1 && slot === 1 ? 0 : 1;
-      const delayUnit = 'days';
+      const { delayValue, delayUnit } = computeDripStepDelay({ day, slot, slotsPerDay });
       zaloGroupTemplateSteps.push({
         templateId: null,
         message: '',
         delayValue,
-        delayUnit: 'days',
+        delayUnit,
+        delayFrom: 'prev',
         templateMappings: buildCompilerTemplateMappings('', groupAudienceId),
         ...(stepAttachments.length > 0 ? { attachments: stepAttachments } : {}),
       });

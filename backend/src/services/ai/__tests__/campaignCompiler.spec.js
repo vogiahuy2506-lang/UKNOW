@@ -348,4 +348,116 @@ describe('PR-2.1 & PR-3.1: campaignCompiler.service', () => {
 
     expect(() => compileCampaign(incomplete)).toThrow(/Cannot compile incomplete intent/);
   });
+
+  // PR-0 (PLAN_TAO_CHIEN_DICH_TUNG_BUOC_2026-10-14): bước nhỏ giọt phải chờ TỪ BƯỚC TRƯỚC (`delayFrom: 'prev'`),
+  // không thì runtime coi là 'start' và mọi bước 2..N cùng đến hạn tại "lần gửi đầu + delay" — chiến dịch 401
+  // trên prod (Zalo nhóm, 3 bước) gửi bước 2 và bước 3 cách nhau 83 giây thay vì 24 giờ.
+  describe('PR-0: nhịp nhỏ giọt (delayFrom + giãn cách khi nhiều tin mỗi ngày)', () => {
+    const DRIP_CHANNELS = [
+      {
+        label: 'email',
+        subtype: 'send_email',
+        stepsKey: 'emailSteps',
+        intent: {
+          version: 1,
+          channel: 'email',
+          sender: { type: 'email_account', id: 7 },
+          audience: { type: 'sheet', url: 'https://docs.google.com/spreadsheets/d/abc', recipientKind: 'email' },
+          contentBrief: { topic: 'Chuỗi email', locale: 'vi' },
+        },
+      },
+      {
+        label: 'Zalo cá nhân',
+        subtype: 'send_zalo_personal',
+        stepsKey: 'zaloPersonalTemplateSteps',
+        intent: {
+          version: 1,
+          channel: 'zalo',
+          sender: { type: 'zalo_account', id: 5 },
+          audience: { type: 'sheet', url: 'https://docs.google.com/spreadsheets/d/abc', recipientKind: 'phone' },
+          contentBrief: { topic: 'Chuỗi Zalo cá nhân', locale: 'vi' },
+        },
+      },
+      {
+        label: 'Zalo nhóm',
+        subtype: 'send_zalo_group',
+        stepsKey: 'zaloGroupTemplateSteps',
+        intent: {
+          version: 1,
+          channel: 'zalo_group',
+          sender: { type: 'zalo_account', id: 8 },
+          audience: { type: 'zalo_contacts', groupIds: ['g1', 'g2'], recipientKind: 'phone' },
+          contentBrief: { topic: 'Chuỗi Zalo nhóm', locale: 'vi' },
+        },
+      },
+    ];
+
+    const compileSteps = (channelCase, days, slotsPerDay) => {
+      const graph = compileCampaign({
+        ...channelCase.intent,
+        schedule: { type: 'drip', days, slotsPerDay },
+      });
+      const sendNode = graph.nodes.find((n) => n.nodeSubtype === channelCase.subtype);
+      expect(sendNode).not.toBeUndefined();
+      return { graph, sendNode, steps: sendNode.config[channelCase.stepsKey] };
+    };
+    const delayPairs = (steps) => steps.map((st) => [st.delayValue, st.delayUnit]);
+    const toHours = (st) => st.delayValue * (st.delayUnit === 'days' ? 24 : 1);
+
+    DRIP_CHANNELS.forEach((channelCase) => {
+      describe(channelCase.label, () => {
+        it('mọi bước sau bước đầu có delayFrom === "prev" (slotsPerDay = 1, 2, 3)', () => {
+          [1, 2, 3].forEach((slotsPerDay) => {
+            const { steps } = compileSteps(channelCase, 3, slotsPerDay);
+            expect(steps.length).toBe(3 * slotsPerDay);
+            steps.slice(1).forEach((st, i) => {
+              expect([slotsPerDay, i + 1, st.delayFrom]).toEqual([slotsPerDay, i + 1, 'prev']);
+            });
+          });
+        });
+
+        it('slotsPerDay = 1, days = 3: bước đầu 0, mỗi bước sau cách 1 ngày', () => {
+          const { steps } = compileSteps(channelCase, 3, 1);
+          expect(delayPairs(steps)).toEqual([[0, 'days'], [1, 'days'], [1, 'days']]);
+        });
+
+        it('slotsPerDay = 2, days = 2: 0, 12h, 12h, 12h (mỗi ngày tròn 24 giờ)', () => {
+          const { steps } = compileSteps(channelCase, 2, 2);
+          expect(delayPairs(steps)).toEqual([[0, 'days'], [12, 'hours'], [12, 'hours'], [12, 'hours']]);
+        });
+
+        it('slotsPerDay = 3, days = 2: 0, rồi 5 bước cách nhau 8h', () => {
+          const { steps } = compileSteps(channelCase, 2, 3);
+          expect(delayPairs(steps)).toEqual([
+            [0, 'days'], [8, 'hours'], [8, 'hours'], [8, 'hours'], [8, 'hours'], [8, 'hours'],
+          ]);
+        });
+
+        it('slotsPerDay không chia hết 24 (5, 7): tin đầu mỗi ngày vẫn rơi đúng mốc 24h x (ngày - 1)', () => {
+          [5, 7].forEach((slotsPerDay) => {
+            const days = 3;
+            const { steps } = compileSteps(channelCase, days, slotsPerDay);
+            const gap = Math.floor(24 / slotsPerDay);
+            let elapsedHours = 0;
+            steps.forEach((st, idx) => {
+              elapsedHours += toHours(st);
+              const day = Math.floor(idx / slotsPerDay) + 1;
+              const slot = (idx % slotsPerDay) + 1;
+              const expected = slot === 1 ? (day - 1) * 24 : (day - 1) * 24 + (slot - 1) * gap;
+              expect([slotsPerDay, idx, elapsedHours]).toEqual([slotsPerDay, idx, expected]);
+            });
+          });
+        });
+
+        it('node gửi nhỏ giọt (slotsPerDay = 3) pass validateNodeConfig của registry', () => {
+          const { graph } = compileSteps(channelCase, 2, 3);
+          graph.nodes.forEach((node) => {
+            const validation = campaignNodeRegistryService.validateNodeConfig(node.nodeSubtype, node.config);
+            expect(validation.errors).toEqual([]);
+            expect(validation.valid).toBe(true);
+          });
+        });
+      });
+    });
+  });
 });
