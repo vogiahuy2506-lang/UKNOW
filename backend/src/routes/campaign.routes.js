@@ -2,10 +2,12 @@ import express from 'express';
 import { body } from 'express-validator';
 import campaignController from '../controllers/campaign.controller.js';
 import campaignShareController from '../controllers/campaignShare.controller.js';
+import campaignSimpleController from '../controllers/campaignSimple.controller.js';
 import channelAccountSendSettingsController from '../controllers/channelAccountSendSettings.controller.js';
 import founderaiController from '../controllers/founderai.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 import handleValidationErrors from '../middleware/validate.middleware.js';
+import { channelEntitlementContext } from '../middleware/channelEntitlement.middleware.js';
 import {
   requirePermission,
   requireActivePlan,
@@ -67,6 +69,12 @@ router.post(
 // W7a — gửi nhanh kênh adapter (Telegram/WhatsApp), 1 người/request. ĐỨNG SAU test-send/attachments (đường dẫn cố định
 // khớp trước); kênh lạ -> 404 ở service.
 router.post('/quick-send/:channel', requirePermission('campaigns_create'), campaignController.quickSendAdapter.bind(campaignController));
+
+// Tạo chiến dịch TỪNG BƯỚC (/app/campaigns/simple) — PLAN_TAO_CHIEN_DICH_TUNG_BUOC_2026-10-14 PR-1. PHẢI đứng TRƯỚC mọi `/:id`.
+// `channelEntitlementContext` BẮT BUỘC: compileCampaign/validateNodeConfig đọc quyền kênh theo gói của chủ workspace từ ngữ cảnh
+// do middleware này đặt (`isChannelBlockedByPlan`); thiếu nó thì chốt "gói không có kênh Zalo" im lặng mất. `POST /` bên dưới không gắn.
+router.post('/simple/preview', requirePermission('campaigns_create'), channelEntitlementContext, campaignSimpleController.preview.bind(campaignSimpleController));
+router.post('/simple', requirePermission('campaigns_create'), channelEntitlementContext, campaignSimpleController.create.bind(campaignSimpleController));
 
 // Ước tính thời gian gửi xong (PLAN_UOC_TINH_THOI_GIAN 3.3) — hai đoạn đường dẫn nên `/:id` không nuốt được; vẫn đặt trước cho rõ.
 router.get('/:id/estimate', requirePermission('campaigns_view'), campaignController.getEstimate.bind(campaignController));

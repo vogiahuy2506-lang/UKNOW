@@ -19,6 +19,9 @@ export const CAMPAIGN_VIA = Object.freeze({
   AI: 'ai',
   AI_COMPILER: 'ai_compiler',
   AI_COMPILER_SLOT_FILLING: 'ai_compiler_slot_filling',
+  // Trình "Tạo chiến dịch từng bước" (/app/campaigns/simple, POST /campaigns/simple) — form điền thẳng intent rồi compileCampaign.
+  // KHÔNG nằm trong KNOWN_AI_VIA: `resolveCampaignVia` chỉ phân loại đường AI; trình này tự gắn `req.campaignVia = SIMPLE` ở controller.
+  SIMPLE: 'simple',
 });
 
 const KNOWN_AI_VIA = new Set([CAMPAIGN_VIA.AI_COMPILER_SLOT_FILLING, CAMPAIGN_VIA.AI_COMPILER]);

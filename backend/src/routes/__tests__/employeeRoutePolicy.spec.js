@@ -170,6 +170,10 @@ jest.unstable_mockModule('../../controllers/campaignShare.controller.js', () => 
   default: makeMockController('campaignShare'),
 }));
 
+jest.unstable_mockModule('../../controllers/campaignSimple.controller.js', () => ({
+  default: makeMockController('campaignSimple'),
+}));
+
 jest.unstable_mockModule('../../controllers/scheduledPlanChange.controller.js', () => {
   const controller = makeMockController('scheduledPlanChange');
   return {
@@ -733,6 +737,43 @@ describe('Employee Route Policy & RBAC Enforcement Matrix', () => {
       const res = await request(app).post('/api/campaigns/quick-send/attachments').send({});
       expect(res.status).toBe(200);
       expect(res.body.method).toBe('uploadQuickSendAttachment');
+    });
+  });
+
+  // PLAN_TAO_CHIEN_DICH_TUNG_BUOC_2026-10-14 PR-1 — trình tạo chiến dịch từng bước: tạo/xem trước đều cần `campaigns_create`
+  // (xem trước vẫn đọc Sheet/đếm người nhận theo nguồn của khách nên không mở cho người chỉ có `campaigns_view`).
+  describe('14b. Simple campaign (/api/campaigns/simple, /simple/preview)', () => {
+    const endpoints = [
+      ['/api/campaigns/simple/preview', 'preview'],
+      ['/api/campaigns/simple', 'create'],
+    ];
+
+    it('blocks employee without campaigns_create permission (403), even with campaigns_view / campaigns_run', async () => {
+      currentTestUser = createEmployee({ campaigns_create: false, campaigns_view: true, campaigns_run: true });
+      for (const [url] of endpoints) {
+        const res = await request(app).post(url).send({});
+        expect(res.status).toBe(403);
+        expect(res.body.code).toBe('PERMISSION_DENIED');
+      }
+    });
+
+    it('allows employee with campaigns_create permission (200) and reaches the simple controller, not POST /:id handlers', async () => {
+      currentTestUser = createEmployee({ campaigns_create: true });
+      for (const [url, method] of endpoints) {
+        const res = await request(app).post(url).send({});
+        expect(res.status).toBe(200);
+        expect(res.body.controller).toBe('campaignSimple');
+        expect(res.body.method).toBe(method);
+      }
+    });
+
+    it('allows owner in self context (200)', async () => {
+      currentTestUser = selfUser;
+      for (const [url, method] of endpoints) {
+        const res = await request(app).post(url).send({});
+        expect(res.status).toBe(200);
+        expect(res.body.method).toBe(method);
+      }
     });
   });
 

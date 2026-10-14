@@ -40,6 +40,12 @@ describe('resolveCampaignVia', () => {
     expect(resolveCampaignVia({ _via: 'whatever', compilerApplied: true })).toBe(CAMPAIGN_VIA.AI_COMPILER);
   });
 
+  it('SIMPLE = "simple" nhưng KHÔNG phải nhãn AI: _via "simple" không lọt vào resolveCampaignVia (đường tạo từng bước tự gắn campaignVia)', () => {
+    expect(CAMPAIGN_VIA.SIMPLE).toBe('simple');
+    expect(resolveCampaignVia({ _via: 'simple' })).toBe(CAMPAIGN_VIA.AI);
+    expect(resolveCampaignVia({ _via: 'simple', compilerApplied: true })).toBe(CAMPAIGN_VIA.AI_COMPILER);
+  });
+
   it('nhiều ứng viên: prepareScript làm rơi _via thì vẫn lấy được từ script gốc', () => {
     const prepared = { compilerApplied: true };
     const raw = { compilerApplied: true, _via: 'ai_compiler_slot_filling' };

@@ -512,6 +512,37 @@ class CustomerReadRepository {
     return result.rows;
   }
 
+  /**
+   * Địa chỉ liên lạc của MỌI khách trong workspace, cho nguồn "Khách hàng đã lưu" của trình tạo chiến dịch từng bước
+   * (PLAN_TAO_CHIEN_DICH_TUNG_BUOC_2026-10-14 PR-1). KHÔNG đi qua node `interested_customers` vì node đó đọc từ
+   * `customer_purchases` — khách không có dòng mua/quan tâm bị loại (prod: 96.940 khách, chỉ 3 có dòng).
+   *
+   * Cùng phạm vi workspace với danh sách khách (`buildCustomerListFilter`: `COALESCE(workspace_owner_id, id_user)`).
+   * Email: chỉ khách còn nhận được thư (`emailStatus: 'subscribed'` — chưa huỷ đăng ký, chưa hard bounce) để số ước tính khớp
+   * số thật sẽ gửi; chốt đồng ý ở bước gửi vẫn là hàng rào cuối. Điện thoại: mọi khách có số.
+   *
+   * @param {{ userId: number, kind: 'email'|'phone', limit: number }} input `limit` do người gọi truyền (trần + 1 để biết có vượt trần)
+   * @returns {Promise<string[]>} giá trị thô (chưa chuẩn hoá/khử trùng), thứ tự id tăng dần
+   */
+  async getCustomerContactValues({ userId, kind, limit }) {
+    const column = kind === 'email' ? 'email' : 'phone';
+    const { whereSql, params } = this.buildCustomerListFilter({
+      userId,
+      emailStatus: kind === 'email' ? 'subscribed' : undefined,
+    });
+    const result = await db.query(
+      `SELECT c.${column} AS value
+       FROM customers c
+       WHERE ${whereSql}
+         AND c.${column} IS NOT NULL
+         AND BTRIM(c.${column}) <> ''
+       ORDER BY c.id ASC
+       LIMIT $${params.length + 1}`,
+      [...params, limit]
+    );
+    return result.rows.map((row) => row.value);
+  }
+
   async getOwnedCampaign(campaignId, userId) {
     const result = await db.query(
       `SELECT id, campaign_type
