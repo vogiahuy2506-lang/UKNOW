@@ -211,6 +211,15 @@ describe('dữ liệu prod 17/10/2026: cạnh `custom` của trình dựng + kh�
     expect(isRoundTripEquivalent(stored, rebuilt)).toEqual({ ok: true, diffs: [] });
   });
 
+  it('khối chọn tài khoản cũ không có cờ `zaloPoolMultiAccountEnabled` (bản dựng lại ghi false) → coi như nhau, khứ hồi khớp', async () => {
+    const stored = persist(await build(zaloBody()));
+    delete stored.nodes.find((node) => node.nodeSubtype === 'select_zalo_account').config.zaloPoolMultiAccountEnabled;
+    const read = readSimpleFormFromGraph(stored.nodes, stored.connections);
+    const rebuilt = await build({ channel: read.channel, ...read.form });
+    expect(rebuilt.nodes.find((node) => node.nodeSubtype === 'select_zalo_account').config.zaloPoolMultiAccountEnabled).toBe(false);
+    expect(isRoundTripEquivalent(stored, rebuilt)).toEqual({ ok: true, diffs: [] });
+  });
+
   it('khối `end` ở GIỮA đường (còn cạnh đi ra) vẫn bị từ chối như khối nâng cao', async () => {
     const stored = persist(await build(emailBody()));
     const [first, second] = stored.nodes;
