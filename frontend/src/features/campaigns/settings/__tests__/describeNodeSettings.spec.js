@@ -292,7 +292,7 @@ describe('describeNodeSettings — Telegram / WhatsApp', () => {
 
 describe('describeNodeSettings — dữ liệu & logic', () => {
   it('manual_trigger', () => {
-    expect(text(node('manual_trigger'))).toEqual(['Bắt đầu: Khi bạn bấm Chạy hoặc theo lịch']);
+    expect(text(node('manual_trigger'))).toEqual(['Chạy khi: Bạn bấm Chạy, hoặc đến giờ theo lịch']);
   });
 
   it('read_sheet: đường dẫn + tab; thiếu đường dẫn → đỏ', () => {

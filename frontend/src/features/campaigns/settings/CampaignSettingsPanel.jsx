@@ -5,7 +5,7 @@ import { getCampaignTypeMeta } from '../../../utils/campaignTypeDisplay';
 import { getAllNodeConfigs } from '../components/CampaignBuilderFlowNodes';
 import CampaignEstimatePanel from '../components/CampaignEstimatePanel';
 import useCampaignEstimate from '../hooks/useCampaignEstimate';
-import { describeEstimateDuration, formatEstimateDateTime } from '../utils/campaignEstimate.helpers';
+import { buildEstimateView, describeEstimateDuration, formatEstimateDateTime } from '../utils/campaignEstimate.helpers';
 import { formatCampaignDateTime } from '../utils/campaignDateTime.helpers';
 import buildSettingsOrder from './buildSettingsOrder';
 import describeNodeSettings from './describeNodeSettings';
@@ -49,6 +49,11 @@ const RunningEstimate = ({ runId, t }) => {
 /** Ước tính của bản ĐÃ LƯU (chiến dịch không chạy) + dòng cảnh báo khi đang có thay đổi chưa lưu. */
 const SavedEstimate = ({ campaignId, isDirty, refreshKey, t }) => {
   const { status, estimate } = useCampaignEstimate({ campaignId, enabled: true, refreshKey });
+  // Ước tính có hình dạng đúng nhưng không có gì để nói (không đếm được người nhận, không cảnh báo) thì CampaignEstimatePanel chỉ
+  // còn mỗi tiêu đề — nói thẳng "chưa ước tính được" thay vì một khung trống.
+  const view = status === 'ready' ? buildEstimateView(estimate) : null;
+  const hasContent = Boolean(view) && ((Boolean(view.finishAtLatest) && view.totalActions > 0) || view.warnings.length > 0);
+  const panelStatus = status === 'ready' && !hasContent ? 'error' : status;
   return (
     <div className="space-y-2">
       {isDirty && (
@@ -56,7 +61,7 @@ const SavedEstimate = ({ campaignId, isDirty, refreshKey, t }) => {
           {t('campaignSettings.estimateDirty')}
         </p>
       )}
-      <CampaignEstimatePanel status={status} estimate={estimate} t={t} />
+      <CampaignEstimatePanel status={panelStatus} estimate={estimate} t={t} />
     </div>
   );
 };

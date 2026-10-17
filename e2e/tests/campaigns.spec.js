@@ -30,8 +30,9 @@ test.describe.serial('Tạo + kích hoạt chiến dịch', () => {
     await page.getByTestId('create-method-blocks').click();
     await page.getByPlaceholder('Nhập tên chiến dịch...').fill(name);
     await page.getByRole('button', { name: 'Tạo và thiết kế' }).click();
-    await page.waitForURL(/\/app\/campaigns\/\d+\/builder/, { timeout: 25_000 });
-    await expect(page).toHaveURL(/\/builder/);
+    // Tạo trống bằng trình dựng: chiến dịch mở thẳng ở tab Sơ đồ khối (`/app/campaigns/:id?tab=flow`).
+    await page.waitForURL(/\/app\/campaigns\/\d+\?tab=flow/, { timeout: 25_000 });
+    await expect(page.getByTestId('campaign-tab-flow')).toHaveAttribute('aria-selected', 'true');
   });
 
   /**
@@ -49,10 +50,12 @@ test.describe.serial('Tạo + kích hoạt chiến dịch', () => {
 
     // Vào builder từ tên chiến dịch.
     await row.getByRole('link', { name }).click();
-    // Từ 17/10/2026 mở chiến dịch vào tab Từng bước trước (chiến dịch rỗng node thì tab đó chỉ xem) → sang tab Sơ đồ khối.
-    await page.waitForURL(/\/app\/campaigns\/\d+\/simple/, { timeout: 25_000 });
-    await page.getByTestId('campaign-tab-builder').click();
-    await page.waitForURL(/\/app\/campaigns\/\d+\/builder/, { timeout: 25_000 });
+    // Từ 17/10/2026 chi tiết chiến dịch là một trang hai tab; mở chiến dịch đã có vào tab Thiết lập trước (chiến dịch rỗng node
+    // hiện trạng thái rỗng) → sang tab Sơ đồ khối. Nút "Chạy ngay" nằm ở thanh trên, dùng được ở cả hai tab.
+    await page.waitForURL(/\/app\/campaigns\/\d+$/, { timeout: 25_000 });
+    await expect(page.getByTestId('settings-empty')).toBeVisible({ timeout: 25_000 });
+    await page.getByTestId('campaign-tab-flow').click();
+    await page.waitForURL(/\/app\/campaigns\/\d+\?tab=flow/, { timeout: 25_000 });
 
     // Bấm "Chạy ngay" trong trình dựng -> mở modal xác nhận.
     await page.getByRole('button', { name: 'Chạy ngay' }).click();

@@ -2064,7 +2064,7 @@ export default {
     limitRecords: '{n} records',
     landingAll: 'All landing pages',
     dateRange: '{from} → {to}',
-    triggerManual: 'When you press Run, or on a schedule',
+    triggerManual: 'You press Run, or a schedule fires',
     unknownNode: 'Press Edit to see its settings',
     node: { unnamed: 'Unnamed block' },
     matchMode: { all: 'Match ALL conditions', any: 'Match ANY condition' },
@@ -2114,7 +2114,7 @@ export default {
       forms: 'Forms',
       dataSource: 'Data source',
       contactFields: 'Contact fields',
-      start: 'Start',
+      start: 'Runs when',
       settings: 'Settings',
     },
     missing: {

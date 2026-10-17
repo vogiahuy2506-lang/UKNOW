@@ -2069,7 +2069,7 @@ export default {
     limitRecords: '{n} bản ghi',
     landingAll: 'Tất cả trang landing',
     dateRange: '{from} → {to}',
-    triggerManual: 'Khi bạn bấm Chạy hoặc theo lịch',
+    triggerManual: 'Bạn bấm Chạy, hoặc đến giờ theo lịch',
     unknownNode: 'Bấm Sửa để xem cài đặt',
     node: { unnamed: 'Khối không tên' },
     matchMode: { all: 'Thoả TẤT CẢ điều kiện', any: 'Thoả BẤT KỲ điều kiện nào' },
@@ -2119,7 +2119,7 @@ export default {
       forms: 'Biểu mẫu',
       dataSource: 'Nguồn dữ liệu',
       contactFields: 'Trường liên hệ',
-      start: 'Bắt đầu',
+      start: 'Chạy khi',
       settings: 'Cài đặt',
     },
     missing: {

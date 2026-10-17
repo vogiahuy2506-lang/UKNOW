@@ -6,7 +6,7 @@
  * gửi/đặt lịch nên không tạo chiến dịch, không gửi tin. Vì vậy các ảnh màn kết quả (Đang gửi chiến dịch / Đã hẹn gửi /
  * chờ duyệt) KHÔNG có ô [ẢNH] trong bài.
  *
- * Hai ảnh cuối (mục "Mở lại và sửa chiến dịch": hai tab, chế độ chỉ xem) cần chiến dịch ĐÃ LƯU nên tạo thật trong DB
+ * Hai ảnh cuối (mục "Mở lại và sửa chiến dịch": trang chi tiết hai tab Thiết lập | Sơ đồ khối, tab Thiết lập) cần chiến dịch ĐÃ LƯU nên tạo thật trong DB
  * e2e qua API (`POST /campaigns/simple` và `POST /campaigns`, chỉ tạo NHÁP, không gọi run/schedule) rồi XOÁ ngay sau khi
  * chụp xong (`withCleanup`). Tài khoản e2e đã chạm trần số chiến dịch email do seed nên `raiseEmailCampaignCap` nâng trần tạm
  * (cột `users.max_email_campaigns`) rồi trả lại.
@@ -245,7 +245,7 @@ export default {
     },
     {
       name: 'hai-tab-tung-buoc',
-      caption: 'trang chiến dịch đang mở tab "Từng bước", khoanh đỏ thanh hai tab "Từng bước" và "Sơ đồ khối"',
+      caption: 'trang chiến dịch đang mở tab "Thiết lập", khoanh đỏ thanh hai tab "Thiết lập" và "Sơ đồ khối"',
       localOnly: true,
       async take(page) {
         const restoreCap = await raiseEmailCampaignCap(2);
@@ -262,12 +262,12 @@ export default {
           campaignId = created?.id ?? created?.campaign?.id ?? created?.campaignId;
           if (!campaignId) throw new Error(`POST /campaigns/simple không trả id: ${JSON.stringify(created).slice(0, 200)}`);
 
+          // Từ 17/10/2026 (PLAN_THIET_LAP_VA_SO_DO) mở chiến dịch vào tab "Thiết lập" của trang chi tiết (`?tab=settings` là mặc định).
           await page.goto(`/app/campaigns/${campaignId}`);
-          await page.waitForURL(/\/app\/campaigns\/\d+\/simple/, { timeout: 30_000 });
           const tabs = page.getByTestId('campaign-view-tabs');
           await tabs.waitFor({ state: 'visible', timeout: 30_000 });
-          await page.locator('[data-testid^="simple-step-body-"]').first().waitFor({ state: 'visible', timeout: 30_000 });
-          await page.getByTestId('simple-edit-loading').waitFor({ state: 'hidden', timeout: 30_000 }).catch(() => {});
+          await page.getByTestId('campaign-settings-panel').waitFor({ state: 'visible', timeout: 30_000 });
+          await page.getByTestId('settings-node-card').first().waitFor({ state: 'visible', timeout: 30_000 });
           await settle(page);
           await hideVolatileChrome(page);
           await highlight(tabs);
@@ -286,7 +286,7 @@ export default {
     },
     {
       name: 'tab-tung-buoc-chi-xem',
-      caption: 'tab Từng bước ở chế độ chỉ xem, khoanh đỏ khung "Vì sao chưa sửa được ở đây" và nút "Mở Sơ đồ khối để sửa"',
+      caption: 'tab Thiết lập của chiến dịch có rẽ nhánh, khoanh đỏ thẻ khối "Gửi email" (ghi nhãn nhánh) và nút "Sửa"',
       localOnly: true,
       async take(page) {
         const restoreCap = await raiseEmailCampaignCap(2);
@@ -296,7 +296,7 @@ export default {
           const templates = await api(page, 'GET', '/email-templates?limit=20');
           const template = (templates.items || []).find((item) => item.isActive !== false);
           if (!template) throw new Error('DB e2e chưa có mẫu email đang dùng.');
-          // Sơ đồ có khối "Rẽ nhánh" nên không phải dạng đơn giản → tab Từng bước chỉ xem.
+          // Sơ đồ có khối "Rẽ nhánh": tab Thiết lập liệt kê mọi khối theo thứ tự chạy, khối sau điều kiện ghi nhãn nhánh.
           const created = await api(page, 'POST', '/campaigns', {
             campaignName: 'Chăm sóc khách có rẽ nhánh',
             campaignType: 'email',
@@ -307,20 +307,19 @@ export default {
             ],
             connections: [
               { sourceNodeId: 't1', targetNodeId: 'c1' },
-              { sourceNodeId: 'c1', targetNodeId: 's1' },
+              { sourceNodeId: 'c1', targetNodeId: 's1', connectionLabel: 'Có email' },
             ],
           });
           campaignId = created?.id ?? created?.campaign?.id ?? created?.campaignId;
           if (!campaignId) throw new Error(`POST /campaigns không trả id: ${JSON.stringify(created).slice(0, 200)}`);
 
           await page.goto(`/app/campaigns/${campaignId}`);
-          await page.waitForURL(/\/app\/campaigns\/\d+\/simple/, { timeout: 30_000 });
-          const reasons = page.getByTestId('simple-readonly-reasons');
-          await reasons.waitFor({ state: 'visible', timeout: 30_000 });
+          const mailCard = page.locator('[data-testid="settings-node-card"][data-node-type="send_email"]');
+          await mailCard.waitFor({ state: 'visible', timeout: 30_000 });
           await settle(page);
           await hideVolatileChrome(page);
-          await highlight(reasons);
-          await highlight(page.getByTestId('simple-readonly-open-builder'));
+          await highlight(mailCard);
+          await highlight(mailCard.locator('[data-testid^="settings-edit-"]'));
           await page.waitForTimeout(200);
           const shot = await contentShot(page, page.getByTestId('campaign-view-tabs').locator('xpath=../..'), { pad: 20, maxHeight: 760 });
           return withCleanup(shot, async () => {

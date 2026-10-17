@@ -195,6 +195,23 @@ describe('CampaignSettingsPanel — ước tính', () => {
     expect(screen.getByTestId('settings-estimate-dirty')).toHaveTextContent('ước tính theo bản đã lưu');
   });
 
+  it('ước tính trả về nhưng rỗng (không đếm được gì, không cảnh báo) → nói "chưa ước tính được", không để khung trống chỉ có tiêu đề', () => {
+    mockSavedEstimate.mockReturnValue({ status: 'ready', estimate: { totalActions: 0, warnings: [], perDay: [] } });
+    renderPanel();
+    expect(screen.getByTestId('campaign-estimate-unavailable')).toBeInTheDocument();
+    expect(screen.queryByTestId('campaign-estimate')).not.toBeInTheDocument();
+  });
+
+  it('ước tính có số liệu → hiện khối ước tính đầy đủ', () => {
+    mockSavedEstimate.mockReturnValue({
+      status: 'ready',
+      estimate: { startAt: '2026-10-17T03:00:00Z', finishAtLatest: '2026-10-17T05:00:00Z', totalActions: 40, perDay: [], warnings: [], accounts: [] },
+    });
+    renderPanel();
+    expect(screen.getByTestId('campaign-estimate')).toBeInTheDocument();
+    expect(screen.getByTestId('campaign-estimate-finish')).toBeInTheDocument();
+  });
+
   it('đang chạy: hiện thời gian CÒN LẠI của lượt chạy, không dùng ước tính bản đã lưu', () => {
     mockRunEstimate.mockReturnValue({
       status: 'ready',
