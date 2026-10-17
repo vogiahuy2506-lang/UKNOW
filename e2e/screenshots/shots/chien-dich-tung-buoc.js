@@ -2,9 +2,14 @@
  * Ảnh minh hoạ cho bài "Tạo chiến dịch từng bước" (/huong-dan/chien-dich-tung-buoc).
  *
  * Trang tạo chiến dịch từng bước (/app/campaigns/simple) giữ trạng thái trong bộ nhớ, không lưu vào storage, nên mỗi ảnh
- * mở trang mới rồi bấm lại từ đầu tới bước cần chụp (`walkTo`). Ảnh nào cũng DỪNG TRƯỚC nút "Bắt đầu gửi": kịch bản không
- * bao giờ bấm gửi/đặt lịch nên không tạo chiến dịch, không gửi tin. Vì vậy các ảnh màn kết quả (Đang gửi chiến dịch / Đã hẹn
- * gửi / chờ duyệt) KHÔNG có ô [ẢNH] trong bài.
+ * mở trang mới rồi bấm lại từ đầu tới bước cần chụp (`walkTo`). Tám ảnh đầu DỪNG TRƯỚC nút "Bắt đầu gửi": không bấm
+ * gửi/đặt lịch nên không tạo chiến dịch, không gửi tin. Vì vậy các ảnh màn kết quả (Đang gửi chiến dịch / Đã hẹn gửi /
+ * chờ duyệt) KHÔNG có ô [ẢNH] trong bài.
+ *
+ * Hai ảnh cuối (mục "Mở lại và sửa chiến dịch": hai tab, chế độ chỉ xem) cần chiến dịch ĐÃ LƯU nên tạo thật trong DB
+ * e2e qua API (`POST /campaigns/simple` và `POST /campaigns`, chỉ tạo NHÁP, không gọi run/schedule) rồi XOÁ ngay sau khi
+ * chụp xong (`withCleanup`). Tài khoản e2e đã chạm trần số chiến dịch email do seed nên `raiseEmailCampaignCap` nâng trần tạm
+ * (cột `users.max_email_campaigns`) rồi trả lại.
  *
  * Cần `E2E_SEED_ALL=1`: tài khoản email gửi `cskh@uknow.vn`. Dữ liệu seed không có biểu mẫu nên ảnh chỉ dùng nguồn
  * "Tự nhập danh sách". Thẻ "Tự động gửi cho người mới" chỉ hiện với nguồn landing / biểu mẫu / Google Sheet nên không có
@@ -14,6 +19,46 @@
  * nhưng giữ localOnly cho khỏi phụ thuộc dữ liệu thật.
  */
 import { highlight, hideVolatileChrome, settle, contentShot } from '../lib/shotHelpers.js';
+import { api, withDb } from '../lib/shotFixtures.js';
+
+/** Chạy `cleanup` sau khi ảnh đã chụp (capture.spec chụp SAU khi `take` trả về nên không dọn trong `take` được). */
+function withCleanup(target, cleanup) {
+  return {
+    screenshot: async (options) => {
+      try {
+        return await target.screenshot(options);
+      } finally {
+        await cleanup().catch((error) => console.log(`  ! dọn chiến dịch thử lỗi: ${error.message}`));
+      }
+    },
+  };
+}
+
+/** Nâng trần số chiến dịch email của tài khoản e2etest (cột `users.max_email_campaigns`) thêm `extra`; trả hàm trả lại giá trị cũ. */
+async function raiseEmailCampaignCap(extra) {
+  const original = await withDb(async (db) => {
+    const { rows } = await db.query(`SELECT id, max_email_campaigns FROM users WHERE username = 'e2etest'`);
+    const user = rows[0];
+    if (user && Number(user.max_email_campaigns) >= 0) {
+      await db.query('UPDATE users SET max_email_campaigns = max_email_campaigns + $1 WHERE id = $2', [extra, user.id]);
+    }
+    return user;
+  });
+  return async () => {
+    if (!original) return;
+    await withDb((db) => db.query('UPDATE users SET max_email_campaigns = $1 WHERE id = $2', [original.max_email_campaigns, original.id]));
+  };
+}
+
+/** Mở một trang trong app (để có origin + token) rồi trả id tài khoản email đầu tiên. */
+async function firstEmailSenderId(page) {
+  await page.goto('/app/campaigns');
+  await settle(page);
+  const settings = await api(page, 'GET', '/email-settings?status=active&page=1&limit=100');
+  const sender = (settings.items || [])[0];
+  if (!sender) throw new Error('DB e2e chưa có tài khoản email — nạp seed với E2E_SEED_ALL=1.');
+  return Number(sender.id);
+}
 
 /** Khối bước + thanh nút Quay lại / Tiếp tục: cha trực tiếp của vùng thân bước. */
 function stepCard(page, stepId) {
@@ -196,6 +241,97 @@ export default {
         await highlight(page.getByTestId('simple-start'));
         // KHÔNG bấm "Bắt đầu gửi": bấm là tạo chiến dịch và gửi tin thật.
         return finish(page, 'review');
+      },
+    },
+    {
+      name: 'hai-tab-tung-buoc',
+      caption: 'trang chiến dịch đang mở tab "Từng bước", khoanh đỏ thanh hai tab "Từng bước" và "Sơ đồ khối"',
+      localOnly: true,
+      async take(page) {
+        const restoreCap = await raiseEmailCampaignCap(2);
+        let campaignId = null;
+        try {
+          const senderId = await firstEmailSenderId(page);
+          const created = await api(page, 'POST', '/campaigns/simple', {
+            channel: 'email',
+            senderId,
+            audience: { type: 'manual', emails: ['an@example.com', 'binh@example.com'] },
+            content: { mode: 'custom', subject: 'Ưu đãi tháng 10 dành cho bạn', body: 'Chào bạn, tháng này shop có ưu đãi dành riêng cho khách quen. Bạn xem chi tiết nhé!' },
+            campaignName: 'Ưu đãi tháng 10',
+          });
+          campaignId = created?.id ?? created?.campaign?.id ?? created?.campaignId;
+          if (!campaignId) throw new Error(`POST /campaigns/simple không trả id: ${JSON.stringify(created).slice(0, 200)}`);
+
+          await page.goto(`/app/campaigns/${campaignId}`);
+          await page.waitForURL(/\/app\/campaigns\/\d+\/simple/, { timeout: 30_000 });
+          const tabs = page.getByTestId('campaign-view-tabs');
+          await tabs.waitFor({ state: 'visible', timeout: 30_000 });
+          await page.locator('[data-testid^="simple-step-body-"]').first().waitFor({ state: 'visible', timeout: 30_000 });
+          await page.getByTestId('simple-edit-loading').waitFor({ state: 'hidden', timeout: 30_000 }).catch(() => {});
+          await settle(page);
+          await hideVolatileChrome(page);
+          await highlight(tabs);
+          await page.waitForTimeout(200);
+          const shot = await contentShot(page, tabs.locator('xpath=../..'), { pad: 20, maxHeight: 760 });
+          return withCleanup(shot, async () => {
+            await api(page, 'DELETE', `/campaigns/${campaignId}`);
+            await restoreCap();
+          });
+        } catch (error) {
+          if (campaignId) await api(page, 'DELETE', `/campaigns/${campaignId}`).catch(() => {});
+          await restoreCap();
+          throw error;
+        }
+      },
+    },
+    {
+      name: 'tab-tung-buoc-chi-xem',
+      caption: 'tab Từng bước ở chế độ chỉ xem, khoanh đỏ khung "Vì sao chưa sửa được ở đây" và nút "Mở Sơ đồ khối để sửa"',
+      localOnly: true,
+      async take(page) {
+        const restoreCap = await raiseEmailCampaignCap(2);
+        let campaignId = null;
+        try {
+          const senderId = await firstEmailSenderId(page);
+          const templates = await api(page, 'GET', '/email-templates?limit=20');
+          const template = (templates.items || []).find((item) => item.isActive !== false);
+          if (!template) throw new Error('DB e2e chưa có mẫu email đang dùng.');
+          // Sơ đồ có khối "Rẽ nhánh" nên không phải dạng đơn giản → tab Từng bước chỉ xem.
+          const created = await api(page, 'POST', '/campaigns', {
+            campaignName: 'Chăm sóc khách có rẽ nhánh',
+            campaignType: 'email',
+            nodes: [
+              { tempId: 't1', nodeType: 'trigger', nodeSubtype: 'manual', nodeName: 'Bắt đầu', config: {} },
+              { tempId: 'c1', nodeType: 'condition', nodeSubtype: 'condition', nodeName: 'Rẽ nhánh', config: {} },
+              { tempId: 's1', nodeType: 'action', nodeSubtype: 'send_email', nodeName: 'Gửi email', config: { fromEmailId: senderId, emailSteps: [{ templateId: Number(template.id), delayValue: 0, delayUnit: 'days' }] } },
+            ],
+            connections: [
+              { sourceNodeId: 't1', targetNodeId: 'c1' },
+              { sourceNodeId: 'c1', targetNodeId: 's1' },
+            ],
+          });
+          campaignId = created?.id ?? created?.campaign?.id ?? created?.campaignId;
+          if (!campaignId) throw new Error(`POST /campaigns không trả id: ${JSON.stringify(created).slice(0, 200)}`);
+
+          await page.goto(`/app/campaigns/${campaignId}`);
+          await page.waitForURL(/\/app\/campaigns\/\d+\/simple/, { timeout: 30_000 });
+          const reasons = page.getByTestId('simple-readonly-reasons');
+          await reasons.waitFor({ state: 'visible', timeout: 30_000 });
+          await settle(page);
+          await hideVolatileChrome(page);
+          await highlight(reasons);
+          await highlight(page.getByTestId('simple-readonly-open-builder'));
+          await page.waitForTimeout(200);
+          const shot = await contentShot(page, page.getByTestId('campaign-view-tabs').locator('xpath=../..'), { pad: 20, maxHeight: 760 });
+          return withCleanup(shot, async () => {
+            await api(page, 'DELETE', `/campaigns/${campaignId}`);
+            await restoreCap();
+          });
+        } catch (error) {
+          if (campaignId) await api(page, 'DELETE', `/campaigns/${campaignId}`).catch(() => {});
+          await restoreCap();
+          throw error;
+        }
       },
     },
   ],
