@@ -85,12 +85,18 @@ describe('buildStateFromServer', () => {
     expect(state.audience.sheetCheckedUrl).toBe(state.audience.sheetUrl.trim());
   });
 
-  it('mẫu có sẵn → templateId số; followUps giữ nguyên', () => {
+  it('mẫu có sẵn → templateId số; followUps thành thẻ tin sau (id cục bộ, độ trễ, nội dung)', () => {
     const state = buildStateFromServer(serverData({
       form: { ...serverData().form, content: { mode: 'template', templateId: '9' }, followUps: FOLLOW_UPS },
     }));
     expect(state.content).toMatchObject({ mode: 'template', templateId: 9 });
-    expect(state.followUps).toEqual(FOLLOW_UPS);
+    expect(state.followUps).toHaveLength(1);
+    expect(state.followUps[0]).toMatchObject({
+      delayValue: 2,
+      delayUnit: 'days',
+      content: { mode: 'template', templateId: 5, templateName: '' },
+    });
+    expect(typeof state.followUps[0].id).toBe('string');
   });
 
   it('form = null (không đọc ngược được) → null', () => {
@@ -102,7 +108,7 @@ describe('buildEditBody / fingerprintEditState', () => {
   it('body PUT = body tạo + followUps khi có; không có followUps thì không gửi khoá đó', () => {
     const base = buildStateFromServer(serverData());
     expect(buildEditBody(base)).not.toHaveProperty('followUps');
-    const withFollow = { ...base, followUps: FOLLOW_UPS };
+    const withFollow = buildStateFromServer(serverData({ form: { ...serverData().form, followUps: FOLLOW_UPS } }));
     expect(buildEditBody(withFollow).followUps).toEqual(FOLLOW_UPS);
     expect(buildEditBody(base)).toMatchObject({
       channel: 'email',

@@ -62,7 +62,6 @@ vi.mock('react-hot-toast', () => {
 });
 
 // ── Dữ liệu mẫu ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
-const FOLLOW_UPS = [{ delayValue: 2, delayUnit: 'days', content: { mode: 'template', templateId: 5 } }];
 const baseData = () => ({
   editable: true,
   readOnlyReasons: [],
@@ -109,7 +108,6 @@ const waitReviewReady = async () => {
   await screen.findByTestId('simple-summary');
   await waitFor(() => expect(screen.getByTestId('simple-edit-save-run')).toBeEnabled());
 };
-const bodyTextarea = () => screen.getByLabelText('Nội dung', { selector: 'textarea' });
 
 /** Đổi nội dung tự soạn (bước Nội dung) rồi quay về bước Xem lại — tạo "thay đổi chưa lưu". */
 async function makeDirtyAndReturnToReview(newBody = 'Nội dung mới') {
@@ -201,23 +199,36 @@ describe('Chi tiết chiến dịch — tab Từng bước (chế độ sửa)',
       expect(screen.queryByTestId('simple-edit-dirty')).not.toBeInTheDocument();
     });
 
-    it('chiến dịch nhiều tin: tin 2..N được GỬI NGUYÊN trong PUT, và bước Nội dung báo rõ chỉ sửa được tin đầu', async () => {
-      campaignApiService.getSimpleCampaign.mockResolvedValue(getResponse({
-        form: { ...baseData().form, followUps: FOLLOW_UPS },
-      }));
+    it('chiến dịch nhiều tin: nạp followUps thành thẻ tin sau (có tên mẫu), sửa độ trễ tin 2 rồi PUT gửi lại đúng', async () => {
+      const followUps = [
+        { delayValue: 2, delayUnit: 'days', content: { mode: 'template', templateId: 5 } },
+        { delayValue: 3, delayUnit: 'hours', content: { mode: 'custom', subject: 'Tiêu đề 3', body: 'Thân tin 3' } },
+      ];
+      campaignApiService.getSimpleCampaign.mockResolvedValue(getResponse({ form: { ...baseData().form, followUps } }));
       renderEdit();
       await screen.findByTestId('simple-summary');
+      expect(screen.getByTestId('simple-summary')).toHaveTextContent('chuỗi 3 tin trong 3 ngày');
       openStep('content');
-      expect(await screen.findByTestId('simple-followups-note')).toHaveTextContent('2 tin');
-      fireEvent.change(bodyTextarea(), { target: { value: 'Tin đầu đã sửa' } });
+      // Hết ghi chú "chỉ sửa được tin đầu".
+      expect(screen.queryByTestId('simple-followups-note')).not.toBeInTheDocument();
+      expect(await screen.findByTestId('simple-followup-0')).toHaveTextContent('Tin 2');
+      expect(screen.getByTestId('simple-followup-1')).toHaveTextContent('Tin 3');
+      expect(screen.getByTestId('simple-followup-delay-0')).toHaveValue(2);
+      expect(screen.getByTestId('simple-followup-unit-1')).toHaveValue('hours');
+      expect(screen.getByDisplayValue('Thân tin 3')).toBeInTheDocument();
+
+      fireEvent.change(screen.getByTestId('simple-followup-delay-0'), { target: { value: '4' } });
       openStep('review');
       await waitFor(() => expect(saveButton()).toBeEnabled());
       fireEvent.click(saveButton());
 
       await waitFor(() => expect(campaignApiService.updateSimpleCampaign).toHaveBeenCalledTimes(1));
       const [, body] = campaignApiService.updateSimpleCampaign.mock.calls[0];
-      expect(body.followUps).toEqual(FOLLOW_UPS);
-      expect(body.content.body).toBe('Tin đầu đã sửa');
+      expect(body.followUps).toEqual([
+        { delayValue: 4, delayUnit: 'days', content: { mode: 'template', templateId: 5 } },
+        { delayValue: 3, delayUnit: 'hours', content: { mode: 'custom', subject: 'Tiêu đề 3', body: 'Thân tin 3' } },
+      ]);
+      expect(body.content.body).toBe('Nội dung gốc');
     });
 
     it('PUT bị từ chối (409) → hiện câu của server, KHÔNG đụng lịch, vẫn còn "Chưa lưu"', async () => {

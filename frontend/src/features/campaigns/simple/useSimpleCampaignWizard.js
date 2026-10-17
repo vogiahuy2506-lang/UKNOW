@@ -12,7 +12,9 @@ import {
   buildSchedulePayload,
   buildSimpleCampaignBody,
   buildSimplePreviewBody,
+  MAX_FOLLOW_UPS,
   createDefaultSchedule,
+  createFollowUp,
   createInitialWizardState,
   getServerMessage,
   isScheduleBased,
@@ -143,6 +145,32 @@ export default function useSimpleCampaignWizard({ campaignId = null } = {}) {
 
   const patchContent = useCallback((patch) => {
     setState((prev) => ({ ...prev, content: { ...prev.content, ...patch } }));
+  }, []);
+
+  /** Chuỗi tin: thêm tin sau (tối đa 9), xoá, sửa độ trễ, sửa nội dung. */
+  const addFollowUp = useCallback(() => {
+    setState((prev) => {
+      const list = Array.isArray(prev.followUps) ? prev.followUps : [];
+      return list.length >= MAX_FOLLOW_UPS ? prev : { ...prev, followUps: [...list, createFollowUp()] };
+    });
+  }, []);
+
+  const removeFollowUp = useCallback((id) => {
+    setState((prev) => ({ ...prev, followUps: (prev.followUps || []).filter((item) => item.id !== id) }));
+  }, []);
+
+  const patchFollowUp = useCallback((id, patch) => {
+    setState((prev) => ({
+      ...prev,
+      followUps: (prev.followUps || []).map((item) => (item.id === id ? { ...item, ...patch } : item)),
+    }));
+  }, []);
+
+  const patchFollowUpContent = useCallback((id, patch) => {
+    setState((prev) => ({
+      ...prev,
+      followUps: (prev.followUps || []).map((item) => (item.id === id ? { ...item, content: { ...item.content, ...patch } } : item)),
+    }));
   }, []);
 
   /** Bấm một thẻ ở bước "Khi nào gửi?": bấm lại đúng thẻ đang chọn thì giữ nguyên (khỏi mất giờ đã nhập). */
@@ -528,6 +556,10 @@ export default function useSimpleCampaignWizard({ campaignId = null } = {}) {
     selectAudienceType,
     patchAudience,
     patchContent,
+    addFollowUp,
+    removeFollowUp,
+    patchFollowUp,
+    patchFollowUpContent,
     selectWhen,
     patchSchedule,
     setCampaignName,

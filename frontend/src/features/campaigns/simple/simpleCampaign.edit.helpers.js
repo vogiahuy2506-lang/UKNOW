@@ -6,6 +6,8 @@
 
 import {
   EMPTY_AUDIENCE,
+  EMPTY_MESSAGE_CONTENT,
+  nextFollowUpId,
   buildScheduleCron,
   buildSimpleCampaignBody,
   createInitialWizardState,
@@ -86,6 +88,26 @@ export const scheduleSignature = (schedule) => {
   }
 };
 
+/** `form.followUps` của GET → thẻ tin sau của trình (tên mẫu được điền sau khi danh sách mẫu tải xong, như tin 1). */
+const buildFollowUpsFromServer = (list) => (Array.isArray(list) ? list : []).map((item) => {
+  const c = item?.content && typeof item.content === 'object' ? item.content : {};
+  const content = { ...EMPTY_MESSAGE_CONTENT };
+  if (c.mode === 'template') {
+    content.mode = 'template';
+    content.templateId = Number(c.templateId) || null;
+  } else if (c.mode === 'custom') {
+    content.mode = 'custom';
+    content.subject = String(c.subject || '');
+    content.body = String(c.body || '');
+  }
+  return {
+    id: nextFollowUpId(),
+    delayValue: Number(item?.delayValue) || 1,
+    delayUnit: item?.delayUnit === 'hours' ? 'hours' : 'days',
+    content,
+  };
+});
+
 /**
  * Trạng thái trình từ phản hồi GET. Thiếu `form` (không đọc ngược được) → null (nơi gọi chỉ hiện chế độ xem).
  *
@@ -131,18 +153,14 @@ export const buildStateFromServer = (data) => {
     sender: hasSender ? { id: Number(form.senderId), label: '' } : null,
     audience,
     content,
-    followUps: Array.isArray(form.followUps) ? form.followUps : [],
+    followUps: buildFollowUpsFromServer(form.followUps),
     schedule: parsed.schedule,
     campaignName: String(data.campaignName || '').trim(),
   };
 };
 
-/** Body `PUT /campaigns/:id/simple` = body tạo + `followUps` (giữ nguyên tin 2..N kể cả khi UI chưa sửa được chúng). */
-export const buildEditBody = (state) => {
-  const body = buildSimpleCampaignBody(state);
-  if (Array.isArray(state.followUps) && state.followUps.length > 0) body.followUps = state.followUps;
-  return body;
-};
+/** Body `PUT /campaigns/:id/simple` = body tạo (đã mang `followUps` khi có chuỗi tin). */
+export const buildEditBody = (state) => buildSimpleCampaignBody(state);
 
 /** Dấu vân tay từ body đã dựng + chữ ký lịch. */
 export const makeFingerprint = (body, signature) => JSON.stringify({ body, schedule: signature });

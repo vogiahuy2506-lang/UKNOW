@@ -78,10 +78,76 @@ export const createInitialWizardState = () => ({
   audience: { ...EMPTY_AUDIENCE },
   /** `mode`: null | 'template' | 'custom'. */
   content: { mode: null, templateId: null, templateName: '', subject: '', body: '' },
+  /** Chuỗi tin: tin 2..N, mỗi phần tử `{ id, delayValue, delayUnit: 'days'|'hours', content }` (xem `createFollowUp`). Rỗng = gửi một tin. */
+  followUps: [],
   /** Xem `createDefaultSchedule`: `{ type: 'now' | 'scheduled' | 'continuous' | 'recurring', … }`. */
   schedule: { type: 'now' },
   campaignName: '',
 });
+
+/** Tối đa 10 tin cả chuỗi = tin 1 + 9 tin sau (hợp đồng PLAN_HAI_TAB §3.1). */
+export const MAX_FOLLOW_UPS = 9;
+export const FOLLOW_UP_DELAY_UNITS = Object.freeze(['days', 'hours']);
+
+export const EMPTY_MESSAGE_CONTENT = Object.freeze({ mode: null, templateId: null, templateName: '', subject: '', body: '' });
+
+let followUpSeq = 0;
+/** Id cục bộ (chỉ làm `key` React); KHÔNG gửi lên server. */
+export const nextFollowUpId = () => {
+  followUpSeq += 1;
+  return `fu-${followUpSeq}`;
+};
+
+/** Tin sau mới: mặc định "sau 1 ngày", chưa chọn nội dung. */
+export const createFollowUp = () => ({
+  id: nextFollowUpId(),
+  delayValue: 1,
+  delayUnit: 'days',
+  content: { ...EMPTY_MESSAGE_CONTENT },
+});
+
+/** Độ trễ hợp lệ = số nguyên > 0 (ô trống / chữ / số lẻ → sai). */
+export const isValidFollowUpDelay = (value) => {
+  if (value === '' || value === null || value === undefined) return false;
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0;
+};
+
+/** Một tin (tin 1 hoặc tin sau) đã đủ nội dung chưa: mẫu có id; tự soạn có nội dung, email có thêm tiêu đề. */
+export const isMessageContentComplete = (channel, content) => {
+  if (content?.mode === 'template') return Number(content.templateId) > 0;
+  if (content?.mode === 'custom') {
+    if (!String(content.body || '').trim()) return false;
+    return channel !== 'email' || Boolean(String(content.subject || '').trim());
+  }
+  return false;
+};
+
+export const isFollowUpComplete = (channel, followUp) => (
+  isValidFollowUpDelay(followUp?.delayValue)
+  && FOLLOW_UP_DELAY_UNITS.includes(followUp?.delayUnit)
+  && isMessageContentComplete(channel, followUp?.content)
+);
+
+/** Nội dung một tin → đúng hình dạng hợp đồng `{mode:'template',templateId} | {mode:'custom',subject?,body}`. */
+export const buildMessageContentBody = (channel, content) => {
+  if (content.mode === 'template') return { mode: 'template', templateId: Number(content.templateId) };
+  const out = { mode: 'custom', body: String(content.body || '').trim() };
+  if (channel === 'email') out.subject = String(content.subject || '').trim();
+  return out;
+};
+
+export const buildFollowUpsBody = (channel, followUps) => followUps.map((item) => ({
+  delayValue: Number(item.delayValue),
+  delayUnit: item.delayUnit,
+  content: buildMessageContentBody(channel, item.content),
+}));
+
+/** Tổng độ trễ cả chuỗi, quy ra giờ (bỏ tin có độ trễ chưa hợp lệ). */
+export const totalFollowUpHours = (followUps) => followUps.reduce((sum, item) => {
+  if (!isValidFollowUpDelay(item.delayValue)) return sum;
+  return sum + Number(item.delayValue) * (item.delayUnit === 'hours' ? 1 : 24);
+}, 0);
 
 /** Email dùng tài khoản email; Zalo cá nhân và Zalo nhóm dùng chung danh sách tài khoản Zalo. */
 export const senderKindOf = (channel) => (channel === 'email' ? 'email' : 'zalo');
@@ -245,6 +311,14 @@ export const applyChannelChange = (state, channel) => {
   if (templateKindOf(state.channel) !== templateKindOf(channel) && state.content.mode === 'template') {
     next.content = { ...state.content, templateId: null, templateName: '' };
   }
+  // Chuỗi tin: mẫu của kho kia không dùng được → xoá templateId của MỌI tin sau; chữ tự soạn được giữ.
+  if (templateKindOf(state.channel) !== templateKindOf(channel) && Array.isArray(state.followUps) && state.followUps.length > 0) {
+    next.followUps = state.followUps.map((item) => (
+      item.content?.mode === 'template'
+        ? { ...item, content: { ...item.content, templateId: null, templateName: '' } }
+        : item
+    ));
+  }
   return reconcileSchedule(next);
 };
 
@@ -372,12 +446,8 @@ export const isStepComplete = (stepId, state, now = new Date()) => {
       }
     }
     case 'content':
-      if (content.mode === 'template') return Number(content.templateId) > 0;
-      if (content.mode === 'custom') {
-        if (!content.body.trim()) return false;
-        return channel !== 'email' || Boolean(content.subject.trim());
-      }
-      return false;
+      return isMessageContentComplete(channel, content)
+        && (state.followUps || []).every((item) => isFollowUpComplete(channel, item));
     case 'when':
       return getAvailableWhenOptions(state).includes(schedule?.type) && validateSchedule(schedule, now).ok;
     case 'review':
@@ -423,13 +493,7 @@ export const buildSimpleCampaignBody = (state) => {
       break;
   }
 
-  let contentBody;
-  if (content.mode === 'template') {
-    contentBody = { mode: 'template', templateId: Number(content.templateId) };
-  } else {
-    contentBody = { mode: 'custom', body: content.body.trim() };
-    if (channel === 'email') contentBody.subject = content.subject.trim();
-  }
+  const contentBody = buildMessageContentBody(channel, content);
 
   const body = {
     channel,
@@ -437,6 +501,10 @@ export const buildSimpleCampaignBody = (state) => {
     audience: audienceBody,
     content: contentBody,
   };
+  // Không có tin sau → KHÔNG gửi trường `followUps` (server hiểu là gửi một lần như cũ).
+  if (Array.isArray(state.followUps) && state.followUps.length > 0) {
+    body.followUps = buildFollowUpsBody(channel, state.followUps);
+  }
   const name = String(campaignName || '').trim();
   if (name) body.campaignName = name;
   return body;

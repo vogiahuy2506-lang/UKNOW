@@ -1819,6 +1819,19 @@ export default {
       noTemplateFound: 'Không có mẫu phù hợp',
       preview: 'Xem trước',
       previewFailed: 'Không mở được bản xem trước. Bạn vẫn có thể dùng mẫu này.',
+      followUp: {
+        firstTitle: 'Tin 1',
+        title: 'Tin {n}',
+        sendAfter: 'Gửi sau',
+        afterPrev: 'kể từ tin trước',
+        unitAria: 'Đơn vị thời gian',
+        unit: { days: 'ngày', hours: 'giờ' },
+        delayInvalid: 'Nhập một số nguyên lớn hơn 0.',
+        remove: 'Xoá tin',
+        removeAria: 'Xoá tin {n}',
+        add: '+ Thêm tin tiếp theo',
+        max: 'Một chuỗi có tối đa {max} tin.',
+      },
       loadingTemplates: 'Đang tải mẫu tin...',
       loadTemplatesFailed: 'Không tải được danh sách mẫu tin.',
       noTemplates: 'Bạn chưa có mẫu tin nào. Hãy chọn "Tự soạn" hoặc tạo mẫu mới.',
@@ -1878,6 +1891,8 @@ export default {
       content: {
         template: '“{name}”',
         custom: 'tự soạn',
+        chain: '{first}, chuỗi {count} tin trong {span}',
+        span: { daysOne: '{n} ngày', daysMany: '{n} ngày', hoursOne: '{n} giờ', hoursMany: '{n} giờ' },
         customWithSubject: 'tự soạn “{subject}”',
       },
       continuousCount: {
@@ -1941,7 +1956,6 @@ export default {
       saved: 'Đã lưu thay đổi.',
       stepIncomplete: 'Còn thiếu thông tin ở bước “{step}”. Bấm vào bước đó để bổ sung.',
       channelLocked: 'Kênh của chiến dịch đã tạo không đổi được. Muốn dùng kênh khác, hãy tạo chiến dịch mới.',
-      followUpsNote: 'Chiến dịch này có {count} tin. Ở đây chỉ sửa được tin đầu; các tin sau vẫn được giữ nguyên khi bạn lưu. Muốn sửa tin sau, mở tab Sơ đồ khối.',
       backToCampaign: 'Quay lại chiến dịch',
       when: {
         hint: 'Chọn cách đặt lịch cho chiến dịch. Muốn gửi ngay hoặc tự động gửi cho người mới, dùng nút ở bước Xem lại.',

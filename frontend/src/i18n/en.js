@@ -1814,6 +1814,19 @@ export default {
       noTemplateFound: 'No matching template',
       preview: 'Preview',
       previewFailed: 'Could not open the preview. You can still use this template.',
+      followUp: {
+        firstTitle: 'Message 1',
+        title: 'Message {n}',
+        sendAfter: 'Send after',
+        afterPrev: 'since the previous message',
+        unitAria: 'Time unit',
+        unit: { days: 'days', hours: 'hours' },
+        delayInvalid: 'Enter a whole number greater than 0.',
+        remove: 'Remove',
+        removeAria: 'Remove message {n}',
+        add: '+ Add next message',
+        max: 'A sequence has at most {max} messages.',
+      },
       loadingTemplates: 'Loading templates...',
       loadTemplatesFailed: 'Could not load your templates.',
       noTemplates: 'You have no templates yet. Choose "Write it yourself" or create a template.',
@@ -1873,6 +1886,8 @@ export default {
       content: {
         template: '“{name}”',
         custom: 'written by you',
+        chain: '{first}, a sequence of {count} messages over {span}',
+        span: { daysOne: '{n} day', daysMany: '{n} days', hoursOne: '{n} hour', hoursMany: '{n} hours' },
         customWithSubject: 'written by you “{subject}”',
       },
       continuousCount: {
@@ -1936,7 +1951,6 @@ export default {
       saved: 'Changes saved.',
       stepIncomplete: 'Some information is missing in the “{step}” step. Click that step to fill it in.',
       channelLocked: 'The channel of an existing campaign cannot be changed. To use another channel, create a new campaign.',
-      followUpsNote: 'This campaign has {count} messages. Here you can only edit the first one; the later messages are kept as they are when you save. To edit them, open the Flow diagram tab.',
       backToCampaign: 'Back to the campaign',
       when: {
         hint: 'Choose how this campaign is scheduled. To send right away or to auto-send to new people, use the buttons on the Review step.',

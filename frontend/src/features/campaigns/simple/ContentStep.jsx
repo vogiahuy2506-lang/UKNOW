@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { HiOutlineEye, HiOutlinePencilAlt, HiOutlineTemplate } from 'react-icons/hi';
+import { HiOutlineEye, HiOutlinePencilAlt, HiOutlinePlus, HiOutlineTemplate, HiOutlineTrash } from 'react-icons/hi';
 import SimpleChoiceCard from './SimpleChoiceCard';
 import TemplateSearchSelect from '../components/TemplateSearchSelect';
 import NodeConfigTemplatePreviewModal from '../components/NodeConfigTemplatePreviewModal';
 import emailTemplateApiService from '../../templates/services/emailTemplateApi.service';
 import zaloTemplateApiService from '../../templates/services/zaloTemplateApi.service';
 import useAsyncResource from './useAsyncResource';
-import { templateKindOf } from './simpleCampaign.helpers';
+import { FOLLOW_UP_DELAY_UNITS, MAX_FOLLOW_UPS, isValidFollowUpDelay, templateKindOf } from './simpleCampaign.helpers';
 
 const INPUT_CLASS =
   'w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 hover:bg-white focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-orange-500/10 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text dark:placeholder:text-dk-muted dark:hover:bg-dk-surface dark:focus:bg-dk-inset';
@@ -20,7 +20,7 @@ const loadTemplates = async (kind) => {
 };
 
 /** Chọn một mẫu có sẵn + nút Xem trước (dùng lại modal xem trước của trình dựng). */
-function TemplatePanel({ kind, content, patchContent, t }) {
+function TemplatePanel({ kind, content, patchContent, t, idPrefix }) {
   const resource = useAsyncResource(() => loadTemplates(kind), [kind]);
   const [previewTemplate, setPreviewTemplate] = useState(null);
   const [previewError, setPreviewError] = useState('');
@@ -90,7 +90,7 @@ function TemplatePanel({ kind, content, patchContent, t }) {
     <div className="space-y-2">
       <label className="block text-sm font-semibold text-slate-800 dark:text-dk-text">{t('simpleCampaign.content.templateLabel')}</label>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
-        <div className="min-w-0 flex-1" data-testid="simple-template-select">
+        <div className="min-w-0 flex-1" data-testid={`${idPrefix}-template-select`}>
           <TemplateSearchSelect
             value={content.templateId || ''}
             options={options}
@@ -123,16 +123,16 @@ function TemplatePanel({ kind, content, patchContent, t }) {
 }
 
 /** Tự soạn: Email = Tiêu đề + Nội dung; Zalo = Nội dung. */
-function CustomPanel({ isEmail, content, patchContent, t }) {
+function CustomPanel({ isEmail, content, patchContent, t, idPrefix }) {
   return (
     <div className="space-y-4">
       {isEmail && (
         <div>
-          <label htmlFor="simple-content-subject" className="block text-sm font-semibold text-slate-800 dark:text-dk-text">
+          <label htmlFor={`${idPrefix}-subject`} className="block text-sm font-semibold text-slate-800 dark:text-dk-text">
             {t('simpleCampaign.content.subjectLabel')}
           </label>
           <input
-            id="simple-content-subject"
+            id={`${idPrefix}-subject`}
             type="text"
             maxLength={200}
             value={content.subject}
@@ -143,11 +143,11 @@ function CustomPanel({ isEmail, content, patchContent, t }) {
         </div>
       )}
       <div>
-        <label htmlFor="simple-content-body" className="block text-sm font-semibold text-slate-800 dark:text-dk-text">
+        <label htmlFor={`${idPrefix}-body`} className="block text-sm font-semibold text-slate-800 dark:text-dk-text">
           {t('simpleCampaign.content.bodyLabel')}
         </label>
         <textarea
-          id="simple-content-body"
+          id={`${idPrefix}-body`}
           rows={8}
           maxLength={10000}
           value={content.body}
@@ -161,31 +161,16 @@ function CustomPanel({ isEmail, content, patchContent, t }) {
 }
 
 /**
- * Bước 3 — "Bạn muốn gửi nội dung gì?": dùng mẫu có sẵn hoặc tự soạn.
- * Chữ tự soạn được server lưu thành mẫu tin (bộ chạy chỉ gửi bước có `templateId` số). v1 chưa có "Nhờ AI viết".
- *
- * @param {object} props
- * @param {object} props.wizard kết quả `useSimpleCampaignWizard`
- * @param {(key: string, params?: object) => string} props.t
+ * Chọn cách soạn + ô nhập của MỘT tin. Dùng cho tin 1 (`idPrefix` 'simple-content') và từng tin sau (`simple-followup-<id>`),
+ * nên tin 1 giữ nguyên mọi id/testid cũ.
  */
-export default function ContentStep({ wizard, t }) {
-  const { state, patchContent } = wizard;
-  const { channel, content } = state;
+function MessageEditor({ channel, content, patchContent, t, idPrefix, cardTestIdPrefix }) {
   const isEmail = channel === 'email';
-
   return (
-    <div>
-      <h2 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-dk-text sm:text-2xl">{t('simpleCampaign.content.title')}</h2>
-      <p className="mt-1 text-sm text-slate-500 dark:text-dk-text2">{t('simpleCampaign.content.hint')}</p>
-      {Array.isArray(state.followUps) && state.followUps.length > 0 && (
-        <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-200" data-testid="simple-followups-note">
-          {t('simpleCampaign.edit.followUpsNote', { count: state.followUps.length + 1 })}
-        </p>
-      )}
-
-      <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <>
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <SimpleChoiceCard
-          testId="simple-content-template"
+          testId={`${cardTestIdPrefix}-template`}
           icon={HiOutlineTemplate}
           tone="rose"
           title={t('simpleCampaign.content.template.title')}
@@ -194,7 +179,7 @@ export default function ContentStep({ wizard, t }) {
           onClick={() => patchContent({ mode: 'template' })}
         />
         <SimpleChoiceCard
-          testId="simple-content-custom"
+          testId={`${cardTestIdPrefix}-custom`}
           icon={HiOutlinePencilAlt}
           tone="blue"
           title={t('simpleCampaign.content.custom.title')}
@@ -205,14 +190,134 @@ export default function ContentStep({ wizard, t }) {
       </div>
 
       {content.mode && (
-        <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50/60 p-4 dark:border-dk-border dark:bg-dk-bg/40" data-testid="simple-content-panel">
+        <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/60 p-4 dark:border-dk-border dark:bg-dk-bg/40" data-testid={`${idPrefix}-panel`}>
           {content.mode === 'template' ? (
-            <TemplatePanel kind={templateKindOf(channel)} content={content} patchContent={patchContent} t={t} />
+            <TemplatePanel kind={templateKindOf(channel)} content={content} patchContent={patchContent} t={t} idPrefix={idPrefix} />
           ) : (
-            <CustomPanel isEmail={isEmail} content={content} patchContent={patchContent} t={t} />
+            <CustomPanel isEmail={isEmail} content={content} patchContent={patchContent} t={t} idPrefix={idPrefix} />
           )}
         </div>
       )}
+    </>
+  );
+}
+
+/** Thẻ một tin sau: "Gửi sau [N] [ngày|giờ] kể từ tin trước" + nội dung + nút xoá. */
+function FollowUpCard({ wizard, channel, item, index, t }) {
+  const { removeFollowUp, patchFollowUp, patchFollowUpContent } = wizard;
+  const delayInvalid = !isValidFollowUpDelay(item.delayValue);
+  const idPrefix = `simple-followup-${item.id}`;
+  return (
+    <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 dark:border-dk-border dark:bg-dk-surface" data-testid={`simple-followup-${index}`}>
+      <div className="flex items-start justify-between gap-3">
+        <h3 className="text-base font-bold text-slate-900 dark:text-dk-text">{t('simpleCampaign.content.followUp.title', { n: index + 2 })}</h3>
+        <button
+          type="button"
+          onClick={() => removeFollowUp(item.id)}
+          aria-label={t('simpleCampaign.content.followUp.removeAria', { n: index + 2 })}
+          data-testid={`simple-followup-remove-${index}`}
+          className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
+        >
+          <HiOutlineTrash className="h-4 w-4" aria-hidden="true" />
+          {t('simpleCampaign.content.followUp.remove')}
+        </button>
+      </div>
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+        <label htmlFor={`${idPrefix}-delay`} className="text-sm font-semibold text-slate-800 dark:text-dk-text">{t('simpleCampaign.content.followUp.sendAfter')}</label>
+        <div className="flex items-center gap-2">
+          <input
+            id={`${idPrefix}-delay`}
+            type="number"
+            min={1}
+            step={1}
+            inputMode="numeric"
+            value={item.delayValue}
+            onChange={(event) => patchFollowUp(item.id, { delayValue: event.target.value })}
+            aria-invalid={delayInvalid}
+            data-testid={`simple-followup-delay-${index}`}
+            className={`w-24 ${INPUT_CLASS}`}
+          />
+          <select
+            value={item.delayUnit}
+            onChange={(event) => patchFollowUp(item.id, { delayUnit: event.target.value })}
+            aria-label={t('simpleCampaign.content.followUp.unitAria')}
+            data-testid={`simple-followup-unit-${index}`}
+            className={`w-28 ${INPUT_CLASS}`}
+          >
+            {FOLLOW_UP_DELAY_UNITS.map((unit) => (
+              <option key={unit} value={unit}>{t(`simpleCampaign.content.followUp.unit.${unit}`)}</option>
+            ))}
+          </select>
+        </div>
+        <span className="text-sm text-slate-600 dark:text-dk-text2">{t('simpleCampaign.content.followUp.afterPrev')}</span>
+      </div>
+      {delayInvalid && (
+        <p role="alert" className="mt-1 text-xs text-red-600 dark:text-red-400" data-testid={`simple-followup-delay-error-${index}`}>
+          {t('simpleCampaign.content.followUp.delayInvalid')}
+        </p>
+      )}
+      <MessageEditor
+        channel={channel}
+        content={item.content}
+        patchContent={(patch) => patchFollowUpContent(item.id, patch)}
+        t={t}
+        idPrefix={idPrefix}
+        cardTestIdPrefix={`simple-followup-${index}-content`}
+      />
+    </section>
+  );
+}
+
+/**
+ * Bước 3 — "Bạn muốn gửi nội dung gì?": dùng mẫu có sẵn hoặc tự soạn.
+ * Chữ tự soạn được server lưu thành mẫu tin (bộ chạy chỉ gửi bước có `templateId` số). v1 chưa có "Nhờ AI viết".
+ *
+ * @param {object} props
+ * @param {object} props.wizard kết quả `useSimpleCampaignWizard`
+ * @param {(key: string, params?: object) => string} props.t
+ */
+export default function ContentStep({ wizard, t }) {
+  const { state, patchContent, addFollowUp } = wizard;
+  const { channel, content } = state;
+  const followUps = Array.isArray(state.followUps) ? state.followUps : [];
+  const canAdd = followUps.length < MAX_FOLLOW_UPS;
+
+  return (
+    <div>
+      <h2 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-dk-text sm:text-2xl">{t('simpleCampaign.content.title')}</h2>
+      <p className="mt-1 text-sm text-slate-500 dark:text-dk-text2">{t('simpleCampaign.content.hint')}</p>
+
+      {followUps.length > 0 && (
+        <h3 className="mt-5 text-base font-bold text-slate-900 dark:text-dk-text">{t('simpleCampaign.content.followUp.firstTitle')}</h3>
+      )}
+      <MessageEditor
+        channel={channel}
+        content={content}
+        patchContent={patchContent}
+        t={t}
+        idPrefix="simple-content"
+        cardTestIdPrefix="simple-content"
+      />
+
+      {followUps.map((item, index) => (
+        <FollowUpCard key={item.id} wizard={wizard} channel={channel} item={item} index={index} t={t} />
+      ))}
+
+      <div className="mt-5">
+        <button
+          type="button"
+          onClick={addFollowUp}
+          disabled={!canAdd}
+          data-testid="simple-followup-add"
+          className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:border-orange-400 hover:text-orange-600 disabled:cursor-not-allowed disabled:opacity-50 dark:border-dk-border dark:text-dk-text dark:hover:border-orange-400"
+        >
+          <HiOutlinePlus className="h-4 w-4" aria-hidden="true" />
+          {t('simpleCampaign.content.followUp.add')}
+        </button>
+        {!canAdd && (
+          <p className="mt-1 text-xs text-slate-500 dark:text-dk-text2" data-testid="simple-followup-max">{t('simpleCampaign.content.followUp.max', { max: MAX_FOLLOW_UPS + 1 })}</p>
+        )}
+      </div>
     </div>
   );
 }
