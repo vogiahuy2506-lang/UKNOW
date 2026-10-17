@@ -181,6 +181,36 @@ describe('dữ liệu prod 17/10/2026: cạnh `custom` của trình dựng + kh�
     expect(isRoundTripEquivalent(stored, rebuilt)).toEqual({ ok: true, diffs: [] });
   });
 
+  it('trình dựng lưu khối gửi Zalo với `zaloAccountId: ""`, tài khoản chỉ nằm ở khối chọn tài khoản → đọc được, khứ hồi khớp', async () => {
+    for (const body of [zaloBody({ followUps: [fu(1, 'days', 22)] }), groupBody()]) {
+      const stored = persist(await build(body));
+      sendOf(stored).config.zaloAccountId = '';
+      const read = readSimpleFormFromGraph(stored.nodes, stored.connections);
+      expect(read.reasons).toEqual([]);
+      expect(read.form.senderId).toBe(9);
+      const rebuilt = await build({ channel: read.channel, ...read.form });
+      expect(isRoundTripEquivalent(stored, rebuilt)).toEqual({ ok: true, diffs: [] });
+    }
+  });
+
+  it('khối chọn tài khoản mang túi trường mặc định của trình dựng (lúc chạy không đọc) → khứ hồi vẫn khớp', async () => {
+    const stored = persist(await build(zaloBody()));
+    Object.assign(stored.nodes.find((node) => node.nodeSubtype === 'select_zalo_account').config, {
+      bccEnabled: false,
+      ccEnabled: true,
+      conditions: [{ field: '', operator: 'equals', value: '' }],
+      dataStartRow: 2,
+      saveCustomerFieldMap: { phone: { mode: 'column', value: '' } },
+      sendMode: 'sequential',
+      zaloAccountName: 'Nhật Minh',
+      zaloPoolMultiAccountEnabled: false,
+      zaloPoolAccountIds: [],
+    });
+    const read = readSimpleFormFromGraph(stored.nodes, stored.connections);
+    const rebuilt = await build({ channel: read.channel, ...read.form });
+    expect(isRoundTripEquivalent(stored, rebuilt)).toEqual({ ok: true, diffs: [] });
+  });
+
   it('khối `end` ở GIỮA đường (còn cạnh đi ra) vẫn bị từ chối như khối nâng cao', async () => {
     const stored = persist(await build(emailBody()));
     const [first, second] = stored.nodes;
@@ -265,10 +295,18 @@ describe('readSimpleFormFromGraph — lý do không đọc ngược được', (
     expect(readSimpleFormFromGraph(group.nodes, group.connections).reasons.map((item) => item.code)).toEqual([CODE.UNSUPPORTED_AUDIENCE]);
   });
 
-  it('khối chọn tài khoản Zalo và khối gửi trỏ hai tài khoản khác nhau → không đọc được', async () => {
+  it('khối chọn tài khoản Zalo và khối gửi trỏ hai tài khoản khác nhau → lấy tài khoản ở khối chọn (lúc chạy nó thắng)', async () => {
     const stored = persist(await build(zaloBody()));
     stored.nodes.find((node) => node.nodeSubtype === 'select_zalo_account').config.zaloAccountId = 99;
-    expect(readSimpleFormFromGraph(stored.nodes, stored.connections).form).toBeNull();
+    expect(readSimpleFormFromGraph(stored.nodes, stored.connections).form.senderId).toBe(99);
+  });
+
+  it('khối chọn tài khoản Zalo không có tài khoản → not_simple "chưa chọn tài khoản gửi" (kể cả khi khối gửi có)', async () => {
+    const stored = persist(await build(zaloBody()));
+    stored.nodes.find((node) => node.nodeSubtype === 'select_zalo_account').config.zaloAccountId = '';
+    const read = readSimpleFormFromGraph(stored.nodes, stored.connections);
+    expect(read.form).toBeNull();
+    expect(read.reasons.map((item) => item.message).join('\n')).toContain('chưa chọn tài khoản gửi');
   });
 
   it('sơ đồ rỗng → not_simple', () => {
@@ -331,11 +369,30 @@ describe('isRoundTripEquivalent — mỗi trường form điều khiển lệch 
     expect(result.diffs.join('\n')).toContain('fromEmailId');
   });
 
-  it('tài khoản Zalo lệch ở khối chọn tài khoản hoặc khối gửi → không editable', async () => {
+  it('tài khoản Zalo lệch ở khối chọn tài khoản → không editable', async () => {
     const select = await pair(zaloPersonalBody(), ({ stored }) => { stored.nodes.find((n) => n.nodeSubtype === 'select_zalo_account').config.zaloAccountId = 77; });
     expect(select.ok).toBe(false);
-    const send = await pair(zaloPersonalBody(), ({ stored }) => { sendOf(stored).config.zaloAccountId = 77; });
-    expect(send.ok).toBe(false);
+    expect(select.diffs.join('\n')).toContain('select_zalo_account#1.zaloAccountId');
+  });
+
+  it('tài khoản Zalo lệch ở khối gửi: có khối chọn tài khoản đứng trước thì bỏ qua (lúc chạy không đọc), không có thì không editable', async () => {
+    const withSelect = await pair(zaloPersonalBody(), ({ stored }) => { sendOf(stored).config.zaloAccountId = 77; });
+    expect(withSelect).toEqual({ ok: true, diffs: [] });
+    const dropSelect = (graph) => {
+      const select = graph.nodes.find((n) => n.nodeSubtype === 'select_zalo_account');
+      const into = graph.connections.find((c) => String(c.targetNodeId) === String(select.id));
+      const out = graph.connections.find((c) => String(c.sourceNodeId) === String(select.id));
+      graph.nodes.splice(graph.nodes.indexOf(select), 1);
+      graph.connections = graph.connections.filter((c) => c !== into && c !== out);
+      graph.connections.push({ sourceNodeId: into.sourceNodeId, targetNodeId: out.targetNodeId, connectionType: 'default' });
+    };
+    const noSelect = await pair(zaloPersonalBody(), ({ stored, rebuilt }) => {
+      dropSelect(stored);
+      dropSelect(rebuilt);
+      sendOf(stored).config.zaloAccountId = 77;
+    });
+    expect(noSelect.ok).toBe(false);
+    expect(noSelect.diffs.join('\n')).toContain('zaloAccountId');
   });
 
   it('slug landing lệch → không editable', async () => {

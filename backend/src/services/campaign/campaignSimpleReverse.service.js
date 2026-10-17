@@ -275,18 +275,18 @@ export function readSimpleFormFromGraph(rawNodes, rawConnections) {
     return { channel, form: null, reasons };
   }
 
-  // Tài khoản gửi. Zalo: khối chọn tài khoản (nếu có) và khối gửi phải trỏ CÙNG một tài khoản.
+  // Tài khoản gửi. Zalo: có khối chọn tài khoản thì lấy ở khối đó — lúc chạy nó THẮNG `zaloAccountId` của khối gửi
+  // (campaignRun: `selectedZaloAccount || config.zaloAccountId`). Trình dựng lưu khối gửi với `zaloAccountId: ''`
+  // (114/118 chiến dịch Zalo prod 17/10/2026 bị chặn oan vì đòi hai khối trùng nhau).
   let senderId;
   if (channel === 'email') {
     senderId = toPositiveInt(sendConfig.fromEmailId);
   } else {
-    senderId = toPositiveInt(sendConfig.zaloAccountId);
     const selectNode = list.find((node) => getNodeSubtype(node) === 'select_zalo_account');
-    const selectId = selectNode ? toPositiveInt(nodeConfig(selectNode).zaloAccountId) : null;
-    if (selectNode && selectId !== senderId) senderId = null;
+    senderId = toPositiveInt(selectNode ? nodeConfig(selectNode).zaloAccountId : sendConfig.zaloAccountId);
   }
   if (!senderId) {
-    fail(CODE.NOT_SIMPLE, 'Chiến dịch chưa chọn tài khoản gửi, hoặc khối chọn tài khoản và khối gửi đang trỏ hai tài khoản khác nhau.');
+    fail(CODE.NOT_SIMPLE, 'Chiến dịch chưa chọn tài khoản gửi.');
     return { channel, form: null, reasons };
   }
 
@@ -351,6 +351,15 @@ export function readSimpleFormFromGraph(rawNodes, rawConnections) {
  *    sau khi tạo mẫu từ chữ tự soạn) và `templateMappings` (dẫn xuất từ chữ + mã khối nguồn).
  */
 const IGNORED_CONFIG_KEYS = new Set(['emailSenderId']);
+
+/**
+ * Loại khối mà lúc chạy CHỈ đọc đúng các khoá này — mọi khoá khác (túi mặc định trình dựng ghi vào mọi khối: `bccEnabled`,
+ * `conditions`, `saveCustomerFieldMap`…) không có tác dụng nên không đem ra so.
+ *  - `select_zalo_account`: campaignRun nhánh `select_zalo_account` + `mergeZaloSelectPoolConfig` (gộp sang khối gửi).
+ */
+const RUNTIME_CONFIG_KEYS_BY_SUBTYPE = Object.freeze({
+  select_zalo_account: Object.freeze(['zaloAccountId', 'zaloPoolMultiAccountEnabled', 'zaloPoolAccountIds']),
+});
 const IGNORED_STEP_KEYS = new Set(['message', 'emailSubject', 'emailBody', 'templateMappings']);
 const STEP_FIELDS = new Set(Object.values(STEPS_FIELD_BY_CHANNEL));
 const NUMERIC_ID_KEYS = new Set(['fromEmailId', 'zaloAccountId']);
@@ -430,13 +439,25 @@ function canonicalGraph(graph) {
   const path = orderLinearPath(stripped.nodes, stripped.connections);
   if (!path.ok) return { ok: false, why: path.why };
   const idToIndex = new Map(path.ordered.map((node, index) => [nodeId(node), index]));
+  const selectIndex = path.ordered.findIndex((node) => getNodeSubtype(node) === 'select_zalo_account');
   return {
     ok: true,
-    nodes: path.ordered.map((node) => {
+    nodes: path.ordered.map((node, index) => {
       const subtype = getNodeSubtype(node);
+      let config = nodeConfig(node);
+      const runtimeKeys = RUNTIME_CONFIG_KEYS_BY_SUBTYPE[subtype];
+      if (runtimeKeys) {
+        // `false` cũng như vắng: lúc chạy các cờ này được đọc bằng Boolean / isTruthyConfigFlag.
+        config = Object.fromEntries(Object.entries(config).filter(([key, value]) => runtimeKeys.includes(key) && value !== false));
+      }
+      if (selectIndex >= 0 && selectIndex < index && SEND_SUBTYPES.has(subtype)) {
+        // Khối chọn tài khoản đứng trước thì `zaloAccountId` của khối gửi không có tác dụng lúc chạy — xem readSimpleFormFromGraph.
+        const { zaloAccountId: _ignored, ...rest } = config;
+        config = rest;
+      }
       return {
         subtype: subtype === 'manual_trigger' ? 'manual' : subtype,
-        config: normalizeConfigForCompare(nodeConfig(node), idToIndex),
+        config: normalizeConfigForCompare(config, idToIndex),
       };
     }),
   };
