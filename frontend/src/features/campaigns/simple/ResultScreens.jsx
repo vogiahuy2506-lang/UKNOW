@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { HiOutlineCalendar, HiOutlineCheckCircle, HiOutlineClock } from 'react-icons/hi';
 import { describeWhen } from './simpleCampaign.summary';
+import { isAdapterChannel } from './simpleCampaign.helpers';
 
 const PRIMARY_LINK =
   'inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-5 py-3 text-sm font-bold text-white shadow-md shadow-orange-500/20 hover:from-orange-600 hover:to-amber-600';
@@ -43,7 +44,7 @@ export function DoneScreen({ result, onCreateAnother, t }) {
       <h2 className="mt-4 text-2xl font-extrabold text-slate-900 dark:text-dk-text">{t('simpleCampaign.done.title')}</h2>
       <p className="mt-2 text-sm text-slate-600 dark:text-dk-text2">{t('simpleCampaign.done.body', { name: result.campaignName })}</p>
       {result.channel !== 'email' && (
-        <p className="mt-2 text-xs text-slate-500 dark:text-dk-text2">{t('simpleCampaign.done.zaloNote')}</p>
+        <p className="mt-2 text-xs text-slate-500 dark:text-dk-text2">{t(isAdapterChannel(result.channel) ? 'simpleCampaign.done.adapterNote' : 'simpleCampaign.done.zaloNote')}</p>
       )}
       <div className="mt-6 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
         <Link to="/app/delivery-monitor" className={PRIMARY_LINK} data-testid="simple-done-progress">{t('simpleCampaign.done.viewProgress')}</Link>

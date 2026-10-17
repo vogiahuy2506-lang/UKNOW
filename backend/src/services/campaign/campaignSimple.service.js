@@ -26,7 +26,19 @@ import aiCampaignRepository from '../../repositories/ai/aiCampaign.repository.js
 import customerReadRepository from '../../repositories/customer/customerRead.repository.js';
 import campaignNodeRegistryService from './campaignNodeRegistry.service.js';
 import { fillReadSheetFirstTabNames } from './readSheetAutoName.service.js';
-import { buildChannelNotInPlanMessage } from './campaignChannelFlags.util.js';
+import {
+  buildChannelNotInPlanMessage,
+  getChannelsBlockedByPlan,
+  isAdapterCampaignChannel,
+  isAdapterCampaignChannelEnabled,
+} from './campaignChannelFlags.util.js';
+import zaloTemplateRepository from '../../repositories/zalo/zaloTemplate.repository.js';
+import { MAX_CHANNEL_STEPS, MAX_STEP_DELAY_MS, resolveStepDelayMs } from '../../utils/channelSteps.util.js';
+import {
+  TELEGRAM_PHOTO_EXTENSIONS,
+  WHATSAPP_IMAGE_EXTENSIONS,
+  assertAttachmentListWithinLimits,
+} from '../../utils/channelMediaSend.util.js';
 import { applyDirectRecipients } from '../../utils/directRecipients.util.js';
 import { validateManualRecipients } from '../../utils/manualRecipients.util.js';
 import { ALL_CUSTOMERS_LIMIT_CAP } from '../../utils/interestedLimits.util.js';
@@ -36,21 +48,39 @@ import { getNodeSubtype } from '../../utils/nodeSubtype.util.js';
 import { getWorkspaceContext } from '../../utils/workspaceContext.util.js';
 import { checkUserResourceLimit } from '../../utils/userResourceLimit.util.js';
 
-/** Ba kênh của trình từng bước (v1). Telegram/WhatsApp ngoài phạm vi. */
-export const SIMPLE_CHANNELS = Object.freeze(['email', 'zalo', 'zalo_group']);
+/**
+ * Kênh của trình từng bước. Telegram/WhatsApp (PLAN_TUNG_BUOC_TELEGRAM_WHATSAPP_2026-10-17) là kênh "adapter": chỉ dùng được khi
+ * quản trị viên bật cờ kênh VÀ gói của chủ workspace có kênh đó (xem `assertAdapterChannelUsable`).
+ */
+export const SIMPLE_CHANNELS = Object.freeze(['email', 'zalo', 'zalo_group', 'telegram', 'whatsapp']);
 
 /** Nguồn người nhận hợp lệ theo kênh (khớp bảng ở plan §2 bước 2). */
 export const SIMPLE_AUDIENCE_TYPES_BY_CHANNEL = Object.freeze({
   email: Object.freeze(['customers', 'landing', 'form', 'sheet', 'manual']),
   zalo: Object.freeze(['customers', 'landing', 'form', 'sheet', 'manual', 'zalo_friends']),
   zalo_group: Object.freeze(['zalo_groups']),
+  // Telegram không nhắn được người lạ (chỉ hội thoại đang mở); WhatsApp thêm các nguồn node dữ liệu (cột SĐT). KHÔNG có nhập tay:
+  // `manual` chưa nối cho hai kênh này (campaignIntent.schema.js ADAPTER_AUDIENCE_TYPES).
+  telegram: Object.freeze(['conversations']),
+  whatsapp: Object.freeze(['conversations', 'customers', 'landing', 'form', 'sheet']),
 });
 
-const CHANNEL_LABELS = Object.freeze({ email: 'Email', zalo: 'Zalo cá nhân', zalo_group: 'Zalo nhóm' });
+const CHANNEL_LABELS = Object.freeze({
+  email: 'Email',
+  zalo: 'Zalo cá nhân',
+  zalo_group: 'Zalo nhóm',
+  telegram: 'Telegram',
+  whatsapp: 'WhatsApp',
+});
+/** Tên kênh trong câu báo lỗi. */
+const ADAPTER_CHANNEL_NAMES = Object.freeze({ telegram: 'Telegram', whatsapp: 'WhatsApp' });
+/** Mã phiên WhatsApp: `<id chủ>-<tên>` (cùng mẫu campaignIntent.schema.js / thẻ xác nhận). */
+const WHATSAPP_SESSION_KEY_PATTERN = /^\d+-[A-Za-z0-9_-]{1,128}$/;
+
 const MAX_CAMPAIGN_NAME_LENGTH = 255;
 const MAX_LANDING_SLUGS = 50;
 const MAX_ZALO_GROUPS = 500;
-const MAX_CUSTOM_BODY_LENGTH = Object.freeze({ email: 100000, zalo: 4000, zalo_group: 4000 });
+const MAX_CUSTOM_BODY_LENGTH = Object.freeze({ email: 100000, zalo: 4000, zalo_group: 4000, telegram: 4000, whatsapp: 4096 });
 const MAX_EMAIL_SUBJECT_LENGTH = 150;
 /** Chuỗi tin: tin 1 + tối đa 9 tin tiếp theo (tổng 10 tin) — PLAN_HAI_TAB_TUNG_BUOC §3.1. */
 export const MAX_FOLLOW_UPS = 9;
@@ -196,6 +226,25 @@ function normalizeStepContent(rawContent, channel, prefix = '') {
   throw bad('INVALID_CONTENT', `${prefix}Vui lòng chọn dùng mẫu có sẵn hoặc tự soạn nội dung.`);
 }
 
+/** Số tin sau tối đa theo kênh: email/Zalo 9 (tổng 10 tin); Telegram/WhatsApp chung trần MAX_CHANNEL_STEPS = 5 tin của node gửi. */
+function maxFollowUpsFor(channel) {
+  return isAdapterCampaignChannel(channel) ? MAX_CHANNEL_STEPS - 1 : MAX_FOLLOW_UPS;
+}
+
+/**
+ * Kênh adapter dùng được không: cờ hệ thống tắt → 400 CHANNEL_NOT_ENABLED; cờ bật nhưng gói của chủ workspace không có
+ * (ngữ cảnh do `channelEntitlementContext` đặt) → 403 CHANNEL_NOT_IN_PLAN. Kênh khác: không làm gì.
+ *
+ * @param {string} channel
+ */
+function assertAdapterChannelUsable(channel) {
+  if (!isAdapterCampaignChannel(channel) || isAdapterCampaignChannelEnabled(channel)) return;
+  if (getChannelsBlockedByPlan().includes(channel)) {
+    throw new SimpleCampaignError(403, 'CHANNEL_NOT_IN_PLAN', buildChannelNotInPlanMessage(channel), { missing: ['channel'] });
+  }
+  throw bad('CHANNEL_NOT_ENABLED', `Kênh ${ADAPTER_CHANNEL_NAMES[channel]} hiện chưa được bật.`);
+}
+
 /**
  * Kiểm + chuẩn hoá chuỗi tin tiếp theo (`followUps`, tin 2..N). Hàm thuần. Thiếu/null → [].
  *
@@ -206,8 +255,9 @@ function normalizeStepContent(rawContent, channel, prefix = '') {
 function normalizeFollowUps(rawFollowUps, channel) {
   if (rawFollowUps == null) return [];
   if (!Array.isArray(rawFollowUps)) throw bad('INVALID_FOLLOW_UPS', 'Danh sách tin tiếp theo không hợp lệ.');
-  if (rawFollowUps.length > MAX_FOLLOW_UPS) {
-    throw bad('FOLLOW_UPS_TOO_MANY', `Chuỗi tin tối đa ${MAX_FOLLOW_UPS + 1} tin (tin đầu và ${MAX_FOLLOW_UPS} tin tiếp theo).`);
+  const maxFollowUps = maxFollowUpsFor(channel);
+  if (rawFollowUps.length > maxFollowUps) {
+    throw bad('FOLLOW_UPS_TOO_MANY', `Chuỗi tin ${isAdapterCampaignChannel(channel) ? `${ADAPTER_CHANNEL_NAMES[channel]} ` : ''}tối đa ${maxFollowUps + 1} tin (tin đầu và ${maxFollowUps} tin tiếp theo).`);
   }
   return rawFollowUps.map((item, index) => {
     const prefix = `Tin ${index + 2}: `;
@@ -220,6 +270,10 @@ function normalizeFollowUps(rawFollowUps, channel) {
     const delayUnit = toTrimmedString(raw.delayUnit);
     if (!FOLLOW_UP_DELAY_UNITS.includes(delayUnit)) {
       throw bad('INVALID_FOLLOW_UP_DELAY', `${prefix}Đơn vị chờ chỉ có thể là ngày, giờ hoặc phút.`);
+    }
+    // Kênh adapter: preflight chặn độ trễ một bước quá 30 ngày (channelSteps.util.js) — báo sớm ở đây thay vì lúc bấm chạy.
+    if (isAdapterCampaignChannel(channel) && resolveStepDelayMs({ delayValue, delayUnit }) > MAX_STEP_DELAY_MS) {
+      throw bad('INVALID_FOLLOW_UP_DELAY', `${prefix}Thời gian chờ tối đa 30 ngày.`);
     }
     return { delayValue, delayUnit, content: normalizeStepContent(raw.content, channel, prefix) };
   });
@@ -248,11 +302,21 @@ export async function normalizeSimpleBody(body, { ownerId, now = new Date(), ski
 
   const channel = toTrimmedString(source.channel);
   if (!SIMPLE_CHANNELS.includes(channel)) {
-    throw bad('INVALID_CHANNEL', 'Kênh gửi không hợp lệ. Chỉ hỗ trợ Email, Zalo cá nhân và Zalo nhóm.');
+    throw bad('INVALID_CHANNEL', 'Kênh gửi không hợp lệ. Chỉ hỗ trợ Email, Zalo cá nhân, Zalo nhóm, Telegram và WhatsApp.');
   }
+  assertAdapterChannelUsable(channel);
 
-  const senderId = toPositiveInt(source.senderId);
-  if (!senderId) throw bad('SENDER_REQUIRED', 'Vui lòng chọn tài khoản gửi.');
+  // WhatsApp không có id số: tài khoản gửi là MÃ PHIÊN chuỗi (`senderKey`, dạng `<id chủ>-<tên>`). Kênh khác dùng `senderId` số.
+  let senderId = null;
+  let senderKey = null;
+  if (channel === 'whatsapp') {
+    senderKey = toTrimmedString(source.senderKey);
+    if (!senderKey) throw bad('SENDER_REQUIRED', 'Vui lòng chọn tài khoản gửi.');
+    if (!WHATSAPP_SESSION_KEY_PATTERN.test(senderKey)) throw bad('SENDER_INVALID', 'Tài khoản WhatsApp không hợp lệ.');
+  } else {
+    senderId = toPositiveInt(source.senderId);
+    if (!senderId) throw bad('SENDER_REQUIRED', 'Vui lòng chọn tài khoản gửi.');
+  }
 
   let campaignName = toTrimmedString(source.campaignName);
   if (campaignName.length > MAX_CAMPAIGN_NAME_LENGTH) {
@@ -308,6 +372,8 @@ export async function normalizeSimpleBody(body, { ownerId, now = new Date(), ski
     const checked = validateManualRecipients({ uids: rawAudience.uids });
     directRecipients = { uids: checked.uids };
     recipientCountHint = checked.uids.length;
+  } else if (type === 'conversations') {
+    // Telegram/WhatsApp: mọi người đã từng nhắn tới tài khoản gửi (đọc lại mỗi lượt chạy) — không có danh sách nào để nhập/đếm lúc tạo.
   } else if (type === 'zalo_groups') {
     // groupIds rỗng = gửi MỌI nhóm của tài khoản (bộ biên dịch không chặn) → bắt buộc ≥ 1 nhóm.
     const groupIds = toStringList(rawAudience.groupIds);
@@ -320,7 +386,13 @@ export async function normalizeSimpleBody(body, { ownerId, now = new Date(), ski
   const content = normalizeStepContent(source.content, channel);
   const followUps = normalizeFollowUps(source.followUps, channel);
 
-  return { campaignName, channel, senderId, audience, content, followUps, directRecipients, recipientCountHint };
+  return { campaignName, channel, senderId, senderKey, audience, content, followUps, directRecipients, recipientCountHint };
+}
+
+function buildIntentSender(channel, senderId, senderKey) {
+  if (channel === 'telegram') return { type: 'telegram_account', id: senderId };
+  if (channel === 'whatsapp') return { type: 'whatsapp_session', sessionKey: senderKey };
+  return { type: channel === 'email' ? 'email_account' : 'zalo_account', id: senderId };
 }
 
 /**
@@ -333,7 +405,7 @@ export async function normalizeSimpleBody(body, { ownerId, now = new Date(), ski
  * @returns {object} CampaignIntentV1
  */
 export function buildSimpleIntent(input) {
-  const { channel, senderId, audience } = input;
+  const { channel, senderId, senderKey, audience } = input;
   const followUps = Array.isArray(input.followUps) ? input.followUps : [];
   const recipientKind = channel === 'email' ? 'email' : 'phone';
 
@@ -360,6 +432,9 @@ export function buildSimpleIntent(input) {
     case 'zalo_groups':
       intentAudience = { type: 'manual', groupIds: audience.groupIds };
       break;
+    case 'conversations':
+      intentAudience = { type: 'conversations' };
+      break;
     default:
       throw bad('INVALID_AUDIENCE', 'Nguồn người nhận không hợp lệ.');
   }
@@ -367,7 +442,7 @@ export function buildSimpleIntent(input) {
   return {
     version: 1,
     channel,
-    sender: { type: channel === 'email' ? 'email_account' : 'zalo_account', id: senderId },
+    sender: buildIntentSender(channel, senderId, senderKey),
     audience: intentAudience,
     schedule: followUps.length > 0 ? { type: 'drip', days: 1 + followUps.length, slotsPerDay: 1 } : { type: 'once' },
   };
@@ -378,6 +453,8 @@ const SEND_NODE_BY_CHANNEL = Object.freeze({
   email: { subtype: 'send_email', stepsField: 'emailSteps' },
   zalo: { subtype: 'send_zalo_personal', stepsField: 'zaloPersonalTemplateSteps' },
   zalo_group: { subtype: 'send_zalo_group', stepsField: 'zaloGroupTemplateSteps' },
+  telegram: { subtype: 'send_telegram', stepsField: 'steps' },
+  whatsapp: { subtype: 'send_whatsapp', stepsField: 'steps' },
 });
 
 /**
@@ -447,6 +524,61 @@ function applyStepContents({ compiled, nodes, connections, channel, contents }) 
 }
 
 /**
+ * Telegram/WhatsApp: gán nội dung từng tin lên `config.steps` của khối gửi.
+ *
+ * Bộ chạy kênh adapter (`campaignChannelRunner`) chỉ đọc `step.message` + `step.attachments` — KHÔNG tra `templateId` lúc gửi. Vì vậy
+ * mẫu có sẵn được CHÉP nội dung + tệp vào bước ngay lúc tạo (y hệt `applyTemplateToStep` của trình dựng: sửa mẫu về sau không đổi
+ * chiến dịch đã tạo); `templateId` giữ lại để thẻ xác nhận kiểm mẫu còn tồn tại. Chữ tự soạn ghi thẳng vào `message` — không cần tạo
+ * mẫu tin và không qua AI.
+ *
+ * @param {{ nodes: object[], channel: 'telegram'|'whatsapp', contents: object[], ownerId: number }} args
+ */
+async function applyAdapterStepContents({ nodes, channel, contents, ownerId }) {
+  const { subtype, stepsField } = SEND_NODE_BY_CHANNEL[channel];
+  const steps = nodes.find((node) => getNodeSubtype(node) === subtype)?.config?.[stepsField];
+  if (!Array.isArray(steps) || steps.length !== contents.length) {
+    throw bad('INVALID_DRAFT_RESOURCES', 'Không dựng được bước gửi cho chiến dịch.');
+  }
+  const maxLength = MAX_CUSTOM_BODY_LENGTH[channel];
+  const imageExtensions = channel === 'telegram' ? TELEGRAM_PHOTO_EXTENSIONS : WHATSAPP_IMAGE_EXTENSIONS;
+
+  for (let index = 0; index < contents.length; index += 1) {
+    const content = contents[index];
+    const step = steps[index];
+    const prefix = contents.length > 1 ? `Tin ${index + 1}: ` : '';
+    if (content.mode === 'custom') {
+      step.message = content.body;
+      continue;
+    }
+
+    // Mẫu có sẵn (kho mẫu dùng chung với Zalo, lọc theo chủ workspace).
+    // eslint-disable-next-line no-await-in-loop
+    const template = await zaloTemplateRepository.findById({ id: content.templateId, userId: ownerId, isAdmin: false });
+    step.templateId = content.templateId;
+    if (!template) {
+      // Để trống: thẻ xác nhận báo `template_not_found` (đúng đường email/Zalo), người dùng thấy câu tiếng Việt thay vì lỗi 500.
+      step.message = '';
+      continue;
+    }
+    const message = typeof template.body_text === 'string' ? template.body_text.trim() : '';
+    const attachments = Array.isArray(template.attachments) ? template.attachments.filter(Boolean) : [];
+    if (!message && attachments.length === 0) {
+      throw bad('CONTENT_REQUIRED', `${prefix}Mẫu tin này chưa có nội dung nào để gửi.`);
+    }
+    if (message.length > maxLength) {
+      throw bad('CONTENT_TOO_LONG', `${prefix}Nội dung mẫu dài quá ${maxLength.toLocaleString('vi-VN')} ký tự nên ${ADAPTER_CHANNEL_NAMES[channel]} không gửi được.`);
+    }
+    try {
+      assertAttachmentListWithinLimits(attachments, imageExtensions);
+    } catch (limitError) {
+      throw bad('CHANNEL_ATTACHMENT_LIMIT', `${prefix}${limitError.message}`);
+    }
+    step.message = message;
+    if (attachments.length > 0) step.attachments = attachments;
+  }
+}
+
+/**
  * Biên dịch body → đồ thị chiến dịch (chưa prepare): intent → (landing → form) → isCompilableIntent → compileCampaign →
  * (chuỗi tin: ghi đè độ trễ từng bước) → gắn nội dung. Không chạm DB trừ bước tra landing → biểu mẫu.
  *
@@ -464,7 +596,13 @@ export async function compileSimpleGraph(input, { ownerId }) {
     // Với 3 kênh đã kiểm ở normalizeSimpleBody, `channel` chỉ khuyết khi gói không có kênh Zalo (đọc từ ngữ cảnh do
     // channelEntitlementContext đặt — thiếu middleware này thì chốt chặn gói im lặng mất).
     if (check.missing.includes('channel') && input.channel !== 'email') {
-      throw new SimpleCampaignError(403, 'CHANNEL_NOT_IN_PLAN', buildChannelNotInPlanMessage('zalo'), { missing: check.missing });
+      assertAdapterChannelUsable(input.channel);
+      throw new SimpleCampaignError(
+        403,
+        'CHANNEL_NOT_IN_PLAN',
+        buildChannelNotInPlanMessage(isAdapterCampaignChannel(input.channel) ? input.channel : 'zalo'),
+        { missing: check.missing },
+      );
     }
     throw bad('INTENT_INCOMPLETE', 'Thông tin chiến dịch chưa đầy đủ.', { missing: check.missing });
   }
@@ -478,24 +616,34 @@ export async function compileSimpleGraph(input, { ownerId }) {
   if (!Array.isArray(compiledSteps) || compiledSteps.length !== contents.length) {
     throw bad('INVALID_DRAFT_RESOURCES', 'Không dựng được bước gửi cho chiến dịch.');
   }
+  // Kênh adapter: bước sau LUÔN chờ kể từ bước trước (hợp đồng `channelSteps.util.js`), không có `delayFrom` và bước đầu không có trường trễ —
+  // giữ đúng hình dạng trình dựng lưu để runner/preflight đọc như nhau.
+  const isAdapter = isAdapterCampaignChannel(input.channel);
   compiledSteps.forEach((step, index) => {
     if (index === 0) {
-      step.delayValue = 0;
+      if (!isAdapter) step.delayValue = 0;
       return;
     }
     const followUp = followUps[index - 1];
     step.delayValue = followUp.delayValue;
     step.delayUnit = followUp.delayUnit;
-    step.delayFrom = 'prev';
+    if (!isAdapter) step.delayFrom = 'prev';
   });
 
-  const { nodes, connections } = applyStepContents({
-    compiled,
-    nodes: compiled.nodes,
-    connections: compiled.connections,
-    channel: input.channel,
-    contents,
-  });
+  let nodes;
+  let connections;
+  if (isAdapter) {
+    await applyAdapterStepContents({ nodes: compiled.nodes, channel: input.channel, contents, ownerId });
+    ({ nodes, connections } = compiled);
+  } else {
+    ({ nodes, connections } = applyStepContents({
+      compiled,
+      nodes: compiled.nodes,
+      connections: compiled.connections,
+      channel: input.channel,
+      contents,
+    }));
+  }
 
   if (input.audience.type === 'sheet' && input.audience.sheetName) {
     const sheetNode = nodes.find((node) => getNodeSubtype(node) === 'read_sheet');
@@ -506,11 +654,16 @@ export async function compileSimpleGraph(input, { ownerId }) {
 }
 
 /** Tài khoản gửi sau prepareScript còn đúng tài khoản đã chọn không (nhân viên chưa được giao thì prepareScript gỡ id đi). */
-function senderSurvivedPrepare(nodes, channel, senderId) {
-  const key = channel === 'email' ? 'fromEmailId' : 'zaloAccountId';
+function senderSurvivedPrepare(nodes, channel, senderId, senderKey = null) {
+  if (channel === 'whatsapp') {
+    return nodes
+      .filter((node) => getNodeSubtype(node) === 'send_whatsapp')
+      .every((node) => String(node.config?.whatsappSessionKey ?? '') === senderKey);
+  }
+  const key = { email: 'fromEmailId', telegram: 'telegramAccountId' }[channel] || 'zaloAccountId';
   const subtypes = channel === 'email'
     ? ['send_email']
-    : ['select_zalo_account', 'send_zalo_personal', 'send_zalo_group'];
+    : (channel === 'telegram' ? ['send_telegram'] : ['select_zalo_account', 'send_zalo_personal', 'send_zalo_group']);
   return nodes
     .filter((node) => subtypes.includes(getNodeSubtype(node)))
     .every((node) => Number(node.config?.[key]) === senderId);
@@ -592,7 +745,7 @@ export async function buildSimpleDraft({ body, authUser, includeEstimate = false
   for (const issue of view.blockingIssues || []) pushIssue(issue);
   // prepareScript gỡ tài khoản Zalo chưa giao cho nhân viên rồi thẻ xác nhận có thể rơi về "mặc định được giao" nên không báo lỗi;
   // so lại với tài khoản đã chọn để chặn gửi bằng tài khoản khác âm thầm.
-  if (!senderSurvivedPrepare(prepared.nodes, input.channel, input.senderId) && !issues.some((item) => item.code === 'missing_sender')) {
+  if (!senderSurvivedPrepare(prepared.nodes, input.channel, input.senderId, input.senderKey) && !issues.some((item) => item.code === 'missing_sender')) {
     pushIssue({ code: 'missing_sender' });
   }
 
@@ -645,7 +798,8 @@ const CAMPAIGN_TYPE_RESOURCE_KEY = Object.freeze({
  */
 async function findCampaignLimitIssue(authUser, channel) {
   const { workspaceOwnerId, roleCode } = getWorkspaceContext(authUser);
-  for (const resourceKey of ['campaigns', CAMPAIGN_TYPE_RESOURCE_KEY[channel]]) {
+  // Telegram/WhatsApp không có hạn mức số chiến dịch riêng theo loại (campaignCrud.service.js) → chỉ trần `campaigns` chung.
+  for (const resourceKey of ['campaigns', CAMPAIGN_TYPE_RESOURCE_KEY[channel]].filter(Boolean)) {
     const check = await checkUserResourceLimit({ userId: workspaceOwnerId, roleCode, resourceKey });
     if (!check.allowed) {
       return {
@@ -691,9 +845,15 @@ export async function previewSimpleCampaign({ body, authUser, now = new Date() }
   const blockingIssues = limitIssue ? [...issues, limitIssue] : issues;
   const issuesOut = [...blockingIssues];
   const unknownCount = (estimate?.warnings || []).some((warning) => warning.code === 'recipient_count_unknown');
+  // Telegram/WhatsApp nguồn "người đã nhắn": thẻ xác nhận đã đếm hội thoại đang mở của tài khoản (null = đếm lỗi → không bịa số).
+  let countHint = input.recipientCountHint;
+  if (countHint == null && input.audience.type === 'conversations') {
+    const openConversations = view.steps?.[0]?.recipients?.conversations?.count;
+    if (Number.isInteger(openConversations)) countHint = openConversations;
+  }
   // Đã biết chắc số người nhận (danh sách nhập sẵn / khách đã lưu / số nhóm Zalo) thì không báo "chưa đếm được": bộ ước tính
   // không đếm thành viên nhóm Zalo nên luôn trả cảnh báo này cho Zalo nhóm dù câu tóm tắt đã nói "1 nhóm" (thử prod 17/10).
-  if (unknownCount && input.recipientCountHint == null && input.audience.type !== 'customers') {
+  if (unknownCount && countHint == null && input.audience.type !== 'customers') {
     issuesOut.push({
       code: 'recipient_count_unknown',
       apiCode: 'RECIPIENT_COUNT_UNKNOWN',
@@ -734,9 +894,21 @@ export async function previewSimpleCampaign({ body, authUser, now = new Date() }
 
   let recipientCount = input.audience.type === 'customers'
     ? Math.min(customersTotal, ALL_CUSTOMERS_LIMIT_CAP)
-    : input.recipientCountHint;
+    : countHint;
   if (recipientCount == null && estimate && !unknownCount) {
     recipientCount = (estimate.perNode || []).reduce((sum, node) => sum + (Number(node.recipients) || 0), 0);
+  }
+
+  if (input.audience.type === 'conversations' && countHint === 0) {
+    issuesOut.push({
+      code: 'conversations_empty',
+      apiCode: 'CONVERSATIONS_EMPTY',
+      nodeId: null,
+      stepIndex: null,
+      severity: 'warning',
+      messageKey: 'simpleCampaign.issues.conversations_empty',
+      message: 'Tài khoản này chưa có ai nhắn tới nên hiện chưa có người nhận. Gửi ngay bây giờ sẽ không có tin nào được gửi.',
+    });
   }
 
   return {
@@ -774,7 +946,9 @@ export async function buildSimpleCreateDraft({ body, authUser, createdTemplates,
   }
 
   // Bất kỳ tin nào (tin 1 hoặc tin trong chuỗi) tự soạn đều phải thành mẫu — bộ chạy chỉ gửi bước có `templateId` dạng số.
-  const hasCustomContent = [input.content, ...(input.followUps || []).map((item) => item.content)].some((item) => item.mode === 'custom');
+  // Telegram/WhatsApp ghi chữ thẳng vào `step.message` (bộ chạy kênh adapter không tra mẫu) nên KHÔNG tạo mẫu tin.
+  const hasCustomContent = !isAdapterCampaignChannel(input.channel)
+    && [input.content, ...(input.followUps || []).map((item) => item.content)].some((item) => item.mode === 'custom');
   if (hasCustomContent) {
     // autoCreate* đặt tên mẫu theo `node.nodeName` (rơi về "Email/Zalo … từ AI"). Mượn tên chiến dịch để thư viện mẫu của khách không
     // hiện nhãn "từ AI" cho thứ họ tự gõ; xoá ngay sau đó để không lọt vào tên khối đã lưu.

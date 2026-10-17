@@ -7,7 +7,15 @@ import NodeConfigTemplatePreviewModal from '../components/NodeConfigTemplatePrev
 import emailTemplateApiService from '../../templates/services/emailTemplateApi.service';
 import zaloTemplateApiService from '../../templates/services/zaloTemplateApi.service';
 import useAsyncResource from './useAsyncResource';
-import { FOLLOW_UP_DELAY_UNITS, MAX_FOLLOW_UPS, isValidFollowUpDelay, templateKindOf } from './simpleCampaign.helpers';
+import {
+  ADAPTER_MESSAGE_MAX,
+  FOLLOW_UP_DELAY_UNITS,
+  getMaxFollowUps,
+  getTemplateChannelProblem,
+  isAdapterChannel,
+  isValidFollowUpDelay,
+  templateKindOf,
+} from './simpleCampaign.helpers';
 
 const INPUT_CLASS =
   'w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 hover:bg-white focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-orange-500/10 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text dark:placeholder:text-dk-muted dark:hover:bg-dk-surface dark:focus:bg-dk-inset';
@@ -20,7 +28,7 @@ const loadTemplates = async (kind) => {
 };
 
 /** Chọn một mẫu có sẵn + nút Xem trước (dùng lại modal xem trước của trình dựng). */
-function TemplatePanel({ kind, content, patchContent, t, idPrefix }) {
+function TemplatePanel({ kind, channel, content, patchContent, t, idPrefix }) {
   const resource = useAsyncResource(() => loadTemplates(kind), [kind]);
   const [previewTemplate, setPreviewTemplate] = useState(null);
   const [previewError, setPreviewError] = useState('');
@@ -53,8 +61,17 @@ function TemplatePanel({ kind, content, patchContent, t, idPrefix }) {
   const handleChange = (value) => {
     const id = Number(value);
     const picked = templates.find((item) => Number(item.id) === id);
-    patchContent({ templateId: id > 0 ? id : null, templateName: picked ? String(picked.templateName || '') : '' });
+    patchContent({
+      templateId: id > 0 ? id : null,
+      templateName: picked ? String(picked.templateName || '') : '',
+      // Telegram/WhatsApp CHÉP nội dung + tệp của mẫu vào chiến dịch: giữ lại tệp/độ dài để báo sớm mẫu không hợp kênh (server kiểm lại).
+      templateAttachments: picked && Array.isArray(picked.attachments) ? picked.attachments : null,
+      templateBodyLength: picked ? String(picked.bodyText || '').trim().length : null,
+    });
   };
+
+  const adapter = isAdapterChannel(channel);
+  const problem = getTemplateChannelProblem(channel, content);
 
   const handlePreview = async () => {
     if (!content.templateId) return;
@@ -117,6 +134,14 @@ function TemplatePanel({ kind, content, patchContent, t, idPrefix }) {
         </button>
       </div>
       {previewError && <p role="alert" className="text-xs text-red-600 dark:text-red-400">{previewError}</p>}
+      {adapter && !problem && (
+        <p className="text-xs text-slate-500 dark:text-dk-text2" data-testid={`${idPrefix}-template-copy-hint`}>{t('simpleCampaign.content.templateCopyHint')}</p>
+      )}
+      {problem && (
+        <p role="alert" className="text-xs font-medium text-red-600 dark:text-red-400" data-testid={`${idPrefix}-template-problem`}>
+          {t(`simpleCampaign.content.templateProblem.${problem.code}`, { limit: problem.limit })}
+        </p>
+      )}
       <NodeConfigTemplatePreviewModal
         isOpen={Boolean(previewTemplate)}
         onClose={() => setPreviewTemplate(null)}
@@ -127,8 +152,10 @@ function TemplatePanel({ kind, content, patchContent, t, idPrefix }) {
   );
 }
 
-/** Tự soạn: Email = Tiêu đề + Nội dung; Zalo = Nội dung. */
-function CustomPanel({ isEmail, content, patchContent, t, idPrefix }) {
+/** Tự soạn: Email = Tiêu đề + Nội dung; Zalo/Telegram/WhatsApp = Nội dung (Telegram/WhatsApp có trần ký tự + bộ đếm). */
+function CustomPanel({ isEmail, channel, content, patchContent, t, idPrefix }) {
+  const bodyMax = ADAPTER_MESSAGE_MAX[channel] || 10000;
+  const showCounter = isAdapterChannel(channel);
   return (
     <div className="space-y-4">
       {isEmail && (
@@ -154,12 +181,17 @@ function CustomPanel({ isEmail, content, patchContent, t, idPrefix }) {
         <textarea
           id={`${idPrefix}-body`}
           rows={8}
-          maxLength={10000}
+          maxLength={bodyMax}
           value={content.body}
           onChange={(event) => patchContent({ body: event.target.value })}
           placeholder={isEmail ? t('simpleCampaign.content.bodyPlaceholderEmail') : t('simpleCampaign.content.bodyPlaceholderZalo')}
           className={`mt-2 resize-y ${INPUT_CLASS}`}
         />
+        {showCounter && (
+          <p className="mt-1 text-right text-xs text-slate-500 dark:text-dk-text2" data-testid={`${idPrefix}-body-counter`}>
+            {content.body.length.toLocaleString('vi-VN')}/{bodyMax.toLocaleString('vi-VN')}
+          </p>
+        )}
       </div>
     </div>
   );
@@ -197,9 +229,9 @@ function MessageEditor({ channel, content, patchContent, t, idPrefix, cardTestId
       {content.mode && (
         <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/60 p-4 dark:border-dk-border dark:bg-dk-bg/40" data-testid={`${idPrefix}-panel`}>
           {content.mode === 'template' ? (
-            <TemplatePanel kind={templateKindOf(channel)} content={content} patchContent={patchContent} t={t} idPrefix={idPrefix} />
+            <TemplatePanel kind={templateKindOf(channel)} channel={channel} content={content} patchContent={patchContent} t={t} idPrefix={idPrefix} />
           ) : (
-            <CustomPanel isEmail={isEmail} content={content} patchContent={patchContent} t={t} idPrefix={idPrefix} />
+            <CustomPanel isEmail={isEmail} channel={channel} content={content} patchContent={patchContent} t={t} idPrefix={idPrefix} />
           )}
         </div>
       )}
@@ -285,7 +317,8 @@ export default function ContentStep({ wizard, t }) {
   const { state, patchContent, addFollowUp } = wizard;
   const { channel, content } = state;
   const followUps = Array.isArray(state.followUps) ? state.followUps : [];
-  const canAdd = followUps.length < MAX_FOLLOW_UPS;
+  const maxFollowUps = getMaxFollowUps(channel);
+  const canAdd = followUps.length < maxFollowUps;
 
   return (
     <div>
@@ -320,7 +353,7 @@ export default function ContentStep({ wizard, t }) {
           {t('simpleCampaign.content.followUp.add')}
         </button>
         {!canAdd && (
-          <p className="mt-1 text-xs text-slate-500 dark:text-dk-text2" data-testid="simple-followup-max">{t('simpleCampaign.content.followUp.max', { max: MAX_FOLLOW_UPS + 1 })}</p>
+          <p className="mt-1 text-xs text-slate-500 dark:text-dk-text2" data-testid="simple-followup-max">{t('simpleCampaign.content.followUp.max', { max: maxFollowUps + 1 })}</p>
         )}
       </div>
     </div>

@@ -55,7 +55,7 @@ export default function ReviewStep({ wizard, t, locale }) {
 
       {state.schedule?.type === 'recurring' && (
         <div className="mt-3">
-          <RecurringWarning t={t} />
+          <RecurringWarning t={t} channel={state.channel} />
         </div>
       )}
 

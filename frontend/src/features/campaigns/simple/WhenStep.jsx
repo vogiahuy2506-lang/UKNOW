@@ -5,6 +5,7 @@ import {
   RECURRING_FREQUENCIES,
   WEEKDAY_OPTIONS,
   getAvailableWhenOptions,
+  isAdapterChannel,
   todayInVietnam,
   validateSchedule,
 } from './simpleCampaign.helpers';
@@ -31,8 +32,9 @@ const PANEL_CLASS = 'mt-4 rounded-2xl border border-slate-200 bg-slate-50/60 p-4
  *
  * @param {object} props
  * @param {(key: string, params?: object) => string} props.t
+ * @param {string} [props.channel] Telegram/WhatsApp không có "Tự động gửi cho người mới" nên câu gợi ý đó được bỏ
  */
-export function RecurringWarning({ t }) {
+export function RecurringWarning({ t, channel }) {
   return (
     <div
       className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-200"
@@ -43,7 +45,7 @@ export function RecurringWarning({ t }) {
       <p>
         <strong className="font-bold">{t('simpleCampaign.when.recurring.warningStrong')}</strong>
         {' '}
-        {t('simpleCampaign.when.recurring.warningRest')}
+        {t(isAdapterChannel(channel) ? 'simpleCampaign.when.recurring.warningRestNoAuto' : 'simpleCampaign.when.recurring.warningRest')}
       </p>
     </div>
   );
@@ -105,7 +107,7 @@ function ContinuousPanel({ schedule, t }) {
   );
 }
 
-function RecurringPanel({ schedule, patchSchedule, t }) {
+function RecurringPanel({ schedule, patchSchedule, t, channel }) {
   return (
     <div className={PANEL_CLASS} data-testid="simple-when-recurring-panel">
       <div role="group" aria-label={t('simpleCampaign.when.recurring.frequencyLabel')} className="flex flex-wrap gap-2">
@@ -167,7 +169,7 @@ function RecurringPanel({ schedule, patchSchedule, t }) {
       <p className="mt-2 text-xs text-slate-500 dark:text-dk-text2">{t('simpleCampaign.when.scheduled.vnNote')}</p>
 
       <div className="mt-4">
-        <RecurringWarning t={t} />
+        <RecurringWarning t={t} channel={channel} />
       </div>
     </div>
   );
@@ -206,7 +208,7 @@ export default function WhenStep({ wizard, t }) {
 
       {schedule?.type === 'scheduled' && <ScheduledPanel schedule={schedule} patchSchedule={patchSchedule} t={t} />}
       {schedule?.type === 'continuous' && <ContinuousPanel schedule={schedule} t={t} />}
-      {schedule?.type === 'recurring' && <RecurringPanel schedule={schedule} patchSchedule={patchSchedule} t={t} />}
+      {schedule?.type === 'recurring' && <RecurringPanel schedule={schedule} patchSchedule={patchSchedule} t={t} channel={state.channel} />}
     </div>
   );
 }

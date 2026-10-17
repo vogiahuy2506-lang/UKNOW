@@ -7,6 +7,15 @@ import { senderKindOf } from './simpleCampaign.helpers';
 const SETTINGS_LINK = Object.freeze({
   email: '/app/settings/channels#email',
   zalo: '/app/settings/channels#zalo',
+  telegram: '/app/settings/channels#telegram',
+  whatsapp: '/app/settings/channels#whatsapp',
+});
+
+const CONNECT_LABEL_KEY = Object.freeze({
+  email: 'simpleCampaign.channel.connectEmail',
+  zalo: 'simpleCampaign.channel.connectZalo',
+  telegram: 'simpleCampaign.channel.connectTelegram',
+  whatsapp: 'simpleCampaign.channel.connectWhatsapp',
 });
 
 // Tài khoản bị khoá theo gói: mở khoá bằng cách xem/nâng gói, không phải kết nối lại.
@@ -24,12 +33,13 @@ const DOT_CLASS = Object.freeze({
  * Chỉ có đúng một tài khoản dùng được thì chọn sẵn.
  *
  * @param {object} props
- * @param {'email'|'zalo'|'zalo_group'} props.channel
+ * @param {'email'|'zalo'|'zalo_group'|'telegram'|'whatsapp'} props.channel
  * @param {{ id: number, label: string }|null} props.selected
  * @param {(sender: { id: number, label: string }) => void} props.onSelect
  * @param {(key: string, params?: object) => string} props.t
+ * @param {string} [props.locale]
  */
-export default function SenderAccountList({ channel, selected, onSelect, t }) {
+export default function SenderAccountList({ channel, selected, onSelect, t, locale = 'vi' }) {
   const kind = senderKindOf(channel);
   const resource = useAsyncResource(() => loadSenderAccounts(kind), [kind]);
   const accounts = resource.status === 'ready' ? resource.data : [];
@@ -65,7 +75,7 @@ export default function SenderAccountList({ channel, selected, onSelect, t }) {
         <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-200" data-testid="simple-sender-empty">
           <p>{t('simpleCampaign.channel.accountEmpty')}</p>
           <Link to={SETTINGS_LINK[kind]} className="mt-2 inline-block font-semibold underline">
-            {kind === 'email' ? t('simpleCampaign.channel.connectEmail') : t('simpleCampaign.channel.connectZalo')}
+            {t(CONNECT_LABEL_KEY[kind])}
           </Link>
         </div>
       )}
@@ -97,6 +107,11 @@ export default function SenderAccountList({ channel, selected, onSelect, t }) {
                     <span className="block truncate text-sm font-semibold text-slate-900 dark:text-dk-text">{account.label}</span>
                     {account.sublabel && (
                       <span className="block truncate text-xs text-slate-500 dark:text-dk-text2">{account.sublabel}</span>
+                    )}
+                    {account.usable && account.conversationCount !== null && account.conversationCount !== undefined && (
+                      <span className="block truncate text-xs text-slate-500 dark:text-dk-text2" data-testid={`simple-sender-conversations-${account.id}`}>
+                        {t('simpleCampaign.channel.conversationCount', { count: account.conversationCount.toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN') })}
+                      </span>
                     )}
                   </span>
                   {account.isDefault && account.usable && (

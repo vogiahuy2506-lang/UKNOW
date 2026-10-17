@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { HiOutlineArrowLeft } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 import { useChannelAvailability } from '../../../hooks/queries/useChannelAvailability';
+import campaignApiService from '../services/campaignApi.service';
 import ChannelUnavailableModal from '../../../components/common/ChannelUnavailableModal';
 import SimpleStepper from './SimpleStepper';
 import ChannelStep from './ChannelStep';
@@ -24,7 +25,8 @@ export default function SimpleCampaignWizard({ wizard }) {
   const { t, locale } = useI18n();
   const navigate = useNavigate();
   // ignoreQuota: chỗ DỰNG chiến dịch không khoá vì hết lượt kỳ này (backend chặn lúc gửi) — như modal tạo chiến dịch.
-  const availability = useChannelAvailability({ ignoreQuota: true });
+  // fetchAdapterChannels: đường dự phòng khi backend cũ chưa trả danh sách kênh adapter (Telegram/WhatsApp) đang bật — như trang Chiến dịch.
+  const availability = useChannelAvailability({ ignoreQuota: true, fetchAdapterChannels: () => campaignApiService.getChannels() });
   const [lockedChannel, setLockedChannel] = useState(null);
   const stepRef = useRef(null);
   const isFirstRenderRef = useRef(true);
@@ -83,7 +85,7 @@ export default function SimpleCampaignWizard({ wizard }) {
       <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-dk-border dark:bg-dk-surface sm:p-6">
         <div ref={stepRef} tabIndex={-1} className="outline-none focus:outline-none focus-visible:outline-none" data-testid={`simple-step-body-${stepId}`}>
           {stepId === 'channel' && (
-            <ChannelStep wizard={wizard} availability={availability} onLockedClick={setLockedChannel} t={t} />
+            <ChannelStep wizard={wizard} availability={availability} onLockedClick={setLockedChannel} t={t} locale={locale} />
           )}
           {stepId === 'audience' && <AudienceStep wizard={wizard} t={t} locale={locale} />}
           {stepId === 'content' && <ContentStep wizard={wizard} t={t} />}

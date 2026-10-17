@@ -1,4 +1,5 @@
 import {
+  HiOutlineChatAlt2,
   HiOutlineClipboardList,
   HiOutlineDatabase,
   HiOutlineGlobeAlt,
@@ -16,6 +17,7 @@ import SheetPanel from './audience/SheetPanel';
 import ManualPanel from './audience/ManualPanel';
 import FriendsPanel from './audience/FriendsPanel';
 import GroupsPanel from './audience/GroupsPanel';
+import ConversationsPanel from './audience/ConversationsPanel';
 
 const AUDIENCE_CARDS = Object.freeze({
   customers: { icon: HiOutlineDatabase, tone: 'blue' },
@@ -25,6 +27,7 @@ const AUDIENCE_CARDS = Object.freeze({
   manual: { icon: HiOutlinePencilAlt, tone: 'slate' },
   zalo_friends: { icon: HiOutlineUsers, tone: 'sky' },
   zalo_groups: { icon: HiOutlineUserGroup, tone: 'violet' },
+  conversations: { icon: HiOutlineChatAlt2, tone: 'sky' },
 });
 
 /** Thẻ có hai câu mô tả (theo kênh): khách đã lưu cần email/SĐT hợp lệ, "Tự nhập" gõ email hay số điện thoại. */
@@ -60,6 +63,8 @@ export default function AudienceStep({ wizard, t, locale }) {
         return <ManualPanel channel={channel} manualText={audience.manualText} patchAudience={patchAudience} t={t} locale={locale} />;
       case 'zalo_friends':
         return <FriendsPanel accountId={sender?.id} uids={audience.uids} patchAudience={patchAudience} t={t} />;
+      case 'conversations':
+        return <ConversationsPanel channel={channel} sender={sender} t={t} locale={locale} />;
       case 'zalo_groups':
         return (
           <GroupsPanel
@@ -111,7 +116,8 @@ export default function AudienceStep({ wizard, t, locale }) {
         </div>
       )}
 
-      {!isGroupChannel && (
+      {/* Telegram không có bước kiểm "đã từ chối nhận tin" (khoá theo SĐT) nên không nói câu này cho Telegram. */}
+      {!isGroupChannel && channel !== 'telegram' && (
         <p className="mt-4 text-xs text-slate-500 dark:text-dk-text2" data-testid="simple-consent-note">
           {t('simpleCampaign.audience.consentNote')}
         </p>

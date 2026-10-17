@@ -10,8 +10,17 @@ import {
   resolveScheduleNextRunAt,
 } from '../utils/campaignRunSchedule.helpers';
 import { resolveScheduleEstimateStartAt } from '../utils/campaignEstimate.helpers';
+import { validateChannelAttachments } from '../utils/channelAttachments';
+import { MAX_CHANNEL_STEPS } from '../utils/channelSteps';
 
-export const SIMPLE_CHANNELS = Object.freeze(['email', 'zalo', 'zalo_group']);
+export const SIMPLE_CHANNELS = Object.freeze(['email', 'zalo', 'zalo_group', 'telegram', 'whatsapp']);
+
+/** Kênh "adapter" (Telegram/WhatsApp): hệ thống phải bật kênh, gói phải có kênh; chuỗi tối đa 5 tin; chữ có trần ký tự riêng. */
+export const ADAPTER_CHANNELS = Object.freeze(['telegram', 'whatsapp']);
+export const isAdapterChannel = (channel) => ADAPTER_CHANNELS.includes(channel);
+
+/** Trần ký tự của MỘT tin tự soạn — khớp backend (`MAX_CUSTOM_BODY_LENGTH`) và ô soạn tin của trình dựng. */
+export const ADAPTER_MESSAGE_MAX = Object.freeze({ telegram: 4000, whatsapp: 4096 });
 
 /** Thứ tự bước. PR-3 chỉ thêm thẻ vào bước `when`, không đổi danh sách này. */
 export const SIMPLE_STEP_IDS = Object.freeze(['channel', 'audience', 'content', 'when', 'review']);
@@ -24,6 +33,9 @@ export const AUDIENCE_TYPES_BY_CHANNEL = Object.freeze({
   email: Object.freeze(['customers', 'landing', 'form', 'sheet', 'manual']),
   zalo: Object.freeze(['customers', 'landing', 'form', 'sheet', 'manual', 'zalo_friends']),
   zalo_group: Object.freeze(['zalo_groups']),
+  // Telegram không nhắn được người lạ nên chỉ có "người đã nhắn"; WhatsApp thêm các nguồn có cột SĐT. KHÔNG có nhập tay.
+  telegram: Object.freeze(['conversations']),
+  whatsapp: Object.freeze(['conversations', 'customers', 'landing', 'form', 'sheet']),
 });
 
 /**
@@ -71,13 +83,27 @@ export const EMPTY_AUDIENCE = Object.freeze({
   groupNames: [],
 });
 
+/**
+ * Nội dung một tin. `templateAttachments` / `templateBodyLength` chỉ để kiểm sớm mẫu có hợp kênh Telegram/WhatsApp không (tệp vượt giới
+ * hạn, chữ quá dài) — KHÔNG gửi lên server (server kiểm lại từ chính mẫu).
+ */
+export const EMPTY_MESSAGE_CONTENT = Object.freeze({
+  mode: null,
+  templateId: null,
+  templateName: '',
+  templateAttachments: null,
+  templateBodyLength: null,
+  subject: '',
+  body: '',
+});
+
 export const createInitialWizardState = () => ({
   channel: null,
   /** `{ id, label }` của tài khoản gửi đã chọn; null = chưa chọn. */
   sender: null,
   audience: { ...EMPTY_AUDIENCE },
   /** `mode`: null | 'template' | 'custom'. */
-  content: { mode: null, templateId: null, templateName: '', subject: '', body: '' },
+  content: { ...EMPTY_MESSAGE_CONTENT },
   /** Chuỗi tin: tin 2..N, mỗi phần tử `{ id, delayValue, delayUnit: 'days'|'hours'|'minutes', content }` (xem `createFollowUp`). Rỗng = gửi một tin. */
   followUps: [],
   /** Xem `createDefaultSchedule`: `{ type: 'now' | 'scheduled' | 'continuous' | 'recurring', … }`. */
@@ -85,11 +111,12 @@ export const createInitialWizardState = () => ({
   campaignName: '',
 });
 
-/** Tối đa 10 tin cả chuỗi = tin 1 + 9 tin sau (hợp đồng PLAN_HAI_TAB §3.1). */
+/** Tối đa 10 tin cả chuỗi = tin 1 + 9 tin sau (hợp đồng PLAN_HAI_TAB §3.1). Telegram/WhatsApp: xem `getMaxFollowUps`. */
 export const MAX_FOLLOW_UPS = 9;
-export const FOLLOW_UP_DELAY_UNITS = Object.freeze(['days', 'hours', 'minutes']);
 
-export const EMPTY_MESSAGE_CONTENT = Object.freeze({ mode: null, templateId: null, templateName: '', subject: '', body: '' });
+/** Số tin SAU tối đa theo kênh: email/Zalo 9; Telegram/WhatsApp chung trần 5 tin của khối gửi (`MAX_CHANNEL_STEPS`) → 4. */
+export const getMaxFollowUps = (channel) => (isAdapterChannel(channel) ? MAX_CHANNEL_STEPS - 1 : MAX_FOLLOW_UPS);
+export const FOLLOW_UP_DELAY_UNITS = Object.freeze(['days', 'hours', 'minutes']);
 
 let followUpSeq = 0;
 /** Id cục bộ (chỉ làm `key` React); KHÔNG gửi lên server. */
@@ -113,11 +140,27 @@ export const isValidFollowUpDelay = (value) => {
   return Number.isInteger(n) && n > 0;
 };
 
-/** Một tin (tin 1 hoặc tin sau) đã đủ nội dung chưa: mẫu có id; tự soạn có nội dung, email có thêm tiêu đề. */
+/**
+ * Mẫu đã chọn có dùng được với kênh Telegram/WhatsApp không: tệp đính kèm vượt giới hạn (5 ảnh · 3 tài liệu · 20 MB mỗi tin) hoặc chữ
+ * dài quá trần của kênh. Kênh khác / chưa chọn mẫu → null. Trả `{ code: 'images'|'documents'|'size'|'tooLong', limit }`.
+ */
+export const getTemplateChannelProblem = (channel, content) => {
+  if (!isAdapterChannel(channel) || content?.mode !== 'template' || !content.templateId) return null;
+  const attachmentProblem = validateChannelAttachments(content.templateAttachments, channel);
+  if (attachmentProblem) return attachmentProblem;
+  if (Number(content.templateBodyLength) > ADAPTER_MESSAGE_MAX[channel]) {
+    return { code: 'tooLong', limit: ADAPTER_MESSAGE_MAX[channel] };
+  }
+  return null;
+};
+
+/** Một tin (tin 1 hoặc tin sau) đã đủ nội dung chưa: mẫu có id (và hợp kênh); tự soạn có nội dung, email có thêm tiêu đề. */
 export const isMessageContentComplete = (channel, content) => {
-  if (content?.mode === 'template') return Number(content.templateId) > 0;
+  if (content?.mode === 'template') return Number(content.templateId) > 0 && !getTemplateChannelProblem(channel, content);
   if (content?.mode === 'custom') {
-    if (!String(content.body || '').trim()) return false;
+    const body = String(content.body || '').trim();
+    if (!body) return false;
+    if (isAdapterChannel(channel) && body.length > ADAPTER_MESSAGE_MAX[channel]) return false;
     return channel !== 'email' || Boolean(String(content.subject || '').trim());
   }
   return false;
@@ -151,21 +194,27 @@ export const totalFollowUpMinutes = (followUps) => followUps.reduce((sum, item) 
   return sum + Number(item.delayValue) * (MINUTES_PER_UNIT[item.delayUnit] ?? MINUTES_PER_UNIT.days);
 }, 0);
 
-/** Email dùng tài khoản email; Zalo cá nhân và Zalo nhóm dùng chung danh sách tài khoản Zalo. */
-export const senderKindOf = (channel) => (channel === 'email' ? 'email' : 'zalo');
+/** Email, Telegram, WhatsApp mỗi kênh một danh sách tài khoản; Zalo cá nhân và Zalo nhóm dùng chung danh sách tài khoản Zalo. */
+export const senderKindOf = (channel) => (['email', 'telegram', 'whatsapp'].includes(channel) ? channel : 'zalo');
 
-/** Mẫu tin của email nằm ở `email_templates`, của Zalo (cá nhân + nhóm) ở `zalo_templates`. */
+/** Mẫu tin của email nằm ở `email_templates`, của Zalo (cá nhân + nhóm) và Telegram/WhatsApp ở `zalo_templates` (kho dùng chung). */
 export const templateKindOf = (channel) => (channel === 'email' ? 'email' : 'zalo');
 
 /**
  * Cách gửi nào đang dùng được với kênh + nguồn người nhận hiện tại. `continuous` chỉ khi nguồn là landing / biểu mẫu / Google Sheet
  * và kênh KHÁC Zalo nhóm (chế độ liên tục bị tắt cho Zalo nhóm ở giao diện cũ, `useCampaignRunController`).
  *
+ * Telegram/WhatsApp: KHÔNG có "Tự động gửi cho người mới". Bộ chạy có cờ `continuousSupported`, nhưng mới được thử với kênh giả + nguồn
+ * nhập tay (campaignChannelStepsP7.test.js) — chưa có phép thử nào với nguồn Sheet/landing/biểu mẫu/hội thoại của kênh thật, nên ẩn
+ * cho tới khi có (gửi nhầm lặp trên tài khoản thật đắt hơn việc thiếu một thẻ).
+ *
  * @param {object} state
  * @returns {string[]}
  */
 export const getAvailableWhenOptions = (state) => {
-  const continuousOk = state.channel !== 'zalo_group' && CONTINUOUS_AUDIENCE_TYPES.includes(state.audience?.type);
+  const continuousOk = state.channel !== 'zalo_group'
+    && !isAdapterChannel(state.channel)
+    && CONTINUOUS_AUDIENCE_TYPES.includes(state.audience?.type);
   return WHEN_OPTION_IDS.filter((id) => id !== 'continuous' || continuousOk);
 };
 
@@ -304,23 +353,28 @@ export const applyChannelChange = (state, channel) => {
 
   const allowedTypes = AUDIENCE_TYPES_BY_CHANNEL[channel] || [];
   if (!allowedTypes.includes(state.audience.type)) {
-    // Zalo nhóm chỉ có đúng một nguồn ("Chọn nhóm") nên được chọn sẵn; các kênh khác để người dùng tự chọn.
-    next.audience = { ...EMPTY_AUDIENCE, type: channel === 'zalo_group' ? 'zalo_groups' : null };
+    // Zalo nhóm ("Chọn nhóm") và Telegram ("Người đã nhắn") chỉ có đúng một nguồn nên được chọn sẵn; các kênh khác để người dùng tự chọn.
+    next.audience = { ...EMPTY_AUDIENCE, type: allowedTypes.length === 1 ? allowedTypes[0] : null };
   } else if (state.audience.type === 'manual' && senderKindOf(state.channel) !== senderKindOf(channel)) {
     next.audience = { ...state.audience, manualText: '' };
   }
 
-  if (templateKindOf(state.channel) !== templateKindOf(channel) && state.content.mode === 'template') {
-    next.content = { ...state.content, templateId: null, templateName: '' };
+  const templateKindChanged = templateKindOf(state.channel) !== templateKindOf(channel);
+  if (templateKindChanged && state.content.mode === 'template') {
+    next.content = { ...state.content, templateId: null, templateName: '', templateAttachments: null, templateBodyLength: null };
   }
+  // Telegram/WhatsApp chỉ nhận chuỗi ≤ 5 tin: đổi sang kênh có trần thấp hơn thì cắt bớt tin cuối (tin 1 luôn giữ).
+  let followUps = Array.isArray(state.followUps) ? state.followUps : [];
+  if (followUps.length > getMaxFollowUps(channel)) followUps = followUps.slice(0, getMaxFollowUps(channel));
   // Chuỗi tin: mẫu của kho kia không dùng được → xoá templateId của MỌI tin sau; chữ tự soạn được giữ.
-  if (templateKindOf(state.channel) !== templateKindOf(channel) && Array.isArray(state.followUps) && state.followUps.length > 0) {
-    next.followUps = state.followUps.map((item) => (
+  if (templateKindChanged && followUps.length > 0) {
+    followUps = followUps.map((item) => (
       item.content?.mode === 'template'
-        ? { ...item, content: { ...item.content, templateId: null, templateName: '' } }
+        ? { ...item, content: { ...item.content, templateId: null, templateName: '', templateAttachments: null, templateBodyLength: null } }
         : item
     ));
   }
+  if (followUps !== state.followUps && (followUps.length > 0 || (state.followUps || []).length > 0)) next.followUps = followUps;
   return reconcileSchedule(next);
 };
 
@@ -443,6 +497,9 @@ export const isStepComplete = (stepId, state, now = new Date()) => {
         case 'zalo_groups':
           // Bắt buộc ≥ 1 nhóm: groupIds rỗng = server gửi MỌI nhóm của nick (PLAN §5).
           return audience.groupIds.length > 0;
+        case 'conversations':
+          // Telegram/WhatsApp: mọi người đã nhắn tới tài khoản gửi — không có gì để chọn thêm.
+          return true;
         default:
           return false;
       }
@@ -499,10 +556,12 @@ export const buildSimpleCampaignBody = (state) => {
 
   const body = {
     channel,
-    senderId: Number(sender?.id),
     audience: audienceBody,
     content: contentBody,
   };
+  // WhatsApp không có id số: tài khoản gửi là mã phiên chuỗi (`<id chủ>-<tên>`).
+  if (channel === 'whatsapp') body.senderKey = String(sender?.id ?? '');
+  else body.senderId = Number(sender?.id);
   // Không có tin sau → KHÔNG gửi trường `followUps` (server hiểu là gửi một lần như cũ).
   if (Array.isArray(state.followUps) && state.followUps.length > 0) {
     body.followUps = buildFollowUpsBody(channel, state.followUps);
@@ -612,6 +671,43 @@ export const describeIssue = (issue, t) => {
   }
   return t('simpleCampaign.issues.unknown');
 };
+
+/**
+ * `GET /campaigns/channels/telegram/accounts` → danh sách chọn. Endpoint đã lọc: chỉ tài khoản còn bật và (với nhân viên) được GIAO;
+ * không trả trạng thái phiên nên tài khoản nào cũng chọn được — phiên hỏng sẽ hiện ở bước Xem lại/lúc gửi.
+ *
+ * @param {Array<object>} items `[{ id, name, username, openConversationCount }]`
+ */
+export const mapTelegramAccounts = (items) =>
+  (Array.isArray(items) ? items : []).map((item) => ({
+    id: Number(item.id),
+    label: String(item.name || item.username || `Telegram #${item.id}`),
+    sublabel: item.username ? `@${String(item.username).replace(/^@/, '')}` : '',
+    isDefault: false,
+    usable: true,
+    problem: null,
+    conversationCount: Number.isFinite(Number(item.openConversationCount)) ? Number(item.openConversationCount) : null,
+  }));
+
+/**
+ * `GET /campaigns/channels/whatsapp/accounts` → danh sách chọn. Dùng được khi phiên đang `open`; ngược lại (offline / đang kết nối) không
+ * chọn được, kèm "Kết nối lại". Mã của tài khoản là `sessionKey` (chuỗi).
+ *
+ * @param {Array<object>} items `[{ sessionKey, display, status, openConversationCount }]`
+ */
+export const mapWhatsAppAccounts = (items) =>
+  (Array.isArray(items) ? items : []).map((item) => {
+    const connected = String(item.status || '') === 'open';
+    return {
+      id: String(item.sessionKey),
+      label: String(item.display || item.sessionKey),
+      sublabel: '',
+      isDefault: false,
+      usable: connected,
+      problem: connected ? null : 'disconnected',
+      conversationCount: Number.isFinite(Number(item.openConversationCount)) ? Number(item.openConversationCount) : null,
+    };
+  });
 
 const looksLikeZaloId = (value) => /^\d{9,15}$/.test(String(value || '').replace(/[\s-]/g, ''));
 
