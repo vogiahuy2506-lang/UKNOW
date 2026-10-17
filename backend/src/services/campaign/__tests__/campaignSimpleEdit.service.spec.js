@@ -6,9 +6,10 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
  * `buildFlowNodeIdMap` + `normalizeNodeReferenceConfig` (15 chiến dịch nhóm Zalo prod 17/10/2026).
  */
 const mockGetCampaignById = jest.fn();
+const mockUpdateCampaign = jest.fn();
 
 jest.unstable_mockModule('../campaignCrud.service.js', () => ({
-  default: { getCampaignById: mockGetCampaignById, updateCampaign: jest.fn() },
+  default: { getCampaignById: mockGetCampaignById, updateCampaign: mockUpdateCampaign },
 }));
 jest.unstable_mockModule('../../../repositories/campaign/campaignCrud.repository.js', () => ({
   default: { hasRunningRun: jest.fn(async () => false) },
@@ -20,10 +21,19 @@ jest.unstable_mockModule('../../ai/landingAudienceResolver.service.js', () => ({
   applyLandingAudienceResolution: jest.fn(async (intent) => intent),
   default: { applyLandingAudienceResolution: jest.fn(async (intent) => intent) },
 }));
-jest.unstable_mockModule('../../ai/aiCampaignDraft.service.js', () => ({ default: {} }));
-jest.unstable_mockModule('../../ai/campaignConfirmation.service.js', () => ({ default: {} }));
+jest.unstable_mockModule('../../ai/aiCampaignDraft.service.js', () => ({
+  default: {
+    prepareScript: jest.fn(async (script) => script),
+    autoCreateEmailTemplates: jest.fn(),
+    autoCreateZaloTemplates: jest.fn(),
+    cleanupAutoCreatedTemplates: jest.fn(),
+  },
+}));
+jest.unstable_mockModule('../../ai/campaignConfirmation.service.js', () => ({
+  default: { buildConfirmationView: jest.fn(async () => ({ blockingIssues: [] })) },
+}));
 jest.unstable_mockModule('../readSheetAutoName.service.js', () => ({ fillReadSheetFirstTabNames: jest.fn() }));
-jest.unstable_mockModule('../../../utils/userResourceLimit.util.js', () => ({ checkUserResourceLimit: jest.fn() }));
+jest.unstable_mockModule('../../../utils/userResourceLimit.util.js', () => ({ checkUserResourceLimit: jest.fn(async () => ({ allowed: true })) }));
 jest.unstable_mockModule('../../../repositories/ai/aiCampaign.repository.js', () => ({
   default: { getFormIdsOwnedBy: jest.fn(async (_owner, ids) => ids) },
 }));
@@ -32,7 +42,7 @@ jest.unstable_mockModule('../../../repositories/customer/customerRead.repository
 }));
 
 const { normalizeSimpleBody, compileSimpleGraph } = await import('../campaignSimple.service.js');
-const { getSimpleEditState } = await import('../campaignSimpleEdit.service.js');
+const { getSimpleEditState, updateSimpleCampaign } = await import('../campaignSimpleEdit.service.js');
 
 const OWNER = 7;
 const authUser = { id: OWNER };
@@ -90,6 +100,8 @@ function useFlowReferences(campaign, { withFlow }) {
 
 beforeEach(() => {
   mockGetCampaignById.mockReset();
+  mockUpdateCampaign.mockReset();
+  mockUpdateCampaign.mockResolvedValue({ id: 55, campaignName: 'Đăng nhóm', nodesTruoc: 4 });
 });
 
 describe('getSimpleEditState — tham chiếu khối theo mã flow_json', () => {
@@ -112,5 +124,39 @@ describe('getSimpleEditState — tham chiếu khối theo mã flow_json', () => 
     const state = await getSimpleEditState({ authUser, campaignId: 55 });
     expect(state.editable).toBe(false);
     expect(state.diffs.join('\n')).toContain('zaloGroupNodeId');
+  });
+});
+
+describe('tắt theo dõi link (người dùng tự tắt) — giữ nguyên khi so khớp và khi lưu', () => {
+  const groupSteps = (nodes) => nodes.find((node) => node.nodeSubtype === 'send_zalo_group').config.zaloGroupTemplateSteps;
+  const putBody = {
+    channel: 'zalo_group',
+    senderId: 9,
+    audience: { type: 'zalo_groups', groupIds: ['111', '222'] },
+    content: { mode: 'template', templateId: 31 },
+    followUps: [{ delayValue: 30, delayUnit: 'minutes', content: { mode: 'template', templateId: 32 } }],
+    campaignName: 'Đăng nhóm',
+  };
+
+  it('mọi tin đã tắt → sửa được; PUT ghi sơ đồ mới với mọi tin (kể cả tin thêm) vẫn tắt', async () => {
+    const stored = await storedGroupCampaign();
+    groupSteps(stored.nodes).forEach((step) => { step.enableLinkTracking = false; });
+    mockGetCampaignById.mockResolvedValue(stored);
+
+    const state = await getSimpleEditState({ authUser, campaignId: 55 });
+    expect(state.diffs).toBeUndefined();
+    expect(state.editable).toBe(true);
+
+    await updateSimpleCampaign({ authUser, campaignId: 55, body: putBody, createdTemplates: { emailTemplateIds: [], zaloTemplateIds: [] } });
+    expect(mockUpdateCampaign).toHaveBeenCalledTimes(1);
+    const written = groupSteps(mockUpdateCampaign.mock.calls[0][0].nodes);
+    expect(written.map((step) => step.enableLinkTracking)).toEqual([false, false]);
+  });
+
+  it('chưa tắt → PUT không tự thêm cờ tắt', async () => {
+    mockGetCampaignById.mockResolvedValue(await storedGroupCampaign());
+    await updateSimpleCampaign({ authUser, campaignId: 55, body: putBody, createdTemplates: { emailTemplateIds: [], zaloTemplateIds: [] } });
+    const written = groupSteps(mockUpdateCampaign.mock.calls[0][0].nodes);
+    expect(written.every((step) => step.enableLinkTracking !== false)).toBe(true);
   });
 });

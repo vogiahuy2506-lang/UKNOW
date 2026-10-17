@@ -27,7 +27,7 @@ jest.unstable_mockModule('../../../repositories/customer/customerRead.repository
 const { normalizeSimpleBody, compileSimpleGraph } = await import('../campaignSimple.service.js');
 const { applyDirectRecipients } = await import('../../../utils/directRecipients.util.js');
 const reverse = await import('../campaignSimpleReverse.service.js');
-const { readSimpleFormFromGraph, isRoundTripEquivalent, READ_ONLY_REASON_CODES: CODE } = reverse;
+const { readSimpleFormFromGraph, isRoundTripEquivalent, carryOverLinkTracking, READ_ONLY_REASON_CODES: CODE } = reverse;
 const { getNodeSubtype } = await import('../../../utils/nodeSubtype.util.js');
 
 const OWNER = 7;
@@ -322,6 +322,35 @@ describe('nhóm Zalo dựng tay (prod 17/10/2026): chỉ so trường lúc chạ
       const result = await roundTripOf(stored);
       expect(result.ok).toBe(false);
       expect(result.diffs.join('\n')).toContain(key);
+    }
+  });
+});
+
+describe('carryOverLinkTracking — giữ lựa chọn tắt theo dõi link khi dựng lại', () => {
+  const linkFlags = (graph) => stepsOf(graph).map((step) => step.enableLinkTracking);
+
+  it('mọi tin đã lưu đều tắt → mọi tin dựng lại (kể cả tin mới thêm) tắt, khứ hồi khớp', async () => {
+    const stored = persist(await build(groupBody({ followUps: [fu(1, 'days', 32)] })));
+    stepsOf(stored).forEach((step) => { step.enableLinkTracking = false; });
+    const rebuilt = await build(groupBody({ followUps: [fu(1, 'days', 32), fu(2, 'days', 33)] }));
+    carryOverLinkTracking(stored.nodes, rebuilt.nodes);
+    expect(linkFlags(rebuilt)).toEqual([false, false, false]);
+
+    const read = readSimpleFormFromGraph(stored.nodes, stored.connections);
+    const again = await build({ channel: read.channel, ...read.form });
+    expect(isRoundTripEquivalent(stored, again).ok).toBe(false);
+    carryOverLinkTracking(stored.nodes, again.nodes);
+    expect(isRoundTripEquivalent(stored, again)).toEqual({ ok: true, diffs: [] });
+  });
+
+  it('chuỗi trộn bật/tắt hoặc không tin nào tắt → không chép gì', async () => {
+    for (const flags of [[false, true], [false, undefined], [true, true]]) {
+      const stored = persist(await build(emailBody({ followUps: [fu(1, 'days', 12)] })));
+      stepsOf(stored).forEach((step, index) => { step.enableLinkTracking = flags[index]; });
+      const rebuilt = await build(emailBody({ followUps: [fu(1, 'days', 12)] }));
+      const before = JSON.stringify(rebuilt);
+      carryOverLinkTracking(stored.nodes, rebuilt.nodes);
+      expect(JSON.stringify(rebuilt)).toBe(before);
     }
   });
 });

@@ -21,6 +21,7 @@ import {
   READ_ONLY_REASON_CODES as CODE,
   readSimpleFormFromGraph,
   isRoundTripEquivalent,
+  carryOverLinkTracking,
 } from './campaignSimpleReverse.service.js';
 import { applyDirectRecipients } from '../../utils/directRecipients.util.js';
 import { getWorkspaceContext } from '../../utils/workspaceContext.util.js';
@@ -72,8 +73,10 @@ async function rebuildGraphFromForm({ channel, form, ownerId }) {
 }
 
 /**
+ * Trạng thái sửa + khối đã lưu (tham chiếu đã đổi mã như lúc chạy) — `updateSimpleCampaign` cần khối đã lưu để giữ cài đặt ẩn.
+ *
  * @param {{ authUser: object, campaignId: number|string }} input
- * @returns {Promise<{
+ * @returns {Promise<{ storedNodes: object[], state: {
  *   editable: boolean,
  *   readOnlyReasons: Array<{ code: string, message: string }>,
  *   running: boolean,
@@ -84,10 +87,10 @@ async function rebuildGraphFromForm({ channel, form, ownerId }) {
  *   view?: object, // chỉ xem: có khi form null vì nhịp chờ (xem readSimpleFormFromGraph)
  *   schedules: Array<{ id: string, scheduleType: string, cronExpression: string, enabled: boolean }>,
  *   diffs?: string[],
- * }>}
+ * } }>}
  * @throws {SimpleCampaignError} 404 khi không thấy / không có quyền xem
  */
-export async function getSimpleEditState({ authUser, campaignId }) {
+async function loadSimpleEditState({ authUser, campaignId }) {
   const context = getWorkspaceContext(authUser);
   const campaign = await campaignCrudService.getCampaignById({ authUser, campaignId });
   if (!campaign) throw notFound();
@@ -118,6 +121,7 @@ export async function getSimpleEditState({ authUser, campaignId }) {
         form: read.form,
         ownerId: Number(campaign.workspaceOwnerId) || context.workspaceOwnerId,
       });
+      carryOverLinkTracking(storedNodes, rebuilt.nodes);
       const comparison = isRoundTripEquivalent(
         { nodes: storedNodes, connections: campaign.connections },
         rebuilt,
@@ -145,7 +149,7 @@ export async function getSimpleEditState({ authUser, campaignId }) {
   }
 
   const editable = readOnlyReasons.every((item) => NON_BLOCKING_REASONS.has(item.code));
-  return {
+  const state = {
     editable,
     readOnlyReasons,
     running,
@@ -157,6 +161,12 @@ export async function getSimpleEditState({ authUser, campaignId }) {
     schedules,
     ...(diffs.length > 0 ? { diffs } : {}),
   };
+  return { state, storedNodes };
+}
+
+/** Trạng thái cho `GET /campaigns/:id/simple` — xem `loadSimpleEditState`. */
+export async function getSimpleEditState(input) {
+  return (await loadSimpleEditState(input)).state;
 }
 
 /**
@@ -166,7 +176,7 @@ export async function getSimpleEditState({ authUser, campaignId }) {
  * @returns {Promise<{ campaignId: string|number, campaignName: string, channel: string, nodesBefore: number|null, nodesAfter: number, recipientCountHint: number|null }>}
  */
 export async function updateSimpleCampaign({ authUser, campaignId, body, createdTemplates, now = new Date() }) {
-  const state = await getSimpleEditState({ authUser, campaignId });
+  const { state, storedNodes } = await loadSimpleEditState({ authUser, campaignId });
 
   if (state.running) {
     throw new SimpleCampaignError(409, 'CAMPAIGN_RUNNING', REASON_MESSAGES[CODE.RUNNING], { readOnlyReasons: state.readOnlyReasons });
@@ -193,6 +203,8 @@ export async function updateSimpleCampaign({ authUser, campaignId, body, created
     createdTemplates,
     now,
   });
+  // Cùng quy tắc với lúc so khớp ở loadSimpleEditState — không lặng lẽ bật lại theo dõi link người dùng đã tắt.
+  carryOverLinkTracking(storedNodes, draft.nodes);
 
   const result = await campaignCrudService.updateCampaign({
     authUser,

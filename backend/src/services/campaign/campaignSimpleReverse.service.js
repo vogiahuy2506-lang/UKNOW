@@ -563,4 +563,28 @@ export function isRoundTripEquivalent(stored, rebuilt) {
   return { ok: diffs.length === 0, diffs };
 }
 
-export default { readSimpleFormFromGraph, isRoundTripEquivalent, orderLinearPath, stripTerminalEndNodes, READ_ONLY_REASON_CODES };
+/**
+ * Giữ lựa chọn "tắt theo dõi link" khi dựng lại sơ đồ từ form (form không có ô này). Trình dựng mặc định BẬT, nên `false` là người
+ * dùng tự tắt — lưu ở tab Từng bước không được lặng lẽ bật lại. Chỉ chép khi MỌI tin của chuỗi đã lưu đều tắt: áp cho mọi tin của bản
+ * dựng lại (kể cả tin mới thêm). Chuỗi trộn bật/tắt thì không chép → so khớp lệch → chỉ xem (thêm/xoá tin sẽ làm lệch vị trí).
+ * Sửa `rebuiltNodes` tại chỗ. 20 chiến dịch nhóm Zalo prod 17/10/2026 chỉ vướng đúng điều này.
+ *
+ * @param {object[]} storedNodes
+ * @param {object[]} rebuiltNodes
+ */
+export function carryOverLinkTracking(storedNodes, rebuiltNodes) {
+  const sendOf = (list) => (Array.isArray(list) ? list : []).find((node) => SEND_SUBTYPES.has(getNodeSubtype(node)));
+  const storedSend = sendOf(storedNodes);
+  const rebuiltSend = sendOf(rebuiltNodes);
+  if (!storedSend || !rebuiltSend) return;
+  const field = STEPS_FIELD_BY_CHANNEL[CHANNEL_BY_SEND_SUBTYPE[getNodeSubtype(storedSend)]];
+  const storedSteps = nodeConfig(storedSend)[field];
+  const rebuiltSteps = rebuiltSend.config?.[field];
+  if (!Array.isArray(storedSteps) || storedSteps.length === 0 || !Array.isArray(rebuiltSteps)) return;
+  if (!storedSteps.every((step) => step?.enableLinkTracking === false)) return;
+  rebuiltSteps.forEach((step) => { step.enableLinkTracking = false; });
+}
+
+export default {
+  readSimpleFormFromGraph, isRoundTripEquivalent, orderLinearPath, stripTerminalEndNodes, carryOverLinkTracking, READ_ONLY_REASON_CODES,
+};
