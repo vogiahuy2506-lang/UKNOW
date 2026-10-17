@@ -22,6 +22,7 @@ import {
   sidebarShot, highlight, hideVolatileChrome, settle, contentShot, paddedShot,
 } from '../lib/shotHelpers.js';
 import { ensureDemoForm, ensureFormSubmissionsNodeDemo } from '../lib/shotFixtures.js';
+import { takeSettingsTab } from './chien-dich-tung-buoc.js';
 
 /**
  * Mở trình dựng của chiến dịch nháp đã có luồng mẫu.
@@ -256,6 +257,12 @@ export default {
         const panel = legend.locator('xpath=ancestor::div[contains(@class,"rounded")][.//h2 or .//h3][1]');
         return paddedShot(page, (await panel.count()) ? panel : legend.locator('xpath=ancestor::div[3]'), { pad: 12 });
       },
+    },
+    {
+      name: 'tab-thiet-lap',
+      caption: 'tab Thiết lập của một chiến dịch email, khoanh đỏ thẻ Tổng quan và danh sách khối theo thứ tự chạy',
+      localOnly: true,
+      take: takeSettingsTab,
     },
   ],
 };

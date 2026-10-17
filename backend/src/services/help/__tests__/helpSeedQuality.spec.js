@@ -577,6 +577,10 @@ const UI_LABELS_IN_ARTICLES = [
   // PLAN_TAO_CHIEN_DICH_TUNG_BUOC PR-4: bài `chien-dich-tung-buoc` tả trang tạo chiến dịch từng bước (vi.js `simpleCampaign.*`).
   ['chien-dich-tung-buoc', 'simpleCampaign.entry.step.title', 'Từng bước'],
   ['chien-dich-tung-buoc', 'simpleCampaign.entry.blocks.title', 'Thủ công'],
+  ['chien-dich-tung-buoc', 'campaignSettings.overview', 'Tổng quan'],
+  ['chien-dich-tung-buoc', 'campaignSettings.edit', 'Sửa'],
+  ['chien-dich-tung-buoc', 'campaignSettings.blocksTitle', 'Các khối theo thứ tự chạy'],
+  ['chien-dich-tung-buoc', 'campaignSettings.scheduleAction', 'Lên lịch'],
   ['chien-dich-tung-buoc', 'simpleCampaign.entry.title', 'Bạn muốn tạo chiến dịch theo cách nào?'],
   ['chien-dich-tung-buoc', 'simpleCampaign.steps.channel', 'Kênh gửi'],
   ['chien-dich-tung-buoc', 'simpleCampaign.steps.audience', 'Người nhận'],

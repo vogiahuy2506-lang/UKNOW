@@ -6,7 +6,7 @@
  * gửi/đặt lịch nên không tạo chiến dịch, không gửi tin. Vì vậy các ảnh màn kết quả (Đang gửi chiến dịch / Đã hẹn gửi /
  * chờ duyệt) KHÔNG có ô [ẢNH] trong bài.
  *
- * Hai ảnh cuối (mục "Mở lại và sửa chiến dịch": trang chi tiết hai tab Thiết lập | Sơ đồ khối, tab Thiết lập) cần chiến dịch ĐÃ LƯU nên tạo thật trong DB
+ * Ảnh cuối (mục "Sau khi tạo: xem và sửa ở tab Thiết lập") cần chiến dịch ĐÃ LƯU nên tạo thật trong DB
  * e2e qua API (`POST /campaigns/simple` và `POST /campaigns`, chỉ tạo NHÁP, không gọi run/schedule) rồi XOÁ ngay sau khi
  * chụp xong (`withCleanup`). Tài khoản e2e đã chạm trần số chiến dịch email do seed nên `raiseEmailCampaignCap` nâng trần tạm
  * (cột `users.max_email_campaigns`) rồi trả lại.
@@ -137,12 +137,58 @@ async function finish(page, stepId, { maxHeight = 0 } = {}) {
   return contentShot(page, stepCard(page, stepId), { pad: 20, maxHeight });
 }
 
+/**
+ * Tạo chiến dịch email nháp có chuỗi hai tin (qua API trên DB e2e), mở trang chi tiết (tab Thiết lập mở sẵn), khoanh đỏ thẻ
+ * Tổng quan và danh sách khối rồi chụp; xoá chiến dịch sau khi ảnh đã chụp. Dùng chung cho bài campaign-create.
+ */
+export async function takeSettingsTab(page) {
+  const restoreCap = await raiseEmailCampaignCap(2);
+  let campaignId = null;
+  try {
+    const senderId = await firstEmailSenderId(page);
+    const created = await api(page, 'POST', '/campaigns/simple', {
+      channel: 'email',
+      senderId,
+      audience: { type: 'manual', emails: ['an@example.com', 'binh@example.com'] },
+      content: { mode: 'custom', subject: 'Ưu đãi tháng 10 dành cho bạn', body: 'Chào bạn, tháng này shop có ưu đãi dành riêng cho khách quen. Bạn xem chi tiết nhé!' },
+      followUps: [{ delayValue: 2, delayUnit: 'days', content: { mode: 'custom', subject: 'Nhắc nhẹ: ưu đãi sắp hết hạn', body: 'Chào bạn, ưu đãi tháng 10 sắp kết thúc. Bạn đừng bỏ lỡ nhé!' } }],
+      campaignName: 'Ưu đãi tháng 10',
+    });
+    campaignId = created?.id ?? created?.campaign?.id ?? created?.campaignId;
+    if (!campaignId) throw new Error(`POST /campaigns/simple không trả id: ${JSON.stringify(created).slice(0, 200)}`);
+
+    // Khung cao để thấy cả Tổng quan lẫn các thẻ khối (thanh Log chạy chiến dịch dính đáy khung).
+    await page.setViewportSize({ width: 1440, height: 1070 });
+    // Chiến dịch đã có mở vào tab "Thiết lập" (`?tab=settings` là mặc định).
+    await page.goto(`/app/campaigns/${campaignId}`);
+    const panel = page.getByTestId('campaign-settings-panel');
+    await panel.waitFor({ state: 'visible', timeout: 30_000 });
+    await page.getByTestId('settings-node-card').first().waitFor({ state: 'visible', timeout: 30_000 });
+    await settle(page);
+    await hideVolatileChrome(page);
+    await highlight(page.getByTestId('settings-overview'));
+    const cards = page.getByTestId('settings-node-card');
+    for (let i = 0; i < await cards.count(); i += 1) await highlight(cards.nth(i));
+    await page.waitForTimeout(200);
+    const shot = await contentShot(page, page.getByTestId('campaign-view-tabs').locator('xpath=../..'), { pad: 20, maxHeight: 1070 });
+    return withCleanup(shot, async () => {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await api(page, 'DELETE', `/campaigns/${campaignId}`);
+      await restoreCap();
+    });
+  } catch (error) {
+    if (campaignId) await api(page, 'DELETE', `/campaigns/${campaignId}`).catch(() => {});
+    await restoreCap();
+    throw error;
+  }
+}
+
 export default {
   slug: 'chien-dich-tung-buoc',
   shots: [
     {
       name: 'hop-chon-cach-tao',
-      caption: 'hộp chọn cách tạo chiến dịch, khoanh đỏ thẻ "Từng bước" và thẻ "Sơ đồ khối" bên cạnh',
+      caption: 'hộp chọn cách tạo chiến dịch, khoanh đỏ thẻ "Từng bước" và thẻ "Thủ công" bên cạnh',
       localOnly: true,
       async take(page) {
         await page.goto('/app/campaigns');
@@ -244,94 +290,10 @@ export default {
       },
     },
     {
-      name: 'hai-tab-tung-buoc',
-      caption: 'trang chiến dịch đang mở tab "Thiết lập", khoanh đỏ thanh hai tab "Thiết lập" và "Sơ đồ khối"',
+      name: 'tab-thiet-lap',
+      caption: 'tab Thiết lập của một chiến dịch email, khoanh đỏ thẻ Tổng quan và danh sách khối theo thứ tự chạy',
       localOnly: true,
-      async take(page) {
-        const restoreCap = await raiseEmailCampaignCap(2);
-        let campaignId = null;
-        try {
-          const senderId = await firstEmailSenderId(page);
-          const created = await api(page, 'POST', '/campaigns/simple', {
-            channel: 'email',
-            senderId,
-            audience: { type: 'manual', emails: ['an@example.com', 'binh@example.com'] },
-            content: { mode: 'custom', subject: 'Ưu đãi tháng 10 dành cho bạn', body: 'Chào bạn, tháng này shop có ưu đãi dành riêng cho khách quen. Bạn xem chi tiết nhé!' },
-            campaignName: 'Ưu đãi tháng 10',
-          });
-          campaignId = created?.id ?? created?.campaign?.id ?? created?.campaignId;
-          if (!campaignId) throw new Error(`POST /campaigns/simple không trả id: ${JSON.stringify(created).slice(0, 200)}`);
-
-          // Từ 17/10/2026 (PLAN_THIET_LAP_VA_SO_DO) mở chiến dịch vào tab "Thiết lập" của trang chi tiết (`?tab=settings` là mặc định).
-          await page.goto(`/app/campaigns/${campaignId}`);
-          const tabs = page.getByTestId('campaign-view-tabs');
-          await tabs.waitFor({ state: 'visible', timeout: 30_000 });
-          await page.getByTestId('campaign-settings-panel').waitFor({ state: 'visible', timeout: 30_000 });
-          await page.getByTestId('settings-node-card').first().waitFor({ state: 'visible', timeout: 30_000 });
-          await settle(page);
-          await hideVolatileChrome(page);
-          await highlight(tabs);
-          await page.waitForTimeout(200);
-          const shot = await contentShot(page, tabs.locator('xpath=../..'), { pad: 20, maxHeight: 760 });
-          return withCleanup(shot, async () => {
-            await api(page, 'DELETE', `/campaigns/${campaignId}`);
-            await restoreCap();
-          });
-        } catch (error) {
-          if (campaignId) await api(page, 'DELETE', `/campaigns/${campaignId}`).catch(() => {});
-          await restoreCap();
-          throw error;
-        }
-      },
-    },
-    {
-      name: 'tab-tung-buoc-chi-xem',
-      caption: 'tab Thiết lập của chiến dịch có rẽ nhánh, khoanh đỏ thẻ khối "Gửi email" (ghi nhãn nhánh) và nút "Sửa"',
-      localOnly: true,
-      async take(page) {
-        const restoreCap = await raiseEmailCampaignCap(2);
-        let campaignId = null;
-        try {
-          const senderId = await firstEmailSenderId(page);
-          const templates = await api(page, 'GET', '/email-templates?limit=20');
-          const template = (templates.items || []).find((item) => item.isActive !== false);
-          if (!template) throw new Error('DB e2e chưa có mẫu email đang dùng.');
-          // Sơ đồ có khối "Rẽ nhánh": tab Thiết lập liệt kê mọi khối theo thứ tự chạy, khối sau điều kiện ghi nhãn nhánh.
-          const created = await api(page, 'POST', '/campaigns', {
-            campaignName: 'Chăm sóc khách có rẽ nhánh',
-            campaignType: 'email',
-            nodes: [
-              { tempId: 't1', nodeType: 'trigger', nodeSubtype: 'manual', nodeName: 'Bắt đầu', config: {} },
-              { tempId: 'c1', nodeType: 'condition', nodeSubtype: 'condition', nodeName: 'Rẽ nhánh', config: {} },
-              { tempId: 's1', nodeType: 'action', nodeSubtype: 'send_email', nodeName: 'Gửi email', config: { fromEmailId: senderId, emailSteps: [{ templateId: Number(template.id), delayValue: 0, delayUnit: 'days' }] } },
-            ],
-            connections: [
-              { sourceNodeId: 't1', targetNodeId: 'c1' },
-              { sourceNodeId: 'c1', targetNodeId: 's1', connectionLabel: 'Có email' },
-            ],
-          });
-          campaignId = created?.id ?? created?.campaign?.id ?? created?.campaignId;
-          if (!campaignId) throw new Error(`POST /campaigns không trả id: ${JSON.stringify(created).slice(0, 200)}`);
-
-          await page.goto(`/app/campaigns/${campaignId}`);
-          const mailCard = page.locator('[data-testid="settings-node-card"][data-node-type="send_email"]');
-          await mailCard.waitFor({ state: 'visible', timeout: 30_000 });
-          await settle(page);
-          await hideVolatileChrome(page);
-          await highlight(mailCard);
-          await highlight(mailCard.locator('[data-testid^="settings-edit-"]'));
-          await page.waitForTimeout(200);
-          const shot = await contentShot(page, page.getByTestId('campaign-view-tabs').locator('xpath=../..'), { pad: 20, maxHeight: 760 });
-          return withCleanup(shot, async () => {
-            await api(page, 'DELETE', `/campaigns/${campaignId}`);
-            await restoreCap();
-          });
-        } catch (error) {
-          if (campaignId) await api(page, 'DELETE', `/campaigns/${campaignId}`).catch(() => {});
-          await restoreCap();
-          throw error;
-        }
-      },
+      take: takeSettingsTab,
     },
   ],
 };
