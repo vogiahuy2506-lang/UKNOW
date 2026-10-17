@@ -1756,7 +1756,7 @@ export default {
         count: 'Bạn đang lưu {count} khách hàng. Số người nhận thật (chỉ tính khách còn nhận tin) sẽ hiện ở bước Xem lại.',
         empty: 'Bạn chưa lưu khách hàng nào nên chưa có ai để gửi.',
         add: 'Thêm khách hàng',
-        unknown: 'Hệ thống sẽ lấy các khách có thông tin liên lạc hợp lệ khi tạo chiến dịch.',
+        unknown: 'Mỗi lần gửi, hệ thống lấy các khách đang lưu có thông tin liên lạc hợp lệ, nên khách lưu thêm sau này cũng được nhận.',
       },
       landing: {
         hint: 'Chọn một hoặc nhiều trang. Mọi người đã để lại thông tin ở các trang này sẽ nhận tin.',

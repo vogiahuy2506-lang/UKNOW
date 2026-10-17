@@ -1751,7 +1751,7 @@ export default {
         count: 'You have {count} saved customers. The real number of recipients (only customers who still accept messages) is shown in the review step.',
         empty: 'You have not saved any customers yet, so there is nobody to send to.',
         add: 'Add customers',
-        unknown: 'We will pick the customers with valid contact details when the campaign is created.',
+        unknown: 'Each time the campaign sends, we pick your saved customers with valid contact details, so customers you add later are included too.',
       },
       landing: {
         hint: 'Choose one or more pages. Everyone who left their details on these pages will receive it.',
