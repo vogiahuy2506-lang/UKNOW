@@ -32,6 +32,8 @@ const SHEETS = [
   'quick-send',
   // Lô 10/10/2026 — đợt 2 ảnh hướng dẫn (trợ lý AI chiến dịch, hạn mức email).
   'email-account', 'tro-ly-ai-chien-dich',
+  // Lô 17/10/2026 — trang Tạo chiến dịch từng bước (PLAN_TAO_CHIEN_DICH_TUNG_BUOC PR-4).
+  'chien-dich-tung-buoc',
 ];
 
 // HELP_SHOT_ONLY=ten-anh-1,ten-anh-2 — chỉ chụp đúng những ảnh đó (tên trong shots/<slug>.js), bỏ qua phần còn lại của bài.
