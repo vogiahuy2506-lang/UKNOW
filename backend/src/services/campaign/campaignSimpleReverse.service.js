@@ -359,8 +359,21 @@ const IGNORED_CONFIG_KEYS = new Set(['emailSenderId']);
  */
 const RUNTIME_CONFIG_KEYS_BY_SUBTYPE = Object.freeze({
   select_zalo_account: Object.freeze(['zaloAccountId', 'zaloPoolMultiAccountEnabled', 'zaloPoolAccountIds']),
+  //  - `get_all_groups`: campaignRun nhánh `get_all_groups` — `zaloGroupIds` của khối này KHÔNG được đọc (bản chép thừa của compiler).
+  get_all_groups: Object.freeze(['zaloGroupAccountNodeId', 'zaloAccountId', 'zaloSelectedGroupIds', 'zaloGroupSelectionSnapshotLocked']),
+  //  - `send_zalo_group`: campaignRun nhánh `send_zalo_group` + campaignEstimate. `zaloSelectedGroupIds` của khối gửi không ai đọc.
+  send_zalo_group: Object.freeze([
+    'zaloAccountId', 'zaloGroupSource', 'zaloGroupIds', 'zaloGroupNodeId', 'zaloGroupField', 'zaloGroupSendMode',
+    'zaloGroupMessage', 'zaloGroupAttachments', 'zaloGroupTemplateSteps',
+  ]),
 });
-const IGNORED_STEP_KEYS = new Set(['message', 'emailSubject', 'emailBody', 'templateMappings']);
+
+/** Lúc chạy đọc dạng `config.x || 'mặc định'` → vắng / rỗng tương đương giá trị mặc định. */
+const RUNTIME_DEFAULTS_BY_SUBTYPE = Object.freeze({
+  send_zalo_group: Object.freeze({ zaloGroupField: 'groupId', zaloGroupSendMode: 'all' }),
+});
+// `id` của bước: trình dựng ghi, lúc chạy không chỗ nào đọc.
+const IGNORED_STEP_KEYS = new Set(['message', 'emailSubject', 'emailBody', 'templateMappings', 'id']);
 const STEP_FIELDS = new Set(Object.values(STEPS_FIELD_BY_CHANNEL));
 const NUMERIC_ID_KEYS = new Set(['fromEmailId', 'zaloAccountId']);
 
@@ -391,6 +404,8 @@ function normalizeStep(step, index) {
     out[key] = value;
   }
   out.templateId = toPositiveInt(out.templateId);
+  // Lúc chạy đọc `step.enableLinkTracking !== false` (campaignRun, campaignEmailSender) → `true` cũng như vắng; `false` vẫn so.
+  if (out.enableLinkTracking === true) delete out.enableLinkTracking;
   const delayValue = Number(out.delayValue ?? 0) || 0;
   out.delayValue = delayValue;
   if (index === 0 || delayValue === 0) {
@@ -450,10 +465,24 @@ function canonicalGraph(graph) {
         // `false` cũng như vắng: lúc chạy các cờ này được đọc bằng Boolean / isTruthyConfigFlag.
         config = Object.fromEntries(Object.entries(config).filter(([key, value]) => runtimeKeys.includes(key) && value !== false));
       }
-      if (selectIndex >= 0 && selectIndex < index && SEND_SUBTYPES.has(subtype)) {
-        // Khối chọn tài khoản đứng trước thì `zaloAccountId` của khối gửi không có tác dụng lúc chạy — xem readSimpleFormFromGraph.
-        const { zaloAccountId: _ignored, ...rest } = config;
-        config = rest;
+      config = { ...config };
+      for (const [key, fallback] of Object.entries(RUNTIME_DEFAULTS_BY_SUBTYPE[subtype] || {})) {
+        if (isEmptyValue(config[key])) config[key] = fallback;
+      }
+      if (subtype === 'send_zalo_group' && (asString(config.zaloGroupSource) || 'manual') !== 'manual') {
+        // Nguồn nhóm là khối phía trước → danh sách nhập tay không được đọc (collectEntriesFromSource).
+        delete config.zaloGroupIds;
+      }
+      const afterSelect = selectIndex >= 0 && selectIndex < index;
+      if (afterSelect && (SEND_SUBTYPES.has(subtype) || subtype === 'get_all_groups')) {
+        // Khối chọn tài khoản đứng trước thì `zaloAccountId` ở đây không có tác dụng lúc chạy (`selectedZaloAccount` thắng).
+        delete config.zaloAccountId;
+      }
+      if (afterSelect && subtype === 'get_all_groups') {
+        // Trỏ vào chính khối chọn tài khoản, để trống, hay trỏ vào khối không còn trên sơ đồ (`pickNodeItems` ra rỗng) đều rơi về
+        // `selectedZaloAccount` — cùng một tài khoản.
+        const ref = asString(config.zaloGroupAccountNodeId);
+        if (!ref || ref === nodeId(path.ordered[selectIndex]) || !idToIndex.has(ref)) delete config.zaloGroupAccountNodeId;
       }
       return {
         subtype: subtype === 'manual_trigger' ? 'manual' : subtype,

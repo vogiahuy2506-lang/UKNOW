@@ -233,6 +233,90 @@ describe('dữ liệu prod 17/10/2026: cạnh `custom` của trình dựng + kh�
   });
 });
 
+describe('nhóm Zalo dựng tay (prod 17/10/2026): chỉ so trường lúc chạy thật đọc', () => {
+  const groupsOf = (graph) => graph.nodes.find((node) => node.nodeSubtype === 'get_all_groups');
+  const selectOf = (graph) => graph.nodes.find((node) => node.nodeSubtype === 'select_zalo_account');
+
+  /**
+   * Sơ đồ nhóm Zalo kiểu trình dựng lưu: không có bản chép danh sách nhóm thừa, túi trường mặc định, cờ / bước dạng mặc định.
+   * Mặc định một tin (compiler ghi `zaloGroupSendMode: 'all'` → bản lưu để rỗng tương đương); chuỗi tin thì compiler ghi 'schedule'.
+   */
+  async function builderGroupGraph(body = groupBody()) {
+    const chain = Array.isArray(body.followUps) && body.followUps.length > 0;
+    const stored = persist(await build(body));
+    const groups = groupsOf(stored);
+    const send = sendOf(stored);
+    delete groups.config.zaloGroupIds;
+    delete send.config.zaloGroupIds;
+    delete send.config.zaloSelectedGroupIds;
+    Object.assign(groups.config, {
+      zaloAccountId: 77, // khối chọn tài khoản đứng trước thắng — lúc chạy không đọc
+
+      zaloGroupSelectionSnapshotLocked: false,
+      bccEnabled: false,
+      conditions: [{ field: '', operator: 'equals', value: '' }],
+      sheetName: 'Trang tính1',
+      saveMessageLog: true,
+      zaloGroupSendMode: 'all',
+    });
+    Object.assign(send.config, {
+      zaloAccountId: '',
+      zaloGroupField: '',
+      ...(chain ? {} : { zaloGroupSendMode: '' }),
+      bccEnabled: false,
+      hasExtraCondition: false,
+      landingLeadsLimit: 500,
+      zaloSelectedGroupIds: [],
+    });
+    send.config.zaloGroupTemplateSteps.forEach((step, index) => {
+      step.id = `step_${index}`;
+      step.enableLinkTracking = true;
+    });
+    return stored;
+  }
+
+  async function roundTripOf(stored) {
+    const read = readSimpleFormFromGraph(stored.nodes, stored.connections);
+    expect(read.reasons).toEqual([]);
+    const rebuilt = await build({ channel: read.channel, ...read.form });
+    return isRoundTripEquivalent(stored, rebuilt);
+  }
+
+  it('bản chép thừa danh sách nhóm, túi trường mặc định, mặc định lúc chạy, `id` bước, theo dõi link = true → khứ hồi khớp', async () => {
+    expect(await roundTripOf(await builderGroupGraph())).toEqual({ ok: true, diffs: [] });
+    expect(await roundTripOf(await builderGroupGraph(groupBody({ followUps: [fu(1, 'days', 32)] })))).toEqual({ ok: true, diffs: [] });
+  });
+
+  it('tham chiếu tài khoản của khối lấy nhóm: rỗng / trỏ khối chọn / trỏ khối không còn trên sơ đồ → khớp; trỏ khối khác trên đường → lệch', async () => {
+    for (const ref of ['', 'select', '424242']) {
+      const stored = await builderGroupGraph();
+      groupsOf(stored).config.zaloGroupAccountNodeId = ref === 'select' ? selectOf(stored).id : ref;
+      expect(await roundTripOf(stored)).toEqual({ ok: true, diffs: [] });
+    }
+    const stored = await builderGroupGraph();
+    groupsOf(stored).config.zaloGroupAccountNodeId = stored.nodes[0].id;
+    const result = await roundTripOf(stored);
+    expect(result.ok).toBe(false);
+    expect(result.diffs.join('\n')).toContain('zaloGroupAccountNodeId');
+  });
+
+  it('cài đặt thật vẫn chặn: tắt theo dõi link, chế độ gửi khác "all", khoá danh sách nhóm, nguồn nhập tay với danh sách khác', async () => {
+    const cases = [
+      ['enableLinkTracking', (g) => { sendOf(g).config.zaloGroupTemplateSteps[0].enableLinkTracking = false; }],
+      ['zaloGroupSendMode', (g) => { sendOf(g).config.zaloGroupSendMode = 'schedule'; }],
+      ['zaloGroupSelectionSnapshotLocked', (g) => { groupsOf(g).config.zaloGroupSelectionSnapshotLocked = true; }],
+      ['zaloGroupSource', (g) => { Object.assign(sendOf(g).config, { zaloGroupSource: 'manual', zaloGroupIds: '999' }); }],
+    ];
+    for (const [key, mutate] of cases) {
+      const stored = await builderGroupGraph();
+      mutate(stored);
+      const result = await roundTripOf(stored);
+      expect(result.ok).toBe(false);
+      expect(result.diffs.join('\n')).toContain(key);
+    }
+  });
+});
+
 describe('readSimpleFormFromGraph — lý do không đọc ngược được', () => {
   it('có khối nâng cao (Rẽ nhánh) → not_simple, nêu tên khối + subtype', async () => {
     const stored = persist(await build(emailBody()));
@@ -428,11 +512,21 @@ describe('isRoundTripEquivalent — mỗi trường form điều khiển lệch 
     expect(result.ok).toBe(false);
   });
 
-  it('nhóm Zalo lệch (trên khối nguồn hoặc khối gửi) → không editable', async () => {
+  it('nhóm Zalo lệch ở khối lấy nhóm (`zaloSelectedGroupIds` — chỗ lúc chạy đọc) → không editable', async () => {
     const onSource = await pair(zaloGroupBody(), ({ stored }) => { stored.nodes.find((n) => n.nodeSubtype === 'get_all_groups').config.zaloSelectedGroupIds = ['111']; });
     expect(onSource.ok).toBe(false);
-    const onSend = await pair(zaloGroupBody(), ({ stored }) => { sendOf(stored).config.zaloGroupIds = ['999']; });
-    expect(onSend.ok).toBe(false);
+  });
+
+  it('danh sách nhóm ở khối gửi: nguồn là khối phía trước thì lúc chạy không đọc → bỏ qua; nguồn nhập tay thì lệch → không editable', async () => {
+    const fromNode = await pair(zaloGroupBody(), ({ stored }) => { sendOf(stored).config.zaloGroupIds = ['999']; });
+    expect(fromNode).toEqual({ ok: true, diffs: [] });
+    const manual = await pair(zaloGroupBody(), ({ stored, rebuilt }) => {
+      sendOf(stored).config.zaloGroupSource = 'manual';
+      sendOf(rebuilt).config.zaloGroupSource = 'manual';
+      sendOf(stored).config.zaloGroupIds = ['999'];
+    });
+    expect(manual.ok).toBe(false);
+    expect(manual.diffs.join('\n')).toContain('zaloGroupIds');
   });
 
   it('sheet: URL / tên tab / cột đã chọn lệch → không editable', async () => {

@@ -8,6 +8,7 @@
  *    (`buildSimpleCreateDraft`) rồi ghi đè nodes + connections bằng `updateCampaign` (giữ id / trạng thái / lịch / lịch sử chạy).
  */
 import campaignCrudService from './campaignCrud.service.js';
+import campaignFlowService from './campaignFlow.service.js';
 import campaignCrudRepository from '../../repositories/campaign/campaignCrud.repository.js';
 import campaignScheduleRepository from '../../repositories/campaign/campaignSchedule.repository.js';
 import {
@@ -37,6 +38,24 @@ const REASON_MESSAGES = Object.freeze({
 const NON_BLOCKING_REASONS = new Set([CODE.MULTIPLE_SCHEDULES]);
 
 const notFound = () => new SimpleCampaignError(404, 'CAMPAIGN_NOT_FOUND', 'Không tìm thấy chiến dịch');
+
+/**
+ * Tham chiếu khối trong config (`zaloGroupNodeId`, `zaloGroupAccountNodeId`, `recipientNodeId`…) của chiến dịch dựng tay có thể là
+ * mã khối trong `flow_json` của trình dựng; lúc chạy campaignRun đổi sang mã DB bằng đúng `buildFlowNodeIdMap` +
+ * `normalizeNodeReferenceConfig`. Đọc ngược + so khớp phải thấy cùng tham chiếu như lúc chạy (15 chiến dịch nhóm Zalo prod 17/10/2026).
+ */
+function resolveStoredNodeReferences(campaign) {
+  const nodes = Array.isArray(campaign.nodes) ? campaign.nodes : [];
+  const idMap = campaignFlowService.buildFlowNodeIdMap(
+    campaign.flowJson,
+    nodes.map((node) => ({ id: node.id, node_subtype: node.nodeSubtype, node_name: node.nodeName })),
+  );
+  const resolveNodeId = (id) => {
+    const key = String(id ?? '').trim();
+    return key ? (idMap.get(key) || key) : '';
+  };
+  return nodes.map((node) => ({ ...node, config: campaignFlowService.normalizeNodeReferenceConfig(node.config || {}, resolveNodeId) }));
+}
 
 /**
  * Dựng lại sơ đồ từ form đã đọc ngược, bằng chính pipeline tạo (normalize → compile → người nhận nhập sẵn), KHÔNG ghi DB.
@@ -83,7 +102,8 @@ export async function getSimpleEditState({ authUser, campaignId }) {
     enabled: row.enabled === true,
   }));
 
-  const read = readSimpleFormFromGraph(campaign.nodes, campaign.connections);
+  const storedNodes = resolveStoredNodeReferences(campaign);
+  const read = readSimpleFormFromGraph(storedNodes, campaign.connections);
   const readOnlyReasons = [...read.reasons];
   let diffs = [];
 
@@ -98,7 +118,7 @@ export async function getSimpleEditState({ authUser, campaignId }) {
         ownerId: Number(campaign.workspaceOwnerId) || context.workspaceOwnerId,
       });
       const comparison = isRoundTripEquivalent(
-        { nodes: campaign.nodes, connections: campaign.connections },
+        { nodes: storedNodes, connections: campaign.connections },
         rebuilt,
       );
       if (!comparison.ok) {
