@@ -6,7 +6,7 @@ import SimpleCampaignWizard from '../../features/campaigns/simple/SimpleCampaign
 import useSimpleCampaignWizard from '../../features/campaigns/simple/useSimpleCampaignWizard';
 
 /**
- * `/app/campaigns/simple` — tạo chiến dịch bằng cách trả lời vài câu hỏi (thay cho trình dựng sơ đồ khối).
+ * `/app/campaigns/simple` — tạo chiến dịch (toàn màn hình, không header toàn cục) bằng cách trả lời vài câu hỏi (thay cho trình dựng sơ đồ khối).
  * Trang chỉ có tiêu đề; toàn bộ logic ở `features/campaigns/simple/`. Xem PLAN_TAO_CHIEN_DICH_TUNG_BUOC_2026-10-14.
  * Mở/sửa một chiến dịch đã có: `CampaignSimpleEdit` (`/app/campaigns/:id/simple`).
  */
@@ -15,7 +15,7 @@ const SimpleCampaign = () => {
   const navigate = useNavigate();
   const wizard = useSimpleCampaignWizard();
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6">
+    <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
       <PageHeader
         icon={HiOutlineSparkles}
         title={t('simpleCampaign.title')}

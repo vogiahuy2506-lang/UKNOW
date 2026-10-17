@@ -1698,9 +1698,9 @@ export default {
         desc: 'Answer a few questions in plain words. No technical knowledge needed.',
       },
       blocks: {
-        title: 'Block diagram',
+        title: 'Manual',
         badge: 'Advanced',
-        desc: 'Connect blocks yourself to build a multi-step flow.',
+        desc: 'Set everything up yourself: see every setting on the Setup tab, drag and drop blocks on the Block diagram tab.',
       },
     },
     channel: {

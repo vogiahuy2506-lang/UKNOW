@@ -1703,9 +1703,9 @@ export default {
         desc: 'Trả lời vài câu hỏi bằng lời thường. Không cần biết kỹ thuật.',
       },
       blocks: {
-        title: 'Sơ đồ khối',
+        title: 'Thủ công',
         badge: 'Nâng cao',
-        desc: 'Tự ghép các khối để tạo quy trình nhiều bước.',
+        desc: 'Tự thiết lập chi tiết: xem mọi cài đặt ở tab Thiết lập, kéo thả các khối ở tab Sơ đồ khối.',
       },
     },
     channel: {

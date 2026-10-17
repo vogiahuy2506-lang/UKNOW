@@ -469,7 +469,7 @@ describe('Campaigns — Trang gộp Quản lý & Vận hành chiến dịch', ()
     await screen.findByPlaceholderText(viTranslations.campaigns.campaignNamePlaceholder);
     expect(screen.queryByRole('button', { name: 'Telegram nhóm' })).not.toBeInTheDocument();
   });
-  // PLAN_TAO_CHIEN_DICH_TUNG_BUOC PR-2: nút Tạo mở hộp chọn cách tạo; "Sơ đồ khối" mới là modal chọn loại cũ.
+  // PLAN_TAO_CHIEN_DICH_TUNG_BUOC PR-2: nút Tạo mở hộp chọn cách tạo; "Thủ công" mới là modal chọn loại cũ.
   describe('lối vào: hộp chọn cách tạo', () => {
     const renderWithRoutes = (entry = '/app/campaigns') => render(
       <MemoryRouter initialEntries={[entry]}>
@@ -480,12 +480,13 @@ describe('Campaigns — Trang gộp Quản lý & Vận hành chiến dịch', ()
       </MemoryRouter>
     );
 
-    it('bấm Tạo mở hộp 2 thẻ (Từng bước - Dễ, Sơ đồ khối - Nâng cao), CHƯA mở modal chọn loại', async () => {
+    it('bấm Tạo mở hộp 2 thẻ (Từng bước - Dễ, Thủ công - Nâng cao), CHƯA mở modal chọn loại', async () => {
       renderWithRoutes();
       await screen.findByText('Chiến dịch Chào thu');
       fireEvent.click(screen.getByRole('button', { name: 'Tạo' }));
       const modal = await screen.findByTestId('create-method-modal');
       expect(within(modal).getByTestId('create-method-step')).toHaveTextContent('Dễ — khuyên dùng');
+      expect(within(modal).getByTestId('create-method-blocks')).toHaveTextContent('Thủ công');
       expect(within(modal).getByTestId('create-method-blocks')).toHaveTextContent('Nâng cao');
       expect(screen.queryByPlaceholderText(viTranslations.campaigns.campaignNamePlaceholder)).not.toBeInTheDocument();
     });
@@ -498,7 +499,7 @@ describe('Campaigns — Trang gộp Quản lý & Vận hành chiến dịch', ()
       expect(await screen.findByText('TRANG-TUNG-BUOC')).toBeInTheDocument();
     });
 
-    it('thẻ "Sơ đồ khối" đóng hộp và mở đúng modal chọn loại cũ', async () => {
+    it('thẻ "Thủ công" đóng hộp và mở đúng modal chọn loại cũ', async () => {
       renderWithRoutes();
       await screen.findByText('Chiến dịch Chào thu');
       fireEvent.click(screen.getByRole('button', { name: 'Tạo' }));

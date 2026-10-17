@@ -6,7 +6,7 @@ import SimpleChoiceCard from './SimpleChoiceCard';
 
 /**
  * Hộp "Bạn muốn tạo chiến dịch theo cách nào?" mở từ nút "Tạo" ở trang Chiến dịch (header + trạng thái rỗng).
- * Hai thẻ lớn: "Từng bước" (Dễ — khuyên dùng) → trang `/app/campaigns/simple`; "Sơ đồ khối" (Nâng cao) → modal chọn loại hiện có,
+ * Hai thẻ lớn: "Từng bước" (Dễ — khuyên dùng) → trang `/app/campaigns/simple`; "Thủ công" (Nâng cao) → modal chọn loại hiện có,
  * phía sau KHÔNG đổi.
  *
  * @param {object} props

@@ -143,9 +143,9 @@ const MainLayout = ({ children = null }) => {
   // không ghi nhớ scroll của <main>. Từ commit đầu (e24f6725) route đã nằm dưới `/app` nhưng phép
   // so vẫn là `startsWith('/campaigns')` → cờ này chưa bao giờ true; sửa 13/09/2026 (dọn nợ sau
   // PLAN_GOP_TRANG_CHIEN_DICH_MOT_MUC_2026-09-12).
-  const isFullLayout =
-    location.pathname.startsWith('/app/campaigns/') &&
-    (location.pathname.endsWith('/new') || location.pathname.includes('/builder'));
+  // 17/10/2026: MỌI đường dưới `/app/campaigns/` (wizard /simple, /new, trang chi tiết /:id, /:id/builder, /:id/simple) là toàn màn hình:
+  // ẩn header + thu menu trái (xem effect bên dưới). Danh sách `/app/campaigns` (kể cả `?tab=`) vẫn là trang thường.
+  const isFullLayout = /^\/app\/campaigns\/.+/.test(location.pathname);
 
   const isInboxPage = location.pathname.includes('/settings/inbox');
   const isChatbotStudio = location.pathname.includes('/chatbot-studio');
@@ -207,6 +207,23 @@ const MainLayout = ({ children = null }) => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ chạy khi modal mở/đóng, không theo sidebarOpen
   }, [isTemplateEditorOpen]);
+
+  // Trang chiến dịch toàn màn hình cũng thu menu trái; rời hết các trang đó mới trả về trạng thái trước khi vào.
+  // Đi giữa hai trang toàn màn hình thì isFullLayout giữ true nên effect không chạy lại → không mở menu giữa chừng.
+  // Người dùng tự bấm mở menu khi đang ở trang toàn màn hình: effect không phụ thuộc sidebarOpen nên không ép thu lại.
+  const sidebarOpenBeforeFullLayoutRef = useRef(null);
+  useEffect(() => {
+    if (isFullLayout) {
+      if (sidebarOpenBeforeFullLayoutRef.current === null) {
+        sidebarOpenBeforeFullLayoutRef.current = sidebarOpen;
+        setSidebarOpen(false);
+      }
+    } else if (sidebarOpenBeforeFullLayoutRef.current !== null) {
+      if (sidebarOpenBeforeFullLayoutRef.current) setSidebarOpen(true);
+      sidebarOpenBeforeFullLayoutRef.current = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ chạy khi vào/ra trang toàn màn hình, không theo sidebarOpen
+  }, [isFullLayout]);
 
   // Các trang soạn tràn màn: ẩn Header toàn cục, kéo topbar lên sát đỉnh
   // - Trình dựng chiến dịch (/app/campaigns/new, /app/campaigns/:id/builder)
