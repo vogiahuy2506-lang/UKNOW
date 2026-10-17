@@ -34,6 +34,7 @@ import { extractSpreadsheetId } from '../../utils/googleSheetWorksheets.util.js'
 import { getNodeSubtype } from '../../utils/nodeSubtype.util.js';
 import { normalizeVietnamesePhone, isValidVietnamesePhone } from '../../utils/vietnamesePhone.util.js';
 import { getWorkspaceContext } from '../../utils/workspaceContext.util.js';
+import { checkUserResourceLimit } from '../../utils/userResourceLimit.util.js';
 
 /** Ba kênh của trình từng bước (v1). Telegram/WhatsApp ngoài phạm vi. */
 export const SIMPLE_CHANNELS = Object.freeze(['email', 'zalo', 'zalo_group']);
@@ -527,6 +528,40 @@ function describeAudience(input, view) {
   return recipients.sourceLabel || null;
 }
 
+/** Hạn mức chiến dịch theo loại — cùng bảng với `campaignController.create` (campaign.controller.js). */
+const CAMPAIGN_TYPE_RESOURCE_KEY = Object.freeze({
+  email: 'emailCampaigns',
+  zalo: 'zaloCampaigns',
+  zalo_group: 'zaloGroupCampaigns',
+});
+
+/**
+ * Hạn mức tạo chiến dịch của gói (tổng + theo loại), kiểm Y HỆT `campaignController.create`. Hết hạn mức → issue chặn để màn
+ * Xem lại báo TRƯỚC khi bấm gửi (review 17/10: trước đó preview báo "sẵn sàng" rồi bấm gửi mới nhận 400 "đã đạt giới hạn").
+ *
+ * @param {object} authUser
+ * @param {'email'|'zalo'|'zalo_group'} channel
+ * @returns {Promise<object|null>} issue hoặc null khi còn hạn mức
+ */
+async function findCampaignLimitIssue(authUser, channel) {
+  const { workspaceOwnerId, roleCode } = getWorkspaceContext(authUser);
+  for (const resourceKey of ['campaigns', CAMPAIGN_TYPE_RESOURCE_KEY[channel]]) {
+    const check = await checkUserResourceLimit({ userId: workspaceOwnerId, roleCode, resourceKey });
+    if (!check.allowed) {
+      return {
+        code: 'campaign_limit_reached',
+        apiCode: 'CAMPAIGN_LIMIT_REACHED',
+        nodeId: null,
+        stepIndex: null,
+        severity: 'blocking',
+        messageKey: 'simpleCampaign.issues.campaign_limit_reached',
+        message: check.message || 'Tài khoản đã đạt giới hạn số chiến dịch của gói.',
+      };
+    }
+  }
+  return null;
+}
+
 /**
  * `POST /campaigns/simple/preview` — bước 1–5, KHÔNG ghi DB (không tạo mẫu tin, không tạo chiến dịch).
  * Lỗi dữ liệu (thiếu tài khoản, mẫu không tìm thấy, Sheet không đọc được…) trả về trong `issues`, không phải 500.
@@ -546,7 +581,9 @@ export async function previewSimpleCampaign({ body, authUser, now = new Date() }
   const { input, view, issues } = await buildSimpleDraft({ body, authUser, includeEstimate: true, now });
   const estimate = view.estimate || null;
 
-  const issuesOut = [...issues];
+  const limitIssue = await findCampaignLimitIssue(authUser, input.channel);
+  const blockingIssues = limitIssue ? [...issues, limitIssue] : issues;
+  const issuesOut = [...blockingIssues];
   const unknownCount = (estimate?.warnings || []).some((warning) => warning.code === 'recipient_count_unknown');
   if (unknownCount) {
     issuesOut.push({
@@ -566,7 +603,7 @@ export async function previewSimpleCampaign({ body, authUser, now = new Date() }
   }
 
   return {
-    readyToCreate: issues.length === 0,
+    readyToCreate: blockingIssues.length === 0,
     issues: issuesOut,
     estimate,
     recipientCount: recipientCount ?? null,

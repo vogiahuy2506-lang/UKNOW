@@ -12,6 +12,7 @@ const mockApplyLandingAudienceResolution = jest.fn();
 const mockGetFormIdsOwnedBy = jest.fn();
 const mockGetCustomerContactValues = jest.fn();
 const mockFillReadSheetFirstTabNames = jest.fn();
+const mockCheckUserResourceLimit = jest.fn();
 
 jest.unstable_mockModule('../../ai/aiCampaignDraft.service.js', () => ({
   default: {
@@ -36,6 +37,10 @@ jest.unstable_mockModule('../../../repositories/customer/customerRead.repository
 }));
 jest.unstable_mockModule('../readSheetAutoName.service.js', () => ({
   fillReadSheetFirstTabNames: mockFillReadSheetFirstTabNames,
+}));
+
+jest.unstable_mockModule('../../../utils/userResourceLimit.util.js', () => ({
+  checkUserResourceLimit: mockCheckUserResourceLimit,
 }));
 
 const service = await import('../campaignSimple.service.js');
@@ -99,6 +104,7 @@ beforeEach(() => {
   mockApplyLandingAudienceResolution.mockImplementation(async (intent) => intent);
   mockGetFormIdsOwnedBy.mockImplementation(async (_owner, ids) => ids);
   mockGetCustomerContactValues.mockResolvedValue([]);
+  mockCheckUserResourceLimit.mockResolvedValue({ allowed: true, limit: null, currentCount: 0, message: null });
   mockFillReadSheetFirstTabNames.mockResolvedValue(undefined);
   mockAutoCreateEmailTemplates.mockResolvedValue(undefined);
   mockAutoCreateZaloTemplates.mockResolvedValue(undefined);
@@ -506,6 +512,30 @@ describe('chốt chặn theo gói', () => {
 });
 
 describe('previewSimpleCampaign — không ghi DB', () => {
+  it('hết hạn mức chiến dịch của gói → readyToCreate=false + issue chặn campaign_limit_reached (báo TRƯỚC khi bấm gửi)', async () => {
+    mockCheckUserResourceLimit.mockImplementation(async ({ resourceKey }) => (resourceKey === 'campaigns'
+      ? { allowed: false, limit: 5, currentCount: 5, message: 'Tài khoản đã đạt giới hạn số chiến dịch (5).' }
+      : { allowed: true, limit: null, currentCount: 0, message: null }));
+    const result = await previewSimpleCampaign({ body: emailBody(), authUser: user });
+    expect(mockCheckUserResourceLimit).toHaveBeenCalledWith({ userId: 7, roleCode: 'user', resourceKey: 'campaigns' });
+    expect(result.readyToCreate).toBe(false);
+    expect(result.issues).toEqual([expect.objectContaining({
+      code: 'campaign_limit_reached', severity: 'blocking', message: 'Tài khoản đã đạt giới hạn số chiến dịch (5).',
+    })]);
+  });
+
+  it('hạn mức THEO LOẠI: Zalo nhóm kiểm zaloGroupCampaigns, email kiểm emailCampaigns (cùng bảng campaignController.create)', async () => {
+    mockCheckUserResourceLimit.mockImplementation(async ({ resourceKey }) => (resourceKey === 'zaloGroupCampaigns'
+      ? { allowed: false, limit: 2, currentCount: 2, message: 'Đã đạt giới hạn chiến dịch Zalo nhóm (2).' }
+      : { allowed: true, limit: null, currentCount: 0, message: null }));
+    const group = await previewSimpleCampaign({ body: groupBody(), authUser: user });
+    expect(group.readyToCreate).toBe(false);
+    expect(group.issues.map((issue) => issue.code)).toEqual(['campaign_limit_reached']);
+    const email = await previewSimpleCampaign({ body: emailBody(), authUser: user });
+    expect(email.readyToCreate).toBe(true);
+    expect(mockCheckUserResourceLimit).toHaveBeenCalledWith(expect.objectContaining({ resourceKey: 'emailCampaigns' }));
+  });
+
   it('KHÔNG tạo mẫu tin (autoCreate*) dù là chữ tự soạn, KHÔNG dọn mẫu', async () => {
     await previewSimpleCampaign({ body: emailBody(), authUser: user });
     await previewSimpleCampaign({ body: zaloBody(), authUser: user });
