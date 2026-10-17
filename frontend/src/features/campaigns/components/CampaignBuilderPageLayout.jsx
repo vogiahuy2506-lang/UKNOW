@@ -177,6 +177,7 @@ const CampaignBuilderPageLayout = ({
   onOpenSchedule,
   canUseServerRunActions = false,
   serverRunActionsDisabledHint = '',
+  viewTabs = null,
   onOpenShare,
   canShare = false,
   onOpenDuplicate,
@@ -333,6 +334,12 @@ const CampaignBuilderPageLayout = ({
         />
       </div>
     </div>
+
+    {viewTabs && (
+      <div className="bg-white dark:bg-dk-surface border-b border-gray-200 dark:border-dk-border px-2.5 sm:px-4 py-2" data-testid="campaign-builder-view-tabs">
+        {viewTabs}
+      </div>
+    )}
 
     <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden flex-col">
       <div className="flex flex-1 min-h-0 min-w-0 h-full overflow-hidden">

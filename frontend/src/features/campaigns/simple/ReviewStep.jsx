@@ -39,9 +39,12 @@ export default function ReviewStep({ wizard, t, locale }) {
   const data = preview.status === 'ready' ? preview.data : null;
   // Server gắn `severity` cho từng issue ('blocking' | 'warning'); issue không có nhãn coi là chặn khi chiến dịch chưa gửi được.
   const isWarning = (issue) => typeof issue === 'object' && issue?.severity === 'warning';
-  const blockingIssues = data && !data.readyToCreate ? data.issues.filter((issue) => !isWarning(issue)) : [];
+  // Chế độ sửa: "đã đủ chỗ tạo thêm chiến dịch" không áp cho việc sửa chiến dịch đã có nên không hiện như lỗi chặn.
+  const isLimitIssue = (issue) => wizard.isEdit && issue?.code === 'campaign_limit_reached';
+  const blockingIssues = data && !data.readyToCreate ? data.issues.filter((issue) => !isWarning(issue) && !isLimitIssue(issue)) : [];
+  const excusedOnly = Boolean(data) && !data.readyToCreate && blockingIssues.length === 0 && data.issues.some(isLimitIssue);
   const warnings = data ? data.issues.filter((issue) => (data.readyToCreate ? true : isWarning(issue))) : [];
-  const summary = buildReviewSummary({ state, preview: data, t, locale });
+  const summary = buildReviewSummary({ state, preview: data, t, locale, manualWhen: wizard.isEdit });
   // Hết hạn mức tạo chiến dịch: "quay lại sửa" không giải quyết được — gợi ý xoá bớt chiến dịch cũ hoặc nâng cấp gói.
   const limitReached = blockingIssues.some((issue) => issue?.code === 'campaign_limit_reached');
 
@@ -74,7 +77,7 @@ export default function ReviewStep({ wizard, t, locale }) {
           </div>
         )}
 
-        {data && !data.readyToCreate && (
+        {data && !data.readyToCreate && !excusedOnly && (
           <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200" role="alert" data-testid="simple-preview-blocked">
             <p className="font-semibold">{t('simpleCampaign.review.cannotSend')}</p>
             <ul className="mt-1 list-disc space-y-1 pl-5">
@@ -138,7 +141,7 @@ export default function ReviewStep({ wizard, t, locale }) {
               {submitState.suggestions.map((suggestion, index) => <li key={index}>{suggestion}</li>)}
             </ul>
           )}
-          {(submitState.stage === 'run' || submitState.stage === 'schedule') && (
+          {!wizard.isEdit && (submitState.stage === 'run' || submitState.stage === 'schedule') && (
             <p className="mt-2 text-xs">{t(submitState.stage === 'run' ? 'simpleCampaign.review.runHint' : 'simpleCampaign.review.scheduleHint')}</p>
           )}
         </div>

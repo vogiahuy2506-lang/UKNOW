@@ -39,7 +39,7 @@ export const formatPollInterval = (minutes, t) => {
     : t('simpleCampaign.when.continuous.aboutMinutes', { n: total });
 };
 
-export const describeWhen = ({ schedule, t }) => {
+export const describeWhen = ({ schedule, t, manual = false }) => {
   switch (schedule?.type) {
     case 'scheduled':
       return t('simpleCampaign.review.when.scheduled', { time: formatPickedTime(schedule.time), date: formatPickedDate(schedule.date) });
@@ -54,7 +54,8 @@ export const describeWhen = ({ schedule, t }) => {
       return t(schedule.frequency === 'monthly' ? 'simpleCampaign.review.when.recurringMonthly' : 'simpleCampaign.review.when.recurringDaily', { time });
     }
     default:
-      return t('simpleCampaign.review.when.now');
+      // Chế độ sửa: "không lịch" = chạy tay (không có nghĩa là sẽ gửi ngay).
+      return t(manual ? 'simpleCampaign.review.when.manual' : 'simpleCampaign.review.when.now');
   }
 };
 
@@ -89,9 +90,10 @@ const resolveRecipientCount = (state, preview) => {
  * @param {{ recipientCount: number|null }|null} args.preview phản hồi preview đã chuẩn hoá (null khi chưa có)
  * @param {(key: string, params?: object) => string} args.t
  * @param {string} args.locale
+ * @param {boolean} [args.manualWhen] chế độ sửa: không lịch = chạy tay
  * @returns {string}
  */
-export const buildReviewSummary = ({ state, preview, t, locale }) => {
+export const buildReviewSummary = ({ state, preview, t, locale, manualWhen = false }) => {
   const { channel, sender, audience, content, schedule } = state;
 
   let names = '';
@@ -125,6 +127,6 @@ export const buildReviewSummary = ({ state, preview, t, locale }) => {
     sender: sender?.label || '',
     audience: audienceText,
     content: contentText,
-    when: describeWhen({ schedule, t }),
+    when: describeWhen({ schedule, t, manual: manualWhen }),
   });
 };

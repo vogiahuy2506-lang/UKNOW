@@ -4,18 +4,50 @@ import { describeWhen } from './simpleCampaign.summary';
 
 const PRIMARY_LINK =
   'inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-5 py-3 text-sm font-bold text-white shadow-md shadow-orange-500/20 hover:from-orange-600 hover:to-amber-600';
+const SECONDARY_BUTTON =
+  'inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-dk-border dark:bg-dk-surface dark:text-dk-text dark:hover:bg-dk-raised';
 const SECONDARY_LINK =
   'inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-dk-border dark:bg-dk-surface dark:text-dk-text dark:hover:bg-dk-raised';
+
+/**
+ * Nút thứ hai của màn kết quả. Lúc TẠO: "Xem chiến dịch" → `/app/campaigns/:id` (mở vào tab Từng bước). Lúc SỬA đang đứng
+ * ngay trong chiến dịch đó nên là nút "Quay lại chiến dịch" (nạp lại từ server).
+ */
+function CampaignLink({ result, testId, onBackToCampaign, t }) {
+  if (onBackToCampaign) {
+    return (
+      <button type="button" onClick={onBackToCampaign} className={SECONDARY_BUTTON} data-testid={testId}>
+        {t('simpleCampaign.edit.backToCampaign')}
+      </button>
+    );
+  }
+  return (
+    <Link to={`/app/campaigns/${result.campaignId}`} className={SECONDARY_LINK} data-testid={testId}>
+      {t('simpleCampaign.done.viewCampaign')}
+    </Link>
+  );
+}
+
+/** "Tạo chiến dịch khác" — chỉ có ở lúc TẠO. */
+function CreateAnother({ onCreateAnother, onBackToCampaign, t }) {
+  if (onBackToCampaign || !onCreateAnother) return null;
+  return (
+    <button type="button" onClick={onCreateAnother} className="mt-5 text-sm font-semibold text-orange-600 underline dark:text-orange-400">
+      {t('simpleCampaign.createAnother')}
+    </button>
+  );
+}
 
 /**
  * Màn "Đang gửi": chiến dịch đã tạo và đã được nhận lệnh chạy.
  *
  * @param {object} props
  * @param {{ campaignId: number, campaignName: string, channel: string }} props.result
- * @param {() => void} props.onCreateAnother
+ * @param {() => void} [props.onCreateAnother] màn kết quả của lúc TẠO
+ * @param {() => void} [props.onBackToCampaign] màn kết quả của lúc SỬA: quay lại chi tiết chiến dịch (thay cho "xem chiến dịch" + "tạo khác")
  * @param {(key: string, params?: object) => string} props.t
  */
-export function DoneScreen({ result, onCreateAnother, t }) {
+export function DoneScreen({ result, onCreateAnother, onBackToCampaign, t }) {
   return (
     <div className="mx-auto max-w-xl py-6 text-center" data-testid="simple-done">
       <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300" aria-hidden="true">
@@ -28,11 +60,9 @@ export function DoneScreen({ result, onCreateAnother, t }) {
       )}
       <div className="mt-6 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
         <Link to="/app/delivery-monitor" className={PRIMARY_LINK} data-testid="simple-done-progress">{t('simpleCampaign.done.viewProgress')}</Link>
-        <Link to={`/app/campaigns/${result.campaignId}/builder`} className={SECONDARY_LINK} data-testid="simple-done-builder">{t('simpleCampaign.done.openBuilder')}</Link>
+        <CampaignLink result={result} testId="simple-done-builder" onBackToCampaign={onBackToCampaign} t={t} />
       </div>
-      <button type="button" onClick={onCreateAnother} className="mt-5 text-sm font-semibold text-orange-600 underline dark:text-orange-400">
-        {t('simpleCampaign.createAnother')}
-      </button>
+      <CreateAnother onCreateAnother={onCreateAnother} onBackToCampaign={onBackToCampaign} t={t} />
     </div>
   );
 }
@@ -43,10 +73,11 @@ export function DoneScreen({ result, onCreateAnother, t }) {
  *
  * @param {object} props
  * @param {{ campaignId: number, campaignName: string }} props.result
- * @param {() => void} props.onCreateAnother
+ * @param {() => void} [props.onCreateAnother]
+ * @param {() => void} [props.onBackToCampaign]
  * @param {(key: string, params?: object) => string} props.t
  */
-export function ApprovalScreen({ result, onCreateAnother, t }) {
+export function ApprovalScreen({ result, onCreateAnother, onBackToCampaign, t }) {
   return (
     <div className="mx-auto max-w-xl py-6 text-center" data-testid="simple-approval">
       <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-950/40 dark:text-amber-300" aria-hidden="true">
@@ -57,9 +88,7 @@ export function ApprovalScreen({ result, onCreateAnother, t }) {
       <div className="mt-6 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
         <Link to="/app/campaigns" className={PRIMARY_LINK} data-testid="simple-approval-list">{t('simpleCampaign.backToList')}</Link>
       </div>
-      <button type="button" onClick={onCreateAnother} className="mt-5 text-sm font-semibold text-orange-600 underline dark:text-orange-400">
-        {t('simpleCampaign.createAnother')}
-      </button>
+      <CreateAnother onCreateAnother={onCreateAnother} onBackToCampaign={onBackToCampaign} t={t} />
     </div>
   );
 }
@@ -88,11 +117,9 @@ export function ScheduledScreen({ result, onCreateAnother, t }) {
       )}
       <div className="mt-6 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
         <Link to="/app/campaigns?tab=schedules" className={PRIMARY_LINK} data-testid="simple-scheduled-list">{t('simpleCampaign.scheduled.viewSchedules')}</Link>
-        <Link to={`/app/campaigns/${result.campaignId}/builder`} className={SECONDARY_LINK} data-testid="simple-scheduled-builder">{t('simpleCampaign.done.openBuilder')}</Link>
+        <CampaignLink result={result} testId="simple-scheduled-builder" t={t} />
       </div>
-      <button type="button" onClick={onCreateAnother} className="mt-5 text-sm font-semibold text-orange-600 underline dark:text-orange-400">
-        {t('simpleCampaign.createAnother')}
-      </button>
+      <CreateAnother onCreateAnother={onCreateAnother} t={t} />
     </div>
   );
 }

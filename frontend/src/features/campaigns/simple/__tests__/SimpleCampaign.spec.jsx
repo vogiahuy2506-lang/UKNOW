@@ -573,13 +573,13 @@ describe('Tạo chiến dịch từng bước (PR-2)', () => {
       expect(within(approval).getByTestId('simple-approval-list')).toHaveAttribute('href', '/app/campaigns');
     });
 
-    it('thành công → màn xong với "Xem tiến độ" và "Mở bằng trình dựng nâng cao" đúng đích', async () => {
+    it('thành công → màn xong với "Xem tiến độ" và "Xem chiến dịch" đúng đích', async () => {
       const start = await reachReviewEmailForm();
       fireEvent.click(start);
       const done = await screen.findByTestId('simple-done');
       expect(done).toHaveTextContent('Đang gửi chiến dịch');
       expect(screen.getByTestId('simple-done-progress')).toHaveAttribute('href', '/app/delivery-monitor');
-      expect(screen.getByTestId('simple-done-builder')).toHaveAttribute('href', '/app/campaigns/900/builder');
+      expect(screen.getByTestId('simple-done-builder')).toHaveAttribute('href', '/app/campaigns/900');
       // Email không cần lời giải thích về nhịp gửi Zalo.
       expect(done).not.toHaveTextContent('vài chục giây');
     });
@@ -612,7 +612,7 @@ describe('Tạo chiến dịch từng bước (PR-2)', () => {
       expect(campaignApiService.deleteCampaign.mock.invocationCallOrder[0])
         .toBeLessThan(campaignApiService.createSimpleCampaign.mock.invocationCallOrder[1]);
       expect(campaignRunApiService.runCampaign).toHaveBeenLastCalledWith('901', expect.objectContaining({ source: 'campaign_run', autoActivate: true }));
-      expect(screen.getByTestId('simple-done-builder')).toHaveAttribute('href', '/app/campaigns/901/builder');
+      expect(screen.getByTestId('simple-done-builder')).toHaveAttribute('href', '/app/campaigns/901');
     });
 
     it('nháp cũ đã mất (DELETE 404) hoặc xoá lỗi thì vẫn tạo bản mới, không kẹt người dùng', async () => {

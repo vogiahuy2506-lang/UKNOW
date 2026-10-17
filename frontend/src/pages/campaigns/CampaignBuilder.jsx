@@ -49,6 +49,8 @@ import useLatestRunPause from '../../features/campaigns/hooks/useLatestRunPause'
 import { fetchZaloAccountOptions } from '../../features/campaigns/utils/nodeConfigModal.helpers';
 import { formatCampaignDateTime } from '../../features/campaigns/utils/campaignDateTime.helpers';
 import toast from 'react-hot-toast';
+import CampaignViewTabs from '../../features/campaigns/components/CampaignViewTabs';
+import CampaignTabSwitchModal from '../../features/campaigns/components/CampaignTabSwitchModal';
 import { readCampaignDraft, writeCampaignDraft, clearCampaignDraft } from '../../utils/campaignDraftStorage';
 const LOG_LIST_MIN_WIDTH = 200;
 const LOG_DETAIL_MIN_WIDTH = 220;
@@ -1162,6 +1164,52 @@ const CampaignBuilder = () => {
     navigate('/app/campaigns');
   };
 
+  // ── Tab "Từng bước" ⇄ "Sơ đồ khối" (PLAN_HAI_TAB_TUNG_BUOC_SO_DO_2026-10-17) ─────────────────────────────────────────────────
+  // Hai tab chỉ đồng bộ qua server: còn thay đổi chưa lưu thì hỏi Lưu rồi chuyển / Bỏ thay đổi / Ở lại; tab đích nạp lại từ server.
+  const [showTabSwitchModal, setShowTabSwitchModal] = useState(false);
+  const [isSavingTabSwitch, setIsSavingTabSwitch] = useState(false);
+  const simpleTabPath = `/app/campaigns/${id}/simple`;
+
+  const goToSimpleTab = () => {
+    // `when` của bộ chặn còn true đến lần vẽ kế → cho qua đúng một lần điều hướng này.
+    navigationBlocker.allowNext?.();
+    if (isRunning) cancelCurrentRun();
+    navigate(simpleTabPath);
+  };
+
+  const handleSelectViewTab = (tab) => {
+    if (tab !== 'simple' || isNewCampaign) return;
+    if (isDirty) {
+      setShowTabSwitchModal(true);
+      return;
+    }
+    if (isRunning) {
+      pendingLeaveActionRef.current = () => navigate(simpleTabPath);
+      setLeaveConfirmContext('running');
+      setShowLeaveConfirmModal(true);
+      return;
+    }
+    navigate(simpleTabPath);
+  };
+
+  const handleTabSwitchSave = async () => {
+    setIsSavingTabSwitch(true);
+    const saved = await handleSave();
+    setIsSavingTabSwitch(false);
+    // Lưu hỏng (đã có toast): ở lại để người dùng sửa.
+    if (!saved) {
+      setShowTabSwitchModal(false);
+      return;
+    }
+    setShowTabSwitchModal(false);
+    goToSimpleTab();
+  };
+
+  const handleTabSwitchDiscard = () => {
+    setShowTabSwitchModal(false);
+    goToSimpleTab();
+  };
+
   const handleNameModalPrimary = () => {
     if (!campaignName.trim()) {
       toast.error(t('campaignBuilderExtra.enterCampaignName'));
@@ -1193,6 +1241,7 @@ const CampaignBuilder = () => {
       onOpenSchedule={() => requestServerAction('schedule')}
       canUseServerRunActions={canUseServerRunActions}
       serverRunActionsDisabledHint={t('campaignBuilder.saveCampaignFirst')}
+      viewTabs={isNewCampaign ? null : <CampaignViewTabs active="builder" onSelect={handleSelectViewTab} />}
       onOpenShare={() => setShowShareModal(true)}
       canShare={canShare}
       onOpenDuplicate={() => setShowDuplicateModal(true)}
@@ -1281,6 +1330,13 @@ const CampaignBuilder = () => {
       leaveModalTitle={leaveModalTitle}
       leaveModalMessage={leaveModalMessage}
     />
+      <CampaignTabSwitchModal
+        isOpen={showTabSwitchModal}
+        isSaving={isSavingTabSwitch}
+        onSave={handleTabSwitchSave}
+        onDiscard={handleTabSwitchDiscard}
+        onStay={() => setShowTabSwitchModal(false)}
+      />
       {lockedChannelModal && (
         <ChannelUnavailableModal
           channel={lockedChannelModal}

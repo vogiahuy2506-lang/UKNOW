@@ -4239,7 +4239,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
               {msg.type === 'auto_created_success' && msg.data && (
                 <AutoCreatedSuccessCard
                   result={msg.data}
-                  onView={() => navigate(`/app/campaigns/${msg.data.campaignId}/builder`)}
+                  onView={() => navigate(`/app/campaigns/${msg.data.campaignId}`)}
                   t={t}
                 />
               )}

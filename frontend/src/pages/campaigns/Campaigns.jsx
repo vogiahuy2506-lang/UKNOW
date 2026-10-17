@@ -750,7 +750,7 @@ const Campaigns = () => {
                             <div className="flex flex-col gap-1.5">
                               {/* Tên có thể rất dài: cắt 2 dòng, `title` giữ tên đầy đủ (không nowrap kẻo đẩy bảng rộng ra). */}
                               <Link
-                                to={`/app/campaigns/${campaign.id}/builder`}
+                                to={`/app/campaigns/${campaign.id}`}
                                 title={campaign.campaignName}
                                 className="font-semibold text-slate-900 dark:text-dk-text hover:text-orange-600 dark:hover:text-orange-400 transition-colors inline-flex max-w-full items-start gap-1.5 group text-sm"
                               >
@@ -1034,7 +1034,7 @@ const Campaigns = () => {
                                         </>
                                       )}
                                       <button
-                                        onClick={() => navigate(`/app/campaigns/${campaign.id}/builder`)}
+                                        onClick={() => navigate(`/app/campaigns/${campaign.id}`)}
                                         className="w-full flex items-center px-4 py-2 text-sm text-gray-700 dark:text-dk-text hover:bg-gray-100 dark:hover:bg-dk-raised"
                                       >
                                         <HiOutlinePencil className="w-4 h-4 mr-3" />

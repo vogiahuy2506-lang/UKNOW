@@ -19,12 +19,27 @@ import {
   isStepComplete,
   normalizePreview,
   reconcileSchedule,
+  senderKindOf,
   unwrapResponseData,
   validateSchedule,
 } from './simpleCampaign.helpers';
+import {
+  MULTIPLE_SCHEDULES_CODE,
+  buildEditBody,
+  buildScheduleUpdatePayload,
+  buildStateFromServer,
+  fingerprintEditState,
+  makeFingerprint,
+  parseServerSchedules,
+  planScheduleSync,
+  scheduleSignature,
+} from './simpleCampaign.edit.helpers';
+import { loadSenderAccounts } from './loadSenderAccounts';
 
 const IDLE_PREVIEW = Object.freeze({ status: 'idle', data: null, message: '' });
 const IDLE_SUBMIT = Object.freeze({ status: 'idle', stage: null, message: '' });
+/** Chế độ sửa: lỗi "đã đủ chỗ tạo thêm chiến dịch" không áp cho việc SỬA một chiến dịch đã có. */
+const LIMIT_REACHED_CODE = 'campaign_limit_reached';
 
 /**
  * Trạng thái + hành động của trình tạo chiến dịch "Từng bước".
@@ -37,9 +52,14 @@ const IDLE_SUBMIT = Object.freeze({ status: 'idle', stage: null, message: '' });
  * - Đặt lịch xong → phase `scheduled` (màn "Đã hẹn gửi").
  * - Chạy/đặt lịch lỗi sau khi đã tạo → giữ `draftCampaignId`; lần bấm kế DELETE nháp đó trước khi tạo bản mới để khỏi đẻ nháp rác.
  *
+ * Chế độ SỬA (`campaignId` có giá trị — PLAN_HAI_TAB_TUNG_BUOC_SO_DO_2026-10-17): nạp `GET /campaigns/:id/simple`, điền sẵn mọi bước,
+ * cho nhảy tự do, và `saveEdit` ghi bằng `PUT /campaigns/:id/simple` (+ tạo / sửa / xoá đúng 1 lịch bằng API lịch sẵn có).
+ *
+ * @param {{ campaignId?: number|string|null }} [options]
  * @returns {object} xem `return` cuối hàm
  */
-export default function useSimpleCampaignWizard() {
+export default function useSimpleCampaignWizard({ campaignId = null } = {}) {
+  const isEdit = Boolean(campaignId);
   const { t } = useI18n();
   const [state, setState] = useState(createInitialWizardState);
   const [stepId, setStepId] = useState(SIMPLE_STEP_IDS[0]);
@@ -49,6 +69,11 @@ export default function useSimpleCampaignWizard() {
   const [submitState, setSubmitState] = useState(IDLE_SUBMIT);
   const [result, setResult] = useState(null);
   const [draftCampaignId, setDraftCampaignId] = useState(null);
+  // Chế độ sửa: tình trạng nạp, thông tin phụ của chiến dịch, dấu vân tay lúc nạp (để biết còn thay đổi chưa lưu), mốc lưu gần nhất.
+  const [editLoad, setEditLoad] = useState(() => ({ status: isEdit ? 'loading' : 'idle', message: '' }));
+  const [editInfo, setEditInfo] = useState(null);
+  const [baseline, setBaseline] = useState(null);
+  const [savedAt, setSavedAt] = useState(null);
 
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -57,19 +82,47 @@ export default function useSimpleCampaignWizard() {
   const previewSeqRef = useRef(0);
   const submittingRef = useRef(false);
   const draftIdRef = useRef(null);
+  const editInfoRef = useRef(null);
+  editInfoRef.current = editInfo;
+  const loadSeqRef = useRef(0);
 
   // Rời trang giữa chừng: huỷ mọi preview đang bay để nó không ghi vào state đã gỡ.
   useEffect(() => () => {
     previewSeqRef.current += 1;
   }, []);
 
+  /** Bước đã đủ thông tin chưa. Chế độ sửa: lịch giữ nguyên (kể cả giờ đã qua) hoặc đang khoá thì không bị hỏi lại giờ hẹn. */
+  const isStepDone = (id) => {
+    if (isEdit && id === 'when' && editInfo) {
+      if (editInfo.scheduleLocked) return true;
+      if (scheduleSignature(state.schedule) === editInfo.originalSignature) return true;
+    }
+    return isStepComplete(id, state);
+  };
   const stepIndex = SIMPLE_STEP_IDS.indexOf(stepId);
-  const canContinue = isStepComplete(stepId, state);
+  const canContinue = isStepDone(stepId);
   // Nút "Bắt đầu gửi": chỉ khi server đã kiểm xong VÀ nói `readyToCreate=true`; đang gửi thì khoá để khỏi tạo hai lần.
   const canStart = stepId === 'review'
     && preview.status === 'ready'
     && preview.data?.readyToCreate === true
     && submitState.status !== 'submitting';
+
+  // ── Chế độ sửa ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  const incompleteStepId = isEdit ? (SIMPLE_STEP_IDS.find((id) => id !== 'review' && !isStepDone(id)) || null) : null;
+  const previewIssues = preview.status === 'ready' ? (preview.data?.issues || []) : [];
+  const previewLimitOnly = preview.status === 'ready'
+    && preview.data?.readyToCreate !== true
+    && previewIssues.some((issue) => issue?.code === LIMIT_REACHED_CODE)
+    && previewIssues.every((issue) => issue?.code === LIMIT_REACHED_CODE || (typeof issue === 'object' && issue?.severity === 'warning'));
+  const canSaveEdit = isEdit
+    && stepId === 'review'
+    && editLoad.status === 'ready'
+    && !incompleteStepId
+    && preview.status === 'ready'
+    && (preview.data?.readyToCreate === true || previewLimitOnly)
+    && submitState.status !== 'submitting';
+  const isDirty = isEdit && baseline !== null && fingerprintEditState(state) !== baseline;
+  const isReadOnly = isEdit && editLoad.status === 'ready' && Boolean(editInfo?.readOnly);
 
   const selectChannel = useCallback((channel) => {
     setState((prev) => applyChannelChange(prev, channel));
@@ -138,7 +191,10 @@ export default function useSimpleCampaignWizard() {
   const goNext = useCallback(() => {
     const current = stateRef.current;
     const index = SIMPLE_STEP_IDS.indexOf(stepId);
-    if (index < 0 || index >= SIMPLE_STEP_IDS.length - 1 || !isStepComplete(stepId, current)) return;
+    const info = editInfoRef.current;
+    const keptSchedule = isEdit && stepId === 'when' && info
+      && (info.scheduleLocked || scheduleSignature(current.schedule) === info.originalSignature);
+    if (index < 0 || index >= SIMPLE_STEP_IDS.length - 1 || !(keptSchedule || isStepComplete(stepId, current))) return;
     const nextStep = SIMPLE_STEP_IDS[index + 1];
     if (nextStep === 'review' && !current.campaignName.trim()) {
       const channelTitle = tRef.current(`simpleCampaign.channel.${current.channel}.title`);
@@ -148,7 +204,7 @@ export default function useSimpleCampaignWizard() {
       }));
     }
     setStepId(nextStep);
-  }, [stepId]);
+  }, [stepId, isEdit]);
 
   /** @returns {boolean} true nếu lùi được một bước (false = đang ở bước đầu, nơi gọi tự rời trang). */
   const goBack = useCallback(() => {
@@ -163,18 +219,18 @@ export default function useSimpleCampaignWizard() {
     return true;
   }, [stepId, invalidatePreview]);
 
-  /** Bấm thanh tiến trình: chỉ lùi về bước đã qua. */
+  /** Bấm thanh tiến trình: chỉ lùi về bước đã qua (chế độ sửa: nhảy tự do vì dữ liệu đã đủ). */
   const goToStep = useCallback((targetId) => {
     const target = SIMPLE_STEP_IDS.indexOf(targetId);
     const index = SIMPLE_STEP_IDS.indexOf(stepId);
-    if (target < 0 || target >= index) return;
+    if (target < 0 || target === index || (!isEdit && target >= index)) return;
     if (stepId === 'review') {
       invalidatePreview();
       setPreview(IDLE_PREVIEW);
       setSubmitState(IDLE_SUBMIT);
     }
     setStepId(targetId);
-  }, [stepId, invalidatePreview]);
+  }, [stepId, isEdit, invalidatePreview]);
 
   /** "Bắt đầu gửi": tạo chiến dịch rồi chạy. Chống bấm đúp bằng ref (state chỉ cập nhật sau lần vẽ kế). */
   const submit = useCallback(async () => {
@@ -280,6 +336,169 @@ export default function useSimpleCampaignWizard() {
     }
   }, []);
 
+  /**
+   * Nạp (hoặc nạp lại) chiến dịch từ server. `quiet`: không đổi màn hình sang "đang tải" và giữ bước đang đứng (dùng sau khi lưu).
+   * Mỗi lần nạp xong là một mốc "đã lưu": dấu vân tay baseline đặt lại theo đúng dữ liệu server.
+   */
+  const loadEdit = useCallback(async ({ quiet = false } = {}) => {
+    if (!campaignId) return;
+    loadSeqRef.current += 1;
+    const seq = loadSeqRef.current;
+    if (!quiet) setEditLoad({ status: 'loading', message: '' });
+    try {
+      const data = unwrapResponseData(await campaignApiService.getSimpleCampaign(campaignId));
+      if (seq !== loadSeqRef.current) return;
+      const next = buildStateFromServer(data);
+      const parsed = parseServerSchedules(data?.schedules);
+      const reasons = Array.isArray(data?.readOnlyReasons) ? data.readOnlyReasons : [];
+      const scheduleLocked = parsed.locked
+        || reasons.some((reason) => reason?.code === MULTIPLE_SCHEDULES_CODE)
+        || (Array.isArray(data?.schedules) && data.schedules.length > 1);
+      setEditInfo({
+        readOnly: data?.editable !== true || data?.running === true || !next,
+        running: data?.running === true,
+        reasons,
+        campaignStatus: String(data?.status || ''),
+        campaignName: String(data?.campaignName || ''),
+        original: parsed.original,
+        originalSignature: scheduleSignature(parsed.schedule),
+        scheduleLocked,
+        lockedCron: parsed.lockedCron,
+        hasForm: Boolean(next),
+      });
+      if (next) {
+        setState(next);
+        setBaseline(fingerprintEditState(next));
+      } else {
+        setBaseline(null);
+      }
+      invalidatePreview();
+      setPreview(IDLE_PREVIEW);
+      setSubmitState(IDLE_SUBMIT);
+      if (!quiet) setStepId('review');
+      setEditLoad({ status: 'ready', message: '' });
+
+      // Điền tên tài khoản gửi (GET chỉ trả id) — không chặn màn hình, lỗi thì để trống.
+      if (next?.sender?.id) {
+        try {
+          const accounts = await loadSenderAccounts(senderKindOf(next.channel));
+          if (seq !== loadSeqRef.current) return;
+          const found = accounts.find((account) => String(account.id) === String(next.sender.id));
+          if (found) {
+            setState((prev) => (String(prev.sender?.id ?? '') === String(found.id) && !prev.sender.label
+              ? { ...prev, sender: { id: found.id, label: found.label } }
+              : prev));
+          }
+        } catch {
+          // Không có tên thì câu tóm tắt chỉ thiếu tên tài khoản.
+        }
+      }
+    } catch (error) {
+      if (seq !== loadSeqRef.current) return;
+      setEditLoad({ status: 'error', message: getServerMessage(error, tRef.current('simpleCampaign.edit.loadFailed')) });
+    }
+  }, [campaignId, invalidatePreview]);
+
+  useEffect(() => {
+    if (!campaignId) return undefined;
+    loadEdit();
+    return () => {
+      loadSeqRef.current += 1;
+    };
+  }, [campaignId, loadEdit]);
+
+  /**
+   * Lưu thay đổi ở chế độ sửa. `mode`: 'save' (chỉ lưu) · 'run' (lưu rồi chạy ngay) · 'continuous' (lưu rồi bật tự động gửi cho người mới).
+   * Thứ tự: PUT nội dung → đồng bộ đúng 1 lịch (tạo / sửa / xoá) → nạp lại từ server → (nếu có) chạy.
+   *
+   * @param {'save'|'run'|'continuous'} [mode]
+   * @returns {Promise<boolean>} true khi phần LƯU đã xong (nơi gọi dùng để chuyển tab sau "Lưu rồi chuyển")
+   */
+  const saveEdit = useCallback(async (mode = 'save') => {
+    const info = editInfoRef.current;
+    if (!campaignId || !info || submittingRef.current) return false;
+    submittingRef.current = true;
+    setSubmitState({ status: 'submitting', stage: null, message: '' });
+    const snapshot = stateRef.current;
+    const translate = tRef.current;
+    try {
+      const plan = planScheduleSync({ original: info.original, schedule: snapshot.schedule, locked: info.scheduleLocked });
+      if (plan === 'create' || plan === 'update') {
+        const scheduleCheck = validateSchedule(snapshot.schedule, new Date());
+        if (!scheduleCheck.ok) {
+          setSubmitState({
+            status: 'error',
+            stage: 'input',
+            message: translate(scheduleCheck.reason === 'too_soon' ? 'simpleCampaign.when.scheduled.tooSoon' : 'simpleCampaign.when.scheduleIncomplete'),
+          });
+          return false;
+        }
+      }
+
+      const body = buildEditBody(snapshot);
+      try {
+        await campaignApiService.updateSimpleCampaign(campaignId, body);
+      } catch (error) {
+        setSubmitState({ status: 'error', stage: 'save', message: getServerMessage(error, translate('simpleCampaign.edit.saveFailed')) });
+        return false;
+      }
+
+      const runName = snapshot.campaignName.trim() || info.campaignName;
+      if (plan !== 'none') {
+        try {
+          if (plan === 'create') {
+            await campaignRunApiService.createCampaignSchedule(buildSchedulePayload(snapshot.schedule, { campaignId, scheduleName: runName }));
+          } else if (plan === 'update') {
+            await campaignRunApiService.updateCampaignSchedule(info.original.id, buildScheduleUpdatePayload(snapshot.schedule));
+          } else {
+            await campaignRunApiService.deleteCampaignSchedule(info.original.id);
+          }
+        } catch (error) {
+          // Nội dung đã lưu rồi: mốc "đã lưu" dời theo body mới, chỉ lịch còn lệch (người dùng sửa giờ rồi bấm lưu lại).
+          setBaseline(makeFingerprint(body, info.originalSignature));
+          const overlap = extractScheduleOverlapError(error);
+          setSubmitState({
+            status: 'error',
+            stage: 'schedule',
+            message: overlap?.message || getServerMessage(error, translate('simpleCampaign.edit.scheduleFailed')),
+            suggestions: overlap ? describeOverlapSuggestions(overlap.suggestions, translate) : [],
+          });
+          return false;
+        }
+      }
+
+      await loadEdit({ quiet: true });
+      setSavedAt(Date.now());
+      if (mode === 'save') return true;
+
+      try {
+        const runSchedule = mode === 'continuous'
+          ? { type: 'continuous', pollIntervalMinutes: normalizeContinuousPollIntervalMinutes(null) }
+          : { type: 'now' };
+        const runResponse = await campaignRunApiService.runCampaign(campaignId, buildRunBody(runSchedule, runName));
+        const runData = unwrapResponseData(runResponse);
+        const requiresApproval = runData?.requiresApproval === true || runResponse?.data?.requiresApproval === true;
+        setResult({ campaignId, campaignName: runName, channel: snapshot.channel });
+        setPhase(requiresApproval ? 'approval' : 'done');
+        setSubmitState(IDLE_SUBMIT);
+      } catch (error) {
+        // Phần lưu đã xong; chỉ lệnh chạy lỗi.
+        setSubmitState({ status: 'error', stage: 'run', message: getServerMessage(error, translate('simpleCampaign.edit.runFailed')) });
+      }
+      return true;
+    } finally {
+      submittingRef.current = false;
+    }
+  }, [campaignId, loadEdit]);
+
+  /** Từ màn "Đang gửi" / "Chờ duyệt" quay lại chi tiết chiến dịch (nạp lại từ server). */
+  const backToCampaign = useCallback(() => {
+    setPhase('editing');
+    setResult(null);
+    setSubmitState(IDLE_SUBMIT);
+    loadEdit();
+  }, [loadEdit]);
+
   /** Làm lại từ đầu (nút "Tạo chiến dịch khác"). */
   const reset = useCallback(() => {
     invalidatePreview();
@@ -319,5 +538,17 @@ export default function useSimpleCampaignWizard() {
     goToStep,
     submit,
     reset,
+    // Chế độ sửa
+    isEdit,
+    editLoad,
+    editInfo,
+    isDirty,
+    isReadOnly,
+    savedAt,
+    canSaveEdit,
+    incompleteStepId,
+    loadEdit,
+    saveEdit,
+    backToCampaign,
   };
 }

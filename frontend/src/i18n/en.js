@@ -1882,6 +1882,7 @@ export default {
       },
       when: {
         now: 'send now',
+        manual: 'no schedule set, you press send when you need to',
         scheduled: 'scheduled for {time} on {date}',
         continuous: 'sent automatically to new people, checking every {interval}',
         recurringDaily: 'repeating every day at {time}',
@@ -1911,12 +1912,51 @@ export default {
       zaloNote: 'Zalo messages are sent tens of seconds apart to keep your account safe, so this can take a while.',
       viewProgress: 'View progress',
       openBuilder: 'Open in the advanced builder',
+      viewCampaign: 'View campaign',
     },
     scheduled: {
       title: 'Scheduled',
       body: 'Campaign “{name}” is scheduled: {when}. The system will send it on time, you do not need to keep this page open.',
       recurringNote: 'To stop it or change the time, open the Schedules tab on the Campaigns page.',
       viewSchedules: 'View schedules',
+    },
+    // EDIT mode for an existing campaign (the "Step by step" tab of /app/campaigns/:id) — PLAN_HAI_TAB_TUNG_BUOC_SO_DO_2026-10-17.
+    edit: {
+      titleFallback: 'Campaign',
+      subtitle: 'Change the parts you need, then save. For more detail, switch to the Flow diagram tab.',
+      loading: 'Opening your campaign...',
+      loadFailed: 'We could not open this campaign. Please try again.',
+      saveFailed: 'We could not save the campaign. Please try again.',
+      scheduleFailed: 'Your changes were saved, but the schedule could not be changed. Fix the schedule, then press "Save changes" again.',
+      runFailed: 'Your changes were saved, but the campaign could not be started. Please try again.',
+      save: 'Save changes',
+      saving: 'Saving...',
+      saveAndRun: 'Save and send now',
+      saveAndContinuous: 'Save and auto-send to new people',
+      saved: 'Changes saved.',
+      stepIncomplete: 'Some information is missing in the “{step}” step. Click that step to fill it in.',
+      channelLocked: 'The channel of an existing campaign cannot be changed. To use another channel, create a new campaign.',
+      followUpsNote: 'This campaign has {count} messages. Here you can only edit the first one; the later messages are kept as they are when you save. To edit them, open the Flow diagram tab.',
+      backToCampaign: 'Back to the campaign',
+      when: {
+        hint: 'Choose how this campaign is scheduled. To send right away or to auto-send to new people, use the buttons on the Review step.',
+        now: { title: 'Run manually', desc: 'No schedule. You press send when you need to.' },
+        scheduled: { title: 'At a set time', desc: 'Sent once, at the date and time you choose.' },
+        recurring: { title: 'Repeat regularly', desc: 'Sent again every day, week or month.' },
+        deleteNote: 'The schedule currently set for this campaign will be deleted when you save.',
+        disabledNote: 'This schedule is turned off. Changing the time here does not turn it back on; turn it on in the Schedules tab.',
+        lockedTitle: 'The schedule of this campaign is view-only here',
+        lockedBody: 'This campaign has several schedules or a special kind of schedule. To change it, open the Schedules tab on the Campaigns page.',
+      },
+      readOnly: {
+        title: 'This campaign is view-only in the Step by step tab',
+        hint: 'To edit it, open the Flow diagram tab.',
+        noPermission: 'You do not have permission to edit campaigns, so you can only view it.',
+        running: 'This campaign is running. You can edit it once it has finished.',
+        reasonsTitle: 'Why it cannot be edited here',
+        openBuilder: 'Open the Flow diagram to edit',
+        followUps: 'The campaign has {count} messages.',
+      },
     },
     approval: {
       title: 'Sent to the account owner for approval',
@@ -1925,6 +1965,21 @@ export default {
     issues: {
       unknown: 'This campaign is not ready to send.',
     },
+  },
+
+  // Step by step ⇄ Flow diagram tab bar of one campaign — PLAN_HAI_TAB_TUNG_BUOC_SO_DO_2026-10-17.
+  campaignTabs: {
+    label: 'Campaign views',
+    simple: 'Step by step',
+    builder: 'Flow diagram',
+    builderNoPermission: 'You do not have permission to open the Flow diagram',
+    unsaved: 'Unsaved',
+    unsavedTitle: 'You have unsaved changes',
+    unsavedBody: 'The two tabs only see each other after saving. Do you want to save and switch tabs, discard your changes, or stay?',
+    saveAndSwitch: 'Save and switch',
+    discard: 'Discard changes',
+    stay: 'Stay',
+    saveFailed: 'The campaign could not be saved, so the tab was not changed. See the error on the Review step.',
   },
 
   employee: {

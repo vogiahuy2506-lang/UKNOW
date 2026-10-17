@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { HiOutlineEye, HiOutlinePencilAlt, HiOutlineTemplate } from 'react-icons/hi';
 import SimpleChoiceCard from './SimpleChoiceCard';
@@ -35,6 +35,15 @@ function TemplatePanel({ kind, content, patchContent, t }) {
     })),
     [templates]
   );
+
+  // Chế độ sửa: GET chỉ trả id mẫu → điền tên mẫu khi danh sách đã tải (câu tóm tắt ở bước Xem lại nêu tên, không nêu số).
+  useEffect(() => {
+    if (!content.templateId || content.templateName) return;
+    const picked = templates.find((item) => Number(item.id) === Number(content.templateId));
+    if (picked) patchContent({ templateName: String(picked.templateName || '') });
+    // patchContent ổn định (useCallback); chỉ phản ứng khi danh sách mẫu tải xong hoặc đổi mẫu.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templates, content.templateId, content.templateName]);
 
   const handleChange = (value) => {
     const id = Number(value);
@@ -168,6 +177,11 @@ export default function ContentStep({ wizard, t }) {
     <div>
       <h2 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-dk-text sm:text-2xl">{t('simpleCampaign.content.title')}</h2>
       <p className="mt-1 text-sm text-slate-500 dark:text-dk-text2">{t('simpleCampaign.content.hint')}</p>
+      {Array.isArray(state.followUps) && state.followUps.length > 0 && (
+        <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-200" data-testid="simple-followups-note">
+          {t('simpleCampaign.edit.followUpsNote', { count: state.followUps.length + 1 })}
+        </p>
+      )}
 
       <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <SimpleChoiceCard

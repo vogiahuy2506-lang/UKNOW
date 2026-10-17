@@ -145,6 +145,28 @@ export const campaignApiService = {
   createSimpleCampaign(body, options = {}) {
     return api.post('/campaigns/simple', body, options);
   },
+
+  /**
+   * Chi tiết chiến dịch ở dạng "Từng bước" (PLAN_HAI_TAB_TUNG_BUOC_SO_DO_2026-10-17).
+   * `{ editable, readOnlyReasons[], running, campaignName, channel, status, form|null, schedules[] }`.
+   *
+   * @param {number|string} campaignId
+   * @param {object} [options] tuỳ chọn axios
+   */
+  getSimpleCampaign(campaignId, options = {}) {
+    return api.get(`/campaigns/${campaignId}/simple`, options);
+  },
+
+  /**
+   * Lưu chiến dịch từ trình "Từng bước" (body như tạo + `followUps`). Giữ nguyên id, trạng thái, lịch và lịch sử chạy.
+   *
+   * @param {number|string} campaignId
+   * @param {object} body
+   * @param {object} [options] tuỳ chọn axios
+   */
+  updateSimpleCampaign(campaignId, body, options = {}) {
+    return api.put(`/campaigns/${campaignId}/simple`, body, options);
+  },
 };
 
 export default campaignApiService;

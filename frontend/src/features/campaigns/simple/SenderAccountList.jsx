@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import campaignBuilderApiService from '../services/campaignBuilderApi.service';
 import useAsyncResource from './useAsyncResource';
-import { mapEmailAccounts, mapZaloAccounts, senderKindOf } from './simpleCampaign.helpers';
+import { loadSenderAccounts } from './loadSenderAccounts';
+import { senderKindOf } from './simpleCampaign.helpers';
 
 const SETTINGS_LINK = Object.freeze({
   email: '/app/settings/channels#email',
@@ -18,16 +18,6 @@ const DOT_CLASS = Object.freeze({
   disconnected: 'bg-red-500',
 });
 
-/** Tải tài khoản gửi: email dùng `getActiveEmailSettings` (limit 100 — ĐỪNG gọi GET /email-settings trần, chỉ 10), Zalo dùng `selectable`. */
-const loadAccounts = async (kind) => {
-  if (kind === 'email') {
-    const response = await campaignBuilderApiService.getActiveEmailSettings();
-    return mapEmailAccounts(response?.data?.data?.items);
-  }
-  const response = await campaignBuilderApiService.getZaloAccounts();
-  return mapZaloAccounts(response?.data?.data?.items);
-};
-
 /**
  * "Gửi từ tài khoản nào?" — danh sách tài khoản có chấm trạng thái.
  * Tài khoản mất kết nối/bị khoá theo gói: không chọn được, kèm link "Kết nối lại" tới trang cài đặt kênh.
@@ -41,7 +31,7 @@ const loadAccounts = async (kind) => {
  */
 export default function SenderAccountList({ channel, selected, onSelect, t }) {
   const kind = senderKindOf(channel);
-  const resource = useAsyncResource(() => loadAccounts(kind), [kind]);
+  const resource = useAsyncResource(() => loadSenderAccounts(kind), [kind]);
   const accounts = resource.status === 'ready' ? resource.data : [];
   const usable = accounts.filter((account) => account.usable);
 

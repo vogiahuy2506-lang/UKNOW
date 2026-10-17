@@ -22,6 +22,9 @@ import adminMenuApiService, {
 // Menu khách /app nay luôn có `key` ổn định trên mọi mục sau khi làm phẳng (PR-1,
 // PLAN_MENU_CHUYEN_MUC_APP_2026-09-12, navConfig.jsx:userMenuItems) — `|| item.path ||
 // item.name` chỉ còn là lưới an toàn, không phải đường chính.
+/** Màn của MỘT chiến dịch đã có: tab Sơ đồ khối (`/builder`) hoặc Từng bước (`/simple`) — cùng highlight mục Chiến dịch. */
+const CAMPAIGN_DETAIL_PATH = /^\/app\/campaigns\/[^/]+\/(builder|simple)(\/|$)/;
+
 const getMenuItemKey = (item) => item.key || item.path || item.name;
 
 // ── Floating Submenu Panel (for collapsed sidebar) ──────────────────────────
@@ -31,7 +34,7 @@ function SubmenuPanel({ item, onClose }) {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const isBuilderPage = location.pathname.includes('/app/campaigns/') && location.pathname.includes('/builder');
+  const isBuilderPage = CAMPAIGN_DETAIL_PATH.test(location.pathname);
 
   const getActiveChild = (child) => {
     if (child.external || !child.path) return false;
@@ -183,7 +186,7 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
       // PR-1 (PLAN_MENU_CHUYEN_MUC_APP_2026-09-12, việc 4) — so theo `key` chuyên mục thay vì
       // tên đã dịch: super admin đổi tên "Chiến dịch" (PR-2) không còn làm hỏng highlight khi
       // ở /app/campaigns/:id/builder (route không nằm trong children vì :id động).
-      || (item.key === 'app-category-campaigns' && location.pathname.includes('/app/campaigns/') && location.pathname.includes('/builder'));
+      || (item.key === 'app-category-campaigns' && CAMPAIGN_DETAIL_PATH.test(location.pathname));
   };
 
   const applyLayoutCategories = (rawCats, rawLinks) => {
@@ -331,7 +334,7 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
 
   const renderChildItems = (children) => {
     return children.map((child) => {
-      const isBuilderPage = location.pathname.includes('/app/campaigns/') && location.pathname.includes('/builder');
+      const isBuilderPage = CAMPAIGN_DETAIL_PATH.test(location.pathname);
       const [childBasePath, childQuery] = (child.path || '').split('?');
       let isActiveChild = false;
       if (!child.external && child.path) {

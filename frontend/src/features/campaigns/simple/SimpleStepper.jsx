@@ -7,17 +7,18 @@ import { SIMPLE_STEP_IDS } from './simpleCampaign.helpers';
  *
  * @param {object} props
  * @param {string} props.currentStepId
- * @param {(stepId: string) => void} props.onSelectStep chỉ được gọi cho bước đã qua
+ * @param {(stepId: string) => void} props.onSelectStep chỉ được gọi cho bước đã qua (`freeJump`: cho mọi bước)
+ * @param {boolean} [props.freeJump] chế độ sửa: dữ liệu đã đủ nên bấm bước nào cũng được
  * @param {(key: string, params?: object) => string} props.t
  */
-export default function SimpleStepper({ currentStepId, onSelectStep, t }) {
+export default function SimpleStepper({ currentStepId, onSelectStep, freeJump = false, t }) {
   const currentIndex = SIMPLE_STEP_IDS.indexOf(currentStepId);
   return (
     <nav aria-label={t('simpleCampaign.stepperLabel')} className="overflow-x-auto border-b border-gray-200 pb-4 dark:border-dk-border">
       <ol className="flex items-center gap-2">
         {SIMPLE_STEP_IDS.map((id, index) => {
           const isActive = index === currentIndex;
-          const isDone = index < currentIndex;
+          const isDone = freeJump ? !isActive : index < currentIndex;
           const tone = isActive
             ? 'bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300'
             : isDone
