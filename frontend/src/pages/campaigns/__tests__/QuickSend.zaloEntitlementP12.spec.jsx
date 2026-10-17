@@ -95,7 +95,7 @@ describe('QuickSend — P12 quyền kênh Zalo', () => {
     expect(screen.getByTestId('quick-send-channel-email')).not.toHaveAttribute('aria-disabled');
   });
 
-  it('zalo:false -> bấm thẻ Zalo mở modal "Gói hiện tại không có Zalo" có nút mua slot, KHÔNG đổi kênh đang chọn (vẫn Email)', async () => {
+  it('zalo:false -> bấm thẻ Zalo mở modal "Mở khoá Zalo" có nút mua slot, KHÔNG đổi kênh đang chọn (vẫn Email)', async () => {
     entitlementsState.zalo = false;
     render(<QuickSend />);
     fireEvent.click(await screen.findByTestId('quick-send-channel-zalo'));
@@ -105,7 +105,7 @@ describe('QuickSend — P12 quyền kênh Zalo', () => {
     // Vẫn ở Email: có ô chọn tài khoản gửi email, không có ô loại người nhận Zalo.
     expect(screen.getByText('quickSend.selectSenderAccount')).toBeInTheDocument();
     expect(screen.queryByText('quickSend.zaloRecipientTypeLabel')).toBeNull();
-    fireEvent.click(within(modal).getByRole('button', { name: 'common.close' }));
+    fireEvent.click(within(modal).getByRole('button', { name: 'channelUnavailable.later' }));
     expect(screen.queryByTestId('channel-unavailable-modal')).toBeNull();
   });
 

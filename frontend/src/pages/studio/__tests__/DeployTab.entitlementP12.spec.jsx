@@ -72,14 +72,14 @@ describe('DeployTab — P12 quyền kênh Zalo', () => {
     expect(screen.getByTestId('deploy-channel-facebook')).not.toHaveAttribute('aria-disabled');
   });
 
-  it('bấm ô bị khoá mở modal "Gói hiện tại không có Telegram" có nút mua slot, KHÔNG mở hộp cấu hình kênh', () => {
+  it('bấm ô bị khoá mở modal "Mở khoá Telegram" có nút mua slot, KHÔNG mở hộp cấu hình kênh', () => {
     entitlementsState.telegram = false;
     renderTab();
     fireEvent.click(screen.getByTestId('deploy-channel-telegram_personal'));
     const modal = screen.getByTestId('channel-unavailable-modal');
     expect(modal).toHaveAttribute('data-channel', 'telegram');
     expect(modal).toHaveAttribute('data-reason', 'not_in_plan');
-    expect(within(modal).getByText('Gói hiện tại không có Telegram')).toBeTruthy();
+    expect(within(modal).getByText('Mở khoá Telegram')).toBeTruthy();
     expect(within(modal).getByTestId('channel-unavailable-action-buySlot')).toBeTruthy();
   });
 
