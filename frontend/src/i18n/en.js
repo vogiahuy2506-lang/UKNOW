@@ -1824,9 +1824,10 @@ export default {
         delayInvalid: 'Enter a whole number greater than 0.',
         remove: 'Remove',
         removeAria: 'Remove message {n}',
-        add: '+ Add next message',
+        add: 'Add next message',
         max: 'A sequence has at most {max} messages.',
       },
+      selectedTemplate: 'Selected template',
       loadingTemplates: 'Loading templates...',
       loadTemplatesFailed: 'Could not load your templates.',
       noTemplates: 'You have no templates yet. Choose "Write it yourself" or create a template.',
@@ -1885,6 +1886,7 @@ export default {
       },
       content: {
         template: '“{name}”',
+        templateUnknown: 'the selected template',
         custom: 'written by you',
         chain: '{first}, a sequence of {count} messages over {span}',
         span: { daysOne: '{n} day', daysMany: '{n} days', hoursOne: '{n} hour', hoursMany: '{n} hours' },
@@ -1938,6 +1940,8 @@ export default {
     // EDIT mode for an existing campaign (the "Step by step" tab of /app/campaigns/:id) — PLAN_HAI_TAB_TUNG_BUOC_SO_DO_2026-10-17.
     edit: {
       titleFallback: 'Campaign',
+      reviewTitle: 'Review and save',
+      subtitleReadOnly: 'View the campaign step by step. To edit it, open the Flow diagram tab.',
       subtitle: 'Change the parts you need, then save. For more detail, switch to the Flow diagram tab.',
       loading: 'Opening your campaign...',
       loadFailed: 'We could not open this campaign. Please try again.',

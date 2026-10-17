@@ -27,14 +27,19 @@ function TemplatePanel({ kind, content, patchContent, t, idPrefix }) {
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
   const templates = useMemo(() => (resource.status === 'ready' ? resource.data : []), [resource.status, resource.data]);
-  const options = useMemo(
-    () => templates.map((item) => ({
+  const options = useMemo(() => {
+    const list = templates.map((item) => ({
       id: item.id,
       label: String(item.templateName || `#${item.id}`),
       description: String(item.category || '').trim(),
-    })),
-    [templates]
-  );
+    }));
+    // Mẫu đang chọn không nằm trong danh sách (danh sách chỉ tải 100 mẫu đầu): vẫn hiện đúng tên, không để ô chọn trống.
+    const currentId = Number(content.templateId);
+    if (currentId > 0 && !list.some((item) => Number(item.id) === currentId)) {
+      list.unshift({ id: currentId, label: content.templateName || t('simpleCampaign.content.selectedTemplate'), description: '' });
+    }
+    return list;
+  }, [templates, content.templateId, content.templateName, t]);
 
   // Chế độ sửa: GET chỉ trả id mẫu → điền tên mẫu khi danh sách đã tải (câu tóm tắt ở bước Xem lại nêu tên, không nêu số).
   useEffect(() => {

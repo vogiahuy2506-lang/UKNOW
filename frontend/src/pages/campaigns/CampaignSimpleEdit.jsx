@@ -98,7 +98,7 @@ export default function CampaignSimpleEdit() {
       <PageHeader
         icon={HiOutlineSparkles}
         title={title}
-        subtitle={t('simpleCampaign.edit.subtitle')}
+        subtitle={t(wizard.isReadOnly || !canSave ? 'simpleCampaign.edit.subtitleReadOnly' : 'simpleCampaign.edit.subtitle')}
         onBack={() => navigate('/app/campaigns')}
         backLabel={t('simpleCampaign.backToList')}
       />

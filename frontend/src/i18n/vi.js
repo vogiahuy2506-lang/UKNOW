@@ -1829,9 +1829,10 @@ export default {
         delayInvalid: 'Nhập một số nguyên lớn hơn 0.',
         remove: 'Xoá tin',
         removeAria: 'Xoá tin {n}',
-        add: '+ Thêm tin tiếp theo',
+        add: 'Thêm tin tiếp theo',
         max: 'Một chuỗi có tối đa {max} tin.',
       },
+      selectedTemplate: 'Mẫu đã chọn',
       loadingTemplates: 'Đang tải mẫu tin...',
       loadTemplatesFailed: 'Không tải được danh sách mẫu tin.',
       noTemplates: 'Bạn chưa có mẫu tin nào. Hãy chọn "Tự soạn" hoặc tạo mẫu mới.',
@@ -1890,6 +1891,7 @@ export default {
       },
       content: {
         template: '“{name}”',
+        templateUnknown: 'mẫu đã chọn',
         custom: 'tự soạn',
         chain: '{first}, chuỗi {count} tin trong {span}',
         span: { daysOne: '{n} ngày', daysMany: '{n} ngày', hoursOne: '{n} giờ', hoursMany: '{n} giờ' },
@@ -1943,6 +1945,8 @@ export default {
     // Chế độ SỬA một chiến dịch đã có (tab "Từng bước" của /app/campaigns/:id) — PLAN_HAI_TAB_TUNG_BUOC_SO_DO_2026-10-17.
     edit: {
       titleFallback: 'Chiến dịch',
+      reviewTitle: 'Xem lại và lưu',
+      subtitleReadOnly: 'Xem chiến dịch theo từng bước. Muốn sửa, mở tab Sơ đồ khối.',
       subtitle: 'Sửa từng phần rồi lưu. Muốn chi tiết hơn, chuyển sang tab Sơ đồ khối.',
       loading: 'Đang mở chiến dịch...',
       loadFailed: 'Chưa mở được chiến dịch. Hãy thử lại.',

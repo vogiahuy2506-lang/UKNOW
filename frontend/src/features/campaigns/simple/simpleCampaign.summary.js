@@ -115,7 +115,7 @@ export const buildReviewSummary = ({ state, preview, t, locale, manualWhen = fal
 
   let contentText;
   if (content.mode === 'template') {
-    contentText = t('simpleCampaign.review.content.template', { name: content.templateName || `#${content.templateId}` });
+    contentText = t('simpleCampaign.review.content.template', { name: content.templateName || t('simpleCampaign.review.content.templateUnknown') });
   } else if (channel === 'email' && content.subject.trim()) {
     contentText = t('simpleCampaign.review.content.customWithSubject', { subject: content.subject.trim() });
   } else {

@@ -72,7 +72,7 @@ export default function SimpleCampaignWizard({ wizard, permissions = {}, onOpenB
   if (phase === 'done' && wizard.result) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-dk-border dark:bg-dk-surface sm:p-8">
-        <div ref={stepRef} tabIndex={-1} className="outline-none">
+        <div ref={stepRef} tabIndex={-1} className="outline-none focus:outline-none focus-visible:outline-none">
           <DoneScreen result={wizard.result} onCreateAnother={isEdit ? undefined : wizard.reset} onBackToCampaign={onBackToCampaign} t={t} />
         </div>
       </div>
@@ -81,7 +81,7 @@ export default function SimpleCampaignWizard({ wizard, permissions = {}, onOpenB
   if (phase === 'scheduled' && wizard.result) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-dk-border dark:bg-dk-surface sm:p-8">
-        <div ref={stepRef} tabIndex={-1} className="outline-none">
+        <div ref={stepRef} tabIndex={-1} className="outline-none focus:outline-none focus-visible:outline-none">
           <ScheduledScreen result={wizard.result} onCreateAnother={wizard.reset} t={t} />
         </div>
       </div>
@@ -90,7 +90,7 @@ export default function SimpleCampaignWizard({ wizard, permissions = {}, onOpenB
   if (phase === 'approval' && wizard.result) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-dk-border dark:bg-dk-surface sm:p-8">
-        <div ref={stepRef} tabIndex={-1} className="outline-none">
+        <div ref={stepRef} tabIndex={-1} className="outline-none focus:outline-none focus-visible:outline-none">
           <ApprovalScreen result={wizard.result} onCreateAnother={isEdit ? undefined : wizard.reset} onBackToCampaign={onBackToCampaign} t={t} />
         </div>
       </div>
@@ -114,7 +114,7 @@ export default function SimpleCampaignWizard({ wizard, permissions = {}, onOpenB
       <SimpleStepper currentStepId={stepId} onSelectStep={wizard.goToStep} freeJump={isEdit} t={t} />
 
       <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-dk-border dark:bg-dk-surface sm:p-6">
-        <div ref={stepRef} tabIndex={-1} className="outline-none" data-testid={`simple-step-body-${stepId}`}>
+        <div ref={stepRef} tabIndex={-1} className="outline-none focus:outline-none focus-visible:outline-none" data-testid={`simple-step-body-${stepId}`}>
           {stepId === 'channel' && (
             <ChannelStep wizard={wizard} availability={availability} onLockedClick={setLockedChannel} t={t} />
           )}

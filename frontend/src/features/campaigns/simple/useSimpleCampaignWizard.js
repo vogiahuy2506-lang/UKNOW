@@ -37,6 +37,7 @@ import {
   scheduleSignature,
 } from './simpleCampaign.edit.helpers';
 import { loadSenderAccounts } from './loadSenderAccounts';
+import { applyTemplateLabels, fetchTemplateLabels } from './resolveTemplateLabels';
 
 const IDLE_PREVIEW = Object.freeze({ status: 'idle', data: null, message: '' });
 const IDLE_SUBMIT = Object.freeze({ status: 'idle', stage: null, message: '' });
@@ -405,6 +406,14 @@ export default function useSimpleCampaignWizard({ campaignId = null } = {}) {
       setSubmitState(IDLE_SUBMIT);
       if (!quiet) setStepId('review');
       setEditLoad({ status: 'ready', message: '' });
+
+      // Điền tên mẫu (GET chỉ trả id; trình mở ở bước Xem lại nên bước Nội dung chưa mount để tự tra) — không chặn màn hình.
+      if (next) {
+        fetchTemplateLabels(next).then((labels) => {
+          if (seq !== loadSeqRef.current) return;
+          setState((prev) => applyTemplateLabels(prev, labels));
+        }).catch(() => {});
+      }
 
       // Điền tên tài khoản gửi (GET chỉ trả id) — không chặn màn hình, lỗi thì để trống.
       if (next?.sender?.id) {

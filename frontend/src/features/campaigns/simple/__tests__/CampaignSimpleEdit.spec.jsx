@@ -231,6 +231,54 @@ describe('Chi tiết chiến dịch — tab Từng bước (chế độ sửa)',
       expect(body.content.body).toBe('Nội dung gốc');
     });
 
+    describe('tên mẫu khi mở lại chiến dịch (mẫu server tự tạo, không nằm trong danh sách mẫu)', () => {
+      const templated = () => getResponse({
+        form: {
+          ...baseData().form,
+          content: { mode: 'template', templateId: 7 },
+          followUps: [{ delayValue: 2, delayUnit: 'days', content: { mode: 'template', templateId: 8 } }],
+        },
+      });
+
+      it('câu tóm tắt ở bước Xem lại nêu TIÊU ĐỀ của mẫu email (tra theo id), không bao giờ ghi "#7"; thẻ mẫu của tin 1 và tin sau cũng hiện đúng tên', async () => {
+        campaignApiService.getSimpleCampaign.mockResolvedValue(templated());
+        emailTemplateApiService.getTemplateById.mockImplementation(async (id) => ({
+          data: { data: id === 7
+            ? { id: 7, templateName: 'Email – 17/10/2026 15:39', subject: 'Tin 1 - chào' }
+            : { id: 8, templateName: 'Email – 17/10/2026 15:39', subject: 'Tin 2 - nhắc' } },
+        }));
+        renderEdit();
+        const summary = await screen.findByTestId('simple-summary');
+        await waitFor(() => expect(summary).toHaveTextContent('“Tin 1 - chào”'));
+        expect(summary).not.toHaveTextContent('#7');
+        expect(emailTemplateApiService.getTemplateById).toHaveBeenCalledWith(7);
+        expect(emailTemplateApiService.getTemplateById).toHaveBeenCalledWith(8);
+
+        openStep('content');
+        expect(await within(screen.getByTestId('simple-content-panel')).findByText('Tin 1 - chào')).toBeInTheDocument();
+        expect(await within(screen.getByTestId('simple-followup-0')).findByText('Tin 2 - nhắc')).toBeInTheDocument();
+      });
+
+      it('tra tên mẫu thất bại → ghi "mẫu đã chọn", tuyệt đối không ghi "#7"', async () => {
+        campaignApiService.getSimpleCampaign.mockResolvedValue(templated());
+        emailTemplateApiService.getTemplateById.mockRejectedValue(new Error('boom'));
+        renderEdit();
+        const summary = await screen.findByTestId('simple-summary');
+        await waitFor(() => expect(summary).toHaveTextContent('mẫu đã chọn'));
+        expect(summary).not.toHaveTextContent('#7');
+        openStep('content');
+        expect(await within(screen.getByTestId('simple-content-panel')).findByText('Mẫu đã chọn')).toBeInTheDocument();
+      });
+    });
+
+    it('chế độ sửa: tiêu đề bước cuối là "Xem lại và lưu"; nút thêm tin không lặp dấu cộng', async () => {
+      renderEdit();
+      await screen.findByTestId('simple-summary');
+      expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Xem lại và lưu');
+      openStep('content');
+      expect((await screen.findByTestId('simple-followup-add')).textContent.trim()).toBe('Thêm tin tiếp theo');
+    });
+
     it('PUT bị từ chối (409) → hiện câu của server, KHÔNG đụng lịch, vẫn còn "Chưa lưu"', async () => {
       campaignApiService.updateSimpleCampaign.mockRejectedValue(apiError('Chiến dịch đang chạy, chưa sửa được.'));
       renderEdit();
@@ -442,6 +490,9 @@ describe('Chi tiết chiến dịch — tab Từng bước (chế độ sửa)',
       campaignApiService.getSimpleCampaign.mockResolvedValue(notSimple());
       renderEdit();
       const view = await screen.findByTestId('simple-readonly');
+      // Phụ đề đầu trang đúng ngữ cảnh chỉ xem (không còn "Sửa từng phần rồi lưu").
+      expect(screen.getByText(/Xem chiến dịch theo từng bước/)).toBeInTheDocument();
+      expect(screen.queryByText(/Sửa từng phần rồi lưu/)).not.toBeInTheDocument();
       expect(within(view).getByTestId('simple-readonly-reasons')).toHaveTextContent('Chiến dịch có khối nâng cao: Rẽ nhánh.');
       await waitFor(() => expect(within(view).getByTestId('simple-readonly-summary')).toHaveTextContent('shop@abc.vn'));
       expect(within(view).getByTestId('simple-readonly-open-builder')).toHaveTextContent('Mở Sơ đồ khối để sửa');

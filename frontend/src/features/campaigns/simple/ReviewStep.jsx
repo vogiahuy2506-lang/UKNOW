@@ -50,7 +50,7 @@ export default function ReviewStep({ wizard, t, locale }) {
 
   return (
     <div>
-      <h2 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-dk-text sm:text-2xl">{t('simpleCampaign.review.title')}</h2>
+      <h2 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-dk-text sm:text-2xl">{t(wizard.isEdit ? 'simpleCampaign.edit.reviewTitle' : 'simpleCampaign.review.title')}</h2>
 
       <p className="mt-4 rounded-2xl border border-orange-200 bg-orange-50/70 p-4 text-base leading-relaxed text-slate-700 dark:border-orange-500/30 dark:bg-orange-950/30 dark:text-dk-text" data-testid="simple-summary">
         <RichSummary text={summary} />
