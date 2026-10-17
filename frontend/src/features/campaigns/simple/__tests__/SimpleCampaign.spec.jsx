@@ -209,6 +209,20 @@ describe('Tạo chiến dịch từng bước (PR-2)', () => {
       await waitFor(() => expect(within(good).getByRole('button', { pressed: true })).toBeInTheDocument());
     });
 
+    it('Email: tài khoản bị khoá theo gói hiện lý do + link gói, không chọn được, không chọn sẵn', async () => {
+      campaignBuilderApiService.getActiveEmailSettings.mockResolvedValue({
+        data: { data: { items: [{ id: 11, name: 'A', email: 'a@x.vn', isLocked: true }] } },
+      });
+      renderPage();
+      fireEvent.click(await screen.findByTestId('simple-channel-email'));
+      const locked = await screen.findByTestId('simple-sender-11');
+      expect(within(locked).getByRole('button', { name: /a@x.vn/ })).toBeDisabled();
+      expect(within(locked).getByText('Đang bị khoá theo gói')).toBeInTheDocument();
+      expect(within(locked).getByRole('link', { name: 'Xem gói của bạn' })).toHaveAttribute('href', '/app/billing');
+      expect(within(locked).queryByRole('button', { pressed: true })).toBeNull();
+      expect(nextButton()).toBeDisabled();
+    });
+
     it('nhiều tài khoản dùng được: không chọn sẵn, phải bấm chọn mới sang được bước kế', async () => {
       campaignBuilderApiService.getActiveEmailSettings.mockResolvedValue({
         data: { data: { items: [{ id: 11, name: 'A', email: 'a@x.vn' }, { id: 12, name: 'B', email: 'b@x.vn' }] } },

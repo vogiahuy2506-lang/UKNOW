@@ -1720,6 +1720,7 @@ export default {
       accountDisconnected: 'Disconnected',
       reconnect: 'Reconnect',
       viewAccounts: 'View accounts',
+      viewPlan: 'View your plan',
       noUsableAccount: 'No account is usable right now. Reconnect an account, then come back here.',
     },
     audience: {

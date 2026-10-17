@@ -29,6 +29,7 @@ class EmailSettingsCrudService {
       domainVerificationStatus: item.domain_verification_status || null,
       domainVerifiedAt: item.domain_verified_at || null,
       userDailySendLimit: item.user_daily_send_limit ?? null,
+      isLocked: Boolean(item.is_locked),
       creatorName: item.creator_name || null,
       createdBy: item.creator_name ? { name: item.creator_name } : null,
       createdAt: item.created_at,

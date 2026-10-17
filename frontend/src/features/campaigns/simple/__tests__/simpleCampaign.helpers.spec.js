@@ -293,6 +293,17 @@ describe('phản hồi server', () => {
       expect.objectContaining({ id: 11, label: 'shop@abc.vn', sublabel: 'Shop', usable: true }),
     ]);
   });
+
+  it('mapEmailAccounts: tài khoản isLocked không dùng được, problem = locked', () => {
+    const accounts = mapEmailAccounts([
+      { id: 11, email: 'a@x.vn', isLocked: false },
+      { id: 12, email: 'b@x.vn', isLocked: true },
+    ]);
+    expect(accounts.map((a) => [a.id, a.usable, a.problem])).toEqual([
+      [11, true, null],
+      [12, false, 'locked'],
+    ]);
+  });
 });
 
 describe('bảng nguồn người nhận theo kênh', () => {

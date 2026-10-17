@@ -11,7 +11,11 @@ class EmailSettingsRepository {
              es.daily_sent_count, es.total_sent_count, es.is_verified, es.status, es.created_at, es.updated_at,
              es.brand_domain, es.domain_verification_status, es.domain_verified_at, es.email_mode, es.platform_prefix,
              es.user_daily_send_limit,
-             COALESCE(u.full_name, u.username) AS creator_name
+             COALESCE(u.full_name, u.username) AS creator_name,
+             EXISTS (
+               SELECT 1 FROM topup_locked_resources tlr
+               WHERE tlr.resource_key = 'email_accounts' AND tlr.resource_id = es.id
+             ) AS is_locked
       FROM email_settings es
       LEFT JOIN users u ON es.id_user = u.id
       WHERE 1=1

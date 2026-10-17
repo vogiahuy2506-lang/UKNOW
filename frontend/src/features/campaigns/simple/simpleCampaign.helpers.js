@@ -557,8 +557,8 @@ export const mapEmailAccounts = (items) =>
     label: String(item.email || item.name || `#${item.id}`),
     sublabel: item.email && item.name && item.name !== item.email ? String(item.name) : '',
     isDefault: item.isDefault === true,
-    usable: true,
-    problem: null,
+    usable: item.isLocked !== true,
+    problem: item.isLocked === true ? 'locked' : null,
   }));
 
 /**

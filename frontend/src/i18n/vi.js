@@ -1725,6 +1725,7 @@ export default {
       accountDisconnected: 'Mất kết nối',
       reconnect: 'Kết nối lại',
       viewAccounts: 'Xem tài khoản',
+      viewPlan: 'Xem gói của bạn',
       noUsableAccount: 'Chưa có tài khoản nào dùng được. Hãy kết nối lại tài khoản rồi quay lại đây.',
     },
     audience: {

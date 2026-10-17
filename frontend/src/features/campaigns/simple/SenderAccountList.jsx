@@ -9,6 +9,9 @@ const SETTINGS_LINK = Object.freeze({
   zalo: '/app/settings/channels#zalo',
 });
 
+// Tài khoản bị khoá theo gói: mở khoá bằng cách xem/nâng gói, không phải kết nối lại.
+const BILLING_LINK = '/app/billing';
+
 const DOT_CLASS = Object.freeze({
   ok: 'bg-emerald-500',
   locked: 'bg-slate-400 dark:bg-dk-muted',
@@ -117,8 +120,8 @@ export default function SenderAccountList({ channel, selected, onSelect, t }) {
                     <span className="font-medium text-red-600 dark:text-red-400">
                       {account.problem === 'locked' ? t('simpleCampaign.channel.accountLocked') : t('simpleCampaign.channel.accountDisconnected')}
                     </span>
-                    <Link to={SETTINGS_LINK[kind]} className="font-semibold text-orange-600 underline dark:text-orange-400">
-                      {account.problem === 'locked' ? t('simpleCampaign.channel.viewAccounts') : t('simpleCampaign.channel.reconnect')}
+                    <Link to={account.problem === 'locked' ? BILLING_LINK : SETTINGS_LINK[kind]} className="font-semibold text-orange-600 underline dark:text-orange-400">
+                      {account.problem === 'locked' ? t('simpleCampaign.channel.viewPlan') : t('simpleCampaign.channel.reconnect')}
                     </Link>
                   </span>
                 )}
