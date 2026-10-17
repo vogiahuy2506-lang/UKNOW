@@ -160,6 +160,40 @@ describe('readSimpleFormFromGraph — đọc ngược theo từng loại nguồn
   });
 });
 
+describe('dữ liệu prod 17/10/2026: cạnh `custom` của trình dựng + khối `end` của trợ lý AI cũ', () => {
+  it('cạnh `custom` (trình dựng lưu) là nối thường → đọc ngược + khứ hồi khớp', async () => {
+    const stored = persist(await build(emailBody({ followUps: [fu(2, 'days', 12)] })));
+    stored.connections.forEach((conn) => { conn.connectionType = 'custom'; });
+    const read = readSimpleFormFromGraph(stored.nodes, stored.connections);
+    expect(read.reasons).toEqual([]);
+    const rebuilt = await build({ channel: read.channel, ...read.form });
+    expect(isRoundTripEquivalent(stored, rebuilt)).toEqual({ ok: true, diffs: [] });
+  });
+
+  it('khối `end` ở CUỐI đường bị bỏ qua → đọc ngược được, khứ hồi khớp (sơ đồ dựng lại không có end)', async () => {
+    const stored = persist(await build(zaloBody()));
+    const last = stored.nodes[stored.nodes.length - 1];
+    stored.nodes.push({ id: '9999', nodeType: 'end', nodeSubtype: 'end', nodeName: 'Kết thúc', config: {} });
+    stored.connections.push({ id: 1, sourceNodeId: last.id, targetNodeId: '9999', connectionType: 'default', connectionLabel: '', conditionConfig: null });
+    const read = readSimpleFormFromGraph(stored.nodes, stored.connections);
+    expect(read.reasons).toEqual([]);
+    const rebuilt = await build({ channel: read.channel, ...read.form });
+    expect(isRoundTripEquivalent(stored, rebuilt)).toEqual({ ok: true, diffs: [] });
+  });
+
+  it('khối `end` ở GIỮA đường (còn cạnh đi ra) vẫn bị từ chối như khối nâng cao', async () => {
+    const stored = persist(await build(emailBody()));
+    const [first, second] = stored.nodes;
+    stored.nodes.push({ id: '9998', nodeType: 'end', nodeSubtype: 'end', nodeName: 'Kết thúc', config: {} });
+    const conn = stored.connections.find((item) => item.sourceNodeId === first.id && item.targetNodeId === second.id);
+    conn.targetNodeId = '9998';
+    stored.connections.push({ id: 2, sourceNodeId: '9998', targetNodeId: second.id, connectionType: 'default', connectionLabel: '', conditionConfig: null });
+    const read = readSimpleFormFromGraph(stored.nodes, stored.connections);
+    expect(read.form).toBeNull();
+    expect(read.reasons.map((item) => item.code)).toContain(CODE.NOT_SIMPLE);
+  });
+});
+
 describe('readSimpleFormFromGraph — lý do không đọc ngược được', () => {
   it('có khối nâng cao (Rẽ nhánh) → not_simple, nêu tên khối + subtype', async () => {
     const stored = persist(await build(emailBody()));
@@ -355,7 +389,8 @@ describe('isRoundTripEquivalent — mỗi trường form điều khiển lệch 
 
   it('thứ tự khối / thêm khối / bớt khối → không editable', async () => {
     const extra = await pair(baseBody(), ({ stored }) => {
-      stored.nodes.push({ id: '8000', nodeType: 'end', nodeSubtype: 'end', nodeName: 'Kết thúc', config: {} });
+      // Khối có tác dụng lúc chạy (chờ). Khối `end` ở cuối thì được bỏ qua có chủ đích — xem ca "dữ liệu prod 17/10/2026".
+      stored.nodes.push({ id: '8000', nodeType: 'logic', nodeSubtype: 'wait_time', nodeName: 'Chờ', config: { waitValue: 1, waitUnit: 'days' } });
       stored.connections.push({ sourceNodeId: sendOf(stored).id, targetNodeId: '8000', connectionType: 'default' });
     });
     expect(extra.ok).toBe(false);

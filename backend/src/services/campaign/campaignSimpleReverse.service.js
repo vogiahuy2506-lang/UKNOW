@@ -89,6 +89,38 @@ const nodeId = (node) => asString(node?.id ?? node?.tempId);
 // ---------------------------------------------------------------------------------------------------------------------
 
 /**
+ * Kiểu nối THƯỜNG (không điều kiện). Trình dựng lưu cạnh React Flow là `custom`, compiler/trợ lý AI lưu `default` — đo prod
+ * 17/10/2026: 100% cạnh là một trong hai, không cạnh nào có `condition_config`. Trước bản này `custom` bị coi là "nối điều
+ * kiện" → 144/297 chiến dịch thật bị chỉ-xem oan.
+ */
+const PLAIN_CONNECTION_TYPES = new Set(['default', 'custom']);
+
+/**
+ * Bỏ khối `end` (Kết thúc) nằm CUỐI đường (không có cạnh đi ra) cùng cạnh trỏ vào nó. Khối này không làm gì lúc chạy;
+ * trợ lý AI cũ hay thêm (79/297 chiến dịch prod 17/10/2026) → trước bản này bị coi là "khối nâng cao". Khối `end` ở giữa đường
+ * (còn cạnh đi ra) giữ nguyên để bị từ chối như cũ. Lưu từ tab Từng bước thì sơ đồ mới không còn khối `end` — tương đương lúc chạy.
+ *
+ * @param {object[]} nodes
+ * @param {object[]} connections
+ * @returns {{ nodes: object[], connections: object[] }}
+ */
+export function stripTerminalEndNodes(nodes, connections) {
+  const list = Array.isArray(nodes) ? nodes : [];
+  const conns = Array.isArray(connections) ? connections : [];
+  const endIds = new Set(
+    list
+      .filter((node) => getNodeSubtype(node) === 'end')
+      .map((node) => nodeId(node))
+      .filter((id) => !conns.some((conn) => asString(conn?.sourceNodeId) === id)),
+  );
+  if (endIds.size === 0) return { nodes: list, connections: conns };
+  return {
+    nodes: list.filter((node) => !endIds.has(nodeId(node))),
+    connections: conns.filter((conn) => !endIds.has(asString(conn?.targetNodeId))),
+  };
+}
+
+/**
  * Sắp các khối theo đường đi từ khối bắt đầu. Sơ đồ của trình từng bước luôn là MỘT đường thẳng
  * (trigger → [chọn tài khoản Zalo] → [nguồn] → gửi): có nhánh, khối rời, nối kiểu khác 'default' hoặc có điều kiện đều không phải.
  *
@@ -108,7 +140,7 @@ export function orderLinearPath(nodes, connections) {
     const source = asString(conn?.sourceNodeId);
     const target = asString(conn?.targetNodeId);
     const type = asString(conn?.connectionType) || 'default';
-    if (type !== 'default') return { ok: false, why: 'Sơ đồ có đường nối điều kiện.' };
+    if (!PLAIN_CONNECTION_TYPES.has(type)) return { ok: false, why: 'Sơ đồ có đường nối điều kiện.' };
     const condition = conn?.conditionConfig;
     if (condition && typeof condition === 'object' && Object.keys(condition).length > 0) {
       return { ok: false, why: 'Sơ đồ có đường nối điều kiện.' };
@@ -199,8 +231,9 @@ function readAudience({ channel, audienceNode, sendConfig }) {
  *   reasons: Array<{ code: string, message: string }>,
  * }} `form` null khi không đọc ngược được (kèm `reasons`)
  */
-export function readSimpleFormFromGraph(nodes, connections) {
-  const list = Array.isArray(nodes) ? nodes : [];
+export function readSimpleFormFromGraph(rawNodes, rawConnections) {
+  const { nodes, connections } = stripTerminalEndNodes(rawNodes, rawConnections);
+  const list = nodes;
   const reasons = [];
   const fail = (code, message, extra) => reasons.push(reason(code, message, extra));
 
@@ -393,7 +426,8 @@ function flatten(value, prefix, into) {
 }
 
 function canonicalGraph(graph) {
-  const path = orderLinearPath(graph?.nodes, graph?.connections);
+  const stripped = stripTerminalEndNodes(graph?.nodes, graph?.connections);
+  const path = orderLinearPath(stripped.nodes, stripped.connections);
   if (!path.ok) return { ok: false, why: path.why };
   const idToIndex = new Map(path.ordered.map((node, index) => [nodeId(node), index]));
   return {
@@ -447,4 +481,4 @@ export function isRoundTripEquivalent(stored, rebuilt) {
   return { ok: diffs.length === 0, diffs };
 }
 
-export default { readSimpleFormFromGraph, isRoundTripEquivalent, orderLinearPath, READ_ONLY_REASON_CODES };
+export default { readSimpleFormFromGraph, isRoundTripEquivalent, orderLinearPath, stripTerminalEndNodes, READ_ONLY_REASON_CODES };
