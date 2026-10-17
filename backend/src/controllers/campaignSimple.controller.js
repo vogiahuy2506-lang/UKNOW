@@ -1,7 +1,10 @@
 import campaignController from './campaign.controller.js';
 import campaignSimpleService, { SimpleCampaignError } from '../services/campaign/campaignSimple.service.js';
+import campaignSimpleEditService from '../services/campaign/campaignSimpleEdit.service.js';
 import { CAMPAIGN_VIA } from '../utils/campaignVia.util.js';
 import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
+import { logWorkspace, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
+import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
 
 /**
  * HTTP cho trình "Tạo chiến dịch từng bước" (PLAN_TAO_CHIEN_DICH_TUNG_BUOC_2026-10-14, PR-1).
@@ -100,6 +103,76 @@ class CampaignSimpleController {
         await campaignSimpleService.cleanupCreatedTemplates(createdTemplates, ownerId).catch(() => {});
       }
       return this.sendError(res, error, 'create');
+    }
+  }
+
+  /**
+   * GET /campaigns/:id/simple — đọc ngược chiến dịch đã lưu ra form của trình từng bước (PLAN_HAI_TAB_TUNG_BUOC §3.1).
+   * @param {import('express').Request} req - params: { id }
+   * @param {import('express').Response} res
+   */
+  async getSimple(req, res) {
+    try {
+      const campaignId = Number.parseInt(req.params.id, 10);
+      if (!Number.isInteger(campaignId) || campaignId <= 0) {
+        return res.status(400).json({ success: false, message: 'ID chiến dịch không hợp lệ' });
+      }
+      const { diffs, ...data } = await campaignSimpleEditService.getSimpleEditState({ authUser: req.user, campaignId });
+      // `diffs` (khác biệt kỹ thuật khi so khớp khứ hồi) chỉ để điều tra: ghi log, không đưa cho trình duyệt.
+      if (diffs?.length) console.info(`[CampaignSimple] campaign ${campaignId} chỉ-xem do lệch khứ hồi:`, diffs.slice(0, 10).join(' | '));
+      return res.json({ success: true, data });
+    } catch (error) {
+      return this.sendError(res, error, 'getSimple');
+    }
+  }
+
+  /**
+   * PUT /campaigns/:id/simple — ghi đè nodes + connections của chiến dịch đã lưu bằng form của trình từng bước.
+   * @param {import('express').Request} req - params: { id }; body như `POST /campaigns/simple`
+   * @param {import('express').Response} res
+   */
+  async updateSimple(req, res) {
+    const createdTemplates = { emailTemplateIds: [], zaloTemplateIds: [] };
+    let ownerId = null;
+    let updated = false;
+    try {
+      const campaignId = Number.parseInt(req.params.id, 10);
+      if (!Number.isInteger(campaignId) || campaignId <= 0) {
+        return res.status(400).json({ success: false, message: 'ID chiến dịch không hợp lệ' });
+      }
+      ownerId = getWorkspaceContext(req.user).workspaceOwnerId;
+      const result = await campaignSimpleEditService.updateSimpleCampaign({
+        authUser: req.user,
+        campaignId,
+        body: req.body,
+        createdTemplates,
+      });
+      updated = true;
+
+      try {
+        await logWorkspace(
+          getWorkspaceAuditContext(req),
+          AUDIT_ACTIONS.CAMPAIGN_UPDATED,
+          AUDIT_ENTITY_TYPES.CAMPAIGN,
+          campaignId,
+          { nodesTruoc: result.nodesBefore, nodesSau: result.nodesAfter, via: CAMPAIGN_VIA.SIMPLE },
+        );
+      } catch (auditError) {
+        console.warn('[CampaignSimple] CAMPAIGN_UPDATED audit failed:', auditError?.message);
+      }
+
+      return res.json({
+        success: true,
+        data: {
+          campaignId: result.campaignId,
+          campaignName: result.campaignName,
+          channel: result.channel,
+          recipientCountHint: result.recipientCountHint,
+        },
+      });
+    } catch (error) {
+      if (!updated) await campaignSimpleService.cleanupCreatedTemplates(createdTemplates, ownerId).catch(() => {});
+      return this.sendError(res, error, 'updateSimple');
     }
   }
 }

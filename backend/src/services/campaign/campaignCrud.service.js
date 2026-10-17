@@ -175,6 +175,7 @@ class CampaignCrudService {
       campaignType: campaign.campaign_type,
       status: campaign.status,
       origin: campaign.origin,
+      workspaceOwnerId: campaign.workspace_owner_id,
       flowJson: campaign.flow_json,
       landingPageUrl: campaign.landing_page_url,
       startDate: campaign.start_date,

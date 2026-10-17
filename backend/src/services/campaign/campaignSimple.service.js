@@ -28,11 +28,11 @@ import campaignNodeRegistryService from './campaignNodeRegistry.service.js';
 import { fillReadSheetFirstTabNames } from './readSheetAutoName.service.js';
 import { buildChannelNotInPlanMessage } from './campaignChannelFlags.util.js';
 import { applyDirectRecipients } from '../../utils/directRecipients.util.js';
-import { MAX_AI_MANUAL_RECIPIENTS, validateManualRecipients } from '../../utils/manualRecipients.util.js';
+import { validateManualRecipients } from '../../utils/manualRecipients.util.js';
+import { ALL_CUSTOMERS_LIMIT_CAP } from '../../utils/interestedLimits.util.js';
 import { normalizeFormIdList } from '../../utils/campaignFormIds.util.js';
 import { extractSpreadsheetId } from '../../utils/googleSheetWorksheets.util.js';
 import { getNodeSubtype } from '../../utils/nodeSubtype.util.js';
-import { normalizeVietnamesePhone, isValidVietnamesePhone } from '../../utils/vietnamesePhone.util.js';
 import { getWorkspaceContext } from '../../utils/workspaceContext.util.js';
 import { checkUserResourceLimit } from '../../utils/userResourceLimit.util.js';
 
@@ -52,8 +52,12 @@ const MAX_LANDING_SLUGS = 50;
 const MAX_ZALO_GROUPS = 500;
 const MAX_CUSTOM_BODY_LENGTH = Object.freeze({ email: 100000, zalo: 4000, zalo_group: 4000 });
 const MAX_EMAIL_SUBJECT_LENGTH = 150;
-// Cùng quy tắc `validateManualRecipients` (manualRecipients.util.js) — lọc trước để một dòng khách lỗi không làm hỏng cả danh sách.
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** Chuỗi tin: tin 1 + tối đa 9 tin tiếp theo (tổng 10 tin) — PLAN_HAI_TAB_TUNG_BUOC §3.1. */
+export const MAX_FOLLOW_UPS = 9;
+export const FOLLOW_UP_DELAY_UNITS = Object.freeze(['days', 'hours']);
+const MAX_FOLLOW_UP_DELAY_VALUE = 9999;
+/** Chữ giữ chỗ cho bước dùng mẫu trong lúc `applySlotsToGraph` (xem `applyStepContents`). */
+const TEMPLATE_STEP_PLACEHOLDER = '__template__';
 
 /** Mã issue của thẻ xác nhận → câu tiếng Việt cho người dùng + mã lỗi API khi tạo bị chặn. */
 const ISSUE_INFO = Object.freeze({
@@ -158,63 +162,88 @@ export function buildDefaultCampaignName(channel, now = new Date()) {
 }
 
 /**
- * Lấy mọi email/SĐT khách của workspace (nguồn "Khách hàng đã lưu"). Phạm vi workspace do repository lo (cùng
- * `GET /customers`). Quá trần `MAX_AI_MANUAL_RECIPIENTS` → 400 nói rõ con số; không có ai hợp lệ → 400.
+ * Kiểm + chuẩn hoá MỘT tin (tin 1 hoặc một tin trong `followUps`). Hàm thuần.
  *
- * @param {{ ownerId: number, channel: 'email'|'zalo' }} input
- * @returns {Promise<string[]>} email (thường hoá) hoặc SĐT (đã chuẩn hoá), đã khử trùng
+ * @param {unknown} rawContent `{ mode:'template', templateId }` | `{ mode:'custom', subject?, body }`
+ * @param {'email'|'zalo'|'zalo_group'} channel
+ * @param {string} [prefix] tiền tố câu lỗi cho tin sau ("Tin 2: ")
+ * @returns {{ mode: 'template', templateId: number } | { mode: 'custom', subject: string, body: string }}
  */
-async function loadCustomerContacts({ ownerId, channel }) {
-  const kind = channel === 'email' ? 'email' : 'phone';
-  const rows = await customerReadRepository.getCustomerContactValues({
-    userId: ownerId,
-    kind,
-    limit: MAX_AI_MANUAL_RECIPIENTS + 1,
-  });
-  if (rows.length > MAX_AI_MANUAL_RECIPIENTS) {
-    throw bad(
-      'CUSTOMERS_OVER_LIMIT',
-      `Danh sách khách hàng đã lưu vượt trần ${MAX_AI_MANUAL_RECIPIENTS.toLocaleString('vi-VN')} người nhận cho mỗi chiến dịch. Hãy chọn nguồn khác (biểu mẫu, landing page, Google Sheet) hoặc chia nhỏ danh sách.`,
-      { limit: MAX_AI_MANUAL_RECIPIENTS },
-    );
+function normalizeStepContent(rawContent, channel, prefix = '') {
+  const raw = rawContent && typeof rawContent === 'object' ? rawContent : {};
+  const mode = toTrimmedString(raw.mode);
+  if (mode === 'template') {
+    const templateId = toPositiveInt(raw.templateId);
+    if (!templateId) throw bad('TEMPLATE_REQUIRED', `${prefix}Vui lòng chọn một mẫu tin.`);
+    return { mode: 'template', templateId };
   }
-  const seen = new Set();
-  const contacts = [];
-  for (const raw of rows) {
-    const value = kind === 'email' ? String(raw || '').trim().toLowerCase() : normalizeVietnamesePhone(raw);
-    const valid = kind === 'email' ? EMAIL_PATTERN.test(value) : isValidVietnamesePhone(value);
-    if (!valid || seen.has(value)) continue;
-    seen.add(value);
-    contacts.push(value);
+  if (mode === 'custom') {
+    const text = toTrimmedString(raw.body);
+    if (!text) throw bad('CONTENT_REQUIRED', `${prefix}Vui lòng nhập nội dung tin nhắn.`);
+    if (text.length > MAX_CUSTOM_BODY_LENGTH[channel]) {
+      throw bad('CONTENT_TOO_LONG', `${prefix}Nội dung tối đa ${MAX_CUSTOM_BODY_LENGTH[channel].toLocaleString('vi-VN')} ký tự.`);
+    }
+    let subject = '';
+    if (channel === 'email') {
+      subject = toTrimmedString(raw.subject).replace(/\s+/g, ' ');
+      if (!subject) throw bad('SUBJECT_REQUIRED', `${prefix}Vui lòng nhập tiêu đề email.`);
+      if (subject.length > MAX_EMAIL_SUBJECT_LENGTH) {
+        throw bad('SUBJECT_TOO_LONG', `${prefix}Tiêu đề email tối đa ${MAX_EMAIL_SUBJECT_LENGTH} ký tự.`);
+      }
+    }
+    return { mode: 'custom', subject, body: text };
   }
-  if (contacts.length === 0) {
-    throw bad(
-      'CUSTOMERS_EMPTY',
-      kind === 'email'
-        ? 'Chưa có khách hàng nào có email hợp lệ và còn nhận thư.'
-        : 'Chưa có khách hàng nào có số điện thoại hợp lệ.',
-    );
-  }
-  return contacts;
+  throw bad('INVALID_CONTENT', `${prefix}Vui lòng chọn dùng mẫu có sẵn hoặc tự soạn nội dung.`);
 }
 
 /**
- * Kiểm + chuẩn hoá body của trình từng bước. KHÔNG ghi DB. Có đọc DB ở hai chỗ: danh sách khách ("customers") và quyền sở hữu
- * biểu mẫu ("form").
+ * Kiểm + chuẩn hoá chuỗi tin tiếp theo (`followUps`, tin 2..N). Hàm thuần. Thiếu/null → [].
+ *
+ * @param {unknown} rawFollowUps
+ * @param {'email'|'zalo'|'zalo_group'} channel
+ * @returns {Array<{ delayValue: number, delayUnit: 'days'|'hours', content: object }>}
+ */
+function normalizeFollowUps(rawFollowUps, channel) {
+  if (rawFollowUps == null) return [];
+  if (!Array.isArray(rawFollowUps)) throw bad('INVALID_FOLLOW_UPS', 'Danh sách tin tiếp theo không hợp lệ.');
+  if (rawFollowUps.length > MAX_FOLLOW_UPS) {
+    throw bad('FOLLOW_UPS_TOO_MANY', `Chuỗi tin tối đa ${MAX_FOLLOW_UPS + 1} tin (tin đầu và ${MAX_FOLLOW_UPS} tin tiếp theo).`);
+  }
+  return rawFollowUps.map((item, index) => {
+    const prefix = `Tin ${index + 2}: `;
+    const raw = item && typeof item === 'object' ? item : {};
+    const rawDelay = typeof raw.delayValue === 'string' ? raw.delayValue.trim() : raw.delayValue;
+    const delayValue = typeof rawDelay === 'number' || (typeof rawDelay === 'string' && rawDelay !== '') ? Number(rawDelay) : NaN;
+    if (!Number.isInteger(delayValue) || delayValue <= 0 || delayValue > MAX_FOLLOW_UP_DELAY_VALUE) {
+      throw bad('INVALID_FOLLOW_UP_DELAY', `${prefix}Thời gian chờ phải là số nguyên lớn hơn 0.`);
+    }
+    const delayUnit = toTrimmedString(raw.delayUnit);
+    if (!FOLLOW_UP_DELAY_UNITS.includes(delayUnit)) {
+      throw bad('INVALID_FOLLOW_UP_DELAY', `${prefix}Đơn vị chờ chỉ có thể là ngày hoặc giờ.`);
+    }
+    return { delayValue, delayUnit, content: normalizeStepContent(raw.content, channel, prefix) };
+  });
+}
+
+/**
+ * Kiểm + chuẩn hoá body của trình từng bước. KHÔNG ghi DB. Chỉ đọc DB ở một chỗ: quyền sở hữu biểu mẫu ("form"), và bỏ qua được
+ * bằng `skipDbChecks` (đọc ngược một chiến dịch đã lưu để dựng lại đồ thị so khớp — không có gì để hỏi người dùng).
+ * Nguồn "Khách hàng đã lưu" KHÔNG còn lấy danh sách lúc tạo: là khối động `interested_customers` loại `all` (đọc lại mỗi lượt chạy).
  *
  * @param {object} body
- * @param {{ ownerId: number, now?: Date }} context
+ * @param {{ ownerId: number, now?: Date, skipDbChecks?: boolean }} context
  * @returns {Promise<{
  *   campaignName: string,
  *   channel: 'email'|'zalo'|'zalo_group',
  *   senderId: number,
  *   audience: object,
  *   content: { mode: 'template', templateId: number } | { mode: 'custom', subject: string, body: string },
+ *   followUps: Array<{ delayValue: number, delayUnit: 'days'|'hours', content: object }>,
  *   directRecipients: { emails?: string[], phones?: string[], uids?: string[] }|null,
  *   recipientCountHint: number|null,
  * }>}
  */
-export async function normalizeSimpleBody(body, { ownerId, now = new Date() }) {
+export async function normalizeSimpleBody(body, { ownerId, now = new Date(), skipDbChecks = false }) {
   const source = body && typeof body === 'object' ? body : {};
 
   const channel = toTrimmedString(source.channel);
@@ -242,9 +271,7 @@ export async function normalizeSimpleBody(body, { ownerId, now = new Date() }) {
   let recipientCountHint = null;
 
   if (type === 'customers') {
-    const contacts = await loadCustomerContacts({ ownerId, channel });
-    directRecipients = channel === 'email' ? { emails: contacts } : { phones: contacts };
-    recipientCountHint = contacts.length;
+    // Khối động: không có danh sách, không đếm lúc tạo (preview tự đếm tổng khách của workspace).
   } else if (type === 'landing') {
     const slugs = toStringList(rawAudience.slugs)
       .map((slug) => slug.toLowerCase().replace(/^\/+|\/+$/g, ''))
@@ -255,9 +282,11 @@ export async function normalizeSimpleBody(body, { ownerId, now = new Date() }) {
   } else if (type === 'form') {
     const formIds = normalizeFormIdList(rawAudience.formIds);
     if (formIds.length === 0) throw bad('FORM_REQUIRED', 'Vui lòng chọn ít nhất một biểu mẫu.');
-    const owned = new Set(await aiCampaignRepository.getFormIdsOwnedBy(ownerId, formIds));
-    if (formIds.some((id) => !owned.has(id))) {
-      throw bad('FORM_NOT_FOUND', 'Có biểu mẫu không tồn tại hoặc không thuộc tài khoản của bạn.');
+    if (!skipDbChecks) {
+      const owned = new Set(await aiCampaignRepository.getFormIdsOwnedBy(ownerId, formIds));
+      if (formIds.some((id) => !owned.has(id))) {
+        throw bad('FORM_NOT_FOUND', 'Có biểu mẫu không tồn tại hoặc không thuộc tài khoản của bạn.');
+      }
     }
     audience.formIds = formIds;
   } else if (type === 'sheet') {
@@ -288,50 +317,31 @@ export async function normalizeSimpleBody(body, { ownerId, now = new Date() }) {
     recipientCountHint = groupIds.length;
   }
 
-  const rawContent = source.content && typeof source.content === 'object' ? source.content : {};
-  const mode = toTrimmedString(rawContent.mode);
-  let content;
-  if (mode === 'template') {
-    const templateId = toPositiveInt(rawContent.templateId);
-    if (!templateId) throw bad('TEMPLATE_REQUIRED', 'Vui lòng chọn một mẫu tin.');
-    content = { mode: 'template', templateId };
-  } else if (mode === 'custom') {
-    const text = toTrimmedString(rawContent.body);
-    if (!text) throw bad('CONTENT_REQUIRED', 'Vui lòng nhập nội dung tin nhắn.');
-    if (text.length > MAX_CUSTOM_BODY_LENGTH[channel]) {
-      throw bad('CONTENT_TOO_LONG', `Nội dung tối đa ${MAX_CUSTOM_BODY_LENGTH[channel].toLocaleString('vi-VN')} ký tự.`);
-    }
-    let subject = '';
-    if (channel === 'email') {
-      subject = toTrimmedString(rawContent.subject).replace(/\s+/g, ' ');
-      if (!subject) throw bad('SUBJECT_REQUIRED', 'Vui lòng nhập tiêu đề email.');
-      if (subject.length > MAX_EMAIL_SUBJECT_LENGTH) {
-        throw bad('SUBJECT_TOO_LONG', `Tiêu đề email tối đa ${MAX_EMAIL_SUBJECT_LENGTH} ký tự.`);
-      }
-    }
-    content = { mode: 'custom', subject, body: text };
-  } else {
-    throw bad('INVALID_CONTENT', 'Vui lòng chọn dùng mẫu có sẵn hoặc tự soạn nội dung.');
-  }
+  const content = normalizeStepContent(source.content, channel);
+  const followUps = normalizeFollowUps(source.followUps, channel);
 
-  return { campaignName, channel, senderId, audience, content, directRecipients, recipientCountHint };
+  return { campaignName, channel, senderId, audience, content, followUps, directRecipients, recipientCountHint };
 }
 
 /**
  * Dựng `CampaignIntentV1` từ body đã chuẩn hoá — bảng ánh xạ ở plan §PR-1. Hàm thuần.
- * "Khách hàng đã lưu" KHÔNG dùng audience `db` (node `interested_customers` đọc `customer_purchases`, gần như luôn ra 0 người):
- * server lấy danh sách rồi đổ vào danh sách nhập sẵn, nên intent là `manual`.
+ * "Khách hàng đã lưu" dùng audience `db` → khối động `interested_customers` loại `all` (toàn bộ khách workspace, trần 50.000, đọc lại
+ * mỗi lượt chạy — PLAN_TAO_CHIEN_DICH PR-5). Có `followUps` → lịch `drip` (tin 1 + N tin, mỗi ngày 1 tin; độ trễ thật ghi đè ở
+ * `compileSimpleGraph`).
  *
  * @param {Awaited<ReturnType<typeof normalizeSimpleBody>>} input
  * @returns {object} CampaignIntentV1
  */
 export function buildSimpleIntent(input) {
   const { channel, senderId, audience } = input;
+  const followUps = Array.isArray(input.followUps) ? input.followUps : [];
   const recipientKind = channel === 'email' ? 'email' : 'phone';
 
   let intentAudience;
   switch (audience.type) {
     case 'customers':
+      intentAudience = { type: 'db', recipientKind };
+      break;
     case 'manual':
       intentAudience = { type: 'manual', recipientKind };
       break;
@@ -359,7 +369,7 @@ export function buildSimpleIntent(input) {
     channel,
     sender: { type: channel === 'email' ? 'email_account' : 'zalo_account', id: senderId },
     audience: intentAudience,
-    schedule: { type: 'once' },
+    schedule: followUps.length > 0 ? { type: 'drip', days: 1 + followUps.length, slotsPerDay: 1 } : { type: 'once' },
   };
 }
 
@@ -370,22 +380,83 @@ const SEND_NODE_BY_CHANNEL = Object.freeze({
   zalo_group: { subtype: 'send_zalo_group', stepsField: 'zaloGroupTemplateSteps' },
 });
 
-/** Gán mẫu tin có sẵn vào bước 0 của khối gửi (sửa tại chỗ trên đồ thị vừa biên dịch). */
-function attachTemplate(nodes, channel, templateId) {
+/**
+ * Gán nội dung từng tin lên các bước của khối gửi (sửa tại chỗ trên đồ thị vừa biên dịch).
+ *  - mẫu có sẵn → `templateId`;
+ *  - tự soạn → `applySlotsToGraph` đúng `slotId` của bước (email bắt buộc tiêu đề cho MỌI tin tự soạn).
+ * `applySlotsToGraph` luôn chạy `assertNoEmptyContent` trên MỌI bước của khối gửi — bước dùng mẫu (không có `message`) sẽ bị từ
+ * chối. Nên bước dùng mẫu được điền chữ giữ chỗ trong lúc áp, rồi trả về rỗng + gắn `templateId` ngay sau đó.
+ */
+function applyStepContents({ compiled, nodes, connections, channel, contents }) {
   const { subtype, stepsField } = SEND_NODE_BY_CHANNEL[channel];
-  const sendNode = nodes.find((node) => getNodeSubtype(node) === subtype);
-  const step = sendNode?.config?.[stepsField]?.[0];
-  if (!step) throw bad('INVALID_DRAFT_RESOURCES', 'Không dựng được bước gửi cho chiến dịch.');
-  step.templateId = templateId;
+  const sendNodeOf = (list) => list.find((node) => getNodeSubtype(node) === subtype);
+  const stepsOf = (list) => sendNodeOf(list)?.config?.[stepsField];
+
+  const steps = stepsOf(nodes);
+  if (!Array.isArray(steps) || steps.length !== contents.length || contents.some((_, index) => !steps[index])) {
+    throw bad('INVALID_DRAFT_RESOURCES', 'Không dựng được bước gửi cho chiến dịch.');
+  }
+
+  const customSlots = [];
+  const customContentSlots = [];
+  contents.forEach((content, index) => {
+    if (content.mode !== 'custom') return;
+    const slot = compiled.contentSlots?.[index];
+    if (!slot) throw bad('INVALID_DRAFT_RESOURCES', 'Không dựng được bước gửi cho chiến dịch.');
+    customContentSlots.push(slot);
+    customSlots.push({ slotId: slot.slotId, message: content.body, subject: content.subject });
+  });
+
+  let resultNodes = nodes;
+  let resultConnections = connections;
+  if (customSlots.length > 0) {
+    const working = JSON.parse(JSON.stringify(nodes));
+    const workingSteps = stepsOf(working);
+    contents.forEach((content, index) => {
+      if (content.mode === 'custom') return;
+      if (channel === 'email') {
+        workingSteps[index].emailSubject = TEMPLATE_STEP_PLACEHOLDER;
+        workingSteps[index].emailBody = TEMPLATE_STEP_PLACEHOLDER;
+      } else {
+        workingSteps[index].message = TEMPLATE_STEP_PLACEHOLDER;
+      }
+    });
+    try {
+      ({ script: { nodes: resultNodes, connections: resultConnections } } = applySlotsToGraph(
+        { ...compiled, nodes: working, connections, contentSlots: customContentSlots },
+        customSlots,
+      ));
+    } catch (error) {
+      throw bad('INVALID_CONTENT', error?.message || 'Nội dung tin nhắn không hợp lệ.');
+    }
+  }
+
+  const finalSteps = stepsOf(resultNodes);
+  contents.forEach((content, index) => {
+    if (content.mode !== 'template') return;
+    const step = finalSteps[index];
+    step.templateId = content.templateId;
+    if (channel === 'email') {
+      step.emailSubject = '';
+      step.emailBody = '';
+    } else {
+      step.message = '';
+    }
+  });
+  return { nodes: resultNodes, connections: resultConnections };
 }
 
 /**
  * Biên dịch body → đồ thị chiến dịch (chưa prepare): intent → (landing → form) → isCompilableIntent → compileCampaign →
- * gắn nội dung. Không chạm DB trừ bước tra landing → biểu mẫu.
+ * (chuỗi tin: ghi đè độ trễ từng bước) → gắn nội dung. Không chạm DB trừ bước tra landing → biểu mẫu.
+ *
+ * Chuỗi tin: `buildSimpleIntent` dựng lịch `drip` mỗi ngày 1 tin, bộ biên dịch đặt độ trễ 1 ngày mỗi bước; ở đây ghi đè bằng độ trễ
+ * thật của người dùng. Bước 0: `delayValue: 0`. Bước i ≥ 1: `delayFrom: 'prev'` (BẮT BUỘC — thiếu thì runtime coi là 'start' và mọi bước
+ * sau cùng đến hạn một lúc, xem `computeDripStepDelay` ở campaignCompiler.service.js).
  *
  * @returns {Promise<{ nodes: object[], connections: object[] }>}
  */
-async function compileSimpleGraph(input, { ownerId }) {
+export async function compileSimpleGraph(input, { ownerId }) {
   const intent = await applyLandingAudienceResolution(buildSimpleIntent(input), ownerId);
 
   const check = isCompilableIntent(intent);
@@ -399,22 +470,32 @@ async function compileSimpleGraph(input, { ownerId }) {
   }
   const compiled = compileCampaign(intent);
 
-  let nodes = compiled.nodes;
-  let connections = compiled.connections;
+  const followUps = Array.isArray(input.followUps) ? input.followUps : [];
+  const contents = [input.content, ...followUps.map((item) => item.content)];
 
-  if (input.content.mode === 'custom') {
-    const slot = compiled.contentSlots?.[0];
-    if (!slot) throw bad('INVALID_DRAFT_RESOURCES', 'Không dựng được bước gửi cho chiến dịch.');
-    try {
-      ({ script: { nodes, connections } } = applySlotsToGraph(compiled, [
-        { slotId: slot.slotId, message: input.content.body, subject: input.content.subject },
-      ]));
-    } catch (error) {
-      throw bad('INVALID_CONTENT', error?.message || 'Nội dung tin nhắn không hợp lệ.');
-    }
-  } else {
-    attachTemplate(nodes, input.channel, input.content.templateId);
+  const { stepsField, subtype } = SEND_NODE_BY_CHANNEL[input.channel];
+  const compiledSteps = compiled.nodes.find((node) => getNodeSubtype(node) === subtype)?.config?.[stepsField];
+  if (!Array.isArray(compiledSteps) || compiledSteps.length !== contents.length) {
+    throw bad('INVALID_DRAFT_RESOURCES', 'Không dựng được bước gửi cho chiến dịch.');
   }
+  compiledSteps.forEach((step, index) => {
+    if (index === 0) {
+      step.delayValue = 0;
+      return;
+    }
+    const followUp = followUps[index - 1];
+    step.delayValue = followUp.delayValue;
+    step.delayUnit = followUp.delayUnit;
+    step.delayFrom = 'prev';
+  });
+
+  const { nodes, connections } = applyStepContents({
+    compiled,
+    nodes: compiled.nodes,
+    connections: compiled.connections,
+    channel: input.channel,
+    contents,
+  });
 
   if (input.audience.type === 'sheet' && input.audience.sheetName) {
     const sheetNode = nodes.find((node) => getNodeSubtype(node) === 'read_sheet');
@@ -597,7 +678,7 @@ async function findCampaignLimitIssue(authUser, channel) {
  * }>}
  */
 export async function previewSimpleCampaign({ body, authUser, now = new Date() }) {
-  const { input, view, issues } = await buildSimpleDraft({
+  const { input, ownerId, view, issues } = await buildSimpleDraft({
     body,
     authUser,
     includeEstimate: true,
@@ -612,7 +693,7 @@ export async function previewSimpleCampaign({ body, authUser, now = new Date() }
   const unknownCount = (estimate?.warnings || []).some((warning) => warning.code === 'recipient_count_unknown');
   // Đã biết chắc số người nhận (danh sách nhập sẵn / khách đã lưu / số nhóm Zalo) thì không báo "chưa đếm được": bộ ước tính
   // không đếm thành viên nhóm Zalo nên luôn trả cảnh báo này cho Zalo nhóm dù câu tóm tắt đã nói "1 nhóm" (thử prod 17/10).
-  if (unknownCount && input.recipientCountHint == null) {
+  if (unknownCount && input.recipientCountHint == null && input.audience.type !== 'customers') {
     issuesOut.push({
       code: 'recipient_count_unknown',
       apiCode: 'RECIPIENT_COUNT_UNKNOWN',
@@ -624,7 +705,36 @@ export async function previewSimpleCampaign({ body, authUser, now = new Date() }
     });
   }
 
-  let recipientCount = input.recipientCountHint;
+  // "Khách hàng đã lưu" là khối động: không có danh sách, chỉ có tổng khách của workspace. Khối chỉ đọc tối đa 50.000 khách đầu tiên.
+  let customersTotal = null;
+  if (input.audience.type === 'customers') {
+    customersTotal = await customerReadRepository.countWorkspaceCustomers({ userId: ownerId });
+    if (customersTotal > ALL_CUSTOMERS_LIMIT_CAP) {
+      issuesOut.push({
+        code: 'customers_over_limit',
+        apiCode: 'CUSTOMERS_OVER_LIMIT',
+        nodeId: null,
+        stepIndex: null,
+        severity: 'warning',
+        messageKey: 'simpleCampaign.issues.customers_over_limit',
+        message: `Chỉ gửi cho ${ALL_CUSTOMERS_LIMIT_CAP.toLocaleString('vi-VN')} khách đầu tiên (bạn có ${customersTotal.toLocaleString('vi-VN')} khách).`,
+      });
+    } else if (customersTotal === 0) {
+      issuesOut.push({
+        code: 'customers_empty',
+        apiCode: 'CUSTOMERS_EMPTY',
+        nodeId: null,
+        stepIndex: null,
+        severity: 'warning',
+        messageKey: 'simpleCampaign.issues.customers_empty',
+        message: 'Hiện chưa có khách hàng nào trong danh sách đã lưu. Chiến dịch sẽ gửi cho khách được thêm vào sau.',
+      });
+    }
+  }
+
+  let recipientCount = input.audience.type === 'customers'
+    ? Math.min(customersTotal, ALL_CUSTOMERS_LIMIT_CAP)
+    : input.recipientCountHint;
   if (recipientCount == null && estimate && !unknownCount) {
     recipientCount = (estimate.perNode || []).reduce((sum, node) => sum + (Number(node.recipients) || 0), 0);
   }
@@ -663,7 +773,9 @@ export async function buildSimpleCreateDraft({ body, authUser, createdTemplates,
     });
   }
 
-  if (input.content.mode === 'custom') {
+  // Bất kỳ tin nào (tin 1 hoặc tin trong chuỗi) tự soạn đều phải thành mẫu — bộ chạy chỉ gửi bước có `templateId` dạng số.
+  const hasCustomContent = [input.content, ...(input.followUps || []).map((item) => item.content)].some((item) => item.mode === 'custom');
+  if (hasCustomContent) {
     // autoCreate* đặt tên mẫu theo `node.nodeName` (rơi về "Email/Zalo … từ AI"). Mượn tên chiến dịch để thư viện mẫu của khách không
     // hiện nhãn "từ AI" cho thứ họ tự gõ; xoá ngay sau đó để không lọt vào tên khối đã lưu.
     for (const node of script.nodes) {

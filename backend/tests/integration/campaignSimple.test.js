@@ -202,30 +202,42 @@ describe('POST /api/campaigns/simple — tạo chiến dịch nháp', () => {
     expect(template.body_text).toBe('Xin chào, tuần này có ưu đãi');
   });
 
-  it('khách hàng đã lưu → lấy khách của ĐÚNG workspace, còn nhận thư, email hợp lệ — kể cả khách KHÔNG có dòng mua/quan tâm', async () => {
+  it('khách hàng đã lưu → khối động interested_customers loại all (KHÔNG chụp danh sách lúc tạo); khách thêm sau vẫn thuộc nguồn', async () => {
     const owner = await createUser({ email: 'simple-owner4@test.com', username: 'simple_owner4' });
-    const other = await createUser({ email: 'simple-other4@test.com', username: 'simple_other4' });
     const r = await seedOwnerResources(owner.id);
-    const insertCustomer = (idUser, email, extra = {}) => db.query(
-      `INSERT INTO customers (id_user, workspace_owner_id, email, email_subscribed, email_hard_bounced)
-       VALUES ($1, $1, $2, $3, $4)`,
-      [idUser, email, extra.subscribed ?? true, extra.bounced ?? false]
+    await db.query(
+      `INSERT INTO customers (id_user, workspace_owner_id, email) VALUES ($1, $1, 'mot@example.test')`,
+      [owner.id]
     );
-    await insertCustomer(owner.id, 'mot@example.test');
-    await insertCustomer(owner.id, 'Hai@Example.test');
-    await insertCustomer(owner.id, 'da-huy@example.test', { subscribed: false });
-    await insertCustomer(owner.id, 'bounce@example.test', { bounced: true });
-    await insertCustomer(owner.id, 'khong-phai-email');
-    await insertCustomer(other.id, 'cua-nguoi-khac@example.test');
     expect(await countOf('customer_purchases')).toBe(0);
 
     const res = await post(owner, '/api/campaigns/simple', emailCustomBody(r, { audience: { type: 'customers' } }));
 
     expect(res.status).toBe(201);
-    expect(res.body.data.recipientCountHint).toBe(2);
+    expect(res.body.data.recipientCountHint).toBeNull();
     const nodes = await nodesOf(res.body.data.campaignId);
-    expect(nodes.map((n) => n.node_subtype)).toEqual(['manual', 'send_email']);
-    expect([...nodes[1].config.recipientEmails].sort()).toEqual(['hai@example.test', 'mot@example.test']);
+    expect(nodes.map((n) => n.node_subtype)).toEqual(['manual', 'interested_customers', 'send_email']);
+    expect(nodes[1].config).toEqual({ interestedCustomerType: 'all' });
+    expect(nodes[2].config.recipientSource).toBe('node');
+    expect(nodes[2].config.recipientEmails).toBeUndefined();
+  });
+
+  it('khách hàng đã lưu + Zalo cá nhân → khối all, cột phone, không có danh sách SĐT chụp sẵn', async () => {
+    const owner = await createUser({ email: 'simple-owner4z@test.com', username: 'simple_owner4z' });
+    const r = await seedOwnerResources(owner.id);
+    const res = await post(owner, '/api/campaigns/simple', {
+      channel: 'zalo',
+      senderId: r.zaloId,
+      audience: { type: 'customers' },
+      content: { mode: 'template', templateId: r.zaloTemplateId },
+    });
+    expect(res.status).toBe(201);
+    const nodes = await nodesOf(res.body.data.campaignId);
+    expect(nodes.map((n) => n.node_subtype)).toEqual(['manual', 'select_zalo_account', 'interested_customers', 'send_zalo_personal']);
+    const send = nodes[3].config;
+    expect(send.zaloRecipientSource).toBe('node');
+    expect(send.zaloRecipientField).toBe('phone');
+    expect(send.zaloRecipientPhones).toBeUndefined();
   });
 
   it('hết hạn mức chiến dịch của gói → trả 400 limitReached của campaignController.create và XOÁ mẫu tin vừa tạo từ chữ tự soạn', async () => {

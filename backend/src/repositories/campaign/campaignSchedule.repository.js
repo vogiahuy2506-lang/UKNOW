@@ -44,6 +44,23 @@ class CampaignScheduleRepository {
     return result.rows;
   }
 
+  /**
+   * Mọi lịch của MỘT chiến dịch (người gọi đã kiểm quyền xem chiến dịch) — cho `GET /campaigns/:id/simple`.
+   *
+   * @param {number|string} campaignId
+   * @returns {Promise<Array<{ id: string, schedule_type: string, cron_expression: string, enabled: boolean }>>}
+   */
+  async findByCampaignId(campaignId) {
+    const result = await db.query(
+      `SELECT id, schedule_type, cron_expression, enabled
+       FROM campaign_schedules
+       WHERE id_campaign = $1
+       ORDER BY id`,
+      [campaignId]
+    );
+    return result.rows;
+  }
+
   async findById({ id, userId, workspaceOwnerId = userId, isAdmin }) {
     const result = await db.query(
       `SELECT

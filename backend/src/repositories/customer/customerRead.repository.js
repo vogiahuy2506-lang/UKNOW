@@ -544,6 +544,19 @@ class CustomerReadRepository {
   }
 
   /**
+   * Tổng số khách của workspace (cùng phạm vi `buildCustomerListFilter`) — cho preview của trình tạo chiến dịch từng bước
+   * (nguồn "Khách hàng đã lưu" là khối động loại `all`: không có danh sách để đếm, chỉ có tổng).
+   *
+   * @param {{ userId: number }} input
+   * @returns {Promise<number>}
+   */
+  async countWorkspaceCustomers({ userId }) {
+    const { whereSql, params } = this.buildCustomerListFilter({ userId });
+    const result = await db.query(`SELECT COUNT(*)::INTEGER AS total FROM customers c WHERE ${whereSql}`, params);
+    return result.rows[0]?.total || 0;
+  }
+
+  /**
    * MỌI khách của workspace (không cần dòng trong `customer_purchases`) cho khối "Lấy dữ liệu khách" loại `all`
    * (PLAN_TAO_CHIEN_DICH_TUNG_BUOC PR-5). Khối cũ đọc `FROM customer_purchases JOIN customers` nên khách chưa có dòng
    * mua/quan tâm bị loại (prod: 96.940 khách, chỉ 3 có dòng). Cùng phạm vi workspace với danh sách khách

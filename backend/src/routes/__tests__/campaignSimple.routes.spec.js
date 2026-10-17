@@ -58,6 +58,8 @@ jest.unstable_mockModule('../../controllers/campaignSimple.controller.js', () =>
   default: {
     preview: (req, res) => res.json({ success: true, method: 'preview', entitlementContextRan: req.entitlementContextRan === true }),
     create: (req, res) => res.json({ success: true, method: 'create', entitlementContextRan: req.entitlementContextRan === true }),
+    getSimple: (req, res) => res.json({ success: true, method: 'getSimple', id: req.params.id, entitlementContextRan: req.entitlementContextRan === true }),
+    updateSimple: (req, res) => res.json({ success: true, method: 'updateSimple', id: req.params.id, entitlementContextRan: req.entitlementContextRan === true }),
   },
 }));
 
@@ -80,5 +82,24 @@ describe('POST /api/campaigns/simple[/preview] — route wiring', () => {
     expect(res.status).toBe(200);
     expect(res.body.method).toBe('create');
     expect(res.body.entitlementContextRan).toBe(true);
+  });
+});
+
+describe('GET|PUT /api/campaigns/:id/simple — route wiring', () => {
+  it('GET /:id/simple tới getSimple (không bị `/:id` nuốt), qua channelEntitlementContext', async () => {
+    const res = await request(app).get('/api/campaigns/42/simple');
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ method: 'getSimple', id: '42', entitlementContextRan: true });
+  });
+
+  it('PUT /:id/simple tới updateSimple, qua channelEntitlementContext', async () => {
+    const res = await request(app).put('/api/campaigns/42/simple').send({});
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ method: 'updateSimple', id: '42', entitlementContextRan: true });
+  });
+
+  it('các đường hai đoạn cũ không bị đổi: GET /:id/estimate vẫn tới controller estimate', async () => {
+    const res = await request(app).get('/api/campaigns/42/estimate');
+    expect(res.body.method).toBe('getEstimate');
   });
 });

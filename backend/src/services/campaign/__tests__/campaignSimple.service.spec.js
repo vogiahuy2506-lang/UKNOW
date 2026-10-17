@@ -10,7 +10,7 @@ const mockCleanupAutoCreatedTemplates = jest.fn();
 const mockBuildConfirmationView = jest.fn();
 const mockApplyLandingAudienceResolution = jest.fn();
 const mockGetFormIdsOwnedBy = jest.fn();
-const mockGetCustomerContactValues = jest.fn();
+const mockCountWorkspaceCustomers = jest.fn();
 const mockFillReadSheetFirstTabNames = jest.fn();
 const mockCheckUserResourceLimit = jest.fn();
 
@@ -33,7 +33,7 @@ jest.unstable_mockModule('../../../repositories/ai/aiCampaign.repository.js', ()
   default: { getFormIdsOwnedBy: mockGetFormIdsOwnedBy },
 }));
 jest.unstable_mockModule('../../../repositories/customer/customerRead.repository.js', () => ({
-  default: { getCustomerContactValues: mockGetCustomerContactValues },
+  default: { countWorkspaceCustomers: mockCountWorkspaceCustomers },
 }));
 jest.unstable_mockModule('../readSheetAutoName.service.js', () => ({
   fillReadSheetFirstTabNames: mockFillReadSheetFirstTabNames,
@@ -104,7 +104,7 @@ beforeEach(() => {
   mockBuildConfirmationView.mockResolvedValue(readyView());
   mockApplyLandingAudienceResolution.mockImplementation(async (intent) => intent);
   mockGetFormIdsOwnedBy.mockImplementation(async (_owner, ids) => ids);
-  mockGetCustomerContactValues.mockResolvedValue([]);
+  mockCountWorkspaceCustomers.mockResolvedValue(0);
   mockCheckUserResourceLimit.mockResolvedValue({ allowed: true, limit: null, currentCount: 0, message: null });
   mockFillReadSheetFirstTabNames.mockResolvedValue(undefined);
   mockAutoCreateEmailTemplates.mockResolvedValue(undefined);
@@ -115,15 +115,24 @@ beforeEach(() => {
 describe('buildSimpleIntent — bảng ánh xạ audience → CampaignIntentV1 (plan §PR-1)', () => {
   const norm = (extra) => ({ campaignName: 'x', senderId: 5, directRecipients: null, ...extra });
 
-  it('customers (email) → manual + recipientKind email, KHÔNG dùng "db"', () => {
+  it('customers (email) → db + recipientKind email (khối động `all`, không còn danh sách chụp lúc tạo)', () => {
     const intent = buildSimpleIntent(norm({ channel: 'email', audience: { type: 'customers' } }));
-    expect(intent.audience).toEqual({ type: 'manual', recipientKind: 'email' });
-    expect(intent.audience.type).not.toBe('db');
+    expect(intent.audience).toEqual({ type: 'db', recipientKind: 'email' });
   });
 
-  it('customers (zalo) → manual + recipientKind phone', () => {
+  it('customers (zalo) → db + recipientKind phone', () => {
     const intent = buildSimpleIntent(norm({ channel: 'zalo', audience: { type: 'customers' } }));
-    expect(intent.audience).toEqual({ type: 'manual', recipientKind: 'phone' });
+    expect(intent.audience).toEqual({ type: 'db', recipientKind: 'phone' });
+  });
+
+  it('không followUps → lịch once; có followUps → drip days = 1 + N, mỗi ngày 1 tin', () => {
+    expect(buildSimpleIntent(norm({ channel: 'email', audience: { type: 'landing', slugs: ['a'] } })).schedule).toEqual({ type: 'once' });
+    const intent = buildSimpleIntent(norm({
+      channel: 'email',
+      audience: { type: 'landing', slugs: ['a'] },
+      followUps: [{ delayValue: 2, delayUnit: 'days', content: {} }, { delayValue: 5, delayUnit: 'hours', content: {} }],
+    }));
+    expect(intent.schedule).toEqual({ type: 'drip', days: 3, slotsPerDay: 1 });
   });
 
   it('landing → { type: landing, slugs }', () => {
@@ -266,35 +275,40 @@ describe('buildSimpleDraft — chuỗi khối compiler sinh ra cho từng nguồ
     expect(sendNode(script, 'send_zalo_group').config.zaloGroupIds).toEqual(['111', '222']);
   });
 
-  it('customers (email): server lấy danh sách khách, lọc email hỏng, khử trùng, đổ vào danh sách nhập sẵn — không có node db', async () => {
-    mockGetCustomerContactValues.mockResolvedValue(['A@x.com', 'khong-hop-le', 'b@x.com']);
+  it('customers (email): khối động interested_customers loại all, KHÔNG có danh sách nhập sẵn, KHÔNG đọc danh sách khách lúc tạo', async () => {
     const { script, input } = await buildSimpleDraft({
       body: emailBody({ audience: { type: 'customers' } }),
       authUser: user,
     });
-    expect(subtypes(script)).toEqual(['manual', 'send_email']);
-    expect(sendNode(script, 'send_email').config.recipientEmails).toEqual(['a@x.com', 'b@x.com']);
-    expect(input.recipientCountHint).toBe(2);
-    expect(mockGetCustomerContactValues).toHaveBeenCalledWith({ userId: 7, kind: 'email', limit: 4 });
+    expect(subtypes(script)).toEqual(['manual', 'interested_customers', 'send_email']);
+    expect(sendNode(script, 'interested_customers').config).toEqual({ interestedCustomerType: 'all' });
+    const send = sendNode(script, 'send_email').config;
+    expect(send.recipientSource).toBe('node');
+    expect(send.recipientField).toBe('email');
+    expect(send.recipientEmails).toBeUndefined();
+    expect(input.directRecipients).toBeNull();
+    expect(input.recipientCountHint).toBeNull();
   });
 
-  it('customers (zalo): lấy SĐT, chuẩn hoá +84, loại số không phải di động VN', async () => {
-    mockGetCustomerContactValues.mockResolvedValue(['+84912345678', '0912345678', '12345']);
+  it('customers (zalo cá nhân): khối all + cột phone, nguồn "node"', async () => {
     const { script } = await buildSimpleDraft({
       body: zaloBody({ audience: { type: 'customers' } }),
       authUser: user,
     });
-    expect(sendNode(script, 'send_zalo_personal').config.zaloRecipientPhones).toEqual(['0912345678']);
-    expect(mockGetCustomerContactValues).toHaveBeenCalledWith({ userId: 7, kind: 'phone', limit: 4 });
+    expect(subtypes(script)).toEqual(['manual', 'select_zalo_account', 'interested_customers', 'send_zalo_personal']);
+    expect(sendNode(script, 'interested_customers').config.interestedCustomerType).toBe('all');
+    const send = sendNode(script, 'send_zalo_personal').config;
+    expect(send.zaloRecipientSource).toBe('node');
+    expect(send.zaloRecipientField).toBe('phone');
+    expect(send.zaloRecipientType).toBe('phone');
+    expect(send.zaloRecipientPhones).toBeUndefined();
   });
 
-  it('nhân viên: phạm vi lấy theo CHỦ workspace (ownerId), không phải id nhân viên', async () => {
-    mockGetCustomerContactValues.mockResolvedValue(['a@x.com']);
+  it('nhân viên: prepareScript nhận id nhân viên + chủ workspace; khối customers không mang id người dùng nào', async () => {
     await buildSimpleDraft({
       body: emailBody({ audience: { type: 'customers' } }),
       authUser: { id: 8, role: 'user', activeContext: { type: 'employee', ownerId: 3 } },
     });
-    expect(mockGetCustomerContactValues).toHaveBeenCalledWith(expect.objectContaining({ userId: 3 }));
     expect(mockPrepareScript).toHaveBeenCalledWith(expect.anything(), 8, { ownerUserId: 3 });
   });
 });
@@ -418,29 +432,10 @@ describe('kiểm body (400)', () => {
     expect(mockPrepareScript).not.toHaveBeenCalled();
   });
 
-  it('customers vượt trần MAX_AI_MANUAL_RECIPIENTS → 400 CUSTOMERS_OVER_LIMIT, nêu rõ con số trần', async () => {
-    mockGetCustomerContactValues.mockResolvedValue(['a@x.com', 'b@x.com', 'c@x.com', 'd@x.com']);
-    const error = await buildSimpleDraft({ body: emailBody({ audience: { type: 'customers' } }), authUser: user }).catch((e) => e);
-    expect(error).toMatchObject({ statusCode: 400, code: 'CUSTOMERS_OVER_LIMIT' });
-    expect(error.message).toContain('3');
-    expect(error.extra).toEqual({ limit: 3 });
-  });
-
-  it('customers đúng bằng trần thì qua; không có khách hợp lệ → 400 CUSTOMERS_EMPTY', async () => {
-    mockGetCustomerContactValues.mockResolvedValue(['a@x.com', 'b@x.com', 'c@x.com']);
+  it('customers KHÔNG còn bị chặn CUSTOMERS_OVER_LIMIT / CUSTOMERS_EMPTY khi tạo (khối động, đếm ở preview)', async () => {
+    mockCountWorkspaceCustomers.mockResolvedValue(10_000_000);
     await expect(buildSimpleDraft({ body: emailBody({ audience: { type: 'customers' } }), authUser: user })).resolves.toBeDefined();
-    mockGetCustomerContactValues.mockResolvedValue(['khong-hop-le']);
-    await expect(buildSimpleDraft({ body: emailBody({ audience: { type: 'customers' } }), authUser: user }))
-      .rejects.toMatchObject({ statusCode: 400, code: 'CUSTOMERS_EMPTY' });
-  });
-
-  it('kênh lạ (telegram) → 400 INVALID_CHANNEL; thiếu tài khoản gửi → 400 SENDER_REQUIRED', async () => {
-    await expect(buildSimpleDraft({ body: emailBody({ channel: 'telegram' }), authUser: user }))
-      .rejects.toMatchObject({ statusCode: 400, code: 'INVALID_CHANNEL' });
-    await expect(buildSimpleDraft({ body: emailBody({ senderId: undefined }), authUser: user }))
-      .rejects.toMatchObject({ statusCode: 400, code: 'SENDER_REQUIRED' });
-    await expect(buildSimpleDraft({ body: emailBody({ senderId: 'abc' }), authUser: user }))
-      .rejects.toMatchObject({ code: 'SENDER_REQUIRED' });
+    expect(mockCountWorkspaceCustomers).not.toHaveBeenCalled();
   });
 
   it('nguồn không hợp kênh → 400 INVALID_AUDIENCE (zalo_groups cho email, customers cho nhóm, zalo_friends cho email)', async () => {
@@ -669,5 +664,206 @@ describe('buildDefaultCampaignName', () => {
   it('tên tự đặt quá 255 ký tự → 400', async () => {
     await expect(buildSimpleDraft({ body: emailBody({ campaignName: 'x'.repeat(256) }), authUser: user }))
       .rejects.toMatchObject({ statusCode: 400, code: 'CAMPAIGN_NAME_TOO_LONG' });
+  });
+});
+
+describe('followUps — biên dịch chuỗi tin (PLAN_HAI_TAB_TUNG_BUOC PR-A)', () => {
+  const tplContent = (templateId) => ({ mode: 'template', templateId });
+  const stepsOf = (script, subtype, field) => sendNode(script, subtype).config[field];
+
+  it('email 3 tin: độ trễ từng bước ghi đè, bước 0 = 0, bước ≥ 1 đều delayFrom=prev; sendMode=schedule', async () => {
+    const { script } = await buildSimpleDraft({
+      body: emailBody({
+        content: { mode: 'template', templateId: 11 },
+        followUps: [
+          { delayValue: 2, delayUnit: 'days', content: { mode: 'template', templateId: 12 } },
+          { delayValue: 5, delayUnit: 'hours', content: { mode: 'template', templateId: 13 } },
+        ],
+      }),
+      authUser: user,
+    });
+    const send = sendNode(script, 'send_email').config;
+    expect(send.sendMode).toBe('schedule');
+    const steps = send.emailSteps;
+    expect(steps).toHaveLength(3);
+    expect(steps.map((step) => step.templateId)).toEqual([11, 12, 13]);
+    expect(steps.map((step) => step.delayValue)).toEqual([0, 2, 5]);
+    expect(steps.slice(1).map((step) => step.delayUnit)).toEqual(['days', 'hours']);
+    expect(steps.slice(1).map((step) => step.delayFrom)).toEqual(['prev', 'prev']);
+  });
+
+  it('zalo cá nhân và zalo nhóm cũng ghi đè độ trễ + delayFrom=prev', async () => {
+    const personal = await buildSimpleDraft({
+      body: zaloBody({
+        content: { mode: 'template', templateId: 1 },
+        followUps: [{ delayValue: 3, delayUnit: 'days', content: { mode: 'template', templateId: 2 } }],
+      }),
+      authUser: user,
+    });
+    const pSteps = stepsOf(personal.script, 'send_zalo_personal', 'zaloPersonalTemplateSteps');
+    expect(pSteps.map((step) => [step.templateId, step.delayValue, step.delayFrom ?? null])).toEqual([[1, 0, 'prev'], [2, 3, 'prev']]);
+    expect(sendNode(personal.script, 'send_zalo_personal').config.zaloPersonalSendMode).toBe('schedule');
+
+    const group = await buildSimpleDraft({
+      body: groupBody({ followUps: [{ delayValue: 12, delayUnit: 'hours', content: { mode: 'template', templateId: 4 } }] }),
+      authUser: user,
+    });
+    const gSteps = stepsOf(group.script, 'send_zalo_group', 'zaloGroupTemplateSteps');
+    expect(gSteps.map((step) => [step.templateId, step.delayValue, step.delayUnit, step.delayFrom])).toEqual([
+      [3, 0, 'days', 'prev'],
+      [4, 12, 'hours', 'prev'],
+    ]);
+  });
+
+  it('trộn mẫu + tự soạn: chữ tự soạn vào ĐÚNG bước của nó, bước dùng mẫu không dính chữ giữ chỗ', async () => {
+    const { script } = await buildSimpleDraft({
+      body: emailBody({
+        content: { mode: 'template', templateId: 11 },
+        followUps: [
+          { delayValue: 1, delayUnit: 'days', content: { mode: 'custom', subject: 'Nhắc lần 1', body: 'Nội dung nhắc một' } },
+          { delayValue: 3, delayUnit: 'days', content: { mode: 'template', templateId: 13 } },
+          { delayValue: 7, delayUnit: 'days', content: { mode: 'custom', subject: 'Nhắc lần 3', body: 'Nội dung nhắc ba' } },
+        ],
+      }),
+      authUser: user,
+    });
+    const steps = sendNode(script, 'send_email').config.emailSteps;
+    expect(steps.map((step) => step.templateId)).toEqual([11, null, 13, null]);
+    expect(steps.map((step) => step.emailSubject)).toEqual(['', 'Nhắc lần 1', '', 'Nhắc lần 3']);
+    expect(steps[1].emailBody).toContain('Nội dung nhắc một');
+    expect(steps[3].emailBody).toContain('Nội dung nhắc ba');
+    expect(JSON.stringify(steps)).not.toContain('__template__');
+  });
+
+  it('zalo trộn mẫu + tự soạn: message đúng bước, bước mẫu trả về rỗng', async () => {
+    const { script } = await buildSimpleDraft({
+      body: zaloBody({
+        content: { mode: 'custom', body: 'Tin đầu' },
+        followUps: [
+          { delayValue: 1, delayUnit: 'days', content: { mode: 'template', templateId: 9 } },
+          { delayValue: 2, delayUnit: 'days', content: { mode: 'custom', body: 'Tin ba' } },
+        ],
+      }),
+      authUser: user,
+    });
+    const steps = stepsOf(script, 'send_zalo_personal', 'zaloPersonalTemplateSteps');
+    expect(steps.map((step) => step.message)).toEqual(['Tin đầu', '', 'Tin ba']);
+    expect(steps.map((step) => step.templateId)).toEqual([null, 9, null]);
+  });
+
+  it('email tự soạn thiếu tiêu đề ở tin 3 → 400 SUBJECT_REQUIRED nêu "Tin 3"', async () => {
+    await expect(buildSimpleDraft({
+      body: emailBody({
+        followUps: [
+          { delayValue: 1, delayUnit: 'days', content: { mode: 'custom', subject: 'Có tiêu đề', body: 'b' } },
+          { delayValue: 1, delayUnit: 'days', content: { mode: 'custom', subject: '  ', body: 'b' } },
+        ],
+      }),
+      authUser: user,
+    })).rejects.toMatchObject({ statusCode: 400, code: 'SUBJECT_REQUIRED', message: expect.stringContaining('Tin 3') });
+  });
+
+  it('tạo thật: autoCreate chạy trên khối gửi có đủ các bước (mỗi tin tự soạn thành một mẫu)', async () => {
+    const createdTemplates = { emailTemplateIds: [], zaloTemplateIds: [] };
+    await buildSimpleCreateDraft({
+      body: emailBody({ followUps: [{ delayValue: 1, delayUnit: 'days', content: { mode: 'custom', subject: 'S2', body: 'B2' } }] }),
+      authUser: user,
+      createdTemplates,
+    });
+    expect(mockAutoCreateEmailTemplates).toHaveBeenCalledTimes(1);
+    const nodes = mockAutoCreateEmailTemplates.mock.calls[0][0];
+    expect(sendNode({ nodes }, 'send_email').config.emailSteps).toHaveLength(2);
+  });
+
+  it('tạo thật: CHỈ tin trong chuỗi tự soạn (tin 1 dùng mẫu) vẫn phải tạo mẫu — nếu không bước đó lưu không có templateId và không bao giờ được gửi', async () => {
+    await buildSimpleCreateDraft({
+      body: emailBody({
+        content: { mode: 'template', templateId: 11 },
+        followUps: [{ delayValue: 1, delayUnit: 'days', content: { mode: 'custom', subject: 'S2', body: 'B2' } }],
+      }),
+      authUser: user,
+      createdTemplates: { emailTemplateIds: [], zaloTemplateIds: [] },
+    });
+    expect(mockAutoCreateEmailTemplates).toHaveBeenCalledTimes(1);
+    expect(mockAutoCreateZaloTemplates).toHaveBeenCalledTimes(1);
+  });
+
+  it('tạo thật: toàn bộ dùng mẫu có sẵn → KHÔNG tạo mẫu nào', async () => {
+    await buildSimpleCreateDraft({
+      body: emailBody({ content: tplContent(11), followUps: [{ delayValue: 1, delayUnit: 'days', content: tplContent(12) }] }),
+      authUser: user,
+      createdTemplates: { emailTemplateIds: [], zaloTemplateIds: [] },
+    });
+    expect(mockAutoCreateEmailTemplates).not.toHaveBeenCalled();
+    expect(mockAutoCreateZaloTemplates).not.toHaveBeenCalled();
+  });
+
+  it('kiểm đầu vào: > 9 tin, delayValue ≤ 0 / thập phân / chữ, đơn vị lạ, followUps không phải mảng → 400', async () => {
+    const one = { delayValue: 1, delayUnit: 'days', content: { mode: 'template', templateId: 2 } };
+    const run = (followUps) => buildSimpleDraft({ body: emailBody({ followUps }), authUser: user });
+    await expect(run(Array.from({ length: 10 }, () => one))).rejects.toMatchObject({ statusCode: 400, code: 'FOLLOW_UPS_TOO_MANY' });
+    await expect(run(Array.from({ length: 9 }, () => one))).resolves.toBeDefined();
+    await expect(run([{ ...one, delayValue: 0 }])).rejects.toMatchObject({ code: 'INVALID_FOLLOW_UP_DELAY' });
+    await expect(run([{ ...one, delayValue: -3 }])).rejects.toMatchObject({ code: 'INVALID_FOLLOW_UP_DELAY' });
+    await expect(run([{ ...one, delayValue: 1.5 }])).rejects.toMatchObject({ code: 'INVALID_FOLLOW_UP_DELAY' });
+    await expect(run([{ ...one, delayValue: 'abc' }])).rejects.toMatchObject({ code: 'INVALID_FOLLOW_UP_DELAY' });
+    await expect(run([{ ...one, delayUnit: 'minutes' }])).rejects.toMatchObject({ code: 'INVALID_FOLLOW_UP_DELAY' });
+    await expect(run('nhieu-tin')).rejects.toMatchObject({ code: 'INVALID_FOLLOW_UPS' });
+    await expect(run([{ ...one, delayValue: '3' }])).resolves.toBeDefined();
+  });
+
+  it('followUps: [] hoặc vắng → chiến dịch một lần như cũ (sendMode all, 1 bước)', async () => {
+    const { script } = await buildSimpleDraft({ body: emailBody({ followUps: [] }), authUser: user });
+    const send = sendNode(script, 'send_email').config;
+    expect(send.sendMode).toBe('all');
+    expect(send.emailSteps).toHaveLength(1);
+  });
+});
+
+describe('previewSimpleCampaign — nguồn "khách hàng đã lưu" là khối động', () => {
+  it('đếm tổng khách của CHỦ workspace; recipientCount = tổng; không báo "chưa đếm được" dù ước tính báo', async () => {
+    mockCountWorkspaceCustomers.mockResolvedValue(2);
+    mockBuildConfirmationView.mockResolvedValue(readyView({
+      estimate: { perNode: [], warnings: [{ code: 'recipient_count_unknown' }] },
+    }));
+    const result = await previewSimpleCampaign({
+      body: emailBody({ audience: { type: 'customers' } }),
+      authUser: { id: 8, role: 'user', activeContext: { type: 'employee', ownerId: 3 } },
+    });
+    expect(mockCountWorkspaceCustomers).toHaveBeenCalledWith({ userId: 3 });
+    expect(result.recipientCount).toBe(2);
+    expect(result.issues).toEqual([]);
+    expect(result.readyToCreate).toBe(true);
+  });
+
+  // Spec này đặt MAX_AI_MANUAL_RECIPIENTS=3 (đầu file) nên trần = 3; ở production là 50.000 → "Chỉ gửi cho 50.000 khách đầu tiên".
+  it('tổng > trần → cảnh báo severity=warning "Chỉ gửi cho <trần> khách đầu tiên"; KHÔNG chặn; recipientCount kẹp ở trần', async () => {
+    mockCountWorkspaceCustomers.mockResolvedValue(96940);
+    const result = await previewSimpleCampaign({ body: emailBody({ audience: { type: 'customers' } }), authUser: user });
+    expect(result.readyToCreate).toBe(true);
+    expect(result.issues).toEqual([expect.objectContaining({
+      code: 'customers_over_limit',
+      severity: 'warning',
+      message: expect.stringContaining('Chỉ gửi cho 3 khách đầu tiên'),
+    })]);
+    expect(result.recipientCount).toBe(3);
+  });
+
+  it('đúng bằng trần khách → không cảnh báo', async () => {
+    mockCountWorkspaceCustomers.mockResolvedValue(3);
+    const result = await previewSimpleCampaign({ body: emailBody({ audience: { type: 'customers' } }), authUser: user });
+    expect(result.issues).toEqual([]);
+  });
+
+  it('0 khách → cảnh báo customers_empty (không chặn)', async () => {
+    mockCountWorkspaceCustomers.mockResolvedValue(0);
+    const result = await previewSimpleCampaign({ body: emailBody({ audience: { type: 'customers' } }), authUser: user });
+    expect(result.readyToCreate).toBe(true);
+    expect(result.issues.map((issue) => [issue.code, issue.severity])).toEqual([['customers_empty', 'warning']]);
+  });
+
+  it('nguồn khác không đếm khách', async () => {
+    await previewSimpleCampaign({ body: emailBody(), authUser: user });
+    expect(mockCountWorkspaceCustomers).not.toHaveBeenCalled();
   });
 });
