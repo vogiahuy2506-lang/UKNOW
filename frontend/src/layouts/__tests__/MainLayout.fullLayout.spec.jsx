@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { render, screen, act, fireEvent } from '@testing-library/react';
+import { MemoryRouter, useNavigate } from 'react-router-dom';
 import MainLayout from '../MainLayout';
 
 /**
@@ -27,7 +27,9 @@ vi.mock('../../stores/authStore', () => ({
 }));
 
 vi.mock('../../hooks/useIsMobile', () => ({ default: () => false }));
-vi.mock('../../components/layout/admin/Sidebar', () => ({ default: () => null }));
+vi.mock('../../components/layout/admin/Sidebar', () => ({
+  default: ({ onToggle }) => <button type="button" data-testid="sidebar-toggle" onClick={onToggle} />,
+}));
 vi.mock('../../components/layout/admin/Header', () => ({ default: () => <div data-testid="global-header" /> }));
 vi.mock('../../features/ai/AiChatbot', () => ({ default: () => null }));
 vi.mock('../../components/layout/CreditWarningBanner', () => ({
@@ -187,5 +189,103 @@ describe('MainLayout — khi mở modal soạn template (template-editor:change)
     expect(document.documentElement.style.getPropertyValue('--sidebar-w')).toBe('44px');
     expect(localStorage.getItem('founder_ai_sidebar_open')).toBe('false');
     localStorage.removeItem('founder_ai_sidebar_open');
+  });
+});
+
+/**
+ * 17/10/2026 (PLAN_THIET_LAP_VA_SO_DO PR-1): mọi đường DƯỚI `/app/campaigns/` là toàn màn hình (ẩn header + thu menu trái);
+ * danh sách `/app/campaigns` thì không. Rời trang toàn màn hình trả menu về đúng trạng thái trước khi vào.
+ */
+describe('MainLayout — trang chiến dịch toàn màn hình (wizard, chi tiết, trình dựng)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.removeItem('founder_ai_sidebar_open');
+  });
+
+  const GoTo = () => {
+    const navigate = useNavigate();
+    return (
+      <div>
+        {['/app/campaigns', '/app/campaigns?tab=drafts', '/app/campaigns/simple', '/app/campaigns/123', '/app/campaigns/123/builder', '/app/settings/templates'].map((to) => (
+          <button key={to} type="button" data-testid={`go-${to}`} onClick={() => navigate(to)} />
+        ))}
+      </div>
+    );
+  };
+  const renderWithNav = (path) =>
+    render(
+      <MemoryRouter initialEntries={[path]}>
+        <MainLayout><GoTo /></MainLayout>
+      </MemoryRouter>
+    );
+  const go = (to) => act(() => { fireEvent.click(screen.getByTestId(`go-${to}`)); });
+  const sidebarW = () => document.documentElement.style.getPropertyValue('--sidebar-w');
+
+  it.each(['/app/campaigns/simple', '/app/campaigns/new', '/app/campaigns/123', '/app/campaigns/123/builder', '/app/campaigns/123/simple'])(
+    '%s → ẩn header, không banner, <main> tràn màn',
+    (path) => {
+      renderAt(path);
+      expect(screen.queryByTestId('global-header')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('credit-banner')).not.toBeInTheDocument();
+      expect(screen.getByRole('main').className.split(' ')).toContain('rounded-none');
+    }
+  );
+
+  it.each(['/app/campaigns', '/app/campaigns?tab=drafts'])('%s (danh sách) → trang thường, có header, banner và menu đúng trạng thái', (path) => {
+    localStorage.setItem('founder_ai_sidebar_open', 'true');
+    renderAt(path);
+    expect(screen.getByTestId('global-header')).toBeInTheDocument();
+    expect(screen.getByTestId('credit-banner')).toBeInTheDocument();
+    expect(screen.getByRole('main').className.split(' ')).toContain('p-2');
+    expect(sidebarW()).toBe('220px');
+  });
+
+  it('menu đang MỞ: vào /simple thu menu, về danh sách trả menu mở, localStorage vẫn là true', () => {
+    localStorage.setItem('founder_ai_sidebar_open', 'true');
+    renderWithNav('/app/campaigns');
+    expect(sidebarW()).toBe('220px');
+    go('/app/campaigns/simple');
+    expect(sidebarW()).toBe('44px');
+    go('/app/campaigns');
+    expect(sidebarW()).toBe('220px');
+    expect(localStorage.getItem('founder_ai_sidebar_open')).toBe('true');
+  });
+
+  it('menu đang THU: vào rồi ra vẫn thu', () => {
+    localStorage.setItem('founder_ai_sidebar_open', 'false');
+    renderWithNav('/app/campaigns');
+    go('/app/campaigns/simple');
+    go('/app/campaigns');
+    expect(sidebarW()).toBe('44px');
+  });
+
+  it('đi giữa hai trang toàn màn hình (wizard → chi tiết → builder) KHÔNG mở lại menu giữa chừng; ra ngoài mới trả', () => {
+    localStorage.setItem('founder_ai_sidebar_open', 'true');
+    renderWithNav('/app/campaigns');
+    go('/app/campaigns/simple');
+    expect(sidebarW()).toBe('44px');
+    go('/app/campaigns/123');
+    expect(sidebarW()).toBe('44px');
+    go('/app/campaigns/123/builder');
+    expect(sidebarW()).toBe('44px');
+    go('/app/settings/templates');
+    expect(sidebarW()).toBe('220px');
+  });
+
+  it('mở thẳng vào trang toàn màn hình rồi rời đi: trả menu về trạng thái lưu trước đó', () => {
+    localStorage.setItem('founder_ai_sidebar_open', 'true');
+    renderWithNav('/app/campaigns/simple');
+    expect(sidebarW()).toBe('44px');
+    go('/app/campaigns');
+    expect(sidebarW()).toBe('220px');
+  });
+
+  it('người dùng tự bấm mở menu khi đang ở trang toàn màn hình: tôn trọng, không ép thu lại', () => {
+    localStorage.setItem('founder_ai_sidebar_open', 'false');
+    renderWithNav('/app/campaigns/simple');
+    fireEvent.click(screen.getByTestId('sidebar-toggle'));
+    expect(sidebarW()).toBe('220px');
+    go('/app/campaigns/123');
+    expect(sidebarW()).toBe('220px');
   });
 });
