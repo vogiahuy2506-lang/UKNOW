@@ -86,9 +86,9 @@ const OverviewCard = ({
   const typeMeta = getCampaignTypeMeta(campaignType);
   const statusKey = campaignStatus === 'active' ? 'active' : campaignStatus === 'paused' ? 'paused' : 'draft';
   return (
-    <section className={`${CARD} p-4 sm:p-5`} data-testid="settings-overview">
+    <section className={`${CARD} p-4 sm:p-5 lg:sticky lg:top-0`} data-testid="settings-overview">
       <h2 className="text-base font-bold text-gray-900 dark:text-dk-text">{t('campaignSettings.overview')}</h2>
-      <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-[9rem_1fr]">
+      <dl className="mt-3 grid grid-cols-1 gap-x-4 gap-y-1 text-sm sm:grid-cols-[7rem_minmax(0,1fr)] sm:gap-y-2">
         <dt className={MUTED}>{t('campaignSettings.label.name')}</dt>
         <dd className="min-w-0 break-words font-medium text-gray-900 dark:text-dk-text" data-testid="settings-overview-name">
           {campaignName || t('campaignBuilder.newCampaign')}
@@ -294,7 +294,7 @@ export default function CampaignSettingsPanel({
 
   return (
     <div className="min-h-0 w-full min-w-0 flex-1 overflow-y-auto bg-gray-50 dark:bg-dk-inset" data-testid="campaign-settings-panel">
-      <div className="mx-auto w-full max-w-4xl space-y-4 px-4 py-4 sm:py-6">
+      <div className="mx-auto grid w-full max-w-[1800px] grid-cols-1 items-start gap-4 px-4 py-4 sm:px-6 sm:py-6 lg:grid-cols-[minmax(22rem,28rem)_minmax(0,1fr)] lg:gap-6 lg:px-8">
         <OverviewCard
           campaignId={campaignId}
           campaignName={campaignName}
@@ -313,6 +313,7 @@ export default function CampaignSettingsPanel({
           t={t}
         />
 
+        <div className="min-w-0 space-y-4">
         {!hasNodes ? (
           <section className={`${CARD} flex flex-col items-center gap-3 px-4 py-10 text-center`} data-testid="settings-empty">
             <HiOutlineViewGrid className={`h-10 w-10 ${MUTED}`} aria-hidden="true" />
@@ -345,6 +346,7 @@ export default function CampaignSettingsPanel({
             )}
           </>
         )}
+        </div>
       </div>
     </div>
   );

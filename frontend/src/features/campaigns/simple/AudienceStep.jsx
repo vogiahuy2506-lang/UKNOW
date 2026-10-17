@@ -83,7 +83,7 @@ export default function AudienceStep({ wizard, t, locale }) {
       {!isGroupChannel && <p className="mt-1 text-sm text-slate-500 dark:text-dk-text2">{t('simpleCampaign.audience.hint')}</p>}
 
       {!isGroupChannel && (
-        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
           {types.map((type) => {
             const card = AUDIENCE_CARDS[type];
             const descKey = DESCRIPTION_VARIANT_TYPES.has(type)

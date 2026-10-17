@@ -42,7 +42,7 @@ export default function CampaignViewTabs({ active, onSelect, flowDisabled = fals
             onClick={() => {
               if (!selected && !disabled) onSelect(id);
             }}
-            className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 py-1.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+            className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 py-1.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 disabled:cursor-not-allowed disabled:opacity-50 ${
               selected
                 ? 'bg-white text-orange-700 shadow-sm dark:bg-dk-surface dark:text-orange-300'
                 : 'text-slate-600 hover:text-slate-900 dark:text-dk-text2 dark:hover:text-dk-text'

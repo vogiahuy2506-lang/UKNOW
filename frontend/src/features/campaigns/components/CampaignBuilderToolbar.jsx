@@ -9,6 +9,8 @@ import {
 } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 
+/** Nút phụ (Dừng / Chia sẻ / Nhân bản) dưới `lg` chỉ còn biểu tượng (đã có aria-label + title) để thanh nút không xếp 3 hàng trên điện thoại. */
+const COLLAPSE_LABEL = 'hidden lg:inline';
 const BASE_BUTTON_CLASS = 'px-2.5 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base rounded-lg transition-colors flex items-center gap-1.5 sm:gap-2';
 
 /**
@@ -86,12 +88,14 @@ const CampaignBuilderToolbar = ({
       <button
         onClick={onStopRun}
         disabled={!isRunning}
+        aria-label={t('campaignBuilder.stop')}
+        title={t('campaignBuilder.stop')}
         className={`${BASE_BUTTON_CLASS} ${
           !isRunning ? 'bg-gray-200 dark:bg-dk-raised text-gray-500 dark:text-dk-muted cursor-not-allowed' : 'bg-red-500 text-white hover:bg-red-600'
         }`}
       >
         <HiOutlineStop className="w-4 h-4" />
-        {t('campaignBuilder.stop')}
+        <span className={COLLAPSE_LABEL}>{t('campaignBuilder.stop')}</span>
       </button>
       <button
         onClick={onOpenNameModal}
@@ -104,25 +108,27 @@ const CampaignBuilderToolbar = ({
         <button
           onClick={onOpenShare}
           disabled={!canUseServerRunActions}
-          title={!canUseServerRunActions ? serverRunActionsDisabledHint : undefined}
+          aria-label={t('campaignBuilder.share')}
+          title={!canUseServerRunActions ? serverRunActionsDisabledHint : t('campaignBuilder.share')}
           className={`${BASE_BUTTON_CLASS} ${
             !canUseServerRunActions ? 'bg-gray-200 dark:bg-dk-raised text-gray-500 dark:text-dk-muted cursor-not-allowed' : 'bg-white dark:bg-dk-raised text-gray-700 dark:text-dk-text border border-gray-300 dark:border-dk-border hover:bg-gray-50 dark:hover:bg-dk-strong'
           }`}
         >
           <HiOutlineMail className="w-4 h-4" />
-          {t('campaignBuilder.share')}
+          <span className={COLLAPSE_LABEL}>{t('campaignBuilder.share')}</span>
         </button>
       )}
       <button
         onClick={onOpenDuplicate}
         disabled={!canUseServerRunActions}
-        title={!canUseServerRunActions ? serverRunActionsDisabledHint : undefined}
+        aria-label={t('campaignBuilder.duplicate')}
+        title={!canUseServerRunActions ? serverRunActionsDisabledHint : t('campaignBuilder.duplicate')}
         className={`${BASE_BUTTON_CLASS} ${
           !canUseServerRunActions ? 'bg-gray-200 dark:bg-dk-raised text-gray-500 dark:text-dk-muted cursor-not-allowed' : 'bg-white dark:bg-dk-raised text-gray-700 dark:text-dk-text border border-gray-300 dark:border-dk-border hover:bg-gray-50 dark:hover:bg-dk-strong'
         }`}
       >
         <HiOutlineDuplicate className="w-4 h-4" />
-        {t('campaignBuilder.duplicate')}
+        <span className={COLLAPSE_LABEL}>{t('campaignBuilder.duplicate')}</span>
       </button>
     </div>
   );
