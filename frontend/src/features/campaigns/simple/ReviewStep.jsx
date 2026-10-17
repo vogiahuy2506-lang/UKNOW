@@ -10,7 +10,7 @@ function RichSummary({ text }) {
     <>
       {String(text).split('**').map((part, index) => (
         index % 2 === 1
-          ? <strong key={index} className="font-bold text-slate-900 dark:text-white">{part}</strong>
+          ? <strong key={index} className="font-bold text-slate-900 dark:text-dk-text">{part}</strong>
           : <span key={index}>{part}</span>
       ))}
     </>
