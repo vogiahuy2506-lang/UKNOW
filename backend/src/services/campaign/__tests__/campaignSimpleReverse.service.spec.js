@@ -453,7 +453,7 @@ describe('readSimpleFormFromGraph — `view` (chỉ xem) khi bị chặn chỉ v
     expect(read.view.followUps[0]).toEqual({ delayValue: 1, delayUnit: 'days', delayFrom: '', content: tpl(22) });
   });
 
-  it('unsupported_delay (phút, thập phân, đơn vị lạ) → có view, giữ nguyên giá trị đã lưu', async () => {
+  it('unsupported_delay (thập phân, đơn vị lạ; tin phút hợp lệ đi cùng) → có view, giữ nguyên giá trị đã lưu', async () => {
     const stored = persist(await build(emailBody({ followUps: [fu(1, 'days', 12), fu(1, 'days', 13), fu(1, 'days', 14)] })));
     const steps = stepsOf(stored);
     steps[1].delayUnit = 'minutes'; steps[1].delayValue = 30;
@@ -490,7 +490,7 @@ describe('readSimpleFormFromGraph — `view` (chỉ xem) khi bị chặn chỉ v
     const stored = persist(await build(emailBody({ followUps: [fu(1, 'days', 12)] })));
     stepsOf(stored)[0].delayValue = 2;
     stepsOf(stored)[1].delayFrom = 'start';
-    stepsOf(stored)[1].delayUnit = 'minutes';
+    stepsOf(stored)[1].delayUnit = 'weeks'; // phút đã hợp lệ (D2) → dùng đơn vị thật sự lạ
     const read = readSimpleFormFromGraph(stored.nodes, stored.connections);
     expect(codes(read).sort()).toEqual([CODE.DELAY_FROM_START, CODE.FIRST_STEP_DELAY, CODE.UNSUPPORTED_DELAY].sort());
     expect(read.view).toBeDefined();

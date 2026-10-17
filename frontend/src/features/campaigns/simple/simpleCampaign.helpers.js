@@ -151,9 +151,6 @@ export const totalFollowUpMinutes = (followUps) => followUps.reduce((sum, item) 
   return sum + Number(item.delayValue) * (MINUTES_PER_UNIT[item.delayUnit] ?? MINUTES_PER_UNIT.days);
 }, 0);
 
-/** Tổng độ trễ cả chuỗi, quy ra giờ (có thể lẻ khi có phút). */
-export const totalFollowUpHours = (followUps) => totalFollowUpMinutes(followUps) / 60;
-
 /** Email dùng tài khoản email; Zalo cá nhân và Zalo nhóm dùng chung danh sách tài khoản Zalo. */
 export const senderKindOf = (channel) => (channel === 'email' ? 'email' : 'zalo');
 
