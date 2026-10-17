@@ -14,7 +14,8 @@ test.describe('Email template', () => {
 
     await page.getByPlaceholder('<!-- Bắt đầu viết mã HTML của bạn tại đây... -->').fill('<p>E2E body</p>');
 
-    await page.locator('form').getByRole('button', { name: 'Tạo template mới' }).click();
+    // Nút gửi nằm ở thanh trên của modal, NGOÀI <form> (nối bằng thuộc tính form=, từ 6d294fbf 14/10).
+    await page.locator('button[type="submit"][form="email-template-editor-form"]').click();
 
     await expect(page.getByText(/Tạo template thành công/i).first()).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(tplName).first()).toBeVisible({ timeout: 10_000 });
