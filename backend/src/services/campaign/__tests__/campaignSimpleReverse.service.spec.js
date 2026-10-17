@@ -132,6 +132,15 @@ describe('readSimpleFormFromGraph — đọc ngược theo từng loại nguồn
     expect(comparison).toEqual({ ok: true, diffs: [] });
   });
 
+  it('đơn vị phút: đọc ngược ra đúng followUps (không unsupported_delay), cả email lẫn zalo', async () => {
+    const body = emailBody({ content: tpl(11), followUps: [fu(30, 'minutes', 12), fu(2, 'days', 13)] });
+    const { read } = await roundTrip(body);
+    expect(read.reasons).toEqual([]);
+    expect(read.form.followUps).toEqual([fu(30, 'minutes', 12), fu(2, 'days', 13)]);
+    const zalo = await roundTrip(zaloBody({ followUps: [fu(45, 'minutes', 22)] }));
+    expect(zalo.read.form.followUps).toEqual([fu(45, 'minutes', 22)]);
+  });
+
   it('chuỗi 3 tin: followUps mang đúng độ trễ + templateId từng bước; content = tin 1', async () => {
     const body = emailBody({ content: tpl(11), followUps: [fu(2, 'days', 12), fu(5, 'hours', 13)] });
     const { read, comparison } = await roundTrip(body);
@@ -352,10 +361,10 @@ describe('readSimpleFormFromGraph — lý do không đọc ngược được', (
     expect(read.reasons.map((item) => item.code)).toEqual([CODE.INLINE_CONTENT]);
   });
 
-  it('đơn vị chờ phút / số thập phân → unsupported_delay; tin đầu có chờ → first_step_delay', async () => {
-    const minutes = persist(await build(emailBody({ followUps: [fu(1, 'days', 12)] })));
-    stepsOf(minutes)[1].delayUnit = 'minutes';
-    expect(readSimpleFormFromGraph(minutes.nodes, minutes.connections).reasons.map((item) => item.code)).toEqual([CODE.UNSUPPORTED_DELAY]);
+  it('đơn vị chờ lạ / số thập phân → unsupported_delay; tin đầu có chờ → first_step_delay', async () => {
+    const weeks = persist(await build(emailBody({ followUps: [fu(1, 'days', 12)] })));
+    stepsOf(weeks)[1].delayUnit = 'weeks';
+    expect(readSimpleFormFromGraph(weeks.nodes, weeks.connections).reasons.map((item) => item.code)).toEqual([CODE.UNSUPPORTED_DELAY]);
 
     const decimal = persist(await build(emailBody({ followUps: [fu(1, 'days', 12)] })));
     stepsOf(decimal)[1].delayValue = 1.5;
@@ -443,6 +452,14 @@ describe('isRoundTripEquivalent — mỗi trường form điều khiển lệch 
   it('delayUnit tin 2 lệch → không editable', async () => {
     const result = await pair(baseBody(), ({ stored }) => { stepsOf(stored)[1].delayUnit = 'hours'; });
     expect(result.ok).toBe(false);
+  });
+
+  it('khứ hồi khớp với phút; đổi phút → giờ ở bản lưu thì lệch', async () => {
+    const body = () => emailBody({ audience: { type: 'landing', slugs: ['a'] }, content: tpl(11), followUps: [fu(30, 'minutes', 12)] });
+    expect(await pair(body(), () => {})).toEqual({ ok: true, diffs: [] });
+    const result = await pair(body(), ({ stored }) => { stepsOf(stored)[1].delayUnit = 'hours'; });
+    expect(result.ok).toBe(false);
+    expect(result.diffs.join('\n')).toContain('delayUnit');
   });
 
   it('delayFrom tin 2 lệch (prev → start) → không editable', async () => {

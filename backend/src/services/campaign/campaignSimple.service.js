@@ -54,7 +54,7 @@ const MAX_CUSTOM_BODY_LENGTH = Object.freeze({ email: 100000, zalo: 4000, zalo_g
 const MAX_EMAIL_SUBJECT_LENGTH = 150;
 /** Chuỗi tin: tin 1 + tối đa 9 tin tiếp theo (tổng 10 tin) — PLAN_HAI_TAB_TUNG_BUOC §3.1. */
 export const MAX_FOLLOW_UPS = 9;
-export const FOLLOW_UP_DELAY_UNITS = Object.freeze(['days', 'hours']);
+export const FOLLOW_UP_DELAY_UNITS = Object.freeze(['days', 'hours', 'minutes']);
 const MAX_FOLLOW_UP_DELAY_VALUE = 9999;
 /** Chữ giữ chỗ cho bước dùng mẫu trong lúc `applySlotsToGraph` (xem `applyStepContents`). */
 const TEMPLATE_STEP_PLACEHOLDER = '__template__';
@@ -201,7 +201,7 @@ function normalizeStepContent(rawContent, channel, prefix = '') {
  *
  * @param {unknown} rawFollowUps
  * @param {'email'|'zalo'|'zalo_group'} channel
- * @returns {Array<{ delayValue: number, delayUnit: 'days'|'hours', content: object }>}
+ * @returns {Array<{ delayValue: number, delayUnit: 'days'|'hours'|'minutes', content: object }>}
  */
 function normalizeFollowUps(rawFollowUps, channel) {
   if (rawFollowUps == null) return [];
@@ -219,7 +219,7 @@ function normalizeFollowUps(rawFollowUps, channel) {
     }
     const delayUnit = toTrimmedString(raw.delayUnit);
     if (!FOLLOW_UP_DELAY_UNITS.includes(delayUnit)) {
-      throw bad('INVALID_FOLLOW_UP_DELAY', `${prefix}Đơn vị chờ chỉ có thể là ngày hoặc giờ.`);
+      throw bad('INVALID_FOLLOW_UP_DELAY', `${prefix}Đơn vị chờ chỉ có thể là ngày, giờ hoặc phút.`);
     }
     return { delayValue, delayUnit, content: normalizeStepContent(raw.content, channel, prefix) };
   });
@@ -238,7 +238,7 @@ function normalizeFollowUps(rawFollowUps, channel) {
  *   senderId: number,
  *   audience: object,
  *   content: { mode: 'template', templateId: number } | { mode: 'custom', subject: string, body: string },
- *   followUps: Array<{ delayValue: number, delayUnit: 'days'|'hours', content: object }>,
+ *   followUps: Array<{ delayValue: number, delayUnit: 'days'|'hours'|'minutes', content: object }>,
  *   directRecipients: { emails?: string[], phones?: string[], uids?: string[] }|null,
  *   recipientCountHint: number|null,
  * }>}

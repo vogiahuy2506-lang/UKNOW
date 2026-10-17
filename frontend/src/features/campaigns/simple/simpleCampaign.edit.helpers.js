@@ -103,7 +103,7 @@ const buildFollowUpsFromServer = (list) => (Array.isArray(list) ? list : []).map
   return {
     id: nextFollowUpId(),
     delayValue: Number(item?.delayValue) || 1,
-    delayUnit: item?.delayUnit === 'hours' ? 'hours' : 'days',
+    delayUnit: ['hours', 'minutes'].includes(item?.delayUnit) ? item.delayUnit : 'days',
     content,
   };
 });

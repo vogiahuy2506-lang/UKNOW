@@ -692,6 +692,23 @@ describe('followUps — biên dịch chuỗi tin (PLAN_HAI_TAB_TUNG_BUOC PR-A)',
     expect(steps.slice(1).map((step) => step.delayFrom)).toEqual(['prev', 'prev']);
   });
 
+  it('đơn vị phút: normalize nhận, đồ thị ghi delayUnit=minutes + delayValue đúng, delayFrom=prev', async () => {
+    const { script } = await buildSimpleDraft({
+      body: emailBody({
+        content: { mode: 'template', templateId: 11 },
+        followUps: [
+          { delayValue: 30, delayUnit: 'minutes', content: { mode: 'template', templateId: 12 } },
+          { delayValue: 2, delayUnit: 'days', content: { mode: 'template', templateId: 13 } },
+        ],
+      }),
+      authUser: user,
+    });
+    const steps = sendNode(script, 'send_email').config.emailSteps;
+    expect(steps.map((step) => step.delayValue)).toEqual([0, 30, 2]);
+    expect(steps.slice(1).map((step) => step.delayUnit)).toEqual(['minutes', 'days']);
+    expect(steps.slice(1).map((step) => step.delayFrom)).toEqual(['prev', 'prev']);
+  });
+
   it('zalo cá nhân và zalo nhóm cũng ghi đè độ trễ + delayFrom=prev', async () => {
     const personal = await buildSimpleDraft({
       body: zaloBody({
@@ -807,7 +824,7 @@ describe('followUps — biên dịch chuỗi tin (PLAN_HAI_TAB_TUNG_BUOC PR-A)',
     await expect(run([{ ...one, delayValue: -3 }])).rejects.toMatchObject({ code: 'INVALID_FOLLOW_UP_DELAY' });
     await expect(run([{ ...one, delayValue: 1.5 }])).rejects.toMatchObject({ code: 'INVALID_FOLLOW_UP_DELAY' });
     await expect(run([{ ...one, delayValue: 'abc' }])).rejects.toMatchObject({ code: 'INVALID_FOLLOW_UP_DELAY' });
-    await expect(run([{ ...one, delayUnit: 'minutes' }])).rejects.toMatchObject({ code: 'INVALID_FOLLOW_UP_DELAY' });
+    await expect(run([{ ...one, delayUnit: 'seconds' }])).rejects.toMatchObject({ code: 'INVALID_FOLLOW_UP_DELAY' });
     await expect(run('nhieu-tin')).rejects.toMatchObject({ code: 'INVALID_FOLLOW_UPS' });
     await expect(run([{ ...one, delayValue: '3' }])).resolves.toBeDefined();
   });

@@ -1820,7 +1820,7 @@ export default {
         sendAfter: 'Send after',
         afterPrev: 'since the previous message',
         unitAria: 'Time unit',
-        unit: { days: 'days', hours: 'hours' },
+        unit: { days: 'days', hours: 'hours', minutes: 'minutes' },
         delayInvalid: 'Enter a whole number greater than 0.',
         remove: 'Remove',
         removeAria: 'Remove message {n}',
@@ -1889,7 +1889,7 @@ export default {
         templateUnknown: 'the selected template',
         custom: 'written by you',
         chain: '{first}, a sequence of {count} messages over {span}',
-        span: { daysOne: '{n} day', daysMany: '{n} days', hoursOne: '{n} hour', hoursMany: '{n} hours' },
+        span: { daysOne: '{n} day', daysMany: '{n} days', hoursOne: '{n} hour', hoursMany: '{n} hours', minutesOne: '{n} minute', minutesMany: '{n} minutes' },
         customWithSubject: 'written by you “{subject}”',
       },
       continuousCount: {

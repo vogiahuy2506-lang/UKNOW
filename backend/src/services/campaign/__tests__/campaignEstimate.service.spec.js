@@ -305,6 +305,23 @@ describe('estimateForCampaign — email', () => {
     expect(result.finishAtEarliest).toBe(vn('2026-10-07T10:00:00').toISOString());
     expect(result.totalActions).toBe(3);
   });
+
+  it('chuỗi tin cách nhau 30 phút (delayUnit minutes) → bước 2 sau đúng 30 phút, không bị coi là 30 ngày/giờ', async () => {
+    const steps = [
+      { templateId: 1 },
+      { templateId: 2, delayValue: 30, delayUnit: 'minutes', delayFrom: 'prev' },
+    ];
+    const { deps } = makeDeps({
+      state: {
+        nodes: emailNodes({ recipientEmails: 'a@mail.vn', emailSteps: steps, sendMode: 'schedule' }),
+        connections: [connect(1, 2)],
+      },
+      deps: { emailDelay: { minMs: 0, maxMs: 0 } },
+    });
+    const result = await estimateForCampaign({ campaignId: 437, ownerUserId: 39, startAt: vn('2026-10-05T10:00:00'), deps });
+    expect(result.finishAtEarliest).toBe(vn('2026-10-05T10:30:00').toISOString());
+    expect(result.totalActions).toBe(2);
+  });
 });
 
 describe('estimateForCampaign — cảnh báo từ dữ kiện ngoài', () => {

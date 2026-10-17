@@ -1825,7 +1825,7 @@ export default {
         sendAfter: 'Gửi sau',
         afterPrev: 'kể từ tin trước',
         unitAria: 'Đơn vị thời gian',
-        unit: { days: 'ngày', hours: 'giờ' },
+        unit: { days: 'ngày', hours: 'giờ', minutes: 'phút' },
         delayInvalid: 'Nhập một số nguyên lớn hơn 0.',
         remove: 'Xoá tin',
         removeAria: 'Xoá tin {n}',
@@ -1894,7 +1894,7 @@ export default {
         templateUnknown: 'mẫu đã chọn',
         custom: 'tự soạn',
         chain: '{first}, chuỗi {count} tin trong {span}',
-        span: { daysOne: '{n} ngày', daysMany: '{n} ngày', hoursOne: '{n} giờ', hoursMany: '{n} giờ' },
+        span: { daysOne: '{n} ngày', daysMany: '{n} ngày', hoursOne: '{n} giờ', hoursMany: '{n} giờ', minutesOne: '{n} phút', minutesMany: '{n} phút' },
         customWithSubject: 'tự soạn “{subject}”',
       },
       continuousCount: {

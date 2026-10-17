@@ -320,7 +320,7 @@ export function readSimpleFormFromGraph(rawNodes, rawConnections) {
     if (asString(step?.delayFrom) !== 'prev') {
       if (!reasons.some((item) => item.code === CODE.DELAY_FROM_START)) fail(CODE.DELAY_FROM_START);
     }
-    if (!Number.isInteger(value) || value <= 0 || value > MAX_DELAY_VALUE || !['days', 'hours'].includes(unit)) {
+    if (!Number.isInteger(value) || value <= 0 || value > MAX_DELAY_VALUE || !['days', 'hours', 'minutes'].includes(unit)) {
       if (!reasons.some((item) => item.code === CODE.UNSUPPORTED_DELAY)) fail(CODE.UNSUPPORTED_DELAY);
       return;
     }

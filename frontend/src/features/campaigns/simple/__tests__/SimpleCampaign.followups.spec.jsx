@@ -148,6 +148,18 @@ describe('Chuỗi tin ở bước Nội dung (PR-C)', () => {
     expect(screen.getByTestId('simple-followup-delay-0')).toHaveValue(7);
   });
 
+  it('ô chọn đơn vị có đủ ngày → giờ → phút (đúng thứ tự, chữ tiếng Việt); chọn phút giữ được', async () => {
+    await reachContentStep();
+    fireEvent.click(screen.getByTestId('simple-followup-add'));
+    const select = screen.getByTestId('simple-followup-unit-0');
+    expect(within(select).getAllByRole('option').map((option) => [option.value, option.textContent])).toEqual([
+      ['days', 'ngày'], ['hours', 'giờ'], ['minutes', 'phút'],
+    ]);
+    setDelay(0, 30, 'minutes');
+    expect(select).toHaveValue('minutes');
+    expect(screen.queryByTestId('simple-followup-delay-error-0')).not.toBeInTheDocument();
+  });
+
   it('tối đa 10 tin: sau 9 tin sau thì nút thêm bị khoá và có dòng giải thích', async () => {
     await reachContentStep();
     for (let i = 0; i < 9; i += 1) fireEvent.click(screen.getByTestId('simple-followup-add'));

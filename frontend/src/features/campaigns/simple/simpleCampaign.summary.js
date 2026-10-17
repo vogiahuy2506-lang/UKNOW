@@ -1,4 +1,4 @@
-import { WEEKDAY_OPTIONS, parseManualRecipients, totalFollowUpHours } from './simpleCampaign.helpers';
+import { WEEKDAY_OPTIONS, parseManualRecipients, totalFollowUpMinutes } from './simpleCampaign.helpers';
 
 const MAX_NAMES_SHOWN = 2;
 
@@ -124,10 +124,10 @@ export const buildReviewSummary = ({ state, preview, t, locale, manualWhen = fal
 
   const followUps = Array.isArray(state.followUps) ? state.followUps : [];
   if (followUps.length > 0) {
-    // "chuỗi 3 tin trong 5 ngày": tổng độ trễ làm tròn lên ngày; dưới 1 ngày thì nêu giờ.
-    const hours = Math.max(1, totalFollowUpHours(followUps));
-    const spanKey = hours >= 24 ? 'days' : 'hours';
-    const n = hours >= 24 ? Math.ceil(hours / 24) : hours;
+    // "chuỗi 3 tin trong 5 ngày": tổng độ trễ làm tròn lên ngày; dưới 1 ngày nêu giờ (làm tròn lên); dưới 1 giờ nêu phút.
+    const minutes = Math.max(1, totalFollowUpMinutes(followUps));
+    const spanKey = minutes >= 1440 ? 'days' : (minutes >= 60 ? 'hours' : 'minutes');
+    const n = spanKey === 'days' ? Math.ceil(minutes / 1440) : (spanKey === 'hours' ? Math.ceil(minutes / 60) : minutes);
     const span = t(`simpleCampaign.review.content.span.${spanKey}${n === 1 ? 'One' : 'Many'}`, { n });
     contentText = t('simpleCampaign.review.content.chain', { first: contentText, count: followUps.length + 1, span });
   }

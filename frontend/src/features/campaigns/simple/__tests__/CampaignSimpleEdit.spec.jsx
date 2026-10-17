@@ -199,6 +199,17 @@ describe('Chi tiết chiến dịch — tab Từng bước (chế độ sửa)',
       expect(screen.queryByTestId('simple-edit-dirty')).not.toBeInTheDocument();
     });
 
+    it('tin sau chờ theo phút: nạp lại đúng đơn vị phút (không rơi về ngày) và tóm tắt "trong 30 phút"', async () => {
+      const followUps = [{ delayValue: 30, delayUnit: 'minutes', content: { mode: 'template', templateId: 5 } }];
+      campaignApiService.getSimpleCampaign.mockResolvedValue(getResponse({ form: { ...baseData().form, followUps } }));
+      renderEdit();
+      await screen.findByTestId('simple-summary');
+      expect(screen.getByTestId('simple-summary')).toHaveTextContent('chuỗi 2 tin trong 30 phút');
+      openStep('content');
+      expect(await screen.findByTestId('simple-followup-unit-0')).toHaveValue('minutes');
+      expect(screen.getByTestId('simple-followup-delay-0')).toHaveValue(30);
+    });
+
     it('chiến dịch nhiều tin: nạp followUps thành thẻ tin sau (có tên mẫu), sửa độ trễ tin 2 rồi PUT gửi lại đúng', async () => {
       const followUps = [
         { delayValue: 2, delayUnit: 'days', content: { mode: 'template', templateId: 5 } },

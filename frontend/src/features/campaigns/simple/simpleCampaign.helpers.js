@@ -78,7 +78,7 @@ export const createInitialWizardState = () => ({
   audience: { ...EMPTY_AUDIENCE },
   /** `mode`: null | 'template' | 'custom'. */
   content: { mode: null, templateId: null, templateName: '', subject: '', body: '' },
-  /** Chuỗi tin: tin 2..N, mỗi phần tử `{ id, delayValue, delayUnit: 'days'|'hours', content }` (xem `createFollowUp`). Rỗng = gửi một tin. */
+  /** Chuỗi tin: tin 2..N, mỗi phần tử `{ id, delayValue, delayUnit: 'days'|'hours'|'minutes', content }` (xem `createFollowUp`). Rỗng = gửi một tin. */
   followUps: [],
   /** Xem `createDefaultSchedule`: `{ type: 'now' | 'scheduled' | 'continuous' | 'recurring', … }`. */
   schedule: { type: 'now' },
@@ -87,7 +87,7 @@ export const createInitialWizardState = () => ({
 
 /** Tối đa 10 tin cả chuỗi = tin 1 + 9 tin sau (hợp đồng PLAN_HAI_TAB §3.1). */
 export const MAX_FOLLOW_UPS = 9;
-export const FOLLOW_UP_DELAY_UNITS = Object.freeze(['days', 'hours']);
+export const FOLLOW_UP_DELAY_UNITS = Object.freeze(['days', 'hours', 'minutes']);
 
 export const EMPTY_MESSAGE_CONTENT = Object.freeze({ mode: null, templateId: null, templateName: '', subject: '', body: '' });
 
@@ -143,11 +143,16 @@ export const buildFollowUpsBody = (channel, followUps) => followUps.map((item) =
   content: buildMessageContentBody(channel, item.content),
 }));
 
-/** Tổng độ trễ cả chuỗi, quy ra giờ (bỏ tin có độ trễ chưa hợp lệ). */
-export const totalFollowUpHours = (followUps) => followUps.reduce((sum, item) => {
+const MINUTES_PER_UNIT = Object.freeze({ days: 1440, hours: 60, minutes: 1 });
+
+/** Tổng độ trễ cả chuỗi, quy ra phút (bỏ tin có độ trễ chưa hợp lệ). */
+export const totalFollowUpMinutes = (followUps) => followUps.reduce((sum, item) => {
   if (!isValidFollowUpDelay(item.delayValue)) return sum;
-  return sum + Number(item.delayValue) * (item.delayUnit === 'hours' ? 1 : 24);
+  return sum + Number(item.delayValue) * (MINUTES_PER_UNIT[item.delayUnit] ?? MINUTES_PER_UNIT.days);
 }, 0);
+
+/** Tổng độ trễ cả chuỗi, quy ra giờ (có thể lẻ khi có phút). */
+export const totalFollowUpHours = (followUps) => totalFollowUpMinutes(followUps) / 60;
 
 /** Email dùng tài khoản email; Zalo cá nhân và Zalo nhóm dùng chung danh sách tài khoản Zalo. */
 export const senderKindOf = (channel) => (channel === 'email' ? 'email' : 'zalo');

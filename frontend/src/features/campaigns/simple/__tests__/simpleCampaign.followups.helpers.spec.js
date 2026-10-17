@@ -4,6 +4,8 @@ import {
   buildSimpleCampaignBody,
   createFollowUp,
   createInitialWizardState,
+  FOLLOW_UP_DELAY_UNITS,
+  isFollowUpComplete,
   isStepComplete,
 } from '../simpleCampaign.helpers';
 import { buildReviewSummary } from '../simpleCampaign.summary';
@@ -103,6 +105,8 @@ describe('buildReviewSummary — chuỗi tin', () => {
       'simpleCampaign.review.content.span.daysMany': '{n} ngày',
       'simpleCampaign.review.content.span.hoursOne': '{n} giờ',
       'simpleCampaign.review.content.span.hoursMany': '{n} giờ',
+      'simpleCampaign.review.content.span.minutesOne': '{n} phút',
+      'simpleCampaign.review.content.span.minutesMany': '{n} phút',
     };
     const text = map[key] ?? key;
     return text.replace(/\{(\w+)\}/g, (_, k) => String(params[k] ?? ''));
@@ -116,6 +120,23 @@ describe('buildReviewSummary — chuỗi tin', () => {
   it('có giờ: làm tròn lên ngày; dưới 1 ngày thì nêu giờ', () => {
     expect(summary([fu({ delayValue: 1 }), fu({ delayValue: 5, delayUnit: 'hours' })])).toContain('trong 2 ngày');
     expect(summary([fu({ delayValue: 5, delayUnit: 'hours' })])).toContain('chuỗi 2 tin trong 5 giờ');
+  });
+
+  it('có phút: 2 tin cách 30 phút → "trong 30 phút"; 90 phút → 2 giờ; ngày + phút → làm tròn lên ngày', () => {
+    expect(summary([fu({ delayValue: 30, delayUnit: 'minutes' })])).toContain('chuỗi 2 tin trong 30 phút');
+    expect(summary([fu({ delayValue: 1, delayUnit: 'minutes' })])).toContain('chuỗi 2 tin trong 1 phút');
+    expect(summary([fu({ delayValue: 90, delayUnit: 'minutes' })])).toContain('chuỗi 2 tin trong 2 giờ');
+    expect(summary([fu({ delayValue: 1 }), fu({ delayValue: 30, delayUnit: 'minutes' })])).toContain('chuỗi 3 tin trong 2 ngày');
+    expect(summary([fu({ delayValue: 20, delayUnit: 'minutes' }), fu({ delayValue: 40, delayUnit: 'minutes' })])).toContain('chuỗi 3 tin trong 1 giờ');
+  });
+
+  it('FOLLOW_UP_DELAY_UNITS: ngày → giờ → phút; isFollowUpComplete nhận phút; body gửi minutes', () => {
+    expect([...FOLLOW_UP_DELAY_UNITS]).toEqual(['days', 'hours', 'minutes']);
+    const content = { mode: 'template', templateId: 9, templateName: '', subject: '', body: '' };
+    expect(isFollowUpComplete('zalo', fu({ delayValue: 10, delayUnit: 'minutes' }, content))).toBe(true);
+    expect(isFollowUpComplete('zalo', fu({ delayValue: 10, delayUnit: 'seconds' }, content))).toBe(false);
+    expect(buildSimpleCampaignBody(emailState([fu({ delayValue: '15', delayUnit: 'minutes' }, content)])).followUps[0])
+      .toMatchObject({ delayValue: 15, delayUnit: 'minutes' });
   });
 
   it('không có tin sau → không nhắc chuỗi', () => {
