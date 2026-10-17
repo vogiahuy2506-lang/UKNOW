@@ -573,10 +573,10 @@ const UI_LABELS_IN_ARTICLES = [
   ['gui-telegram-whatsapp', 'dashboard.channelType', 'Loại kênh'],
   ['gui-telegram-whatsapp', 'nav.reports', 'Báo cáo'],
   ['campaign-create', 'channelSteps.addStep', '+ Thêm bước'],
-  ['campaign-create', 'simpleCampaign.entry.blocks.title', 'Sơ đồ khối'],
+  ['campaign-create', 'simpleCampaign.entry.blocks.title', 'Thủ công'],
   // PLAN_TAO_CHIEN_DICH_TUNG_BUOC PR-4: bài `chien-dich-tung-buoc` tả trang tạo chiến dịch từng bước (vi.js `simpleCampaign.*`).
   ['chien-dich-tung-buoc', 'simpleCampaign.entry.step.title', 'Từng bước'],
-  ['chien-dich-tung-buoc', 'simpleCampaign.entry.blocks.title', 'Sơ đồ khối'],
+  ['chien-dich-tung-buoc', 'simpleCampaign.entry.blocks.title', 'Thủ công'],
   ['chien-dich-tung-buoc', 'simpleCampaign.entry.title', 'Bạn muốn tạo chiến dịch theo cách nào?'],
   ['chien-dich-tung-buoc', 'simpleCampaign.steps.channel', 'Kênh gửi'],
   ['chien-dich-tung-buoc', 'simpleCampaign.steps.audience', 'Người nhận'],
