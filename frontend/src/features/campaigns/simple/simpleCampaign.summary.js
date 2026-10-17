@@ -25,12 +25,26 @@ const formatPickedTime = (value) => {
  * @param {(key: string, params?: object) => string} args.t
  * @returns {string}
  */
+/**
+ * Chu kỳ quét người mới nói bằng lời, làm tròn: từ 60 phút trở lên tính theo giờ ("khoảng 5 giờ"), dưới đó theo phút
+ * ("khoảng 45 phút"). Chỉ để HIỂN THỊ — số gửi server vẫn là phút.
+ *
+ * @param {number|string} minutes
+ * @param {(key: string, params?: object) => string} t
+ */
+export const formatPollInterval = (minutes, t) => {
+  const total = Math.max(1, Math.round(Number(minutes) || 0));
+  return total >= 60
+    ? t('simpleCampaign.when.continuous.aboutHours', { n: Math.round(total / 60) })
+    : t('simpleCampaign.when.continuous.aboutMinutes', { n: total });
+};
+
 export const describeWhen = ({ schedule, t }) => {
   switch (schedule?.type) {
     case 'scheduled':
       return t('simpleCampaign.review.when.scheduled', { time: formatPickedTime(schedule.time), date: formatPickedDate(schedule.date) });
     case 'continuous':
-      return t('simpleCampaign.review.when.continuous', { minutes: schedule.pollIntervalMinutes });
+      return t('simpleCampaign.review.when.continuous', { interval: formatPollInterval(schedule.pollIntervalMinutes, t) });
     case 'recurring': {
       const time = formatPickedTime(schedule.time);
       if (schedule.frequency === 'weekly') {
@@ -82,12 +96,20 @@ export const buildReviewSummary = ({ state, preview, t, locale }) => {
 
   let names = '';
   if (audience.type === 'form') names = joinNames(audience.formTitles, { withQuotes: true });
-  else if (audience.type === 'landing') names = joinNames(audience.slugs, { withQuotes: false });
+  else if (audience.type === 'landing') {
+    // Nêu TÊN trang, không nêu slug; thiếu tên (state cũ) mới rơi về slug.
+    names = joinNames(audience.landingTitles?.length ? audience.landingTitles : audience.slugs, { withQuotes: true });
+  }
 
   const audienceLabel = t(`simpleCampaign.review.audience.${audience.type}`, { names });
   const count = resolveRecipientCount(state, preview);
   const formattedCount = count === null ? '' : Number(count).toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN');
-  const audienceText = formattedCount ? `${formattedCount} ${audienceLabel}` : audienceLabel;
+  let audienceText = formattedCount ? `${formattedCount} ${audienceLabel}` : audienceLabel;
+  if (schedule?.type === 'continuous') {
+    // "Tự động": số người HIỆN CÓ chỉ là một phần; người mới sẽ tự được gửi. Không viết "0 người" kẻo hiểu nhầm là không gửi ai.
+    const known = count === null ? 'unknown' : (Number(count) > 0 ? 'some' : 'none');
+    audienceText = `${audienceLabel} ${t(`simpleCampaign.review.continuousCount.${known}`, { count: formattedCount })}`;
+  }
 
   let contentText;
   if (content.mode === 'template') {

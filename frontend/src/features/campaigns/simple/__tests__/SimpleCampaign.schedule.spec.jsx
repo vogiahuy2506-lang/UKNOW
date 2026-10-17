@@ -10,6 +10,8 @@ import emailTemplateApiService from '../../../templates/services/emailTemplateAp
 import zaloTemplateApiService from '../../../templates/services/zaloTemplateApi.service';
 import customerApiService from '../../../customers/services/customerApi.service';
 import chatbotApiService from '../../../chatbot/services/chatbotApi.service';
+import { fetchLandingPagesAdminList } from '../../../landing-pages/services/landingPagesAdminApi.service';
+import { fetchLandingLeadsSlugFilterOptions } from '../../../landing/utils/landingLeadsSlugFilterOptions';
 
 // ── Mock ranh giới: i18n từ điển thật (useI18n(ns) → hàm t; useI18n() → { t, locale }), cổng kênh, API ─────────────────────────
 vi.mock('../../../../i18n', async () => (await import('../../../../test/realI18n.js')).realI18nModule());
@@ -45,6 +47,10 @@ vi.mock('../../../customers/services/customerApi.service', () => ({ default: { g
 vi.mock('../../../chatbot/services/chatbotApi.service', () => ({
   default: { getZaloFriends: vi.fn(), syncZaloContacts: vi.fn() },
 }));
+vi.mock('../../../landing-pages/services/landingPagesAdminApi.service', () => ({
+  fetchLandingPagesAdminList: vi.fn(),
+}));
+// Hàm này luôn chèn mục nội bộ "Landing React (/l)" và hiện slug — bộ chọn của trình Từng bước KHÔNG được dùng nó.
 vi.mock('../../../landing/utils/landingLeadsSlugFilterOptions', () => ({
   fetchLandingLeadsSlugFilterOptions: vi.fn().mockResolvedValue([{ value: 'l', label: 'Landing React (/l)' }]),
 }));
@@ -58,6 +64,15 @@ const FORMS = [
   { id: 7, title: 'Đăng ký học thử', submissionCount: 12, settings: { consentEnabled: true } },
 ];
 const GROUPS = [{ groupId: 'g1', groupName: 'Nhóm Khách VIP' }];
+const LANDINGS = [
+  { slug: 'khoa-hoc', title: 'Khoá học Excel', isPublished: true },
+  { slug: 'ban-nhap', title: '', isPublished: false },
+];
+
+/** Các lớp màu cam "đang chọn" (viền/nền/chữ, không tính hover:/dark:) còn dính trên thẻ hoặc phần tử con của nó. */
+const orangeTokens = (card) => [card, ...card.querySelectorAll('*')]
+  .flatMap((el) => String(el.getAttribute('class') || '').split(/\s+/))
+  .filter((token) => /^(border|bg|text)-orange-/.test(token));
 const readyPreview = () => ({
   data: { success: true, data: { readyToCreate: true, issues: [], estimate: null, recipientCount: 12, summary: {} } },
 });
@@ -111,6 +126,12 @@ async function chooseChannel(channel) {
 async function chooseFormAudience() {
   fireEvent.click(await screen.findByTestId('simple-audience-form'));
   fireEvent.click(await screen.findByRole('checkbox', { name: /Đăng ký học thử/ }));
+  fireEvent.click(await enabledNext());
+}
+
+async function chooseLandingAudience() {
+  fireEvent.click(await screen.findByTestId('simple-audience-landing'));
+  fireEvent.click(await screen.findByRole('checkbox', { name: /Khoá học Excel/ }));
   fireEvent.click(await enabledNext());
 }
 
@@ -183,6 +204,7 @@ describe('Tạo chiến dịch từng bước (PR-3) — bước "Khi nào gửi
     campaignApiService.deleteCampaign.mockResolvedValue({ data: { success: true } });
     campaignRunApiService.runCampaign.mockResolvedValue(runOk);
     campaignRunApiService.createCampaignSchedule.mockResolvedValue(scheduleOk);
+    fetchLandingPagesAdminList.mockResolvedValue(LANDINGS);
   });
 
   describe('thẻ nào hiện', () => {
@@ -194,6 +216,42 @@ describe('Tạo chiến dịch từng bước (PR-3) — bước "Khi nào gửi
       expect(screen.getByTestId('simple-when-now')).toHaveAttribute('aria-pressed', 'true');
       // Câu mô tả thẻ "tự động" nói đúng sự thật: gửi cho người đang có, rồi kiểm tra người mới.
       expect(screen.getByTestId('simple-when-continuous')).toHaveTextContent('Gửi cho những người đang có trong danh sách');
+    });
+
+    it('chọn "Lặp lại định kỳ" thì "Gửi ngay" KHÔNG còn trạng thái chọn và không còn tô cam; chỉ thẻ đang chọn được tô', async () => {
+      await reachWhenStepEmailForm();
+      const now = screen.getByTestId('simple-when-now');
+      expect(now).toHaveAttribute('aria-pressed', 'true');
+      expect(orangeTokens(now).length).toBeGreaterThan(0);
+
+      fireEvent.click(screen.getByTestId('simple-when-recurring'));
+      expect(screen.getByTestId('simple-when-recurring')).toHaveAttribute('aria-pressed', 'true');
+      expect(now).toHaveAttribute('aria-pressed', 'false');
+      expect(orangeTokens(now)).toEqual([]);
+      expect(orangeTokens(screen.getByTestId('simple-when-scheduled'))).toEqual([]);
+      expect(orangeTokens(screen.getByTestId('simple-when-continuous'))).toEqual([]);
+
+      fireEvent.click(screen.getByTestId('simple-when-continuous'));
+      expect(now).toHaveAttribute('aria-pressed', 'false');
+      expect(orangeTokens(now)).toEqual([]);
+      expect(orangeTokens(screen.getByTestId('simple-when-recurring'))).toEqual([]);
+    });
+
+    it('các bước khác dùng cùng thẻ: kênh / nguồn / nội dung chưa chọn thì không tô cam', async () => {
+      renderPage();
+      fireEvent.click(await screen.findByTestId('simple-channel-email'));
+      expect(orangeTokens(screen.getByTestId('simple-channel-zalo'))).toEqual([]);
+      expect(orangeTokens(screen.getByTestId('simple-channel-zalo_group'))).toEqual([]);
+      fireEvent.click(await enabledNext());
+
+      fireEvent.click(await screen.findByTestId('simple-audience-form'));
+      expect(orangeTokens(screen.getByTestId('simple-audience-landing'))).toEqual([]);
+      expect(orangeTokens(screen.getByTestId('simple-audience-customers'))).toEqual([]);
+      fireEvent.click(await screen.findByRole('checkbox', { name: /Đăng ký học thử/ }));
+      fireEvent.click(await enabledNext());
+
+      fireEvent.click(await screen.findByTestId('simple-content-custom'));
+      expect(orangeTokens(screen.getByTestId('simple-content-template'))).toEqual([]);
     });
 
     it('Email + Tự nhập danh sách: KHÔNG có thẻ "Tự động gửi cho người mới" (danh sách cố định)', async () => {
@@ -315,7 +373,10 @@ describe('Tạo chiến dịch từng bước (PR-3) — bước "Khi nào gửi
     it('chạy với continuousMode + chu kỳ quét mặc định 120–300 phút; preview mang continuous:true; vẫn là "Bắt đầu gửi"', async () => {
       await reachWhenStepEmailForm();
       fireEvent.click(screen.getByTestId('simple-when-continuous'));
-      expect(await screen.findByTestId('simple-when-continuous-panel')).toHaveTextContent(/khoảng \d+ phút/);
+      const panel = await screen.findByTestId('simple-when-continuous-panel');
+      // Chu kỳ mặc định 120–300 phút → nói bằng GIỜ làm tròn, không phải con số phút máy móc.
+      expect(panel).toHaveTextContent(/khoảng [2-5] giờ/);
+      expect(panel).not.toHaveTextContent(/phút/);
       const start = await goToReview();
       expect(start).toHaveTextContent('Bắt đầu gửi');
       expect(campaignApiService.previewSimpleCampaign.mock.calls.at(-1)[0].continuous).toBe(true);
@@ -374,5 +435,92 @@ describe('Tạo chiến dịch từng bước (PR-3) — bước "Khi nào gửi
       expect(await screen.findByTestId('simple-submit-error')).toHaveTextContent('Biểu thức cron không hợp lệ');
       expect(screen.queryByTestId('simple-overlap-suggestions')).toBeNull();
     });
+  });
+});
+
+describe('Tạo chiến dịch từng bước (PR-3) — bộ chọn landing và câu tóm tắt "tự động"', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    availabilityState.value = openAvailability();
+    campaignBuilderApiService.getActiveEmailSettings.mockResolvedValue({
+      data: { data: { items: [{ id: 11, name: 'Shop ABC', email: 'shop@abc.vn', status: 'active' }] } },
+    });
+    emailTemplateApiService.getTemplates.mockResolvedValue({
+      data: { data: { items: [{ id: 5, templateName: 'Ưu đãi tháng 10', category: '' }] } },
+    });
+    emailTemplateApiService.getTemplateById.mockResolvedValue({
+      data: { data: { id: 5, templateName: 'Ưu đãi tháng 10', subject: 'Giảm 20%', bodyText: 'Nội dung mẫu' } },
+    });
+    campaignApiService.previewSimpleCampaign.mockResolvedValue(readyPreview());
+    campaignApiService.createSimpleCampaign.mockResolvedValue(created(900));
+    campaignRunApiService.runCampaign.mockResolvedValue(runOk);
+    fetchLandingPagesAdminList.mockResolvedValue(LANDINGS);
+  });
+
+  it('liệt kê landing của người dùng bằng TÊN trang (rỗng thì slug) + huy hiệu "Chưa xuất bản"; KHÔNG có mục nội bộ "Landing React (/l)"', async () => {
+    renderPage();
+    await chooseChannel('email');
+    fireEvent.click(await screen.findByTestId('simple-audience-landing'));
+    expect(await screen.findByRole('checkbox', { name: /Khoá học Excel/ })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /ban-nhap/ })).toBeInTheDocument();
+    expect(screen.getByText('Chưa xuất bản')).toBeInTheDocument();
+    expect(screen.queryByText(/Landing React/)).toBeNull();
+    expect(screen.queryByRole('checkbox', { name: /\(\/l\)/ })).toBeNull();
+    expect(fetchLandingLeadsSlugFilterOptions).not.toHaveBeenCalled();
+    expect(fetchLandingPagesAdminList).toHaveBeenCalledTimes(1);
+  });
+
+  it('chưa có landing nào → câu mời tạo landing kèm link tới trang quản lý landing', async () => {
+    fetchLandingPagesAdminList.mockResolvedValue([]);
+    renderPage();
+    await chooseChannel('email');
+    fireEvent.click(await screen.findByTestId('simple-audience-landing'));
+    const empty = await screen.findByTestId('simple-landing-empty');
+    expect(empty).toHaveTextContent('chưa có landing page nào');
+    expect(screen.getByRole('link', { name: 'Tạo landing page' })).toHaveAttribute('href', '/app/settings/landing-pages');
+    expect(nextButton()).toBeDisabled();
+  });
+
+  async function reachReviewLandingContinuous(recipientCount) {
+    campaignApiService.previewSimpleCampaign.mockResolvedValue({
+      data: { success: true, data: { readyToCreate: true, issues: [], estimate: null, recipientCount, summary: {} } },
+    });
+    renderPage();
+    await chooseChannel('email');
+    await chooseLandingAudience();
+    await chooseTemplate('Ưu đãi tháng 10');
+    fireEvent.click(await screen.findByTestId('simple-when-continuous'));
+    return goToReview();
+  }
+
+  it('tự động + landing có 12 người: câu tóm tắt nêu TÊN trang (không nêu slug), "hiện có 12 người; người mới sẽ tự được gửi", chu kỳ theo giờ', async () => {
+    const start = await reachReviewLandingContinuous(12);
+    const summary = screen.getByTestId('simple-summary');
+    expect(summary).toHaveTextContent('landing page “Khoá học Excel” (hiện có 12 người; người mới sẽ tự được gửi)');
+    expect(summary).toHaveTextContent(/cứ khoảng [2-5] giờ kiểm tra một lần/);
+    expect(summary).not.toHaveTextContent('khoa-hoc');
+    expect(summary).not.toHaveTextContent(/12 người để lại/);
+    // Giá trị gửi server vẫn là slug chuẩn hoá và số phút.
+    fireEvent.click(start);
+    await waitFor(() => expect(campaignRunApiService.runCampaign).toHaveBeenCalledTimes(1));
+    expect(campaignApiService.createSimpleCampaign.mock.calls[0][0].audience).toEqual({ type: 'landing', slugs: ['khoa-hoc'] });
+    expect(campaignRunApiService.runCampaign.mock.calls[0][1].pollIntervalMinutes).toBeGreaterThanOrEqual(120);
+  });
+
+  it('tự động + landing chưa có ai (0): KHÔNG viết "0 người", mà "hiện chưa có ai; người mới sẽ tự được gửi"', async () => {
+    await reachReviewLandingContinuous(0);
+    const summary = screen.getByTestId('simple-summary');
+    expect(summary).toHaveTextContent('landing page “Khoá học Excel” (hiện chưa có ai; người mới sẽ tự được gửi)');
+    expect(summary).not.toHaveTextContent('0 người');
+  });
+
+  it('gửi ngay với landing: câu tóm tắt vẫn nêu tên trang và số người như cũ', async () => {
+    campaignApiService.previewSimpleCampaign.mockResolvedValue(readyPreview());
+    renderPage();
+    await chooseChannel('email');
+    await chooseLandingAudience();
+    await chooseTemplate('Ưu đãi tháng 10');
+    await goToReview();
+    expect(screen.getByTestId('simple-summary')).toHaveTextContent('12 người để lại thông tin trên landing page “Khoá học Excel”');
   });
 });

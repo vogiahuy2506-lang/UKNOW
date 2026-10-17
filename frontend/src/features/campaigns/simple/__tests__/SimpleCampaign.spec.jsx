@@ -42,8 +42,8 @@ vi.mock('../../../customers/services/customerApi.service', () => ({ default: { g
 vi.mock('../../../chatbot/services/chatbotApi.service', () => ({
   default: { getZaloFriends: vi.fn(), syncZaloContacts: vi.fn() },
 }));
-vi.mock('../../../landing/utils/landingLeadsSlugFilterOptions', () => ({
-  fetchLandingLeadsSlugFilterOptions: vi.fn().mockResolvedValue([{ value: 'l', label: 'Landing React (/l)' }]),
+vi.mock('../../../landing-pages/services/landingPagesAdminApi.service', () => ({
+  fetchLandingPagesAdminList: vi.fn().mockResolvedValue([]),
 }));
 vi.mock('react-hot-toast', () => {
   const toast = Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() });

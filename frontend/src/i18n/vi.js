@@ -1760,6 +1760,10 @@ export default {
       landing: {
         hint: 'Chọn một hoặc nhiều trang. Mọi người đã để lại thông tin ở các trang này sẽ nhận tin.',
         selected: 'Đã chọn {count} trang',
+        loadFailed: 'Không tải được danh sách landing page.',
+        empty: 'Bạn chưa có landing page nào nên chưa có ai để gửi.',
+        create: 'Tạo landing page',
+        unpublished: 'Chưa xuất bản',
       },
       form: {
         loadFailed: 'Không tải được danh sách biểu mẫu.',
@@ -1841,7 +1845,9 @@ export default {
       continuous: {
         title: 'Tự động gửi cho người mới',
         desc: 'Gửi cho những người đang có trong danh sách, rồi cứ vài giờ kiểm tra thêm người mới để gửi tiếp. Chạy cho tới khi bạn dừng chiến dịch.',
-        panel: 'Hệ thống gửi cho người đang có trong danh sách ngay bây giờ, rồi cứ khoảng {minutes} phút kiểm tra một lần và chỉ gửi cho người mới xuất hiện. Chiến dịch chạy cho tới khi bạn dừng nó trong trang Chiến dịch.',
+        aboutHours: 'khoảng {n} giờ',
+        aboutMinutes: 'khoảng {n} phút',
+        panel: 'Hệ thống gửi cho người đang có trong danh sách ngay bây giờ, rồi cứ {interval} kiểm tra một lần và chỉ gửi cho người mới xuất hiện. Chiến dịch chạy cho tới khi bạn dừng nó trong trang Chiến dịch.',
       },
       recurring: {
         title: 'Lặp lại định kỳ',
@@ -1873,10 +1879,15 @@ export default {
         custom: 'tự soạn',
         customWithSubject: 'tự soạn “{subject}”',
       },
+      continuousCount: {
+        some: '(hiện có {count} người; người mới sẽ tự được gửi)',
+        none: '(hiện chưa có ai; người mới sẽ tự được gửi)',
+        unknown: '(người mới sẽ tự được gửi)',
+      },
       when: {
         now: 'gửi ngay',
         scheduled: 'hẹn gửi lúc {time} ngày {date}',
-        continuous: 'tự động gửi cho người mới (cứ khoảng {minutes} phút kiểm tra một lần)',
+        continuous: 'tự động gửi cho người mới, cứ {interval} kiểm tra một lần',
         recurringDaily: 'gửi lặp lại hằng ngày lúc {time}',
         recurringWeekly: 'gửi lặp lại hằng tuần vào {day} lúc {time}',
         recurringMonthly: 'gửi lặp lại vào ngày 1 hằng tháng lúc {time}',

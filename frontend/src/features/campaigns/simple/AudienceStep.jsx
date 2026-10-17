@@ -19,7 +19,7 @@ import GroupsPanel from './audience/GroupsPanel';
 
 const AUDIENCE_CARDS = Object.freeze({
   customers: { icon: HiOutlineDatabase, tone: 'blue' },
-  landing: { icon: HiOutlineGlobeAlt, tone: 'orange' },
+  landing: { icon: HiOutlineGlobeAlt, tone: 'rose' },
   form: { icon: HiOutlineClipboardList, tone: 'emerald' },
   sheet: { icon: HiOutlineTable, tone: 'emerald' },
   manual: { icon: HiOutlinePencilAlt, tone: 'slate' },
@@ -51,7 +51,7 @@ export default function AudienceStep({ wizard, t, locale }) {
       case 'customers':
         return <CustomersPanel patchAudience={patchAudience} t={t} locale={locale} />;
       case 'landing':
-        return <LandingPanel slugs={audience.slugs} patchAudience={patchAudience} t={t} />;
+        return <LandingPanel slugs={audience.slugs} landingTitles={audience.landingTitles} patchAudience={patchAudience} t={t} />;
       case 'form':
         return <FormPanel formIds={audience.formIds} formTitles={audience.formTitles} patchAudience={patchAudience} t={t} />;
       case 'sheet':

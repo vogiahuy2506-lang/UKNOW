@@ -173,7 +173,7 @@ export default function ContentStep({ wizard, t }) {
         <SimpleChoiceCard
           testId="simple-content-template"
           icon={HiOutlineTemplate}
-          tone="orange"
+          tone="rose"
           title={t('simpleCampaign.content.template.title')}
           description={t('simpleCampaign.content.template.desc')}
           selected={content.mode === 'template'}

@@ -15,7 +15,7 @@ import {
   resolveScheduleStartAt,
   validateSchedule,
 } from '../simpleCampaign.helpers';
-import { describeWhen } from '../simpleCampaign.summary';
+import { describeWhen, formatPollInterval } from '../simpleCampaign.summary';
 
 const stateWith = (patch = {}) => {
   const base = createInitialWizardState();
@@ -198,12 +198,36 @@ describe('describeWhen — câu nêu đúng cách gửi', () => {
     expect(describeWhen({ schedule: { type: 'scheduled', date: '2026-10-20', time: '8:05' }, t }))
       .toBe('simpleCampaign.review.when.scheduled|time=08:05,date=20/10/2026');
     expect(describeWhen({ schedule: { type: 'continuous', pollIntervalMinutes: 180 }, t }))
-      .toBe('simpleCampaign.review.when.continuous|minutes=180');
+      .toBe('simpleCampaign.review.when.continuous|interval=simpleCampaign.when.continuous.aboutHours|n=3');
     expect(describeWhen({ schedule: { type: 'recurring', frequency: 'daily', time: '08:30' }, t }))
       .toBe('simpleCampaign.review.when.recurringDaily|time=08:30');
     expect(describeWhen({ schedule: { type: 'recurring', frequency: 'monthly', time: '07:15' }, t }))
       .toBe('simpleCampaign.review.when.recurringMonthly|time=07:15');
     expect(describeWhen({ schedule: { type: 'recurring', frequency: 'weekly', weeklyDay: '1', time: '09:00' }, t }))
       .toBe('simpleCampaign.review.when.recurringWeekly|day=campaigns.monday|,time=09:00');
+  });
+});
+
+describe('formatPollInterval — chu kỳ quét nói bằng lời, làm tròn', () => {
+  const t = (key, params = {}) => `${key}:${params.n}`;
+
+  it('từ 60 phút trở lên tính theo giờ làm tròn; dưới 60 phút tính theo phút', () => {
+    expect(formatPollInterval(295, t)).toBe('simpleCampaign.when.continuous.aboutHours:5');
+    expect(formatPollInterval(120, t)).toBe('simpleCampaign.when.continuous.aboutHours:2');
+    expect(formatPollInterval(150, t)).toBe('simpleCampaign.when.continuous.aboutHours:3');
+    expect(formatPollInterval(45, t)).toBe('simpleCampaign.when.continuous.aboutMinutes:45');
+  });
+
+  it('bản tiếng Việt thật: 295 → "khoảng 5 giờ", 120 → "khoảng 2 giờ", 45 → "khoảng 45 phút"', async () => {
+    const viDict = (await import('../../../../i18n/vi.js')).default;
+    const real = (key, params = {}) => String(key.split('.').reduce((acc, part) => acc?.[part], viDict)).replace(/\{(\w+)\}/g, (_, name) => params[name]);
+    expect(formatPollInterval(295, real)).toBe('khoảng 5 giờ');
+    expect(formatPollInterval(120, real)).toBe('khoảng 2 giờ');
+    expect(formatPollInterval(45, real)).toBe('khoảng 45 phút');
+  });
+
+  it('số phút gửi server giữ nguyên (không bị làm tròn)', () => {
+    expect(buildRunBody({ type: 'continuous', pollIntervalMinutes: 295 }, 'x').pollIntervalMinutes).toBe(295);
+    expect(buildRunBody({ type: 'continuous', pollIntervalMinutes: 295 }, 'x').pollIntervalMs).toBe(295 * 60 * 1000);
   });
 });

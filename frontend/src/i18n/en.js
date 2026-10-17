@@ -1755,6 +1755,10 @@ export default {
       landing: {
         hint: 'Choose one or more pages. Everyone who left their details on these pages will receive it.',
         selected: '{count} pages selected',
+        loadFailed: 'Could not load your landing pages.',
+        empty: 'You have no landing pages yet, so there is nobody to send to.',
+        create: 'Create a landing page',
+        unpublished: 'Not published',
       },
       form: {
         loadFailed: 'Could not load your forms.',
@@ -1836,7 +1840,9 @@ export default {
       continuous: {
         title: 'Send automatically to new people',
         desc: 'Sends to the people already in the list, then every few hours checks for new people and sends to them. Runs until you stop the campaign.',
-        panel: 'The system sends to everyone already in the list right now, then checks about every {minutes} minutes and only sends to new people. The campaign keeps running until you stop it on the Campaigns page.',
+        aboutHours: 'about {n} hours',
+        aboutMinutes: 'about {n} minutes',
+        panel: 'The system sends to everyone already in the list right now, then checks every {interval} and only sends to new people. The campaign keeps running until you stop it on the Campaigns page.',
       },
       recurring: {
         title: 'Repeat on a schedule',
@@ -1868,10 +1874,15 @@ export default {
         custom: 'written by you',
         customWithSubject: 'written by you “{subject}”',
       },
+      continuousCount: {
+        some: '(currently {count} people; new people will be sent automatically)',
+        none: '(nobody yet; new people will be sent automatically)',
+        unknown: '(new people will be sent automatically)',
+      },
       when: {
         now: 'send now',
         scheduled: 'scheduled for {time} on {date}',
-        continuous: 'sent automatically to new people (checking about every {minutes} minutes)',
+        continuous: 'sent automatically to new people, checking every {interval}',
         recurringDaily: 'repeating every day at {time}',
         recurringWeekly: 'repeating every week on {day} at {time}',
         recurringMonthly: 'repeating on the 1st of every month at {time}',

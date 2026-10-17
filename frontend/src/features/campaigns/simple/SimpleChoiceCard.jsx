@@ -5,7 +5,9 @@ const TONES = {
   blue: 'bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900/60',
   sky: 'bg-sky-50 text-sky-600 border-sky-100 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-900/60',
   violet: 'bg-violet-50 text-violet-600 border-violet-100 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-900/60',
+  // Cam là màu của thẻ ĐANG CHỌN (viền + nền cam) nên các thẻ thường không dùng tông cam, kẻo trông như hai thẻ cùng được chọn.
   orange: 'bg-orange-50 text-orange-600 border-orange-100 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-900/60',
+  rose: 'bg-rose-50 text-rose-600 border-rose-100 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900/60',
   emerald: 'bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/60',
   slate: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-dk-raised dark:text-dk-text2 dark:border-dk-border',
 };

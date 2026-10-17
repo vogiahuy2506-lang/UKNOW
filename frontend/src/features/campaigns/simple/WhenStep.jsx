@@ -1,5 +1,6 @@
 import { HiOutlineCalendar, HiOutlineExclamation, HiOutlineLightningBolt, HiOutlineRefresh, HiOutlineUserAdd } from 'react-icons/hi';
 import SimpleChoiceCard from './SimpleChoiceCard';
+import { formatPollInterval } from './simpleCampaign.summary';
 import {
   RECURRING_FREQUENCIES,
   WEEKDAY_OPTIONS,
@@ -13,7 +14,7 @@ import {
  * nguồn người nhận; thẻ chưa dùng được thì KHÔNG hiện (không hiện "Sắp có").
  */
 const WHEN_CARDS = Object.freeze({
-  now: { icon: HiOutlineLightningBolt, tone: 'orange' },
+  now: { icon: HiOutlineLightningBolt, tone: 'rose' },
   scheduled: { icon: HiOutlineCalendar, tone: 'blue' },
   continuous: { icon: HiOutlineUserAdd, tone: 'emerald' },
   recurring: { icon: HiOutlineRefresh, tone: 'violet' },
@@ -98,7 +99,7 @@ function ContinuousPanel({ schedule, t }) {
   return (
     <div className={PANEL_CLASS} data-testid="simple-when-continuous-panel">
       <p className="text-sm text-slate-700 dark:text-dk-text">
-        {t('simpleCampaign.when.continuous.panel', { minutes: schedule.pollIntervalMinutes })}
+        {t('simpleCampaign.when.continuous.panel', { interval: formatPollInterval(schedule.pollIntervalMinutes, t) })}
       </p>
     </div>
   );

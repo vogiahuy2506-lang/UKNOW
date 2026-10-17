@@ -59,6 +59,7 @@ export const EMPTY_AUDIENCE = Object.freeze({
   type: null,
   customerTotal: null,
   slugs: [],
+  landingTitles: [],
   formIds: [],
   formTitles: [],
   sheetUrl: '',
