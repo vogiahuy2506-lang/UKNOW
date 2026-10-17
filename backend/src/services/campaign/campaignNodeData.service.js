@@ -5,6 +5,7 @@ import campaignFlowService from './campaignFlow.service.js';
 import campaignCustomerRepository from '../../repositories/campaign/campaignCustomer.repository.js';
 import customerInterestedService from '../customer/customerInterested.service.js';
 import customerHelperService from '../customer/customerHelper.service.js';
+import { ALL_CUSTOMERS_LIMIT_CAP, INTERESTED_LIMIT_CAP } from '../../utils/interestedLimits.util.js';
 import outboundMessageQueueService, {
   OUTBOUND_MESSAGE_JOB_TYPES,
 } from '../queue/outboundMessageQueue.service.js';
@@ -88,10 +89,14 @@ class CampaignNodeDataService {
     switch (subtype) {
       case 'read_interested_customers':
       case 'interested_customers': {
+        const customerType = String(config.interestedCustomerType || 'interested').trim();
+        // Loại `all` (toàn bộ khách workspace) có trần 50.000 và mặc định lấy tới trần; các loại khác trần 5.000.
+        const isAllCustomers = customerType.toLowerCase() === 'all';
+        const limitCap = isAllCustomers ? ALL_CUSTOMERS_LIMIT_CAP : INTERESTED_LIMIT_CAP;
         const interestedLimit = Number.isFinite(parseInt(config.interestedLimit, 10))
           ? parseInt(config.interestedLimit, 10)
-          : 1000;
-        const limit = Math.max(1, Math.min(interestedLimit, 5000));
+          : (isAllCustomers ? limitCap : 1000);
+        const limit = Math.max(1, Math.min(interestedLimit, limitCap));
         const selectedCourseIds = (Array.isArray(config.interestedCourseIds) ? config.interestedCourseIds : [])
           .map((v) => parseInt(v, 10))
           .filter((v, idx, arr) => Number.isFinite(v) && arr.indexOf(v) === idx);
@@ -99,8 +104,10 @@ class CampaignNodeDataService {
           .map((v) => String(v || '').trim().toLowerCase())
           .filter((v, idx, arr) => v && arr.indexOf(v) === idx);
         const courseQuery = String(config.interestedCourseQuery || '').trim();
-        const customerType = String(config.interestedCustomerType || 'interested').trim();
-        const dataSource = String(config.interestedDataSource || 'database').trim().toLowerCase();
+        // `all` chỉ có ở database (API WooCommerce không có khái niệm "mọi khách đã lưu").
+        const dataSource = isAllCustomers
+          ? 'database'
+          : String(config.interestedDataSource || 'database').trim().toLowerCase();
         const selectedCustomerIds = (Array.isArray(config.interestedSelectedCustomerIds) ? config.interestedSelectedCustomerIds : [])
           .map((v) => parseInt(v, 10))
           .filter((v, idx, arr) => Number.isFinite(v) && arr.indexOf(v) === idx);

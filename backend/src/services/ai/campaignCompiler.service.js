@@ -128,7 +128,7 @@ function buildAdapterAudienceNode(audience, prefix) {
     const id = `${prefix}_interested_customers_1`;
     return { node: { ...base, id, tempId: id, nodeSubtype: 'interested_customers', nodeName: 'Lấy dữ liệu khách hàng',
       nodeDescription: 'Lấy danh sách khách hàng từ database hệ thống',
-      config: { interestedCustomerType: 'both', interestedLimit: 1000 } } };
+      config: { interestedCustomerType: 'all' } } };
   }
   if (audience.type === 'landing') {
     const id = `${prefix}_read_landing_leads_1`;
@@ -350,8 +350,7 @@ function compileEmailOnceCampaign({ sender, audience, contentBrief, fileUsage, a
       positionX: 350,
       positionY: 200,
       config: {
-        interestedCustomerType: 'both',
-        interestedLimit: 1000,
+        interestedCustomerType: 'all',
       },
     });
   } else if (audience.type === 'landing') {
@@ -537,8 +536,7 @@ function compileEmailDripCampaign({ sender, audience, schedule, contentBrief, fi
       positionX: 350,
       positionY: 200,
       config: {
-        interestedCustomerType: 'both',
-        interestedLimit: 1000,
+        interestedCustomerType: 'all',
       },
     });
   } else if (audience.type === 'landing') {
@@ -769,8 +767,7 @@ function compileZaloPersonalOnceCampaign({ sender, audience, contentBrief, fileU
       positionX: 500,
       positionY: 200,
       config: {
-        interestedCustomerType: 'both',
-        interestedLimit: 1000,
+        interestedCustomerType: 'all',
       },
     });
   } else if (audience.type === 'landing') {
@@ -985,8 +982,7 @@ function compileZaloPersonalDripCampaign({ sender, audience, schedule, contentBr
       positionX: 500,
       positionY: 200,
       config: {
-        interestedCustomerType: 'both',
-        interestedLimit: 1000,
+        interestedCustomerType: 'all',
       },
     });
   } else if (audience.type === 'landing') {

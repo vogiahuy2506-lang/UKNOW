@@ -190,7 +190,9 @@ describe('F2.2 — script LLM có bộ lọc người nhận thì compiler KHÔN
 
     expect(result.data.compilerApplied).toBe(true);
     expect(result.data._via).toBe('ai_compiler');
-    expect(audienceConfig).toMatchObject({ interestedCustomerType: 'both', interestedLimit: 1000 });
+    // PR-5: compiler dựng nguồn db thành 'all' (toàn bộ khách đã lưu), không còn 'both'/1000.
+    expect(audienceConfig).toMatchObject({ interestedCustomerType: 'all' });
+    expect(audienceConfig.interestedLimit).toBeUndefined();
   });
 });
 

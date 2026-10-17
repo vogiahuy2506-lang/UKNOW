@@ -543,6 +543,31 @@ class CustomerReadRepository {
     return result.rows.map((row) => row.value);
   }
 
+  /**
+   * MỌI khách của workspace (không cần dòng trong `customer_purchases`) cho khối "Lấy dữ liệu khách" loại `all`
+   * (PLAN_TAO_CHIEN_DICH_TUNG_BUOC PR-5). Khối cũ đọc `FROM customer_purchases JOIN customers` nên khách chưa có dòng
+   * mua/quan tâm bị loại (prod: 96.940 khách, chỉ 3 có dòng). Cùng phạm vi workspace với danh sách khách
+   * (`buildCustomerListFilter`). Không lọc đồng ý/huỷ đăng ký ở đây — hàng rào đó nằm ở bước gửi, như các loại còn lại.
+   *
+   * @param {{ userId: number, limit: number }} input
+   * @returns {Promise<{ rows: object[], total: number }>} `total` = tổng khách workspace (kể cả phần bị cắt bởi `limit`)
+   */
+  async getAllCustomersRows({ userId, limit }) {
+    const { whereSql, params } = this.buildCustomerListFilter({ userId });
+    const [listResult, countResult] = await Promise.all([
+      db.query(
+        `SELECT c.id AS id_customer, c.full_name, c.email, c.phone, c.zalo_id, c.zalo_phone, c.customer_source
+         FROM customers c
+         WHERE ${whereSql}
+         ORDER BY c.id ASC
+         LIMIT $${params.length + 1}`,
+        [...params, limit]
+      ),
+      db.query(`SELECT COUNT(*)::INTEGER AS total FROM customers c WHERE ${whereSql}`, params),
+    ]);
+    return { rows: listResult.rows, total: countResult.rows[0]?.total || 0 };
+  }
+
   async getOwnedCampaign(campaignId, userId) {
     const result = await db.query(
       `SELECT id, campaign_type

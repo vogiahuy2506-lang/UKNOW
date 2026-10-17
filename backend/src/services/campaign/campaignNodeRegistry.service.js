@@ -169,7 +169,7 @@ class CampaignNodeRegistryService {
         configSchema: {
           interestedCustomerType: {
             type: 'enum',
-            values: ['interested', 'purchased', 'both'],
+            values: ['interested', 'purchased', 'both', 'all'],
             default: 'both',
             label: 'Loại khách hàng',
           },

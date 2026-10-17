@@ -1,4 +1,5 @@
 import customerReadRepository from '../../repositories/customer/customerRead.repository.js';
+import { ALL_CUSTOMERS_LIMIT_CAP, INTERESTED_LIMIT_CAP } from '../../utils/interestedLimits.util.js';
 
 /** Thời gian chờ tối đa mỗi trang đơn hàng WooCommerce (ms). */
 const WOO_REQUEST_TIMEOUT_MS = 20000;
@@ -26,10 +27,12 @@ class CustomerInterestedService {
     const campaignIdNum = Number.isFinite(parseInt(campaignId, 10))
       ? parseInt(campaignId, 10)
       : null;
+    const isAllCustomers = String(customerType || '').trim().toLowerCase() === 'all';
+    if (isAllCustomers) return this.getAllCustomersAsItems({ userId, limit: rawLimit });
     const requestedLimit = Number.isFinite(parseInt(rawLimit, 10))
       ? parseInt(rawLimit, 10)
       : 1000;
-    const limit = Math.max(1, Math.min(requestedLimit, 5000));
+    const limit = Math.max(1, Math.min(requestedLimit, INTERESTED_LIMIT_CAP));
     const selectedCourseIds = String(courseIds || '')
       .split(',')
       .map((v) => parseInt(v, 10))
@@ -121,6 +124,59 @@ class CustomerInterestedService {
         courseStatuses: normalizedCourseStatuses,
         courseQuery: normalizedCourseQuery,
         customerType: normalizedCustomerType,
+      },
+      pagination: {
+        limit,
+        total: result.total || 0,
+      },
+    };
+  }
+
+  /**
+   * Loại `all`: toàn bộ khách của workspace, kể cả khách không có dòng mua/quan tâm. Trả item CÙNG hình dạng nhánh
+   * interested (khối gửi email/Zalo và bảng ánh xạ cột chạy không đổi); các trường đơn hàng/khoá học để null.
+   * Bộ lọc khoá học không áp dụng. Không truyền `limit` thì lấy tới trần (khác các loại kia mặc định 1.000).
+   *
+   * @param {{ userId: number, limit?: number|string }} input
+   * @returns {Promise<object>} cùng hình dạng `getInterestedCustomersWithCourses`
+   */
+  async getAllCustomersAsItems({ userId, limit: rawLimit }) {
+    const requestedLimit = Number.isFinite(parseInt(rawLimit, 10))
+      ? parseInt(rawLimit, 10)
+      : ALL_CUSTOMERS_LIMIT_CAP;
+    const limit = Math.max(1, Math.min(requestedLimit, ALL_CUSTOMERS_LIMIT_CAP));
+    const result = await customerReadRepository.getAllCustomersRows({ userId, limit });
+    return {
+      items: result.rows.map((row) => ({
+        id: null,
+        customerId: row.id_customer,
+        courseId: null,
+        campaignId: null,
+        orderId: null,
+        productName: null,
+        productType: null,
+        amount: null,
+        currency: null,
+        paymentMethod: null,
+        purchaseDate: null,
+        orderStatus: null,
+        fullName: row.full_name,
+        email: row.email,
+        phone: row.phone,
+        zaloId: row.zalo_id,
+        zaloPhone: row.zalo_phone,
+        customerSource: row.customer_source,
+        courseName: null,
+        courseCode: null,
+        campaignName: null,
+      })),
+      courses: [],
+      filters: {
+        campaignId: null,
+        courseIds: [],
+        courseStatuses: [],
+        courseQuery: '',
+        customerType: 'all',
       },
       pagination: {
         limit,

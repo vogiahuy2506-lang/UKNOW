@@ -4,6 +4,7 @@ import zaloTemplateRepository from '../../repositories/zalo/zaloTemplate.reposit
 import campaignEmailSenderRepository from '../../repositories/campaign/campaignEmailSender.repository.js';
 import campaignZaloSenderRepository from '../../repositories/campaign/campaignZaloSender.repository.js';
 import chatbotTelegramRepository from '../../repositories/chatbot/chatbotTelegram.repository.js';
+import { ALL_CUSTOMERS_LIMIT_CAP } from '../../utils/interestedLimits.util.js';
 import { isAdapterCampaignChannelEnabled } from '../campaign/campaignChannelFlags.util.js';
 import { resolveActorZaloAccessibleIds } from '../campaign/campaignZaloAccess.service.js';
 import { resolveActorChannelAccessibleRefs } from '../campaign/campaignChannelAccess.service.js';
@@ -97,7 +98,9 @@ const audienceFilterOf = (sourceNode) => {
   const rawType = String(config.interestedCustomerType ?? '').trim().toLowerCase();
   const customerType = rawType === 'purchased' || rawType === 'interested' ? rawType : null;
   const rawLimit = Number(config.interestedLimit);
-  const limit = Number.isFinite(rawLimit) && rawLimit > 0 && rawLimit !== DEFAULT_DB_AUDIENCE_LIMIT ? rawLimit : null;
+  // Loại 'all' (mọi khách đã lưu) mặc định lấy tới trần 50.000 — không phải bộ lọc số lượng người dùng đặt.
+  const defaultLimit = rawType === 'all' ? ALL_CUSTOMERS_LIMIT_CAP : DEFAULT_DB_AUDIENCE_LIMIT;
+  const limit = Number.isFinite(rawLimit) && rawLimit > 0 && rawLimit !== defaultLimit ? rawLimit : null;
   if (!courseIds.length && !excludedCourseIds.length && !customerType && limit == null) return null;
   return { customerType, limit, courseIds, excludedCourseIds };
 };

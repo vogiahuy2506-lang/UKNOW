@@ -13,6 +13,9 @@ import { INTERESTED_CUSTOMER_COLUMN_OPTIONS } from '../constants/dataNodeColumnO
 import { NodeConfigDataColumnPicker } from './NodeConfigDataColumnPicker';
 import NumberInput from '../../../components/common/NumberInput';
 
+/** Trần số khách của loại 'all' (khớp ALL_CUSTOMERS_LIMIT_CAP ở backend). */
+const ALL_CUSTOMERS_MAX_LIMIT = 50000;
+
 const INTERESTED_COURSE_STATUS_OPTIONS = ['publish', 'draft', 'pending', 'private'];
 
 const normalizeCourseStatus = (status) => String(status || '').trim().toLowerCase() || 'publish';
@@ -142,15 +145,17 @@ export const NodeConfigReadInterestedCustomersSection = ({
 
   const selectedDataCols = Array.isArray(formData.dataSelectedColumns) ? formData.dataSelectedColumns : [];
 
+  // Loại 'all' (Tất cả khách hàng) đọc thẳng bảng khách, không qua đơn hàng nên bộ lọc khoá học không áp dụng.
+  const isAllCustomersType = formData.interestedCustomerType === 'all';
   const readInterestedCustomersSections = [
     { id: 'basic', name: t('nodeConfig.basicInfo'), icon: HiOutlineDocument },
-    {
+    ...(isAllCustomersType ? [] : [{
       id: 'filter',
       name: t('nodeConfig.filterCourses'),
       icon: HiOutlineSearch,
       badge: selectedCourseIds.length > 0,
       badgeLabel: selectedCourseIds.length,
-    },
+    }]),
     {
       id: 'columns',
       name: t('nodeConfig.dataColumns'),
@@ -221,6 +226,7 @@ export const NodeConfigReadInterestedCustomersSection = ({
     switch (selectedReadInterestedCustomersSection) {
       case 'basic': {
         const customerTypeOpts = [
+          { value: 'all', label: t('nodeConfig.allCustomers'), desc: t('nodeConfig.allCustomersDesc') },
           { value: 'interested', label: t('nodeConfig.interestedStatus'), desc: t('nodeConfig.interestedDesc') },
           { value: 'purchased', label: t('nodeConfig.purchased'), desc: t('nodeConfig.purchasedDesc') },
           { value: 'both', label: t('nodeConfig.both'), desc: t('nodeConfig.bothDesc') },
@@ -307,7 +313,27 @@ export const NodeConfigReadInterestedCustomersSection = ({
                       name="interestedCustomerType"
                       value={opt.value}
                       checked={currentCustomerType === opt.value}
-                      onChange={() => setFormData((prev) => ({ ...prev, interestedCustomerType: opt.value }))}
+                      onChange={() => setFormData((prev) => {
+                        if (opt.value === 'all') {
+                          // Toàn bộ khách: chỉ đọc từ database, bỏ lọc khoá học, nâng số bản ghi tới trần 50.000.
+                          return {
+                            ...prev,
+                            interestedCustomerType: 'all',
+                            interestedDataSource: 'database',
+                            interestedCourseIds: [],
+                            interestedCourseStatuses: [],
+                            interestedCourseQuery: '',
+                            interestedLimit: ALL_CUSTOMERS_MAX_LIMIT,
+                          };
+                        }
+                        // Rời 'all': trần quay về 5.000 (giá trị 50.000 cũ sẽ bị cắt ở server).
+                        const prevLimit = parseInt(prev.interestedLimit, 10) || 1000;
+                        return {
+                          ...prev,
+                          interestedCustomerType: opt.value,
+                          interestedLimit: prev.interestedCustomerType === 'all' || prevLimit > 5000 ? 1000 : prevLimit,
+                        };
+                      })}
                       className="mt-0.5 text-primary-600 focus:ring-primary-500 dark:text-primary-400"
                     />
                     <div className="flex-1 min-w-0">
@@ -325,7 +351,7 @@ export const NodeConfigReadInterestedCustomersSection = ({
               <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">{t('nodeConfig.maxRecords')}</label>
               <NumberInput
                 min={1}
-                max={5000}
+                max={isAllCustomersType ? ALL_CUSTOMERS_MAX_LIMIT : 5000}
                 value={formData.interestedLimit || 1000}
                 onChange={(v) => setFormData((prev) => ({ ...prev, interestedLimit: parseInt(v, 10) || 1000 }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
@@ -333,9 +359,11 @@ export const NodeConfigReadInterestedCustomersSection = ({
               <p className="text-xs text-gray-500 mt-1 dark:text-dk-text2">
                 {currentCustomerType === 'purchased'
                   ? t('nodeConfig.purchasedNote')
-                  : currentCustomerType === 'both'
-                    ? t('nodeConfig.bothNote')
-                    : t('nodeConfig.interestedNote')}
+                  : currentCustomerType === 'all'
+                    ? t('nodeConfig.allCustomersNote')
+                    : currentCustomerType === 'both'
+                      ? t('nodeConfig.bothNote')
+                      : t('nodeConfig.interestedNote')}
               </p>
             </div>
 

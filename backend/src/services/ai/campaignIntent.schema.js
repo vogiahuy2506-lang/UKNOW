@@ -3,6 +3,7 @@ import { isAdapterCampaignChannel, isAdapterCampaignChannelEnabled, isChannelBlo
 import { MAX_CHANNEL_STEPS, countDripSteps } from '../../utils/channelSteps.util.js';
 import { getNodeSubtype } from '../../utils/nodeSubtype.util.js';
 import { normalizeFormIdList } from '../../utils/campaignFormIds.util.js';
+import { ALL_CUSTOMERS_LIMIT_CAP } from '../../utils/interestedLimits.util.js';
 
 /**
  * Schema OpenAPI subset cho CampaignIntentV1, tương thích trực tiếp với responseSchema của Gemini.
@@ -369,11 +370,13 @@ export function detectLegacyAudienceFilters(script) {
     if (nonEmptyList(config.notPurchasedCourseIds)) reasons.add('notPurchasedCourseIds');
 
     const customerType = String(config.interestedCustomerType ?? '').trim().toLowerCase();
-    if (customerType && customerType !== 'both') reasons.add('interestedCustomerType');
+    // 'all' = tất cả khách workspace — chính là loại compiler sinh cho nguồn db (PR-5), không phải bộ lọc.
+    if (customerType && customerType !== 'both' && customerType !== 'all') reasons.add('interestedCustomerType');
 
     const hasLimit = config.interestedLimit != null && String(config.interestedLimit).trim() !== '';
+    const defaultLimit = customerType === 'all' ? ALL_CUSTOMERS_LIMIT_CAP : COMPILER_DEFAULT_INTERESTED_LIMIT;
     if (hasLimit && Number.isFinite(Number(config.interestedLimit))
-      && Number(config.interestedLimit) !== COMPILER_DEFAULT_INTERESTED_LIMIT) {
+      && Number(config.interestedLimit) !== defaultLimit) {
       reasons.add('interestedLimit');
     }
   }

@@ -1010,7 +1010,7 @@ ${forms.length > 0 ? forms.map(f => `  - id: ${f.id} | "${f.title}"${f.consentEn
 NODE TYPES THỰC SỰ TỒN TẠI trong hệ thống (chỉ dùng các loại này):
 • trigger/manual — điểm khởi đầu
 • data/interested_customers — lấy khách từ DB (config: interestedCustomerType, interestedLimit, interestedCourseIds, notPurchasedCourseIds)
-  - interestedCustomerType: "interested"=chưa mua | "purchased"=đã mua | "both"=tất cả
+  - interestedCustomerType: "interested"=chưa mua | "purchased"=đã mua | "both"=mọi khách có dòng mua/quan tâm | "all"=TOÀN BỘ khách đã lưu của tài khoản (kể cả khách chưa từng mua/quan tâm)
   - interestedCourseIds: [id1, id2] → chỉ lấy khách liên quan đến khóa học này
   - notPurchasedCourseIds: [id1, id2] → loại trừ khách ĐÃ mua các khóa này
 • data/read_sheet — đọc Google Sheet (config: sheetUrl BẮT BUỘC)
@@ -1568,7 +1568,7 @@ UPLOADED FILE CHO NỘI DUNG (contentMode = attached_file):
 - Dùng CAMPAIGN_BRIEF DATA (nếu có) để viết nội dung: không bịa sản phẩm ngoài brief; không tự map productIds sang interestedCourseIds / notPurchasedCourseIds trừ khi user NÓI RÕ muốn lọc audience theo đã mua/chưa mua/quan tâm khóa đó
 - dataSource="zalo_contacts" → xử lý GIỐNG "manual": KHÔNG tạo interested_customers/read_sheet/get_all_friends. Người nhận là các UID người dùng đã chọn, hệ thống truyền riêng ở bước chuẩn bị gửi. Vẫn PHẢI có select_zalo_account.
 - dataSource="sheet"          → nodeSubtype: "read_sheet", config: { sheetUrl: "<url>", headerRow: 1, dataStartRow: 2 }
-- dataSource="db"             → nodeSubtype: "interested_customers", config: { interestedCustomerType: "both", interestedLimit: 1000 }
+- dataSource="db"             → nodeSubtype: "interested_customers", config: { interestedCustomerType: "all" } (toàn bộ khách đã lưu; không đặt interestedLimit)
 - dataSource="manual"         → không tạo interested_customers/read_sheet; để trống danh sách — hệ thống sẽ dùng người nhận nhập trực tiếp ở bước chuẩn bị gửi
 - "đã mua [khóa X]" → interestedCustomerType: "purchased", interestedCourseIds: [id_khoaX]
 - "chưa mua [khóa X]" → interestedCustomerType: "interested", interestedCourseIds: [id_khoaX]
