@@ -441,6 +441,14 @@ register(['ZALO_ACCOUNT_SEND_SPEED_UPDATED'], (t, d) => (isNil(d.next)
   ? ''
   : tr(t, 'sendSpeed.change', { before: enumLabel(t, 'sendSpeed', d.previous || 'safe'), after: enumLabel(t, 'sendSpeed', d.next) })));
 
+// zaloSettings.controller.js updateAutoAcceptFriendRequests → { previous: boolean|null, next: boolean }
+register(['ZALO_ACCOUNT_AUTO_ACCEPT_FRIENDS_UPDATED'], (t, d) => {
+  if (typeof d.next !== 'boolean') return '';
+  const state = (value) => tr(t, value ? 'autoAcceptFriends.on' : 'autoAcceptFriends.off');
+  // `previous` null = không đọc được giá trị cũ (audit vẫn ghi) -> coi như Tắt, đúng mặc định của cột.
+  return tr(t, 'autoAcceptFriends.change', { before: state(d.previous === true), after: state(d.next) });
+});
+
 // channelAccountSendSettings.controller.js:52 → { channel: 'telegram'|'whatsapp', accountKey,
 //   previous: {userDailySendLimit, sendSpeed}, next: {…} }
 register(['CHANNEL_ACCOUNT_SEND_SETTINGS_UPDATED'], (t, d, locale) => {

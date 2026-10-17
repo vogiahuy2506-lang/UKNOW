@@ -3989,6 +3989,7 @@ export default {
       EMAIL_ACCOUNT_SEND_LIMIT_UPDATED: 'Đổi giới hạn gửi/ngày (email)',
       ZALO_ACCOUNT_SEND_LIMIT_UPDATED: 'Đổi giới hạn gửi/ngày (Zalo)',
       ZALO_ACCOUNT_SEND_SPEED_UPDATED: 'Đổi tốc độ gửi (Zalo)',
+      ZALO_ACCOUNT_AUTO_ACCEPT_FRIENDS_UPDATED: 'Bật/tắt tự động đồng ý kết bạn (Zalo)',
       CHANNEL_ACCOUNT_SEND_SETTINGS_UPDATED: 'Đổi giới hạn/tốc độ gửi (Telegram/WhatsApp)',
       EINVOICE_RETRIED: 'Xuất lại hoá đơn điện tử',
       EINVOICE_EMAIL_RESENT: 'Gửi lại email hoá đơn',
@@ -4099,6 +4100,11 @@ export default {
         very_fast: 'Rất nhanh',
         custom: 'Tuỳ chỉnh',
         change: 'Tốc độ gửi: {before} → {after}',
+      },
+      autoAcceptFriends: {
+        on: 'Bật',
+        off: 'Tắt',
+        change: 'Tự động đồng ý kết bạn: {before} → {after}',
       },
       knowledgeSource: {
         file: 'Tệp tải lên',
@@ -4929,6 +4935,12 @@ export default {
         schedule: 'Mỗi giờ, phút 25',
         description: 'Dọn các đơn chờ thanh toán quá lâu, nhả lại suất voucher cho người khác dùng.',
         impact: 'Đơn bỏ dở chiếm suất voucher giới hạn, người khác không áp mã được.',
+      },
+      zalo_friend_auto_accept: {
+        label: 'Tự động đồng ý kết bạn Zalo',
+        schedule: 'Mỗi 10 phút (phút 7/17/27…)',
+        description: 'Quét lời mời kết bạn đang chờ của các tài khoản Zalo cá nhân đã bật công tắc "tự động đồng ý" và đồng ý dần (tối đa 20 lời mời/giờ/tài khoản, không chạy 23:00–06:00). Bù cho lời mời đến lúc tài khoản mất kết nối hoặc trước khi bật công tắc.',
+        impact: 'Lời mời kết bạn đến lúc tài khoản mất phiên hoặc khi sự kiện bị lỡ không được tự đồng ý; khách phải bấm đồng ý tay trong Zalo.',
       },
       zalo_personal_bg_group_sync: {
         label: 'Đồng bộ nhóm Zalo',

@@ -219,6 +219,26 @@ router.patch(
   zaloSettingsController.updateSendSpeed.bind(zaloSettingsController)
 );
 
+// Tự động đồng ý lời mời kết bạn của nick Zalo cá nhân (PLAN_ZALO_TU_DONG_DONG_Y_KET_BAN) — cần quyền zalo_settings.
+// `enabled` BẮT BUỘC có và phải là boolean: thiếu field không được hiểu thành "tắt" (hay "bật") ngầm.
+router.patch(
+  '/accounts/:id/auto-accept-friends',
+  requirePermission('zalo_settings'),
+  [
+    param('id').isInt({ min: 1 }).withMessage('ID tài khoản không hợp lệ'),
+    body('enabled')
+      .exists({ checkNull: true })
+      .withMessage('Thiếu enabled — bắt buộc là true hoặc false')
+      .bail()
+      // Không dùng isBoolean(): express-validator chạy validator chuẩn TỪNG PHẦN TỬ khi giá trị là mảng, nên `[true]` lọt qua.
+      .custom((value) => value === true || value === false || value === 'true' || value === 'false')
+      .withMessage('enabled phải là true hoặc false')
+      .toBoolean(),
+  ],
+  handleValidationErrors,
+  zaloSettingsController.updateAutoAcceptFriendRequests.bind(zaloSettingsController)
+);
+
 // Restore account session by cookie — cần quyền zalo_settings
 router.post(
   '/accounts/:id/restore-session-by-cookie',

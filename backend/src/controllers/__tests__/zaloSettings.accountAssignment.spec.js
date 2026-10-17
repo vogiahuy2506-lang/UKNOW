@@ -123,11 +123,12 @@ describe('zaloSettings.controller — giao tài khoản Zalo cho nhân viên (G1
   });
 
   describe('endpoint nhận :id tài khoản — nhân viên chưa được giao bị 403, repo không bị gọi', () => {
-    const body = { userDailySendLimit: 50, sendSpeed: 'safe' };
+    const body = { userDailySendLimit: 50, sendSpeed: 'safe', enabled: true };
     const cases = [
       ['deleteAccount (DELETE /accounts/:id)', 'deleteAccount', 'deleteAccount'],
       ['updateSendLimit (PATCH /accounts/:id/send-limit)', 'updateSendLimit', 'updateSendLimit'],
       ['updateSendSpeed (PATCH /accounts/:id/send-speed)', 'updateSendSpeed', 'updateSendSpeed'],
+      ['updateAutoAcceptFriendRequests (PATCH /accounts/:id/auto-accept-friends)', 'updateAutoAcceptFriendRequests', 'updateAutoAcceptFriendRequests'],
       ['retryRestore (POST /accounts/:id/retry-restore)', 'retryRestore', 'findAccountForRestore'],
       ['restoreAccountSessionByCookie (POST /accounts/:id/restore-session, /restore-session-by-cookie)', 'restoreAccountSessionByCookie', 'findAccountForRestore'],
     ];
@@ -135,6 +136,7 @@ describe('zaloSettings.controller — giao tài khoản Zalo cho nhân viên (G1
     it.each(cases)('%s: nhân viên chưa được giao → 403 ZALO_ACCOUNT_NOT_ASSIGNED', async (_label, method, repoMethod) => {
       const repoSpy = jest.spyOn(zaloSettingRepository, repoMethod).mockResolvedValue(null);
       const sideSpy = jest.spyOn(zaloSettingRepository, 'findUserDailySendLimitById').mockResolvedValue(null);
+      const autoAcceptReadSpy = jest.spyOn(zaloSettingRepository, 'isAutoAcceptEnabled').mockResolvedValue(false);
       const res = makeRes();
       await controller[method]({ user: employee, params: { id: '9' }, body, ip: '1.1.1.1', get: () => null }, res);
 
@@ -142,6 +144,7 @@ describe('zaloSettings.controller — giao tài khoản Zalo cho nhân viên (G1
       expect(jsonOf(res)).toEqual({ success: false, message: 'Tài khoản Zalo này chưa được giao cho bạn.', code: 'ZALO_ACCOUNT_NOT_ASSIGNED' });
       expect(repoSpy).not.toHaveBeenCalled();
       expect(sideSpy).not.toHaveBeenCalled();
+      expect(autoAcceptReadSpy).not.toHaveBeenCalled();
     });
 
     it.each(cases)('%s: id không tồn tại cũng 403 như id chưa giao (không lộ id nào có thật)', async (_label, method, repoMethod) => {
@@ -156,6 +159,7 @@ describe('zaloSettings.controller — giao tài khoản Zalo cho nhân viên (G1
       const repoSpy = jest.spyOn(zaloSettingRepository, repoMethod).mockResolvedValue(null);
       jest.spyOn(zaloSettingRepository, 'findUserDailySendLimitById').mockResolvedValue(null);
       jest.spyOn(zaloSettingRepository, 'findUserSendSpeedById').mockResolvedValue(null);
+      jest.spyOn(zaloSettingRepository, 'isAutoAcceptEnabled').mockResolvedValue(false);
       const res = makeRes();
       await controller[method]({ user: employee, params: { id: '5' }, body, ip: '1.1.1.1', get: () => null }, res);
 
@@ -167,6 +171,7 @@ describe('zaloSettings.controller — giao tài khoản Zalo cho nhân viên (G1
       const repoSpy = jest.spyOn(zaloSettingRepository, repoMethod).mockResolvedValue(null);
       jest.spyOn(zaloSettingRepository, 'findUserDailySendLimitById').mockResolvedValue(null);
       jest.spyOn(zaloSettingRepository, 'findUserSendSpeedById').mockResolvedValue(null);
+      jest.spyOn(zaloSettingRepository, 'isAutoAcceptEnabled').mockResolvedValue(false);
       const res = makeRes();
       await controller[method]({ user: owner, params: { id: '9' }, body, ip: '1.1.1.1', get: () => null }, res);
 

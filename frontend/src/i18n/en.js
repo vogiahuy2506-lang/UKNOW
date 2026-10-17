@@ -3976,6 +3976,7 @@ export default {
       EMAIL_ACCOUNT_SEND_LIMIT_UPDATED: 'Email Daily Send Limit Changed',
       ZALO_ACCOUNT_SEND_LIMIT_UPDATED: 'Zalo Daily Send Limit Changed',
       ZALO_ACCOUNT_SEND_SPEED_UPDATED: 'Zalo Send Speed Changed',
+      ZALO_ACCOUNT_AUTO_ACCEPT_FRIENDS_UPDATED: 'Zalo Auto-Accept Friend Requests Toggled',
       CHANNEL_ACCOUNT_SEND_SETTINGS_UPDATED: 'Telegram/WhatsApp Send Limit or Speed Changed',
       EINVOICE_RETRIED: 'E-invoice Reissued',
       EINVOICE_EMAIL_RESENT: 'E-invoice Email Resent',
@@ -4086,6 +4087,11 @@ export default {
         very_fast: 'Very fast',
         custom: 'Custom',
         change: 'Send speed: {before} → {after}',
+      },
+      autoAcceptFriends: {
+        on: 'On',
+        off: 'Off',
+        change: 'Auto-accept friend requests: {before} → {after}',
       },
       knowledgeSource: {
         file: 'Uploaded file',
@@ -4916,6 +4922,12 @@ export default {
         schedule: 'Hourly, at min 25',
         description: 'Cleans up overdue pending orders and releases voucher quotas for others.',
         impact: 'Abandoned orders hoard limited voucher quotas, preventing others from applying vouchers.',
+      },
+      zalo_friend_auto_accept: {
+        label: 'Zalo Friend Request Auto-Accept',
+        schedule: 'Every 10 min (at min 7/17/27…)',
+        description: 'Sweeps pending friend requests of personal Zalo accounts that turned the "auto-accept" switch on and accepts them gradually (max 20 requests/hour/account, not between 23:00 and 06:00). Covers requests that arrived while the account was disconnected or before the switch was turned on.',
+        impact: 'Friend requests that arrive while the account has lost its session, or whose event was missed, are not auto-accepted; the customer has to accept them by hand in Zalo.',
       },
       zalo_personal_bg_group_sync: {
         label: 'Zalo Group Sync',

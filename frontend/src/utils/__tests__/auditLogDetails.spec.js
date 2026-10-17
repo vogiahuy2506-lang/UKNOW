@@ -73,6 +73,8 @@ const REAL_ROWS = [
   ['ZALO_ACCOUNT_SEND_LIMIT_UPDATED', { previousValue: null, newValue: 150, exceededRecommended: true }, 'Giới hạn gửi/ngày: không giới hạn → 150 · Vượt mức khuyến nghị'],
   ['EMAIL_ACCOUNT_SEND_LIMIT_UPDATED', { previousValue: 500, newValue: 800, exceededRecommended: false }, 'Giới hạn gửi/ngày: 500 → 800'],
   ['ZALO_ACCOUNT_SEND_SPEED_UPDATED', { previous: 'safe', next: 'fast' }, 'Tốc độ gửi: An toàn → Nhanh'],
+  ['ZALO_ACCOUNT_AUTO_ACCEPT_FRIENDS_UPDATED', { previous: false, next: true }, 'Tự động đồng ý kết bạn: Tắt → Bật'],
+  ['ZALO_ACCOUNT_AUTO_ACCEPT_FRIENDS_UPDATED', { previous: true, next: false }, 'Tự động đồng ý kết bạn: Bật → Tắt'],
   [
     'CHANNEL_ACCOUNT_SEND_SETTINGS_UPDATED',
     { channel: 'telegram', accountKey: 'tg-7', previous: { userDailySendLimit: null, sendSpeed: 'safe' }, next: { userDailySendLimit: 200, sendSpeed: 'safe' } },

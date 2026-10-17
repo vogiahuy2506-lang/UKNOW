@@ -132,6 +132,9 @@ export const AUDIT_ACTIONS = {
   EMAIL_ACCOUNT_SEND_LIMIT_UPDATED: 'EMAIL_ACCOUNT_SEND_LIMIT_UPDATED',
   ZALO_ACCOUNT_SEND_LIMIT_UPDATED: 'ZALO_ACCOUNT_SEND_LIMIT_UPDATED',
   ZALO_ACCOUNT_SEND_SPEED_UPDATED: 'ZALO_ACCOUNT_SEND_SPEED_UPDATED',
+  // Bật/tắt Zalo cá nhân tự động đồng ý lời mời kết bạn (PLAN_ZALO_TU_DONG_DONG_Y_KET_BAN Việc 6). entity = ZALO_SETTING,
+  // entity_id = id tài khoản; details gồm previous và next (boolean).
+  ZALO_ACCOUNT_AUTO_ACCEPT_FRIENDS_UPDATED: 'ZALO_ACCOUNT_AUTO_ACCEPT_FRIENDS_UPDATED',
   // P4 (PLAN_TG_WA_DAY_DU_2026-09-29): giới hạn gửi/ngày + tốc độ gửi của tài khoản Telegram/WhatsApp. details gồm
   // channel, accountKey, previous, next (mỗi bên có userDailySendLimit + sendSpeed). entity = telegram_account (entity_id = id)
   // hoặc whatsapp_account (entity_id NULL — session_key là chuỗi, để trong details.accountKey). KHÔNG dùng dấu ngoặc nhọn

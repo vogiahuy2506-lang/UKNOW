@@ -4288,3 +4288,7 @@ ON CONFLICT (event_type) DO NOTHING;
 INSERT INTO notification_event_settings (event_type, in_app_enabled, email_enabled, user_can_disable_email)
 VALUES ('form_submission_received', true, false, true)
 ON CONFLICT (event_type) DO NOTHING;
+
+-- --- Migration 303: zalo_settings.auto_accept_friend_requests (PLAN_ZALO_TU_DONG_DONG_Y_KET_BAN: Zalo ca nhan tu dong dong y loi moi ket ban, bat/tat theo nick) ---
+ALTER TABLE zalo_settings
+  ADD COLUMN IF NOT EXISTS auto_accept_friend_requests BOOLEAN NOT NULL DEFAULT FALSE;

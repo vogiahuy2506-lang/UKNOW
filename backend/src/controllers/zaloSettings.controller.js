@@ -10,6 +10,7 @@ import { loginQR as rawLoginQR } from '../../node_modules/zca-js/dist/apis/login
 import { generateZaloUUID } from '../../node_modules/zca-js/dist/utils.js';
 import { request as rawRequest } from '../../node_modules/zca-js/dist/utils.js';
 import zaloAccountSessionService from '../services/zalo/zaloAccountSession.service.js';
+import zaloFriendAutoAcceptService from '../services/zalo/zaloFriendAutoAccept.service.js';
 import campaignZaloSenderService from '../services/campaign/campaignZaloSender.service.js';
 import { isAdminRole, isSuperAdmin } from '../utils/roleScope.util.js';
 import { enforceResourceLimitTx } from '../utils/userResourceLimit.util.js';
@@ -270,6 +271,7 @@ class ZaloSettingsController {
         ? new Date(item.phone_lookup_cooldown_until).toISOString()
         : null,
       userDailySendLimit: item.user_daily_send_limit ?? null,
+      autoAcceptFriendRequests: Boolean(item.auto_accept_friend_requests),
       sendSpeed: resolveSendSpeedFromRow(
         item.zalo_personal_outbound_delay_min_ms,
         item.zalo_personal_outbound_delay_max_ms
@@ -2160,6 +2162,71 @@ class ZaloSettingsController {
       }
       console.error('Update zalo send-speed error:', error);
       return res.status(500).json({ success: false, message: 'Không thể cập nhật tốc độ gửi Zalo' });
+    }
+  }
+
+  /**
+   * PATCH /api/zalo/accounts/:id/auto-accept-friends
+   * Bật/tắt Zalo cá nhân TỰ ĐỘNG ĐỒNG Ý lời mời kết bạn của một nick (PLAN_ZALO_TU_DONG_DONG_Y_KET_BAN Việc 6).
+   * Body: { enabled: boolean }. Bật -> kích một lượt quét NGAY (không chờ cron, không await): lời mời cũ đang chờ cũng được
+   * đồng ý dần, vẫn qua trần giờ + giãn cách của sweepAccount nên bật trên nick có hàng trăm lời mời tồn không gây bão.
+   *
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
+   */
+  async updateAutoAcceptFriendRequests(req, res) {
+    try {
+      const ctx = getWorkspaceContext(req.user);
+      const { actorUserId, workspaceOwnerId: userId } = ctx;
+      const isAdmin = isAdminRole(req.user?.role);
+      const accountId = Number.parseInt(req.params.id, 10);
+      if (await this.rejectIfAccountNotAssigned(res, ctx, accountId)) return;
+      const enabled = req.body?.enabled;
+      if (typeof enabled !== 'boolean') {
+        return res.status(400).json({ success: false, message: 'enabled phải là true hoặc false' });
+      }
+
+      const previous = await zaloSettingRepository
+        .isAutoAcceptEnabled(accountId)
+        .catch(() => null);
+
+      const updated = await zaloSettingRepository.updateAutoAcceptFriendRequests(accountId, isAdmin, userId, enabled);
+      if (!updated) {
+        return res.status(404).json({ success: false, message: 'Không tìm thấy tài khoản Zalo' });
+      }
+
+      await auditService.log({
+        userId: actorUserId,
+        ownerId: userId,
+        category: 'workspace',
+        action: AUDIT_ACTIONS.ZALO_ACCOUNT_AUTO_ACCEPT_FRIENDS_UPDATED,
+        entityType: AUDIT_ENTITY_TYPES.ZALO_SETTING,
+        entityId: updated.id,
+        details: {
+          previous,
+          next: enabled,
+        },
+        ipAddress: req.ip,
+        userAgent: req.get?.('user-agent') || null,
+      });
+
+      if (enabled) {
+        // Fire-and-forget có chủ ý: lượt quét có thể kéo dài nhiều phút (giãn cách giữa các lần đồng ý), request không đợi.
+        Promise.resolve(zaloFriendAutoAcceptService.sweepAccount(updated.id, { reason: 'enabled' }))
+          .catch((err) => console.error('[ZaloAutoAccept] sweep sau khi bật công tắc lỗi:', err?.message || err));
+      }
+
+      return res.json({
+        success: true,
+        message: enabled ? 'Đã bật tự động đồng ý lời mời kết bạn' : 'Đã tắt tự động đồng ý lời mời kết bạn',
+        data: this.mapRow(updated),
+      });
+    } catch (error) {
+      if (error?.code === '42P01') {
+        return this.buildMissingTableResponse(res);
+      }
+      console.error('Update zalo auto-accept-friends error:', error);
+      return res.status(500).json({ success: false, message: 'Không thể cập nhật tự động đồng ý kết bạn' });
     }
   }
 

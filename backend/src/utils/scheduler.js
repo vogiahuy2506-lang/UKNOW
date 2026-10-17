@@ -1074,6 +1074,33 @@ export const initScheduler = () => {
     console.log('[Scheduler] Zalo Personal background group sync TẮT (ZALO_BG_SYNC_ENABLED=false)');
   }
 
+  // ── Zalo Personal — tự động đồng ý lời mời kết bạn (quét bù) ──
+  // PLAN_ZALO_TU_DONG_DONG_Y_KET_BAN Việc 5. Sự kiện `friend_event` chỉ tới khi listener đang chạy; lời mời đến lúc nick
+  // mất phiên / lúc deploy / trước khi bật công tắc chỉ được nhặt ở đây. Phút 7/17/27/... để lệch cron nhóm (5/15/25...)
+  // và cron listener (0/5/10...). Lượt có thể dài hơn 10 phút (chờ 15–45s giữa các lần đồng ý): cờ dưới chặn chồng lượt.
+  let zaloFriendAutoAcceptRunning = false;
+  const sweepZaloFriendAutoAccept = async () => {
+    if (zaloFriendAutoAcceptRunning) return;
+    zaloFriendAutoAcceptRunning = true;
+    const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+    try {
+      await cronJobRunRepository.recordRun('zalo_friend_auto_accept', async () => {
+        const zaloFriendAutoAcceptService = (await import('../services/zalo/zaloFriendAutoAccept.service.js')).default;
+        return zaloFriendAutoAcceptService.sweepAllEnabledAccounts();
+      });
+    } catch (error) {
+      console.error('[Scheduler] Lỗi Zalo tự động đồng ý kết bạn:', error.message);
+    } finally {
+      zaloFriendAutoAcceptRunning = false;
+    }
+  };
+
+  cron.schedule('7-59/10 * * * *', async () => {
+    await sweepZaloFriendAutoAccept();
+  }, { timezone: HANOI_TIME_ZONE });
+
+  console.log('[Scheduler] Đã khởi tạo Zalo tự động đồng ý kết bạn: phút 7/17/27/...');
+
   // ── Zalo Account Session Restoration - Khôi phục các tài khoản bị ngắt kết nối ────
   // Chạy mỗi 15 phút để thử khôi phục các tài khoản Zalo bị out (do server restart hoặc cookie hết hạn)
   const restoreZaloSessions = async () => {

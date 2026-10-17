@@ -312,6 +312,7 @@ class ZaloSettingRepository {
               zs.restore_fail_count,
               zs.phone_lookup_cooldown_until::timestamptz AS phone_lookup_cooldown_until,
               zs.user_daily_send_limit,
+              zs.auto_accept_friend_requests,
               zs.zalo_personal_outbound_delay_min_ms,
               zs.zalo_personal_outbound_delay_max_ms,
               COALESCE(u.full_name, u.username) AS creator_name,
@@ -392,7 +393,7 @@ class ZaloSettingRepository {
        RETURNING id, id_user, display_name, zalo_user_id, zalo_name, zalo_phone, login_method,
                  status, is_active, is_default, notes, updated_at, last_connected_at,
                  last_restore_attempt_at, restore_fail_count, phone_lookup_cooldown_until,
-                 user_daily_send_limit,
+                 user_daily_send_limit, auto_accept_friend_requests,
                  zalo_personal_outbound_delay_min_ms,
                  zalo_personal_outbound_delay_max_ms`,
       isAdmin ? [value, accountId] : [value, accountId, userId]
@@ -421,12 +422,72 @@ class ZaloSettingRepository {
        RETURNING id, id_user, display_name, zalo_user_id, zalo_name, zalo_phone, login_method,
                  status, is_active, is_default, notes, updated_at, last_connected_at,
                  last_restore_attempt_at, restore_fail_count, phone_lookup_cooldown_until,
-                 user_daily_send_limit,
+                 user_daily_send_limit, auto_accept_friend_requests,
                  zalo_personal_outbound_delay_min_ms,
                  zalo_personal_outbound_delay_max_ms`,
       isAdmin ? [delayMinMs, delayMaxMs, accountId] : [delayMinMs, delayMaxMs, accountId, userId]
     );
     return rows[0] || null;
+  }
+
+  /**
+   * Bật/tắt "tự động đồng ý lời mời kết bạn" cho một nick Zalo cá nhân
+   * (PLAN_ZALO_TU_DONG_DONG_Y_KET_BAN_2026-10-17 Việc 2). Khuôn `updateSendSpeed`: chủ chỉ sửa nick của mình,
+   * super admin sửa mọi nick. RETURNING đủ cột để `mapRow` không trả sai `false`/`null` cho trường khác.
+   *
+   * @param {number} accountId
+   * @param {boolean} isAdmin
+   * @param {number} userId
+   * @param {boolean} enabled
+   * @returns {Promise<object|null>}
+   */
+  async updateAutoAcceptFriendRequests(accountId, isAdmin, userId, enabled) {
+    const { rows } = await db.query(
+      `UPDATE zalo_settings
+       SET auto_accept_friend_requests = $1, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2
+         ${isAdmin ? '' : 'AND id_user = $3'}
+       RETURNING id, id_user, display_name, zalo_user_id, zalo_name, zalo_phone, login_method,
+                 status, is_active, is_default, notes, updated_at, last_connected_at,
+                 last_restore_attempt_at, restore_fail_count, phone_lookup_cooldown_until,
+                 user_daily_send_limit, auto_accept_friend_requests,
+                 zalo_personal_outbound_delay_min_ms,
+                 zalo_personal_outbound_delay_max_ms`,
+      isAdmin ? [enabled === true, accountId] : [enabled === true, accountId, userId]
+    );
+    return rows[0] || null;
+  }
+
+  /**
+   * Công tắc tự đồng ý kết bạn của một nick — đọc TẠI THỜI ĐIỂM chạy (không cache) để đổi công tắc có hiệu lực
+   * ngay, không cần gắn lại listener. Nick không tồn tại → false. Cũng dùng làm "giá trị cũ" cho audit.
+   *
+   * @param {number|string} accountId
+   * @returns {Promise<boolean>}
+   */
+  async isAutoAcceptEnabled(accountId) {
+    const { rows } = await db.query(
+      'SELECT auto_accept_friend_requests FROM zalo_settings WHERE id = $1',
+      [accountId]
+    );
+    return rows[0]?.auto_accept_friend_requests === true;
+  }
+
+  /**
+   * Các nick đang bật tự đồng ý kết bạn VÀ đang kết nối — đầu vào của cron quét bù. Điều kiện "đang kết nối"
+   * LẤY Y NGUYÊN `zaloInbox.repository.findActiveConnectedAccounts` (`is_active = true AND status = 'connected'`)
+   * để cron và đường gắn listener cùng một tập nick.
+   *
+   * @returns {Promise<Array<{id: number|string, id_user: number}>>}
+   */
+  async findAutoAcceptEnabledAccountIds() {
+    const { rows } = await db.query(
+      `SELECT id, id_user FROM zalo_settings
+       WHERE auto_accept_friend_requests = true
+         AND is_active = true AND status = 'connected'
+       ORDER BY id`
+    );
+    return rows;
   }
 
   async deleteAccount(accountId, isAdmin, userId) {

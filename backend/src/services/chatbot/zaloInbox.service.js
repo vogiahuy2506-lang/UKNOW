@@ -18,6 +18,7 @@ import zaloPersonalRepository from '../../repositories/chatbot/zaloPersonal.repo
 import chatRouterService from './chatRouter.service.js';
 import chatbotZaloAccountRepository from '../../repositories/chatbot/chatbotZaloAccount.repository.js';
 import zaloAccountSessionService from '../zalo/zaloAccountSession.service.js';
+import zaloFriendAutoAcceptService from '../zalo/zaloFriendAutoAccept.service.js';
 import sseService from '../sse.service.js';
 import unifiedInboxRepository from '../../repositories/ai/unifiedInbox.repository.js';
 import { isZaloAccountChatbotEnabled } from '../../utils/zaloAccountChatbotGate.util.js';
@@ -1145,6 +1146,19 @@ class ZaloPersonalInboxService {
 
       const session = await zaloPersonalAdapter.getSessionByAccountId(accountId);
       const currentListener = session?.api?.listener || null;
+      // Tự đồng ý lời mời kết bạn (PLAN_ZALO_TU_DONG_DONG_Y_KET_BAN Việc 4): gắn `friend_event` vào listener HIỆN TẠI.
+      // PHẢI đặt TRƯỚC nhánh "already registered (skipping)" ngay dưới — nhánh đó `return true` sớm, đặt sau thì nick đã
+      // đăng ký từ trước không bao giờ nghe sự kiện. Idempotent theo đối tượng listener (WeakSet), nên gọi mỗi 5 phút
+      // không chồng handler; listener mới sau khi khôi phục phiên là đối tượng mới nên tự được gắn lại. Công tắc bật/tắt
+      // đọc ở lúc xử lý sự kiện, không ở đây.
+      if (currentListener) {
+        try {
+          zaloFriendAutoAcceptService.attachToListener(accountId, currentListener);
+        } catch (attachErr) {
+          // Tính năng phụ: không được làm hỏng đường đăng ký nhận tin nhắn bên dưới.
+          console.warn(`[ZaloInbox] Không gắn được friend_event cho account ${accountId}: ${attachErr.message}`);
+        }
+      }
       // Chỉ skip khi handler còn gắn đúng listener của session HIỆN TẠI.
       // Sau websocket close + restore API mới, cờ registered cũ từng khiến skip
       // → gửi từ web vẫn được (api.sendMessage) nhưng tin bạn bè không về hộp thư.

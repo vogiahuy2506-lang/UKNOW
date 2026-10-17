@@ -58,6 +58,14 @@ export const CRON_JOBS = [
     optional: true,
   },
   {
+    code: 'zalo_friend_auto_accept',
+    label: 'Tự động đồng ý kết bạn Zalo',
+    schedule: 'Mỗi 10 phút (phút 7/17/27…)',
+    description: 'Quét lời mời kết bạn đang chờ của các tài khoản Zalo cá nhân đã bật công tắc "tự động đồng ý" và đồng ý dần (tối đa 20 lời mời/giờ/tài khoản, không chạy 23:00–06:00). Bù cho lời mời đến lúc tài khoản mất kết nối hoặc trước khi bật công tắc.',
+    impact: 'Lời mời kết bạn đến lúc tài khoản mất phiên hoặc khi sự kiện bị lỡ không được tự đồng ý; khách phải bấm đồng ý tay trong Zalo.',
+    tracked: true,
+  },
+  {
     code: 'campaign_scheduler_tick',
     label: 'Nhịp chiến dịch',
     schedule: 'Mỗi phút (giây 20)',
