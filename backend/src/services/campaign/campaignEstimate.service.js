@@ -97,6 +97,22 @@ export async function loadDefaultDeps() {
     checkSendQuota: userSendLimit.checkSendQuota,
     getAdapterDescriptor: registryMod.getAdapterDescriptorBySubtype,
     applyAccountDelayOverride: speedMod.applyAccountDelayOverride,
+    // Nguồn "người đã nhắn" của Telegram/WhatsApp: đếm hội thoại đang mở của tài khoản (cùng truy vấn thẻ xác nhận dùng).
+    countAdapterConversations: async ({ channel, ownerUserId, config }) => {
+      if (channel === 'telegram') {
+        const accountId = Number(config?.telegramAccountId);
+        if (!Number.isInteger(accountId) || accountId <= 0) return null;
+        const { default: telegramRepo } = await import('../../repositories/chatbot/chatbotTelegram.repository.js');
+        return (await telegramRepo.countOpenConversationsByAccountIds([accountId])).get(accountId) ?? 0;
+      }
+      if (channel === 'whatsapp') {
+        const sessionKey = String(config?.whatsappSessionKey ?? '').trim();
+        if (!sessionKey) return null;
+        const { default: whatsappRepo } = await import('../../repositories/chatbot/whatsappCampaignConversation.repository.js');
+        return (await whatsappRepo.countOpenConversationsBySessionKeys(ownerUserId, [sessionKey])).get(sessionKey) ?? 0;
+      }
+      return null;
+    },
     estimateRepo: estimateRepoMod.default,
     env: process.env,
     now: () => new Date(),
@@ -449,6 +465,17 @@ async function buildSimulationInput({ nodes, connections, flowJson, ownerUserId,
         recipients = await countRecipients({
           node, mode: 'node', sourceNodeId: config.recipientNodeId, fields: ['phone', 'recipientKey', 'email'], previousDataNode: null,
         });
+      } else if (['telegram_conversations', 'whatsapp_conversations'].includes(source) && typeof deps.countAdapterConversations === 'function') {
+        // Đếm lỗi → null → rơi về cảnh báo "chưa đếm được" như nguồn khác (không bịa số).
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          recipients = await deps.countAdapterConversations({ channel: descriptor.key, ownerUserId, config });
+        } catch (error) {
+          recipients = null;
+        }
+        if (recipients == null) {
+          warnings.push({ code: 'recipient_count_unknown', params: { nodeId: String(node.id), reason: 'error' } });
+        }
       } else {
         warnings.push({ code: 'recipient_count_unknown', params: { nodeId: String(node.id), reason: 'source_not_countable' } });
         recipients = null;

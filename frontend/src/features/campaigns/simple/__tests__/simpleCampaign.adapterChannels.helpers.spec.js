@@ -143,6 +143,10 @@ describe('đủ thông tin để Tiếp tục', () => {
     expect(getTemplateChannelProblem('zalo', template({ templateAttachments: images(9) }))).toBeNull();
     expect(isMessageContentComplete('telegram', template({ templateAttachments: images(6) }))).toBe(false);
     expect(isMessageContentComplete('telegram', template())).toBe(true);
+    // Tệp của mẫu chưa tải xong (API danh sách mẫu không trả tệp): Telegram/WhatsApp chưa cho đi tiếp; Zalo/email không cần tệp.
+    expect(isMessageContentComplete('telegram', template({ templateAttachments: null }))).toBe(false);
+    expect(isMessageContentComplete('whatsapp', template({ templateAttachments: null }))).toBe(false);
+    expect(isMessageContentComplete('zalo', template({ templateAttachments: null }))).toBe(true);
     // WebP: ảnh ở WhatsApp, tài liệu ở Telegram.
     const webp = Array.from({ length: 4 }, (_v, i) => ({ name: `${i}.webp`, size: 1 }));
     expect(getTemplateChannelProblem('whatsapp', template({ templateAttachments: webp }))).toBeNull();

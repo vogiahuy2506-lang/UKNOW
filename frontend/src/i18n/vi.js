@@ -1845,6 +1845,7 @@ export default {
         max: 'Một chuỗi có tối đa {max} tin.',
       },
       selectedTemplate: 'Mẫu đã chọn',
+      templateChecking: 'Đang kiểm tra mẫu...',
       templateCopyHint: 'Nội dung và tệp đính kèm của mẫu được chép vào chiến dịch. Sửa mẫu sau này sẽ không đổi chiến dịch đã tạo.',
       templateProblem: {
         images: 'Mẫu này có quá {limit} ảnh nên kênh này không gửi được. Hãy chọn mẫu khác hoặc bớt ảnh trong mẫu.',

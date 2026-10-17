@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { HiOutlineEye, HiOutlinePencilAlt, HiOutlinePlus, HiOutlineTemplate, HiOutlineTrash } from 'react-icons/hi';
 import SimpleChoiceCard from './SimpleChoiceCard';
@@ -58,20 +58,38 @@ function TemplatePanel({ kind, channel, content, patchContent, t, idPrefix }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [templates, content.templateId, content.templateName]);
 
-  const handleChange = (value) => {
+  const adapter = isAdapterChannel(channel);
+  const problem = getTemplateChannelProblem(channel, content);
+  // Mẫu đang được tải chi tiết (Telegram/WhatsApp cần danh sách tệp, mà API danh sách mẫu KHÔNG trả `attachments`).
+  const pickSeqRef = useRef(0);
+  const isCheckingTemplate = adapter && Number(content.templateId) > 0 && !Array.isArray(content.templateAttachments);
+
+  const handleChange = async (value) => {
     const id = Number(value);
     const picked = templates.find((item) => Number(item.id) === id);
+    pickSeqRef.current += 1;
+    const seq = pickSeqRef.current;
     patchContent({
       templateId: id > 0 ? id : null,
       templateName: picked ? String(picked.templateName || '') : '',
-      // Telegram/WhatsApp CHÉP nội dung + tệp của mẫu vào chiến dịch: giữ lại tệp/độ dài để báo sớm mẫu không hợp kênh (server kiểm lại).
-      templateAttachments: picked && Array.isArray(picked.attachments) ? picked.attachments : null,
+      // Telegram/WhatsApp CHÉP nội dung + tệp của mẫu vào chiến dịch: tải chi tiết mẫu để báo sớm mẫu không hợp kênh (server kiểm lại).
+      templateAttachments: null,
       templateBodyLength: picked ? String(picked.bodyText || '').trim().length : null,
     });
+    if (!adapter || !(id > 0)) return;
+    try {
+      const response = await serviceFor(kind).getTemplateById(id);
+      const detail = response?.data?.data || null;
+      if (seq !== pickSeqRef.current) return;
+      patchContent({
+        templateAttachments: Array.isArray(detail?.attachments) ? detail.attachments.filter(Boolean) : [],
+        templateBodyLength: String(detail?.bodyText ?? picked?.bodyText ?? '').trim().length,
+      });
+    } catch {
+      // Không tải được chi tiết: để server (bước Xem lại) kiểm tệp — không chặn người dùng vì một lỗi mạng.
+      if (seq === pickSeqRef.current) patchContent({ templateAttachments: [] });
+    }
   };
-
-  const adapter = isAdapterChannel(channel);
-  const problem = getTemplateChannelProblem(channel, content);
 
   const handlePreview = async () => {
     if (!content.templateId) return;
@@ -134,7 +152,10 @@ function TemplatePanel({ kind, channel, content, patchContent, t, idPrefix }) {
         </button>
       </div>
       {previewError && <p role="alert" className="text-xs text-red-600 dark:text-red-400">{previewError}</p>}
-      {adapter && !problem && (
+      {isCheckingTemplate && (
+        <p className="text-xs text-slate-500 dark:text-dk-text2" role="status" data-testid={`${idPrefix}-template-checking`}>{t('simpleCampaign.content.templateChecking')}</p>
+      )}
+      {adapter && !problem && !isCheckingTemplate && (
         <p className="text-xs text-slate-500 dark:text-dk-text2" data-testid={`${idPrefix}-template-copy-hint`}>{t('simpleCampaign.content.templateCopyHint')}</p>
       )}
       {problem && (

@@ -156,7 +156,12 @@ export const getTemplateChannelProblem = (channel, content) => {
 
 /** Một tin (tin 1 hoặc tin sau) đã đủ nội dung chưa: mẫu có id (và hợp kênh); tự soạn có nội dung, email có thêm tiêu đề. */
 export const isMessageContentComplete = (channel, content) => {
-  if (content?.mode === 'template') return Number(content.templateId) > 0 && !getTemplateChannelProblem(channel, content);
+  if (content?.mode === 'template') {
+    if (!(Number(content.templateId) > 0)) return false;
+    // Telegram/WhatsApp: chờ tải xong tệp của mẫu (API danh sách mẫu không trả tệp) rồi mới cho đi tiếp.
+    if (isAdapterChannel(channel) && !Array.isArray(content.templateAttachments)) return false;
+    return !getTemplateChannelProblem(channel, content);
+  }
   if (content?.mode === 'custom') {
     const body = String(content.body || '').trim();
     if (!body) return false;

@@ -102,16 +102,19 @@ beforeEach(() => {
   });
   campaignBuilderApiService.listForms.mockResolvedValue({ data: { data: [] } });
   emailTemplateApiService.getTemplates.mockResolvedValue({ data: { data: { items: [] } } });
+  // API danh sách mẫu KHÔNG trả `attachments` (đã đo trên backend thật) — tệp chỉ có ở chi tiết mẫu.
+  const templateDetails = {
+    6: { id: 6, templateName: 'Mẫu chào mừng', bodyText: 'Chào bạn', attachments: images(1) },
+    7: { id: 7, templateName: 'Mẫu nhiều ảnh', bodyText: 'Xem ảnh', attachments: images(6) },
+  };
   zaloTemplateApiService.getTemplates.mockResolvedValue({
     data: {
       data: {
-        items: [
-          { id: 6, templateName: 'Mẫu chào mừng', category: '', bodyText: 'Chào bạn', attachments: images(1) },
-          { id: 7, templateName: 'Mẫu nhiều ảnh', category: '', bodyText: 'Xem ảnh', attachments: images(6) },
-        ],
+        items: Object.values(templateDetails).map(({ attachments: _omit, ...item }) => ({ ...item, category: '' })),
       },
     },
   });
+  zaloTemplateApiService.getTemplateById.mockImplementation(async (id) => ({ data: { data: templateDetails[id] } }));
   campaignApiService.previewSimpleCampaign.mockResolvedValue({
     data: { success: true, data: { readyToCreate: true, issues: [], estimate: null, recipientCount: 12, summary: {} } },
   });
@@ -284,6 +287,7 @@ describe('bước Nội dung — trần chuỗi 5 tin, bộ đếm, mẫu vượ
     fireEvent.click(await screen.findByText('-- Chọn mẫu --'));
     fireEvent.click(await screen.findByText('Mẫu nhiều ảnh'));
     expect(await screen.findByTestId('simple-content-template-problem')).toHaveTextContent('quá 5 ảnh');
+    expect(zaloTemplateApiService.getTemplateById).toHaveBeenCalledWith(7);
     expect(nextButton()).toBeDisabled();
 
     fireEvent.click(await screen.findByText('Mẫu nhiều ảnh'));

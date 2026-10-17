@@ -515,3 +515,51 @@ describe('summarizeLedgerForRemaining', () => {
     expect(summarizeLedgerForRemaining(null).size).toBe(0);
   });
 });
+
+describe('estimateForCampaign — Telegram/WhatsApp nguồn "người đã nhắn" (trình từng bước)', () => {
+  const adapterDeps = (countAdapterConversations) => ({
+    getAdapterDescriptor: jest.fn((subtype) => (subtype === 'send_telegram' || subtype === 'send_whatsapp'
+      ? {
+        key: subtype === 'send_telegram' ? 'telegram' : 'whatsapp',
+        policy: { minDelayMs: 5000, maxDelayMs: 10000, perHourLimit: 100, quietHours: { startHour: 23, endHour: 6 } },
+        adapter: {
+          resolveAccount: jest.fn(async () => ({ accountKey: '5', display: 'Shop' })),
+          getAccountSendSettings: jest.fn(async () => null),
+        },
+      }
+      : null)),
+    ...(countAdapterConversations ? { countAdapterConversations } : {}),
+  });
+  const telegramNodes = () => ([
+    node(1, 'start', {}, 'trigger'),
+    node(2, 'send_telegram', { telegramAccountId: 5, recipientSource: 'telegram_conversations', steps: [{ message: 'a' }] }),
+  ]);
+
+  it('đếm hội thoại đang mở của tài khoản → 12 người, KHÔNG cảnh báo recipient_count_unknown', async () => {
+    const count = jest.fn(async () => 12);
+    const { deps } = makeDeps({ state: { nodes: telegramNodes(), connections: [connect(1, 2)] }, deps: adapterDeps(count) });
+    const result = await estimateForCampaign({ campaignId: 438, ownerUserId: 39, startAt: NOW, deps });
+    expect(count).toHaveBeenCalledWith(expect.objectContaining({ channel: 'telegram', ownerUserId: 39 }));
+    expect(result.perNode.map((n) => [n.nodeId, n.recipients])).toEqual([['2', 12]]);
+    expect(codes(result)).not.toContain('recipient_count_unknown');
+  });
+
+  it('WhatsApp whatsapp_conversations cũng được đếm theo mã phiên', async () => {
+    const count = jest.fn(async () => 3);
+    const nodes = [node(1, 'start', {}, 'trigger'), node(2, 'send_whatsapp', { whatsappSessionKey: '39-main', recipientSource: 'whatsapp_conversations', steps: [{ message: 'a' }] })];
+    const { deps } = makeDeps({ state: { nodes, connections: [connect(1, 2)] }, deps: adapterDeps(count) });
+    const result = await estimateForCampaign({ campaignId: 438, ownerUserId: 39, startAt: NOW, deps });
+    expect(count).toHaveBeenCalledWith(expect.objectContaining({ channel: 'whatsapp', config: expect.objectContaining({ whatsappSessionKey: '39-main' }) }));
+    expect(result.perNode[0].recipients).toBe(3);
+  });
+
+  it('đếm lỗi hoặc không có bộ đếm → recipient_count_unknown, 0 người (không ném, không bịa số)', async () => {
+    const failing = makeDeps({ state: { nodes: telegramNodes(), connections: [connect(1, 2)] }, deps: adapterDeps(jest.fn(async () => { throw new Error('db down'); })) });
+    const a = await estimateForCampaign({ campaignId: 438, ownerUserId: 39, startAt: NOW, deps: failing.deps });
+    expect(codes(a)).toContain('recipient_count_unknown');
+    expect(a.perNode[0].recipients).toBe(0);
+    const missing = makeDeps({ state: { nodes: telegramNodes(), connections: [connect(1, 2)] }, deps: adapterDeps(null) });
+    const b = await estimateForCampaign({ campaignId: 438, ownerUserId: 39, startAt: NOW, deps: missing.deps });
+    expect(codes(b)).toContain('recipient_count_unknown');
+  });
+});

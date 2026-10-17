@@ -1840,6 +1840,7 @@ export default {
         max: 'A sequence has at most {max} messages.',
       },
       selectedTemplate: 'Selected template',
+      templateChecking: 'Checking the template...',
       templateCopyHint: 'The template’s text and attachments are copied into the campaign. Editing the template later will not change a campaign you already created.',
       templateProblem: {
         images: 'This template has more than {limit} images, so this channel cannot send it. Choose another template or remove some images.',
