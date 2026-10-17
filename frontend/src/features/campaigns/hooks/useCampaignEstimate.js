@@ -11,10 +11,10 @@ const IDLE = Object.freeze({ status: 'idle', estimate: null });
  * - Lỗi (mạng, 5xx, hình dạng lạ) → `status: 'error'` — hộp chỉ hiện câu nhẹ, KHÔNG chặn nút Chạy/Đặt lịch.
  *
  * @param {{ campaignId: number|string|null, enabled: boolean, startAt?: string|null,
- *   continuous?: boolean, debounceMs?: number }} options
+ *   continuous?: boolean, debounceMs?: number, refreshKey?: any }} options `refreshKey` đổi (vd sau khi lưu chiến dịch) thì tải lại
  * @returns {{ status: 'idle'|'loading'|'ready'|'error', estimate: object|null }}
  */
-export default function useCampaignEstimate({ campaignId, enabled, startAt = null, continuous = false, debounceMs = 400 }) {
+export default function useCampaignEstimate({ campaignId, enabled, startAt = null, continuous = false, debounceMs = 400, refreshKey = null }) {
   const [state, setState] = useState(IDLE);
 
   useEffect(() => {
@@ -50,7 +50,7 @@ export default function useCampaignEstimate({ campaignId, enabled, startAt = nul
       clearTimeout(timer);
       controller.abort();
     };
-  }, [enabled, campaignId, startAt, continuous, debounceMs]);
+  }, [enabled, campaignId, startAt, continuous, debounceMs, refreshKey]);
 
   return state;
 }

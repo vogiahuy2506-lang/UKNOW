@@ -178,6 +178,9 @@ const CampaignBuilderPageLayout = ({
   canUseServerRunActions = false,
   serverRunActionsDisabledHint = '',
   viewTabs = null,
+  /** 'settings' | 'flow' — tab đang mở; 'settings' vẽ `settingsPanel` thay cho palette + canvas. */
+  activeTab = 'flow',
+  settingsPanel = null,
   onOpenShare,
   canShare = false,
   onOpenDuplicate,
@@ -342,6 +345,7 @@ const CampaignBuilderPageLayout = ({
     )}
 
     <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden flex-col">
+      {activeTab === 'settings' && settingsPanel ? settingsPanel : (
       <div className="flex flex-1 min-h-0 min-w-0 h-full overflow-hidden">
         <div
           className="bg-white dark:bg-dk-surface border-r border-gray-200 dark:border-dk-border flex flex-col min-h-0 h-full overflow-hidden"
@@ -628,6 +632,7 @@ const CampaignBuilderPageLayout = ({
           </div>
         )}
       </div>
+      )}
 
       {activePause && (
         <div className="flex-none px-4 py-2 bg-amber-50 dark:bg-amber-950/40 border-t border-b border-amber-200 dark:border-amber-900/60 flex items-center justify-between gap-2">

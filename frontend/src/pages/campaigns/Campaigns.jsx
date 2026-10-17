@@ -432,7 +432,7 @@ const Campaigns = () => {
         throw new Error(t('errors.serverError'));
       }
       setShowCreateModal(false);
-      navigate(`/app/campaigns/${createdCampaignId}/builder`);
+      navigate(`/app/campaigns/${createdCampaignId}?tab=flow`);
       toast.success(t('campaigns.createSuccess'));
     } catch (error) {
       if (!error._upgradeToastShown) {

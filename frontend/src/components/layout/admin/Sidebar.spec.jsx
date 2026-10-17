@@ -276,6 +276,17 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
     expect(campaignsButton.className.split(' ')).not.toContain('bg-orange-50');
   });
 
+  it('vào /app/campaigns/123 (trang chi tiết hai tab Thiết lập | Sơ đồ khối) — nhóm Chiến dịch được highlight như /builder', () => {
+    authState.user = { role: 'user', username: 'owner1', fullName: 'Chủ TK' };
+    authState.activeContext = { type: 'self' };
+
+    renderAppSidebar('/app/campaigns/123');
+
+    const campaignsButton = screen.getByRole('button', { name: 'Chiến dịch' });
+    expect(campaignsButton).toHaveAttribute('data-active', 'true');
+    expect(campaignsButton).toHaveAttribute('aria-expanded', 'true');
+  });
+
   // ── 4 ca test PR-3 (mục 6 việc 5) ──────────────────────────────────────────
   it('render tại /app/campaigns — nhóm Chiến dịch tự mở, link "Quản lý chiến dịch" có sẵn với aria-current="page"', () => {
     authState.user = { role: 'user', username: 'owner1', fullName: 'Chủ TK' };

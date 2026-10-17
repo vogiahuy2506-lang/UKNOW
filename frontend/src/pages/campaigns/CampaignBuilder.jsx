@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useLocalStorageState } from '../../hooks/useLocalStorageState';
 import { addEdge, useNodesState, useEdgesState } from 'reactflow';
 import 'reactflow/dist/style.css';
@@ -50,7 +50,13 @@ import { fetchZaloAccountOptions } from '../../features/campaigns/utils/nodeConf
 import { formatCampaignDateTime } from '../../features/campaigns/utils/campaignDateTime.helpers';
 import toast from 'react-hot-toast';
 import CampaignViewTabs from '../../features/campaigns/components/CampaignViewTabs';
-import CampaignTabSwitchModal from '../../features/campaigns/components/CampaignTabSwitchModal';
+import CampaignSettingsPanel from '../../features/campaigns/settings/CampaignSettingsPanel';
+import { useAuthStore } from '../../stores/authStore';
+import {
+  filterSchedulesByCampaignId,
+  getSchedulePatternSummaryVi,
+  resolveScheduleNextRunAt,
+} from '../../features/campaigns/utils/campaignRunSchedule.helpers';
 import { readCampaignDraft, writeCampaignDraft, clearCampaignDraft } from '../../utils/campaignDraftStorage';
 const LOG_LIST_MIN_WIDTH = 200;
 const LOG_DETAIL_MIN_WIDTH = 220;
@@ -141,7 +147,19 @@ const CampaignBuilder = () => {
   const hasHydratedDraftRef = useRef(false);
   const hasHydratedAiDraftRef = useRef(false);
   const isNewCampaign = !id || id === 'new';
-  const { activePause } = useLatestRunPause(isNewCampaign ? null : id);
+  // ── Tab Thiết lập | Sơ đồ khối (PLAN_THIET_LAP_VA_SO_DO_2026-10-17) ──────────────────────────────────────────────
+  // Hai tab dùng CHUNG nodes/edges/isDirty của trang nên sửa bên nào bên kia thấy ngay, không cần hỏi "lưu rồi chuyển".
+  // Tab nằm trên URL (`?tab=settings|flow`). Mặc định: chiến dịch đã có → Thiết lập; chiến dịch mới → Sơ đồ khối.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { activeContext } = useAuthStore();
+  // Cùng công thức PermissionRoute: chủ tài khoản luôn được; nhân viên cần quyền cụ thể.
+  const isEmployeeCtx = activeContext?.type === 'employee';
+  const canEditCampaign = !isEmployeeCtx || activeContext?.permissions?.campaigns_create === true;
+  const requestedTab = searchParams.get('tab');
+  const defaultTab = isNewCampaign ? 'flow' : 'settings';
+  const requestedOrDefaultTab = requestedTab === 'settings' || requestedTab === 'flow' ? requestedTab : defaultTab;
+  const activeTab = canEditCampaign ? requestedOrDefaultTab : 'settings';
+  const { activePause, latestRun } = useLatestRunPause(isNewCampaign ? null : id);
   const shouldBlockNavigation = isRunning || isDirty;
   const navigationBlocker = useBrowserRouterBlocker(shouldBlockNavigation);
   const {
@@ -754,7 +772,7 @@ const CampaignBuilder = () => {
       setIsDirty(false);
       setShowNameModal(false);
       if (isNewCampaign && savedCampaignId) {
-        navigate(`/app/campaigns/${savedCampaignId}/builder`, { replace: true });
+        navigate(`/app/campaigns/${savedCampaignId}?tab=${activeTab}`, { replace: true });
       }
       toast.success(t('campaignBuilderExtra.saved'));
       return true;
@@ -1146,7 +1164,7 @@ const CampaignBuilder = () => {
     const targetId = duplicatedCampaignId;
     setDuplicatedCampaignId(null);
     if (!targetId) return;
-    navigate(`/app/campaigns/${targetId}/builder`);
+    navigate(`/app/campaigns/${targetId}`);
   };
 
   /**
@@ -1164,50 +1182,36 @@ const CampaignBuilder = () => {
     navigate('/app/campaigns');
   };
 
-  // ── Tab "Từng bước" ⇄ "Sơ đồ khối" (PLAN_HAI_TAB_TUNG_BUOC_SO_DO_2026-10-17) ─────────────────────────────────────────────────
-  // Hai tab chỉ đồng bộ qua server: còn thay đổi chưa lưu thì hỏi Lưu rồi chuyển / Bỏ thay đổi / Ở lại; tab đích nạp lại từ server.
-  const [showTabSwitchModal, setShowTabSwitchModal] = useState(false);
-  const [isSavingTabSwitch, setIsSavingTabSwitch] = useState(false);
-  const simpleTabPath = `/app/campaigns/${id}/simple`;
-
-  const goToSimpleTab = () => {
-    // `when` của bộ chặn còn true đến lần vẽ kế → cho qua đúng một lần điều hướng này.
-    navigationBlocker.allowNext?.();
-    if (isRunning) cancelCurrentRun();
-    navigate(simpleTabPath);
-  };
-
   const handleSelectViewTab = (tab) => {
-    if (tab !== 'simple' || isNewCampaign) return;
-    if (isDirty) {
-      setShowTabSwitchModal(true);
-      return;
-    }
-    if (isRunning) {
-      pendingLeaveActionRef.current = () => navigate(simpleTabPath);
-      setLeaveConfirmContext('running');
-      setShowLeaveConfirmModal(true);
-      return;
-    }
-    navigate(simpleTabPath);
+    if (tab !== 'settings' && tab !== 'flow') return;
+    // Đổi tab là một lần điều hướng (đổi `?tab=`); chiến dịch đang có thay đổi chưa lưu thì bộ chặn rời trang sẽ hỏi nhầm
+    // → cho qua đúng một lần. `replace` để nút Back không phải lùi qua từng lần đổi tab.
+    navigationBlocker.allowNext?.();
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.set('tab', tab);
+      return next;
+    }, { replace: true });
   };
 
-  const handleTabSwitchSave = async () => {
-    setIsSavingTabSwitch(true);
-    const saved = await handleSave();
-    setIsSavingTabSwitch(false);
-    // Lưu hỏng (đã có toast): ở lại để người dùng sửa.
-    if (!saved) {
-      setShowTabSwitchModal(false);
-      return;
-    }
-    setShowTabSwitchModal(false);
-    goToSimpleTab();
+  // Tab Thiết lập mở CHÍNH hộp cấu hình khối của trình dựng (cùng `handleNodeConfigSave`), không nhúng form riêng.
+  const handleEditNodeFromSettings = (node) => {
+    setNodeToConfig(node);
+    setShowConfigModal(true);
   };
 
-  const handleTabSwitchDiscard = () => {
-    setShowTabSwitchModal(false);
-    goToSimpleTab();
+  const campaignSchedules = useMemo(
+    () => (isNewCampaign ? [] : filterSchedulesByCampaignId(runController.schedules, id)),
+    [id, isNewCampaign, runController.schedules],
+  );
+
+  const describeScheduleForSettings = (schedule) => {
+    const nextRun = schedule?.enabled ? resolveScheduleNextRunAt(schedule) : null;
+    return {
+      pattern: getSchedulePatternSummaryVi(schedule, runController.getWeeklyDayFromCron, runController.getWeeklyDayLabel, t),
+      nextRun: nextRun && nextRun.getTime() > Date.now() ? nextRun : null,
+      statusLabel: runController.getScheduleStatusLabel(schedule),
+    };
   };
 
   const handleNameModalPrimary = () => {
@@ -1241,7 +1245,32 @@ const CampaignBuilder = () => {
       onOpenSchedule={() => requestServerAction('schedule')}
       canUseServerRunActions={canUseServerRunActions}
       serverRunActionsDisabledHint={t('campaignBuilder.saveCampaignFirst')}
-      viewTabs={isNewCampaign ? null : <CampaignViewTabs active="builder" onSelect={handleSelectViewTab} />}
+      viewTabs={<CampaignViewTabs active={activeTab} onSelect={handleSelectViewTab} flowDisabled={!canEditCampaign} />}
+      activeTab={activeTab}
+      settingsPanel={(
+        <CampaignSettingsPanel
+          campaignId={isNewCampaign ? null : id}
+          campaignName={campaignName}
+          campaignType={campaignType}
+          campaignStatus={campaignStatus}
+          isNewCampaign={isNewCampaign}
+          isDirty={isDirty}
+          lastSavedTime={lastSavedTime}
+          nodes={nodes}
+          edges={edges}
+          emailTemplates={emailTemplates}
+          zaloTemplates={zaloTemplates}
+          emailSettings={emailSettings}
+          runningRunId={latestRun?.status === 'running' ? latestRun.id : null}
+          schedules={campaignSchedules}
+          describeSchedule={describeScheduleForSettings}
+          onOpenSchedule={() => requestServerAction('schedule')}
+          onManageSchedules={() => runController.openCampaignSchedulesSummaryModal(campaignForServerActions)}
+          onEditNode={handleEditNodeFromSettings}
+          onGoFlow={() => handleSelectViewTab('flow')}
+          canEdit={canEditCampaign}
+        />
+      )}
       onOpenShare={() => setShowShareModal(true)}
       canShare={canShare}
       onOpenDuplicate={() => setShowDuplicateModal(true)}
@@ -1330,13 +1359,6 @@ const CampaignBuilder = () => {
       leaveModalTitle={leaveModalTitle}
       leaveModalMessage={leaveModalMessage}
     />
-      <CampaignTabSwitchModal
-        isOpen={showTabSwitchModal}
-        isSaving={isSavingTabSwitch}
-        onSave={handleTabSwitchSave}
-        onDiscard={handleTabSwitchDiscard}
-        onStay={() => setShowTabSwitchModal(false)}
-      />
       {lockedChannelModal && (
         <ChannelUnavailableModal
           channel={lockedChannelModal}
@@ -1390,6 +1412,7 @@ const CampaignBuilder = () => {
         scheduleRuns={runController.scheduleRuns}
         handleToggleSchedule={runController.handleToggleSchedule}
         isReadonlyOnceSchedule={runController.isReadonlyOnceSchedule}
+        campaignSchedulesModalCampaign={runController.campaignSchedulesModalCampaign}
         closeCampaignSchedulesSummaryModal={runController.closeCampaignSchedulesSummaryModal}
         allSchedules={runController.schedules}
       />

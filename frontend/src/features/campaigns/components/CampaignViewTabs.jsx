@@ -1,25 +1,34 @@
-import { HiOutlineSparkles, HiOutlineViewGrid } from 'react-icons/hi';
+import { HiOutlineAdjustments, HiOutlineSparkles, HiOutlineViewGrid } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 
+/** Hai tab của chi tiết MỘT chiến dịch: `Thiết lập` (mọi cài đặt viết tường minh) và `Sơ đồ khối` (kéo thả). */
+export const CAMPAIGN_DETAIL_TABS = Object.freeze([
+  { id: 'settings', icon: HiOutlineAdjustments, labelKey: 'campaignTabs.settings', gated: false },
+  { id: 'flow', icon: HiOutlineViewGrid, labelKey: 'campaignTabs.flow', gated: true },
+]);
+
 /**
- * Thanh tab dùng chung ở đầu hai màn của MỘT chiến dịch: `Từng bước` (`/app/campaigns/:id/simple`) và `Sơ đồ khối`
- * (`/app/campaigns/:id/builder`). PLAN_HAI_TAB_TUNG_BUOC_SO_DO_2026-10-17: mở chiến dịch luôn vào Từng bước trước
- * (người mới nhìn sơ đồ khối dễ bị ngợp); ai muốn chi tiết hơn thì tự qua Sơ đồ khối.
- *
- * Bấm tab KHÔNG tự điều hướng: cha quyết định (có thể hỏi "Lưu rồi chuyển / Bỏ thay đổi / Ở lại" khi còn thay đổi chưa lưu).
+ * Cặp tab cũ `Từng bước` ⇄ `Sơ đồ khối` của màn `CampaignSimpleEdit`. Màn đó đã gỡ khỏi route (PLAN_THIET_LAP_VA_SO_DO_2026-10-17,
+ * PR-2) và sẽ bị xoá ở PR-3; giữ tạm để file đó còn biên dịch và test của nó còn chạy.
+ */
+export const LEGACY_SIMPLE_TABS = Object.freeze([
+  { id: 'simple', icon: HiOutlineSparkles, labelKey: 'campaignTabs.simple', gated: false },
+  { id: 'builder', icon: HiOutlineViewGrid, labelKey: 'campaignTabs.builder', gated: true },
+]);
+
+/**
+ * Thanh tab dùng chung ở đầu trang chi tiết MỘT chiến dịch: `Thiết lập` | `Sơ đồ khối`.
+ * Bấm tab KHÔNG tự điều hướng: cha quyết định (đặt `?tab=` trên URL). Hai tab dùng chung dữ liệu nên không cần hỏi "lưu rồi chuyển".
  *
  * @param {object} props
- * @param {'simple'|'builder'} props.active
- * @param {(tab: 'simple'|'builder') => void} props.onSelect
- * @param {boolean} [props.builderDisabled] thiếu quyền dựng chiến dịch (campaigns_create) → tab Sơ đồ khối mờ, không bấm được
+ * @param {'settings'|'flow'} props.active
+ * @param {(tab: 'settings'|'flow') => void} props.onSelect
+ * @param {boolean} [props.flowDisabled] thiếu quyền dựng chiến dịch (campaigns_create) → tab Sơ đồ khối mờ, không bấm được
+ * @param {Array<object>} [props.tabs] danh sách tab (mặc định {@link CAMPAIGN_DETAIL_TABS})
  * @param {string} [props.className]
  */
-export default function CampaignViewTabs({ active, onSelect, builderDisabled = false, className = '' }) {
+export default function CampaignViewTabs({ active, onSelect, flowDisabled = false, tabs = CAMPAIGN_DETAIL_TABS, className = '' }) {
   const { t } = useI18n();
-  const tabs = [
-    { id: 'simple', icon: HiOutlineSparkles, label: t('campaignTabs.simple'), disabled: false },
-    { id: 'builder', icon: HiOutlineViewGrid, label: t('campaignTabs.builder'), disabled: builderDisabled },
-  ];
   return (
     <div
       role="tablist"
@@ -27,8 +36,9 @@ export default function CampaignViewTabs({ active, onSelect, builderDisabled = f
       className={`inline-flex max-w-full gap-1 rounded-xl border border-slate-200 bg-slate-100/80 p-1 dark:border-dk-border dark:bg-dk-inset ${className}`}
       data-testid="campaign-view-tabs"
     >
-      {tabs.map(({ id, icon: Icon, label, disabled }) => {
+      {tabs.map(({ id, icon: Icon, labelKey, gated }) => {
         const selected = active === id;
+        const disabled = gated && flowDisabled;
         return (
           <button
             key={id}
@@ -49,7 +59,7 @@ export default function CampaignViewTabs({ active, onSelect, builderDisabled = f
             }`}
           >
             <Icon className="h-4 w-4" aria-hidden="true" />
-            {label}
+            {t(labelKey)}
           </button>
         );
       })}

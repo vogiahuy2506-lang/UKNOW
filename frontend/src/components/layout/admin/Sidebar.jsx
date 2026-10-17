@@ -14,6 +14,7 @@ import {
   userMenuItems,
   AVATAR_STYLES,
 } from './navConfig';
+import { CAMPAIGN_DETAIL_PATH } from './campaignDetailPath';
 import { groupSuperAdminMenuItems, groupAppMenuItems, buildAppLinkMenuItems } from './adminMenuLayout';
 import adminMenuApiService, {
   ADMIN_MENU_LAYOUT_UPDATED_EVENT,
@@ -22,9 +23,6 @@ import adminMenuApiService, {
 // Menu khách /app nay luôn có `key` ổn định trên mọi mục sau khi làm phẳng (PR-1,
 // PLAN_MENU_CHUYEN_MUC_APP_2026-09-12, navConfig.jsx:userMenuItems) — `|| item.path ||
 // item.name` chỉ còn là lưới an toàn, không phải đường chính.
-/** Màn của MỘT chiến dịch đã có: tab Sơ đồ khối (`/builder`) hoặc Từng bước (`/simple`) — cùng highlight mục Chiến dịch. */
-const CAMPAIGN_DETAIL_PATH = /^\/app\/campaigns\/[^/]+\/(builder|simple)(\/|$)/;
-
 const getMenuItemKey = (item) => item.key || item.path || item.name;
 
 // ── Floating Submenu Panel (for collapsed sidebar) ──────────────────────────

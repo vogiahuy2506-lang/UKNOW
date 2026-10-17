@@ -7,7 +7,7 @@ import { useAuthStore } from '../../stores/authStore';
 import PageHeader from '../../components/common/PageHeader';
 import SimpleCampaignWizard from '../../features/campaigns/simple/SimpleCampaignWizard';
 import useSimpleCampaignWizard from '../../features/campaigns/simple/useSimpleCampaignWizard';
-import CampaignViewTabs from '../../features/campaigns/components/CampaignViewTabs';
+import CampaignViewTabs, { LEGACY_SIMPLE_TABS } from '../../features/campaigns/components/CampaignViewTabs';
 import CampaignTabSwitchModal from '../../features/campaigns/components/CampaignTabSwitchModal';
 import { useBrowserRouterBlocker } from '../../features/campaigns/hooks/useBrowserRouterBlocker';
 
@@ -103,7 +103,7 @@ export default function CampaignSimpleEdit() {
         backLabel={t('simpleCampaign.backToList')}
       />
       <div className="flex flex-wrap items-center gap-3">
-        <CampaignViewTabs active="simple" onSelect={handleSelectTab} builderDisabled={!canSave} />
+        <CampaignViewTabs active="simple" tabs={LEGACY_SIMPLE_TABS} onSelect={handleSelectTab} flowDisabled={!canSave} />
         {isDirty && (
           <span className="text-sm font-semibold text-amber-600 dark:text-amber-400" data-testid="simple-edit-dirty">
             {t('campaignTabs.unsaved')}

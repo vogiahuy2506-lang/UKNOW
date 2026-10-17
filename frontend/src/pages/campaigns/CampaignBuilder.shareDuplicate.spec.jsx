@@ -205,7 +205,7 @@ describe('CampaignBuilder — Nhân bản trong sơ đồ (PR-2)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Mở bản sao' }));
 
-    expect(mockNavigate).toHaveBeenCalledWith('/app/campaigns/999/builder');
+    expect(mockNavigate).toHaveBeenCalledWith('/app/campaigns/999');
   });
 
   it('nhân bản xong, hộp "Mở bản sao?" bấm "Ở lại" → KHÔNG điều hướng, ở lại trang', async () => {

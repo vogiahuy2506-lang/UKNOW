@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from './stores/authStore';
 import { useThemeStore, applyThemeToDocument } from './stores/themeStore';
@@ -29,7 +29,6 @@ const Campaigns = lazyWithRetry(() => import('./pages/campaigns/Campaigns'));
 const CampaignBuilder = lazyWithRetry(() => import('./pages/campaigns/CampaignBuilder'));
 const QuickSend = lazyWithRetry(() => import('./pages/campaigns/QuickSend'));
 const SimpleCampaign = lazyWithRetry(() => import('./pages/campaigns/SimpleCampaign'));
-const CampaignSimpleEdit = lazyWithRetry(() => import('./pages/campaigns/CampaignSimpleEdit'));
 const Customers = lazyWithRetry(() => import('./pages/customers/Customers'));
 const CampaignCustomers = lazyWithRetry(() => import('./pages/customers/CampaignCustomers'));
 const ChannelSettings = lazyWithRetry(() => import('./pages/settings/ChannelSettings'));
@@ -171,6 +170,12 @@ const PublicRoute = ({ children }) => {
   }
 
   return children;
+};
+
+// Link cũ `/app/campaigns/:id/simple` (tab "Từng bước" đã bỏ) → trang chi tiết `/app/campaigns/:id`.
+const CampaignSimpleRedirect = () => {
+  const { id } = useParams();
+  return <Navigate to={`/app/campaigns/${id}`} replace />;
 };
 
 // Modal phải nằm trong <Router> để MarketplaceContent (dùng useNavigate) hoạt động.
@@ -391,9 +396,11 @@ function AppContent() {
             <Route path="campaigns" element={<PermissionRoute permission="campaigns_view"><Campaigns /></PermissionRoute>} />
             {/* Tạo chiến dịch từng bước: đường tĩnh `campaigns/simple` thắng `campaigns/:id` (React Router xếp tĩnh trên động). */}
             <Route path="campaigns/simple" element={<PermissionRoute permission="campaigns_create"><SimpleCampaign /></PermissionRoute>} />
-            {/* Mở chi tiết một chiến dịch: luôn vào tab "Từng bước" trước (người mới nhìn sơ đồ khối dễ bị ngợp); tab "Sơ đồ khối" là `/builder`. */}
-            <Route path="campaigns/:id" element={<Navigate to="simple" replace />} />
-            <Route path="campaigns/:id/simple" element={<PermissionRoute permission="campaigns_view"><CampaignSimpleEdit /></PermissionRoute>} />
+            {/* Chi tiết một chiến dịch = MỘT trang (CampaignBuilder) có hai tab Thiết lập | Sơ đồ khối, tab nằm trên `?tab=`.
+                Tab Thiết lập xem được với quyền xem; tab Sơ đồ khối trong trang tự khoá khi thiếu quyền tạo. `/builder` là link cũ (cùng trang);
+                `/simple` là link cũ của tab Từng bước (đã bỏ) → về trang chi tiết. */}
+            <Route path="campaigns/:id" element={<PermissionRoute permission="campaigns_view"><CampaignBuilder /></PermissionRoute>} />
+            <Route path="campaigns/:id/simple" element={<CampaignSimpleRedirect />} />
             <Route path="campaigns/:id/builder" element={<PermissionRoute permission="campaigns_create"><CampaignBuilder /></PermissionRoute>} />
             <Route path="campaigns/new" element={<PermissionRoute permission="campaigns_create"><CampaignBuilder /></PermissionRoute>} />
             <Route path="campaign-run" element={<Navigate to="/app/campaigns?tab=schedules" replace />} />

@@ -1516,7 +1516,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           content: `🎉 Đã tạo chiến dịch draft "${script.campaignName}". Mình mở Campaign Builder để bạn review trước khi chạy.`,
         });
         if (res.campaignId) {
-          navigate(`/app/campaigns/${res.campaignId}/builder`);
+          navigate(`/app/campaigns/${res.campaignId}`);
           onToggle?.();
         }
       } else {
@@ -3204,7 +3204,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         });
         // Navigate to the new campaign builder
         if (res.campaignId) {
-          navigate(`/app/campaigns/${res.campaignId}/builder`);
+          navigate(`/app/campaigns/${res.campaignId}`);
           onToggle?.();
         }
       }
