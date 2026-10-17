@@ -1,5 +1,5 @@
 import { HiOutlineEye, HiOutlineViewGrid } from 'react-icons/hi';
-import { buildReviewSummary } from './simpleCampaign.summary';
+import { buildReviewSummary, describeViewStepTiming } from './simpleCampaign.summary';
 
 /** Ghép chuỗi có `**in đậm**` thành phần tử — không dùng dangerouslySetInnerHTML vì có tên do người dùng đặt. */
 function RichSummary({ text }) {
@@ -28,8 +28,16 @@ function RichSummary({ text }) {
 export default function SimpleReadOnlyView({ wizard, canOpenBuilder, onOpenBuilder, t, locale }) {
   const { state, editInfo } = wizard;
   const reasons = (editInfo?.reasons || []).filter((reason) => String(reason?.message || '').trim());
-  const summary = editInfo?.hasForm && state.channel ? buildReviewSummary({ state, preview: null, t, locale, manualWhen: true }) : '';
-  const followUps = Array.isArray(state.followUps) ? state.followUps.length : 0;
+  // Không có form (chỉ bị chặn vì nhịp chờ) mà có `view`: tóm tắt + danh sách tin dựng từ `view`, giữ nguyên nhịp chờ đã lưu.
+  const view = !editInfo?.hasForm && editInfo?.view?.state?.channel ? editInfo.view : null;
+  // Tên mẫu tin 1 được tra riêng ở `steps` (tin sau cũng vậy) nên chép sang state để câu tóm tắt nêu đúng tên.
+  const summaryState = view
+    ? { ...view.state, content: { ...view.state.content, templateName: view.steps[0]?.content?.templateName || '' } }
+    : state;
+  const summary = (editInfo?.hasForm || view) && summaryState.channel
+    ? buildReviewSummary({ state: summaryState, preview: null, t, locale, manualWhen: true })
+    : '';
+  const followUps = view ? view.steps.length - 1 : (Array.isArray(state.followUps) ? state.followUps.length : 0);
 
   return (
     <div className="space-y-5 rounded-2xl border border-slate-200 bg-white p-4 dark:border-dk-border dark:bg-dk-surface sm:p-6" data-testid="simple-readonly">
@@ -56,6 +64,23 @@ export default function SimpleReadOnlyView({ wizard, canOpenBuilder, onOpenBuild
           <RichSummary text={summary} />
           {followUps > 0 && <span> {t('simpleCampaign.edit.readOnly.followUps', { count: followUps + 1 })}</span>}
         </p>
+      )}
+
+      {view && (
+        <div data-testid="simple-readonly-steps">
+          <p className="text-sm font-semibold text-slate-800 dark:text-dk-text">{t('simpleCampaign.edit.readOnly.view.stepsTitle')}</p>
+          <ol className="mt-1 space-y-1 text-sm text-slate-700 dark:text-dk-text2">
+            {view.steps.map((step, index) => (
+              <li key={index} data-testid="simple-readonly-step">
+                {t('simpleCampaign.edit.readOnly.view.stepLine', {
+                  n: index + 1,
+                  name: step.content?.templateName || t('simpleCampaign.review.content.templateUnknown'),
+                  when: describeViewStepTiming({ index, step, t }),
+                })}
+              </li>
+            ))}
+          </ol>
+        </div>
       )}
 
       {reasons.length > 0 && (

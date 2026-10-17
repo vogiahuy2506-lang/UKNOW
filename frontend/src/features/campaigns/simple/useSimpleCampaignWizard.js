@@ -30,6 +30,7 @@ import {
   buildEditBody,
   buildScheduleUpdatePayload,
   buildStateFromServer,
+  buildViewFromServer,
   fingerprintEditState,
   makeFingerprint,
   parseServerSchedules,
@@ -378,6 +379,7 @@ export default function useSimpleCampaignWizard({ campaignId = null } = {}) {
       const data = unwrapResponseData(await campaignApiService.getSimpleCampaign(campaignId));
       if (seq !== loadSeqRef.current) return;
       const next = buildStateFromServer(data);
+      const viewData = next ? null : buildViewFromServer(data);
       const parsed = parseServerSchedules(data?.schedules);
       const reasons = Array.isArray(data?.readOnlyReasons) ? data.readOnlyReasons : [];
       const scheduleLocked = parsed.locked
@@ -394,6 +396,8 @@ export default function useSimpleCampaignWizard({ campaignId = null } = {}) {
         scheduleLocked,
         lockedCron: parsed.lockedCron,
         hasForm: Boolean(next),
+        // Không có form mà có `view` (chỉ bị chặn vì nhịp chờ): màn chỉ xem hiện nội dung các tin.
+        view: viewData,
       });
       if (next) {
         setState(next);
@@ -413,6 +417,31 @@ export default function useSimpleCampaignWizard({ campaignId = null } = {}) {
           if (seq !== loadSeqRef.current) return;
           setState((prev) => applyTemplateLabels(prev, labels));
         }).catch(() => {});
+      }
+
+      // Màn chỉ xem có `view`: tra tên mẫu từng tin + tên tài khoản gửi (GET chỉ trả id), không chặn màn hình.
+      if (viewData) {
+        const patchView = (change) => {
+          if (seq !== loadSeqRef.current) return;
+          setEditInfo((prev) => (prev?.view ? { ...prev, view: change(prev.view) } : prev));
+        };
+        const pseudo = {
+          channel: viewData.state.channel,
+          content: viewData.steps[0].content,
+          followUps: viewData.steps.slice(1).map((item) => ({ content: item.content })),
+        };
+        fetchTemplateLabels(pseudo).then((labels) => {
+          patchView((view) => ({
+            ...view,
+            steps: view.steps.map((item) => ({ ...item, content: applyTemplateLabels({ content: item.content }, labels).content })),
+          }));
+        }).catch(() => {});
+        if (viewData.state.sender?.id) {
+          loadSenderAccounts(senderKindOf(viewData.state.channel)).then((accounts) => {
+            const found = accounts.find((account) => String(account.id) === String(viewData.state.sender.id));
+            if (found) patchView((view) => ({ ...view, state: { ...view.state, sender: { id: found.id, label: found.label } } }));
+          }).catch(() => {});
+        }
       }
 
       // Điền tên tài khoản gửi (GET chỉ trả id) — không chặn màn hình, lỗi thì để trống.

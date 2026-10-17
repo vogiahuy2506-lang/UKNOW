@@ -416,6 +416,118 @@ describe('readSimpleFormFromGraph — lý do không đọc ngược được', (
   });
 });
 
+describe('readSimpleFormFromGraph — `view` (chỉ xem) khi bị chặn chỉ vì nhịp chờ', () => {
+  const codes = (read) => read.reasons.map((item) => item.code);
+
+  it('đọc đủ form (không lý do) → KHÔNG có view', async () => {
+    const stored = persist(await build(emailBody({ followUps: [fu(1, 'days', 12)] })));
+    const read = readSimpleFormFromGraph(stored.nodes, stored.connections);
+    expect(read.form).not.toBeNull();
+    expect(read).not.toHaveProperty('view');
+  });
+
+  it('delay_from_start → có view, giữ nguyên delayFrom/giá trị/đơn vị từng tin (không quy đổi)', async () => {
+    const stored = persist(await build(zaloBody({ followUps: [fu(2, 'days', 22), fu(5, 'hours', 23)] })));
+    const steps = stepsOf(stored);
+    steps[1].delayFrom = 'start';
+    steps[2].delayFrom = 'prev';
+    const read = readSimpleFormFromGraph(stored.nodes, stored.connections);
+    expect(read.form).toBeNull();
+    expect(codes(read)).toEqual([CODE.DELAY_FROM_START]);
+    expect(read.view).toEqual({
+      senderId: 9,
+      audience: { type: 'manual', phones: ['0912345678', '0987654321'] },
+      content: tpl(21),
+      firstStepDelay: { delayValue: 0, delayUnit: expect.any(String), delayFrom: expect.any(String) },
+      followUps: [
+        { delayValue: 2, delayUnit: 'days', delayFrom: 'start', content: tpl(22) },
+        { delayValue: 5, delayUnit: 'hours', delayFrom: 'prev', content: tpl(23) },
+      ],
+    });
+  });
+
+  it('delayFrom vắng → giữ chuỗi rỗng (không tự điền start/prev)', async () => {
+    const stored = persist(await build(zaloBody({ followUps: [fu(1, 'days', 22)] })));
+    delete stepsOf(stored)[1].delayFrom;
+    const read = readSimpleFormFromGraph(stored.nodes, stored.connections);
+    expect(read.view.followUps[0]).toEqual({ delayValue: 1, delayUnit: 'days', delayFrom: '', content: tpl(22) });
+  });
+
+  it('unsupported_delay (phút, thập phân, đơn vị lạ) → có view, giữ nguyên giá trị đã lưu', async () => {
+    const stored = persist(await build(emailBody({ followUps: [fu(1, 'days', 12), fu(1, 'days', 13), fu(1, 'days', 14)] })));
+    const steps = stepsOf(stored);
+    steps[1].delayUnit = 'minutes'; steps[1].delayValue = 30;
+    steps[2].delayUnit = 'days'; steps[2].delayValue = 1.5;
+    steps[3].delayUnit = 'weeks'; steps[3].delayValue = 2;
+    const read = readSimpleFormFromGraph(stored.nodes, stored.connections);
+    expect(read.form).toBeNull();
+    expect(codes(read)).toEqual([CODE.UNSUPPORTED_DELAY]);
+    expect(read.view.followUps.map((item) => [item.delayValue, item.delayUnit, item.delayFrom])).toEqual([
+      [30, 'minutes', 'prev'], [1.5, 'days', 'prev'], [2, 'weeks', 'prev'],
+    ]);
+  });
+
+  it('first_step_delay → có view, tin 1 mang nhịp chờ gốc', async () => {
+    const stored = persist(await build(emailBody({ followUps: [fu(1, 'days', 12)] })));
+    stepsOf(stored)[0].delayValue = 3;
+    stepsOf(stored)[0].delayUnit = 'hours';
+    stepsOf(stored)[0].delayFrom = 'start';
+    const read = readSimpleFormFromGraph(stored.nodes, stored.connections);
+    expect(codes(read)).toEqual([CODE.FIRST_STEP_DELAY]);
+    expect(read.view.firstStepDelay).toEqual({ delayValue: 3, delayUnit: 'hours', delayFrom: 'start' });
+    expect(read.view.content).toEqual(tpl(11));
+  });
+
+  it('too_many_steps → có view đủ cả 11 tin', async () => {
+    const stored = persist(await build(emailBody({ followUps: Array.from({ length: 9 }, (_, i) => fu(1, 'days', 20 + i)) })));
+    sendOf(stored).config.emailSteps.push({ ...sendOf(stored).config.emailSteps[1] });
+    const read = readSimpleFormFromGraph(stored.nodes, stored.connections);
+    expect(codes(read)).toEqual([CODE.TOO_MANY_STEPS]);
+    expect(read.view.followUps).toHaveLength(10);
+  });
+
+  it('nhiều lý do nhịp chờ cùng lúc vẫn có view', async () => {
+    const stored = persist(await build(emailBody({ followUps: [fu(1, 'days', 12)] })));
+    stepsOf(stored)[0].delayValue = 2;
+    stepsOf(stored)[1].delayFrom = 'start';
+    stepsOf(stored)[1].delayUnit = 'minutes';
+    const read = readSimpleFormFromGraph(stored.nodes, stored.connections);
+    expect(codes(read).sort()).toEqual([CODE.DELAY_FROM_START, CODE.FIRST_STEP_DELAY, CODE.UNSUPPORTED_DELAY].sort());
+    expect(read.view).toBeDefined();
+  });
+
+  it('có thêm lý do ngoài nhóm nhịp chờ (tin soạn thẳng) → KHÔNG có view', async () => {
+    const stored = persist(await build(emailBody({ followUps: [fu(1, 'days', 12)] })));
+    stepsOf(stored)[1].delayFrom = 'start';
+    stepsOf(stored)[0].templateId = null;
+    const read = readSimpleFormFromGraph(stored.nodes, stored.connections);
+    expect(codes(read)).toEqual(expect.arrayContaining([CODE.INLINE_CONTENT, CODE.DELAY_FROM_START]));
+    expect(read).not.toHaveProperty('view');
+  });
+
+  it('khối nâng cao / nhiều khối gửi / nguồn lạ / thiếu tài khoản → KHÔNG có view', async () => {
+    const advanced = persist(await build(emailBody({ followUps: [fu(1, 'days', 12)] })));
+    stepsOf(advanced)[1].delayFrom = 'start';
+    advanced.nodes.splice(1, 0, { id: '5000', nodeType: 'condition', nodeSubtype: 'condition', nodeName: 'Rẽ nhánh', config: {} });
+    expect(readSimpleFormFromGraph(advanced.nodes, advanced.connections)).not.toHaveProperty('view');
+
+    const two = persist(await build(emailBody({ followUps: [fu(1, 'days', 12)] })));
+    stepsOf(two)[1].delayFrom = 'start';
+    two.nodes.push({ ...sendOf(two), id: '5001' });
+    expect(readSimpleFormFromGraph(two.nodes, two.connections)).not.toHaveProperty('view');
+
+    const audience = persist(await build(emailBody({ audience: { type: 'customers' }, followUps: [fu(1, 'days', 12)] })));
+    stepsOf(audience)[1].delayFrom = 'start';
+    audience.nodes.find((node) => node.nodeSubtype === 'interested_customers').config.interestedCustomerType = 'purchased';
+    expect(readSimpleFormFromGraph(audience.nodes, audience.connections)).not.toHaveProperty('view');
+
+    const noSender = persist(await build(zaloBody({ followUps: [fu(1, 'days', 22)] })));
+    stepsOf(noSender)[1].delayFrom = 'start';
+    noSender.nodes.find((node) => node.nodeSubtype === 'select_zalo_account').config.zaloAccountId = '';
+    expect(readSimpleFormFromGraph(noSender.nodes, noSender.connections)).not.toHaveProperty('view');
+  });
+});
+
 describe('isRoundTripEquivalent — mỗi trường form điều khiển lệch một ca → ok:false', () => {
   const baseBody = () => emailBody({ audience: { type: 'landing', slugs: ['a'] }, content: tpl(11), followUps: [fu(2, 'days', 12), fu(3, 'days', 13)] });
   const zaloGroupBody = () => groupBody({ followUps: [fu(1, 'days', 32)] });

@@ -1974,6 +1974,23 @@ export default {
         reasonsTitle: 'Why it cannot be edited here',
         openBuilder: 'Open the Flow diagram to edit',
         followUps: 'The campaign has {count} messages.',
+        view: {
+          stepsTitle: 'Messages in this campaign',
+          stepLine: 'Message {n} · {name} · {when}',
+          unit: {
+            minutesOne: 'minute', minutesMany: 'minutes',
+            hoursOne: 'hour', hoursMany: 'hours',
+            daysOne: 'day', daysMany: 'days',
+          },
+          when: {
+            now: 'sent immediately',
+            afterStart: '{wait} after it starts',
+            afterPrev: '{wait} after the previous message',
+            afterFirst: '{wait} after the first message',
+            noWaitPrev: 'right after the previous message',
+            noWaitFirst: 'right after the first message',
+          },
+        },
       },
     },
     approval: {

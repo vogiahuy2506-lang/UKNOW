@@ -534,6 +534,31 @@ describe('Chi tiết chiến dịch — tab Từng bước (chế độ sửa)',
       expect(within(view).getByTestId('simple-readonly-open-builder')).toBeInTheDocument();
     });
 
+    it('form = null nhưng có view (chỉ vì nhịp chờ): hiện tóm tắt + danh sách tin với tên mẫu tra theo id; vẫn không có nút lưu', async () => {
+      emailTemplateApiService.getTemplateById.mockImplementation(async (id) => ({
+        data: { data: { id, templateName: `Mẫu ${id}`, subject: id === 5 ? 'Ưu đãi' : '' } },
+      }));
+      campaignApiService.getSimpleCampaign.mockResolvedValue(getResponse({
+        editable: false,
+        form: null,
+        view: {
+          senderId: 11,
+          audience: { type: 'manual', emails: ['a@x.vn'] },
+          content: { mode: 'template', templateId: 5 },
+          firstStepDelay: { delayValue: 0, delayUnit: '', delayFrom: '' },
+          followUps: [{ delayValue: 30, delayUnit: 'minutes', delayFrom: 'start', content: { mode: 'template', templateId: 6 } }],
+        },
+        readOnlyReasons: [{ code: 'delay_from_start', message: 'Đếm từ tin đầu.' }],
+      }));
+      renderEdit();
+      const view = await screen.findByTestId('simple-readonly');
+      await waitFor(() => expect(within(view).getByTestId('simple-readonly-steps')).toHaveTextContent('Tin 1 · Ưu đãi · gửi ngay'));
+      expect(within(view).getByTestId('simple-readonly-steps')).toHaveTextContent('Tin 2 · Mẫu 6 · 30 phút sau tin đầu');
+      await waitFor(() => expect(within(view).getByTestId('simple-readonly-summary')).toHaveTextContent('shop@abc.vn'));
+      expect(within(view).getByTestId('simple-readonly-reasons')).toHaveTextContent('Đếm từ tin đầu.');
+      expect(screen.queryByTestId('simple-edit-save')).not.toBeInTheDocument();
+    });
+
     it('đang chạy → chỉ xem và nói rõ "Chiến dịch đang chạy"', async () => {
       campaignApiService.getSimpleCampaign.mockResolvedValue(getResponse({
         editable: false,

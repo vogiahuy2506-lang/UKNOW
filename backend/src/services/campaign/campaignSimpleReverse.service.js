@@ -220,6 +220,34 @@ function readAudience({ channel, audienceNode, sendConfig }) {
   return null;
 }
 
+/** Lý do chặn mà vẫn cho XEM nội dung (`view`): đều chỉ vì nhịp chờ giữa các tin. */
+const VIEW_ALLOWED_REASON_CODES = new Set([CODE.DELAY_FROM_START, CODE.UNSUPPORTED_DELAY, CODE.FIRST_STEP_DELAY, CODE.TOO_MANY_STEPS]);
+
+/** Giá trị nhịp chờ giữ NGUYÊN như đã lưu (không quy đổi đơn vị / cách đếm). */
+const viewDelay = (step) => {
+  const raw = step?.delayValue;
+  const num = Number(raw ?? 0);
+  return {
+    delayValue: Number.isFinite(num) ? num : asString(raw),
+    delayUnit: asString(step?.delayUnit),
+    delayFrom: asString(step?.delayFrom),
+  };
+};
+
+/** Bản chỉ-xem của chuỗi tin: cùng hình dạng `form`, nhưng tin 1 có thể có nhịp chờ và mỗi tin sau mang nhịp chờ gốc. */
+function buildView({ senderId, audience, steps, templateIds }) {
+  return {
+    senderId,
+    audience,
+    content: { mode: 'template', templateId: templateIds[0] },
+    firstStepDelay: viewDelay(steps[0]),
+    followUps: steps.slice(1).map((step, index) => ({
+      ...viewDelay(step),
+      content: { mode: 'template', templateId: templateIds[index + 1] },
+    })),
+  };
+}
+
 /**
  * Đọc sơ đồ đã lưu ra form của trình từng bước.
  *
@@ -228,6 +256,7 @@ function readAudience({ channel, audienceNode, sendConfig }) {
  * @returns {{
  *   channel: 'email'|'zalo'|'zalo_group'|null,
  *   form: { senderId: number, audience: object, content: object, followUps: object[] } | null,
+ *   view?: object, // chỉ khi `form` null mà mọi lý do đều thuộc nhóm nhịp chờ — để XEM, không để sửa
  *   reasons: Array<{ code: string, message: string }>,
  * }} `form` null khi không đọc ngược được (kèm `reasons`)
  */
@@ -301,10 +330,8 @@ export function readSimpleFormFromGraph(rawNodes, rawConnections) {
     fail(CODE.NOT_SIMPLE, 'Khối gửi chưa có tin nào.');
     return { channel, form: null, reasons };
   }
-  if (steps.length > MAX_STEPS) {
-    fail(CODE.TOO_MANY_STEPS);
-    return { channel, form: null, reasons };
-  }
+  // Quá nhiều tin: vẫn đọc tiếp để dựng `view` (chỉ xem) — bị chặn sửa bởi nhóm nhịp chờ thì vẫn xem được nội dung.
+  if (steps.length > MAX_STEPS) fail(CODE.TOO_MANY_STEPS);
 
   const templateIds = steps.map((step) => toPositiveInt(step?.templateId));
   if (templateIds.some((id) => !id)) fail(CODE.INLINE_CONTENT);
@@ -326,7 +353,12 @@ export function readSimpleFormFromGraph(rawNodes, rawConnections) {
     }
     followUps.push({ delayValue: value, delayUnit: unit, content: { mode: 'template', templateId: templateIds[index] } });
   });
-  if (reasons.length > 0) return { channel, form: null, reasons };
+  if (reasons.length > 0) {
+    // `view` CHỈ khi mọi lý do chặn thuộc nhóm nhịp chờ — nội dung vẫn đọc được nguyên vẹn, chỉ là form chưa biểu diễn được.
+    // Tin soạn thẳng (inline_content) không nằm trong nhóm này → không có view.
+    const viewable = reasons.every((item) => VIEW_ALLOWED_REASON_CODES.has(item.code));
+    return { channel, form: null, reasons, ...(viewable ? { view: buildView({ senderId, audience, steps, templateIds }) } : {}) };
+  }
 
   return {
     channel,

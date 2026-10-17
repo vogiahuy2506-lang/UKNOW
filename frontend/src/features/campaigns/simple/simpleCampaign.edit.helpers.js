@@ -159,6 +159,33 @@ export const buildStateFromServer = (data) => {
   };
 };
 
+/**
+ * `view` của GET (chỉ có khi form null mà chiến dịch chỉ bị chặn vì nhịp chờ) → dữ liệu màn CHỈ XEM.
+ * `state`: trạng thái trình (kênh, tài khoản, người nhận, tin 1) để dựng câu tóm tắt; `steps`: MỌI tin theo thứ tự, mỗi tin mang
+ * nhịp chờ GỐC như đã lưu (số, đơn vị, cách đếm) — không quy đổi, đơn vị lạ giữ nguyên chữ.
+ *
+ * @param {object} data đã `unwrapResponseData`
+ * @returns {{ state: object, steps: Array<{ delayValue: number|string, delayUnit: string, delayFrom: string, content: object }> }|null}
+ */
+export const buildViewFromServer = (data) => {
+  const view = data?.view;
+  if (!view || typeof view !== 'object') return null;
+  const state = buildStateFromServer({ ...data, form: { ...view, followUps: [] } });
+  if (!state) return null;
+  const contentOf = (content) => ({ mode: 'template', templateId: Number(content?.templateId) || null, templateName: '' });
+  const stepOf = (item, content) => ({
+    delayValue: item?.delayValue ?? 0,
+    delayUnit: String(item?.delayUnit || ''),
+    delayFrom: String(item?.delayFrom || ''),
+    content: contentOf(content),
+  });
+  const followUps = Array.isArray(view.followUps) ? view.followUps : [];
+  return {
+    state,
+    steps: [stepOf(view.firstStepDelay, view.content), ...followUps.map((item) => stepOf(item, item?.content))],
+  };
+};
+
 /** Body `PUT /campaigns/:id/simple` = body tạo (đã mang `followUps` khi có chuỗi tin). */
 export const buildEditBody = (state) => buildSimpleCampaignBody(state);
 

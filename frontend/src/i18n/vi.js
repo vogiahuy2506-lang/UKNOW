@@ -1979,6 +1979,23 @@ export default {
         reasonsTitle: 'Vì sao chưa sửa được ở đây',
         openBuilder: 'Mở Sơ đồ khối để sửa',
         followUps: 'Chiến dịch gồm {count} tin.',
+        view: {
+          stepsTitle: 'Các tin trong chiến dịch',
+          stepLine: 'Tin {n} · {name} · {when}',
+          unit: {
+            minutesOne: 'phút', minutesMany: 'phút',
+            hoursOne: 'giờ', hoursMany: 'giờ',
+            daysOne: 'ngày', daysMany: 'ngày',
+          },
+          when: {
+            now: 'gửi ngay',
+            afterStart: '{wait} sau khi bắt đầu',
+            afterPrev: '{wait} sau tin trước',
+            afterFirst: '{wait} sau tin đầu',
+            noWaitPrev: 'ngay sau tin trước',
+            noWaitFirst: 'ngay sau tin đầu',
+          },
+        },
       },
     },
     approval: {

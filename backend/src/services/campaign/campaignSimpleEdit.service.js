@@ -81,6 +81,7 @@ async function rebuildGraphFromForm({ channel, form, ownerId }) {
  *   channel: string,
  *   status: string,
  *   form: object|null,
+ *   view?: object, // chỉ xem: có khi form null vì nhịp chờ (xem readSimpleFormFromGraph)
  *   schedules: Array<{ id: string, scheduleType: string, cronExpression: string, enabled: boolean }>,
  *   diffs?: string[],
  * }>}
@@ -152,6 +153,7 @@ export async function getSimpleEditState({ authUser, campaignId }) {
     channel: read.channel || campaign.campaignType,
     status: campaign.status,
     form: read.form,
+    ...(!read.form && read.view ? { view: read.view } : {}),
     schedules,
     ...(diffs.length > 0 ? { diffs } : {}),
   };
