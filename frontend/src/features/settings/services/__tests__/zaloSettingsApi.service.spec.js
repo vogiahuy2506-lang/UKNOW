@@ -197,4 +197,24 @@ describe('zaloSettingsApiService', () => {
       expect(api.patch).toHaveBeenCalledWith('/zalo/accounts/7/send-speed', { sendSpeed: 'very_fast' });
     });
   });
+
+  describe('updateAutoAcceptFriends', () => {
+    it('gửi PATCH /zalo/accounts/:id/auto-accept-friends với body { enabled: true }', async () => {
+      api.patch.mockResolvedValue({ data: { success: true } });
+
+      await zaloSettingsApiService.updateAutoAcceptFriends('7', true);
+
+      expect(api.patch).toHaveBeenCalledWith('/zalo/accounts/7/auto-accept-friends', { enabled: true });
+    });
+
+    it('tắt: enabled false vẫn phải nằm TRONG body (backend chặn 400 nếu thiếu field)', async () => {
+      api.patch.mockResolvedValue({ data: { success: true } });
+
+      await zaloSettingsApiService.updateAutoAcceptFriends('7', false);
+
+      expect(api.patch).toHaveBeenCalledWith('/zalo/accounts/7/auto-accept-friends', { enabled: false });
+      const [, body] = api.patch.mock.calls[0];
+      expect(Object.prototype.hasOwnProperty.call(body, 'enabled')).toBe(true);
+    });
+  });
 });

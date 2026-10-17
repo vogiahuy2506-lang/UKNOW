@@ -69,6 +69,7 @@ function normalizeAccount(account = {}) {
     updatedAt: account.updatedAt || account.lastSyncAt || null,
     userDailySendLimit: account.userDailySendLimit ?? account.user_daily_send_limit ?? null,
     sendSpeed: account.sendSpeed || 'safe',
+    autoAcceptFriendRequests: account.autoAcceptFriendRequests === true,
   };
 }
 
@@ -96,6 +97,8 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
   const [savingSendLimitIds, setSavingSendLimitIds] = useState([]);
   const [sendSpeedDrafts, setSendSpeedDrafts] = useState({});
   const [savingSendSpeedIds, setSavingSendSpeedIds] = useState([]);
+  // Công tắc "tự động đồng ý lời mời kết bạn": lưu NGAY khi bấm (không có nút Lưu), khoá công tắc của nick đang lưu.
+  const [savingAutoAcceptIds, setSavingAutoAcceptIds] = useState([]);
   const [isBackendReady, setIsBackendReady] = useState(true);
   const [backendModeMessage, setBackendModeMessage] = useState('');
   const [showHelp, setShowHelp] = useState(false);
@@ -330,6 +333,25 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
       toast.error(error.response?.data?.message || t('zaloSettings.sendSpeedSaveFailed'));
     } finally {
       setSavingSendSpeedIds((prev) => prev.filter((id) => id !== account.id));
+    }
+  };
+
+  const handleToggleAutoAccept = async (account) => {
+    if (!isBackendReady) {
+      toast.error(t('zaloSettings.backendNotReady'));
+      return;
+    }
+
+    const next = !account.autoAcceptFriendRequests;
+    setSavingAutoAcceptIds((prev) => [...prev, account.id]);
+    try {
+      await zaloSettingsApiService.updateAutoAcceptFriends(account.id, next);
+      await fetchAccounts();
+      toast.success(t(next ? 'zaloSettings.autoAcceptFriendsEnabledSuccess' : 'zaloSettings.autoAcceptFriendsDisabledSuccess'));
+    } catch (error) {
+      toast.error(error.response?.data?.message || t('zaloSettings.autoAcceptFriendsSaveFailed'));
+    } finally {
+      setSavingAutoAcceptIds((prev) => prev.filter((id) => id !== account.id));
     }
   };
 
@@ -728,6 +750,36 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
                       )}
                       <p className="text-xs text-gray-400 dark:text-dk-text2 mt-0.5">
                         {t('zaloSettings.sendSpeedAppliedNextRunHint')}
+                      </p>
+                    </div>
+                    <div className="mt-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={account.autoAcceptFriendRequests}
+                          aria-labelledby={`auto-accept-friends-label-${account.id}`}
+                          disabled={readOnly || savingAutoAcceptIds.includes(account.id)}
+                          onClick={() => handleToggleAutoAccept(account)}
+                          className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
+                            readOnly || savingAutoAcceptIds.includes(account.id) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                          } ${account.autoAcceptFriendRequests ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dk-strong'}`}
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                              account.autoAcceptFriendRequests ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                          />
+                        </button>
+                        <span
+                          id={`auto-accept-friends-label-${account.id}`}
+                          className="text-sm text-gray-600 dark:text-dk-text select-none"
+                        >
+                          {t('zaloSettings.autoAcceptFriends')}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-400 dark:text-dk-text2 mt-0.5">
+                        {t('zaloSettings.autoAcceptFriendsHint')}
                       </p>
                     </div>
                   </div>

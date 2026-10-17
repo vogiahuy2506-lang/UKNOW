@@ -36,6 +36,12 @@ const zaloSettingsApiService = {
     return api.patch(`/zalo/accounts/${accountId}/send-speed`, { sendSpeed });
   },
 
+  // PLAN_ZALO_TU_DONG_DONG_Y_KET_BAN_2026-10-17: bật/tắt tự động đồng ý lời mời kết bạn của nick. Body PHẢI có `enabled` kiểu
+  // boolean (true/false tường minh) — backend chặn 400 nếu thiếu, không hiểu ngầm thành tắt.
+  updateAutoAcceptFriends(accountId, enabled) {
+    return api.patch(`/zalo/accounts/${accountId}/auto-accept-friends`, { enabled });
+  },
+
   createLoginQr() {
     return api.post('/zalo/accounts/login-qr');
   },
