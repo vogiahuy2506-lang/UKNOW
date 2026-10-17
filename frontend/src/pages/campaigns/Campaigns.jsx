@@ -50,6 +50,7 @@ import useCampaignRunDerivedData from '../../features/campaigns/hooks/useCampaig
 import CampaignRunLogsPanel from '../../features/campaigns/components/CampaignRunLogsPanel';
 import CampaignRunModals from '../../features/campaigns/components/CampaignRunModals';
 import CampaignSchedulesTable from '../../features/campaigns/components/CampaignSchedulesTable';
+import CreateMethodModal from '../../features/campaigns/simple/CreateMethodModal';
 
 /**
  * Xác định chiến dịch có đang chạy hay không dựa trên số lượt chạy đang thực thi.
@@ -101,6 +102,8 @@ const Campaigns = () => {
   const menuButtonRefs = useRef({});
   const [duplicateModal, setDuplicateModal] = useState({ show: false, campaign: null });
   const [showCreateModal, setShowCreateModal] = useState(false);
+  // Hộp chọn cách tạo (Từng bước / Sơ đồ khối) mở từ nút "Tạo"; modal chọn loại ở trên chỉ còn là nhánh "Sơ đồ khối".
+  const [showCreateMethodModal, setShowCreateMethodModal] = useState(false);
   const [isCreatingCampaign, setIsCreatingCampaign] = useState(false);
   const [showShareModal, setShowShareModal] = useState({ show: false, campaign: null });
   const [approveModal, setApproveModal] = useState({ show: false, campaign: null });
@@ -388,6 +391,19 @@ const Campaigns = () => {
     setShowCreateModal(false);
   };
 
+  const openCreateMethodModal = () => setShowCreateMethodModal(true);
+  const closeCreateMethodModal = () => setShowCreateMethodModal(false);
+
+  const handleCreateStepByStep = () => {
+    setShowCreateMethodModal(false);
+    navigate('/app/campaigns/simple');
+  };
+
+  const handleCreateWithBlocks = () => {
+    setShowCreateMethodModal(false);
+    openCreateModal();
+  };
+
   const handleCreateCampaign = async () => {
     if (!createCampaignForm.campaignName.trim()) {
       toast.error(t('campaigns.enterCampaignName'));
@@ -441,7 +457,7 @@ const Campaigns = () => {
         actions={
           activeTab === 'campaigns' && originTab === 'self_created' && (
             <button
-              onClick={openCreateModal}
+              onClick={openCreateMethodModal}
               className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-sm font-bold shadow-sm hover:shadow transition-all duration-150 shrink-0"
             >
               <HiOutlinePlus className="w-4 h-4" />
@@ -668,7 +684,7 @@ const Campaigns = () => {
                 <p className="text-xs text-slate-400 dark:text-dk-muted mt-1 max-w-sm leading-relaxed">{t('campaigns.startFirst')}</p>
                 {originTab === 'self_created' && (
                   <button
-                    onClick={openCreateModal}
+                    onClick={openCreateMethodModal}
                     className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white text-xs font-bold shadow-xs hover:shadow transition-all"
                   >
                     <HiOutlinePlus className="w-4 h-4" />
@@ -1147,6 +1163,13 @@ const Campaigns = () => {
         open={duplicateModal.show}
         onClose={closeDuplicateModal}
         onDone={fetchCampaigns}
+      />
+
+      <CreateMethodModal
+        open={showCreateMethodModal}
+        onClose={closeCreateMethodModal}
+        onStepByStep={handleCreateStepByStep}
+        onBlocks={handleCreateWithBlocks}
       />
 
       {showCreateModal && createPortal(

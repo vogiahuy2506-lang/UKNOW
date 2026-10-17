@@ -75,6 +75,7 @@ async function openCreateModal() {
   renderComponent();
   await screen.findByText('Chiến dịch cũ');
   fireEvent.click(screen.getByRole('button', { name: viTranslations.campaigns.create }));
+  fireEvent.click(await screen.findByTestId('create-method-blocks'));
   await screen.findByPlaceholderText(viTranslations.campaigns.campaignNamePlaceholder);
 }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import Campaigns from '../Campaigns';
 import { useAuthStore } from '../../../stores/authStore';
@@ -366,6 +366,7 @@ describe('Campaigns — Trang gộp Quản lý & Vận hành chiến dịch', ()
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Tạo' }));
+    fireEvent.click(await screen.findByTestId('create-method-blocks'));
     const nameInput = await screen.findByPlaceholderText(viTranslations.campaigns.campaignNamePlaceholder);
     fireEvent.change(nameInput, { target: { value: 'Chiến dịch Telegram thử' } });
     fireEvent.click(await screen.findByRole('button', { name: 'Telegram' }));
@@ -391,6 +392,7 @@ describe('Campaigns — Trang gộp Quản lý & Vận hành chiến dịch', ()
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Tạo' }));
+    fireEvent.click(await screen.findByTestId('create-method-blocks'));
     const nameInput = await screen.findByPlaceholderText(viTranslations.campaigns.campaignNamePlaceholder);
     fireEvent.change(nameInput, { target: { value: 'Chiến dịch Telegram nhóm thử' } });
     fireEvent.click(await screen.findByRole('button', { name: 'Telegram nhóm' }));
@@ -415,6 +417,7 @@ describe('Campaigns — Trang gộp Quản lý & Vận hành chiến dịch', ()
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Tạo' }));
+    fireEvent.click(await screen.findByTestId('create-method-blocks'));
     const nameInput = await screen.findByPlaceholderText(viTranslations.campaigns.campaignNamePlaceholder);
     fireEvent.change(nameInput, { target: { value: 'Chiến dịch WhatsApp thử' } });
     fireEvent.click(await screen.findByRole('button', { name: 'WhatsApp' }));
@@ -437,6 +440,7 @@ describe('Campaigns — Trang gộp Quản lý & Vận hành chiến dịch', ()
       expect(screen.getByText('Chiến dịch Chào thu')).toBeInTheDocument();
     });
     fireEvent.click(screen.getByRole('button', { name: 'Tạo' }));
+    fireEvent.click(await screen.findByTestId('create-method-blocks'));
     await screen.findByPlaceholderText(viTranslations.campaigns.campaignNamePlaceholder);
     expect(await screen.findByRole('button', { name: 'Telegram' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'WhatsApp' })).not.toBeInTheDocument();
@@ -449,6 +453,7 @@ describe('Campaigns — Trang gộp Quản lý & Vận hành chiến dịch', ()
       expect(screen.getByText('Chiến dịch Chào thu')).toBeInTheDocument();
     });
     fireEvent.click(screen.getByRole('button', { name: 'Tạo' }));
+    fireEvent.click(await screen.findByTestId('create-method-blocks'));
     await screen.findByPlaceholderText(viTranslations.campaigns.campaignNamePlaceholder);
     expect(screen.queryByRole('button', { name: 'WhatsApp' })).not.toBeInTheDocument();
   });
@@ -460,7 +465,59 @@ describe('Campaigns — Trang gộp Quản lý & Vận hành chiến dịch', ()
       expect(screen.getByText('Chiến dịch Chào thu')).toBeInTheDocument();
     });
     fireEvent.click(screen.getByRole('button', { name: 'Tạo' }));
+    fireEvent.click(await screen.findByTestId('create-method-blocks'));
     await screen.findByPlaceholderText(viTranslations.campaigns.campaignNamePlaceholder);
     expect(screen.queryByRole('button', { name: 'Telegram nhóm' })).not.toBeInTheDocument();
+  });
+  // PLAN_TAO_CHIEN_DICH_TUNG_BUOC PR-2: nút Tạo mở hộp chọn cách tạo; "Sơ đồ khối" mới là modal chọn loại cũ.
+  describe('lối vào: hộp chọn cách tạo', () => {
+    const renderWithRoutes = (entry = '/app/campaigns') => render(
+      <MemoryRouter initialEntries={[entry]}>
+        <Routes>
+          <Route path="/app/campaigns" element={<Campaigns />} />
+          <Route path="/app/campaigns/simple" element={<div>TRANG-TUNG-BUOC</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    it('bấm Tạo mở hộp 2 thẻ (Từng bước - Dễ, Sơ đồ khối - Nâng cao), CHƯA mở modal chọn loại', async () => {
+      renderWithRoutes();
+      await screen.findByText('Chiến dịch Chào thu');
+      fireEvent.click(screen.getByRole('button', { name: 'Tạo' }));
+      const modal = await screen.findByTestId('create-method-modal');
+      expect(within(modal).getByTestId('create-method-step')).toHaveTextContent('Dễ — khuyên dùng');
+      expect(within(modal).getByTestId('create-method-blocks')).toHaveTextContent('Nâng cao');
+      expect(screen.queryByPlaceholderText(viTranslations.campaigns.campaignNamePlaceholder)).not.toBeInTheDocument();
+    });
+
+    it('thẻ "Từng bước" chuyển sang /app/campaigns/simple', async () => {
+      renderWithRoutes();
+      await screen.findByText('Chiến dịch Chào thu');
+      fireEvent.click(screen.getByRole('button', { name: 'Tạo' }));
+      fireEvent.click(await screen.findByTestId('create-method-step'));
+      expect(await screen.findByText('TRANG-TUNG-BUOC')).toBeInTheDocument();
+    });
+
+    it('thẻ "Sơ đồ khối" đóng hộp và mở đúng modal chọn loại cũ', async () => {
+      renderWithRoutes();
+      await screen.findByText('Chiến dịch Chào thu');
+      fireEvent.click(screen.getByRole('button', { name: 'Tạo' }));
+      fireEvent.click(await screen.findByTestId('create-method-blocks'));
+      expect(await screen.findByPlaceholderText(viTranslations.campaigns.campaignNamePlaceholder)).toBeInTheDocument();
+      expect(screen.queryByTestId('create-method-modal')).not.toBeInTheDocument();
+    });
+
+    it('trạng thái rỗng: nút tạo đầu tiên cũng mở hộp chọn cách tạo', async () => {
+      campaignApiService.getCampaigns.mockResolvedValue({ data: { data: { items: [], pagination: { page: 1, total: 0, totalPages: 1 } } } });
+      renderWithRoutes();
+      fireEvent.click(await screen.findByRole('button', { name: viTranslations.campaigns.createFirst }));
+      expect(await screen.findByTestId('create-method-modal')).toBeInTheDocument();
+    });
+
+    it('điều hướng mang cờ openCreateCampaignModal vẫn mở thẳng modal chọn loại (không qua hộp chọn)', async () => {
+      renderWithRoutes({ pathname: '/app/campaigns', state: { openCreateCampaignModal: true } });
+      expect(await screen.findByPlaceholderText(viTranslations.campaigns.campaignNamePlaceholder)).toBeInTheDocument();
+      expect(screen.queryByTestId('create-method-modal')).not.toBeInTheDocument();
+    });
   });
 });
