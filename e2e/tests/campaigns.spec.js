@@ -5,9 +5,19 @@ test.describe('Campaigns UI', () => {
     await page.goto('/app/campaigns');
     await expect(page.getByRole('heading', { name: 'Chiến dịch', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Tạo', exact: true }).click();
+    // Từ 17/10/2026 (tạo chiến dịch từng bước) nút Tạo mở hộp chọn cách tạo trước; "Sơ đồ khối" mới tới modal cũ.
+    await page.getByTestId('create-method-blocks').click();
     await expect(page.getByRole('heading', { name: 'Tạo chiến dịch mới' })).toBeVisible();
     await page.getByRole('button', { name: 'Hủy' }).first().click();
     await expect(page.getByRole('heading', { name: 'Tạo chiến dịch mới' })).not.toBeVisible();
+  });
+
+  test('nút Tạo → "Từng bước" mở trang tạo chiến dịch từng bước', async ({ page }) => {
+    await page.goto('/app/campaigns');
+    await page.getByRole('button', { name: 'Tạo', exact: true }).click();
+    await page.getByTestId('create-method-step').click();
+    await page.waitForURL(/\/app\/campaigns\/simple/, { timeout: 15_000 });
+    await expect(page.getByRole('heading', { name: 'Bạn muốn gửi qua đâu?' })).toBeVisible();
   });
 });
 
@@ -17,6 +27,7 @@ test.describe.serial('Tạo + kích hoạt chiến dịch', () => {
   test('tạo email → vào builder', async ({ page }) => {
     await page.goto('/app/campaigns');
     await page.getByRole('button', { name: 'Tạo', exact: true }).click();
+    await page.getByTestId('create-method-blocks').click();
     await page.getByPlaceholder('Nhập tên chiến dịch...').fill(name);
     await page.getByRole('button', { name: 'Tạo và thiết kế' }).click();
     await page.waitForURL(/\/app\/campaigns\/\d+\/builder/, { timeout: 25_000 });
