@@ -64,10 +64,9 @@ export default function ChannelUnavailableModal({ channel, info, onClose }) {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const previouslyFocused = document.activeElement;
-    const timer = setTimeout(() => {
-      const first = dialogRef.current?.querySelector(FOCUSABLE);
-      (first || dialogRef.current)?.focus();
-    }, 50);
+    // Focus vào KHUNG hộp (tabIndex -1), không vào thẻ đầu: thẻ khuyên dùng đã viền cam, thêm vòng focus thành hai lớp.
+    // Bấm Tab vẫn đi vào từng thẻ (bẫy focus bên dưới).
+    const timer = setTimeout(() => dialogRef.current?.focus(), 50);
     const onKeyDown = (event) => {
       if (event.key === 'Escape') {
         onCloseRef.current?.();
@@ -145,7 +144,8 @@ export default function ChannelUnavailableModal({ channel, info, onClose }) {
       hint = t('channelUnavailable.noMessagesHint', { channel: name });
       options.push({ ...upgradeOption('channelUnavailable.upgradeDescChannel'), primary: true });
     } else {
-      hint = t('channelUnavailable.notInPlanHint', { channel: name });
+      // Nhân viên không có lựa chọn nào (chỉ liên hệ chủ) → bỏ vế "Chọn một cách để dùng ngay".
+      hint = t(isEmployee ? 'channelUnavailable.notInPlanHintEmployee' : 'channelUnavailable.notInPlanHint', { channel: name });
       options.push({ key: 'buySlot', title: t('channelUnavailable.buySlotTitle', { channel: name }), desc: t('channelUnavailable.buySlotDesc', { channel: name }), to: TOPUP_PATH, primary: true });
       options.push(upgradeOption('channelUnavailable.upgradeDescChannel'));
     }

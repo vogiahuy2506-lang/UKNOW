@@ -8195,6 +8195,7 @@ export default {
     lockedBadge: 'Not available',
     unlockTitle: 'Unlock {channel}',
     notInPlanHint: 'Your current plan does not include {channel}. Pick a way to start using it now.',
+    notInPlanHintEmployee: 'Your current plan does not include {channel}.',
     noMessagesHint: 'Your current plan has no {channel} sends.',
     keepHistory: 'Past conversations and reports are kept as they are.',
     buySlotTitle: 'Buy more {channel} accounts',

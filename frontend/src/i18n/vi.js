@@ -8207,6 +8207,7 @@ export default {
     lockedBadge: 'Chưa dùng được',
     unlockTitle: 'Mở khoá {channel}',
     notInPlanHint: 'Gói hiện tại chưa có {channel}. Chọn một cách để dùng ngay.',
+    notInPlanHintEmployee: 'Gói hiện tại chưa có {channel}.',
     noMessagesHint: 'Gói hiện tại chưa có lượt gửi {channel}.',
     keepHistory: 'Lịch sử hội thoại và báo cáo cũ vẫn được giữ nguyên.',
     buySlotTitle: 'Mua thêm tài khoản {channel}',
