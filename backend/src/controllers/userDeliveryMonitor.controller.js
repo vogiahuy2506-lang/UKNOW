@@ -22,6 +22,18 @@ export async function overview(req, res) {
   }
 }
 
+export async function campaignLatestRun(req, res) {
+  try {
+    const data = await userDeliveryMonitorService.getCampaignLatestRun({
+      userId: resolveWorkspaceOwnerId(req.user),
+      campaignId: req.params.campaignId,
+    });
+    res.json({ success: true, data });
+  } catch (err) {
+    handleError(res, err);
+  }
+}
+
 export async function runFailures(req, res) {
   try {
     const data = await userDeliveryMonitorService.getRunFailures({

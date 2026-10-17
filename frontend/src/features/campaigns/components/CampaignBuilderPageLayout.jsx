@@ -16,7 +16,7 @@ import {
   ConfirmModal,
   FlowCanvas,
 } from './CampaignBuilderLayout';
-import CampaignBuilderToolbar from './CampaignBuilderToolbar';
+import CampaignBuilderToolbar, { FlowRunControls } from './CampaignBuilderToolbar';
 import NodeConfigModal from './NodeConfigModal';
 import { nodeConfigs } from './CampaignBuilderFlowNodes';
 import { Link } from 'react-router-dom';
@@ -236,7 +236,7 @@ const CampaignBuilderPageLayout = ({
   onLogResizeStart,
   runLogHeight,
   logPanelRef,
-  runLogs,
+  runLogs = [],
   selectedRunLogId,
   setSelectedRunLogId,
   logListWidth,
@@ -282,6 +282,9 @@ const CampaignBuilderPageLayout = ({
   // hiển thị category rỗng / gây hiểu nhầm.
   // P12 — gói không có kênh Zalo: cũng ẩn section Zalo (select_zalo_account, get_all_friends/groups chỉ phục vụ Zalo).
   const showZaloSection = zaloEnabled && normalizedCampaignType !== 'email';
+  const showingSettings = activeTab === 'settings' && Boolean(settingsPanel);
+  // Log chạy thử chỉ có ở tab Sơ đồ khối và chỉ khi có gì để xem (đã chạy thử, hoặc đang chạy).
+  const hasTestRunLog = !showingSettings && (runLogs.length > 0 || isRunning);
 
   return (
     <div className="h-full min-h-0 w-full min-w-0 overflow-hidden flex flex-col bg-white dark:bg-dk-inset">
@@ -327,10 +330,8 @@ const CampaignBuilderPageLayout = ({
           onOpenSchedule={onOpenSchedule}
           canUseServerRunActions={canUseServerRunActions}
           serverRunActionsDisabledHint={serverRunActionsDisabledHint}
-          onRunCampaign={onRunCampaign}
-          isRunning={isRunning}
-          onStopRun={onStopRun}
           onOpenNameModal={onOpenNameModal}
+          isDirty={isDirty}
           onOpenShare={onOpenShare}
           canShare={canShare}
           onOpenDuplicate={onOpenDuplicate}
@@ -339,13 +340,17 @@ const CampaignBuilderPageLayout = ({
     </div>
 
     {viewTabs && (
-      <div className="bg-white dark:bg-dk-surface border-b border-gray-200 dark:border-dk-border px-2.5 sm:px-4 py-2" data-testid="campaign-builder-view-tabs">
+      <div className="bg-white dark:bg-dk-surface border-b border-gray-200 dark:border-dk-border px-2.5 sm:px-4 py-2 flex flex-wrap items-center justify-between gap-2" data-testid="campaign-builder-view-tabs">
         {viewTabs}
+        {/* Chạy thử / Dừng chỉ thuộc tab Sơ đồ khối (chạy trong trình duyệt, không gửi thật). */}
+        {!showingSettings && (
+          <FlowRunControls onRunCampaign={onRunCampaign} isRunning={isRunning} onStopRun={onStopRun} />
+        )}
       </div>
     )}
 
     <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden flex-col">
-      {activeTab === 'settings' && settingsPanel ? settingsPanel : (
+      {showingSettings ? settingsPanel : (
       <div className="flex flex-1 min-h-0 min-w-0 h-full overflow-hidden">
         <div
           className="bg-white dark:bg-dk-surface border-r border-gray-200 dark:border-dk-border flex flex-col min-h-0 h-full overflow-hidden"
@@ -655,7 +660,7 @@ const CampaignBuilderPageLayout = ({
         </div>
       )}
 
-      {showRunLogs && (
+      {hasTestRunLog && showRunLogs && (
         <div
           className={`h-2 w-full cursor-row-resize transition-colors ${
             isResizingLog ? 'bg-primary-100 dark:bg-primary-950/60' : 'hover:bg-primary-50 dark:hover:bg-primary-950/30'
@@ -668,14 +673,16 @@ const CampaignBuilderPageLayout = ({
           <div className="mx-auto h-px w-full bg-gray-200 dark:bg-dk-raised" />
         </div>
       )}
+      {hasTestRunLog && (
       <div
+        data-testid="test-run-log"
         className={`border-t border-gray-200 dark:border-dk-border bg-white dark:bg-dk-surface px-3 py-2 flex-none flex flex-col min-h-0 w-full min-w-0 overflow-hidden ${
           showRunLogs ? '' : 'h-12'
         }`}
         style={showRunLogs ? { height: `${runLogHeight}px` } : undefined}
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="font-medium text-gray-900 dark:text-dk-text">{t('campaignBuilder.campaignRunLog')}</div>
+          <div className="font-medium text-gray-900 dark:text-dk-text">{t('campaignBuilder.testRunLogTitle', { count: runLogs.length })}</div>
           <div className="flex flex-wrap items-center gap-2 justify-end">
             <button
               onClick={() => setShowRunLogs((prev) => !prev)}
@@ -712,6 +719,7 @@ const CampaignBuilderPageLayout = ({
           </div>
         )}
       </div>
+      )}
     </div>
 
     <CampaignNameModal

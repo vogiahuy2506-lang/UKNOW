@@ -9,6 +9,8 @@ import { buildEstimateView, describeEstimateDuration, formatEstimateDateTime } f
 import { formatCampaignDateTime } from '../utils/campaignDateTime.helpers';
 import buildSettingsOrder from './buildSettingsOrder';
 import describeNodeSettings from './describeNodeSettings';
+import { formatVnDayMonthTime, formatVnResumeTime, getWaitReasonI18nKey } from '../utils/deliveryMonitor.helpers';
+import useCampaignLatestRun from './useCampaignLatestRun';
 import useRunRemainingEstimate from './useRunRemainingEstimate';
 import useSettingsAccountLookups from './useSettingsAccountLookups';
 
@@ -46,6 +48,56 @@ const RunningEstimate = ({ runId, t }) => {
   );
 };
 
+const KNOWN_RUN_STATUSES = ['running', 'completed', 'stopped', 'failed'];
+
+/**
+ * Mục "Lần chạy gần nhất": trạng thái, lúc bắt đầu, đã gửi / chưa gửi được / dự kiến. Số lấy từ
+ * `GET /delivery-monitor/campaigns/:id/latest-run` (backend đếm qua sendStats) — KHÔNG đọc campaign_runs.successful_sends/failed_sends.
+ */
+const LatestRun = ({ campaignId, refreshKey, onOpenDeliveryMonitor, t }) => {
+  const { status, run } = useCampaignLatestRun(campaignId, refreshKey);
+  if (status === 'idle' || status === 'loading') {
+    return <p className={`text-sm ${MUTED}`} data-testid="settings-latest-run-loading">{t('campaignSettings.latestRun.loading')}</p>;
+  }
+  if (status === 'error') {
+    return <p className={`text-sm ${MUTED}`} data-testid="settings-latest-run-error">{t('campaignSettings.latestRun.unavailable')}</p>;
+  }
+  if (!run) {
+    return <p className="text-sm text-gray-800 dark:text-dk-text" data-testid="settings-latest-run-none">{t('campaignSettings.latestRun.none')}</p>;
+  }
+  const runStatus = String(run.status || '').toLowerCase();
+  const statusText = run.waitingUntil
+    ? t('userDeliveryMonitor.runStatus.waiting', {
+      reason: t(getWaitReasonI18nKey(run.waitingReason)),
+      time: formatVnResumeTime(run.waitingUntil),
+    })
+    : (KNOWN_RUN_STATUSES.includes(runStatus) ? t(`userDeliveryMonitor.runStatus.${runStatus}`) : (run.status || '-'));
+  return (
+    <div className="space-y-1" data-testid="settings-latest-run">
+      <p className="font-medium text-gray-900 dark:text-dk-text" data-testid="settings-latest-run-status">{statusText}</p>
+      <p className={`text-xs ${MUTED}`}>{t('campaignSettings.latestRun.startedAt', { time: formatVnDayMonthTime(run.startedAt) })}</p>
+      <p className="text-sm text-gray-800 dark:text-dk-text" data-testid="settings-latest-run-counts">
+        {run.planned != null
+          ? t('campaignSettings.latestRun.sentOfPlanned', { sent: run.sent, planned: run.planned })
+          : t('campaignSettings.latestRun.sentOnly', { sent: run.sent })}
+        {' · '}
+        {t('campaignSettings.latestRun.failed', { failed: run.failed })}
+      </p>
+      <a
+        href="/app/delivery-monitor"
+        onClick={(event) => {
+          event.preventDefault();
+          onOpenDeliveryMonitor();
+        }}
+        data-testid="settings-latest-run-link"
+        className="inline-block text-sm font-medium text-primary-600 hover:underline dark:text-primary-400"
+      >
+        {t('campaignSettings.latestRun.viewDetail')}
+      </a>
+    </div>
+  );
+};
+
 /** Ước tính của bản ĐÃ LƯU (chiến dịch không chạy) + dòng cảnh báo khi đang có thay đổi chưa lưu. */
 const SavedEstimate = ({ campaignId, isDirty, refreshKey, t }) => {
   const { status, estimate } = useCampaignEstimate({ campaignId, enabled: true, refreshKey });
@@ -76,6 +128,8 @@ const OverviewCard = ({
   lastSavedTime,
   hasNodes,
   runningRunId,
+  latestRunKey,
+  onOpenDeliveryMonitor,
   schedules,
   describeSchedule,
   onOpenSchedule,
@@ -161,6 +215,15 @@ const OverviewCard = ({
           )}
         </dd>
 
+        {!isNewCampaign && (
+          <>
+            <dt className={MUTED}>{t('campaignSettings.label.latestRun')}</dt>
+            <dd className="min-w-0" data-testid="settings-overview-latest-run">
+              <LatestRun campaignId={campaignId} refreshKey={latestRunKey} onOpenDeliveryMonitor={onOpenDeliveryMonitor} t={t} />
+            </dd>
+          </>
+        )}
+
         {!isNewCampaign && hasNodes && (
           <>
             <dt className={MUTED}>{runningRunId ? t('campaignSettings.label.remaining') : t('campaignSettings.label.estimate')}</dt>
@@ -240,6 +303,8 @@ const NodeCard = ({ entry, nodes, lookups, registry, canEdit, onEditNode, nodeTi
  *
  * @param {object} props
  * @param {(node: object) => void} props.onEditNode mở `NodeConfigModal` của khối (cùng đường `handleNodeConfigSave`)
+ * @param {string|number|null} [props.latestRunKey] đổi giá trị (vd id + trạng thái lượt mới nhất) → mục "Lần chạy gần nhất" tải lại
+ * @param {() => void} props.onOpenDeliveryMonitor mở trang Giám sát gửi tin
  * @param {() => void} props.onGoFlow chuyển sang tab Sơ đồ khối (nút ở trạng thái rỗng)
  * @param {boolean} [props.canEdit=true] false (chỉ có quyền xem) → ẩn nút Sửa / Lên lịch
  */
@@ -257,6 +322,8 @@ export default function CampaignSettingsPanel({
   zaloTemplates = [],
   emailSettings = [],
   runningRunId = null,
+  latestRunKey = null,
+  onOpenDeliveryMonitor = () => {},
   schedules = [],
   describeSchedule = () => ({ pattern: '', nextRun: null, statusLabel: '' }),
   onOpenSchedule = () => {},
@@ -305,6 +372,8 @@ export default function CampaignSettingsPanel({
           lastSavedTime={lastSavedTime}
           hasNodes={hasNodes}
           runningRunId={runningRunId}
+          latestRunKey={latestRunKey}
+          onOpenDeliveryMonitor={onOpenDeliveryMonitor}
           schedules={schedules}
           describeSchedule={describeSchedule}
           onOpenSchedule={onOpenSchedule}

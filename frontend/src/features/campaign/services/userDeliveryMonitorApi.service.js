@@ -9,6 +9,10 @@ const userDeliveryMonitorApiService = {
     return api.get(`/delivery-monitor/runs/${runId}/failures`);
   },
   // Thời gian CÒN LẠI của một lượt đang chạy — gọi lười theo từng lượt (có thể đọc Google Sheet ở backend).
+  // Lượt chạy mới nhất của MỘT chiến dịch (mục "Lần chạy gần nhất" ở tab Thiết lập) — số gửi / lỗi qua sendStats ở backend.
+  getCampaignLatestRun(campaignId) {
+    return api.get(`/delivery-monitor/campaigns/${campaignId}/latest-run`);
+  },
   getRunEstimate(runId) {
     return api.get(`/delivery-monitor/runs/${runId}/estimate`);
   },

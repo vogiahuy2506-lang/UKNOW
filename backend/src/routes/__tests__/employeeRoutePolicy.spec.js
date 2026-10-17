@@ -184,6 +184,7 @@ jest.unstable_mockModule('../../controllers/scheduledPlanChange.controller.js', 
 // PR-4b — trang Giám sát gửi tin: route dùng `import * as ctrl` (export có tên) nên giả lập tường minh, không qua Proxy.
 jest.unstable_mockModule('../../controllers/userDeliveryMonitor.controller.js', () => ({
   overview: (req, res) => res.json({ success: true, controller: 'userDeliveryMonitor', method: 'overview' }),
+  campaignLatestRun: (req, res) => res.json({ success: true, controller: 'userDeliveryMonitor', method: 'campaignLatestRun' }),
   runFailures: (req, res) => res.json({ success: true, controller: 'userDeliveryMonitor', method: 'runFailures' }),
   runEstimate: (req, res) => res.json({ success: true, controller: 'userDeliveryMonitor', method: 'runEstimate' }),
 }));
@@ -783,6 +784,7 @@ describe('Employee Route Policy & RBAC Enforcement Matrix', () => {
   describe('15. Delivery monitor (/api/delivery-monitor)', () => {
     const endpoints = [
       '/api/delivery-monitor/overview',
+      '/api/delivery-monitor/campaigns/3/latest-run',
       '/api/delivery-monitor/runs/7/failures',
       '/api/delivery-monitor/runs/7/estimate',
     ];

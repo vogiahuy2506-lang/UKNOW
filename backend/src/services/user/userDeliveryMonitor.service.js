@@ -167,6 +167,49 @@ export async function getUserDeliveryMonitorOverview({ userId, accessibleZaloAcc
 }
 
 /**
+ * Lượt chạy mới nhất của MỘT chiến dịch, cùng hình dạng một phần tử `runs` của overview. Số đã gửi / chưa gửi được đi qua
+ * sendStats.getRunTotals (KHÔNG đọc campaign_runs.successful_sends/failed_sends).
+ *
+ * @param {{ userId: number, campaignId: number|string }} input `userId` = chủ tài khoản
+ * @returns {Promise<{ run: object|null }>} `run = null` khi chiến dịch chưa chạy lần nào
+ */
+export async function getCampaignLatestRun({ userId, campaignId } = {}) {
+  const ownerId = toPositiveInt(userId);
+  const safeCampaignId = toPositiveInt(campaignId);
+  if (ownerId == null || safeCampaignId == null) {
+    throw httpError(400, 'Tham số không hợp lệ');
+  }
+  const row = await userDeliveryMonitorRepository.findLatestRunForCampaign({ ownerId, campaignId: safeCampaignId });
+  if (!row) return { run: null };
+
+  const runId = Number(row.id);
+  const totals = await sendStats.getRunTotals({ ownerId }, [runId]);
+  let sent = 0;
+  let failed = 0;
+  for (const t of totals) {
+    if (t.runId !== runId) continue;
+    sent += t.sent;
+    failed += t.failed;
+  }
+  const waiting = row.status === 'running' ? resolveWaiting(row, Date.now()) : null;
+  return {
+    run: {
+      runId,
+      campaignId: Number(row.id_campaign),
+      campaignName: row.campaign_name,
+      campaignType: row.campaign_type,
+      status: row.status,
+      startedAt: toIso(row.started_at),
+      waitingUntil: waiting?.until ?? null,
+      waitingReason: waiting?.reason ?? null,
+      sent,
+      failed,
+      planned: resolvePlanned(row, sent),
+    },
+  };
+}
+
+/**
  * Người nhận CHƯA GỬI ĐƯỢC của một lượt chạy (trang Giám sát gửi tin, bấm số "Chưa gửi được" ở hàng lượt chạy).
  * Mỗi người/bước một dòng (người thử 3 lần rồi gửi được thì KHÔNG có mặt), lần lỗi mới nhất trước; `aborted` (tin chưa
  * từng gửi: hoãn / bỏ qua / lượt bị dừng) không phải lỗi. Số phần tử (khi chưa chạm trần 200) đúng bằng `failed` của lượt

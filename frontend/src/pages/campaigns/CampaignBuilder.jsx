@@ -1270,6 +1270,8 @@ const CampaignBuilder = () => {
           zaloTemplates={zaloTemplates}
           emailSettings={emailSettings}
           runningRunId={latestRun?.status === 'running' ? latestRun.id : null}
+          latestRunKey={latestRun ? `${latestRun.id}:${latestRun.status}` : 'none'}
+          onOpenDeliveryMonitor={() => navigate('/app/delivery-monitor')}
           schedules={campaignSchedules}
           describeSchedule={describeScheduleForSettings}
           onOpenSchedule={() => requestServerAction('schedule')}

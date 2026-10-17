@@ -17,6 +17,7 @@ const userRepository = {
   listRunningRuns: jest.fn(),
   findOwnedRun: jest.fn(),
   findOwnedRunForEstimate: jest.fn(),
+  findLatestRunForCampaign: jest.fn(),
 };
 const ledgerRepository = { summarizeRunProgress: jest.fn() };
 const estimateForCampaign = jest.fn();
@@ -491,5 +492,49 @@ describe('getRunEstimate — thời gian CÒN LẠI của lượt đang chạy (
     userRepository.findOwnedRunForEstimate.mockResolvedValue(ownedRun());
     estimateForCampaign.mockResolvedValue(null);
     await expect(service.getRunEstimate({ userId: 5, runId: 9, now: NOW })).resolves.toMatchObject({ estimate: null });
+  });
+});
+
+describe('getCampaignLatestRun — mục "Lần chạy gần nhất" của trang chi tiết chiến dịch', () => {
+  it('chưa chạy lần nào → run null, KHÔNG gọi module đếm', async () => {
+    userRepository.findLatestRunForCampaign.mockResolvedValue(null);
+    await expect(service.getCampaignLatestRun({ userId: 39, campaignId: '3' })).resolves.toEqual({ run: null });
+    expect(userRepository.findLatestRunForCampaign).toHaveBeenCalledWith({ ownerId: 39, campaignId: 3 });
+    expect(sendStats.getRunTotals).not.toHaveBeenCalled();
+  });
+
+  it('số đã gửi / chưa gửi được lấy từ sendStats.getRunTotals (cộng các kênh của lượt), không từ bộ đếm campaign_runs', async () => {
+    userRepository.findLatestRunForCampaign.mockResolvedValue(
+      runRow({ id: '7', total_recipients: 50, successful_sends: 999, failed_sends: 888 })
+    );
+    sendStats.getRunTotals.mockResolvedValue([
+      { runId: 7, channel: 'email', sent: 20, failed: 2 },
+      { runId: 7, channel: 'zalo_personal', sent: 10, failed: 1 },
+    ]);
+    const { run } = await service.getCampaignLatestRun({ userId: 39, campaignId: 3 });
+    expect(sendStats.getRunTotals).toHaveBeenCalledWith({ ownerId: 39 }, [7]);
+    expect(run).toMatchObject({ runId: 7, campaignId: 3, status: 'completed', sent: 30, failed: 3, planned: 50 });
+  });
+
+  it('lượt đang chờ → trả mốc và lý do chờ; lượt đã xong thì bỏ qua khoá chờ còn sót', async () => {
+    const until = minutesFromNow(30);
+    userRepository.findLatestRunForCampaign.mockResolvedValue(
+      runRow({ status: 'running', deferred_until: until, deferred_reason: 'quiet_hours' })
+    );
+    const waiting = (await service.getCampaignLatestRun({ userId: 1, campaignId: 3 })).run;
+    expect(waiting.waitingUntil).toBe(until);
+    expect(waiting.waitingReason).toBeTruthy();
+
+    userRepository.findLatestRunForCampaign.mockResolvedValue(
+      runRow({ status: 'completed', deferred_until: until, deferred_reason: 'quiet_hours' })
+    );
+    const done = (await service.getCampaignLatestRun({ userId: 1, campaignId: 3 })).run;
+    expect(done.waitingUntil).toBeNull();
+  });
+
+  it('tham số sai → 400, không chạm DB', async () => {
+    await expect(service.getCampaignLatestRun({ userId: 1, campaignId: 'abc' })).rejects.toMatchObject({ status: 400 });
+    await expect(service.getCampaignLatestRun({ userId: 0, campaignId: 3 })).rejects.toMatchObject({ status: 400 });
+    expect(userRepository.findLatestRunForCampaign).not.toHaveBeenCalled();
   });
 });

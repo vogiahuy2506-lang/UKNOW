@@ -12,6 +12,7 @@ router.use(authMiddleware);
 router.use(requirePermission('campaigns_view'));
 
 router.get('/overview', ctrl.overview);
+router.get('/campaigns/:campaignId/latest-run', ctrl.campaignLatestRun);
 router.get('/runs/:runId/failures', ctrl.runFailures);
 router.get('/runs/:runId/estimate', ctrl.runEstimate);
 

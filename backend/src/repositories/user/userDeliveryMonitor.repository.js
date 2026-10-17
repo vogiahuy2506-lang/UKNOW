@@ -127,6 +127,38 @@ class UserDeliveryMonitorRepository {
     );
     return rows[0] || null;
   }
+
+  /**
+   * Lượt chạy MỚI NHẤT của MỘT chiến dịch (thuộc chủ này), cùng hình dạng một hàng với `listRecentRuns`. Mục "Lần chạy
+   * gần nhất" ở trang chi tiết chiến dịch cần lượt của chính chiến dịch đó — danh sách 10 lượt của cả chủ có thể không
+   * chứa nó. Lượt đang chạy ưu tiên trước (cùng quy ước với listRecentRuns). Trả null nếu chưa chạy lần nào / không thuộc chủ.
+   *
+   * @param {{ ownerId: number, campaignId: number }} input
+   * @returns {Promise<object|null>}
+   */
+  async findLatestRunForCampaign({ ownerId, campaignId }) {
+    const { rows } = await db.query(
+      `SELECT cr.id,
+              cr.id_campaign,
+              c.campaign_name,
+              c.campaign_type,
+              cr.status,
+              cr.started_at::timestamptz AS started_at,
+              cr.total_recipients,
+              ${runCountersReliableSql('cr')} AS counters_reliable,
+              ${runDeferredUntilSql('cr')} AS deferred_until,
+              ${runDeferredReasonSql('cr')} AS deferred_reason,
+              cr.run_metadata->>'emailRateLimitAt' AS email_rate_limit_at
+       FROM campaign_runs cr
+       JOIN campaigns c ON c.id = cr.id_campaign
+       WHERE cr.id_campaign = $1
+         AND COALESCE(c.workspace_owner_id, c.id_user) = $2
+       ORDER BY (cr.status = 'running') DESC, cr.started_at DESC, cr.id DESC
+       LIMIT 1`,
+      [campaignId, ownerId]
+    );
+    return rows[0] || null;
+  }
 }
 
 export default new UserDeliveryMonitorRepository();

@@ -3,9 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../../../../i18n';
 import CampaignSettingsPanel from '../CampaignSettingsPanel';
 
-const { mockSavedEstimate, mockRunEstimate } = vi.hoisted(() => ({
+const { mockSavedEstimate, mockRunEstimate, mockLatestRun } = vi.hoisted(() => ({
   mockSavedEstimate: vi.fn(),
   mockRunEstimate: vi.fn(),
+  mockLatestRun: vi.fn(),
 }));
 
 // Chỉ phần tra tên tài khoản gọi API → giả; ước tính giả để kiểm tra đúng nhánh nào được dùng.
@@ -14,6 +15,7 @@ vi.mock('../useSettingsAccountLookups', () => ({
 }));
 vi.mock('../../hooks/useCampaignEstimate', () => ({ default: (...args) => mockSavedEstimate(...args) }));
 vi.mock('../useRunRemainingEstimate', () => ({ default: (...args) => mockRunEstimate(...args) }));
+vi.mock('../useCampaignLatestRun', () => ({ default: (...args) => mockLatestRun(...args) }));
 
 const node = (id, nodeType, config = {}, label = '', type = 'task') => ({ id, type, data: { label, nodeType, config } });
 const edge = (source, target, label) => ({ id: `${source}-${target}`, source, target, ...(label ? { label } : {}) });
@@ -60,6 +62,8 @@ beforeEach(() => {
   mockSavedEstimate.mockReturnValue({ status: 'idle', estimate: null });
   mockRunEstimate.mockReset();
   mockRunEstimate.mockReturnValue({ status: 'idle', continuous: false, view: null });
+  mockLatestRun.mockReset();
+  mockLatestRun.mockReturnValue({ status: 'ready', run: null });
 });
 
 describe('CampaignSettingsPanel — danh sách khối', () => {
@@ -229,5 +233,71 @@ describe('CampaignSettingsPanel — ước tính', () => {
     mockRunEstimate.mockReturnValue({ status: 'ready', continuous: true, view: null });
     renderPanel({ runningRunId: 88 });
     expect(screen.getByTestId('settings-run-estimate-continuous')).toBeInTheDocument();
+  });
+});
+
+describe('CampaignSettingsPanel — Lần chạy gần nhất', () => {
+  const RUN = { runId: 9, campaignId: 391, status: 'completed', startedAt: '2026-10-17T03:05:00.000Z', waitingUntil: null, waitingReason: null, sent: 42, failed: 3, planned: 50 };
+
+  it('chưa chạy lần nào → "Chưa chạy lần nào", không có liên kết Giám sát', () => {
+    renderPanel();
+    expect(mockLatestRun).toHaveBeenCalledWith('391', null);
+    expect(screen.getByTestId('settings-latest-run-none')).toHaveTextContent('Chưa chạy lần nào');
+    expect(screen.queryByTestId('settings-latest-run-link')).not.toBeInTheDocument();
+  });
+
+  it('chiến dịch mới (chưa lưu) → không có mục này', () => {
+    renderPanel({ campaignId: null, isNewCampaign: true });
+    expect(screen.queryByTestId('settings-overview-latest-run')).not.toBeInTheDocument();
+  });
+
+  it('lượt đã xong: trạng thái, lúc bắt đầu (giờ VN), đã gửi / dự kiến, chưa gửi được — đúng số hook trả (nguồn sendStats)', () => {
+    mockLatestRun.mockReturnValue({ status: 'ready', run: RUN });
+    renderPanel();
+    expect(screen.getByTestId('settings-latest-run-status')).toHaveTextContent('Xong');
+    expect(screen.getByTestId('settings-latest-run')).toHaveTextContent('Bắt đầu 17/10 10:05');
+    expect(screen.getByTestId('settings-latest-run-counts')).toHaveTextContent('Đã gửi 42 / 50 · Chưa gửi được 3');
+  });
+
+  it('không biết số cần gửi (planned null) → chỉ "Đã gửi N"', () => {
+    mockLatestRun.mockReturnValue({ status: 'ready', run: { ...RUN, planned: null } });
+    renderPanel();
+    expect(screen.getByTestId('settings-latest-run-counts')).toHaveTextContent(/^Đã gửi 42 · Chưa gửi được 3$/);
+  });
+
+  it('lượt đang chạy', () => {
+    mockLatestRun.mockReturnValue({ status: 'ready', run: { ...RUN, status: 'running' } });
+    renderPanel();
+    expect(screen.getByTestId('settings-latest-run-status')).toHaveTextContent('Đang gửi');
+  });
+
+  it('lượt đang chờ: nêu lý do và tới khi nào', () => {
+    mockLatestRun.mockReturnValue({
+      status: 'ready',
+      run: { ...RUN, status: 'running', waitingUntil: new Date(Date.now() + 3600 * 1000).toISOString(), waitingReason: 'quiet_hours' },
+    });
+    renderPanel();
+    expect(screen.getByTestId('settings-latest-run-status')).toHaveTextContent(/^Đang chờ: đang trong khung giờ yên lặng đến (\d{2}\/\d{2} )?\d{2}:\d{2}$/);
+  });
+
+  it('lượt đã dừng', () => {
+    mockLatestRun.mockReturnValue({ status: 'ready', run: { ...RUN, status: 'stopped' } });
+    renderPanel();
+    expect(screen.getByTestId('settings-latest-run-status')).toHaveTextContent('Đã dừng');
+  });
+
+  it('liên kết "Xem chi tiết ở Giám sát gửi tin" gọi onOpenDeliveryMonitor', () => {
+    mockLatestRun.mockReturnValue({ status: 'ready', run: RUN });
+    const onOpenDeliveryMonitor = vi.fn();
+    renderPanel({ onOpenDeliveryMonitor });
+    fireEvent.click(screen.getByRole('link', { name: 'Xem chi tiết ở Giám sát gửi tin' }));
+    expect(onOpenDeliveryMonitor).toHaveBeenCalledTimes(1);
+  });
+
+  it('lỗi tải → nói chưa tải được, không bịa số', () => {
+    mockLatestRun.mockReturnValue({ status: 'error', run: null });
+    renderPanel();
+    expect(screen.getByTestId('settings-latest-run-error')).toBeInTheDocument();
+    expect(screen.queryByTestId('settings-latest-run-counts')).not.toBeInTheDocument();
   });
 });

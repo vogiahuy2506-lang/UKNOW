@@ -84,11 +84,23 @@ describe('findOwnedRun', () => {
   });
 });
 
+describe('findLatestRunForCampaign', () => {
+  it('lọc theo chiến dịch VÀ phạm vi chủ trong cùng WHERE, lượt mới nhất (running trước), LIMIT 1; null khi chưa chạy', async () => {
+    expect(await repository.findLatestRunForCampaign({ ownerId: 39, campaignId: 5 })).toBeNull();
+    const [sql, params] = mockQuery.mock.calls[0];
+    expect(flat(sql)).toContain('WHERE cr.id_campaign = $1 AND COALESCE(c.workspace_owner_id, c.id_user) = $2');
+    expect(flat(sql)).toContain("ORDER BY (cr.status = 'running') DESC, cr.started_at DESC, cr.id DESC LIMIT 1");
+    expect(flat(sql)).toContain('cr.started_at::timestamptz AS started_at');
+    expect(params).toEqual([5, 39]);
+  });
+});
+
 describe('lỗi truy vấn KHÔNG bị nuốt (khác safeQuery: cột sai phải nổ, không thành số 0 im lặng)', () => {
   it.each([
     ['listRecentRuns', () => repository.listRecentRuns({ ownerId: 1, limit: 10 })],
     ['listRunningRuns', () => repository.listRunningRuns({ ownerId: 1 })],
     ['findOwnedRun', () => repository.findOwnedRun({ ownerId: 1, runId: 2 })],
+    ['findLatestRunForCampaign', () => repository.findLatestRunForCampaign({ ownerId: 1, campaignId: 2 })],
   ])('%s ném lại lỗi cột không tồn tại (42703)', async (_ten, call) => {
     mockQuery.mockRejectedValue(Object.assign(new Error('column does not exist'), { code: '42703' }));
     await expect(call()).rejects.toMatchObject({ code: '42703' });
