@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import MainLayout from '../MainLayout';
 
@@ -28,7 +28,7 @@ vi.mock('../../stores/authStore', () => ({
 
 vi.mock('../../hooks/useIsMobile', () => ({ default: () => false }));
 vi.mock('../../components/layout/admin/Sidebar', () => ({ default: () => null }));
-vi.mock('../../components/layout/admin/Header', () => ({ default: () => null }));
+vi.mock('../../components/layout/admin/Header', () => ({ default: () => <div data-testid="global-header" /> }));
 vi.mock('../../features/ai/AiChatbot', () => ({ default: () => null }));
 vi.mock('../../components/layout/CreditWarningBanner', () => ({
   default: () => <div data-testid="credit-banner" />,
@@ -50,26 +50,34 @@ describe('MainLayout — trình dựng chiến dịch là full-screen editor (is
     vi.clearAllMocks();
   });
 
-  it('/app/campaigns/123/builder → <main> không padding, không banner credit', () => {
+  it('/app/campaigns/123/builder → <main> không padding, không bo góc viền, ẩn header toàn cục', () => {
     renderAt('/app/campaigns/123/builder');
 
     const main = screen.getByRole('main');
     expect(main.className.split(' ')).not.toContain('p-2');
+    expect(main.className.split(' ')).toContain('rounded-none');
+    expect(main.className.split(' ')).toContain('border-0');
     expect(screen.queryByTestId('credit-banner')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('global-header')).not.toBeInTheDocument();
   });
 
   it('/app/campaigns/new → cũng là trình dựng, cùng luật', () => {
     renderAt('/app/campaigns/new');
 
-    expect(screen.getByRole('main').className.split(' ')).not.toContain('p-2');
+    const main = screen.getByRole('main');
+    expect(main.className.split(' ')).not.toContain('p-2');
+    expect(main.className.split(' ')).toContain('rounded-none');
+    expect(main.className.split(' ')).toContain('border-0');
     expect(screen.queryByTestId('credit-banner')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('global-header')).not.toBeInTheDocument();
   });
 
-  it('/app/campaigns (danh sách) → trang thường: có padding và banner credit', () => {
+  it('/app/campaigns (danh sách) → trang thường: có padding, có header và banner credit', () => {
     renderAt('/app/campaigns');
 
     expect(screen.getByRole('main').className.split(' ')).toContain('p-2');
     expect(screen.getByTestId('credit-banner')).toBeInTheDocument();
+    expect(screen.getByTestId('global-header')).toBeInTheDocument();
   });
 });
 
@@ -123,3 +131,61 @@ describe('MainLayout — các trang soạn quản trị là editor tràn màn (i
   );
 });
 
+describe('MainLayout — khi mở modal soạn template (template-editor:change)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('mở modal template → ẩn header, đóng modal → hiện lại header', () => {
+    renderAt('/app/settings/templates');
+
+    // Mặc định ở trang templates: header hiển thị
+    expect(screen.getByTestId('global-header')).toBeInTheDocument();
+
+    // Mở modal template editor
+    act(() => {
+      window.dispatchEvent(new CustomEvent('template-editor:change', { detail: { open: true } }));
+    });
+    expect(screen.queryByTestId('global-header')).not.toBeInTheDocument();
+
+    // Đóng modal template editor
+    act(() => {
+      window.dispatchEvent(new CustomEvent('template-editor:change', { detail: { open: false } }));
+    });
+    expect(screen.getByTestId('global-header')).toBeInTheDocument();
+  });
+
+  it('sidebar đang MỞ: mở modal thu sidebar, đóng modal mở lại (không đổi hẳn lựa chọn lưu localStorage)', () => {
+    localStorage.setItem('founder_ai_sidebar_open', 'true');
+    renderAt('/app/settings/templates');
+    const sidebarW = () => document.documentElement.style.getPropertyValue('--sidebar-w');
+    expect(sidebarW()).toBe('220px');
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('template-editor:change', { detail: { open: true } }));
+    });
+    expect(sidebarW()).toBe('44px');
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('template-editor:change', { detail: { open: false } }));
+    });
+    expect(sidebarW()).toBe('220px');
+    expect(localStorage.getItem('founder_ai_sidebar_open')).toBe('true');
+    localStorage.removeItem('founder_ai_sidebar_open');
+  });
+
+  it('sidebar đang THU: đóng modal vẫn giữ thu', () => {
+    localStorage.setItem('founder_ai_sidebar_open', 'false');
+    renderAt('/app/settings/templates');
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('template-editor:change', { detail: { open: true } }));
+    });
+    act(() => {
+      window.dispatchEvent(new CustomEvent('template-editor:change', { detail: { open: false } }));
+    });
+    expect(document.documentElement.style.getPropertyValue('--sidebar-w')).toBe('44px');
+    expect(localStorage.getItem('founder_ai_sidebar_open')).toBe('false');
+    localStorage.removeItem('founder_ai_sidebar_open');
+  });
+});

@@ -163,6 +163,14 @@ const EmailTemplateEditorModal = ({
     setEditorTab('content');
   };
 
+  // Báo MainLayout modal mở/đóng: MainLayout ẩn header toàn cục, thu sidebar khi mở và trả lại khi đóng.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('template-editor:change', { detail: { open: Boolean(showEditorModal) } }));
+    return () => {
+      window.dispatchEvent(new CustomEvent('template-editor:change', { detail: { open: false } }));
+    };
+  }, [showEditorModal]);
+
   const handleClose = () => {
     if (typeof onClose === 'function') {
       onClose();
@@ -176,7 +184,7 @@ const EmailTemplateEditorModal = ({
 
   return createPortal(
     <div
-      className="fixed z-[9999] bg-white dark:bg-dk-bg shadow-xl border-l border-gray-200 dark:border-dk-border flex flex-col overflow-hidden"
+      className="fixed z-[9999] bg-white dark:bg-dk-bg shadow-xl border-l border-gray-200 dark:border-dk-border flex flex-col overflow-hidden transition-all duration-300"
       style={{ left: 'var(--sidebar-w, 0px)', right: 0, top: 0, bottom: 0 }}
     >
       {/* 52px Topbar chuẩn thiết kế AdminEditorShell / LandingCanvasTopbar */}
@@ -196,9 +204,10 @@ const EmailTemplateEditorModal = ({
             <HiOutlinePencil className="w-4 h-4" />
           </span>
           <div className="min-w-0">
-            <div className="text-sm font-semibold text-gray-900 dark:text-dk-text truncate">
+            {/* Giữ là heading (h2): trình đọc màn hình và E2E templates.spec tìm modal theo vai trò heading. */}
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-dk-text truncate">
               {editingTemplate ? t('emailTemplateEditor.editTemplate') : t('emailTemplateEditor.createTemplate')}
-            </div>
+            </h2>
             <div className="text-[11px] text-gray-500 dark:text-dk-text2 truncate hidden sm:block">
               {t('emailTemplateEditor.fillInfoAndDesign')}
             </div>

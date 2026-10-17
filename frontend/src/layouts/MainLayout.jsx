@@ -180,13 +180,45 @@ const MainLayout = ({ children = null }) => {
   // Trang soạn bài viết hướng dẫn (/admin/help-articles/new, /admin/help-articles/:id): giấu sidebar để tối đa không gian cho 2 cột soạn + xem trước
   const isHelpArticleEditor = /^\/admin\/help-articles\/[^/]+$/.test(location.pathname);
 
+  // Lắng nghe khi modal soạn template (EmailTemplateEditorModal) mở/đóng
+  const [isTemplateEditorOpen, setIsTemplateEditorOpen] = useState(false);
+  useEffect(() => {
+    const handler = (e) => {
+      setIsTemplateEditorOpen(Boolean(e?.detail?.open));
+    };
+    window.addEventListener('template-editor:change', handler);
+    return () => window.removeEventListener('template-editor:change', handler);
+  }, []);
+
+  useEffect(() => {
+    setIsTemplateEditorOpen(false);
+  }, [location.pathname]);
+
+  // Mở modal soạn template thì thu sidebar cho rộng chỗ soạn; đóng modal thì trả sidebar về như trước.
+  // sidebarOpen lưu localStorage — thu mà không trả là đổi hẳn lựa chọn của người dùng cho mọi trang sau.
+  const sidebarOpenBeforeTemplateEditorRef = useRef(null);
+  useEffect(() => {
+    if (isTemplateEditorOpen) {
+      sidebarOpenBeforeTemplateEditorRef.current = sidebarOpen;
+      setSidebarOpen(false);
+    } else if (sidebarOpenBeforeTemplateEditorRef.current !== null) {
+      if (sidebarOpenBeforeTemplateEditorRef.current) setSidebarOpen(true);
+      sidebarOpenBeforeTemplateEditorRef.current = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ chạy khi modal mở/đóng, không theo sidebarOpen
+  }, [isTemplateEditorOpen]);
+
   // Các trang soạn tràn màn: ẩn Header toàn cục, kéo topbar lên sát đỉnh
+  // - Trình dựng chiến dịch (/app/campaigns/new, /app/campaigns/:id/builder)
   // - Landing Canvas
   // - Form Editor (/app/forms/new, /app/forms/:id/edit)
+  // - Template Editor (khi mở modal soạn mẫu tin nhắn / email)
   // - Trang soạn quản trị: Tuỳ chỉnh landing, Email chào mừng, hoặc Trung tâm thông báo khi ở tab Soạn mẫu
   const shouldHideHeader =
+    isFullLayout ||
     isLandingCanvas ||
     isFormEditor ||
+    isTemplateEditorOpen ||
     (/^\/admin\/(landing-customizer|welcome-email)\/?$/.test(location.pathname)) ||
     isNotificationCenterTemplates;
   const shouldHideSidebar = isHelpArticleEditor;
@@ -274,8 +306,8 @@ const MainLayout = ({ children = null }) => {
     return () => window.removeEventListener('app:collapse-sidebar', handleCollapseSidebar);
   }, [setSidebarOpen]);
 
-  const isBuilderPage = isFullLayout || isLandingCanvas || isFormEditor || isAdminEditor || isHelpArticleEditor;
-  const isSpecialPage = isFullLayout || isInboxPage || isAiHomePage || isChatbotStudio || isLandingCanvas || isAdminEditor || isFormEditor || isHelpArticleEditor;
+  const isBuilderPage = isFullLayout || isLandingCanvas || isFormEditor || isAdminEditor || isHelpArticleEditor || isTemplateEditorOpen;
+  const isSpecialPage = isFullLayout || isInboxPage || isAiHomePage || isChatbotStudio || isLandingCanvas || isAdminEditor || isFormEditor || isHelpArticleEditor || isTemplateEditorOpen;
 
   // Persist sidebar width for full-screen editors
   useEffect(() => {
@@ -401,7 +433,7 @@ const MainLayout = ({ children = null }) => {
         <main
           ref={mainContentRef}
           className={`flex-1 min-w-0 overflow-auto bg-white dark:bg-dk-inset ${
-            isLandingCanvas || isAdminEditor || isFormEditor ? 'rounded-none border-0 shadow-none' : 'rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_12px_rgba(15,23,42,0.04)] border border-gray-200/70 dark:border-dk-border/80 text-slate-900 dark:text-dk-text'
+            isFullLayout || isLandingCanvas || isAdminEditor || isFormEditor || isTemplateEditorOpen ? 'rounded-none border-0 shadow-none' : 'rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_12px_rgba(15,23,42,0.04)] border border-gray-200/70 dark:border-dk-border/80 text-slate-900 dark:text-dk-text'
           } relative ${isSpecialPage ? '' : 'p-2 md:p-3'}`}
         >
           <div className="relative h-full flex flex-col min-h-0">
