@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../../i18n';
 import PlanSection from './PlanSection';
@@ -322,5 +322,37 @@ describe('PlanSection — P10 hạn mức tin Telegram/WhatsApp', () => {
     });
     expect(limitOf('accountProfileModal.whatsappMessages')).toBe('null');
     expect(usedOf('accountProfileModal.whatsappMessages')).toBe('0');
+  });
+});
+
+describe('PlanSection — thẻ gói gọn, chi tiết gói trong hộp (user 17/10/2026)', () => {
+  const features = ['Không giới hạn Credits AI', { vi: 'Xuất hóa đơn VAT', en: 'VAT invoice' }];
+
+  it('"/tháng" nằm ngay sau giá (cùng dòng giá), câu thuế ở dòng riêng', () => {
+    renderPlan({ activeBillingPeriod: 'monthly', activePlanPrice: '9999000' });
+    const price = screen.getByTestId('plan-price');
+    expect(within(price).getByText('9.999.000 ₫')).toBeInTheDocument();
+    expect(within(price).getByText('/tháng')).toBeInTheDocument();
+    expect(within(price).queryByText('pricing.taxNoteKct')).not.toBeInTheDocument();
+    expect(screen.getByText('pricing.taxNoteKct')).toBeInTheDocument();
+  });
+
+  it('trang KHÔNG bày dãy tính năng và ô nhân viên tối đa; bấm tên gói mới hiện trong hộp chi tiết', () => {
+    renderPlan({ activePlanFeatures: features, planMaxEmployees: 30, activePlanPrice: '9999000' });
+    expect(screen.queryByText('Không giới hạn Credits AI')).not.toBeInTheDocument();
+    expect(screen.queryByText('accountProfileModal.maxEmployees')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('plan-detail')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('plan-detail-open'));
+    const dialog = screen.getByTestId('plan-detail');
+    expect(within(dialog).getByText('Không giới hạn Credits AI')).toBeInTheDocument();
+    expect(within(dialog).getByText('Xuất hóa đơn VAT')).toBeInTheDocument();
+    expect(within(dialog).getByTestId('plan-detail-employees')).toHaveTextContent('accountProfileModal.maxEmployees');
+  });
+
+  it('gói không có danh sách tính năng → hộp báo trống, không vỡ', () => {
+    renderPlan({ activePlanFeatures: [] });
+    fireEvent.click(screen.getByTestId('plan-detail-open'));
+    expect(within(screen.getByTestId('plan-detail')).getByText('accountProfileModal.planDetailEmpty')).toBeInTheDocument();
   });
 });

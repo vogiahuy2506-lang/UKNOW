@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   HiOutlineBadgeCheck,
   HiOutlineMail,
@@ -7,8 +7,10 @@ import {
   HiOutlineTag,
   HiOutlineExclamation,
   HiOutlineSparkles,
+  HiOutlineChevronRight,
 } from 'react-icons/hi';
 import { useI18n } from '../../i18n';
+import Modal from '../../components/Modal';
 import { getSubscriptionUiStatus, isUnlimitedPlanLimit } from '../../utils/subscriptionStatus.util.js';
 import { isPlaceholderPlan } from '../../utils/placeholderPlan.util.js';
 import UsageBar from './UsageBar';
@@ -69,6 +71,8 @@ function unwrapFeature(feat, locale) {
 /** Plan + usage section shown for user_admin. */
 export default function PlanSection({ data, t }) {
   const { locale } = useI18n();
+  // Tính năng của gói + số nhân viên tối đa không bày ra trang nữa — bấm tên gói để xem trong hộp chi tiết (user 17/10/2026).
+  const [showPlanDetail, setShowPlanDetail] = useState(false);
   const hasPlan = !!data?.activePlanId;
   const planLabel = data?.activePlanName || data?.activePlanCode || (hasPlan ? `#${data.activePlanId}` : '');
   const isYearly = data?.activeBillingPeriod === 'yearly';
@@ -81,6 +85,9 @@ export default function PlanSection({ data, t }) {
     ? data?.activePlanPrice
     : (isYearly ? data?.activePlanPriceYearly : data?.activePlanPrice);
   const isPlaceholder = isPlaceholderPlan({ code: data?.activePlanCode, isCustom: data?.activePlanIsCustom });
+  // "/tháng" | "/năm" đứng ngay sau giá (chỉ khi có giá thật > 0).
+  const hasPricePeriod = !isPlaceholder && Number(displayPrice) > 0;
+  const pricePeriodLabel = isYearly ? t('accountProfileModal.perYear') : t('accountProfileModal.perMonth');
 
   const features = useMemo(() => {
     if (!data?.activePlanFeatures) return [];
@@ -141,10 +148,18 @@ export default function PlanSection({ data, t }) {
       <div className="flex items-start justify-between gap-4 rounded-2xl border border-amber-200/80 bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-white px-6 py-5 shadow-xs dark:border-amber-500/30 dark:bg-gradient-to-br dark:from-amber-500/15 dark:via-orange-500/10 dark:to-dk-raised">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold bg-primary-600 text-white rounded-full shadow-xs">
+            <button
+              type="button"
+              onClick={() => setShowPlanDetail(true)}
+              aria-haspopup="dialog"
+              title={t('accountProfileModal.viewPlanDetail')}
+              data-testid="plan-detail-open"
+              className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold bg-primary-600 text-white rounded-full shadow-xs hover:bg-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2"
+            >
               <HiOutlineSparkles className="w-3.5 h-3.5 text-amber-200" />
               {planLabel}
-            </span>
+              <HiOutlineChevronRight className="w-3.5 h-3.5 opacity-80" aria-hidden="true" />
+            </button>
             {data.activePlanCode && (
               <span className="text-xs text-primary-700 bg-primary-50 px-2 py-0.5 rounded-md border border-primary-200/50 font-mono dark:bg-primary-950/40 dark:text-orange-400 dark:border-orange-500/30">
                 {data.activePlanCode}
@@ -154,26 +169,59 @@ export default function PlanSection({ data, t }) {
               {isYearly ? t('accountProfileModal.billingYearly') : t('accountProfileModal.billingMonthly')}
             </span>
           </div>
-          <p className="text-2xl font-extrabold text-gray-900 dark:text-dk-text mt-2 tracking-tight">
-            {formatPrice(displayPrice, t, isPlaceholder)}
+          <p className="mt-2 flex flex-wrap items-baseline gap-x-1.5" data-testid="plan-price">
+            <span className="text-2xl font-extrabold text-gray-900 dark:text-dk-text tracking-tight">
+              {formatPrice(displayPrice, t, isPlaceholder)}
+            </span>
+            {hasPricePeriod && (
+              <span className="text-sm font-medium text-gray-500 dark:text-dk-text2">{pricePeriodLabel}</span>
+            )}
           </p>
-          {!isPlaceholder && displayPrice > 0 && (
-            <p className="text-xs text-gray-500 dark:text-dk-text mt-0.5 flex items-center gap-1">
-              <span>{isYearly ? t('accountProfileModal.perYear') : t('accountProfileModal.perMonth')}</span>
-              <span>·</span>
-              <span>{t('pricing.taxNoteKct')}</span>
-            </p>
+          {hasPricePeriod && (
+            <p className="text-xs text-gray-500 dark:text-dk-text2 mt-0.5">{t('pricing.taxNoteKct')}</p>
           )}
         </div>
-        {data.planMaxEmployees !== null && (
-          <div className="text-right shrink-0 bg-white/90 backdrop-blur-sm px-4 py-2.5 rounded-xl border border-amber-100 shadow-2xs dark:bg-dk-surface/90 dark:border-amber-500/20">
-            <p className="text-[11px] font-medium text-gray-500 dark:text-dk-text2 uppercase tracking-wider">{t('accountProfileModal.maxEmployees')}</p>
-            <p className="text-sm font-bold text-gray-900 dark:text-dk-text mt-0.5">
-              {data.planMaxEmployees === -1 ? t('accountProfileModal.unlimited') : t('accountProfileModal.people', { count: data.planMaxEmployees })}
-            </p>
-          </div>
-        )}
       </div>
+
+      <Modal
+        isOpen={showPlanDetail}
+        onClose={() => setShowPlanDetail(false)}
+        title={t('accountProfileModal.planDetailTitle', { name: planLabel })}
+        size="md"
+      >
+        <div className="space-y-4" data-testid="plan-detail">
+          <p className="flex flex-wrap items-baseline gap-x-1.5">
+            <span className="text-xl font-extrabold text-gray-900 dark:text-dk-text">{formatPrice(displayPrice, t, isPlaceholder)}</span>
+            {hasPricePeriod && <span className="text-sm text-gray-500 dark:text-dk-text2">{pricePeriodLabel}</span>}
+            <span className="text-sm text-gray-500 dark:text-dk-text2">
+              · {isYearly ? t('accountProfileModal.billingYearly') : t('accountProfileModal.billingMonthly')}
+            </span>
+          </p>
+          {data.planMaxEmployees !== null && data.planMaxEmployees !== undefined && (
+            <p className="text-sm text-gray-700 dark:text-dk-text" data-testid="plan-detail-employees">
+              {t('accountProfileModal.maxEmployees')}:{' '}
+              <span className="font-semibold">
+                {data.planMaxEmployees === -1 ? t('accountProfileModal.unlimited') : t('accountProfileModal.people', { count: data.planMaxEmployees })}
+              </span>
+            </p>
+          )}
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-dk-text2">{t('accountProfileModal.planDetailIncludes')}</p>
+            {features.length > 0 ? (
+              <ul className="mt-2 space-y-2" data-testid="plan-detail-features">
+                {features.map((feat, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm text-gray-700 dark:text-dk-text">
+                    <HiOutlineBadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500 dark:text-emerald-400" aria-hidden="true" />
+                    <span>{unwrapFeature(feat, locale)}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-sm text-gray-500 dark:text-dk-text2">{t('accountProfileModal.planDetailEmpty')}</p>
+            )}
+          </div>
+        </div>
+      </Modal>
 
       {/* Expiry date */}
       {data.subscriptionExpiresAt && (() => {
@@ -231,21 +279,6 @@ export default function PlanSection({ data, t }) {
           </div>
         );
       })()}
-
-      {/* Features */}
-      {features.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {features.map((feat, i) => (
-            <span
-              key={i}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs bg-white text-gray-700 rounded-lg border border-gray-200/70 shadow-2xs dark:bg-dk-surface dark:text-dk-text dark:border-dk-border"
-            >
-              <HiOutlineBadgeCheck className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
-              {unwrapFeature(feat, locale)}
-            </span>
-          ))}
-        </div>
-      )}
 
       {/* Tin nhắn trong kỳ — mọi số lấy từ ĐÚNG hàm của cổng chặn gửi tin, cùng kỳ 30 ngày từ ngày kích hoạt gói */}
       <div className="rounded-2xl border border-gray-200/80 bg-white p-5 space-y-3.5 shadow-xs dark:border-dk-border dark:bg-dk-surface" data-testid="messages-usage">

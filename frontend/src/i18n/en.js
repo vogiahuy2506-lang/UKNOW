@@ -9443,6 +9443,11 @@ export default {
     billingMonthly: 'Monthly',
     billingYearly: 'Yearly',
     maxEmployees: 'Max Employees',
+    // Plan detail dialog (click the plan name on the Plan & Billing page).
+    viewPlanDetail: 'View plan details',
+    planDetailTitle: '{name} plan',
+    planDetailIncludes: 'Included',
+    planDetailEmpty: 'This plan has no feature list yet.',
     unlimited: 'Unlimited',
     people: '{count} people',
     // "Messages this period" block: counts follow the plan's billing period (30 days from activation), same functions as the send limiter.

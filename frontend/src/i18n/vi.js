@@ -9452,6 +9452,11 @@ export default {
     billingMonthly: 'Theo tháng',
     billingYearly: 'Theo năm',
     maxEmployees: 'Nhân viên tối đa',
+    // Hộp chi tiết gói (bấm tên gói ở trang Gói & Thanh toán).
+    viewPlanDetail: 'Xem chi tiết gói',
+    planDetailTitle: 'Gói {name}',
+    planDetailIncludes: 'Gói gồm',
+    planDetailEmpty: 'Gói này chưa có danh sách tính năng.',
     unlimited: 'Không giới hạn',
     people: '{count} người',
     // Khối "Tin nhắn trong kỳ": số đếm theo KỲ của gói (30 ngày từ ngày kích hoạt), cùng hàm với cổng chặn gửi tin.
