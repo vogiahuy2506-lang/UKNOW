@@ -615,6 +615,15 @@ describe('previewSimpleCampaign — không ghi DB', () => {
     expect(result.issues).toEqual([expect.objectContaining({ code: 'recipient_count_unknown', severity: 'warning' })]);
   });
 
+  it('Zalo nhóm (đã biết số nhóm) → KHÔNG báo "chưa đếm được số người nhận" dù bộ ước tính trả cảnh báo đó', async () => {
+    mockBuildConfirmationView.mockResolvedValue(readyView({
+      estimate: { perNode: [{ nodeId: 'n', recipients: 0 }], warnings: [{ code: 'recipient_count_unknown', params: { reason: 'error' } }] },
+    }));
+    const result = await previewSimpleCampaign({ body: groupBody(), authUser: user });
+    expect(result.recipientCount).toBe(2);
+    expect(result.issues.map((issue) => issue.code)).not.toContain('recipient_count_unknown');
+  });
+
   it('lỗi dữ liệu của thẻ xác nhận → readyToCreate false + issues blocking có câu tiếng Việt (không ném)', async () => {
     mockBuildConfirmationView.mockResolvedValue(readyView({
       readyToCreate: false,

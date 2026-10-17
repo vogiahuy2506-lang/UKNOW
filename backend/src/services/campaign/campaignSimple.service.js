@@ -610,7 +610,9 @@ export async function previewSimpleCampaign({ body, authUser, now = new Date() }
   const blockingIssues = limitIssue ? [...issues, limitIssue] : issues;
   const issuesOut = [...blockingIssues];
   const unknownCount = (estimate?.warnings || []).some((warning) => warning.code === 'recipient_count_unknown');
-  if (unknownCount) {
+  // Đã biết chắc số người nhận (danh sách nhập sẵn / khách đã lưu / số nhóm Zalo) thì không báo "chưa đếm được": bộ ước tính
+  // không đếm thành viên nhóm Zalo nên luôn trả cảnh báo này cho Zalo nhóm dù câu tóm tắt đã nói "1 nhóm" (thử prod 17/10).
+  if (unknownCount && input.recipientCountHint == null) {
     issuesOut.push({
       code: 'recipient_count_unknown',
       apiCode: 'RECIPIENT_COUNT_UNKNOWN',
