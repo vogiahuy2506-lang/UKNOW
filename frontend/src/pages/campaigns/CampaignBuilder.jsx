@@ -47,6 +47,7 @@ import useCampaignRunController from '../../features/campaigns/hooks/useCampaign
 import useCampaignBuilderLayoutState from '../../features/campaigns/hooks/useCampaignBuilderLayoutState';
 import useLatestRunPause from '../../features/campaigns/hooks/useLatestRunPause';
 import { fetchZaloAccountOptions } from '../../features/campaigns/utils/nodeConfigModal.helpers';
+import { isNodeConfigFormUnchanged } from '../../features/campaigns/utils/nodeConfigUnchanged';
 import { formatCampaignDateTime } from '../../features/campaigns/utils/campaignDateTime.helpers';
 import toast from 'react-hot-toast';
 import CampaignViewTabs from '../../features/campaigns/components/CampaignViewTabs';
@@ -791,6 +792,13 @@ const CampaignBuilder = () => {
 
   const handleNodeConfigSave = (formData) => {
     if (nodeToConfig) {
+      // Bấm Lưu mà không đổi gì → đóng hộp, KHÔNG ghi đè config (hộp luôn ghi cả bộ trường mặc định → "Chưa lưu" oan).
+      if (isNodeConfigFormUnchanged(nodeToConfig, formData, campaignType)) {
+        setShowConfigModal(false);
+        setNodeToConfig(null);
+        toast.success(t('campaignBuilderExtra.nodeConfigSaved'));
+        return;
+      }
       console.log('Saving node config:', {
         nodeType: nodeToConfig.data?.nodeType,
         interestedSelectedCustomerIds: formData.interestedSelectedCustomerIds,
