@@ -49,6 +49,9 @@ test.describe.serial('Tạo + kích hoạt chiến dịch', () => {
 
     // Vào builder từ tên chiến dịch.
     await row.getByRole('link', { name }).click();
+    // Từ 17/10/2026 mở chiến dịch vào tab Từng bước trước (chiến dịch rỗng node thì tab đó chỉ xem) → sang tab Sơ đồ khối.
+    await page.waitForURL(/\/app\/campaigns\/\d+\/simple/, { timeout: 25_000 });
+    await page.getByTestId('campaign-tab-builder').click();
     await page.waitForURL(/\/app\/campaigns\/\d+\/builder/, { timeout: 25_000 });
 
     // Bấm "Chạy ngay" trong trình dựng -> mở modal xác nhận.

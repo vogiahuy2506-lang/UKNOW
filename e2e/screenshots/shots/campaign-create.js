@@ -33,9 +33,11 @@ async function openBuilder(page) {
   await page.goto('/app/campaigns');
   await page.waitForTimeout(1500);
 
-  const row = page.locator('a[href*="/builder"], tr').filter({ hasText: 'Chào mừng Khách hàng mới' }).first();
-  const link = await row.locator('a[href*="/builder"]').first().getAttribute('href').catch(() => null);
-  await page.goto(link || '/app/campaigns/1/builder');
+  // Link mở chiến dịch giờ là /app/campaigns/:id (vào tab Từng bước) — lấy id rồi mở thẳng tab Sơ đồ khối.
+  const row = page.locator('tr').filter({ hasText: 'Chào mừng Khách hàng mới' }).first();
+  const href = await row.locator('a[href^="/app/campaigns/"]').first().getAttribute('href').catch(() => null);
+  const idMatch = String(href || '').match(/\/app\/campaigns\/(\d+)/);
+  await page.goto(idMatch ? `/app/campaigns/${idMatch[1]}/builder` : '/app/campaigns/1/builder');
 
   const nodes = page.locator('.react-flow__node');
   await nodes.first().waitFor({ state: 'visible', timeout: 30_000 }).catch(() => {});
