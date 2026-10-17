@@ -640,8 +640,8 @@ const AdminMembersPage = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [expiryFilter, setExpiryFilter] = useState('');
   const [roleFilter, setRoleFilter] = useState('user');
-  // PR-9: danh sách mặc định CHỈ có khách; 'employee' / 'internal' / 'deleted' / 'all' xem nhóm còn lại.
-  const [segmentFilter, setSegmentFilter] = useState('customer');
+  // Mặc định 'all' (không có ô chọn nhóm). Chỉ các thẻ đầu trang đổi sang 'customer' vì thẻ đếm khách.
+  const [segmentFilter, setSegmentFilter] = useState('all');
   // Bộ lọc theo thẻ đầu trang: '' | paying | trial | expiring | expired30.
   const [planStateFilter, setPlanStateFilter] = useState('');
   // Chỉ có ý nghĩa khi phoneOtpEnabled — UI lọc này không render lúc cờ tắt (xem JSX),
@@ -823,18 +823,18 @@ const AdminMembersPage = () => {
     fetchMembers({ role });
   };
 
-  const handleSegmentChange = (segment) => {
-    setSegmentFilter(segment);
-    fetchMembers({ segment });
-  };
+  const isSummaryCardActive = (card) => (
+    card.filter ? planStateFilter === card.filter : !planStateFilter && segmentFilter === 'customer'
+  );
 
-  // Bấm thẻ: lọc theo trạng thái gói của thẻ (bấm lại thẻ đang chọn = bỏ lọc). Thẻ "Khách" đưa danh sách về mặc định
-  // (chỉ khách, không lọc trạng thái gói). Các thẻ đếm KHÁCH nên luôn chuyển về nhóm "Khách".
+  // Bấm thẻ: thẻ đếm KHÁCH nên lọc nhóm "Khách" (+ trạng thái gói của thẻ). Bấm lại thẻ đang chọn = về "tất cả".
   const handleSummaryCardClick = (card) => {
-    const next = card.filter && planStateFilter === card.filter ? '' : card.filter;
-    setPlanStateFilter(next);
-    setSegmentFilter('customer');
-    fetchMembers({ planState: next, segment: 'customer' });
+    const reset = isSummaryCardActive(card);
+    const planState = reset ? '' : card.filter;
+    const segment = reset ? 'all' : 'customer';
+    setPlanStateFilter(planState);
+    setSegmentFilter(segment);
+    fetchMembers({ planState, segment });
   };
 
   const isAdminView = roleFilter === 'admin';
@@ -878,7 +878,7 @@ const AdminMembersPage = () => {
                 label={t(`adminMembers.summary.${card.key}`)}
                 value={Number(summary[card.key] || 0).toLocaleString('vi-VN')}
                 hint={hints[card.key]}
-                active={card.filter ? planStateFilter === card.filter : !planStateFilter && segmentFilter === 'customer'}
+                active={isSummaryCardActive(card)}
                 onClick={() => handleSummaryCardClick(card)}
               />
             );
@@ -913,20 +913,6 @@ const AdminMembersPage = () => {
               {t('adminMembers.roleFilterAdmin')}
             </button>
           </div>
-          {!isAdminView && (
-            <select
-              className="input !w-auto py-1.5 text-sm shrink-0"
-              value={segmentFilter}
-              onChange={(e) => handleSegmentChange(e.target.value)}
-              aria-label={t('adminMembers.table.segment')}
-            >
-              <option value="customer">{t('adminMembers.segment.customer')}</option>
-              <option value="employee">{t('adminMembers.segment.employee', { n: summary?.employees ?? 0 })}</option>
-              <option value="internal">{t('adminMembers.segment.internal', { n: summary?.internal ?? 0 })}</option>
-              <option value="deleted">{t('adminMembers.segment.deleted', { n: summary?.deleted ?? 0 })}</option>
-              <option value="all">{t('adminMembers.segment.all')}</option>
-            </select>
-          )}
           <div className="flex flex-[2] min-w-[140px] items-center rounded-lg border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-raised px-3 focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-500">
             <HiOutlineSearch className="w-4 h-4 text-gray-400 dark:text-dk-muted shrink-0" />
             <input

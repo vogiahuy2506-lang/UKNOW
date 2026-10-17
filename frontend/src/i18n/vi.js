@@ -2715,10 +2715,6 @@ export default {
     },
     segment: {
       customer: 'Khách',
-      employee: 'Nhân viên ({n})',
-      internal: 'Nội bộ ({n})',
-      deleted: 'Đã xoá ({n})',
-      all: 'Tất cả nhóm',
       employeeLabel: 'Nhân viên',
       internalLabel: 'Nội bộ',
       deletedLabel: 'Đã xoá',

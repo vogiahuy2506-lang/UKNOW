@@ -243,10 +243,10 @@ describe('AdminMembersPage — PR-9: đầu trang, nhóm, cột, lý do nguy cơ
     expect(screen.getByText('Trong đó trả tiền: 1')).toBeInTheDocument();
   });
 
-  it('lần tải đầu gọi API với segment=customer (mặc định chỉ khách), không kèm planState', async () => {
+  it('lần tải đầu gọi API với segment=all (mặc định tất cả), không kèm planState', async () => {
     renderPage();
     await waitFor(() => expect(mockGetMembers).toHaveBeenCalledTimes(1));
-    expect(mockGetMembers).toHaveBeenLastCalledWith(expect.objectContaining({ role: 'user', segment: 'customer' }));
+    expect(mockGetMembers).toHaveBeenLastCalledWith(expect.objectContaining({ role: 'user', segment: 'all' }));
     expect(mockGetMembers.mock.calls[0][0]).not.toHaveProperty('planState');
   });
 
@@ -260,16 +260,18 @@ describe('AdminMembersPage — PR-9: đầu trang, nhóm, cột, lý do nguy cơ
     fireEvent.click(screen.getByTestId('members-summary-paying'));
     await waitFor(() => expect(mockGetMembers).toHaveBeenCalledTimes(3));
     expect(mockGetMembers.mock.calls[2][0]).not.toHaveProperty('planState');
+    expect(mockGetMembers.mock.calls[2][0]).toEqual(expect.objectContaining({ segment: 'all' }));
   });
 
-  it('bộ lọc nhóm ghi số của từng nhóm và gửi segment tương ứng', async () => {
+  it('không còn ô chọn nhóm; thẻ "Khách" lọc chỉ khách, bấm lại → về tất cả', async () => {
     renderPage();
-    await waitFor(() => expect(screen.getByRole('option', { name: 'Nhân viên (2)' })).toBeInTheDocument());
-    expect(screen.getByRole('option', { name: 'Nội bộ (1)' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Đã xoá (1)' })).toBeInTheDocument();
-    const select = screen.getByRole('option', { name: 'Nhân viên (2)' }).closest('select');
-    fireEvent.change(select, { target: { value: 'employee' } });
-    await waitFor(() => expect(mockGetMembers).toHaveBeenLastCalledWith(expect.objectContaining({ segment: 'employee' })));
+    await waitFor(() => expect(screen.getByTestId('members-summary-customers')).toBeInTheDocument());
+    expect(screen.queryByRole('combobox', { name: 'Nhóm' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Nhân viên \(/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('members-summary-customers'));
+    await waitFor(() => expect(mockGetMembers).toHaveBeenLastCalledWith(expect.objectContaining({ segment: 'customer' })));
+    fireEvent.click(screen.getByTestId('members-summary-customers'));
+    await waitFor(() => expect(mockGetMembers).toHaveBeenLastCalledWith(expect.objectContaining({ segment: 'all' })));
   });
 
   it('không còn cột "% AI" và "Fail 30d"; có "Hoạt động gần nhất"', async () => {

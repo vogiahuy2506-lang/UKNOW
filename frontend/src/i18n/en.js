@@ -2709,10 +2709,6 @@ export default {
     },
     segment: {
       customer: 'Customers',
-      employee: 'Staff ({n})',
-      internal: 'Internal ({n})',
-      deleted: 'Deleted ({n})',
-      all: 'All groups',
       employeeLabel: 'Staff',
       internalLabel: 'Internal',
       deletedLabel: 'Deleted',
