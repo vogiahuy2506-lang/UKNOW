@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { HiOutlineExclamationCircle } from 'react-icons/hi';
 import CampaignEstimatePanel from '../components/CampaignEstimatePanel';
 import { describeIssue } from './simpleCampaign.helpers';
@@ -40,6 +41,8 @@ export default function ReviewStep({ wizard, t, locale }) {
   const blockingIssues = data && !data.readyToCreate ? data.issues.filter((issue) => !isWarning(issue)) : [];
   const warnings = data ? data.issues.filter((issue) => (data.readyToCreate ? true : isWarning(issue))) : [];
   const summary = buildReviewSummary({ state, preview: data, t, locale });
+  // Hết hạn mức tạo chiến dịch: "quay lại sửa" không giải quyết được — gợi ý xoá bớt chiến dịch cũ hoặc nâng cấp gói.
+  const limitReached = blockingIssues.some((issue) => issue?.code === 'campaign_limit_reached');
 
   return (
     <div>
@@ -72,7 +75,14 @@ export default function ReviewStep({ wizard, t, locale }) {
                 ? blockingIssues.map((issue, index) => <li key={index}>{describeIssue(issue, t)}</li>)
                 : <li>{t('simpleCampaign.review.notReady')}</li>}
             </ul>
-            <p className="mt-2 text-xs">{t('simpleCampaign.review.fixHint')}</p>
+            {limitReached ? (
+              <p className="mt-2 text-xs" data-testid="simple-limit-hint">
+                {t('simpleCampaign.review.limitHint')}{' '}
+                <Link to="/app/campaigns" className="font-semibold underline">{t('simpleCampaign.review.openCampaignList')}</Link>
+              </p>
+            ) : (
+              <p className="mt-2 text-xs">{t('simpleCampaign.review.fixHint')}</p>
+            )}
           </div>
         )}
 

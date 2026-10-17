@@ -1852,6 +1852,8 @@ export default {
       cannotSend: 'Chưa gửi được vì:',
       notReady: 'Chiến dịch chưa đủ điều kiện để gửi.',
       fixHint: 'Hãy bấm "Quay lại" để sửa rồi thử lại.',
+      limitHint: 'Gói của bạn đã dùng hết lượt tạo chiến dịch loại này. Hãy xoá bớt chiến dịch cũ không còn dùng, hoặc nâng cấp gói để tạo thêm.',
+      openCampaignList: 'Mở trang Chiến dịch',
       notes: 'Lưu ý',
       emptyList: 'Danh sách người nhận đang trống nên sẽ không có tin nào được gửi. Hãy quay lại chọn nguồn khác.',
       nameLabel: 'Tên chiến dịch',

@@ -491,6 +491,25 @@ describe('Tạo chiến dịch từng bước (PR-2)', () => {
       expect(campaignApiService.createSimpleCampaign).not.toHaveBeenCalled();
     });
 
+    it('hết hạn mức tạo chiến dịch: gợi ý xoá bớt chiến dịch cũ / nâng cấp + link trang Chiến dịch, KHÔNG bảo "Quay lại để sửa"', async () => {
+      campaignApiService.previewSimpleCampaign.mockResolvedValue(readyPreview({
+        readyToCreate: false,
+        issues: [{ code: 'campaign_limit_reached', severity: 'blocking', message: 'Tài khoản đã đạt giới hạn số chiến dịch Email (5).' }],
+      }));
+      renderPage();
+      await chooseChannel('email');
+      await chooseFormAudience();
+      await chooseTemplate('Ưu đãi tháng 10');
+      await acceptSendNow();
+
+      const blocked = await screen.findByTestId('simple-preview-blocked');
+      expect(blocked).toHaveTextContent('Tài khoản đã đạt giới hạn số chiến dịch Email (5).');
+      expect(screen.getByTestId('simple-limit-hint')).toHaveTextContent('xoá bớt chiến dịch cũ');
+      expect(screen.getByRole('link', { name: 'Mở trang Chiến dịch' })).toHaveAttribute('href', '/app/campaigns');
+      expect(blocked).not.toHaveTextContent('Quay lại');
+      expect(screen.getByTestId('simple-start')).toBeDisabled();
+    });
+
     it('thiếu trường readyToCreate thì coi như chưa cho gửi (không mặc định true)', async () => {
       campaignApiService.previewSimpleCampaign.mockResolvedValue({ data: { success: true, data: { issues: [], recipientCount: 3 } } });
       renderPage();

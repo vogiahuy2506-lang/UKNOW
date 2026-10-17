@@ -1847,6 +1847,8 @@ export default {
       cannotSend: 'It cannot be sent yet because:',
       notReady: 'This campaign is not ready to send.',
       fixHint: 'Press "Back" to fix it, then try again.',
+      limitHint: 'Your plan has used up its campaigns of this type. Delete old campaigns you no longer use, or upgrade your plan to create more.',
+      openCampaignList: 'Open Campaigns',
       notes: 'Notes',
       emptyList: 'The recipient list is empty, so no message will be sent. Go back and choose another source.',
       nameLabel: 'Campaign name',
