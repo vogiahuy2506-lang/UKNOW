@@ -76,11 +76,6 @@ router.post('/quick-send/:channel', requirePermission('campaigns_create'), campa
 router.post('/simple/preview', requirePermission('campaigns_create'), channelEntitlementContext, campaignSimpleController.preview.bind(campaignSimpleController));
 router.post('/simple', requirePermission('campaigns_create'), channelEntitlementContext, campaignSimpleController.create.bind(campaignSimpleController));
 
-// Mở / sửa chiến dịch ĐÃ LƯU bằng trình từng bước (PLAN_HAI_TAB_TUNG_BUOC_SO_DO_2026-10-17 PR-A). Hai đoạn đường dẫn nên `/:id` không nuốt được.
-// `channelEntitlementContext` như `/simple`: dựng lại sơ đồ để so khớp cần quyền kênh theo gói của chủ workspace.
-router.get('/:id/simple', requirePermission('campaigns_view'), channelEntitlementContext, campaignSimpleController.getSimple.bind(campaignSimpleController));
-router.put('/:id/simple', requirePermission('campaigns_create'), channelEntitlementContext, campaignSimpleController.updateSimple.bind(campaignSimpleController));
-
 // Ước tính thời gian gửi xong (PLAN_UOC_TINH_THOI_GIAN 3.3) — hai đoạn đường dẫn nên `/:id` không nuốt được; vẫn đặt trước cho rõ.
 router.get('/:id/estimate', requirePermission('campaigns_view'), campaignController.getEstimate.bind(campaignController));
 

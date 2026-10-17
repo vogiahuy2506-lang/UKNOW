@@ -1,19 +1,10 @@
-import { HiOutlineAdjustments, HiOutlineSparkles, HiOutlineViewGrid } from 'react-icons/hi';
+import { HiOutlineAdjustments, HiOutlineViewGrid } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 
 /** Hai tab của chi tiết MỘT chiến dịch: `Thiết lập` (mọi cài đặt viết tường minh) và `Sơ đồ khối` (kéo thả). */
 export const CAMPAIGN_DETAIL_TABS = Object.freeze([
   { id: 'settings', icon: HiOutlineAdjustments, labelKey: 'campaignTabs.settings', gated: false },
   { id: 'flow', icon: HiOutlineViewGrid, labelKey: 'campaignTabs.flow', gated: true },
-]);
-
-/**
- * Cặp tab cũ `Từng bước` ⇄ `Sơ đồ khối` của màn `CampaignSimpleEdit`. Màn đó đã gỡ khỏi route (PLAN_THIET_LAP_VA_SO_DO_2026-10-17,
- * PR-2) và sẽ bị xoá ở PR-3; giữ tạm để file đó còn biên dịch và test của nó còn chạy.
- */
-export const LEGACY_SIMPLE_TABS = Object.freeze([
-  { id: 'simple', icon: HiOutlineSparkles, labelKey: 'campaignTabs.simple', gated: false },
-  { id: 'builder', icon: HiOutlineViewGrid, labelKey: 'campaignTabs.builder', gated: true },
 ]);
 
 /**
@@ -24,10 +15,9 @@ export const LEGACY_SIMPLE_TABS = Object.freeze([
  * @param {'settings'|'flow'} props.active
  * @param {(tab: 'settings'|'flow') => void} props.onSelect
  * @param {boolean} [props.flowDisabled] thiếu quyền dựng chiến dịch (campaigns_create) → tab Sơ đồ khối mờ, không bấm được
- * @param {Array<object>} [props.tabs] danh sách tab (mặc định {@link CAMPAIGN_DETAIL_TABS})
  * @param {string} [props.className]
  */
-export default function CampaignViewTabs({ active, onSelect, flowDisabled = false, tabs = CAMPAIGN_DETAIL_TABS, className = '' }) {
+export default function CampaignViewTabs({ active, onSelect, flowDisabled = false, className = '' }) {
   const { t } = useI18n();
   return (
     <div
@@ -36,7 +26,7 @@ export default function CampaignViewTabs({ active, onSelect, flowDisabled = fals
       className={`inline-flex max-w-full gap-1 rounded-xl border border-slate-200 bg-slate-100/80 p-1 dark:border-dk-border dark:bg-dk-inset ${className}`}
       data-testid="campaign-view-tabs"
     >
-      {tabs.map(({ id, icon: Icon, labelKey, gated }) => {
+      {CAMPAIGN_DETAIL_TABS.map(({ id, icon: Icon, labelKey, gated }) => {
         const selected = active === id;
         const disabled = gated && flowDisabled;
         return (

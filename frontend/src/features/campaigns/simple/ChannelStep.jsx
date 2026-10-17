@@ -27,9 +27,6 @@ export default function ChannelStep({ wizard, availability, onLockedClick, t }) 
     <div>
       <h2 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-dk-text sm:text-2xl">{t('simpleCampaign.channel.title')}</h2>
       <p className="mt-1 text-sm text-slate-500 dark:text-dk-text2">{t('simpleCampaign.channel.hint')}</p>
-      {wizard.isEdit && (
-        <p className="mt-2 text-xs text-slate-500 dark:text-dk-text2" data-testid="simple-channel-edit-note">{t('simpleCampaign.edit.channelLocked')}</p>
-      )}
 
       <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
         {CHANNEL_CARDS.map(({ id, availabilityKey, icon, tone }) => {
@@ -45,8 +42,6 @@ export default function ChannelStep({ wizard, availability, onLockedClick, t }) 
               selected={state.channel === id}
               locked={locked}
               onClick={() => {
-                // Chế độ sửa: không đổi kênh của chiến dịch đã tạo (đổi kênh = dựng lại cả chiến dịch → tạo mới).
-                if (wizard.isEdit) return;
                 if (locked) {
                   onLockedClick(availabilityKey);
                   return;

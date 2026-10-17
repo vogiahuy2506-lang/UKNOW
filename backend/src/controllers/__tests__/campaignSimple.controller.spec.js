@@ -4,8 +4,6 @@ const mockPreview = jest.fn();
 const mockBuildCreateDraft = jest.fn();
 const mockCleanup = jest.fn();
 const mockCreateCampaign = jest.fn();
-const mockGetEditState = jest.fn();
-const mockUpdateSimple = jest.fn();
 const mockLogWorkspace = jest.fn();
 
 class MockSimpleCampaignError extends Error {
@@ -24,9 +22,6 @@ jest.unstable_mockModule('../../services/campaign/campaignSimple.service.js', ()
     cleanupCreatedTemplates: mockCleanup,
   },
   SimpleCampaignError: MockSimpleCampaignError,
-}));
-jest.unstable_mockModule('../../services/campaign/campaignSimpleEdit.service.js', () => ({
-  default: { getSimpleEditState: mockGetEditState, updateSimpleCampaign: mockUpdateSimple },
 }));
 jest.unstable_mockModule('../../services/audit.service.js', () => ({
   logWorkspace: mockLogWorkspace,
@@ -169,76 +164,3 @@ describe('campaignSimple.controller.preview', () => {
   });
 });
 
-describe('campaignSimple.controller.getSimple', () => {
-  beforeEach(() => jest.clearAllMocks());
-
-  it('trả { success, data } từ service; `diffs` kỹ thuật KHÔNG lộ ra trình duyệt', async () => {
-    mockGetEditState.mockResolvedValue({ editable: false, readOnlyReasons: [{ code: 'advanced_settings', message: 'x' }], diffs: ['send_email#1.ccEnabled'] });
-    jest.spyOn(console, 'info').mockImplementation(() => {});
-    const res = makeRes();
-    await controller.getSimple(makeReq({ params: { id: '12' } }), res);
-    expect(mockGetEditState).toHaveBeenCalledWith({ authUser: expect.objectContaining({ id: 7 }), campaignId: 12 });
-    expect(res.json).toHaveBeenCalledWith({ success: true, data: { editable: false, readOnlyReasons: [{ code: 'advanced_settings', message: 'x' }] } });
-    console.info.mockRestore();
-  });
-
-  it('id không phải số → 400, không gọi service', async () => {
-    const res = makeRes();
-    await controller.getSimple(makeReq({ params: { id: 'abc' } }), res);
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(mockGetEditState).not.toHaveBeenCalled();
-  });
-
-  it('không thấy chiến dịch → 404 theo mã lỗi nghiệp vụ', async () => {
-    mockGetEditState.mockRejectedValue(new MockSimpleCampaignError(404, 'CAMPAIGN_NOT_FOUND', 'Không tìm thấy chiến dịch'));
-    const res = makeRes();
-    await controller.getSimple(makeReq({ params: { id: '12' } }), res);
-    expect(res.status).toHaveBeenCalledWith(404);
-  });
-});
-
-describe('campaignSimple.controller.updateSimple', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockCleanup.mockResolvedValue(undefined);
-    mockLogWorkspace.mockResolvedValue(undefined);
-  });
-
-  it('thành công → 200 { campaignId, campaignName, channel, recipientCountHint }, audit CAMPAIGN_UPDATED via=simple, KHÔNG dọn mẫu', async () => {
-    mockUpdateSimple.mockResolvedValue({ campaignId: 12, campaignName: 'A', channel: 'email', nodesBefore: 2, nodesAfter: 2, recipientCountHint: 3 });
-    const res = makeRes();
-    await controller.updateSimple(makeReq({ params: { id: '12' }, body: { channel: 'email' } }), res);
-    expect(res.json).toHaveBeenCalledWith({ success: true, data: { campaignId: 12, campaignName: 'A', channel: 'email', recipientCountHint: 3 } });
-    expect(mockLogWorkspace).toHaveBeenCalledTimes(1);
-    expect(mockLogWorkspace.mock.calls[0][1]).toBe('CAMPAIGN_UPDATED');
-    expect(mockLogWorkspace.mock.calls[0][4]).toEqual({ nodesTruoc: 2, nodesSau: 2, via: 'simple' });
-    expect(mockCleanup).not.toHaveBeenCalled();
-  });
-
-  it('409 không sửa được → trả nguyên mã + readOnlyReasons, DỌN mẫu theo đúng chủ workspace', async () => {
-    mockUpdateSimple.mockRejectedValue(new MockSimpleCampaignError(409, 'CAMPAIGN_NOT_EDITABLE', 'Có khối nâng cao', { readOnlyReasons: [{ code: 'not_simple', message: 'Có khối nâng cao' }] }));
-    const res = makeRes();
-    await controller.updateSimple(makeReq({ params: { id: '12' }, user: { id: 8, role: 'user', activeContext: { type: 'employee', ownerId: 3 } } }), res);
-    expect(res.status).toHaveBeenCalledWith(409);
-    expect(res.json).toHaveBeenCalledWith({
-      success: false,
-      code: 'CAMPAIGN_NOT_EDITABLE',
-      message: 'Có khối nâng cao',
-      readOnlyReasons: [{ code: 'not_simple', message: 'Có khối nâng cao' }],
-    });
-    expect(mockCleanup).toHaveBeenCalledTimes(1);
-    expect(mockCleanup.mock.calls[0][1]).toBe(3);
-    expect(mockLogWorkspace).not.toHaveBeenCalled();
-  });
-
-  it('audit hỏng không làm hỏng lượt lưu đã thành công', async () => {
-    mockUpdateSimple.mockResolvedValue({ campaignId: 12, campaignName: 'A', channel: 'email', nodesBefore: 2, nodesAfter: 2, recipientCountHint: null });
-    mockLogWorkspace.mockRejectedValue(new Error('db down'));
-    jest.spyOn(console, 'warn').mockImplementation(() => {});
-    const res = makeRes();
-    await controller.updateSimple(makeReq({ params: { id: '12' } }), res);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
-    expect(mockCleanup).not.toHaveBeenCalled();
-    console.warn.mockRestore();
-  });
-});

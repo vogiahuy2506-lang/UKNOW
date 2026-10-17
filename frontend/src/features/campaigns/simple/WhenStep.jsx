@@ -1,5 +1,4 @@
-import { Link } from 'react-router-dom';
-import { HiOutlineCalendar, HiOutlineExclamation, HiOutlineHand, HiOutlineLightningBolt, HiOutlineRefresh, HiOutlineUserAdd } from 'react-icons/hi';
+import { HiOutlineCalendar, HiOutlineExclamation, HiOutlineLightningBolt, HiOutlineRefresh, HiOutlineUserAdd } from 'react-icons/hi';
 import SimpleChoiceCard from './SimpleChoiceCard';
 import { formatPollInterval } from './simpleCampaign.summary';
 import {
@@ -9,7 +8,6 @@ import {
   todayInVietnam,
   validateSchedule,
 } from './simpleCampaign.helpers';
-import { EDIT_WHEN_OPTION_IDS } from './simpleCampaign.edit.helpers';
 
 /**
  * Cách vẽ từng lựa chọn của bước "Khi nào gửi?". Thẻ nào có mặt do `getAvailableWhenOptions` (helpers) quyết định theo kênh +
@@ -186,7 +184,6 @@ function RecurringPanel({ schedule, patchSchedule, t }) {
 export default function WhenStep({ wizard, t }) {
   const { state, selectWhen, patchSchedule } = wizard;
   const { schedule } = state;
-  if (wizard.isEdit) return <EditWhenStep wizard={wizard} t={t} />;
   const options = getAvailableWhenOptions(state);
   return (
     <div>
@@ -210,73 +207,6 @@ export default function WhenStep({ wizard, t }) {
       {schedule?.type === 'scheduled' && <ScheduledPanel schedule={schedule} patchSchedule={patchSchedule} t={t} />}
       {schedule?.type === 'continuous' && <ContinuousPanel schedule={schedule} t={t} />}
       {schedule?.type === 'recurring' && <RecurringPanel schedule={schedule} patchSchedule={patchSchedule} t={t} />}
-    </div>
-  );
-}
-
-const EDIT_WHEN_ICONS = Object.freeze({
-  now: { icon: HiOutlineHand, tone: 'slate' },
-  scheduled: WHEN_CARDS.scheduled,
-  recurring: WHEN_CARDS.recurring,
-});
-
-/**
- * Bước "Khi nào gửi?" ở CHẾ ĐỘ SỬA: chỉ cấu hình LỊCH — Chạy tay (không lịch) · Hẹn một thời điểm · Lặp lại định kỳ.
- * "Gửi ngay" và "Tự động gửi cho người mới" là hành động chạy nên nằm ở nút phụ của bước cuối. Lưu thì tạo / sửa / xoá đúng 1 lịch.
- * Chiến dịch có từ 2 lịch (hoặc lịch dạng không đọc ngược được): chỉ xem, sửa ở tab Lịch chạy.
- */
-function EditWhenStep({ wizard, t }) {
-  const { state, selectWhen, patchSchedule, editInfo } = wizard;
-  const { schedule } = state;
-  const locked = Boolean(editInfo?.scheduleLocked);
-  const hadSchedule = Boolean(editInfo?.original);
-  return (
-    <div>
-      <h2 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-dk-text sm:text-2xl">{t('simpleCampaign.when.title')}</h2>
-      <p className="mt-1 text-sm text-slate-500 dark:text-dk-text2">{t('simpleCampaign.edit.when.hint')}</p>
-
-      {locked ? (
-        <div className={PANEL_CLASS} data-testid="simple-edit-schedule-locked">
-          <p className="text-sm font-semibold text-slate-800 dark:text-dk-text">{t('simpleCampaign.edit.when.lockedTitle')}</p>
-          <p className="mt-1 text-sm text-slate-600 dark:text-dk-text2">{t('simpleCampaign.edit.when.lockedBody')}</p>
-          {editInfo?.lockedCron && (
-            <p className="mt-2 font-mono text-xs text-slate-500 dark:text-dk-text2">{editInfo.lockedCron}</p>
-          )}
-          <Link to="/app/campaigns?tab=schedules" className="mt-3 inline-block text-sm font-semibold text-orange-600 underline dark:text-orange-400">
-            {t('simpleCampaign.scheduled.viewSchedules')}
-          </Link>
-        </div>
-      ) : (
-        <>
-          <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {EDIT_WHEN_OPTION_IDS.map((id) => (
-              <SimpleChoiceCard
-                key={id}
-                testId={`simple-when-${id}`}
-                icon={EDIT_WHEN_ICONS[id].icon}
-                tone={EDIT_WHEN_ICONS[id].tone}
-                title={t(`simpleCampaign.edit.when.${id}.title`)}
-                description={t(`simpleCampaign.edit.when.${id}.desc`)}
-                selected={(schedule?.type || 'now') === id}
-                onClick={() => selectWhen(id)}
-              />
-            ))}
-          </div>
-
-          {schedule?.type === 'scheduled' && <ScheduledPanel schedule={schedule} patchSchedule={patchSchedule} t={t} />}
-          {schedule?.type === 'recurring' && <RecurringPanel schedule={schedule} patchSchedule={patchSchedule} t={t} />}
-          {hadSchedule && (schedule?.type || 'now') === 'now' && (
-            <p className="mt-3 text-sm text-amber-800 dark:text-amber-300" data-testid="simple-edit-schedule-delete-note">
-              {t('simpleCampaign.edit.when.deleteNote')}
-            </p>
-          )}
-          {hadSchedule && editInfo?.original?.enabled === false && (schedule?.type || 'now') !== 'now' && (
-            <p className="mt-3 text-sm text-slate-600 dark:text-dk-text2" data-testid="simple-edit-schedule-off-note">
-              {t('simpleCampaign.edit.when.disabledNote')}
-            </p>
-          )}
-        </>
-      )}
     </div>
   );
 }

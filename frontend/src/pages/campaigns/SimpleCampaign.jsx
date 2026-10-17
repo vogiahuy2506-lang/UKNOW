@@ -8,7 +8,6 @@ import useSimpleCampaignWizard from '../../features/campaigns/simple/useSimpleCa
 /**
  * `/app/campaigns/simple` — tạo chiến dịch (toàn màn hình, không header toàn cục) bằng cách trả lời vài câu hỏi (thay cho trình dựng sơ đồ khối).
  * Trang chỉ có tiêu đề; toàn bộ logic ở `features/campaigns/simple/`. Xem PLAN_TAO_CHIEN_DICH_TUNG_BUOC_2026-10-14.
- * Mở/sửa một chiến dịch đã có: `CampaignSimpleEdit` (`/app/campaigns/:id/simple`).
  */
 const SimpleCampaign = () => {
   const { t } = useI18n();

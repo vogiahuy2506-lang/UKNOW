@@ -466,20 +466,6 @@ class CampaignCrudRepository {
   }
 
   /**
-   * Chiến dịch có lượt chạy đang `running` không (ngoài giao dịch) — cho `GET /campaigns/:id/simple`.
-   *
-   * @param {number|string} campaignId
-   * @returns {Promise<boolean>}
-   */
-  async hasRunningRun(campaignId) {
-    const result = await db.query(
-      `SELECT 1 FROM campaign_runs WHERE id_campaign = $1 AND status = 'running' LIMIT 1`,
-      [campaignId]
-    );
-    return result.rows.length > 0;
-  }
-
-  /**
    * @param {object} client
    * @param {number|string} campaignId
    * @returns {Promise<boolean>}

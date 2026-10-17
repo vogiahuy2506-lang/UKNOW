@@ -39,7 +39,7 @@ export const formatPollInterval = (minutes, t) => {
     : t('simpleCampaign.when.continuous.aboutMinutes', { n: total });
 };
 
-export const describeWhen = ({ schedule, t, manual = false }) => {
+export const describeWhen = ({ schedule, t }) => {
   switch (schedule?.type) {
     case 'scheduled':
       return t('simpleCampaign.review.when.scheduled', { time: formatPickedTime(schedule.time), date: formatPickedDate(schedule.date) });
@@ -54,8 +54,7 @@ export const describeWhen = ({ schedule, t, manual = false }) => {
       return t(schedule.frequency === 'monthly' ? 'simpleCampaign.review.when.recurringMonthly' : 'simpleCampaign.review.when.recurringDaily', { time });
     }
     default:
-      // Chế độ sửa: "không lịch" = chạy tay (không có nghĩa là sẽ gửi ngay).
-      return t(manual ? 'simpleCampaign.review.when.manual' : 'simpleCampaign.review.when.now');
+      return t('simpleCampaign.review.when.now');
   }
 };
 
@@ -90,10 +89,9 @@ const resolveRecipientCount = (state, preview) => {
  * @param {{ recipientCount: number|null }|null} args.preview phản hồi preview đã chuẩn hoá (null khi chưa có)
  * @param {(key: string, params?: object) => string} args.t
  * @param {string} args.locale
- * @param {boolean} [args.manualWhen] chế độ sửa: không lịch = chạy tay
  * @returns {string}
  */
-export const buildReviewSummary = ({ state, preview, t, locale, manualWhen = false }) => {
+export const buildReviewSummary = ({ state, preview, t, locale }) => {
   const { channel, sender, audience, content, schedule } = state;
 
   let names = '';
@@ -137,41 +135,6 @@ export const buildReviewSummary = ({ state, preview, t, locale, manualWhen = fal
     sender: sender?.label || '',
     audience: audienceText,
     content: contentText,
-    when: describeWhen({ schedule, t, manual: manualWhen }),
+    when: describeWhen({ schedule, t }),
   });
-};
-
-const VIEW_UNITS = new Set(['minutes', 'hours', 'days']);
-
-/** "30 phút" / "2 ngày" / "1 day"; đơn vị lạ (chỉ xem được) hiện nguyên chữ đã lưu. */
-const formatViewWait = (value, unit, t) => {
-  const n = Number(value);
-  const shown = Number.isFinite(n) ? n : String(value);
-  if (VIEW_UNITS.has(unit)) {
-    return `${shown} ${t(`simpleCampaign.edit.readOnly.view.unit.${unit}${n === 1 ? 'One' : 'Many'}`)}`;
-  }
-  return unit ? `${shown} ${unit}` : String(shown);
-};
-
-/**
- * Thời điểm gửi của một tin ở màn chỉ xem, đúng theo nhịp chờ ĐÃ LƯU: tin 1 không chờ → "gửi ngay"; tin sau đếm
- * "sau tin trước" (delayFrom 'prev') hoặc "sau tin đầu" (mọi giá trị khác, như lúc chạy); tin 1 có chờ → "sau khi bắt đầu".
- *
- * @param {object} args
- * @param {number} args.index vị trí tin (0 = tin 1)
- * @param {{ delayValue: number|string, delayUnit: string, delayFrom: string }} args.step
- * @param {(key: string, params?: object) => string} args.t
- * @returns {string}
- */
-export const describeViewStepTiming = ({ index, step, t }) => {
-  const raw = step?.delayValue;
-  const n = Number(raw);
-  const hasWait = Number.isFinite(n) ? n > 0 : String(raw ?? '').trim() !== '';
-  const prefix = 'simpleCampaign.edit.readOnly.view.when';
-  if (index === 0) {
-    return hasWait ? t(`${prefix}.afterStart`, { wait: formatViewWait(raw, step.delayUnit, t) }) : t(`${prefix}.now`);
-  }
-  const fromPrev = step?.delayFrom === 'prev';
-  if (!hasWait) return t(fromPrev ? `${prefix}.noWaitPrev` : `${prefix}.noWaitFirst`);
-  return t(fromPrev ? `${prefix}.afterPrev` : `${prefix}.afterFirst`, { wait: formatViewWait(raw, step.delayUnit, t) });
 };
