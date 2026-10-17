@@ -28,6 +28,7 @@ const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'));
 const Campaigns = lazyWithRetry(() => import('./pages/campaigns/Campaigns'));
 const CampaignBuilder = lazyWithRetry(() => import('./pages/campaigns/CampaignBuilder'));
 const QuickSend = lazyWithRetry(() => import('./pages/campaigns/QuickSend'));
+const SimpleCampaign = lazyWithRetry(() => import('./pages/campaigns/SimpleCampaign'));
 const Customers = lazyWithRetry(() => import('./pages/customers/Customers'));
 const CampaignCustomers = lazyWithRetry(() => import('./pages/customers/CampaignCustomers'));
 const ChannelSettings = lazyWithRetry(() => import('./pages/settings/ChannelSettings'));
@@ -387,6 +388,8 @@ function AppContent() {
 
             {/* Campaigns */}
             <Route path="campaigns" element={<PermissionRoute permission="campaigns_view"><Campaigns /></PermissionRoute>} />
+            {/* Tạo chiến dịch từng bước: đường tĩnh `campaigns/simple` thắng `campaigns/:id` (React Router xếp tĩnh trên động). */}
+            <Route path="campaigns/simple" element={<PermissionRoute permission="campaigns_create"><SimpleCampaign /></PermissionRoute>} />
             <Route path="campaigns/:id" element={<Navigate to="builder" replace />} />
             <Route path="campaigns/:id/builder" element={<PermissionRoute permission="campaigns_create"><CampaignBuilder /></PermissionRoute>} />
             <Route path="campaigns/new" element={<PermissionRoute permission="campaigns_create"><CampaignBuilder /></PermissionRoute>} />
