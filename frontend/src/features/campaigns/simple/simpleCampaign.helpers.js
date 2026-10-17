@@ -4,6 +4,13 @@
  * dọn lựa chọn khi đổi kênh. Tách riêng để test được từng quy tắc mà không phải dựng cả màn hình.
  */
 
+import {
+  assertOnceScheduleNotInPast,
+  buildCronExpression,
+  resolveScheduleNextRunAt,
+} from '../utils/campaignRunSchedule.helpers';
+import { resolveScheduleEstimateStartAt } from '../utils/campaignEstimate.helpers';
+
 export const SIMPLE_CHANNELS = Object.freeze(['email', 'zalo', 'zalo_group']);
 
 /** Thứ tự bước. PR-3 chỉ thêm thẻ vào bước `when`, không đổi danh sách này. */
@@ -19,8 +26,31 @@ export const AUDIENCE_TYPES_BY_CHANNEL = Object.freeze({
   zalo_group: Object.freeze(['zalo_groups']),
 });
 
-/** Cách gửi ở bước "Khi nào gửi?". PR-2 chỉ có `now`; PR-3 thêm `scheduled`, `continuous`, `recurring` vào đây. */
-export const WHEN_OPTION_IDS = Object.freeze(['now']);
+/**
+ * Cách gửi ở bước "Khi nào gửi?": gửi ngay · hẹn một thời điểm · tự gửi cho người mới (chế độ liên tục) · lặp lại định kỳ.
+ * `continuous` chỉ hiện với một số nguồn/kênh — xem `getAvailableWhenOptions`.
+ */
+export const WHEN_OPTION_IDS = Object.freeze(['now', 'scheduled', 'continuous', 'recurring']);
+
+/** Tần suất của "Lặp lại định kỳ". Hằng tháng chỉ có ngày 1 vì cron phía giao diện cố định `m h 1 * *`. */
+export const RECURRING_FREQUENCIES = Object.freeze(['daily', 'weekly', 'monthly']);
+
+/** Giá trị thứ trong tuần theo cron (0 = Chủ nhật), xếp từ Thứ hai; khoá i18n `campaigns.<tên>` đi kèm. */
+export const WEEKDAY_OPTIONS = Object.freeze([
+  Object.freeze({ value: '1', key: 'monday' }),
+  Object.freeze({ value: '2', key: 'tuesday' }),
+  Object.freeze({ value: '3', key: 'wednesday' }),
+  Object.freeze({ value: '4', key: 'thursday' }),
+  Object.freeze({ value: '5', key: 'friday' }),
+  Object.freeze({ value: '6', key: 'saturday' }),
+  Object.freeze({ value: '0', key: 'sunday' }),
+]);
+
+/**
+ * "Tự động gửi cho người mới" chỉ có nghĩa với nguồn CÓ NGƯỜI MỚI ĐẾN theo thời gian (landing / biểu mẫu / Google Sheet);
+ * danh sách tự nhập, khách đã lưu, bạn bè Zalo là danh sách cố định lúc tạo.
+ */
+export const CONTINUOUS_AUDIENCE_TYPES = Object.freeze(['landing', 'form', 'sheet']);
 
 /** Số biểu mẫu tối đa chọn một lúc — khớp trần của node "Dữ liệu Biểu mẫu" (readFormSubmissionsFormIds.js). */
 export const MAX_FORM_IDS = 50;
@@ -47,7 +77,7 @@ export const createInitialWizardState = () => ({
   audience: { ...EMPTY_AUDIENCE },
   /** `mode`: null | 'template' | 'custom'. */
   content: { mode: null, templateId: null, templateName: '', subject: '', body: '' },
-  /** PR-2: chỉ `{ type: 'now' }`. PR-3 mở rộng. */
+  /** Xem `createDefaultSchedule`: `{ type: 'now' | 'scheduled' | 'continuous' | 'recurring', … }`. */
   schedule: { type: 'now' },
   campaignName: '',
 });
@@ -57,6 +87,130 @@ export const senderKindOf = (channel) => (channel === 'email' ? 'email' : 'zalo'
 
 /** Mẫu tin của email nằm ở `email_templates`, của Zalo (cá nhân + nhóm) ở `zalo_templates`. */
 export const templateKindOf = (channel) => (channel === 'email' ? 'email' : 'zalo');
+
+/**
+ * Cách gửi nào đang dùng được với kênh + nguồn người nhận hiện tại. `continuous` chỉ khi nguồn là landing / biểu mẫu / Google Sheet
+ * và kênh KHÁC Zalo nhóm (chế độ liên tục bị tắt cho Zalo nhóm ở giao diện cũ, `useCampaignRunController`).
+ *
+ * @param {object} state
+ * @returns {string[]}
+ */
+export const getAvailableWhenOptions = (state) => {
+  const continuousOk = state.channel !== 'zalo_group' && CONTINUOUS_AUDIENCE_TYPES.includes(state.audience?.type);
+  return WHEN_OPTION_IDS.filter((id) => id !== 'continuous' || continuousOk);
+};
+
+/**
+ * Giá trị khởi tạo khi người dùng bấm một thẻ ở bước "Khi nào gửi?".
+ *
+ * @param {string} type một trong WHEN_OPTION_IDS
+ * @param {{ pollIntervalMinutes?: number }} [options] `continuous`: chu kỳ quét người mới (phút), mặc định do nơi gọi chọn
+ */
+export const createDefaultSchedule = (type, { pollIntervalMinutes = null } = {}) => {
+  switch (type) {
+    case 'scheduled':
+      return { type, date: '', time: '' };
+    case 'continuous':
+      return { type, pollIntervalMinutes };
+    case 'recurring':
+      return { type, frequency: 'daily', weeklyDay: '1', time: '09:00' };
+    default:
+      return { type: 'now' };
+  }
+};
+
+/** Đổi kênh/nguồn xong mà cách gửi đã chọn không còn dùng được (vd "Tự động gửi" sang Zalo nhóm) → về "Gửi ngay". */
+export const reconcileSchedule = (state) => {
+  const type = state.schedule?.type || 'now';
+  if (getAvailableWhenOptions(state).includes(type)) return state;
+  return { ...state, schedule: { type: 'now' } };
+};
+
+/** Ngày hôm nay theo giờ Việt Nam (UTC+7) dạng YYYY-MM-DD — cận dưới của ô chọn ngày. */
+export const todayInVietnam = (now = new Date()) => new Date(now.getTime() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+const TIME_PATTERN = /^\d{1,2}:\d{2}$/;
+
+/**
+ * Biểu mẫu lịch (đúng hình dạng `buildCronExpression` nhận) của cách gửi "hẹn giờ" / "lặp lại"; cách khác → null.
+ * Luôn là lịch theo GIỜ VIỆT NAM (`once` / `daily` / `weekly` / `monthly`), KHÔNG dùng nhánh `after_delay` (nó lấy giờ máy).
+ *
+ * @param {object} schedule
+ * @returns {object|null}
+ */
+export const buildScheduleForm = (schedule) => {
+  if (schedule?.type === 'scheduled') {
+    return { scheduleType: 'once', scheduleDate: schedule.date, scheduleTime: schedule.time };
+  }
+  if (schedule?.type === 'recurring') {
+    return { scheduleType: schedule.frequency, scheduleTime: schedule.time, weeklyDay: schedule.weeklyDay };
+  }
+  return null;
+};
+
+/** Chuỗi cron của lịch (rỗng nếu không phải hẹn giờ / lặp lại hoặc thiếu dữ liệu). */
+export const buildScheduleCron = (schedule) => {
+  const form = buildScheduleForm(schedule);
+  return form ? buildCronExpression(form) : '';
+};
+
+/** `scheduleType` gửi cho `POST /campaign-schedules`: hẹn giờ = `once`, lặp lại = daily | weekly | monthly. */
+export const scheduleTypeForApi = (schedule) => (schedule?.type === 'scheduled' ? 'once' : schedule?.frequency);
+
+/** Hẹn giờ / lặp lại = đặt LỊCH (nút "Đặt lịch", màn "Đã hẹn gửi"); gửi ngay / tự động = chạy ngay (nút "Bắt đầu gửi"). */
+export const isScheduleBased = (schedule) => schedule?.type === 'scheduled' || schedule?.type === 'recurring';
+
+/**
+ * Lựa chọn ở bước "Khi nào gửi?" đã đủ và hợp lệ chưa.
+ * - `scheduled`: đủ ngày + giờ và ≥ 2 phút sau hiện tại (giờ VN) — cùng luật với màn đặt lịch cũ.
+ * - `recurring`: đủ giờ; hằng tuần phải có thứ.
+ * - `continuous`: chu kỳ quét là số phút dương.
+ *
+ * @param {object} schedule
+ * @param {Date} [now]
+ * @returns {{ ok: true } | { ok: false, reason: 'incomplete' | 'too_soon' | 'invalid' }}
+ */
+export const validateSchedule = (schedule, now = new Date()) => {
+  switch (schedule?.type) {
+    case 'now':
+      return { ok: true };
+    case 'scheduled': {
+      if (!String(schedule.date || '').trim() || !String(schedule.time || '').trim()) return { ok: false, reason: 'incomplete' };
+      const guard = assertOnceScheduleNotInPast(buildScheduleForm(schedule), now);
+      return guard.ok ? { ok: true } : { ok: false, reason: guard.reason };
+    }
+    case 'recurring':
+      if (!RECURRING_FREQUENCIES.includes(schedule.frequency)) return { ok: false, reason: 'incomplete' };
+      if (!TIME_PATTERN.test(String(schedule.time || '').trim())) return { ok: false, reason: 'incomplete' };
+      if (schedule.frequency === 'weekly' && !WEEKDAY_OPTIONS.some((day) => day.value === String(schedule.weeklyDay))) {
+        return { ok: false, reason: 'incomplete' };
+      }
+      return { ok: true };
+    case 'continuous':
+      return Number.isFinite(Number(schedule.pollIntervalMinutes)) && Number(schedule.pollIntervalMinutes) > 0
+        ? { ok: true }
+        : { ok: false, reason: 'incomplete' };
+    default:
+      return { ok: false, reason: 'incomplete' };
+  }
+};
+
+/**
+ * Mốc bắt đầu (ISO) để ước tính: hẹn giờ = giờ hẹn, lặp lại = lần nổ kế tiếp; cách khác → null (ước tính từ bây giờ).
+ *
+ * @param {object} schedule
+ * @param {Date} [now]
+ * @returns {string|null}
+ */
+export const resolveScheduleStartAt = (schedule, now = new Date()) => {
+  const form = buildScheduleForm(schedule);
+  if (!form) return null;
+  return resolveScheduleEstimateStartAt(form, {
+    buildCron: buildCronExpression,
+    resolveNextRunAt: (item) => resolveScheduleNextRunAt(item, now),
+    buildDelayedRunDate: () => null,
+  });
+};
 
 /** Trường dữ liệu gắn với tài khoản gửi: đổi tài khoản thì phải chọn lại (nhóm/bạn bè của nick khác). */
 const ACCOUNT_BOUND_AUDIENCE = Object.freeze({ uids: [], groupIds: [], groupNames: [] });
@@ -90,7 +244,7 @@ export const applyChannelChange = (state, channel) => {
   if (templateKindOf(state.channel) !== templateKindOf(channel) && state.content.mode === 'template') {
     next.content = { ...state.content, templateId: null, templateName: '' };
   }
-  return next;
+  return reconcileSchedule(next);
 };
 
 /**
@@ -183,9 +337,10 @@ const manualKindOf = (channel) => (channel === 'email' ? 'email' : 'phone');
  *
  * @param {string} stepId một trong SIMPLE_STEP_IDS
  * @param {object} state
+ * @param {Date} [now] giờ hiện tại (kiểm hạn "hẹn giờ ≥ 2 phút sau")
  * @returns {boolean}
  */
-export const isStepComplete = (stepId, state) => {
+export const isStepComplete = (stepId, state, now = new Date()) => {
   const { channel, sender, audience, content, schedule } = state;
   switch (stepId) {
     case 'channel':
@@ -223,7 +378,7 @@ export const isStepComplete = (stepId, state) => {
       }
       return false;
     case 'when':
-      return WHEN_OPTION_IDS.includes(schedule?.type);
+      return getAvailableWhenOptions(state).includes(schedule?.type) && validateSchedule(schedule, now).ok;
     case 'review':
       return true;
     default:
@@ -285,6 +440,55 @@ export const buildSimpleCampaignBody = (state) => {
   if (name) body.campaignName = name;
   return body;
 };
+
+/**
+ * Body preview: như body tạo, thêm TUỲ CHỌN `startAt` (ISO — giờ hẹn / lần lặp kế tiếp) và `continuous: true` để server ước tính
+ * theo đúng cách gửi. Body tạo KHÔNG mang hai trường này.
+ *
+ * @param {object} state
+ * @param {Date} [now]
+ */
+export const buildSimplePreviewBody = (state, now = new Date()) => {
+  const body = buildSimpleCampaignBody(state);
+  const startAt = resolveScheduleStartAt(state.schedule, now);
+  if (startAt) body.startAt = startAt;
+  if (state.schedule?.type === 'continuous') body.continuous = true;
+  return body;
+};
+
+/**
+ * Body `POST /campaigns/:id/run`. "Tự động gửi cho người mới" thêm `continuousMode` + chu kỳ quét (cùng ba khoá với
+ * `useCampaignRunController.handleRunNow`: server nhận phút hoặc mili-giây).
+ *
+ * @param {object} schedule
+ * @param {string} runName
+ */
+export const buildRunBody = (schedule, runName) => {
+  const body = { source: 'campaign_run', autoActivate: true, runName };
+  if (schedule?.type === 'continuous') {
+    const minutes = Number(schedule.pollIntervalMinutes);
+    body.continuousMode = true;
+    body.pollIntervalMs = minutes * 60 * 1000;
+    body.pollIntervalMinutes = minutes;
+    body.continuousCycleMinutes = minutes;
+  }
+  return body;
+};
+
+/**
+ * Body `POST /campaign-schedules` cho "Hẹn giờ" / "Lặp lại": bật ngay và tự kích hoạt chiến dịch nháp vừa tạo.
+ *
+ * @param {object} schedule
+ * @param {{ campaignId: number|string, scheduleName: string }} meta
+ */
+export const buildSchedulePayload = (schedule, { campaignId, scheduleName }) => ({
+  campaignId,
+  scheduleName,
+  scheduleType: scheduleTypeForApi(schedule),
+  cronExpression: buildScheduleCron(schedule),
+  enabled: true,
+  activateCampaign: true,
+});
 
 /** Mở lớp bọc `{ success, data }` nếu có; server chưa bọc thì dùng thẳng thân phản hồi. */
 export const unwrapResponseData = (response) => {

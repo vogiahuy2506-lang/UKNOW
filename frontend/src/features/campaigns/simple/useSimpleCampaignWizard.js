@@ -2,28 +2,40 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useI18n } from '../../../i18n';
 import campaignApiService from '../services/campaignApi.service';
 import campaignRunApiService from '../services/campaignRunApi.service';
-import { formatEstimateDateTime } from '../utils/campaignEstimate.helpers';
+import { describeOverlapSuggestions, extractScheduleOverlapError, formatEstimateDateTime } from '../utils/campaignEstimate.helpers';
+import { normalizeContinuousPollIntervalMinutes } from '../hooks/useCampaignRunController';
 import {
   SIMPLE_STEP_IDS,
   applyChannelChange,
   applySenderChange,
+  buildRunBody,
+  buildSchedulePayload,
   buildSimpleCampaignBody,
+  buildSimplePreviewBody,
+  createDefaultSchedule,
   createInitialWizardState,
   getServerMessage,
+  isScheduleBased,
   isStepComplete,
   normalizePreview,
+  reconcileSchedule,
   unwrapResponseData,
+  validateSchedule,
 } from './simpleCampaign.helpers';
 
 const IDLE_PREVIEW = Object.freeze({ status: 'idle', data: null, message: '' });
 const IDLE_SUBMIT = Object.freeze({ status: 'idle', stage: null, message: '' });
 
 /**
- * Trạng thái + hành động của trình tạo chiến dịch "Từng bước" (PR-2: chỉ "Gửi ngay").
+ * Trạng thái + hành động của trình tạo chiến dịch "Từng bước".
  *
- * Luồng "Bắt đầu gửi": (xoá nháp cũ nếu lần trước tạo xong mà chạy lỗi) → `POST /campaigns/simple` → `runCampaign`.
+ * Luồng "Bắt đầu gửi" / "Đặt lịch": (xoá nháp cũ nếu lần trước tạo xong mà chạy/đặt lịch lỗi) → `POST /campaigns/simple` →
+ * - gửi ngay / tự động gửi cho người mới: `runCampaign` (tự động = `continuousMode`);
+ * - hẹn giờ / lặp lại: `createCampaignSchedule` (cron giờ Việt Nam, bật + kích hoạt chiến dịch trong cùng lệnh).
+ * Kết quả:
  * - Server trả 200 `requiresApproval:true` → phase `approval` (KHÔNG báo "đang gửi").
- * - Chạy lỗi sau khi đã tạo → giữ `draftCampaignId`; lần bấm kế DELETE nháp đó trước khi tạo bản mới để khỏi đẻ nháp rác.
+ * - Đặt lịch xong → phase `scheduled` (màn "Đã hẹn gửi").
+ * - Chạy/đặt lịch lỗi sau khi đã tạo → giữ `draftCampaignId`; lần bấm kế DELETE nháp đó trước khi tạo bản mới để khỏi đẻ nháp rác.
  *
  * @returns {object} xem `return` cuối hàm
  */
@@ -31,7 +43,7 @@ export default function useSimpleCampaignWizard() {
   const { t } = useI18n();
   const [state, setState] = useState(createInitialWizardState);
   const [stepId, setStepId] = useState(SIMPLE_STEP_IDS[0]);
-  /** 'editing' | 'done' | 'approval' */
+  /** 'editing' | 'done' | 'approval' | 'scheduled' */
   const [phase, setPhase] = useState('editing');
   const [preview, setPreview] = useState(IDLE_PREVIEW);
   const [submitState, setSubmitState] = useState(IDLE_SUBMIT);
@@ -68,7 +80,8 @@ export default function useSimpleCampaignWizard() {
   }, []);
 
   const selectAudienceType = useCallback((type) => {
-    setState((prev) => (prev.audience.type === type ? prev : { ...prev, audience: { ...prev.audience, type } }));
+    // Đổi nguồn có thể làm "Tự động gửi cho người mới" hết hợp lệ → reconcile về "Gửi ngay".
+    setState((prev) => (prev.audience.type === type ? prev : reconcileSchedule({ ...prev, audience: { ...prev.audience, type } })));
   }, []);
 
   const patchAudience = useCallback((patch) => {
@@ -79,8 +92,23 @@ export default function useSimpleCampaignWizard() {
     setState((prev) => ({ ...prev, content: { ...prev.content, ...patch } }));
   }, []);
 
-  const selectSchedule = useCallback((schedule) => {
-    setState((prev) => ({ ...prev, schedule }));
+  /** Bấm một thẻ ở bước "Khi nào gửi?": bấm lại đúng thẻ đang chọn thì giữ nguyên (khỏi mất giờ đã nhập). */
+  const selectWhen = useCallback((type) => {
+    setState((prev) => {
+      if (prev.schedule?.type === type) return prev;
+      return {
+        ...prev,
+        schedule: createDefaultSchedule(type, {
+          // Chu kỳ quét người mới: mặc định như màn chạy chiến dịch cũ (ngẫu nhiên 120–300 phút, bước 5).
+          pollIntervalMinutes: type === 'continuous' ? normalizeContinuousPollIntervalMinutes(null) : null,
+        }),
+      };
+    });
+  }, []);
+
+  /** Sửa trường của cách gửi đang chọn (ngày, giờ, tần suất, thứ…). */
+  const patchSchedule = useCallback((patch) => {
+    setState((prev) => ({ ...prev, schedule: { ...prev.schedule, ...patch } }));
   }, []);
 
   const setCampaignName = useCallback((campaignName) => {
@@ -97,7 +125,7 @@ export default function useSimpleCampaignWizard() {
     const seq = previewSeqRef.current;
     setPreview({ status: 'loading', data: null, message: '' });
     try {
-      const response = await campaignApiService.previewSimpleCampaign(buildSimpleCampaignBody(stateRef.current));
+      const response = await campaignApiService.previewSimpleCampaign(buildSimplePreviewBody(stateRef.current));
       if (seq !== previewSeqRef.current) return;
       setPreview({ status: 'ready', data: normalizePreview(unwrapResponseData(response)), message: '' });
     } catch (error) {
@@ -156,6 +184,17 @@ export default function useSimpleCampaignWizard() {
     const snapshot = stateRef.current;
     const translate = tRef.current;
     try {
+      // Giờ hẹn có thể đã trôi qua trong lúc người dùng đọc màn Xem lại → kiểm lại TRƯỚC khi tạo (khỏi đẻ nháp rồi mới bị từ chối).
+      const scheduleCheck = validateSchedule(snapshot.schedule, new Date());
+      if (!scheduleCheck.ok) {
+        setSubmitState({
+          status: 'error',
+          stage: 'input',
+          message: translate(scheduleCheck.reason === 'too_soon' ? 'simpleCampaign.when.scheduled.tooSoon' : 'simpleCampaign.when.scheduleIncomplete'),
+        });
+        return;
+      }
+
       // Lần trước tạo xong mà chạy lỗi: người dùng đã sửa rồi bấm lại → bỏ nháp cũ, tạo bản mới.
       if (draftIdRef.current) {
         const staleId = draftIdRef.current;
@@ -191,12 +230,35 @@ export default function useSimpleCampaignWizard() {
       setDraftCampaignId(campaignId);
       const campaignName = String(created?.campaignName || snapshot.campaignName || '').trim();
 
+      const runName = snapshot.campaignName.trim() || campaignName;
+
+      // Hẹn giờ / lặp lại: không chạy ngay mà đặt LỊCH (cron giờ Việt Nam). Lỗi → giữ nháp để lần bấm sau xoá nháp này trước.
+      if (isScheduleBased(snapshot.schedule)) {
+        try {
+          await campaignRunApiService.createCampaignSchedule(
+            buildSchedulePayload(snapshot.schedule, { campaignId, scheduleName: runName }),
+          );
+        } catch (error) {
+          // 409 SCHEDULE_OVERLAP: hiện nguyên câu của server (đã nêu giờ chạy / giờ xong dự kiến) + gợi ý, không toast chung.
+          const overlap = extractScheduleOverlapError(error);
+          setSubmitState({
+            status: 'error',
+            stage: 'schedule',
+            message: overlap?.message || getServerMessage(error, translate('simpleCampaign.review.scheduleFailed')),
+            suggestions: overlap ? describeOverlapSuggestions(overlap.suggestions, translate) : [],
+          });
+          return;
+        }
+        draftIdRef.current = null;
+        setDraftCampaignId(null);
+        setResult({ campaignId, campaignName, channel: snapshot.channel, schedule: snapshot.schedule });
+        setPhase('scheduled');
+        setSubmitState(IDLE_SUBMIT);
+        return;
+      }
+
       try {
-        const runResponse = await campaignRunApiService.runCampaign(campaignId, {
-          source: 'campaign_run',
-          autoActivate: true,
-          runName: snapshot.campaignName.trim() || campaignName,
-        });
+        const runResponse = await campaignRunApiService.runCampaign(campaignId, buildRunBody(snapshot.schedule, runName));
         const runData = unwrapResponseData(runResponse);
         // 200 không có nghĩa "đang gửi": chiến dịch vượt ngưỡng của nhân viên thì chỉ chuyển sang chờ chủ duyệt.
         const requiresApproval = runData?.requiresApproval === true || runResponse?.data?.requiresApproval === true;
@@ -247,7 +309,8 @@ export default function useSimpleCampaignWizard() {
     selectAudienceType,
     patchAudience,
     patchContent,
-    selectSchedule,
+    selectWhen,
+    patchSchedule,
     setCampaignName,
     loadPreview,
     invalidatePreview,

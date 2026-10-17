@@ -436,10 +436,28 @@ function senderSurvivedPrepare(nodes, channel, senderId) {
 }
 
 /**
+ * Trường TUỲ CHỌN của preview để ước tính theo cách gửi (PLAN_TAO_CHIEN_DICH_TUNG_BUOC PR-3): `startAt` (ISO, giờ hẹn / lần
+ * lặp kế tiếp) và `continuous: true` (tự gửi cho người mới). Sai định dạng thì bỏ qua (ước tính như "gửi ngay"), không 400:
+ * đây chỉ là gợi ý hiển thị, quá khứ đã được bộ ước tính tự kẹp về "bây giờ".
+ *
+ * @param {object} body body preview
+ * @returns {{ startAt: Date|null, continuous: boolean }}
+ */
+export function resolvePreviewEstimateOptions(body) {
+  const rawStartAt = body && typeof body === 'object' ? body.startAt : null;
+  let startAt = null;
+  if (typeof rawStartAt === 'string' && rawStartAt.trim()) {
+    const parsed = new Date(rawStartAt.trim());
+    if (!Number.isNaN(parsed.getTime())) startAt = parsed;
+  }
+  return { startAt, continuous: body?.continuous === true };
+}
+
+/**
  * Dựng bản nháp ĐÃ KIỂM từ body (bước 1–5 của plan, KHÔNG ghi DB): chuẩn hoá → biên dịch → gắn nội dung → prepareScript →
  * người nhận nhập sẵn → điền tên tab Sheet → thẻ xác nhận → validateNodeConfig từng node.
  *
- * @param {{ body: object, authUser: object, includeEstimate?: boolean, now?: Date }} input
+ * @param {{ body: object, authUser: object, includeEstimate?: boolean, estimateOptions?: { startAt?: Date|null, continuous?: boolean }|null, now?: Date }} input
  * @returns {Promise<{
  *   input: Awaited<ReturnType<typeof normalizeSimpleBody>>,
  *   ownerId: number,
@@ -448,7 +466,7 @@ function senderSurvivedPrepare(nodes, channel, senderId) {
  *   issues: Array<object>,
  * }>}
  */
-export async function buildSimpleDraft({ body, authUser, includeEstimate = false, now = new Date() }) {
+export async function buildSimpleDraft({ body, authUser, includeEstimate = false, estimateOptions = null, now = new Date() }) {
   const ownerId = getWorkspaceContext(authUser).workspaceOwnerId;
   const input = await normalizeSimpleBody(body, { ownerId, now });
   const { nodes, connections } = await compileSimpleGraph(input, { ownerId });
@@ -473,6 +491,7 @@ export async function buildSimpleDraft({ body, authUser, includeEstimate = false
     userId: authUser.id,
     ownerUserId: ownerId,
     includeEstimate,
+    estimateOptions,
   });
 
   const issues = [];
@@ -578,7 +597,13 @@ async function findCampaignLimitIssue(authUser, channel) {
  * }>}
  */
 export async function previewSimpleCampaign({ body, authUser, now = new Date() }) {
-  const { input, view, issues } = await buildSimpleDraft({ body, authUser, includeEstimate: true, now });
+  const { input, view, issues } = await buildSimpleDraft({
+    body,
+    authUser,
+    includeEstimate: true,
+    estimateOptions: resolvePreviewEstimateOptions(body),
+    now,
+  });
   const estimate = view.estimate || null;
 
   const limitIssue = await findCampaignLimitIssue(authUser, input.channel);

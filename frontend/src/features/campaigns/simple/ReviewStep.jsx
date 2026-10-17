@@ -4,6 +4,7 @@ import { HiOutlineExclamationCircle } from 'react-icons/hi';
 import CampaignEstimatePanel from '../components/CampaignEstimatePanel';
 import { describeIssue } from './simpleCampaign.helpers';
 import { buildReviewSummary } from './simpleCampaign.summary';
+import { RecurringWarning } from './WhenStep';
 
 /** Ghép chuỗi có `**in đậm**` thành các phần tử — không dùng dangerouslySetInnerHTML vì có tên do người dùng đặt. */
 function RichSummary({ text }) {
@@ -51,6 +52,12 @@ export default function ReviewStep({ wizard, t, locale }) {
       <p className="mt-4 rounded-2xl border border-orange-200 bg-orange-50/70 p-4 text-base leading-relaxed text-slate-700 dark:border-orange-500/30 dark:bg-orange-950/30 dark:text-dk-text" data-testid="simple-summary">
         <RichSummary text={summary} />
       </p>
+
+      {state.schedule?.type === 'recurring' && (
+        <div className="mt-3">
+          <RecurringWarning t={t} />
+        </div>
+      )}
 
       <div className="mt-4 space-y-3" aria-live="polite">
         {preview.status === 'loading' && (
@@ -126,7 +133,14 @@ export default function ReviewStep({ wizard, t, locale }) {
             <HiOutlineExclamationCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
             <span>{submitState.message}</span>
           </p>
-          {submitState.stage === 'run' && <p className="mt-2 text-xs">{t('simpleCampaign.review.runHint')}</p>}
+          {submitState.stage === 'schedule' && Array.isArray(submitState.suggestions) && submitState.suggestions.length > 0 && (
+            <ul className="mt-2 list-disc space-y-1 pl-5 font-normal" data-testid="simple-overlap-suggestions">
+              {submitState.suggestions.map((suggestion, index) => <li key={index}>{suggestion}</li>)}
+            </ul>
+          )}
+          {(submitState.stage === 'run' || submitState.stage === 'schedule') && (
+            <p className="mt-2 text-xs">{t(submitState.stage === 'run' ? 'simpleCampaign.review.runHint' : 'simpleCampaign.review.scheduleHint')}</p>
+          )}
         </div>
       )}
     </div>

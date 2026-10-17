@@ -52,6 +52,7 @@ const {
   buildSimpleDraft,
   buildSimpleCreateDraft,
   previewSimpleCampaign,
+  resolvePreviewEstimateOptions,
   normalizeSimpleBody,
   buildDefaultCampaignName,
   SimpleCampaignError,
@@ -542,6 +543,24 @@ describe('previewSimpleCampaign — không ghi DB', () => {
     expect(mockAutoCreateEmailTemplates).not.toHaveBeenCalled();
     expect(mockAutoCreateZaloTemplates).not.toHaveBeenCalled();
     expect(mockCleanupAutoCreatedTemplates).not.toHaveBeenCalled();
+  });
+
+  it('startAt (ISO) + continuous:true của body preview được truyền xuống thẻ xác nhận để ước tính theo giờ hẹn / chế độ liên tục (PR-3)', async () => {
+    await previewSimpleCampaign({
+      body: emailBody({ startAt: '2026-10-20T01:30:00.000Z', continuous: true }),
+      authUser: user,
+    });
+    const arg = mockBuildConfirmationView.mock.calls[0][0];
+    expect(arg.includeEstimate).toBe(true);
+    expect(arg.estimateOptions.startAt).toEqual(new Date('2026-10-20T01:30:00.000Z'));
+    expect(arg.estimateOptions.continuous).toBe(true);
+  });
+
+  it('không có startAt/continuous → estimateOptions rỗng (ước tính như gửi ngay); startAt sai định dạng bị bỏ, không 400', async () => {
+    await previewSimpleCampaign({ body: emailBody(), authUser: user });
+    expect(mockBuildConfirmationView.mock.calls[0][0].estimateOptions).toEqual({ startAt: null, continuous: false });
+    expect(resolvePreviewEstimateOptions({ startAt: 'khong-phai-ngay' })).toEqual({ startAt: null, continuous: false });
+    expect(resolvePreviewEstimateOptions({ continuous: 'true' }).continuous).toBe(false);
   });
 
   it('xin ước tính (includeEstimate) và trả đủ hình dạng hợp đồng', async () => {

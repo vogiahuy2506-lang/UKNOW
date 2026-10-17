@@ -6,6 +6,7 @@ import {
   EMPTY_AUDIENCE,
   SIMPLE_CHANNELS,
   SIMPLE_STEP_IDS,
+  RECURRING_FREQUENCIES,
   WHEN_OPTION_IDS,
   applyChannelChange,
   applySenderChange,
@@ -317,7 +318,14 @@ describe('i18n simpleCampaign — mọi khoá dựng động có đủ ở vi v�
         ? [`audience.types.${type}.descEmail`, `audience.types.${type}.descPhone`]
         : [`audience.types.${type}.desc`]),
     ]),
-    ...WHEN_OPTION_IDS.flatMap((id) => [`when.${id}.title`, `when.${id}.desc`, `review.when.${id}`]),
+    ...WHEN_OPTION_IDS.flatMap((id) => [`when.${id}.title`, `when.${id}.desc`]),
+    // Câu tóm tắt: "Lặp lại" có ba biến thể theo tần suất (describeWhen), các cách gửi khác một khoá.
+    ...WHEN_OPTION_IDS.filter((id) => id !== 'recurring').map((id) => `review.when.${id}`),
+    'review.when.recurringDaily', 'review.when.recurringWeekly', 'review.when.recurringMonthly',
+    'when.recurring.warningStrong', 'when.recurring.warningRest', 'when.continuous.panel',
+    'when.scheduled.tooSoon', 'when.scheduleIncomplete', 'nav.schedule', 'nav.scheduling',
+    'scheduled.title', 'scheduled.body', 'scheduled.viewSchedules',
+    ...RECURRING_FREQUENCIES.map((frequency) => `when.recurring.frequency.${frequency}`),
     'needs.channel', 'needs.audience', 'needs.audienceGroups', 'needs.content', 'needs.when',
     'audience.manual.labelEmail', 'audience.manual.labelPhone', 'audience.manual.placeholderEmail', 'audience.manual.placeholderPhone',
     'issues.unknown',

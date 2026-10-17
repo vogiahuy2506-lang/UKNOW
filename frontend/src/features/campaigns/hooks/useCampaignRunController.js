@@ -66,7 +66,7 @@ const getRandomContinuousPollIntervalMinutes = () => {
  * @param {number|string} rawValue
  * @returns {number}
  */
-const normalizeContinuousPollIntervalMinutes = (rawValue) => {
+export const normalizeContinuousPollIntervalMinutes = (rawValue) => {
   const parsed = Number.parseInt(rawValue, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) return getRandomContinuousPollIntervalMinutes();
   return parsed;

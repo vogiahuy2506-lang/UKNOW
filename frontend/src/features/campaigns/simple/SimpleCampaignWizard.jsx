@@ -11,7 +11,8 @@ import AudienceStep from './AudienceStep';
 import ContentStep from './ContentStep';
 import WhenStep from './WhenStep';
 import ReviewStep from './ReviewStep';
-import { ApprovalScreen, DoneScreen } from './ResultScreens';
+import { ApprovalScreen, DoneScreen, ScheduledScreen } from './ResultScreens';
+import { isScheduleBased } from './simpleCampaign.helpers';
 
 /**
  * Vỏ của trình "Tạo chiến dịch từng bước": thanh tiến trình, bước hiện tại, chân trang Quay lại / Tiếp tục
@@ -47,6 +48,15 @@ export default function SimpleCampaignWizard() {
       </div>
     );
   }
+  if (phase === 'scheduled' && wizard.result) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-dk-border dark:bg-dk-surface sm:p-8">
+        <div ref={stepRef} tabIndex={-1} className="outline-none">
+          <ScheduledScreen result={wizard.result} onCreateAnother={wizard.reset} t={t} />
+        </div>
+      </div>
+    );
+  }
   if (phase === 'approval' && wizard.result) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-dk-border dark:bg-dk-surface sm:p-8">
@@ -63,6 +73,7 @@ export default function SimpleCampaignWizard() {
 
   const needsKey = stepId === 'audience' && state.channel === 'zalo_group' ? 'audienceGroups' : stepId;
   const isSubmitting = submitState.status === 'submitting';
+  const scheduleBased = isScheduleBased(state.schedule);
 
   return (
     <div className="space-y-5">
@@ -101,7 +112,9 @@ export default function SimpleCampaignWizard() {
                 data-testid="simple-start"
               >
                 {isSubmitting && <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden="true" />}
-                {isSubmitting ? t('simpleCampaign.nav.starting') : t('simpleCampaign.nav.start')}
+                {isSubmitting
+                  ? t(scheduleBased ? 'simpleCampaign.nav.scheduling' : 'simpleCampaign.nav.starting')
+                  : t(scheduleBased ? 'simpleCampaign.nav.schedule' : 'simpleCampaign.nav.start')}
               </button>
             ) : (
               <button

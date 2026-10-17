@@ -1,8 +1,48 @@
-import { parseManualRecipients } from './simpleCampaign.helpers';
+import { WEEKDAY_OPTIONS, parseManualRecipients } from './simpleCampaign.helpers';
 
 const MAX_NAMES_SHOWN = 2;
 
 const quote = (value) => `“${value}”`;
+
+/** "2026-10-20" → "20/10/2026" (ngày người dùng chọn, không qua Date để khỏi lệch múi giờ). */
+const formatPickedDate = (value) => {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : String(value || '');
+};
+
+/** "9:05" → "09:05". */
+const formatPickedTime = (value) => {
+  const match = String(value || '').match(/^(\d{1,2}):(\d{2})/);
+  return match ? `${match[1].padStart(2, '0')}:${match[2]}` : String(value || '');
+};
+
+/**
+ * Cụm từ nói về CÁCH GỬI, dùng ở câu tóm tắt (Xem lại) và màn "Đã hẹn gửi": "gửi ngay", "hẹn gửi lúc 08:30 ngày 20/10/2026",
+ * "tự động gửi cho người mới (cứ 180 phút kiểm tra một lần)", "gửi lặp lại hằng tuần vào Thứ Hai lúc 09:00".
+ *
+ * @param {object} args
+ * @param {object} args.schedule `state.schedule`
+ * @param {(key: string, params?: object) => string} args.t
+ * @returns {string}
+ */
+export const describeWhen = ({ schedule, t }) => {
+  switch (schedule?.type) {
+    case 'scheduled':
+      return t('simpleCampaign.review.when.scheduled', { time: formatPickedTime(schedule.time), date: formatPickedDate(schedule.date) });
+    case 'continuous':
+      return t('simpleCampaign.review.when.continuous', { minutes: schedule.pollIntervalMinutes });
+    case 'recurring': {
+      const time = formatPickedTime(schedule.time);
+      if (schedule.frequency === 'weekly') {
+        const day = WEEKDAY_OPTIONS.find((item) => item.value === String(schedule.weeklyDay));
+        return t('simpleCampaign.review.when.recurringWeekly', { day: day ? t(`campaigns.${day.key}`) : '', time });
+      }
+      return t(schedule.frequency === 'monthly' ? 'simpleCampaign.review.when.recurringMonthly' : 'simpleCampaign.review.when.recurringDaily', { time });
+    }
+    default:
+      return t('simpleCampaign.review.when.now');
+  }
+};
 
 /** "A", "B" +3 — không để câu tóm tắt dài vô hạn khi chọn nhiều biểu mẫu/trang. */
 const joinNames = (names, { withQuotes }) => {
@@ -63,6 +103,6 @@ export const buildReviewSummary = ({ state, preview, t, locale }) => {
     sender: sender?.label || '',
     audience: audienceText,
     content: contentText,
-    when: t(`simpleCampaign.review.when.${schedule?.type || 'now'}`),
+    when: describeWhen({ schedule, t }),
   });
 };

@@ -151,7 +151,7 @@ class CampaignConfirmationService {
     }
   }
 
-  async buildConfirmationView({ script, userId, ownerUserId = null, includeEstimate = false }) {
+  async buildConfirmationView({ script, userId, ownerUserId = null, includeEstimate = false, estimateOptions = null }) {
     // MỌI tài khoản gửi (Email, Zalo, Telegram, WhatsApp) và mẫu tin (Email/Zalo) thuộc CHỦ workspace — nhân viên dùng chung,
     // khác userId thao tác. Bằng chứng quy ước: các endpoint thường của nhân viên đều tra theo `workspaceOwnerId`
     // (emailSettings/emailTemplate/zaloSettings/zaloTemplate.controller: `getWorkspaceContext(req.user).workspaceOwnerId`),
@@ -532,7 +532,7 @@ class CampaignConfirmationService {
     // Ước tính chỉ để HIỆN trên thẻ (cảnh báo, KHÔNG đổi readyToCreate) — các nơi dựng thẻ chỉ để kiểm quyền sở hữu
     // (tạo/ghi nháp) không cần và không nên tốn đếm người nhận, nên phải xin rõ bằng `includeEstimate`.
     if (includeEstimate) {
-      view.estimate = issues.length === 0 ? await this.estimateForView({ script, ownerUserId: channelOwnerId }) : null;
+      view.estimate = issues.length === 0 ? await this.estimateForView({ script, ownerUserId: channelOwnerId, ...(estimateOptions || {}) }) : null;
     }
     return view;
   }
@@ -544,7 +544,7 @@ class CampaignConfirmationService {
    * Người nhận từ Google Sheet: endpoint prepare chỉ nhận `script` (số người nhận trong `sheetCheck` của lượt chat không đi theo
    * request) nên đếm bằng đường sẵn có của bộ ước tính — đọc Sheet MỘT lần (cache trong lần ước tính), có timeout.
    */
-  async estimateForView({ script, ownerUserId }) {
+  async estimateForView({ script, ownerUserId, startAt = null, continuous = false }) {
     try {
       const { estimateForScript } = await import('../campaign/campaignEstimate.service.js');
       let timer;
@@ -554,7 +554,9 @@ class CampaignConfirmationService {
           estimateForScript({
             script: { nodes: script?.nodes, connections: script?.connections, flowJson: script?.flowJson ?? null },
             ownerUserId,
-            startAt: new Date(),
+            // Mặc định bắt đầu = bây giờ; trình "Từng bước" truyền giờ hẹn / chế độ liên tục (PLAN_TAO_CHIEN_DICH_TUNG_BUOC PR-3).
+            startAt: startAt || new Date(),
+            continuous: continuous === true,
           }),
           timeout,
         ]);

@@ -684,6 +684,25 @@ describe('estimate — ước tính thời gian gửi trên thẻ xác nhận (P
     expect(Math.abs(arg.startAt.getTime() - Date.now())).toBeLessThan(5000);
   });
 
+  it('estimateOptions: startAt (giờ hẹn) + continuous được truyền nguyên xuống estimateForScript (trình Từng bước, PR-3)', async () => {
+    estimateForScript.mockResolvedValue(ESTIMATE);
+    const startAt = new Date('2026-10-20T01:30:00.000Z');
+    await service.default.buildConfirmationView({
+      userId: 7, ownerUserId: OWNER, script: emailScript(), includeEstimate: true, estimateOptions: { startAt, continuous: true },
+    });
+    const arg = estimateForScript.mock.calls[0][0];
+    expect(arg.startAt).toBe(startAt);
+    expect(arg.continuous).toBe(true);
+  });
+
+  it('không truyền estimateOptions → bắt đầu = bây giờ, continuous=false (hành vi cũ của thẻ AI giữ nguyên)', async () => {
+    estimateForScript.mockResolvedValue(ESTIMATE);
+    await service.default.buildConfirmationView({ userId: 7, ownerUserId: OWNER, script: emailScript(), includeEstimate: true });
+    const arg = estimateForScript.mock.calls[0][0];
+    expect(arg.continuous).toBe(false);
+    expect(Math.abs(arg.startAt.getTime() - Date.now())).toBeLessThan(5000);
+  });
+
   it('ước tính NÉM lỗi → estimate: null, thẻ không vỡ, vẫn readyToCreate', async () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     try {
