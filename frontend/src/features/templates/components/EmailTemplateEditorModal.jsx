@@ -7,18 +7,27 @@ import {
   HiOutlinePaperClip,
   HiOutlinePencil,
   HiOutlinePlus,
-  HiOutlineTrash,
   HiOutlineUpload,
   HiOutlineSparkles,
   HiOutlineChevronDown,
-  HiOutlineClipboardCopy,
-  HiOutlineDocumentText,
   HiOutlineLightBulb,
   HiOutlineSearch,
-  HiOutlineCheck,
 } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 import MessageTemplateChannelLimitNotice from './MessageTemplateChannelLimitNotice';
+import {
+  CUSTOMER_FIELDS,
+  buildDetectedVariables,
+  extractVariableKeys,
+  getVariableSource,
+  normalizeCustomKey,
+} from '../utils/templateVariables';
+
+/** Nhãn mặc định lưu dạng khoá thô ("marketing"): hiển thị viết hoa chữ đầu cho dễ đọc. */
+const prettifyLabelName = (value) => {
+  const text = String(value || '').trim();
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : '';
+};
 
 const LabelPicker = ({ value, labels, onChange }) => {
   const [open, setOpen] = useState(false);
@@ -45,7 +54,7 @@ const LabelPicker = ({ value, labels, onChange }) => {
             <span className="text-xs sm:text-sm text-gray-800 dark:text-dk-text flex-1 truncate">{selected.name}</span>
           </>
         ) : (
-          <span className="text-xs sm:text-sm text-gray-400 dark:text-dk-muted flex-1 truncate">{value || 'Chọn nhãn...'}</span>
+          <span className="text-xs sm:text-sm text-gray-400 dark:text-dk-muted flex-1 truncate">{prettifyLabelName(value) || 'Chọn nhãn...'}</span>
         )}
         <HiOutlineChevronDown className={`w-4 h-4 text-gray-400 dark:text-dk-muted flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
@@ -85,8 +94,6 @@ const EmailTemplateEditorModal = ({
   subjectInputRef,
   setActiveInput,
   updateSubjectValue,
-  editorTab,
-  setEditorTab,
   fileInputRef,
   handleFileSelect,
   isUploading,
@@ -111,17 +118,6 @@ const EmailTemplateEditorModal = ({
   editorPreviewIframeRef,
   editorPreviewSrcDoc,
   resizeIframeToContent,
-  newVariable,
-  setNewVariable,
-  handleAddVariable,
-  editingVariableIndex,
-  editingVariable,
-  setEditingVariable,
-  handleSaveEditVariable,
-  handleCancelEditVariable,
-  handleStartEditVariable,
-  handleRemoveVariable,
-  handleAddSuggestedVariable,
   hideHtmlTab = false,
   hideSubjectField = false,
   subjectLabel,
@@ -130,37 +126,30 @@ const EmailTemplateEditorModal = ({
 }) => {
   const { t } = useI18n();
 
-  /** Danh sách biến gợi ý dùng chung cho email và zalo */
-  const SUGGESTED_VARIABLES = [
-    { name: 'Họ và tên khách', key: 'tenkhach' },
-    { name: t('emailTemplateEditor.suggestedOrgUnit') || 'Đơn vị / Cơ quan', key: 'donvi' },
-    { name: t('emailTemplateEditor.suggestedPosition') || 'Chức vụ', key: 'chucvu' },
-    { name: t('emailTemplateEditor.suggestedCustomerName'), key: 'ten_khach' },
-    { name: t('emailTemplateEditor.suggestedCustomerEmail'), key: 'email_khach' },
-    { name: t('emailTemplateEditor.suggestedPhone'), key: 'so_dien_thoai' },
-    { name: t('emailTemplateEditor.suggestedCourseName'), key: 'ten_khoa_hoc' },
-    { name: t('emailTemplateEditor.suggestedCourseLink'), key: 'link_khoa_hoc' },
-  ];
+  /** Thông tin khách bộ chạy tự ghép được (dùng chung cho email và tin nhắn). */
+  const customerFields = CUSTOMER_FIELDS.map((f) => ({ ...f, name: t(f.labelKey) }));
+
+  /** Biến đang dùng: tự phát hiện từ tiêu đề + nội dung (`variables` chỉ giữ tên đã khai báo của mẫu cũ). */
+  const detectedVariables = buildDetectedVariables(
+    extractVariableKeys(formData.subject, formData.bodyHtml, formData.bodyText),
+    { declared: variables, translate: (key) => t(key) },
+  );
 
   const [showToolbarVariableMenu, setShowToolbarVariableMenu] = useState(false);
   const [toolbarVariableSearch, setToolbarVariableSearch] = useState('');
-  const [copiedKey, setCopiedKey] = useState(null);
+  const [customColumn, setCustomColumn] = useState('');
 
-  const handleCopyKey = async (key) => {
-    try {
-      await navigator.clipboard.writeText(`{{${key}}}`);
-      setCopiedKey(key);
-      toast.success(t('emailTemplateEditor.copiedVariable', { key: `{{${key}}}` }) || `Đã sao chép {{${key}}}`);
-      setTimeout(() => setCopiedKey(null), 2000);
-    } catch {
-      toast.error('Không thể sao chép');
-    }
-  };
+  /** Gợi ý khi gõ `{{`: biến đang dùng + thông tin khách có sẵn (không trùng khoá). */
+  const typeaheadOptions = [
+    ...detectedVariables,
+    ...customerFields.filter((f) => !detectedVariables.some((v) => v.key === f.key)),
+  ];
 
-  const handleInsertAndSwitchToContent = (key) => {
+  const handleInsertCustomColumn = () => {
+    const key = normalizeCustomKey(customColumn);
+    if (!key) return;
     insertVariableAtCursor(key);
-    toast.success(t('emailTemplateEditor.insertedVariable', { key: `{{${key}}}` }) || `Đã chèn {{${key}}} vào nội dung`);
-    setEditorTab('content');
+    setCustomColumn('');
   };
 
   // Báo MainLayout modal mở/đóng: MainLayout ẩn header toàn cục, thu sidebar khi mở và trả lại khi đóng.
@@ -212,32 +201,6 @@ const EmailTemplateEditorModal = ({
               {t('emailTemplateEditor.fillInfoAndDesign')}
             </div>
           </div>
-        </div>
-
-        {/* Giữa: Chuyển đổi tab Nội dung / Thiết lập biến */}
-        <div className="flex items-center gap-1 p-1 bg-gray-100/90 dark:bg-dk-raised rounded-xl border border-transparent dark:border-dk-border">
-          <button
-            type="button"
-            onClick={() => setEditorTab('content')}
-            className={`px-3 py-1 text-xs sm:text-sm font-medium rounded-lg transition-all ${
-              editorTab === 'content'
-                ? 'bg-white dark:bg-dk-bg text-gray-900 dark:text-dk-text shadow-2xs font-semibold'
-                : 'text-gray-500 dark:text-dk-text2 hover:text-gray-900 dark:hover:text-dk-text'
-            }`}
-          >
-            {t('emailTemplateEditor.content')}
-          </button>
-          <button
-            type="button"
-            onClick={() => setEditorTab('variables')}
-            className={`px-3 py-1 text-xs sm:text-sm font-medium rounded-lg transition-all ${
-              editorTab === 'variables'
-                ? 'bg-white dark:bg-dk-bg text-gray-900 dark:text-dk-text shadow-2xs font-semibold'
-                : 'text-gray-500 dark:text-dk-text2 hover:text-gray-900 dark:hover:text-dk-text'
-            }`}
-          >
-            {t('emailTemplateEditor.setupVariables')}
-          </button>
         </div>
 
         {/* Phải: Nút Hủy và Nút Lưu / Tạo template */}
@@ -305,18 +268,15 @@ const EmailTemplateEditorModal = ({
           </div>
         </div>
 
-        <div className="flex-1 flex min-h-0 overflow-hidden">
-          <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden">
-            <div className="flex items-center justify-between border-b border-gray-200 dark:border-dk-border px-4 py-2 bg-white dark:bg-dk-surface shrink-0">
+        <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-y-auto lg:overflow-hidden">
+          <div className="flex-1 flex flex-col min-h-[460px] lg:min-h-0 lg:h-full overflow-hidden min-w-0">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 dark:border-dk-border px-4 py-2 bg-white dark:bg-dk-surface shrink-0">
               <div className="flex items-center gap-2">
                 <span className="text-xs text-gray-500 dark:text-dk-text2 font-medium">
-                  {editorTab === 'content'
-                    ? (templateKindLabel === 'zalo' ? 'Nội dung tin nhắn' : 'Nội dung email')
-                    : `${t('emailTemplateEditor.setupVariables')} (${variables.length})`}
+                  {templateKindLabel === 'zalo' ? 'Nội dung tin nhắn' : 'Nội dung email'}
                 </span>
               </div>
-              {editorTab === 'content' && (
-                <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                   {/* Nút Dropdown Chèn biến */}
                   <div className="relative">
                     <button
@@ -360,13 +320,13 @@ const EmailTemplateEditorModal = ({
 
                           <div className="overflow-y-auto p-2 space-y-3 flex-1 text-xs">
                             {/* Nhóm 1: Biến trong template */}
-                            {variables.length > 0 && (
+                            {detectedVariables.length > 0 && (
                               <div>
                                 <div className="px-2 py-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-                                  {t('emailTemplateEditor.templateVariables') || 'Biến trong mẫu này'} ({variables.length})
+                                  {t('emailTemplateEditor.templateVariables') || 'Biến trong mẫu này'} ({detectedVariables.length})
                                 </div>
                                 <div className="space-y-1 mt-1">
-                                  {variables
+                                  {detectedVariables
                                     .filter((v) =>
                                       !toolbarVariableSearch ||
                                       v.name?.toLowerCase().includes(toolbarVariableSearch.toLowerCase()) ||
@@ -400,22 +360,19 @@ const EmailTemplateEditorModal = ({
                                 {t('emailTemplateEditor.suggestedAndSystemVariables') || 'Biến hệ thống & gợi ý'}
                               </div>
                               <div className="space-y-1 mt-1">
-                                {SUGGESTED_VARIABLES
+                                {customerFields
                                   .filter((v) =>
                                     !toolbarVariableSearch ||
                                     v.name?.toLowerCase().includes(toolbarVariableSearch.toLowerCase()) ||
                                     v.key?.toLowerCase().includes(toolbarVariableSearch.toLowerCase())
                                   )
                                   .map((v) => {
-                                    const alreadyInTemplate = variables.some((tv) => tv.key === v.key);
+                                    const alreadyInTemplate = detectedVariables.some((tv) => tv.key === v.key);
                                     return (
                                       <button
                                         key={`sug-var-${v.key}`}
                                         type="button"
                                         onClick={() => {
-                                          if (!alreadyInTemplate) {
-                                            handleAddSuggestedVariable(v);
-                                          }
                                           insertVariableAtCursor(v.key);
                                           setShowToolbarVariableMenu(false);
                                           setToolbarVariableSearch('');
@@ -440,18 +397,8 @@ const EmailTemplateEditorModal = ({
                           </div>
 
                           {/* Footer tip */}
-                          <div className="px-3 py-2 bg-gray-50 dark:bg-dk-raised border-t border-gray-200 dark:border-dk-border text-[11px] text-gray-500 dark:text-dk-text2 flex items-center justify-between">
+                          <div className="px-3 py-2 bg-gray-50 dark:bg-dk-raised border-t border-gray-200 dark:border-dk-border text-[11px] text-gray-500 dark:text-dk-text2">
                             <span>💡 Gõ <code className="font-bold text-gray-700 dark:text-dk-text font-mono">{`{{`}</code> khi soạn thảo</span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setShowToolbarVariableMenu(false);
-                                setEditorTab('variables');
-                              }}
-                              className="text-primary-600 dark:text-primary-400 hover:text-primary-700 font-medium"
-                            >
-                              {t('emailTemplateEditor.setupVariables')} →
-                            </button>
                           </div>
                         </div>
                       </>
@@ -490,8 +437,7 @@ const EmailTemplateEditorModal = ({
                       <HiOutlineEye className="w-4 h-4" /> {isPreviewVisible ? t('emailTemplateEditor.hidePreview') : t('emailTemplateEditor.showPreview')}
                     </button>
                   )}
-                </div>
-              )}
+              </div>
             </div>
 
             {templateKindLabel === 'zalo' && (
@@ -499,7 +445,7 @@ const EmailTemplateEditorModal = ({
             )}
 
             <div className="flex-1 overflow-hidden">
-              {editorTab === 'content' ? (
+              {(
                 <div ref={editorContainerRef} className="flex h-full">
                   <div
                     className="flex flex-col min-w-[320px]"
@@ -546,13 +492,6 @@ const EmailTemplateEditorModal = ({
                           {t('emailTemplateEditor.variableInsertionTip') || 'Gõ {{ hoặc bấm nút "Chèn biến" trên thanh công cụ để chèn biến cá nhân hóa (họ tên, đơn vị...).'}
                         </span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setEditorTab('variables')}
-                        className="text-primary-700 dark:text-primary-300 hover:text-primary-900 dark:hover:text-primary-200 font-medium underline hover:no-underline ml-2 flex-shrink-0 text-[11px]"
-                      >
-                        {t('emailTemplateEditor.setupVariables')} →
-                      </button>
                     </div>
 
                     <div className="flex-1 relative">
@@ -584,7 +523,7 @@ const EmailTemplateEditorModal = ({
                       )}
 
                       {showVariableSuggestions &&
-                        variables.length > 0 &&
+                        typeaheadOptions.length > 0 &&
                         (activeInput === 'html' || activeInput === 'text' || activeInput === 'subject') && (
                           <>
                             {/* Backdrop trong suốt để đóng dropdown khi click ra ngoài */}
@@ -603,7 +542,7 @@ const EmailTemplateEditorModal = ({
                                 {t('emailTemplateEditor.selectVariableToInsert')}
                               </div>
                               <div className="max-h-48 overflow-auto py-1">
-                                {variables
+                                {typeaheadOptions
                                   .filter(
                                     (v) =>
                                       v.name?.toLowerCase().includes(variableQuery.toLowerCase()) ||
@@ -674,232 +613,93 @@ const EmailTemplateEditorModal = ({
                     </>
                   )}
                 </div>
-              ) : (
-                <div className="h-full bg-gray-50 dark:bg-dk-bg p-4 overflow-auto">
-                  <div className="max-w-4xl mx-auto space-y-4">
-                    {/* Section biến gợi ý */}
-                    <div className="bg-white dark:bg-dk-raised p-4 rounded-lg border border-gray-200 dark:border-dk-border">
-                      <div className="flex items-center gap-2 mb-3">
-                        <HiOutlineSparkles className="w-4 h-4 text-primary-500" />
-                        <h4 className="text-gray-900 dark:text-dk-text font-medium">{t('emailTemplateEditor.suggestedVariables')}</h4>
-                      </div>
-                      <p className="text-xs text-gray-500 dark:text-dk-text2 mb-3">
-                        {t('emailTemplateEditor.clickToAddVariable')}
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {SUGGESTED_VARIABLES.map((sv) => {
-                          const alreadyAdded = variables.some((v) => v.key === sv.key);
-                          return (
-                            <button
-                              key={sv.key}
-                              type="button"
-                              onClick={() => handleAddSuggestedVariable(sv)}
-                              disabled={alreadyAdded}
-                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${
-                                alreadyAdded
-                                  ? 'bg-gray-100 dark:bg-dk-raised border-gray-200 dark:border-dk-border text-gray-400 dark:text-dk-muted cursor-default'
-                                  : 'bg-primary-50 dark:bg-primary-950/40 border-primary-200 dark:border-primary-800 text-primary-700 dark:text-primary-300 hover:bg-primary-100 dark:hover:bg-primary-900/50 hover:border-primary-300 cursor-pointer'
-                              }`}
-                            >
-                              <HiOutlinePlus className={`w-3 h-3 ${alreadyAdded ? 'opacity-0' : ''}`} />
-                              <span>{sv.name}</span>
-                              <code className="text-[10px] opacity-60 font-mono">{`{{${sv.key}}}`}</code>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div className="bg-white dark:bg-dk-raised p-4 rounded-lg border border-gray-200 dark:border-dk-border">
-                      <h4 className="text-gray-900 dark:text-dk-text font-medium">{t('emailTemplateEditor.variableManagement')}</h4>
-                      <p className="text-xs text-gray-600 dark:text-dk-text2 mb-4">
-                        {t('emailTemplateEditor.manageVariablesDescription', { templateKind: templateKindLabel })}
-                      </p>
-
-                      <div className="grid grid-cols-3 gap-3 mb-4">
-                        <div>
-                          <label className="text-xs font-medium text-gray-700 dark:text-dk-text mb-1 block">{t('emailTemplateEditor.variableName')}</label>
-                          <input
-                            type="text"
-                            value={newVariable.name}
-                            onChange={(e) =>
-                              setNewVariable((prev) => ({
-                                ...prev,
-                                name: e.target.value,
-                              }))
-                            }
-                            className="w-full px-3 py-1.5 text-sm bg-gray-50 dark:bg-dk-inset text-gray-900 dark:text-dk-text placeholder:text-gray-400 dark:placeholder:text-dk-muted border border-gray-300 dark:border-dk-border rounded-lg focus:bg-white dark:focus:bg-dk-inset focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
-                            placeholder={t('emailTemplateEditor.variableNamePlaceholder')}
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs font-medium text-gray-700 dark:text-dk-text mb-1 block">{t('emailTemplateEditor.variableKey')}</label>
-                          <input
-                            type="text"
-                            value={newVariable.key}
-                            onChange={(e) =>
-                              setNewVariable((prev) => ({
-                                ...prev,
-                                key: e.target.value,
-                              }))
-                            }
-                            className="w-full px-3 py-1.5 text-sm bg-gray-50 dark:bg-dk-inset text-gray-900 dark:text-dk-text placeholder:text-gray-400 dark:placeholder:text-dk-muted border border-gray-300 dark:border-dk-border rounded-lg focus:bg-white dark:focus:bg-dk-inset focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
-                            placeholder={t('emailTemplateEditor.variableKeyPlaceholder')}
-                          />
-                        </div>
-                        <div className="flex items-end">
-                          <button
-                            type="button"
-                            onClick={handleAddVariable}
-                            className="w-full bg-primary-500 hover:bg-primary-600 text-white px-4 py-1.5 rounded-lg font-medium transition-colors text-sm"
-                          >
-                            <HiOutlinePlus className="w-4 h-4 mr-2 inline" />
-                            {t('emailTemplateEditor.addVariable')}
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="border border-gray-200 dark:border-dk-border rounded-lg overflow-hidden">
-                        <div className="bg-gray-50 dark:bg-dk-surface px-4 py-2 border-b border-gray-200 dark:border-dk-border">
-                          <h5 className="text-xs font-semibold text-gray-900 dark:text-dk-text">{t('emailTemplateEditor.variablesList')} ({variables.length})</h5>
-                        </div>
-                        {variables.length === 0 ? (
-                          <div className="p-4 text-center text-gray-500 dark:text-dk-text2">
-                            <div className="w-10 h-10 bg-gray-100 dark:bg-dk-raised rounded-full flex items-center justify-center mx-auto mb-2">
-                              <HiOutlinePlus className="w-6 h-6 text-gray-400 dark:text-dk-muted" />
-                            </div>
-                            <p className="text-sm">{t('emailTemplateEditor.noVariables')}</p>
-                            <p className="text-xs mt-1">{t('emailTemplateEditor.addVariableTip')}</p>
-                          </div>
-                        ) : (
-                          <div className="overflow-auto">
-                            <table className="min-w-full text-sm">
-                              <thead className="bg-gray-50 dark:bg-dk-surface">
-                                <tr className="text-left text-xs uppercase tracking-wide text-gray-500 dark:text-dk-text2">
-                                  <th className="px-4 py-2 font-semibold">{t('emailTemplateEditor.fieldName')}</th>
-                                  <th className="px-4 py-2 font-semibold">{t('emailTemplateEditor.variableKey')}</th>
-                                  <th className="px-4 py-2 font-semibold w-40 text-right">{t('common.actions')}</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-gray-200 dark:divide-dk-border">
-                                {variables.map((variable, index) => (
-                                  <tr key={`${variable.key}-${index}`} className="hover:bg-gray-50 dark:hover:bg-dk-raised/40 transition-colors">
-                                    {editingVariableIndex === index ? (
-                                      <>
-                                        <td className="px-4 py-2">
-                                          <input
-                                            type="text"
-                                            value={editingVariable.name}
-                                            onChange={(e) =>
-                                              setEditingVariable((prev) => ({
-                                                ...prev,
-                                                name: e.target.value,
-                                              }))
-                                            }
-                                            className="w-full px-3 py-1.5 text-sm bg-white dark:bg-dk-inset text-gray-900 dark:text-dk-text border border-gray-300 dark:border-dk-border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                                          />
-                                        </td>
-                                        <td className="px-4 py-2">
-                                          <input
-                                            type="text"
-                                            value={editingVariable.key}
-                                            onChange={(e) =>
-                                              setEditingVariable((prev) => ({
-                                                ...prev,
-                                                key: e.target.value,
-                                              }))
-                                            }
-                                            className="w-full px-3 py-1.5 text-sm bg-white dark:bg-dk-inset text-gray-900 dark:text-dk-text border border-gray-300 dark:border-dk-border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                                          />
-                                        </td>
-                                        <td className="px-4 py-2">
-                                          <div className="flex items-center justify-end gap-2">
-                                            <button
-                                              type="button"
-                                              onClick={handleSaveEditVariable}
-                                              className="px-3 py-1.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-xs"
-                                            >
-                                              {t('common.save')}
-                                            </button>
-                                            <button
-                                              type="button"
-                                              onClick={handleCancelEditVariable}
-                                              className="px-3 py-1.5 bg-gray-200 dark:bg-dk-strong text-gray-700 dark:text-dk-text rounded-lg hover:bg-gray-300 dark:hover:bg-dk-border-strong transition-colors text-xs"
-                                            >
-                                              {t('common.cancel')}
-                                            </button>
-                                          </div>
-                                        </td>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <td className="px-4 py-2 font-medium text-gray-900 dark:text-dk-text">{variable.name}</td>
-                                        <td className="px-4 py-2">
-                                          <code
-                                            onClick={() => handleCopyKey(variable.key)}
-                                            title={t('emailTemplateEditor.copyVariableKey') || 'Bấm để sao chép'}
-                                            className="text-xs bg-gray-100 dark:bg-dk-raised hover:bg-primary-50 dark:hover:bg-primary-950/40 text-gray-700 dark:text-dk-text hover:text-primary-800 dark:hover:text-primary-300 px-2 py-1 rounded cursor-pointer border border-transparent hover:border-primary-200 dark:hover:border-primary-800 transition-all inline-flex items-center gap-1 font-mono"
-                                          >
-                                            {`{{${variable.key}}}`}
-                                            {copiedKey === variable.key ? (
-                                              <HiOutlineCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 inline" />
-                                            ) : (
-                                              <HiOutlineClipboardCopy className="w-3.5 h-3.5 opacity-40 hover:opacity-100 inline" />
-                                            )}
-                                          </code>
-                                        </td>
-                                        <td className="px-4 py-2">
-                                          <div className="flex items-center justify-end gap-1.5">
-                                            <button
-                                              type="button"
-                                              onClick={() => handleInsertAndSwitchToContent(variable.key)}
-                                              className="px-2 py-1 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 rounded-lg transition-colors text-xs font-medium inline-flex items-center gap-1"
-                                              title={t('emailTemplateEditor.insertIntoContent') || 'Chèn vào nội dung'}
-                                            >
-                                              <HiOutlineDocumentText className="w-3.5 h-3.5" />
-                                              <span>{t('emailTemplateEditor.insertVariable') || 'Chèn'}</span>
-                                            </button>
-                                            <button
-                                              type="button"
-                                              onClick={() => handleCopyKey(variable.key)}
-                                              className="p-1.5 text-gray-500 dark:text-dk-text2 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-dk-raised rounded-lg transition-colors"
-                                              title={t('emailTemplateEditor.copyVariableKey') || 'Sao chép mã biến'}
-                                            >
-                                              <HiOutlineClipboardCopy className="w-4 h-4" />
-                                            </button>
-                                            <button
-                                              type="button"
-                                              onClick={() => handleStartEditVariable(index)}
-                                              className="p-1.5 text-gray-500 dark:text-dk-text2 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-dk-raised rounded-lg transition-colors"
-                                              title={t('common.edit')}
-                                            >
-                                              <HiOutlinePencil className="w-4 h-4" />
-                                            </button>
-                                            <button
-                                              type="button"
-                                              onClick={() => handleRemoveVariable(index)}
-                                              className="p-1.5 text-gray-500 dark:text-dk-text2 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors"
-                                              title={t('common.delete')}
-                                            >
-                                              <HiOutlineTrash className="w-4 h-4" />
-                                            </button>
-                                          </div>
-                                        </td>
-                                      </>
-                                    )}
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
               )}
             </div>
           </div>
+          <aside
+            data-testid="template-customer-info-panel"
+            className="shrink-0 lg:w-72 xl:w-80 border-t lg:border-t-0 lg:border-l border-gray-200 dark:border-dk-border bg-gray-50/70 dark:bg-dk-surface/70 p-3 lg:p-4 lg:overflow-y-auto space-y-4"
+          >
+            <section>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-dk-text">{t('emailTemplateEditor.insertCustomerInfo')}</h3>
+              <p className="mt-0.5 text-xs text-gray-500 dark:text-dk-text2">{t('emailTemplateEditor.insertCustomerInfoHint')}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {customerFields.map((field) => (
+                  <button
+                    key={field.key}
+                    type="button"
+                    // Giữ con trỏ trong ô đang soạn để chip chèn đúng chỗ.
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => insertVariableAtCursor(field.key)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium bg-primary-50 dark:bg-primary-950/40 border-primary-200 dark:border-primary-800 text-primary-700 dark:text-primary-300 hover:bg-primary-100 dark:hover:bg-primary-900/50 transition-colors"
+                  >
+                    <HiOutlinePlus className="w-3 h-3" />
+                    <span>{field.name}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-dk-text">{t('emailTemplateEditor.usedInTemplate')}</h3>
+              {detectedVariables.length === 0 ? (
+                <p className="mt-1 text-xs text-gray-500 dark:text-dk-text2">{t('emailTemplateEditor.usedInTemplateEmpty')}</p>
+              ) : (
+                <ul className="mt-1.5 space-y-1.5">
+                  {detectedVariables.map((variable) => {
+                    const source = getVariableSource(variable.key);
+                    const sourceText = source === 'column'
+                      ? t('emailTemplateEditor.sourceColumn', { key: variable.key })
+                      : t(`emailTemplateEditor.source_${source}`);
+                    return (
+                      <li
+                        key={variable.key}
+                        className="rounded-lg border border-gray-200 dark:border-dk-border bg-white dark:bg-dk-raised px-2.5 py-1.5"
+                      >
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                          {variable.name !== variable.key && (
+                            <span className="text-xs font-medium text-gray-800 dark:text-dk-text">{variable.name}</span>
+                          )}
+                          <code className="text-[11px] font-mono text-gray-500 dark:text-dk-text2 break-all">{`{{${variable.key}}}`}</code>
+                        </div>
+                        <div className="mt-0.5 text-[11px] leading-snug text-gray-500 dark:text-dk-text2">{sourceText}</div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+
+            <section>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-dk-text">{t('emailTemplateEditor.customInfoTitle')}</h3>
+              <div className="mt-1.5 flex gap-2">
+                <input
+                  type="text"
+                  value={customColumn}
+                  onChange={(e) => setCustomColumn(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleInsertCustomColumn();
+                    }
+                  }}
+                  placeholder={t('emailTemplateEditor.customInfoPlaceholder')}
+                  aria-label={t('emailTemplateEditor.customInfoTitle')}
+                  className="min-w-0 flex-1 px-3 py-1.5 text-xs bg-white dark:bg-dk-inset text-gray-900 dark:text-dk-text placeholder:text-gray-400 dark:placeholder:text-dk-muted border border-gray-200 dark:border-dk-border rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                />
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={handleInsertCustomColumn}
+                  disabled={!normalizeCustomKey(customColumn)}
+                  className="shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium bg-primary-500 hover:bg-primary-600 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {t('emailTemplateEditor.customInfoInsert')}
+                </button>
+              </div>
+              <p className="mt-1 text-[11px] leading-snug text-gray-500 dark:text-dk-text2">{t('emailTemplateEditor.customInfoHelp')}</p>
+            </section>
+          </aside>
         </div>
       </form>
     </div>,

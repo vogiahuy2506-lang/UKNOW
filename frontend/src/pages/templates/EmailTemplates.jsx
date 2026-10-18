@@ -25,6 +25,7 @@ import {
   resolveAttachmentKey,
   wrapEmailSrcDoc,
 } from '../../features/templates/utils/emailTemplateEditor.helpers';
+import { buildDetectedVariables, extractVariableKeys } from '../../features/templates/utils/templateVariables';
 import { htmlToPlainText } from '../../utils/htmlToPlainText.util.js';
 import { miniMarkdownToHtml } from '../../utils/miniMarkdownToHtml.js';
 
@@ -57,13 +58,9 @@ const EmailTemplates = ({
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState(null);
   const [previewTemplate, setPreviewTemplate] = useState(null);
-  const [editorTab, setEditorTab] = useState('content');
   const [contentTab, setContentTab] = useState(isZaloTemplate ? 'text' : 'html');
   const [variables, setVariables] = useState([]);
   const [showAttachmentsModal, setShowAttachmentsModal] = useState(false);
-  const [newVariable, setNewVariable] = useState({ name: '', key: '' });
-  const [editingVariableIndex, setEditingVariableIndex] = useState(null);
-  const [editingVariable, setEditingVariable] = useState({ name: '', key: '' });
   const [showVariableSuggestions, setShowVariableSuggestions] = useState(false);
   const [variableQuery, setVariableQuery] = useState('');
   const [activeInput, setActiveInput] = useState(isZaloTemplate ? 'text' : 'html');
@@ -298,7 +295,11 @@ const EmailTemplates = ({
         ...formData,
         bodyHtml: finalBodyHtml,
         bodyText: finalBodyText,
-        variables,
+        // Biến tự phát hiện từ tiêu đề + nội dung (không còn khai báo tay); giữ hình dạng cũ {name, key}.
+        variables: buildDetectedVariables(
+          extractVariableKeys(formData.subject, finalBodyHtml, finalBodyText),
+          { declared: variables, translate: (key) => t(key) },
+        ),
         // Gửi temp attachments riêng để backend xử lý
         tempAttachments: namedTemp.map(att => ({
           tempId: att.tempId,
@@ -430,44 +431,6 @@ const EmailTemplates = ({
     });
     setVariables([]);
     setDeletedAttachments([]);
-    setNewVariable({ name: '', key: '' });
-    setEditingVariableIndex(null);
-    setEditingVariable({ name: '', key: '' });
-  };
-
-  const handleAddVariable = () => {
-    if (!newVariable.name.trim() || !newVariable.key.trim()) return;
-    setVariables((prev) => [...prev, { ...newVariable }]);
-    setNewVariable({ name: '', key: '' });
-  };
-
-  const handleRemoveVariable = (index) => {
-    setVariables((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleStartEditVariable = (index) => {
-    setEditingVariableIndex(index);
-    setEditingVariable({
-      name: variables[index]?.name || '',
-      key: variables[index]?.key || '',
-    });
-  };
-
-  const handleCancelEditVariable = () => {
-    setEditingVariableIndex(null);
-    setEditingVariable({ name: '', key: '' });
-  };
-
-  const handleSaveEditVariable = () => {
-    if (editingVariableIndex === null) return;
-    setVariables((prev) =>
-      prev.map((item, i) =>
-        i === editingVariableIndex
-          ? { ...item, name: editingVariable.name, key: editingVariable.key }
-          : item
-      )
-    );
-    handleCancelEditVariable();
   };
 
   const updateSubjectValue = (value, selectionStart) => {
@@ -743,22 +706,6 @@ const EmailTemplates = ({
     });
   };
 
-  /**
-   * Thêm một biến gợi ý vào danh sách biến của template.
-   * Nếu biến đã tồn tại (trùng key) thì bỏ qua và thông báo.
-   *
-   * @param {{ name: string, key: string }} suggestedVar - Biến gợi ý cần thêm
-   */
-  const handleAddSuggestedVariable = (suggestedVar) => {
-    const exists = variables.some((v) => v.key === suggestedVar.key);
-    if (exists) {
-      toast(t('templates.variableAlreadyExists'), { icon: 'ℹ️' });
-      return;
-    }
-    setVariables((prev) => [...prev, { ...suggestedVar }]);
-    toast.success(t('templates.variableAddedWithKey', { key: suggestedVar.key }));
-  };
-
   return (
     <div className="space-y-6">
       <EmailTemplateListSection
@@ -802,8 +749,6 @@ const EmailTemplates = ({
         subjectInputRef={subjectInputRef}
         setActiveInput={setActiveInput}
         updateSubjectValue={updateSubjectValue}
-        editorTab={editorTab}
-        setEditorTab={setEditorTab}
         fileInputRef={fileInputRef}
         handleFileSelect={handleFileSelect}
         isUploading={isUploading}
@@ -828,17 +773,6 @@ const EmailTemplates = ({
         editorPreviewIframeRef={editorPreviewIframeRef}
         editorPreviewSrcDoc={editorPreviewSrcDoc}
         resizeIframeToContent={resizeIframeToContent}
-        newVariable={newVariable}
-        setNewVariable={setNewVariable}
-        handleAddVariable={handleAddVariable}
-        editingVariableIndex={editingVariableIndex}
-        editingVariable={editingVariable}
-        setEditingVariable={setEditingVariable}
-        handleSaveEditVariable={handleSaveEditVariable}
-        handleCancelEditVariable={handleCancelEditVariable}
-        handleStartEditVariable={handleStartEditVariable}
-        handleRemoveVariable={handleRemoveVariable}
-        handleAddSuggestedVariable={handleAddSuggestedVariable}
         hideHtmlTab={isZaloTemplate}
         hideSubjectField={isZaloTemplate}
         subjectLabel={subjectLabel}
