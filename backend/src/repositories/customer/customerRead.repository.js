@@ -1,5 +1,28 @@
 import db from '../../config/database.js';
 
+/**
+ * Dieu kien SQL "khach mang BAT KY tag nao trong `tagIds`" (ANY, khong phai AND). MOT noi duy nhat cho moi duong chon khach theo tag:
+ * danh sach/xuat CSV khach va khoi `interested_customers` (chay that + uoc tinh + xem truoc). Quy uoc: `$1` = chu workspace, `c` = bang
+ * customers; tag phai thuoc DUNG workspace nen id tag cua workspace khac khong khop ai (loc ra rong, khong bao gio ro khach).
+ * Day `tagIds` vao `params` va tra doan ` AND EXISTS (...)` (rong khi khong loc).
+ *
+ * @param {number[]|undefined} tagIds
+ * @param {any[]} params mang tham so cua truy van goi (se duoc push them)
+ * @returns {string}
+ */
+export function buildTagFilterSql(tagIds, params) {
+  if (!Array.isArray(tagIds) || tagIds.length === 0) return '';
+  params.push(tagIds);
+  return ` AND EXISTS (
+        SELECT 1
+        FROM customer_tag_assignments cta
+        JOIN customer_tags ctg ON ctg.id = cta.tag_id
+        WHERE cta.customer_id = c.id
+          AND ctg.workspace_owner_id = $1
+          AND cta.tag_id = ANY($${params.length}::bigint[])
+      )`;
+}
+
 class CustomerReadRepository {
   async hasPurchaseOrderStatusColumn() {
     const columnCheckResult = await db.query(
@@ -345,17 +368,7 @@ class CustomerReadRepository {
     }
 
     // Lọc theo tag: khách mang BẤT KỲ tag nào trong danh sách (ANY, không phải AND). Tag phải thuộc đúng workspace.
-    if (Array.isArray(tagIds) && tagIds.length > 0) {
-      params.push(tagIds);
-      whereSql += ` AND EXISTS (
-        SELECT 1
-        FROM customer_tag_assignments cta
-        JOIN customer_tags ctg ON ctg.id = cta.tag_id
-        WHERE cta.customer_id = c.id
-          AND ctg.workspace_owner_id = $1
-          AND cta.tag_id = ANY($${params.length}::bigint[])
-      )`;
-    }
+    whereSql += buildTagFilterSql(tagIds, params);
 
     if (campaignParamIdx) {
       whereSql += ` AND EXISTS (
@@ -564,8 +577,8 @@ class CustomerReadRepository {
    * @param {{ userId: number }} input
    * @returns {Promise<number>}
    */
-  async countWorkspaceCustomers({ userId }) {
-    const { whereSql, params } = this.buildCustomerListFilter({ userId });
+  async countWorkspaceCustomers({ userId, tagIds }) {
+    const { whereSql, params } = this.buildCustomerListFilter({ userId, tagIds });
     const result = await db.query(`SELECT COUNT(*)::INTEGER AS total FROM customers c WHERE ${whereSql}`, params);
     return result.rows[0]?.total || 0;
   }
@@ -579,8 +592,8 @@ class CustomerReadRepository {
    * @param {{ userId: number, limit: number }} input
    * @returns {Promise<{ rows: object[], total: number }>} `total` = tổng khách workspace (kể cả phần bị cắt bởi `limit`)
    */
-  async getAllCustomersRows({ userId, limit }) {
-    const { whereSql, params } = this.buildCustomerListFilter({ userId });
+  async getAllCustomersRows({ userId, limit, tagIds }) {
+    const { whereSql, params } = this.buildCustomerListFilter({ userId, tagIds });
     const [listResult, countResult] = await Promise.all([
       db.query(
         `SELECT c.id AS id_customer, c.full_name, c.email, c.phone, c.zalo_id, c.zalo_phone, c.customer_source
@@ -697,6 +710,7 @@ class CustomerReadRepository {
     interestedCondition,
     purchaseOrderStatusExpr,
     limit,
+    tagIds,
   }) {
     const params = [userId];
     let whereCampaign = '';
@@ -741,6 +755,9 @@ class CustomerReadRepository {
       )`;
     }
 
+    // Loc tag (cung dieu kien voi danh sach khach) - ap cho ca danh sach, dem va nhom khoa hoc de so lieu khop nhau.
+    const whereTags = buildTagFilterSql(tagIds, params);
+
     const listParams = [...params, limit];
     const listQuery = `
       SELECT MIN(cp.id) AS id,
@@ -778,6 +795,7 @@ class CustomerReadRepository {
         ${whereCourseStatus}
         ${whereCourseQuery}
         ${whereNotPurchased}
+        ${whereTags}
       GROUP BY cp.id_customer,
                c.full_name,
                c.email,
@@ -800,6 +818,7 @@ class CustomerReadRepository {
         ${whereCourse}
         ${whereCourseStatus}
         ${whereCourseQuery}
+        ${whereTags}
     `;
 
     const coursesQuery = `
@@ -818,6 +837,7 @@ class CustomerReadRepository {
         ${whereCourse}
         ${whereCourseStatus}
         ${whereCourseQuery}
+        ${whereTags}
       GROUP BY cp.id_course, COALESCE(crs.course_name, cp.product_name, 'Khoa hoc khong xac dinh'), crs.course_code, crs.status
       ORDER BY total_items DESC
     `;

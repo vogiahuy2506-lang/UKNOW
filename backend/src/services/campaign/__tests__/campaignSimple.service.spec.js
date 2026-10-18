@@ -13,6 +13,7 @@ const mockGetFormIdsOwnedBy = jest.fn();
 const mockCountWorkspaceCustomers = jest.fn();
 const mockFillReadSheetFirstTabNames = jest.fn();
 const mockCheckUserResourceLimit = jest.fn();
+const mockFindTagsByIds = jest.fn();
 
 jest.unstable_mockModule('../../ai/aiCampaignDraft.service.js', () => ({
   default: {
@@ -34,6 +35,9 @@ jest.unstable_mockModule('../../../repositories/ai/aiCampaign.repository.js', ()
 }));
 jest.unstable_mockModule('../../../repositories/customer/customerRead.repository.js', () => ({
   default: { countWorkspaceCustomers: mockCountWorkspaceCustomers },
+}));
+jest.unstable_mockModule('../../../repositories/customer/customerTag.repository.js', () => ({
+  default: { findByIds: mockFindTagsByIds },
 }));
 jest.unstable_mockModule('../readSheetAutoName.service.js', () => ({
   fillReadSheetFirstTabNames: mockFillReadSheetFirstTabNames,
@@ -105,6 +109,8 @@ beforeEach(() => {
   mockApplyLandingAudienceResolution.mockImplementation(async (intent) => intent);
   mockGetFormIdsOwnedBy.mockImplementation(async (_owner, ids) => ids);
   mockCountWorkspaceCustomers.mockResolvedValue(0);
+  // Mặc định: mọi id tag hỏi đều thuộc workspace (spec riêng cho tag ghi đè).
+  mockFindTagsByIds.mockImplementation(async (_owner, ids) => ids.map((id) => ({ id, name: `Tag ${id}` })));
   mockCheckUserResourceLimit.mockResolvedValue({ allowed: true, limit: null, currentCount: 0, message: null });
   mockFillReadSheetFirstTabNames.mockResolvedValue(undefined);
   mockAutoCreateEmailTemplates.mockResolvedValue(undefined);
@@ -847,7 +853,7 @@ describe('previewSimpleCampaign — nguồn "khách hàng đã lưu" là khối 
       body: emailBody({ audience: { type: 'customers' } }),
       authUser: { id: 8, role: 'user', activeContext: { type: 'employee', ownerId: 3 } },
     });
-    expect(mockCountWorkspaceCustomers).toHaveBeenCalledWith({ userId: 3 });
+    expect(mockCountWorkspaceCustomers).toHaveBeenCalledWith({ userId: 3, tagIds: [] });
     expect(result.recipientCount).toBe(2);
     expect(result.issues).toEqual([]);
     expect(result.readyToCreate).toBe(true);
@@ -882,5 +888,62 @@ describe('previewSimpleCampaign — nguồn "khách hàng đã lưu" là khối 
   it('nguồn khác không đếm khách', async () => {
     await previewSimpleCampaign({ body: emailBody(), authUser: user });
     expect(mockCountWorkspaceCustomers).not.toHaveBeenCalled();
+  });
+});
+
+describe('PR-T3 — nguồn "khách đã lưu" chỉ gửi cho khách có tag', () => {
+  it('buildSimpleIntent: audience.tagIds -> intent db kèm tagIds; không có tag -> y như cũ', () => {
+    const norm = (audience) => ({ campaignName: 'x', senderId: 5, channel: 'email', directRecipients: null, audience });
+    expect(buildSimpleIntent(norm({ type: 'customers', tagIds: [4, 9] })).audience)
+      .toEqual({ type: 'db', recipientKind: 'email', tagIds: [4, 9] });
+    expect(buildSimpleIntent(norm({ type: 'customers' })).audience).toEqual({ type: 'db', recipientKind: 'email' });
+    expect(buildSimpleIntent(norm({ type: 'customers', tagIds: [] })).audience).toEqual({ type: 'db', recipientKind: 'email' });
+  });
+
+  it('normalizeSimpleBody: kiểm tag theo CHỦ workspace, bỏ id lạ, giữ thứ tự', async () => {
+    mockFindTagsByIds.mockResolvedValue([{ id: 9 }, { id: 4 }]);
+    const input = await normalizeSimpleBody(emailBody({ audience: { type: 'customers', tagIds: [4, '9', 77, 4] } }), { ownerId: 3 });
+    expect(mockFindTagsByIds).toHaveBeenCalledWith(3, [4, 9, 77]);
+    expect(input.audience).toEqual({ type: 'customers', tagIds: [4, 9] });
+  });
+
+  it('toàn tag lạ -> 400 TAG_NOT_FOUND (KHÔNG rơi về "mọi khách")', async () => {
+    mockFindTagsByIds.mockResolvedValue([]);
+    await expect(normalizeSimpleBody(emailBody({ audience: { type: 'customers', tagIds: [77] } }), { ownerId: 3 }))
+      .rejects.toMatchObject({ statusCode: 400, code: 'TAG_NOT_FOUND' });
+  });
+
+  it('tagIds sai kiểu hoặc vượt trần -> 400 TAG_INVALID, không hỏi CSDL', async () => {
+    await expect(normalizeSimpleBody(emailBody({ audience: { type: 'customers', tagIds: ['abc'] } }), { ownerId: 3 }))
+      .rejects.toMatchObject({ statusCode: 400, code: 'TAG_INVALID' });
+    await expect(normalizeSimpleBody(emailBody({ audience: { type: 'customers', tagIds: Array.from({ length: 51 }, (_, i) => i + 1) } }), { ownerId: 3 }))
+      .rejects.toMatchObject({ code: 'TAG_INVALID' });
+    expect(mockFindTagsByIds).not.toHaveBeenCalled();
+  });
+
+  it('không chọn tag -> audience không có tagIds và không hỏi CSDL tag', async () => {
+    const input = await normalizeSimpleBody(emailBody({ audience: { type: 'customers' } }), { ownerId: 3 });
+    expect(input.audience).toEqual({ type: 'customers' });
+    expect(mockFindTagsByIds).not.toHaveBeenCalled();
+  });
+
+  it('biên dịch: khối interested_customers mang interestedTagIds (email và Zalo)', async () => {
+    const email = await buildSimpleDraft({ body: emailBody({ audience: { type: 'customers', tagIds: [4, 9] } }), authUser: user });
+    expect(sendNode(email.script, 'interested_customers').config).toEqual({ interestedCustomerType: 'all', interestedTagIds: [4, 9] });
+    const zalo = await buildSimpleDraft({ body: zaloBody({ audience: { type: 'customers', tagIds: [4] } }), authUser: user });
+    expect(sendNode(zalo.script, 'interested_customers').config).toEqual({ interestedCustomerType: 'all', interestedTagIds: [4] });
+    const plain = await buildSimpleDraft({ body: emailBody({ audience: { type: 'customers' } }), authUser: user });
+    expect(sendNode(plain.script, 'interested_customers').config).toEqual({ interestedCustomerType: 'all' });
+  });
+
+  it('preview: đếm khách THEO tag; 0 khách có tag -> cảnh báo customers_tag_empty (không chặn)', async () => {
+    mockCountWorkspaceCustomers.mockResolvedValue(12);
+    const ok = await previewSimpleCampaign({ body: emailBody({ audience: { type: 'customers', tagIds: [4] } }), authUser: user });
+    expect(mockCountWorkspaceCustomers).toHaveBeenCalledWith({ userId: 7, tagIds: [4] });
+    expect(ok.recipientCount).toBe(3); // kẹp ở trần 3 của spec này
+    mockCountWorkspaceCustomers.mockResolvedValue(0);
+    const empty = await previewSimpleCampaign({ body: emailBody({ audience: { type: 'customers', tagIds: [4] } }), authUser: user });
+    expect(empty.readyToCreate).toBe(true);
+    expect(empty.issues.map((issue) => [issue.code, issue.severity])).toEqual([['customers_tag_empty', 'warning']]);
   });
 });

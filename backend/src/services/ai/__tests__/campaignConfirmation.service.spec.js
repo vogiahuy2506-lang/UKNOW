@@ -10,6 +10,7 @@ const emailSenders = { findEmailSettingsById: jest.fn() };
 const zaloSenders = { findCampaignZaloAccount: jest.fn() };
 const aiResources = { getCourses: jest.fn(), getLandingPickerOptions: jest.fn() };
 const estimateForScript = jest.fn();
+const tagRepo = { findByIds: jest.fn() };
 
 jest.unstable_mockModule('../../../repositories/ai/aiCampaignDraft.repository.js', () => ({ default: draftRepo }));
 jest.unstable_mockModule('../../../repositories/email/emailTemplate.repository.js', () => ({ default: emailTemplates }));
@@ -18,6 +19,7 @@ jest.unstable_mockModule('../../../repositories/campaign/campaignEmailSender.rep
 jest.unstable_mockModule('../../../repositories/campaign/campaignZaloSender.repository.js', () => ({ default: zaloSenders }));
 // Tra TÊN khoá học của bộ lọc người nhận (F2.2): service import động aiPromptResources — mock đúng ranh giới DB.
 jest.unstable_mockModule('../aiPromptResources.service.js', () => ({ default: aiResources }));
+jest.unstable_mockModule('../../../repositories/customer/customerTag.repository.js', () => ({ default: tagRepo }));
 // Ước tính thời gian gửi (PLAN_UOC_TINH 4.2): mock đúng ranh giới — service ước tính, hình dạng đầu ra theo hợp đồng PR-1.
 jest.unstable_mockModule('../../campaign/campaignEstimate.service.js', () => ({ estimateForScript }));
 
@@ -260,6 +262,29 @@ describe('campaignConfirmation.service', () => {
         excludedCourses: [{ id: 4, name: 'Khoá Photoshop & Thiết kế' }],
       });
       expect(aiResources.getCourses).toHaveBeenCalledWith(1);
+    });
+
+    it('PR-T3: node khách có interestedTagIds -> filters.tags kèm TÊN tag (tra theo chủ workspace)', async () => {
+      tagRepo.findByIds.mockResolvedValue([{ id: 4, name: 'Khách VIP' }]);
+      const result = await service.default.buildConfirmationView({
+        userId: 1,
+        ownerUserId: 1,
+        script: emailScript({ interestedCustomerType: 'all', interestedTagIds: [4, 9] }),
+      });
+      expect(tagRepo.findByIds).toHaveBeenCalledWith(1, [4, 9]);
+      expect(result.steps[0].recipients.filters).toMatchObject({
+        tags: [{ id: 4, name: 'Khách VIP' }, { id: 9, name: null }],
+      });
+    });
+
+    it('PR-T3: tra tên tag lỗi -> thẻ KHÔNG vỡ, vẫn hiện bộ lọc tag bằng id', async () => {
+      tagRepo.findByIds.mockRejectedValue(new Error('db down'));
+      const result = await service.default.buildConfirmationView({
+        userId: 1,
+        script: emailScript({ interestedCustomerType: 'all', interestedTagIds: [4] }),
+      });
+      expect(result.readyToCreate).toBe(true);
+      expect(result.steps[0].recipients.filters.tags).toEqual([{ id: 4, name: null }]);
     });
 
     it('khoá không có trong danh sách của chủ (id lạ) → vẫn hiện bộ lọc theo id, name = null', async () => {

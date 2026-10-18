@@ -5,6 +5,7 @@ import campaignFlowService from './campaignFlow.service.js';
 import campaignCustomerRepository from '../../repositories/campaign/campaignCustomer.repository.js';
 import customerInterestedService from '../customer/customerInterested.service.js';
 import customerHelperService from '../customer/customerHelper.service.js';
+import { normalizeIdList, CUSTOMER_TAG_MAX_TAGS_PER_CALL } from '../customer/customerTag.service.js';
 import { ALL_CUSTOMERS_LIMIT_CAP, INTERESTED_LIMIT_CAP } from '../../utils/interestedLimits.util.js';
 import outboundMessageQueueService, {
   OUTBOUND_MESSAGE_JOB_TYPES,
@@ -115,8 +116,14 @@ class CampaignNodeDataService {
           .map((v) => parseInt(v, 10))
           .filter((v, idx, arr) => Number.isFinite(v) && arr.indexOf(v) === idx);
         const selectionMode = resolveSelectionMode(config.interestedSelectionMode, selectedCustomerIds);
+        // Lọc theo tag (PLAN_TAG_KHACH_HANG PR-T3): khách mang BẤT KỲ tag nào. Rỗng = mọi khách như cũ. MỘT bộ lọc SQL dùng chung
+        // (`buildTagFilterSql`) cho chạy thật + ước tính + xem trước vì cả ba đều đi qua hàm này. Id tag lạ/workspace khác không khớp ai.
+        const tagIds = normalizeIdList(config.interestedTagIds, { label: 'Tag', max: CUSTOMER_TAG_MAX_TAGS_PER_CALL });
         let interestedData;
-        if (dataSource === 'api') {
+        if (dataSource === 'api' && tagIds.length > 0) {
+          // Nguồn API WooCommerce không có khái niệm tag của UKNOW — fail-closed (0 người) thay vì lờ bộ lọc rồi gửi cho tất cả.
+          interestedData = { items: [] };
+        } else if (dataSource === 'api') {
           logApiCall('uknow_api', 'customerInterestedService.getInterestedCustomersFromUknowApi');
           interestedData = await customerInterestedService.getInterestedCustomersFromUknowApi({
             userId,
@@ -146,6 +153,7 @@ class CampaignNodeDataService {
             customerType,
             purchaseOrderStatusExpr,
             notPurchasedCourseIds,
+            tagIds,
           });
         }
 

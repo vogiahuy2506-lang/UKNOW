@@ -24,6 +24,8 @@ import aiCampaignDraftService from '../ai/aiCampaignDraft.service.js';
 import campaignConfirmationService from '../ai/campaignConfirmation.service.js';
 import aiCampaignRepository from '../../repositories/ai/aiCampaign.repository.js';
 import customerReadRepository from '../../repositories/customer/customerRead.repository.js';
+import customerTagRepository from '../../repositories/customer/customerTag.repository.js';
+import { normalizeIdList, CUSTOMER_TAG_MAX_TAGS_PER_CALL } from '../customer/customerTag.service.js';
 import campaignNodeRegistryService from './campaignNodeRegistry.service.js';
 import { fillReadSheetFirstTabNames } from './readSheetAutoName.service.js';
 import {
@@ -340,7 +342,25 @@ export async function normalizeSimpleBody(body, { ownerId, now = new Date(), ski
   let recipientCountHint = null;
 
   if (type === 'customers') {
-    // Khối động: không có danh sách, không đếm lúc tạo (preview tự đếm tổng khách của workspace).
+    // Khối động: không có danh sách, không đếm lúc tạo (preview tự đếm khách của workspace). `tagIds` (PLAN_TAG_KHACH_HANG PR-T3):
+    // chỉ khách mang BẤT KỲ tag nào; rỗng = mọi khách như cũ. Id tag lạ/workspace khác bị bỏ; chọn toàn tag lạ → 400 (KHÔNG rơi về
+    // "mọi khách" — bấm gửi sẽ ra tin cho cả danh sách thay vì nhóm đã chọn).
+    let requestedTagIds;
+    try {
+      requestedTagIds = normalizeIdList(rawAudience.tagIds, { label: 'Tag', max: CUSTOMER_TAG_MAX_TAGS_PER_CALL });
+    } catch (error) {
+      throw bad('TAG_INVALID', error?.message || 'Tag đã chọn không hợp lệ.');
+    }
+    if (requestedTagIds.length > 0) {
+      if (skipDbChecks) {
+        audience.tagIds = requestedTagIds;
+      } else {
+        const owned = new Set((await customerTagRepository.findByIds(ownerId, requestedTagIds)).map((row) => Number(row.id)));
+        const tagIds = requestedTagIds.filter((id) => owned.has(id));
+        if (tagIds.length === 0) throw bad('TAG_NOT_FOUND', 'Tag đã chọn không còn tồn tại. Vui lòng chọn lại.');
+        audience.tagIds = tagIds;
+      }
+    }
   } else if (type === 'landing') {
     const slugs = toStringList(rawAudience.slugs)
       .map((slug) => slug.toLowerCase().replace(/^\/+|\/+$/g, ''))
@@ -440,7 +460,7 @@ export function buildSimpleIntent(input) {
   let intentAudience;
   switch (audience.type) {
     case 'customers':
-      intentAudience = { type: 'db', recipientKind };
+      intentAudience = { type: 'db', recipientKind, ...(audience.tagIds?.length ? { tagIds: audience.tagIds } : {}) };
       break;
     case 'manual':
       intentAudience = { type: 'manual', recipientKind };
@@ -900,7 +920,8 @@ export async function previewSimpleCampaign({ body, authUser, now = new Date() }
   // "Khách hàng đã lưu" là khối động: không có danh sách, chỉ có tổng khách của workspace. Khối chỉ đọc tối đa 50.000 khách đầu tiên.
   let customersTotal = null;
   if (input.audience.type === 'customers') {
-    customersTotal = await customerReadRepository.countWorkspaceCustomers({ userId: ownerId });
+    const tagIds = input.audience.tagIds || [];
+    customersTotal = await customerReadRepository.countWorkspaceCustomers({ userId: ownerId, tagIds });
     if (customersTotal > ALL_CUSTOMERS_LIMIT_CAP) {
       issuesOut.push({
         code: 'customers_over_limit',
@@ -910,6 +931,16 @@ export async function previewSimpleCampaign({ body, authUser, now = new Date() }
         severity: 'warning',
         messageKey: 'simpleCampaign.issues.customers_over_limit',
         message: `Chỉ gửi cho ${ALL_CUSTOMERS_LIMIT_CAP.toLocaleString('vi-VN')} khách đầu tiên (bạn có ${customersTotal.toLocaleString('vi-VN')} khách).`,
+      });
+    } else if (customersTotal === 0 && tagIds.length > 0) {
+      issuesOut.push({
+        code: 'customers_tag_empty',
+        apiCode: 'CUSTOMERS_TAG_EMPTY',
+        nodeId: null,
+        stepIndex: null,
+        severity: 'warning',
+        messageKey: 'simpleCampaign.issues.customers_tag_empty',
+        message: 'Chưa có khách nào mang tag đã chọn. Chiến dịch sẽ gửi cho khách được gắn tag này sau.',
       });
     } else if (customersTotal === 0) {
       issuesOut.push({

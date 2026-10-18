@@ -56,7 +56,7 @@ describe('PR-5 campaignNodeData: interestedCustomerType = all', () => {
   it('đọc khách qua getAllCustomersRows (không qua customer_purchases) và giữ đủ khoá item', async () => {
     const pack = await campaignNodeDataService.getCustomersFromDataNode(nodeOf({ interestedCustomerType: 'all' }), 42, []);
     expect(mockGetInterestedRows).not.toHaveBeenCalled();
-    expect(mockGetAllCustomersRows).toHaveBeenCalledWith({ userId: 42, limit: 50000 });
+    expect(mockGetAllCustomersRows).toHaveBeenCalledWith({ userId: 42, limit: 50000, tagIds: [] });
     expect(pack.items).toHaveLength(3);
     expect(pack.items[0]).toEqual(expect.objectContaining({
       customerId: 1,
@@ -74,11 +74,11 @@ describe('PR-5 campaignNodeData: interestedCustomerType = all', () => {
 
   it('trần 50.000 cho all: interestedLimit lớn hơn bị cắt, thiếu thì lấy tới trần', async () => {
     await campaignNodeDataService.getCustomersFromDataNode(nodeOf({ interestedCustomerType: 'all', interestedLimit: 999999 }), 42, []);
-    expect(mockGetAllCustomersRows).toHaveBeenLastCalledWith({ userId: 42, limit: 50000 });
+    expect(mockGetAllCustomersRows).toHaveBeenLastCalledWith({ userId: 42, limit: 50000, tagIds: [] });
     await campaignNodeDataService.getCustomersFromDataNode(nodeOf({ interestedCustomerType: 'all', interestedLimit: 20000 }), 42, []);
-    expect(mockGetAllCustomersRows).toHaveBeenLastCalledWith({ userId: 42, limit: 20000 });
+    expect(mockGetAllCustomersRows).toHaveBeenLastCalledWith({ userId: 42, limit: 20000, tagIds: [] });
     await campaignNodeDataService.getCustomersFromDataNode(nodeOf({ interestedCustomerType: 'all' }), 42, []);
-    expect(mockGetAllCustomersRows).toHaveBeenLastCalledWith({ userId: 42, limit: 50000 });
+    expect(mockGetAllCustomersRows).toHaveBeenLastCalledWith({ userId: 42, limit: 50000, tagIds: [] });
   });
 
   it('trần 5.000 cho các loại khác', async () => {
@@ -121,5 +121,47 @@ describe('PR-5 campaignNodeData: interestedCustomerType = all', () => {
     );
     expect(mockGetAllCustomersRows).toHaveBeenCalledTimes(1);
     expect(pack.items).toHaveLength(3);
+  });
+});
+
+describe('PR-T3 campaignNodeData: interestedTagIds (lọc khách theo tag)', () => {
+  beforeEach(() => {
+    mockGetAllCustomersRows.mockReset();
+    mockGetInterestedRows.mockReset();
+    mockGetAllCustomersRows.mockResolvedValue({ rows: [sqlRow(1)], total: 1 });
+    mockGetInterestedRows.mockResolvedValue({ rows: [], total: 0, courses: [] });
+  });
+
+  it('loại all: chuyển interestedTagIds (đã chuẩn hoá, bỏ trùng) xuống truy vấn', async () => {
+    await campaignNodeDataService.getCustomersFromDataNode(nodeOf({ interestedCustomerType: 'all', interestedTagIds: [3, '5', 3] }), 42, []);
+    expect(mockGetAllCustomersRows).toHaveBeenCalledWith({ userId: 42, limit: 50000, tagIds: [3, 5] });
+  });
+
+  it('không có interestedTagIds -> tagIds rỗng (mọi khách như cũ)', async () => {
+    await campaignNodeDataService.getCustomersFromDataNode(nodeOf({ interestedCustomerType: 'all' }), 42, []);
+    expect(mockGetAllCustomersRows.mock.calls[0][0].tagIds).toEqual([]);
+  });
+
+  it('loại khác (đã mua / quan tâm) cũng nhận bộ lọc tag', async () => {
+    await campaignNodeDataService.getCustomersFromDataNode(nodeOf({ interestedCustomerType: 'purchased', interestedTagIds: [7] }), 42, []);
+    expect(mockGetInterestedRows.mock.calls[0][0].tagIds).toEqual([7]);
+  });
+
+  it('nguồn API WooCommerce + tag -> 0 người (fail-closed), không đọc DB', async () => {
+    const pack = await campaignNodeDataService.getCustomersFromDataNode(
+      nodeOf({ interestedCustomerType: 'purchased', interestedDataSource: 'api', interestedTagIds: [7] }),
+      42,
+      []
+    );
+    expect(pack.items).toEqual([]);
+    expect(mockGetInterestedRows).not.toHaveBeenCalled();
+    expect(mockGetAllCustomersRows).not.toHaveBeenCalled();
+  });
+
+  it('id tag sai kiểu -> lỗi 400, không đọc khách (không rơi về "mọi khách")', async () => {
+    await expect(
+      campaignNodeDataService.getCustomersFromDataNode(nodeOf({ interestedCustomerType: 'all', interestedTagIds: ['abc'] }), 42, [])
+    ).rejects.toMatchObject({ statusCode: 400 });
+    expect(mockGetAllCustomersRows).not.toHaveBeenCalled();
   });
 });

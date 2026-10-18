@@ -167,9 +167,13 @@ export function deriveIntentFromGraph(nodes = [], connections = []) {
         recipientKind,
       };
     } else if (audSubtype === 'interested_customers') {
+      // Giữ bộ lọc tag (PLAN_TAG_KHACH_HANG PR-T3) khi mở lại chiến dịch để AI sửa — mất nó = sửa xong gửi cho MỌI khách.
+      const tagIds = [...new Set((Array.isArray(audCfg.interestedTagIds) ? audCfg.interestedTagIds : [])
+        .map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))];
       audience = {
         type: 'db',
         recipientKind,
+        ...(tagIds.length > 0 ? { tagIds } : {}),
       };
     } else if (audSubtype === 'read_landing_leads') {
       audience = {

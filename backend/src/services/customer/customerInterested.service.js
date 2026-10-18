@@ -1,4 +1,5 @@
 import customerReadRepository from '../../repositories/customer/customerRead.repository.js';
+import { normalizeIdList, CUSTOMER_TAG_MAX_TAGS_PER_CALL } from './customerTag.service.js';
 import { ALL_CUSTOMERS_LIMIT_CAP, INTERESTED_LIMIT_CAP } from '../../utils/interestedLimits.util.js';
 
 /** Thời gian chờ tối đa mỗi trang đơn hàng WooCommerce (ms). */
@@ -23,12 +24,15 @@ class CustomerInterestedService {
     customerType,
     purchaseOrderStatusExpr,
     notPurchasedCourseIds,
+    tagIds: rawTagIds,
   }) {
+    // Lọc tag (PLAN_TAG_KHACH_HANG PR-T3): mảng id hoặc chuỗi phẩy (query của chạy thử trên trình dựng); sai kiểu -> lỗi 400.
+    const tagIds = normalizeIdList(rawTagIds, { label: 'Tag', max: CUSTOMER_TAG_MAX_TAGS_PER_CALL });
     const campaignIdNum = Number.isFinite(parseInt(campaignId, 10))
       ? parseInt(campaignId, 10)
       : null;
     const isAllCustomers = String(customerType || '').trim().toLowerCase() === 'all';
-    if (isAllCustomers) return this.getAllCustomersAsItems({ userId, limit: rawLimit });
+    if (isAllCustomers) return this.getAllCustomersAsItems({ userId, limit: rawLimit, tagIds });
     const requestedLimit = Number.isFinite(parseInt(rawLimit, 10))
       ? parseInt(rawLimit, 10)
       : 1000;
@@ -86,6 +90,7 @@ class CustomerInterestedService {
       interestedCondition,
       purchaseOrderStatusExpr,
       limit,
+      tagIds,
     });
     return {
       items: result.rows.map((row) => ({
@@ -140,12 +145,12 @@ class CustomerInterestedService {
    * @param {{ userId: number, limit?: number|string }} input
    * @returns {Promise<object>} cùng hình dạng `getInterestedCustomersWithCourses`
    */
-  async getAllCustomersAsItems({ userId, limit: rawLimit }) {
+  async getAllCustomersAsItems({ userId, limit: rawLimit, tagIds }) {
     const requestedLimit = Number.isFinite(parseInt(rawLimit, 10))
       ? parseInt(rawLimit, 10)
       : ALL_CUSTOMERS_LIMIT_CAP;
     const limit = Math.max(1, Math.min(requestedLimit, ALL_CUSTOMERS_LIMIT_CAP));
-    const result = await customerReadRepository.getAllCustomersRows({ userId, limit });
+    const result = await customerReadRepository.getAllCustomersRows({ userId, limit, tagIds });
     return {
       items: result.rows.map((row) => ({
         id: null,

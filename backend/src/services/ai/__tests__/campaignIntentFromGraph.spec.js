@@ -173,3 +173,22 @@ describe('Backtest - Việc 1: campaignIntentFromGraph.service', () => {
     expect(noSendRes.unsupported).toContain('no_send_node');
   });
 });
+
+describe('PR-T3: campaignIntentFromGraph giữ bộ lọc tag của khối khách đã lưu', () => {
+  const graph = (sourceConfig) => [
+    { id: 1, node_subtype: 'manual', config: {} },
+    { id: 2, node_subtype: 'interested_customers', config: sourceConfig },
+    { id: 3, node_subtype: 'send_email', config: { fromEmailId: 5, recipientSource: 'node' } },
+    { id: 4, node_subtype: 'end', config: {} },
+  ];
+
+  it('interestedTagIds -> audience.tagIds (mở lại để AI sửa không mất nhóm tag)', () => {
+    const res = deriveIntentFromGraph(graph({ interestedCustomerType: 'all', interestedTagIds: [4, '9', 4, 'x'] }), []);
+    expect(res.intent.audience).toEqual({ type: 'db', recipientKind: 'email', tagIds: [4, 9] });
+  });
+
+  it('không có tag -> audience y như cũ', () => {
+    const res = deriveIntentFromGraph(graph({ interestedCustomerType: 'all' }), []);
+    expect(res.intent.audience).toEqual({ type: 'db', recipientKind: 'email' });
+  });
+});

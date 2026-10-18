@@ -181,6 +181,7 @@ class CustomerController {
         courseQuery: req.query.courseQuery,
         customerType: req.query.customerType,
         purchaseOrderStatusExpr,
+        tagIds: req.query.tagIds,
       });
 
       res.json({
@@ -188,6 +189,9 @@ class CustomerController {
         data,
       });
     } catch (error) {
+      if (error.statusCode === 400) {
+        return res.status(400).json({ success: false, message: error.message });
+      }
       console.error('Get interested customers with courses error:', error);
       res.status(500).json({
         success: false,

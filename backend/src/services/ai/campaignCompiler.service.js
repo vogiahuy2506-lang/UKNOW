@@ -22,6 +22,16 @@ import { normalizeFormIdList } from '../../utils/campaignFormIds.util.js';
  * @param {{ formId?: unknown, formIds?: unknown }} audience
  * @returns {{ formIds: number[] }|{ formId: number|null }}
  */
+/**
+ * Bộ lọc tag của nguồn "khách đã lưu" (PLAN_TAG_KHACH_HANG PR-T3): `audience.tagIds` -> `interestedTagIds` trên khối
+ * `interested_customers`. Rỗng/không có -> KHÔNG thêm khoá (khối y như cũ: mọi khách). Id đã được tầng từng bước kiểm thuộc workspace.
+ */
+function buildDbAudienceTagConfig(audience) {
+  const ids = [...new Set((Array.isArray(audience?.tagIds) ? audience.tagIds : [])
+    .map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))];
+  return ids.length > 0 ? { interestedTagIds: ids } : {};
+}
+
 function buildFormSubmissionsNodeConfig(audience) {
   const formIds = normalizeFormIdList(audience?.formIds);
   if (formIds.length > 0) return { formIds };
@@ -128,7 +138,7 @@ function buildAdapterAudienceNode(audience, prefix) {
     const id = `${prefix}_interested_customers_1`;
     return { node: { ...base, id, tempId: id, nodeSubtype: 'interested_customers', nodeName: 'Lấy dữ liệu khách hàng',
       nodeDescription: 'Lấy danh sách khách hàng từ database hệ thống',
-      config: { interestedCustomerType: 'all' } } };
+      config: { interestedCustomerType: 'all', ...buildDbAudienceTagConfig(audience) } } };
   }
   if (audience.type === 'landing') {
     const id = `${prefix}_read_landing_leads_1`;
@@ -357,6 +367,7 @@ function compileEmailOnceCampaign({ sender, audience, contentBrief, fileUsage, a
       positionY: 200,
       config: {
         interestedCustomerType: 'all',
+        ...buildDbAudienceTagConfig(audience),
       },
     });
   } else if (audience.type === 'landing') {
@@ -543,6 +554,7 @@ function compileEmailDripCampaign({ sender, audience, schedule, contentBrief, fi
       positionY: 200,
       config: {
         interestedCustomerType: 'all',
+        ...buildDbAudienceTagConfig(audience),
       },
     });
   } else if (audience.type === 'landing') {
@@ -774,6 +786,7 @@ function compileZaloPersonalOnceCampaign({ sender, audience, contentBrief, fileU
       positionY: 200,
       config: {
         interestedCustomerType: 'all',
+        ...buildDbAudienceTagConfig(audience),
       },
     });
   } else if (audience.type === 'landing') {
@@ -989,6 +1002,7 @@ function compileZaloPersonalDripCampaign({ sender, audience, schedule, contentBr
       positionY: 200,
       config: {
         interestedCustomerType: 'all',
+        ...buildDbAudienceTagConfig(audience),
       },
     });
   } else if (audience.type === 'landing') {

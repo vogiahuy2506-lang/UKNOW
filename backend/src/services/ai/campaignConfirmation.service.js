@@ -95,14 +95,15 @@ const audienceFilterOf = (sourceNode) => {
   const ids = (value) => [...new Set((Array.isArray(value) ? value : []).map(asNumber).filter((id) => id != null && id > 0))];
   const courseIds = ids(config.interestedCourseIds);
   const excludedCourseIds = ids(config.notPurchasedCourseIds);
+  const tagIds = ids(config.interestedTagIds);
   const rawType = String(config.interestedCustomerType ?? '').trim().toLowerCase();
   const customerType = rawType === 'purchased' || rawType === 'interested' ? rawType : null;
   const rawLimit = Number(config.interestedLimit);
   // Loại 'all' (mọi khách đã lưu) mặc định lấy tới trần 50.000 — không phải bộ lọc số lượng người dùng đặt.
   const defaultLimit = rawType === 'all' ? ALL_CUSTOMERS_LIMIT_CAP : DEFAULT_DB_AUDIENCE_LIMIT;
   const limit = Number.isFinite(rawLimit) && rawLimit > 0 && rawLimit !== defaultLimit ? rawLimit : null;
-  if (!courseIds.length && !excludedCourseIds.length && !customerType && limit == null) return null;
-  return { customerType, limit, courseIds, excludedCourseIds };
+  if (!courseIds.length && !excludedCourseIds.length && !tagIds.length && !customerType && limit == null) return null;
+  return { customerType, limit, courseIds, excludedCourseIds, tagIds };
 };
 
 const manualRecipientCount = (value) => String(value || '')
@@ -213,11 +214,23 @@ class CampaignConfirmationService {
         }
       }
       const named = (courseIds) => courseIds.map((id) => ({ id, name: nameById.get(id) || null }));
+      // Tag của bộ lọc (PLAN_TAG_KHACH_HANG PR-T3) kèm TÊN; tra lỗi thì hiện bằng id, giống khoá học.
+      let tagNameById = new Map();
+      if (raw.tagIds.length > 0) {
+        try {
+          const { default: customerTagRepository } = await import('../../repositories/customer/customerTag.repository.js');
+          const tagRows = await customerTagRepository.findByIds(channelOwnerId, raw.tagIds);
+          tagNameById = new Map((tagRows || []).map((row) => [Number(row.id), String(row.name)]));
+        } catch (error) {
+          console.warn('[CampaignConfirmation] Không tra được tên tag của bộ lọc người nhận:', error?.message || error);
+        }
+      }
       const view = {
         customerType: raw.customerType,
         limit: raw.limit,
         courses: named(raw.courseIds),
         excludedCourses: named(raw.excludedCourseIds),
+        ...(raw.tagIds.length > 0 ? { tags: raw.tagIds.map((id) => ({ id, name: tagNameById.get(id) || null })) } : {}),
       };
       audienceFilterCache.set(cacheKey, view);
       return view;
