@@ -5,7 +5,8 @@
  * Bảng trường thật (đối chiếu `campaignCompiler.service.js` + `createNodeConfigFormData`; nguồn nằm ở khối đọc dữ liệu hay trong khối gửi):
  *  - email · nhập tay        → send_email.recipientEmails (chuỗi, mỗi dòng một email), recipientSource 'manual'
  *  - Zalo cá nhân · nhập tay → send_zalo_personal.zaloRecipientPhones (chuỗi), zaloRecipientType 'phone'
- *  - khách đã lưu            → read_interested_customers (chỉ khi 'all' trọn bộ; có lọc theo loại / khoá học / chọn tay → KHÔNG sửa ở đây)
+ *  - khách đã lưu            → read_interested_customers (chỉ khi 'all' trọn bộ; có lọc theo loại / khoá học / chọn tay → KHÔNG sửa ở đây);
+ *                              `interestedTagIds` (chỉ khách có BẤT KỲ tag nào, rỗng = mọi khách) là phần panel hiểu nên sửa được
  *  - landing                 → read_landing_leads.landingLeadsSlugs (không khoảng ngày / nghề / sở thích / lọc riêng)
  *  - biểu mẫu                → read_form_submissions.formIds
  *  - Google Sheet            → read_sheet.sheetUrl + sheetName; cột người nhận của khối gửi mặc định (email | phone), cột khác → KHÔNG sửa
@@ -178,14 +179,27 @@ const detectType = (located) => {
 
 // ── Đọc ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
+/** Danh sách id tag hợp lệ (số nguyên dương, không trùng) từ cấu hình khối. */
+const tagIdsOf = (value) => [...new Set(list(value).map(Number).filter((id) => Number.isInteger(id) && id > 0))];
+
+/** Tên tag theo bảng tra `lookups.tags`; chưa tra được thì `#id` (không bao giờ ẩn bộ lọc). */
+const tagNameOf = (lookups, id) => {
+  const found = list(lookups?.tags).find((tag) => Number(tag?.id) === Number(id));
+  return text(found?.name) || `#${id}`;
+};
+
 /** Trạng thái panel (dạng `EMPTY_AUDIENCE`) từ cấu hình đang lưu. */
-const extractAudience = (type, located) => {
+const extractAudience = (type, located, lookups = {}) => {
   const { sendNode, sourceNode } = located;
   const sendConfig = configOf(sendNode);
   const sourceConfig = configOf(sourceNode);
   const sendSubtype = subtypeOf(sendNode);
   const audience = { ...EMPTY_AUDIENCE, type };
   switch (type) {
+    case 'customers':
+      audience.tagIds = tagIdsOf(sourceConfig.interestedTagIds);
+      audience.tagNames = audience.tagIds.map((id) => tagNameOf(lookups, id));
+      break;
     case 'manual': {
       const raw = sendConfig[RECIPIENT_FIELDS[sendSubtype].list];
       audience.manualText = Array.isArray(raw) ? raw.join('\n') : String(raw ?? '');
@@ -261,8 +275,11 @@ const summarize = (type, audience, ctx, { filtered = false, column = '' } = {}) 
     case 'telegram_groups':
     case 'whatsapp_groups':
       return `${title}: ${t('campaignSettings.groupsSelected', { n: audience.groups.length })}`;
-    case 'customers':
-      return filtered ? `${title} (${t('campaignSettings.section.audience.filtered')})` : title;
+    case 'customers': {
+      const names = list(audience.tagNames).map(text).filter(Boolean);
+      if (filtered) return `${title} (${t('campaignSettings.section.audience.filtered')})`;
+      return names.length > 0 ? `${title} · ${t('campaignSettings.section.audience.tagsOnly', { names: joinShown(names, 3) })}` : title;
+    }
     default:
       return title;
   }
@@ -321,7 +338,7 @@ export function readAudience(nodes, edges, ctx) {
 
   if (!detected.editable) {
     const type = detected.type;
-    const audience = type ? extractAudience(type, located) : { ...EMPTY_AUDIENCE };
+    const audience = type ? extractAudience(type, located, lookups) : { ...EMPTY_AUDIENCE };
     const column = text(configOf(located.sendNode)[RECIPIENT_FIELDS[sendSubtype].column]);
     const summary = type
       ? summarize(type, audience, sctx, { filtered: detected.reason === 'filtered', column: detected.reason === 'column' ? column : '' })
@@ -339,7 +356,7 @@ export function readAudience(nodes, edges, ctx) {
   }
 
   const type = detected.type;
-  const audience = type ? extractAudience(type, located) : { ...EMPTY_AUDIENCE };
+  const audience = type ? extractAudience(type, located, lookups) : { ...EMPTY_AUDIENCE };
   // Thiếu theo `describeNodeSettings` (bám validateNodeForRun) HOẶC chưa đủ theo luật của trình từng bước (≥ 1 trang / biểu mẫu / bạn bè / nhóm…).
   const incomplete = type === null || !isStepComplete('audience', { channel: located.channel, audience });
   const missing = describeMissing || incomplete;
@@ -401,6 +418,13 @@ const patchAudienceData = (nodes, edges, audience) => {
       }
       break;
     }
+    case 'customers':
+      // Chỉ chạm `interestedTagIds`; không có tag thì XOÁ khoá (khối về đúng hình "mọi khách" như cũ).
+      if (sourceNode) {
+        const tagIds = tagIdsOf(audience.tagIds);
+        next = setConfigFields(next, sourceNode.id, { interestedTagIds: tagIds.length > 0 ? tagIds : undefined });
+      }
+      break;
     case 'landing':
       if (sourceNode) next = setConfigFields(next, sourceNode.id, { landingLeadsSlugs: list(audience.slugs).map(text).filter(Boolean) });
       break;

@@ -127,6 +127,12 @@ export const fetchInterestedCustomerCoursesLocal = async ({ config = {} } = {}) 
   if (normalizedStatuses.length > 0) {
     params.set('courseStatuses', normalizedStatuses.join(','));
   }
+  const tagIds = (Array.isArray(config.interestedTagIds) ? config.interestedTagIds : [])
+    .map((value) => parseInt(value, 10))
+    .filter((value, idx, arr) => Number.isFinite(value) && value > 0 && arr.indexOf(value) === idx);
+  if (tagIds.length > 0) {
+    params.set('tagIds', tagIds.join(','));
+  }
   const dataSource = config.interestedDataSource || 'database';
   const response = await campaignBuilderApiService.getInterestedCustomersByQuery(params.toString(), dataSource);
   return response.data?.data || { items: [], pagination: { total: 0, limit } };
@@ -325,6 +331,8 @@ export const createNodeConfigFormData = ({
   interestedCourseIds: Array.isArray(config.interestedCourseIds) ? config.interestedCourseIds : [],
   interestedCourseStatuses: Array.isArray(config.interestedCourseStatuses) ? config.interestedCourseStatuses : [],
   interestedCourseQuery: config.interestedCourseQuery || '',
+  /** Lọc khách đã lưu theo tag (PLAN_TAG_KHACH_HANG PR-T3). Hộp cài đặt nâng cao không có ô chọn tag nhưng PHẢI giữ nguyên trường này, nếu không lưu hộp là mất bộ lọc và gửi cho mọi khách. */
+  interestedTagIds: Array.isArray(config.interestedTagIds) ? config.interestedTagIds : [],
   interestedCustomerType: config.interestedCustomerType || 'interested',
   interestedSelectionMode: resolveSelectionMode(
     config.interestedSelectionMode,

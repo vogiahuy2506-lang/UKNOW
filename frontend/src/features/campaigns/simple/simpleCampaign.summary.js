@@ -102,7 +102,12 @@ export const buildReviewSummary = ({ state, preview, t, locale }) => {
     names = joinNames(audience.landingTitles?.length ? audience.landingTitles : audience.slugs, { withQuotes: true });
   }
 
-  const audienceLabel = t(`simpleCampaign.review.audience.${audience.type}`, { names });
+  const taggedCustomers = audience.type === 'customers' && Array.isArray(audience.tagIds) && audience.tagIds.length > 0;
+  if (taggedCustomers) {
+    // Tên tag hiện bằng TÊN người dùng vừa bấm; thiếu tên (state cũ) mới rơi về #id.
+    names = joinNames(audience.tagIds.map((id, index) => audience.tagNames?.[index] || `#${id}`), { withQuotes: true });
+  }
+  const audienceLabel = t(`simpleCampaign.review.audience.${taggedCustomers ? 'customersTagged' : audience.type}`, { names });
   const count = resolveRecipientCount(state, preview);
   const formattedCount = count === null ? '' : Number(count).toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN');
   let audienceText = formattedCount ? `${formattedCount} ${audienceLabel}` : audienceLabel;

@@ -102,4 +102,10 @@ describe('describeAudienceFilter', () => {
       customerType: 'interested', limit: null, courses: [{ id: 1, name: 'A' }, { id: 2, name: 'B' }], excludedCourses: [],
     }, t)).toBe('Quan tâm (chưa mua) · khoá: A, B');
   });
+
+  it('PR-T3: bộ lọc tag hiện bằng TÊN, thiếu tên thì #id', () => {
+    expect(describeAudienceFilter({
+      customerType: null, limit: null, courses: [], excludedCourses: [], tags: [{ id: 4, name: 'Khách VIP' }, { id: 9, name: null }],
+    }, t)).toBe('chỉ khách có tag: Khách VIP, #9');
+  });
 });

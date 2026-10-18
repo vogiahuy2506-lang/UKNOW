@@ -459,3 +459,63 @@ describe('readSettingsSections', () => {
     expect(sections.after.canAdd).toBe(true);
   });
 });
+
+describe('PR-T3 — khách đã lưu chỉ gửi cho khách có tag', () => {
+  const tagLookups = { ...lookups, tags: [{ id: 4, name: 'Khách VIP' }] };
+  const customersGraph = (sourceConfig) => {
+    const nodes = [
+      node('t', 'manual_trigger'),
+      node('c', 'read_interested_customers', sourceConfig),
+      node('e', 'send_email', { recipientSource: 'node', recipientNodeId: 'c', recipientField: 'email', fromEmailId: 3 }),
+    ];
+    return { nodes, edges: chain('t', 'c', 'e') };
+  };
+
+  it('đọc: có interestedTagIds vẫn SỬA ĐƯỢC, tagIds/tagNames vào panel, tóm tắt nói chỉ khách có tag (tên tag, thiếu tên -> #id)', () => {
+    const { nodes, edges } = customersGraph({ interestedCustomerType: 'all', interestedTagIds: [4, 9] });
+    const read = readAudience(nodes, edges, ctxFor('email', { lookups: tagLookups }));
+    expect(read).toMatchObject({ editable: true, status: 'ok' });
+    expect(read.value.audience).toMatchObject({ type: 'customers', tagIds: [4, 9], tagNames: ['Khách VIP', '#9'] });
+    expect(read.summary).toBe('Khách hàng đã lưu · chỉ khách có tag Khách VIP, #9');
+  });
+
+  it('đọc: không tag -> tóm tắt như cũ, tagIds rỗng', () => {
+    const { nodes, edges } = customersGraph({ interestedCustomerType: 'all' });
+    const read = readAudience(nodes, edges, ctxFor('email'));
+    expect(read.value.audience).toMatchObject({ tagIds: [], tagNames: [] });
+    expect(read.summary).toBe('Khách hàng đã lưu');
+  });
+
+  it('khách đã lưu lọc KHOÁ HỌC (kể cả kèm tag) vẫn KHÔNG sửa được ở đây', () => {
+    const { nodes, edges } = customersGraph({ interestedCustomerType: 'all', interestedCourseIds: [3], interestedTagIds: [4] });
+    const read = readAudience(nodes, edges, ctxFor('email', { lookups: tagLookups }));
+    expect(read).toMatchObject({ editable: false, reasonIfNotEditable: 'filtered' });
+    expect(writeAudience(nodes, edges, read.value.audience, ctxFor('email'))).toBeNull();
+  });
+
+  it('ghi: chọn tag chỉ vá interestedTagIds, mọi trường khác của khối nguồn/khối gửi còn nguyên', () => {
+    const { nodes, edges } = customersGraph({ interestedCustomerType: 'all', truongLa: 'giu' });
+    const read = readAudience(nodes, edges, ctxFor('email'));
+    const next = writeAudience(nodes, edges, { ...read.value.audience, tagIds: [4, 9], tagNames: ['x', 'y'] }, ctxFor('email'));
+    expect(byType(next.nodes, 'read_interested_customers').data.config).toEqual({ interestedCustomerType: 'all', truongLa: 'giu', interestedTagIds: [4, 9] });
+    expect(byType(next.nodes, 'send_email').data.config).toEqual(byType(nodes, 'send_email').data.config);
+  });
+
+  it('ghi: bỏ hết tag -> XOÁ khoá interestedTagIds (về đúng "mọi khách"); write(read(x)) không đổi gì', () => {
+    const { nodes, edges } = customersGraph({ interestedCustomerType: 'all', interestedTagIds: [4] });
+    const read = readAudience(nodes, edges, ctxFor('email', { lookups: tagLookups }));
+    expect(writeAudience(nodes, edges, read.value.audience, ctxFor('email')).nodes).toBe(nodes);
+    const cleared = writeAudience(nodes, edges, { ...read.value.audience, tagIds: [], tagNames: [] }, ctxFor('email'));
+    expect(byType(cleared.nodes, 'read_interested_customers').data.config).toEqual({ interestedCustomerType: 'all' });
+  });
+
+  it('đổi nguồn sang khách đã lưu kèm tag ở khung mới: khối nguồn mang interestedTagIds', () => {
+    const built = buildFor('email', 'customers', { ...EMPTY_AUDIENCE, type: 'customers', tagIds: [4], tagNames: ['Khách VIP'] });
+    expect(byType(built.nodes, 'read_interested_customers').data.config).toMatchObject({ interestedCustomerType: 'all', interestedTagIds: [4] });
+  });
+
+  it('createNodeConfigFormData giữ interestedTagIds (hộp cài đặt nâng cao lưu lại không làm MẤT bộ lọc tag)', () => {
+    const form = createNodeConfigFormData({ config: { interestedCustomerType: 'all', interestedTagIds: [4, 9] }, nodeType: 'read_interested_customers', campaignType: 'email' });
+    expect(form.interestedTagIds).toEqual([4, 9]);
+  });
+});

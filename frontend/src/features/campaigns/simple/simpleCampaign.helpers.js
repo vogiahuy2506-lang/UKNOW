@@ -91,6 +91,9 @@ export const MAX_FORM_IDS = 50;
 export const EMPTY_AUDIENCE = Object.freeze({
   type: null,
   customerTotal: null,
+  /** Khách đã lưu: chỉ khách mang BẤT KỲ tag nào trong `tagIds` (rỗng = mọi khách). `tagNames` song song, chỉ để hiện tên. */
+  tagIds: [],
+  tagNames: [],
   slugs: [],
   landingTitles: [],
   formIds: [],
@@ -558,6 +561,9 @@ export const buildSimpleCampaignBody = (state) => {
   const { channel, sender, audience, content, campaignName } = state;
   const audienceBody = { type: audience.type };
   switch (audience.type) {
+    case 'customers':
+      if (Array.isArray(audience.tagIds) && audience.tagIds.length > 0) audienceBody.tagIds = audience.tagIds.map(Number);
+      break;
     case 'landing':
       audienceBody.slugs = [...audience.slugs];
       break;

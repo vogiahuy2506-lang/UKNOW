@@ -512,6 +512,11 @@ const describeInterestedCustomers = (config, lookups, t) => {
   } else {
     lines.push(line(t(`${PREFIX}.label.customers`), t(`${PREFIX}.customersAll`)));
   }
+  const tagIds = (Array.isArray(config.interestedTagIds) ? config.interestedTagIds : []).map(Number).filter((id) => Number.isInteger(id) && id > 0);
+  if (tagIds.length > 0) {
+    const names = tagIds.map((id) => text((Array.isArray(lookups?.tags) ? lookups.tags : []).find((tag) => Number(tag?.id) === id)?.name) || `#${id}`);
+    lines.push(line(t(`${PREFIX}.label.tags`), joinShown(names)));
+  }
   if (Number(config.interestedLimit) > 0) lines.push(line(t(`${PREFIX}.label.limit`), t(`${PREFIX}.limitRecords`, { n: Number(config.interestedLimit) })));
   return lines;
 };

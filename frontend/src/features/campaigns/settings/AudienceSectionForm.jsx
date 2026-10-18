@@ -4,8 +4,8 @@ import { EMPTY_AUDIENCE } from '../simple/simpleCampaign.helpers';
 import { validateAudience } from './sections/audienceSection';
 import { sameValue } from './sections/sectionUtils';
 
-// Số khách chỉ do panel "Khách hàng đã lưu" tự đếm khi mở — không phải thay đổi của người dùng.
-const withoutCounters = (audience) => ({ ...audience, customerTotal: null });
+// Số khách và TÊN tag chỉ do panel "Khách hàng đã lưu" tự điền khi mở — không phải thay đổi của người dùng (id tag mới là dữ liệu).
+const withoutCounters = (audience) => ({ ...audience, customerTotal: null, tagNames: [] });
 
 /**
  * Biểu mẫu mục "Gửi cho ai": thẻ nguồn + PANEL NHẬP của trình từng bước (ô nhập email / số điện thoại, link Google Sheet, chọn landing,

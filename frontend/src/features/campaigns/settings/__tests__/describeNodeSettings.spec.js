@@ -489,3 +489,18 @@ describe('describeNodeSettings — vai (role) của từng dòng', () => {
     });
   });
 });
+
+describe('PR-T3 — read_interested_customers có lọc tag', () => {
+  it('thêm dòng "Chỉ khách có tag" với TÊN tag (tra lookups.tags), thiếu tên thì #id', () => {
+    const target = node('read_interested_customers', { interestedCustomerType: 'all', interestedTagIds: [4, 9] });
+    expect(text(target, { ...lookups, tags: [{ id: 4, name: 'Khách VIP' }] })).toEqual([
+      `Loại khách: ${vi.nodeConfig.allCustomers}`,
+      'Khách hàng: Tất cả khách thuộc loại này',
+      'Chỉ khách có tag: Khách VIP, #9',
+    ]);
+  });
+
+  it('không có tag -> không có dòng tag (y như cũ)', () => {
+    expect(text(node('read_interested_customers', { interestedCustomerType: 'all' }))).toHaveLength(2);
+  });
+});

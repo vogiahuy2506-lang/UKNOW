@@ -149,6 +149,13 @@ export const createCampaignNodeRunner = (deps) => {
     if (selectedStatuses.length > 0) {
       params.set('courseStatuses', selectedStatuses.join(','));
     }
+    // Lọc tag: chạy thử trên trình dựng phải ra CÙNG tập khách với lúc chạy thật (máy chủ dùng chung một bộ lọc SQL).
+    const selectedTagIds = (Array.isArray(config.interestedTagIds) ? config.interestedTagIds : [])
+      .map((v) => parseInt(v, 10))
+      .filter((v, idx, arr) => Number.isFinite(v) && v > 0 && arr.indexOf(v) === idx);
+    if (selectedTagIds.length > 0) {
+      params.set('tagIds', selectedTagIds.join(','));
+    }
     const dataSource = config.interestedDataSource || 'database';
     const response = await apiService.getInterestedCustomersByQuery(
       params.toString(),

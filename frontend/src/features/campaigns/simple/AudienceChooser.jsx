@@ -58,7 +58,7 @@ export default function AudienceChooser({
     }
     switch (audience.type) {
       case 'customers':
-        return <CustomersPanel patchAudience={patchAudience} t={t} locale={locale} />;
+        return <CustomersPanel audience={audience} patchAudience={patchAudience} t={t} locale={locale} />;
       case 'landing':
         return <LandingPanel slugs={audience.slugs} landingTitles={audience.landingTitles} patchAudience={patchAudience} t={t} />;
       case 'form':

@@ -21,6 +21,9 @@ export function describeAudienceFilter(filters, t) {
   if (Array.isArray(filters.excludedCourses) && filters.excludedCourses.length > 0) {
     parts.push(t('aiChatbot.confirmation.filterExcluded', { names: names(filters.excludedCourses) }));
   }
+  if (Array.isArray(filters.tags) && filters.tags.length > 0) {
+    parts.push(t('aiChatbot.confirmation.filterTags', { names: names(filters.tags) }));
+  }
   if (Number.isFinite(Number(filters.limit)) && Number(filters.limit) > 0) {
     parts.push(t('aiChatbot.confirmation.filterLimit', { count: Number(filters.limit) }));
   }
