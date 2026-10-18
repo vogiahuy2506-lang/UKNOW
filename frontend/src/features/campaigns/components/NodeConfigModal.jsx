@@ -6,7 +6,7 @@ import NodeConfigForm from './NodeConfigForm';
 
 /**
  * Hộp cấu hình khối của Sơ đồ khối: vỏ `FullScreenOverlay` + tiêu đề, phần form nằm ở `NodeConfigForm`
- * (cùng form được nhúng tại chỗ ở tab Thiết lập).
+ * (cũng là "Cài đặt nâng cao" của tab Thiết lập).
  */
 const NodeConfigModal = ({ isOpen, onClose, node, ...formProps }) => {
   const { t, locale } = useI18n();
@@ -34,7 +34,7 @@ const NodeConfigModal = ({ isOpen, onClose, node, ...formProps }) => {
           </button>
         </div>
 
-        <NodeConfigForm {...formProps} isOpen={isOpen} node={node} onCancel={onClose} variant="modal" />
+        <NodeConfigForm {...formProps} isOpen={isOpen} node={node} onCancel={onClose} />
       </div>
     </FullScreenOverlay>
   );

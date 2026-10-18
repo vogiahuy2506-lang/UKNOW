@@ -57,26 +57,19 @@ import {
 
 /**
  * Form cấu hình MỘT khối chiến dịch (tách khỏi `NodeConfigModal` — PLAN_THIET_LAP_CAU_HINH_TRUC_TIEP PR-A1).
- * Dùng ở hai nơi: hộp cấu hình của Sơ đồ khối (`variant="modal"`, bọc bởi `NodeConfigModal`) và thẻ khối ở tab Thiết lập
- * (`variant="inline"`, sửa tại chỗ). Form chỉ khởi tạo lại khi ĐỔI KHỐI (`node.id`), không theo mỗi lần `nodes` đổi
- * → đang gõ mà trạng thái khối cập nhật (Chạy thử) thì chữ còn nguyên.
+ * Dùng trong `NodeConfigModal` — hộp cấu hình của Sơ đồ khối và "Cài đặt nâng cao" của tab Thiết lập. Form chỉ khởi tạo lại khi
+ * ĐỔI KHỐI (`node.id`), không theo mỗi lần `nodes` đổi → đang gõ mà trạng thái khối cập nhật (Chạy thử) thì chữ còn nguyên.
  *
  * @param {object} props
  * @param {() => void} props.onCancel bấm Hủy
  * @param {(formData: object) => void} props.onSave bấm Lưu (sau khi qua kiểm tra riêng của từng loại khối)
- * @param {'modal'|'inline'} [props.variant='modal'] 'modal' = thân cuộn 70vh + chân nút; 'inline' = nằm trong thẻ, không khung cuộn
- * @param {(formData: object, isDirty: boolean) => void} [props.onFormChange] báo mỗi lần form đổi; `isDirty` = khác bản vừa khởi tạo
  * @param {string|null} [props.initialSection] id mục form mở sẵn (email / Zalo cá nhân / Zalo nhóm / đọc sheet / khách đã lưu / khoá học /
  *   sản phẩm / lưu khách). Không truyền → mục `basic` như cũ (Sơ đồ khối không truyền). Có truyền → focus ô nhập đầu tiên của mục.
- * @param {number} [props.sectionRequestId] đổi giá trị → áp lại `initialSection` + focus lại (nút Sửa của checklist bấm khi thẻ này đang mở)
  */
 const NodeConfigForm = ({
   isOpen = true,
   onCancel,
-  variant = 'modal',
-  onFormChange,
   initialSection = null,
-  sectionRequestId = 0,
   node,
   onSave,
   onCheckSheetConnection,
@@ -106,8 +99,6 @@ const NodeConfigForm = ({
   // `nodes` chỉ cần lúc khởi tạo (đổi `recipientFormula` → `recipientNodeId`) nên đọc qua ref, không đưa vào deps của effect.
   const nodesRef = useRef(nodes);
   nodesRef.current = nodes;
-  // Bản form ngay sau khi khởi tạo xong (đã gồm bước mặc định do effect thêm) — mốc để biết người dùng có sửa gì chưa.
-  const baselineRef = useRef(null);
 
   const [, setSelectedTemplate] = useState(null);
   const [mappingTemplate, setMappingTemplate] = useState(null);
@@ -326,19 +317,13 @@ const NodeConfigForm = ({
           }
         }
       }
-
-      // Updater chạy theo thứ tự hàng đợi → thấy form SAU mọi bước khởi tạo ở trên. Idempotent (StrictMode chạy hai lần cũng được).
-      setFormData((prev) => {
-        baselineRef.current = JSON.stringify(prev);
-        return prev;
-      });
     }
     // Khởi tạo theo `node?.id` (không theo `node`/`nodes`): object khối đổi identity mỗi lần cha render / mỗi lần Chạy thử cập nhật
     // trạng thái khối, mà dựng lại form lúc đó là mất chữ người dùng đang gõ.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [node?.id, campaignType]);
 
-  // PR-D: áp `initialSection` (lúc mở và mỗi lần `sectionRequestId` đổi) — khai báo SAU effect khởi tạo ở trên, vì effect đó đặt lại
+  // PR-D: áp `initialSection` lúc mở — khai báo SAU effect khởi tạo ở trên, vì effect đó đặt lại
   // mục Zalo về 'basic'. Sau khi mục hiển thị thì focus ô nhập đầu tiên (effect không deps bên dưới).
   useEffect(() => {
     if (!initialSection || !node) return;
@@ -357,7 +342,7 @@ const NodeConfigForm = ({
     setter(initialSection);
     pendingFocusRef.current = 6;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialSection, sectionRequestId, node?.id]);
+  }, [initialSection, node?.id]);
 
   useEffect(() => {
     if (pendingFocusRef.current <= 0) return;
@@ -386,12 +371,6 @@ const NodeConfigForm = ({
     pendingFocusRef.current = 0;
     target.focus();
   });
-
-  useEffect(() => {
-    if (typeof onFormChange !== 'function') return;
-    onFormChange(formData, baselineRef.current !== null && JSON.stringify(formData) !== baselineRef.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData]);
 
   useEffect(() => {
     if (!isOpen || !node || nodeType !== 'read_interested_customers') {
@@ -931,24 +910,13 @@ const NodeConfigForm = ({
     }
   };
 
-  const isInline = variant === 'inline';
   return (
     <>
-      <div
-        ref={contentRef}
-        className={isInline ? 'pt-3' : 'p-4 max-h-[70vh] overflow-y-auto'}
-        data-testid={isInline ? 'node-config-form-inline' : undefined}
-      >
+      <div ref={contentRef} className="p-4 max-h-[70vh] overflow-y-auto">
         {renderContent()}
       </div>
 
-      <div
-        className={
-          isInline
-            ? 'mt-4 flex flex-wrap justify-end gap-3 border-t border-gray-200 pt-3 dark:border-dk-border'
-            : 'flex justify-end gap-3 p-4 border-t border-gray-200 dark:border-dk-border bg-gray-50 dark:bg-dk-bg rounded-b-xl'
-        }
-      >
+      <div className="flex justify-end gap-3 p-4 border-t border-gray-200 dark:border-dk-border bg-gray-50 dark:bg-dk-bg rounded-b-xl">
         <button
           type="button"
           onClick={onCancel}

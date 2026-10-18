@@ -1,5 +1,5 @@
 /**
- * NodeConfigForm — `initialSection` (PLAN_THIET_LAP_CAU_HINH_TRUC_TIEP PR-D): thẻ sửa tại chỗ mở ĐÚNG mục cần điền và focus ô nhập đầu tiên.
+ * NodeConfigForm — `initialSection` (PLAN_THIET_LAP_CAU_HINH_TRUC_TIEP PR-D): "Cài đặt nâng cao" của tab Thiết lập mở ĐÚNG mục cần điền và focus ô nhập đầu tiên.
  * Không truyền `initialSection` (Sơ đồ khối) → mục `basic` như cũ, không focus.
  */
 import { describe, it, expect, vi } from 'vitest';
@@ -13,10 +13,9 @@ vi.mock('../../services/campaignBuilderApi.service', () => ({
 
 const node = (id, nodeType, config = {}) => ({ id, type: 'task', data: { nodeType, label: nodeType, config } });
 
-const Harness = ({ target, variant = 'inline', ...rest }) => (
+const Harness = ({ target, ...rest }) => (
   <I18nProvider>
     <NodeConfigForm
-      variant={variant}
       node={target}
       nodes={[target]}
       edges={[]}
@@ -56,7 +55,7 @@ describe('NodeConfigForm — initialSection', () => {
   });
 
   it('KHÔNG truyền initialSection (Sơ đồ khối / hộp) → mục basic, không focus ô nào', () => {
-    render(<Harness target={EMAIL_MANUAL} variant="modal" />);
+    render(<Harness target={EMAIL_MANUAL} />);
     expect(document.querySelector('select[data-section-focus]')).not.toBeNull();
     expect(document.querySelector('textarea')).toBeNull();
     expect(document.activeElement).toBe(document.body);
@@ -86,15 +85,6 @@ describe('NodeConfigForm — initialSection', () => {
     render(<Harness target={group} initialSection="templates" />);
     expect(document.querySelector('textarea')).toBeNull();
     expect(screen.getAllByText('Danh sách template gửi').length).toBeGreaterThan(1);
-  });
-
-  it('thẻ đang mở, sectionRequestId đổi + initialSection khác → nhảy tới mục mới và focus lại', () => {
-    const view = render(<Harness target={EMAIL_MANUAL} initialSection="basic" sectionRequestId={1} />);
-    expect(document.activeElement).toBe(document.querySelector('select[data-section-focus]'));
-    view.rerender(<Harness target={EMAIL_MANUAL} initialSection="recipient" sectionRequestId={2} />);
-    const textarea = document.querySelector('textarea');
-    expect(textarea).not.toBeNull();
-    expect(document.activeElement).toBe(textarea);
   });
 
   it('loại khối không có thanh mục (điều kiện) → initialSection bị bỏ qua, form vẫn hiện bình thường', () => {
