@@ -1,10 +1,26 @@
 import { readAudience } from './audienceSection';
 import { readSender } from './senderSection';
-import { readAfterSend, readContent, readTiming } from './summarySections';
+import { readContent } from './contentSection';
+import { readAfterSend, readTiming } from './summarySections';
 
 export { audienceChangeNeedsRebuild, buildAudienceGraph, readAudience, validateAudience, writeAudience } from './audienceSection';
 export { readSender, writeSender } from './senderSection';
-export { readAfterSend, readContent, readTiming } from './summarySections';
+export { readAfterSend, readTiming } from './summarySections';
+export {
+  CONTENT_SEND_SPEC,
+  CUSTOM_BODY_MAX,
+  CUSTOM_SUBJECT_MAX,
+  buildTemplateMappings,
+  contentProblemOf,
+  contentSignature,
+  createBlankContentStep,
+  delayProblemOf,
+  isContentValueChanged,
+  maxStepsOf,
+  readContent,
+  validateContentValue,
+  writeContent,
+} from './contentSection';
 
 /** Số mục cần điền trước khi chạy: Gửi từ · Gửi cho ai · Nội dung (Thời điểm / Sau khi gửi không tính). */
 export const countMissingSections = (sections) => ['sender', 'audience', 'content'].filter((key) => sections[key]?.status === 'missing').length;
