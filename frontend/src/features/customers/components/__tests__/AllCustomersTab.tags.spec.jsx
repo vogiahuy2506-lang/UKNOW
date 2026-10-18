@@ -68,7 +68,7 @@ describe('AllCustomersTab — tag', () => {
     customerApiService.unassignTags.mockResolvedValue({ data: { data: { removed: 1 } } });
   });
 
-  it('hiện chip tag của từng khách; quá 3 tag thì gom thành "+n"', async () => {
+  it('hiện chip tag của từng khách; quá 2 tag thì gom thành "+n"', async () => {
     customerApiService.getCustomers.mockResolvedValue(listResponse([
       makeCustomer({
         id: 1,
@@ -77,8 +77,8 @@ describe('AllCustomersTab — tag', () => {
     ]));
     render(<AllCustomersTab />);
     await screen.findByText('Nguyễn An');
-    expect(screen.getAllByTestId('customer-tag-chip')).toHaveLength(3);
-    expect(screen.getByText('customers.tags.more{"count":2}')).toBeInTheDocument();
+    expect(screen.getAllByTestId('customer-tag-chip')).toHaveLength(2);
+    expect(screen.getByText('customers.tags.more{"count":3}')).toBeInTheDocument();
   });
 
   it('lọc theo tag gửi `tagIds` dạng chuỗi phẩy (BẤT KỲ tag), quay về trang 1; bỏ lọc thì không gửi nữa', async () => {

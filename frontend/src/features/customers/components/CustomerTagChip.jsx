@@ -13,7 +13,7 @@ export default function CustomerTagChip({ tag, onRemove }) {
   return (
     <span
       data-testid="customer-tag-chip"
-      className="inline-flex max-w-[160px] items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-700 dark:border-dk-border dark:bg-dk-raised dark:text-dk-text"
+      className="inline-flex max-w-[150px] items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-700 dark:border-dk-border dark:bg-dk-raised dark:text-dk-text"
       title={tag.name}
     >
       <span

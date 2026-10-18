@@ -39,7 +39,7 @@ import CustomerTagFilter from './CustomerTagFilter';
 import CustomerTagManageModal from './CustomerTagManageModal';
 
 /** Số chip tag hiện tối đa trong một ô; phần dư gom thành "+n". */
-const MAX_VISIBLE_TAGS = 3;
+const MAX_VISIBLE_TAGS = 2;
 
 /**
  * Tab "Tất cả khách" của `/app/customers`: toàn bộ khách trong không gian làm việc (không theo chiến dịch),
@@ -354,7 +354,7 @@ export default function AllCustomersTab() {
                     <td>
                       <div className="flex items-center gap-1.5 text-gray-600 dark:text-dk-text min-w-0">
                         <HiOutlineMail className="w-4 h-4 text-gray-400 dark:text-dk-muted shrink-0" />
-                        <span className="truncate max-w-[200px]">{customer.email || '--'}</span>
+                        <span className="truncate max-w-[170px]">{customer.email || '--'}</span>
                       </div>
                     </td>
                     <td>
@@ -370,7 +370,7 @@ export default function AllCustomersTab() {
                     <td><CustomerEmailStatusBadge customer={customer} /></td>
                     <td>
                       {customer.tags?.length ? (
-                        <div className="flex max-w-[260px] flex-wrap gap-1">
+                        <div className="flex max-w-[170px] flex-wrap gap-1">
                           {customer.tags.slice(0, MAX_VISIBLE_TAGS).map((tag) => (
                             <CustomerTagChip key={tag.id} tag={tag} />
                           ))}
