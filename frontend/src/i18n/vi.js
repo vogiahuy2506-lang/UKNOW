@@ -2046,6 +2046,26 @@ export default {
       message: 'Bước “{name}” sẽ bị xoá khỏi chiến dịch. Bước trước và bước sau sẽ được nối lại với nhau.',
       confirm: 'Xoá bước',
     },
+    content: {
+      notEditable: {
+        unsupported: 'Phần này được cài đặt riêng nên chưa sửa nhanh ở đây được.',
+        legacy: 'Nội dung này được lưu theo kiểu cũ nên chưa sửa nhanh ở đây được.',
+        sendMode: 'Cách gửi của phần này được cài đặt riêng nên chưa sửa nhanh ở đây được.',
+        sendAll: 'Chuỗi tin này đang gửi tất cả cùng lúc nên chưa sửa nhanh ở đây được.',
+        step: 'Có tin được cài đặt riêng (không phải mẫu hoặc chữ thường) nên chưa sửa nhanh ở đây được.',
+      },
+      form: {
+        modeAria: 'Cách soạn tin {n}',
+        afterFirst: 'kể từ tin đầu',
+        delayTooLong: 'Thời gian chờ tối đa 30 ngày.',
+        incomplete: 'Mỗi tin cần có mẫu (hoặc nội dung), và thời gian chờ phải là số nguyên lớn hơn 0.',
+        customHint: 'Tin tự soạn được lưu thành mẫu tin trong thư viện của bạn khi bấm Lưu.',
+        createFailed: 'Không tạo được mẫu tin từ nội dung bạn soạn.',
+        saveFailed: 'Không lưu được nội dung này. Hãy thử lại.',
+        templateNameFallback: 'Chiến dịch',
+        templateNameStep: 'Tin',
+      },
+    },
     section: {
       edit: 'Sửa',
       save: 'Lưu',

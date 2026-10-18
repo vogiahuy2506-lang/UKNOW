@@ -2041,6 +2041,26 @@ export default {
       message: 'The step “{name}” will be removed from the campaign. The steps before and after it will be connected to each other.',
       confirm: 'Remove step',
     },
+    content: {
+      notEditable: {
+        unsupported: 'This part has its own settings, so it cannot be edited quickly here.',
+        legacy: 'This content is stored in an older format, so it cannot be edited quickly here.',
+        sendMode: 'The sending mode of this part has its own settings, so it cannot be edited quickly here.',
+        sendAll: 'This message series is sent all at once, so it cannot be edited quickly here.',
+        step: 'A message has its own settings (not a template or plain text), so it cannot be edited quickly here.',
+      },
+      form: {
+        modeAria: 'How to write message {n}',
+        afterFirst: 'after the first message',
+        delayTooLong: 'The wait can be at most 30 days.',
+        incomplete: 'Every message needs a template (or text), and the wait must be a whole number greater than 0.',
+        customHint: 'Messages you write yourself are saved as message templates in your library when you press Save.',
+        createFailed: 'Could not create a template from the text you wrote.',
+        saveFailed: 'Could not save this content. Please try again.',
+        templateNameFallback: 'Campaign',
+        templateNameStep: 'Message',
+      },
+    },
     section: {
       edit: 'Edit',
       save: 'Save',

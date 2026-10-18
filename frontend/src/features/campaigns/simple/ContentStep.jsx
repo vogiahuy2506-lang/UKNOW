@@ -4,8 +4,7 @@ import { HiOutlineEye, HiOutlinePencilAlt, HiOutlinePlus, HiOutlineTemplate, HiO
 import SimpleChoiceCard from './SimpleChoiceCard';
 import TemplateSearchSelect from '../components/TemplateSearchSelect';
 import NodeConfigTemplatePreviewModal from '../components/NodeConfigTemplatePreviewModal';
-import emailTemplateApiService from '../../templates/services/emailTemplateApi.service';
-import zaloTemplateApiService from '../../templates/services/zaloTemplateApi.service';
+import { loadTemplates, serviceFor } from './loadTemplates';
 import useAsyncResource from './useAsyncResource';
 import {
   ADAPTER_MESSAGE_MAX,
@@ -20,16 +19,13 @@ import {
 const INPUT_CLASS =
   'w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 hover:bg-white focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-orange-500/10 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text dark:placeholder:text-dk-muted dark:hover:bg-dk-surface dark:focus:bg-dk-inset';
 
-const serviceFor = (kind) => (kind === 'email' ? emailTemplateApiService : zaloTemplateApiService);
 
-const loadTemplates = async (kind) => {
-  const response = await serviceFor(kind).getTemplates({ page: 1, limit: 100 });
-  return Array.isArray(response?.data?.data?.items) ? response.data.data.items : [];
-};
-
-/** Chọn một mẫu có sẵn + nút Xem trước (dùng lại modal xem trước của trình dựng). */
-function TemplatePanel({ kind, channel, content, patchContent, t, idPrefix }) {
-  const resource = useAsyncResource(() => loadTemplates(kind), [kind]);
+/**
+ * Chọn một mẫu có sẵn + nút Xem trước (dùng lại modal xem trước của trình dựng). `resource` là danh sách mẫu đã tải (`useAsyncResource`):
+ * nơi có NHIỀU ô chọn cùng lúc (mục Nội dung của tab Thiết lập) tải MỘT lần rồi truyền xuống — `api.js` khử trùng GET song song cùng khoá
+ * nên N ô tự tải thì N-1 ô kẹt "đang tải".
+ */
+export function TemplatePanelView({ resource, kind, channel, content, patchContent, t, idPrefix }) {
   const [previewTemplate, setPreviewTemplate] = useState(null);
   const [previewError, setPreviewError] = useState('');
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
@@ -75,6 +71,7 @@ function TemplatePanel({ kind, channel, content, patchContent, t, idPrefix }) {
       // Telegram/WhatsApp CHÉP nội dung + tệp của mẫu vào chiến dịch: tải chi tiết mẫu để báo sớm mẫu không hợp kênh (server kiểm lại).
       templateAttachments: null,
       templateBodyLength: picked ? String(picked.bodyText || '').trim().length : null,
+      templateBody: picked ? String(picked.bodyText || '') : '',
     });
     if (!adapter || !(id > 0)) return;
     try {
@@ -84,6 +81,7 @@ function TemplatePanel({ kind, channel, content, patchContent, t, idPrefix }) {
       patchContent({
         templateAttachments: Array.isArray(detail?.attachments) ? detail.attachments.filter(Boolean) : [],
         templateBodyLength: String(detail?.bodyText ?? picked?.bodyText ?? '').trim().length,
+        templateBody: String(detail?.bodyText ?? picked?.bodyText ?? ''),
       });
     } catch {
       // Không tải được chi tiết: để server (bước Xem lại) kiểm tệp — không chặn người dùng vì một lỗi mạng.
@@ -173,9 +171,15 @@ function TemplatePanel({ kind, channel, content, patchContent, t, idPrefix }) {
   );
 }
 
+/** Ô chọn mẫu tự tải danh sách (trình từng bước: mỗi lúc chỉ một ô). */
+function TemplatePanel(props) {
+  const resource = useAsyncResource(() => loadTemplates(props.kind), [props.kind]);
+  return <TemplatePanelView resource={resource} {...props} />;
+}
+
 /** Tự soạn: Email = Tiêu đề + Nội dung; Zalo/Telegram/WhatsApp = Nội dung (Telegram/WhatsApp có trần ký tự + bộ đếm). */
-function CustomPanel({ isEmail, channel, content, patchContent, t, idPrefix }) {
-  const bodyMax = ADAPTER_MESSAGE_MAX[channel] || 10000;
+export function CustomPanel({ isEmail, channel, content, patchContent, t, idPrefix, bodyMax: bodyMaxOverride, subjectMax = 200 }) {
+  const bodyMax = bodyMaxOverride || ADAPTER_MESSAGE_MAX[channel] || 10000;
   const showCounter = isAdapterChannel(channel);
   return (
     <div className="space-y-4">
@@ -187,7 +191,7 @@ function CustomPanel({ isEmail, channel, content, patchContent, t, idPrefix }) {
           <input
             id={`${idPrefix}-subject`}
             type="text"
-            maxLength={200}
+            maxLength={subjectMax}
             value={content.subject}
             onChange={(event) => patchContent({ subject: event.target.value })}
             placeholder={t('simpleCampaign.content.subjectPlaceholder')}

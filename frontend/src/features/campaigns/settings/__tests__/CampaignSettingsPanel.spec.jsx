@@ -2,8 +2,11 @@ import { useState } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import toast from 'react-hot-toast';
 import { I18nProvider } from '../../../../i18n';
 import CampaignSettingsPanel from '../CampaignSettingsPanel';
+import emailTemplateApiService from '../../../templates/services/emailTemplateApi.service';
+import zaloTemplateApiService from '../../../templates/services/zaloTemplateApi.service';
 
 const { mockSavedEstimate, mockRunEstimate, mockLatestRun, mockLoadSenders } = vi.hoisted(() => ({
   mockLoadSenders: vi.fn(),
@@ -21,6 +24,14 @@ vi.mock('../../simple/loadSenderAccounts', () => ({ loadSenderAccounts: (...args
 vi.mock('../../hooks/useCampaignEstimate', () => ({ default: (...args) => mockSavedEstimate(...args) }));
 vi.mock('../useRunRemainingEstimate', () => ({ default: (...args) => mockRunEstimate(...args) }));
 vi.mock('../useCampaignLatestRun', () => ({ default: (...args) => mockLatestRun(...args) }));
+// Mẫu tin: danh sách + tạo / xoá mẫu gọi API → giả (mục Nội dung chọn mẫu và tạo mẫu cho tin tự soạn).
+vi.mock('../../../templates/services/emailTemplateApi.service', () => ({
+  default: { getTemplates: vi.fn(), getTemplateById: vi.fn(), createTemplate: vi.fn(), deleteTemplate: vi.fn() },
+}));
+vi.mock('../../../templates/services/zaloTemplateApi.service', () => ({
+  default: { getTemplates: vi.fn(), getTemplateById: vi.fn(), createTemplate: vi.fn(), deleteTemplate: vi.fn() },
+}));
+vi.mock('react-hot-toast', () => ({ default: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }) }));
 // Hộp cài đặt khối thật có spec riêng (NodeConfigForm.spec.jsx); ở đây chỉ kiểm tab Thiết lập mở đúng khối / đúng mục và lưu qua onSaveNode.
 vi.mock('../../components/NodeConfigModal', async () => {
   const { createNodeConfigFormData } = await import('../../utils/nodeConfigModal.helpers');
@@ -123,6 +134,10 @@ beforeEach(() => {
   mockLoadSenders.mockReset();
   mockLoadSenders.mockResolvedValue(EMAIL_ACCOUNTS);
   mockLatestRun.mockReturnValue({ status: 'ready', run: null });
+  [emailTemplateApiService, zaloTemplateApiService].forEach((service) => Object.values(service).forEach((fn) => fn.mockReset()));
+  emailTemplateApiService.getTemplates.mockResolvedValue({ data: { data: { items: [{ id: 7, templateName: 'Chào mừng' }, { id: 8, templateName: 'Nhắc lại' }, { id: 9, templateName: 'Ưu đãi cuối tuần' }] } } });
+  zaloTemplateApiService.getTemplates.mockResolvedValue({ data: { data: { items: [{ id: 21, templateName: 'Mời học' }] } } });
+  toast.error.mockReset();
 });
 
 const pickSender = async (id) => fireEvent.click(within(await screen.findByTestId(`simple-sender-${id}`)).getAllByRole('button')[0]);
@@ -340,23 +355,97 @@ describe('CampaignSettingsPanel — Gửi cho ai', () => {
   });
 });
 
-describe('CampaignSettingsPanel — Nội dung / Thời điểm / Sau khi gửi (E1: chỉ tóm tắt, chỗ sửa tạm là hộp cài đặt)', () => {
-  it('Nội dung: Sửa mở hộp cài đặt của khối gửi ở mục mẫu; lưu qua onSaveNode; không đổi gì thì không lưu', async () => {
-    const onSaveNode = vi.fn();
-    renderPanel({ onSaveNode });
+describe('CampaignSettingsPanel — Nội dung có biểu mẫu riêng (E2)', () => {
+  const pickTemplate = async (stepIndex, label) => {
+    const step = screen.getByTestId(`settings-content-step-${stepIndex}`);
+    fireEvent.click(await within(step).findByRole('button', { name: '-- Chọn mẫu --' }));
+    fireEvent.click(within(step).getByRole('button', { name: label }));
+  };
+
+  it('Sửa mở biểu mẫu ngay tại mục (KHÔNG mở hộp cài đặt khối); thêm tin 3 chờ 30 phút + chọn mẫu → Lưu ghi đúng bước vào sơ đồ qua onApplyGraph', async () => {
+    const onApplyGraph = vi.fn().mockResolvedValue(undefined);
+    renderHarness({ onApplyGraph, nodes: EMAIL_FLOW.nodes, edges: EMAIL_FLOW.edges });
     fireEvent.click(screen.getByTestId('settings-content-edit-mail'));
-    expect(screen.getByTestId('modal-stub')).toHaveAttribute('data-node-id', 'mail');
-    expect(screen.getByTestId('modal-stub')).toHaveAttribute('data-initial-section', 'templates');
-    fireEvent.click(screen.getByTestId('stub-unchanged'));
-    expect(onSaveNode).not.toHaveBeenCalled();
     expect(screen.queryByTestId('modal-stub')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('settings-content-edit-mail'));
-    fireEvent.click(screen.getByTestId('stub-save'));
-    await waitFor(() => expect(onSaveNode).toHaveBeenCalledTimes(1));
-    expect(onSaveNode.mock.calls[0][0].id).toBe('mail');
-    expect(onSaveNode.mock.calls[0][1]).toMatchObject({ edited: true });
+    expect(screen.getByTestId('settings-content-form')).toBeInTheDocument();
+    expect(screen.getByTestId('settings-content-save')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('settings-content-add'));
+    fireEvent.change(screen.getByTestId('settings-content-delay-2'), { target: { value: '30' } });
+    fireEvent.change(screen.getByTestId('settings-content-unit-2'), { target: { value: 'minutes' } });
+    expect(screen.getByTestId('settings-content-save')).toBeDisabled();
+    await pickTemplate(2, 'Ưu đãi cuối tuần');
+    fireEvent.click(screen.getByTestId('settings-content-save'));
+    await waitFor(() => expect(onApplyGraph).toHaveBeenCalledTimes(1));
+    const steps = onApplyGraph.mock.calls[0][0].find((item) => item.id === 'mail').data.config.emailSteps;
+    expect(steps).toHaveLength(3);
+    expect(steps[2]).toEqual({
+      templateId: 9, emailSubject: '', emailBody: '', delayValue: 30, delayUnit: 'minutes', delayFrom: 'prev', enableLinkTracking: true, templateMappings: [],
+    });
+    expect(steps[0]).toBe(EMAIL_FLOW.nodes[2].data.config.emailSteps[0]);
+    // Lưu xong: biểu mẫu đóng, tóm tắt hiện TÊN mẫu mới (không phải "Mẫu #9").
+    await waitFor(() => expect(screen.queryByTestId('settings-content-form')).not.toBeInTheDocument());
+    expect(screen.getByTestId('settings-content-list')).toHaveTextContent('Tin 3Ưu đãi cuối tuần · 30 phút sau tin trước');
   });
 
+  it('tin tự soạn Zalo: Lưu tạo mẫu rồi mới ghi sơ đồ; hết hạn mức mẫu → báo đúng câu, KHÔNG ghi sơ đồ, biểu mẫu vẫn mở', async () => {
+    const zalo = {
+      nodes: [
+        node('start', 'manual_trigger', {}, 'Khởi chạy', 'start'),
+        node('zalo', 'send_zalo_personal', {
+          zaloAccountId: 5, zaloRecipientSource: 'manual', zaloRecipientPhones: '0901234567', zaloPersonalSendMode: 'all',
+          zaloPersonalTemplateSteps: [{ templateId: 21, message: '', delayValue: 0, delayUnit: 'days', templateMappings: [] }],
+        }, 'Gửi Zalo'),
+      ],
+      edges: [edge('start', 'zalo')],
+    };
+    const onApplyGraph = vi.fn().mockResolvedValue(undefined);
+    renderHarness({ onApplyGraph, campaignType: 'zalo', nodes: zalo.nodes, edges: zalo.edges, zaloTemplates: [{ id: 21, templateName: 'Mời học' }] });
+    fireEvent.click(screen.getByTestId('settings-content-edit-zalo'));
+    fireEvent.click(screen.getByTestId('settings-content-add'));
+    fireEvent.click(screen.getByTestId('settings-content-mode-1-custom'));
+    fireEvent.change(screen.getByLabelText('Nội dung'), { target: { value: 'Chào {{ten}}' } });
+    zaloTemplateApiService.createTemplate.mockRejectedValueOnce({ response: { data: { message: 'Gói của bạn chỉ tạo được 10 mẫu Zalo.', limitReached: true } } });
+    fireEvent.click(screen.getByTestId('settings-content-save'));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Gói của bạn chỉ tạo được 10 mẫu Zalo.'));
+    expect(onApplyGraph).not.toHaveBeenCalled();
+    expect(screen.getByTestId('settings-content-form')).toBeInTheDocument();
+
+    zaloTemplateApiService.createTemplate.mockResolvedValueOnce({ data: { data: { id: 77 } } });
+    fireEvent.click(screen.getByTestId('settings-content-save'));
+    await waitFor(() => expect(onApplyGraph).toHaveBeenCalledTimes(1));
+    expect(zaloTemplateApiService.createTemplate).toHaveBeenLastCalledWith(expect.objectContaining({ templateName: 'Chăm sóc khách mới – Tin 2', bodyText: 'Chào {{ten}}' }));
+    const config = onApplyGraph.mock.calls[0][0].find((item) => item.id === 'zalo').data.config;
+    expect(config.zaloPersonalSendMode).toBe('schedule');
+    expect(config.zaloPersonalTemplateSteps[1]).toMatchObject({ templateId: 77, message: 'Chào {{ten}}', delayFrom: 'prev', delayValue: 1, delayUnit: 'days' });
+  });
+
+  it('nhóm không sửa nhanh được (gửi cả chuỗi cùng lúc): không có nút Sửa, hiện lý do + Cài đặt nâng cao mở đúng khối', () => {
+    const sendAll = EMAIL_FLOW.nodes.map((item) => (item.id === 'mail' ? { ...item, data: { ...item.data, config: { ...item.data.config, sendMode: 'all' } } } : item));
+    renderPanel({ nodes: sendAll, edges: EMAIL_FLOW.edges });
+    expect(screen.queryByTestId('settings-content-edit-mail')).not.toBeInTheDocument();
+    expect(screen.getByTestId('settings-content-not-editable')).toHaveTextContent('đang gửi tất cả cùng lúc');
+    fireEvent.click(screen.getByTestId('settings-content-advanced-mail'));
+    expect(screen.getByTestId('modal-stub')).toHaveAttribute('data-node-id', 'mail');
+    expect(screen.getByTestId('modal-stub')).toHaveAttribute('data-initial-section', 'templates');
+  });
+
+  it('đang sửa Nội dung: nút Sửa của mục khác khoá, báo trang có thay đổi chưa lưu; Huỷ đóng biểu mẫu không ghi gì', () => {
+    const onApplyGraph = vi.fn();
+    const onInlineDirtyChange = vi.fn();
+    renderHarness({ onApplyGraph, onInlineDirtyChange, nodes: EMAIL_FLOW.nodes, edges: EMAIL_FLOW.edges });
+    fireEvent.click(screen.getByTestId('settings-content-edit-mail'));
+    expect(screen.getByTestId('settings-section-edit-sender')).toBeDisabled();
+    expect(onInlineDirtyChange).toHaveBeenLastCalledWith(false);
+    fireEvent.click(screen.getByTestId('settings-content-add'));
+    expect(onInlineDirtyChange).toHaveBeenLastCalledWith(true);
+    fireEvent.click(screen.getByTestId('settings-content-cancel'));
+    expect(screen.queryByTestId('settings-content-form')).not.toBeInTheDocument();
+    expect(onApplyGraph).not.toHaveBeenCalled();
+    expect(onInlineDirtyChange).toHaveBeenLastCalledWith(false);
+  });
+});
+
+describe('CampaignSettingsPanel — Thời điểm / Sau khi gửi', () => {
   it('Thời điểm: nút Đặt lịch mở hộp lên lịch có sẵn; chiến dịch mới chưa lưu thì không có nút', () => {
     const onOpenSchedule = vi.fn();
     const { unmount } = renderPanel({ onOpenSchedule });

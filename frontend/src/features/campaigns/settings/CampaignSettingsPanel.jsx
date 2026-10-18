@@ -31,7 +31,9 @@ import useSettingsAccountLookups from './useSettingsAccountLookups';
 import SettingsSectionCard, { CARD, MUTED } from './SettingsSectionCard';
 import SenderSectionForm, { SENDER_LOAD_OPTIONS } from './SenderSectionForm';
 import AudienceSectionForm from './AudienceSectionForm';
-import { buildAudienceGraph, countMissingSections, readSettingsSections, writeAudience, writeSender } from './sections';
+import ContentSectionForm from './ContentSectionForm';
+import { buildAudienceGraph, countMissingSections, readSettingsSections, writeAudience, writeContent, writeSender } from './sections';
+import { resolveCustomSteps } from './sections/contentTemplates';
 import {
   ADDABLE_SIDE_STEP_SUBTYPES,
   analyzeSettingsGraph,
@@ -299,43 +301,68 @@ const BranchBanner = ({ onGoFlow, t }) => (
 
 const SMALL_BUTTON = 'inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent dark:border-dk-border dark:text-dk-text dark:hover:bg-dk-raised';
 
-/** Thân mục Nội dung: mỗi khối gửi một nhóm dòng "Tin N: mẫu · nhịp chờ" (PR-E2 thay bằng biểu mẫu riêng; nút Sửa tạm mở hộp cài đặt của khối gửi). */
-const ContentBody = ({ items, canEdit, editLocked, onEdit, t }) => (
+/**
+ * Thân mục Nội dung: mỗi khối gửi một nhóm "Tin N: mẫu · nhịp chờ"; Sửa mở biểu mẫu riêng ngay tại nhóm (`renderForm`). Nhóm không sửa được
+ * nhanh (chế độ lạ, chữ dựng tay…) chỉ tóm tắt + lý do + "Cài đặt nâng cao".
+ */
+const ContentBody = ({ items, canEdit, editingNodeId, editLocked, renderForm, onEdit, onAdvanced, t }) => (
   <ul className="space-y-4" data-testid="settings-content-list">
-    {items.map((item) => (
-      <li key={item.nodeId} className="min-w-0" data-testid="settings-content-item" data-node-id={item.nodeId} data-status={item.status}>
-        <div className="flex min-w-0 items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            {items.length > 1 && (
-              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-dk-text2">
-                {t(`campaignSettings.section.content.send.${item.subtype}`)}
-              </p>
+    {items.map((item) => {
+      const editing = editingNodeId === item.nodeId && item.editable;
+      return (
+        <li key={item.nodeId} className="min-w-0" data-testid="settings-content-item" data-node-id={item.nodeId} data-status={item.status} data-editing={editing ? 'true' : 'false'}>
+          <div className="flex min-w-0 items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              {items.length > 1 && (
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-dk-text2">
+                  {t(`campaignSettings.section.content.send.${item.subtype}`)}
+                </p>
+              )}
+              {!editing && (
+                <dl className="space-y-1.5 text-sm">
+                  {item.lines.map((line, index) => (
+                    <div key={`${line.label}-${index}`} className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:gap-3" data-testid="settings-content-line" data-tone={line.tone}>
+                      <dt className={`shrink-0 sm:w-20 ${MUTED}`}>{line.label}</dt>
+                      <dd className={`min-w-0 break-words ${line.tone === 'missing' ? 'font-medium text-rose-600 dark:text-rose-400' : 'text-gray-900 dark:text-dk-text'}`}>{line.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
+            </div>
+            {canEdit && item.editable && !editing && (
+              <button
+                type="button"
+                onClick={() => onEdit(item.nodeId)}
+                disabled={editLocked}
+                title={editLocked ? t('campaignSettings.editBusy') : undefined}
+                data-testid={`settings-content-edit-${item.nodeId}`}
+                className={SMALL_BUTTON}
+              >
+                <HiOutlinePencil className="h-4 w-4" aria-hidden="true" />
+                {t('campaignSettings.section.edit')}
+              </button>
             )}
-            <dl className="space-y-1.5 text-sm">
-              {item.lines.map((line, index) => (
-                <div key={`${line.label}-${index}`} className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:gap-3" data-testid="settings-content-line" data-tone={line.tone}>
-                  <dt className={`shrink-0 sm:w-20 ${MUTED}`}>{line.label}</dt>
-                  <dd className={`min-w-0 break-words ${line.tone === 'missing' ? 'font-medium text-rose-600 dark:text-rose-400' : 'text-gray-900 dark:text-dk-text'}`}>{line.value}</dd>
-                </div>
-              ))}
-            </dl>
           </div>
-          {canEdit && (
-            <button
-              type="button"
-              onClick={() => onEdit(item.nodeId)}
-              disabled={editLocked}
-              title={editLocked ? t('campaignSettings.editBusy') : undefined}
-              data-testid={`settings-content-edit-${item.nodeId}`}
-              className={SMALL_BUTTON}
-            >
-              <HiOutlinePencil className="h-4 w-4" aria-hidden="true" />
-              {t('campaignSettings.section.edit')}
-            </button>
+          {editing && <div className="mt-2 min-w-0">{renderForm(item)}</div>}
+          {!editing && !item.editable && (
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1" data-testid="settings-content-not-editable">
+              <p className={`text-xs ${MUTED}`}>{t(`campaignSettings.content.notEditable.${item.reasonIfNotEditable}`)}</p>
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => onAdvanced(item.nodeId)}
+                  disabled={editLocked}
+                  data-testid={`settings-content-advanced-${item.nodeId}`}
+                  className="text-xs font-medium text-primary-600 hover:underline disabled:opacity-50 dark:text-primary-400"
+                >
+                  {t('campaignSettings.section.advanced')}
+                </button>
+              )}
+            </div>
           )}
-        </div>
-      </li>
-    ))}
+        </li>
+      );
+    })}
   </ul>
 );
 
@@ -477,10 +504,20 @@ export default function CampaignSettingsPanel({
   const { t, locale } = useI18n();
   const accountLookups = useSettingsAccountLookups(nodes);
   const registry = useMemo(() => getAllNodeConfigs(), []);
-  const lookups = useMemo(
-    () => ({ emailTemplates, zaloTemplates, emailSettings, ...accountLookups }),
-    [emailTemplates, zaloTemplates, emailSettings, accountLookups],
-  );
+  // Mẫu vừa tạo / vừa chọn ở mục Nội dung mà danh sách của trang (tải một lần lúc mở) chưa có: giữ ở đây để tóm tắt hiện TÊN mẫu, không hiện "Mẫu #12".
+  const [extraTemplates, setExtraTemplates] = useState({ email: [], zalo: [] });
+  const lookups = useMemo(() => {
+    const merge = (base, extra) => {
+      const known = new Set((Array.isArray(base) ? base : []).map((item) => String(item?.id)));
+      return [...(Array.isArray(base) ? base : []), ...extra.filter((item) => !known.has(String(item.id)))];
+    };
+    return {
+      emailTemplates: merge(emailTemplates, extraTemplates.email),
+      zaloTemplates: merge(zaloTemplates, extraTemplates.zalo),
+      emailSettings,
+      ...accountLookups,
+    };
+  }, [emailTemplates, zaloTemplates, emailSettings, accountLookups, extraTemplates]);
   const { ordered, unconnected } = useMemo(() => buildSettingsOrder(nodes, edges), [nodes, edges]);
   const hasNodes = ordered.length + unconnected.length > 0;
   // "Trống" = chưa có khối nào ngoài khối khởi chạy thủ công: dựng khung khối từ "Gửi từ" + "Gửi cho ai".
@@ -596,6 +633,45 @@ export default function CampaignSettingsPanel({
     await commitGraph(buildAudienceGraph({ campaignType, audience, sender: sections.sender.value, locale }));
   }, [campaignType, closeEdit, commitGraph, locale, rebuildTarget, sections.sender.value]);
 
+  // ── Nội dung: tạo mẫu cho tin tự soạn (email / Zalo) rồi ghi chuỗi tin vào khối gửi ─────────────────────────────────────
+  const [contentBusy, setContentBusy] = useState(false);
+  const handleSaveContent = useCallback(async (nodeId, value) => {
+    setContentBusy(true);
+    try {
+      let resolved;
+      try {
+        resolved = await resolveCustomSteps({
+          value,
+          campaignName,
+          fallbackName: t('campaignSettings.content.form.templateNameFallback'),
+          messageLabel: t('campaignSettings.content.form.templateNameStep'),
+        });
+      } catch (error) {
+        // Không ghi gì vào sơ đồ; biểu mẫu vẫn mở để sửa / thử lại.
+        toast.error(error?.message || t('campaignSettings.content.form.createFailed'));
+        return;
+      }
+      const result = writeContent(nodes, edges, nodeId, resolved.value);
+      if (!result) {
+        toast.error(t('campaignSettings.content.form.saveFailed'));
+        return;
+      }
+      const seen = resolved.value.steps
+        .map((step) => step.content)
+        .filter((content) => content.mode === 'template' && Number(content.templateId) > 0 && content.templateName)
+        .map((content) => ({ id: content.templateId, templateName: content.templateName }));
+      if (seen.length > 0) {
+        const kind = value.kind === 'email' ? 'email' : 'zalo';
+        setExtraTemplates((prev) => ({ ...prev, [kind]: [...prev[kind], ...seen] }));
+      }
+      closeEdit();
+      if (result.nodes === nodes && result.edges === edges) return;
+      await commitGraph(result);
+    } finally {
+      setContentBusy(false);
+    }
+  }, [campaignName, closeEdit, commitGraph, edges, nodes, t]);
+
   // ── Cài đặt nâng cao: hộp cấu hình của đúng khối (hộp của Sơ đồ khối) ─────────────────────────────────────────────
   // Chỉ nhớ id + vai; khối và mục form được tra lúc VẼ — bước phụ vừa thêm chưa nằm trong `nodes` của lần vẽ đang gọi.
   const openAdvanced = useCallback((nodeId, role = null) => {
@@ -668,6 +744,7 @@ export default function CampaignSettingsPanel({
     return t('campaignSettings.section.notEditable.generic');
   };
 
+  const contentEditingNodeId = !startMode && typeof editingKey === 'string' && editingKey.startsWith('content:') ? editingKey.slice('content:'.length) : null;
   const senderEditing = startMode || editingKey === 'sender';
   const audienceEditing = startMode || editingKey === 'audience';
   const audienceChannel = sections.audience.value?.channel || channel;
@@ -791,14 +868,28 @@ export default function CampaignSettingsPanel({
             status={contentView.status}
             title={t('campaignSettings.section.content.title')}
             summary={contentView.items.length === 0 ? contentView.summary : ''}
+            editing={contentEditingNodeId !== null}
             t={t}
           >
             {contentView.items.length > 0 && (
               <ContentBody
                 items={contentView.items}
                 canEdit={canEdit}
-                editLocked={Boolean(editingKey)}
-                onEdit={(nodeId) => openAdvanced(nodeId, 'content')}
+                editingNodeId={contentEditingNodeId}
+                editLocked={Boolean(editingKey) || structureBusy}
+                onEdit={(nodeId) => requestEdit(`content:${nodeId}`)}
+                onAdvanced={(nodeId) => openAdvanced(nodeId, 'content')}
+                renderForm={(item) => (
+                  <ContentSectionForm
+                    key={item.nodeId}
+                    value={item.value}
+                    onSave={(value) => handleSaveContent(item.nodeId, value)}
+                    onCancel={closeEdit}
+                    onDirtyChange={handleFormDirty}
+                    busy={contentBusy || structureBusy}
+                    t={t}
+                  />
+                )}
                 t={t}
               />
             )}
