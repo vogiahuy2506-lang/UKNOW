@@ -369,6 +369,11 @@ class CampaignFlowService {
     safeConfig.zaloFriendNodeId = remap(safeConfig.zaloFriendNodeId);
     safeConfig.zaloGroupNodeId = remap(safeConfig.zaloGroupNodeId);
     safeConfig.zaloGroupAccountNodeId = remap(safeConfig.zaloGroupAccountNodeId);
+    // PR-T2: khối Gắn tag / Cập nhật thông tin / Kết bạn Zalo cũng trỏ về node nguồn bằng id — không đổi id thì lưu
+    // xong tải lại tham chiếu trỏ id tạm của sơ đồ.
+    safeConfig.tagSourceNodeId = remap(safeConfig.tagSourceNodeId);
+    safeConfig.attributeSourceNodeId = remap(safeConfig.attributeSourceNodeId);
+    safeConfig.zaloFriendAccountNodeId = remap(safeConfig.zaloFriendAccountNodeId);
 
     if (Array.isArray(safeConfig.emailSteps)) {
       safeConfig.emailSteps = safeConfig.emailSteps.map((step) => {

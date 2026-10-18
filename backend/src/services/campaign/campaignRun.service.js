@@ -3,6 +3,7 @@ import campaignRunRepository from '../../repositories/campaign/campaignRun.repos
 import recipientLedgerRepository from '../../repositories/campaign/recipientLedger.repository.js';
 import campaignFlowService from './campaignFlow.service.js';
 import campaignNodeDataService from './campaignNodeData.service.js';
+import campaignTagStepService from './campaignTagStep.service.js';
 import campaignEmailSenderService from './campaignEmailSender.service.js';
 import campaignExecutionLogService from './campaignExecutionLog.service.js';
 import campaignChannelRegistry from './campaignChannelRegistry.service.js';
@@ -3479,6 +3480,8 @@ class CampaignRunService {
       }
 
       let previousNodeSubtype = '';
+      /** nodeId khối Gắn tag → khoá dòng đã khớp khách (chỉ chế độ liên tục, xem nhánh `tag_contact`). */
+      const tagDoneKeysByNode = new Map();
       let continuousCycleIndex = 0;
       let nextContinuousWakeAtMs = null;
       /**
@@ -3534,6 +3537,7 @@ class CampaignRunService {
           const replayAllowedSubtypes = [
             ...campaignChannelRegistry.getContinuousReplaySubtypes(),
             'save_customer',
+            'tag_contact',
           ];
           if (
             isReplayCycle
@@ -3713,6 +3717,88 @@ class CampaignRunService {
               },
             },
           });
+          continue;
+        }
+
+        // PR-T2 — khối "Gắn tag". Hành vi ở MỌI chế độ chạy (cố ý đơn giản, KHÔNG phụ thuộc kết quả gửi):
+        // - Chạy đúng một lần mỗi lượt duyệt khối, ngay khi vòng duyệt tới khối này (sau khối gửi trong thứ tự sơ đồ),
+        //   cho TẤT CẢ dòng của khối nguồn — không đợi từng tin gửi xong, không lọc theo gửi thành công/thất bại.
+        // - Chuỗi hẹn giờ nhiều tin / lượt bị nhả slot rồi resume: mỗi lần resume duyệt lại cả sơ đồ nên bước này chạy
+        //   lại; gắn/gỡ idempotent nên lặp không đổi kết quả, và người MỚI vào nguồn giữa hai lượt được gắn thêm.
+        // - Chế độ liên tục: được phép chạy ở chu kỳ replay để người mới vào nguồn được gắn; `tagDoneKeysByNode` nhớ
+        //   dòng đã khớp để không tra lại cả danh sách tích luỹ mỗi chu kỳ, và chu kỳ không có gì mới thì không ghi log.
+        // - Chỉ gắn/gỡ cho khách ĐÃ CÓ trong workspace (khớp email/SĐT); không tạo khách mới.
+        if (nodeSubtype === 'tag_contact') {
+          const config = campaignFlowService.normalizeNodeReferenceConfig(node.config || {}, resolveNodeId);
+          const tagSourceNodeId = String(config.tagSourceNodeId || '').trim();
+          const tagItems = tagSourceNodeId
+            ? (Array.isArray(nodeOutputs[tagSourceNodeId]) ? nodeOutputs[tagSourceNodeId] : [])
+            : (Array.isArray(lastOutputItems) ? lastOutputItems : []);
+          const tagNodeKey = String(node.id);
+          let tagDoneKeys = null;
+          if (isContinuousMode) {
+            tagDoneKeys = tagDoneKeysByNode.get(tagNodeKey) || new Set();
+            tagDoneKeysByNode.set(tagNodeKey, tagDoneKeys);
+          }
+          let tagResult;
+          try {
+            tagResult = await campaignTagStepService.applyStep({
+              workspaceOwnerId: campaign?.workspace_owner_id || campaign?.id_user || userId,
+              items: tagItems,
+              tagAction: config.tagAction,
+              tagName: config.tagName,
+              campaignId,
+              runId,
+              doneKeys: tagDoneKeys,
+            });
+          } catch (tagError) {
+            // Gắn tag là bước phụ chạy SAU khi gửi: lỗi (tên tag trống, trần 200 tag, DB) chỉ ghi cảnh báo ở khối,
+            // không làm hỏng cả lượt chạy đã gửi tin xong.
+            if (tagError?.code === 'RUN_STOPPED') throw tagError;
+            console.warn(`[CampaignRun] run=${runId} tag_contact node=${node.id} lỗi: ${tagError?.message || tagError}`);
+            await campaignExecutionLogService.logExecutionNode({
+              campaignId,
+              runId,
+              node,
+              status: 'warning',
+              errorMessage: tagError?.message || 'Không gắn được tag',
+              executionData: {
+                message: `Không gắn được tag: ${tagError?.message || 'lỗi không xác định'}`,
+                items: [],
+                schema: [],
+                meta: { tagAction: config.tagAction || 'add', tagName: config.tagName || '' },
+              },
+            });
+            continue;
+          }
+          nodeOutputs[tagNodeKey] = tagItems;
+          lastOutputItems = tagItems;
+
+          const isIdleTagReplay = isReplayCycle && tagResult.totalItems === 0;
+          if (!isIdleTagReplay) {
+            const verb = tagResult.action === 'remove' ? 'Đã gỡ' : 'Đã gắn';
+            await campaignExecutionLogService.logExecutionNode({
+              campaignId,
+              runId,
+              node,
+              status: 'success',
+              executionData: {
+                message: `${verb} tag "${tagResult.tagName}" cho ${tagResult.changed} khách `
+                  + `(${tagResult.matched}/${tagResult.totalItems} dòng khớp khách đã lưu, ${tagResult.notFound} không tìm thấy khách)`,
+                items: [],
+                schema: [],
+                meta: {
+                  tagAction: tagResult.action,
+                  tagId: tagResult.tagId,
+                  tagName: tagResult.tagName,
+                  totalItems: tagResult.totalItems,
+                  matched: tagResult.matched,
+                  notFound: tagResult.notFound,
+                  changed: tagResult.changed,
+                },
+              },
+            });
+          }
           continue;
         }
 
