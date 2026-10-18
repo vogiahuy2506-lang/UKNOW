@@ -97,11 +97,37 @@ vi.mock('../../features/campaigns/settings/useSettingsAccountLookups', () => ({
   default: () => ({ zaloAccounts: [], telegramAccounts: [], whatsappAccounts: [] }),
 }));
 
+// Form khối thật có spec riêng; ở đây giả bằng một ô nhập tên khối, kèm cấu hình email đủ để kiểm đường Lưu ở thẻ.
+vi.mock('../../features/campaigns/components/NodeConfigForm', async () => {
+  const React = await import('react');
+  const build = (label) => ({ label, fromEmailId: 3, recipientSource: 'manual', recipientEmails: 'a@x.vn', emailSteps: [] });
+  return {
+    default: ({ node, onSave, onCancel, onFormChange }) => {
+      const [label, setLabel] = React.useState(node.data.label);
+      return (
+        <div data-testid="form-stub">
+          <input
+            data-testid="stub-input"
+            value={label}
+            onChange={(event) => {
+              setLabel(event.target.value);
+              onFormChange?.(build(event.target.value), true);
+            }}
+          />
+          <button type="button" data-testid="stub-save" onClick={() => onSave(build(label))}>save</button>
+          <button type="button" data-testid="stub-cancel" onClick={onCancel}>cancel</button>
+        </div>
+      );
+    },
+  };
+});
+
 // Khung trang giả: GIỮ chỗ đặt thanh tab (`viewTabs`), vẽ `settingsPanel` thật khi đang ở tab Thiết lập (như khung thật), và lộ
 // ra trạng thái hộp cấu hình + nhãn khối của sơ đồ để kiểm "sửa ở một tab, tab kia thấy".
 vi.mock('../../features/campaigns/components/CampaignBuilderPageLayout', () => ({
   default: ({
     viewTabs, activeTab, settingsPanel, campaignName, setNodes, isDirty, nodes, showConfigModal, nodeToConfig, onNodeConfigSave,
+    setNodeToConfig, setShowConfigModal,
   }) => (
     <div>
       <span data-testid="campaign-name">{campaignName}</span>
@@ -123,6 +149,9 @@ vi.mock('../../features/campaigns/components/CampaignBuilderPageLayout', () => (
         ])}
       >
         Thêm khối giả
+      </button>
+      <button type="button" onClick={() => { setNodeToConfig(nodes.find((node) => node.id === 'mail')); setShowConfigModal(true); }}>
+        Mở hộp giả
       </button>
       <button type="button" onClick={() => onNodeConfigSave({ label: 'Thư đã đổi tên', fromEmailId: 3, recipientSource: 'manual', recipientEmails: 'a@x.vn', emailSteps: [] })}>
         Lưu cấu hình giả
@@ -233,34 +262,109 @@ describe('CampaignBuilder — hai tab Thiết lập | Sơ đồ khối', () => {
     expect(screen.getByTestId('is-dirty')).toHaveTextContent('true');
   });
 
-  it('nút Sửa ở tab Thiết lập mở CHÍNH hộp cấu hình của trình dựng cho đúng khối', async () => {
+  it('nút Sửa ở tab Thiết lập mở form TẠI CHỖ trong thẻ, KHÔNG mở hộp cấu hình của trình dựng', async () => {
     renderBuilder('/app/campaigns/391');
     await waitForLoaded();
-    expect(screen.getByTestId('config-open')).toHaveTextContent('false');
     fireEvent.click(await screen.findByTestId('settings-edit-mail'));
-    expect(screen.getByTestId('config-open')).toHaveTextContent('true');
-    expect(screen.getByTestId('config-node')).toHaveTextContent('mail');
+    expect(screen.getByTestId('config-open')).toHaveTextContent('false');
+    const mailCard = screen.getAllByTestId('settings-node-card').find((c) => c.getAttribute('data-node-id') === 'mail');
+    expect(within(mailCard).getByTestId('form-stub')).toBeInTheDocument();
   });
 
-  it('sửa khối ở tab Thiết lập → tab Sơ đồ khối thấy ngay (chưa lưu) và ngược lại', async () => {
+  it('Lưu ở thẻ = áp + lưu chiến dịch: updateCampaign nhận config MỚI (không phải cũ), "Chưa lưu" về false, Sơ đồ khối thấy giá trị mới', async () => {
     renderBuilder('/app/campaigns/391');
     await waitForLoaded();
     fireEvent.click(await screen.findByTestId('settings-edit-mail'));
-    fireEvent.click(screen.getByRole('button', { name: 'Lưu cấu hình giả' }));
+    fireEvent.change(screen.getByTestId('stub-input'), { target: { value: 'Thư đã đổi tên' } });
+    fireEvent.click(screen.getByTestId('stub-save'));
 
-    // Tab Thiết lập cập nhật ngay: tên khối + giá trị mới, trạng thái "chưa lưu".
-    const card = await screen.findByText('Thư đã đổi tên');
-    const mailCard = card.closest('[data-testid="settings-node-card"]');
+    await waitFor(() => expect(mockUpdateCampaign).toHaveBeenCalledTimes(1));
+    const [campaignId, payload] = mockUpdateCampaign.mock.calls[0];
+    expect(String(campaignId)).toBe('391');
+    const mail = payload.nodes.find((n) => n.tempId === 'mail');
+    expect(mail.nodeName).toBe('Thư đã đổi tên');
+    expect(mail.config.recipientEmails).toBe('a@x.vn');
+    expect(payload.flowJson.nodes.find((n) => n.id === 'mail').data.config.fromEmailId).toBe(3);
+    await waitFor(() => expect(screen.getByTestId('is-dirty')).toHaveTextContent('false'));
+
+    const mailCard = (await screen.findByText('Thư đã đổi tên')).closest('[data-testid="settings-node-card"]');
     expect(within(mailCard).getByText('CSKH (cskh@abc.vn)')).toBeInTheDocument();
     expect(within(mailCard).getByText('1 email nhập tay')).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByTestId('is-dirty')).toHaveTextContent('true'));
-    expect(mockUpdateCampaign).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('form-stub')).not.toBeInTheDocument();
 
-    // Sang Sơ đồ khối: cùng nodes → thấy tên mới.
     fireEvent.click(screen.getByTestId('campaign-tab-flow'));
     expect(await within(await screen.findByTestId('flow-canvas')).findByText('Thư đã đổi tên')).toBeInTheDocument();
+  });
 
-    // Ngược lại: thêm khối ở Sơ đồ khối → sang Thiết lập thấy thẻ mới.
+  it('Lưu ở thẻ thất bại (mạng / 500) → thay đổi vẫn áp cục bộ, thanh vẫn "Chưa lưu", thẻ đóng', async () => {
+    mockUpdateCampaign.mockRejectedValue(Object.assign(new Error('boom'), { response: { status: 500, data: { message: 'Lỗi máy chủ' } } }));
+    renderBuilder('/app/campaigns/391');
+    await waitForLoaded();
+    fireEvent.click(await screen.findByTestId('settings-edit-mail'));
+    fireEvent.change(screen.getByTestId('stub-input'), { target: { value: 'Thư lưu lỗi' } });
+    fireEvent.click(screen.getByTestId('stub-save'));
+
+    await waitFor(() => expect(mockUpdateCampaign).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByTestId('is-dirty')).toHaveTextContent('true'));
+    expect(await screen.findByText('Thư lưu lỗi')).toBeInTheDocument();
+    expect(screen.queryByTestId('form-stub')).not.toBeInTheDocument();
+  });
+
+  it('Lưu ở thẻ khi form không đổi → đóng thẻ, KHÔNG gọi API', async () => {
+    renderBuilder('/app/campaigns/391');
+    await waitForLoaded();
+    fireEvent.click(await screen.findByTestId('settings-edit-mail'));
+    fireEvent.click(screen.getByTestId('stub-save'));
+    await waitFor(() => expect(screen.queryByTestId('form-stub')).not.toBeInTheDocument());
+    expect(mockUpdateCampaign).not.toHaveBeenCalled();
+    expect(screen.getByTestId('is-dirty')).toHaveTextContent('false');
+  });
+
+  it('đổi tab khi thẻ đang sửa dở → hỏi xác nhận; "Tiếp tục sửa" ở lại Thiết lập, "Bỏ thay đổi" sang Sơ đồ khối', async () => {
+    renderBuilder('/app/campaigns/391');
+    await waitForLoaded();
+    fireEvent.click(await screen.findByTestId('settings-edit-mail'));
+    fireEvent.change(screen.getByTestId('stub-input'), { target: { value: 'Đang gõ dở' } });
+
+    fireEvent.click(screen.getByTestId('campaign-tab-flow'));
+    expect(await screen.findByText('Bỏ thay đổi đang sửa?')).toBeInTheDocument();
+    expect(screen.getByTestId('active-tab')).toHaveTextContent('settings');
+
+    fireEvent.click(screen.getByText('Tiếp tục sửa'));
+    expect(screen.queryByText('Bỏ thay đổi đang sửa?')).not.toBeInTheDocument();
+    expect(screen.getByTestId('active-tab')).toHaveTextContent('settings');
+    expect(screen.getByTestId('stub-input')).toHaveValue('Đang gõ dở');
+
+    fireEvent.click(screen.getByTestId('campaign-tab-flow'));
+    fireEvent.click(await screen.findByText('Bỏ thay đổi'));
+    await waitFor(() => expect(screen.getByTestId('active-tab')).toHaveTextContent('flow'));
+    expect(mockUpdateCampaign).not.toHaveBeenCalled();
+  });
+
+  it('đổi tab khi thẻ chưa đổi gì → sang thẳng, không hỏi', async () => {
+    renderBuilder('/app/campaigns/391');
+    await waitForLoaded();
+    fireEvent.click(await screen.findByTestId('settings-edit-mail'));
+    fireEvent.click(screen.getByTestId('campaign-tab-flow'));
+    await waitFor(() => expect(screen.getByTestId('active-tab')).toHaveTextContent('flow'));
+    expect(screen.queryByText('Bỏ thay đổi đang sửa?')).not.toBeInTheDocument();
+  });
+
+  it('hộp cấu hình của Sơ đồ khối vẫn chỉ áp cục bộ (Chưa lưu), không gọi API', async () => {
+    renderBuilder('/app/campaigns/391?tab=flow');
+    await waitForLoaded();
+    fireEvent.click(screen.getByRole('button', { name: 'Mở hộp giả' }));
+    expect(screen.getByTestId('config-node')).toHaveTextContent('mail');
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu cấu hình giả' }));
+    expect(await within(await screen.findByTestId('flow-canvas')).findByText('Thư đã đổi tên')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('is-dirty')).toHaveTextContent('true'));
+    expect(mockUpdateCampaign).not.toHaveBeenCalled();
+    expect(screen.getByTestId('config-open')).toHaveTextContent('false');
+  });
+
+  it('thêm khối ở Sơ đồ khối → sang Thiết lập thấy thẻ mới', async () => {
+    renderBuilder('/app/campaigns/391?tab=flow');
+    await waitForLoaded();
     fireEvent.click(screen.getByRole('button', { name: 'Thêm khối giả' }));
     fireEvent.click(screen.getByTestId('campaign-tab-settings'));
     await waitFor(() => expect(screen.getAllByTestId('settings-node-card').map((c) => c.getAttribute('data-node-id'))).toContain('n-moi'));

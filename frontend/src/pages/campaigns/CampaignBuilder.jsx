@@ -48,6 +48,7 @@ import useCampaignBuilderLayoutState from '../../features/campaigns/hooks/useCam
 import useLatestRunPause from '../../features/campaigns/hooks/useLatestRunPause';
 import { fetchZaloAccountOptions } from '../../features/campaigns/utils/nodeConfigModal.helpers';
 import { isNodeConfigFormUnchanged } from '../../features/campaigns/utils/nodeConfigUnchanged';
+import { applyNodeConfigToGraph } from '../../features/campaigns/utils/applyNodeConfigToGraph';
 import { formatCampaignDateTime } from '../../features/campaigns/utils/campaignDateTime.helpers';
 import toast from 'react-hot-toast';
 import CampaignViewTabs from '../../features/campaigns/components/CampaignViewTabs';
@@ -161,7 +162,10 @@ const CampaignBuilder = () => {
   const requestedOrDefaultTab = requestedTab === 'settings' || requestedTab === 'flow' ? requestedTab : defaultTab;
   const activeTab = canEditCampaign ? requestedOrDefaultTab : 'settings';
   const { activePause, latestRun } = useLatestRunPause(isNewCampaign ? null : id);
-  const shouldBlockNavigation = isRunning || isDirty;
+  // Thẻ khối đang sửa ở tab Thiết lập có thay đổi chưa Lưu (chưa nằm trong nodes/isDirty) — cũng phải chặn rời trang / đổi tab.
+  const [inlineDirty, setInlineDirty] = useState(false);
+  const [pendingTab, setPendingTab] = useState(null);
+  const shouldBlockNavigation = isRunning || isDirty || inlineDirty;
   const navigationBlocker = useBrowserRouterBlocker(shouldBlockNavigation);
   const {
     runLogHeight,
@@ -695,13 +699,18 @@ const CampaignBuilder = () => {
    * @returns {Promise<boolean>} true khi đã lưu xong. Luồng "Lưu rồi chạy" của nút "Chạy ngay" đọc
    *   giá trị này: lưu hỏng mà vẫn chạy tiếp nghĩa là gửi theo bản cũ trong DB.
    */
-  const handleSave = async () => {
+  const handleSave = async (graphOverride) => {
+    // `graphOverride = { nodes, edges }`: lưu ĐÚNG bộ vừa áp (Lưu ở thẻ tab Thiết lập — `setNodes` chưa kịp thấy qua closure).
+    // Bấm nút Lưu truyền SyntheticEvent vào đây nên chỉ nhận khi `nodes` là mảng.
+    const useOverride = Array.isArray(graphOverride?.nodes) && Array.isArray(graphOverride?.edges);
+    const saveNodes = useOverride ? graphOverride.nodes : nodes;
+    const saveEdges = useOverride ? graphOverride.edges : edges;
     if (!campaignName.trim()) {
       toast.error(t('campaignBuilderExtra.enterCampaignName'));
       return false;
     }
 
-    const triggerCount = nodes.filter((n) => isTriggerNodeType(n.data?.nodeType || n.type)).length;
+    const triggerCount = saveNodes.filter((n) => isTriggerNodeType(n.data?.nodeType || n.type)).length;
     if (triggerCount > 1) {
       toast.error(t('campaignBuilderExtra.onlyOneTrigger'));
       return false;
@@ -715,7 +724,7 @@ const CampaignBuilder = () => {
       }
 
       // Transform nodes to match backend format
-      const transformedNodes = nodes.map((node, index) => ({
+      const transformedNodes = saveNodes.map((node, index) => ({
         tempId: node.id,
         nodeType: node.data?.nodeType?.includes('trigger') ? 'trigger' : 
                   [
@@ -740,8 +749,8 @@ const CampaignBuilder = () => {
         executionOrder: index + 1
       }));
 
-      const nodeIds = new Set(nodes.map((n) => n.id));
-      const transformedConnections = edges
+      const nodeIds = new Set(saveNodes.map((n) => n.id));
+      const transformedConnections = saveEdges
         .filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target))
         .map((edge) => ({
           sourceNodeId: edge.source,
@@ -754,7 +763,7 @@ const CampaignBuilder = () => {
           campaignName: campaignName.trim(),
           description: campaignDescription.trim(),
           campaignType,
-          flowJson: { nodes, edges },
+          flowJson: { nodes: saveNodes, edges: saveEdges },
           nodes: transformedNodes,
           connections: transformedConnections
         };
@@ -774,7 +783,7 @@ const CampaignBuilder = () => {
       }
       if (savedCampaignType && savedCampaignType !== campaignType) setCampaignType(savedCampaignType);
       setLastSavedTime(new Date().toISOString());
-      lastSavedSnapshotRef.current = buildSnapshot(campaignName, nodes, edges);
+      lastSavedSnapshotRef.current = buildSnapshot(campaignName, saveNodes, saveEdges);
       hasBaselineRef.current = true;
       setIsDirty(false);
       setShowNameModal(false);
@@ -805,44 +814,12 @@ const CampaignBuilder = () => {
         toast.success(t('campaignBuilderExtra.nodeConfigSaved'));
         return;
       }
-      console.log('Saving node config:', {
-        nodeType: nodeToConfig.data?.nodeType,
-        interestedSelectedCustomerIds: formData.interestedSelectedCustomerIds,
-        formData,
-      });
+      const applied = applyNodeConfigToGraph({ nodes, edges, node: nodeToConfig, formData });
+      const { strippedFriendNodeIds: friendNodeIds, updatedNode } = applied;
+      const shouldStripFriendListNodes = friendNodeIds.length > 0;
 
-      const savedNodeType = nodeToConfig.data?.nodeType || nodeToConfig.type;
-      const poolOn =
-        savedNodeType === 'select_zalo_account'
-        && Boolean(formData.zaloPoolMultiAccountEnabled);
-      const poolIds = Array.isArray(formData.zaloPoolAccountIds)
-        ? formData.zaloPoolAccountIds.map((id) => String(id || '').trim()).filter(Boolean)
-        : [];
-      const shouldStripFriendListNodes = poolOn && poolIds.length > 0;
-
-      const friendNodeIds = shouldStripFriendListNodes
-        ? nodes
-          .filter((n) => (n.data?.nodeType || n.type) === 'get_all_friends')
-          .map((n) => n.id)
-        : [];
-
-      // Cập nhật node với config mới
-      const updatedNode = {
-        ...nodeToConfig,
-        data: { ...nodeToConfig.data, label: formData.label, config: formData },
-      };
-
-      setNodes((nds) => {
-        const mapped = nds.map((n) => (n.id === nodeToConfig.id ? updatedNode : n));
-        if (!shouldStripFriendListNodes) return mapped;
-        return mapped.filter((n) => (n.data?.nodeType || n.type) !== 'get_all_friends');
-      });
-
-      if (shouldStripFriendListNodes && friendNodeIds.length > 0) {
-        setEdges((eds) => eds.filter(
-          (e) => !friendNodeIds.includes(e.source) && !friendNodeIds.includes(e.target)
-        ));
-      }
+      setNodes(applied.nodes);
+      if (applied.edges !== edges) setEdges(applied.edges);
 
       // Cập nhật selectedNode nếu đang được chọn
       if (selectedNode && selectedNode.id === nodeToConfig.id) {
@@ -1198,6 +1175,15 @@ const CampaignBuilder = () => {
 
   const handleSelectViewTab = (tab) => {
     if (tab !== 'settings' && tab !== 'flow') return;
+    // Thẻ khối đang sửa dở: hỏi trước khi đổi tab (rời tab Thiết lập là mất form).
+    if (tab !== activeTab && inlineDirty) {
+      setPendingTab(tab);
+      return;
+    }
+    applyViewTab(tab);
+  };
+
+  const applyViewTab = (tab) => {
     // Đổi tab là một lần điều hướng (đổi `?tab=`); chiến dịch đang có thay đổi chưa lưu thì bộ chặn rời trang sẽ hỏi nhầm
     // → cho qua đúng một lần. `replace` để nút Back không phải lùi qua từng lần đổi tab.
     navigationBlocker.allowNext?.();
@@ -1208,11 +1194,27 @@ const CampaignBuilder = () => {
     }, { replace: true });
   };
 
-  // Tab Thiết lập mở CHÍNH hộp cấu hình khối của trình dựng (cùng `handleNodeConfigSave`), không nhúng form riêng.
-  const handleEditNodeFromSettings = (node) => {
-    setNodeToConfig(node);
-    setShowConfigModal(true);
+  /**
+   * Lưu ở thẻ khối của tab Thiết lập = áp cấu hình vào sơ đồ VÀ lưu chiến dịch luôn. Dùng `applyNodeConfigToGraph` rồi đưa
+   * đúng bộ `nodes/edges` mới cho `handleSave` (gọi `setNodes` rồi `handleSave()` cùng nhịp sẽ lưu bản CŨ). Lưu hỏng → thay đổi
+   * vẫn nằm ở sơ đồ cục bộ (thanh trên báo "Chưa lưu"), `handleSave` đã toast lỗi.
+   */
+  const handleSaveNodeFromSettings = async (node, formData) => {
+    const applied = applyNodeConfigToGraph({ nodes, edges, node, formData });
+    setNodes(applied.nodes);
+    if (applied.edges !== edges) setEdges(applied.edges);
+    if (selectedNode && selectedNode.id === node.id) setSelectedNode(applied.updatedNode);
+    if (selectedNode && applied.strippedFriendNodeIds.includes(selectedNode.id)) setSelectedNode(null);
+    if (applied.strippedFriendNodeIds.length > 0) toast.success(t('campaignBuilderExtra.nodeConfigSavedPoolWarning'));
+    // Chiến dịch mới chưa có tên: dùng hộp đặt tên sẵn có (nút của hộp gọi `handleSave` với state đã áp).
+    if (!campaignName.trim()) {
+      setShowNameModal(true);
+      return;
+    }
+    await handleSave({ nodes: applied.nodes, edges: applied.edges });
   };
+
+  const handleInlineDirtyChange = useCallback((isDirtyForm) => setInlineDirty(Boolean(isDirtyForm)), []);
 
   const campaignSchedules = useMemo(
     () => (isNewCampaign ? [] : filterSchedulesByCampaignId(runController.schedules, id)),
@@ -1282,7 +1284,10 @@ const CampaignBuilder = () => {
           describeSchedule={describeScheduleForSettings}
           onOpenSchedule={() => requestServerAction('schedule')}
           onManageSchedules={() => runController.openCampaignSchedulesSummaryModal(campaignForServerActions)}
-          onEditNode={handleEditNodeFromSettings}
+          onSaveNode={handleSaveNodeFromSettings}
+          onInlineDirtyChange={handleInlineDirtyChange}
+          runLogs={runLogs}
+          onCheckSheetConnection={checkSheetConnection}
           onGoFlow={() => handleSelectViewTab('flow')}
           canEdit={canEditCampaign}
         />
@@ -1375,6 +1380,23 @@ const CampaignBuilder = () => {
       leaveModalTitle={leaveModalTitle}
       leaveModalMessage={leaveModalMessage}
     />
+      <ConfirmModal
+        isOpen={Boolean(pendingTab)}
+        onClose={() => setPendingTab(null)}
+        onConfirm={() => {
+          const next = pendingTab;
+          setPendingTab(null);
+          setInlineDirty(false);
+          applyViewTab(next);
+        }}
+        title={t('campaignSettings.discard.title')}
+        message={t('campaignSettings.discard.message')}
+        confirmLabel={t('campaignSettings.discard.confirm')}
+        cancelLabel={t('campaignSettings.discard.stay')}
+        confirmButtonClassName="bg-primary-500 text-white hover:bg-primary-600"
+        iconClassName="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0"
+        iconColorClassName="w-6 h-6 text-amber-600"
+      />
       {lockedChannelModal && (
         <ChannelUnavailableModal
           channel={lockedChannelModal}

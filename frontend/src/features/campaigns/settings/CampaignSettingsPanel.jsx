@@ -1,12 +1,23 @@
-import { useMemo } from 'react';
-import { HiOutlineCalendar, HiOutlineClock, HiOutlinePencil, HiOutlineViewGrid } from 'react-icons/hi';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  HiOutlineCalendar,
+  HiOutlineCheckCircle,
+  HiOutlineClock,
+  HiOutlineExclamation,
+  HiOutlinePencil,
+  HiOutlineViewGrid,
+} from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 import { getCampaignTypeMeta } from '../../../utils/campaignTypeDisplay';
 import { getAllNodeConfigs } from '../components/CampaignBuilderFlowNodes';
 import CampaignEstimatePanel from '../components/CampaignEstimatePanel';
+import { ConfirmModal } from '../components/CampaignBuilderLayout';
+import NodeConfigForm from '../components/NodeConfigForm';
+import { isNodeConfigFormUnchanged } from '../utils/nodeConfigUnchanged';
 import useCampaignEstimate from '../hooks/useCampaignEstimate';
 import { buildEstimateView, describeEstimateDuration, formatEstimateDateTime } from '../utils/campaignEstimate.helpers';
 import { formatCampaignDateTime } from '../utils/campaignDateTime.helpers';
+import buildSettingsChecklist from './buildSettingsChecklist';
 import buildSettingsOrder from './buildSettingsOrder';
 import describeNodeSettings from './describeNodeSettings';
 import { formatVnDayMonthTime, formatVnResumeTime, getWaitReasonI18nKey } from '../utils/deliveryMonitor.helpers';
@@ -239,7 +250,25 @@ const OverviewCard = ({
   );
 };
 
-const NodeCard = ({ entry, nodes, lookups, registry, canEdit, onEditNode, nodeTitleOf, t, locale }) => {
+const NodeCard = ({
+  entry,
+  nodes,
+  edges,
+  lookups,
+  registry,
+  canEdit,
+  isEditing,
+  editLocked,
+  onStartEdit,
+  onCancelEdit,
+  onSaveEdit,
+  onFormChange,
+  formProps,
+  cardRef,
+  nodeTitleOf,
+  t,
+  locale,
+}) => {
   const { node, step, branch } = entry;
   const subtype = subtypeOf(node);
   const config = registry.find((item) => item.type === subtype);
@@ -248,9 +277,18 @@ const NodeCard = ({ entry, nodes, lookups, registry, canEdit, onEditNode, nodeTi
   const title = String(node?.data?.label || '').trim() || typeName;
   const lines = describeNodeSettings(node, { ...lookups, nodes }, t);
   const branchFrom = branch ? nodes.find((item) => String(item.id) === branch.fromId) : null;
+  const hasMissing = lines.some((item) => item.tone === 'missing');
 
   return (
-    <li className={`${CARD} p-4`} data-testid="settings-node-card" data-node-id={node.id} data-node-type={subtype}>
+    <li
+      ref={cardRef}
+      className={`${CARD} min-w-0 scroll-mt-4 p-4 ${isEditing ? 'ring-2 ring-primary-400 dark:ring-primary-500' : hasMissing ? 'border-amber-300 dark:border-amber-500/60' : ''}`}
+      data-testid="settings-node-card"
+      data-node-id={node.id}
+      data-node-type={subtype}
+      data-editing={isEditing ? 'true' : 'false'}
+      data-missing={hasMissing ? 'true' : 'false'}
+    >
       <div className="flex items-start gap-3">
         <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold tabular-nums text-gray-600 dark:bg-dk-raised dark:text-dk-text2">
           {step ?? '–'}
@@ -264,24 +302,56 @@ const NodeCard = ({ entry, nodes, lookups, registry, canEdit, onEditNode, nodeTi
         <div className="min-w-0 flex-1">
           <h3 className="break-words text-sm font-semibold text-gray-900 dark:text-dk-text">{title}</h3>
           {title !== typeName && <p className={`text-xs ${MUTED}`}>{typeName}</p>}
+          {hasMissing && (
+            <p
+              className="mt-1 inline-flex items-center gap-1 rounded bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+              data-testid="settings-card-missing"
+            >
+              <HiOutlineExclamation className="h-3.5 w-3.5" aria-hidden="true" />
+              {t('campaignSettings.needsAttention')}
+            </p>
+          )}
           {branch && (
             <p className="mt-1 inline-block rounded bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700 dark:bg-sky-950/40 dark:text-sky-300" data-testid="settings-branch-label">
               {t('campaignSettings.branch', { label: branch.label, node: branchFrom ? nodeTitleOf(branchFrom) : '' })}
             </p>
           )}
         </div>
-        {canEdit && (
+        {canEdit && !isEditing && (
           <button
             type="button"
-            onClick={() => onEditNode(node)}
+            onClick={() => onStartEdit(node.id)}
+            disabled={editLocked}
+            title={editLocked ? t('campaignSettings.editBusy') : undefined}
             data-testid={`settings-edit-${node.id}`}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-dk-border dark:text-dk-text dark:hover:bg-dk-raised"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent dark:border-dk-border dark:text-dk-text dark:hover:bg-dk-raised"
           >
             <HiOutlinePencil className="h-4 w-4" aria-hidden="true" />
             {t('campaignSettings.edit')}
           </button>
         )}
       </div>
+      {isEditing ? (
+        <div className="mt-3 min-w-0 overflow-x-auto border-t border-gray-100 dark:border-dk-border" data-testid="settings-inline-form">
+          <NodeConfigForm
+            key={node.id}
+            variant="inline"
+            node={node}
+            nodes={nodes}
+            edges={edges}
+            campaignType={formProps.campaignType}
+            campaignId={formProps.campaignId}
+            emailTemplates={formProps.emailTemplates}
+            zaloTemplates={formProps.zaloTemplates}
+            emailSettings={formProps.emailSettings}
+            runLogs={formProps.runLogs}
+            onCheckSheetConnection={formProps.onCheckSheetConnection}
+            onSave={(formData) => onSaveEdit(node, formData)}
+            onCancel={onCancelEdit}
+            onFormChange={onFormChange}
+          />
+        </div>
+      ) : (
       <dl className="mt-3 space-y-1.5 border-t border-gray-100 pt-3 text-sm dark:border-dk-border">
         {lines.map((item, index) => (
           <div key={`${item.label}-${index}`} className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:gap-3" data-testid="settings-line" data-tone={item.tone}>
@@ -292,7 +362,65 @@ const NodeCard = ({ entry, nodes, lookups, registry, canEdit, onEditNode, nodeTi
           </div>
         ))}
       </dl>
+      )}
     </li>
+  );
+};
+
+/** Checklist "Trước khi chạy": 4 dòng (Gửi từ · Gửi cho ai · Nội dung · Thời điểm), ✓ đủ / ⚠ thiếu, nút Sửa mở đúng thẻ. */
+const Checklist = ({ rows, canEdit, canOpenSchedule, onEditRow, onOpenSchedule, t }) => {
+  const missingCount = rows.filter((row) => row.status === 'missing').length;
+  return (
+    <section className={`${CARD} p-4 sm:p-5`} data-testid="settings-checklist" data-missing-count={missingCount} aria-label={t('campaignSettings.checklist.title')}>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <h2 className="text-base font-bold text-gray-900 dark:text-dk-text">{t('campaignSettings.checklist.title')}</h2>
+        <p
+          className={`text-sm font-medium ${missingCount > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-green-700 dark:text-green-400'}`}
+          data-testid="settings-checklist-summary"
+        >
+          {missingCount > 0 ? t('campaignSettings.checklist.remaining', { n: missingCount }) : t('campaignSettings.checklist.ready')}
+        </p>
+      </div>
+      <ul className="mt-3 divide-y divide-gray-100 dark:divide-dk-border">
+        {rows.map((row) => {
+          const ok = row.status === 'ok';
+          const isTiming = row.key === 'timing';
+          const canClick = canEdit && (isTiming ? canOpenSchedule : Boolean(row.targetNodeId));
+          return (
+            <li
+              key={row.key}
+              className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 py-2.5"
+              data-testid={`settings-checklist-row-${row.key}`}
+              data-status={row.status}
+            >
+              <span className="flex shrink-0 items-center gap-1.5" aria-label={ok ? t('campaignSettings.checklist.okBadge') : t('campaignSettings.checklist.missingBadge')}>
+                {ok
+                  ? <HiOutlineCheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" aria-hidden="true" />
+                  : <HiOutlineExclamation className="h-5 w-5 text-amber-600 dark:text-amber-400" aria-hidden="true" />}
+              </span>
+              <span className="w-24 shrink-0 text-sm font-semibold text-gray-900 dark:text-dk-text">{t(`campaignSettings.checklist.row.${row.key}`)}</span>
+              <span
+                className={`min-w-0 flex-1 basis-40 break-words text-sm ${ok ? 'text-gray-700 dark:text-dk-text' : 'font-medium text-rose-600 dark:text-rose-400'}`}
+                data-testid={`settings-checklist-summary-${row.key}`}
+              >
+                {row.summary}
+              </span>
+              {canClick && (
+                <button
+                  type="button"
+                  onClick={() => (isTiming ? onOpenSchedule() : onEditRow(row.targetNodeId))}
+                  data-testid={`settings-checklist-edit-${row.key}`}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-dk-border dark:text-dk-text dark:hover:bg-dk-raised"
+                >
+                  <HiOutlinePencil className="h-4 w-4" aria-hidden="true" />
+                  {t('campaignSettings.checklist.edit')}
+                </button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 };
 
@@ -302,7 +430,13 @@ const NodeCard = ({ entry, nodes, lookups, registry, canEdit, onEditNode, nodeTi
  * (qua hộp cấu hình của trình dựng) thì Sơ đồ khối thấy ngay, và ngược lại.
  *
  * @param {object} props
- * @param {(node: object) => void} props.onEditNode mở `NodeConfigModal` của khối (cùng đường `handleNodeConfigSave`)
+ * Sửa khối TẠI CHỖ (PLAN_THIET_LAP_CAU_HINH_TRUC_TIEP PR-A): bấm Sửa → thẻ mở `NodeConfigForm variant="inline"`, mỗi lúc một thẻ;
+ * Lưu ở thẻ gọi `onSaveNode` (trang áp cấu hình + lưu chiến dịch). Không còn mở `NodeConfigModal` từ tab này.
+ *
+ * @param {(node: object, formData: object) => Promise<void>|void} props.onSaveNode áp cấu hình khối vào sơ đồ VÀ lưu chiến dịch
+ * @param {(isDirty: boolean) => void} [props.onInlineDirtyChange] báo trang biết thẻ đang mở có thay đổi chưa lưu (để hỏi khi đổi tab)
+ * @param {Array<object>} [props.runLogs] log lần chạy thử (form khối dùng để gợi ý cột)
+ * @param {Function} [props.onCheckSheetConnection] kiểm tra kết nối Google Sheet của khối đọc sheet
  * @param {string|number|null} [props.latestRunKey] đổi giá trị (vd id + trạng thái lượt mới nhất) → mục "Lần chạy gần nhất" tải lại
  * @param {() => void} props.onOpenDeliveryMonitor mở trang Giám sát gửi tin
  * @param {() => void} props.onGoFlow chuyển sang tab Sơ đồ khối (nút ở trạng thái rỗng)
@@ -328,7 +462,10 @@ export default function CampaignSettingsPanel({
   describeSchedule = () => ({ pattern: '', nextRun: null, statusLabel: '' }),
   onOpenSchedule = () => {},
   onManageSchedules = () => {},
-  onEditNode = () => {},
+  onSaveNode = () => {},
+  onInlineDirtyChange = () => {},
+  runLogs = [],
+  onCheckSheetConnection = undefined,
   onGoFlow = () => {},
   canEdit = true,
 }) {
@@ -343,16 +480,109 @@ export default function CampaignSettingsPanel({
 
   const nodeTitleOf = (node) => String(node?.data?.label || '').trim() || subtypeOf(node);
   const hasNodes = ordered.length + unconnected.length > 0;
+  // Khối khởi chạy thủ công không hiện thành thẻ bước: thông tin của nó nằm ở dòng "Thời điểm" của checklist.
+  const visibleOrdered = useMemo(
+    () => ordered.filter((entry) => subtypeOf(entry.node) !== 'manual_trigger').map((entry, index) => ({ ...entry, step: index + 1 })),
+    [ordered],
+  );
+  const visibleUnconnected = useMemo(() => unconnected.filter((node) => subtypeOf(node) !== 'manual_trigger'), [unconnected]);
+  const hasCards = visibleOrdered.length + visibleUnconnected.length > 0;
+
+  const scheduleSummary = useMemo(() => {
+    if (!Array.isArray(schedules) || schedules.length === 0) return '';
+    const first = describeSchedule(schedules[0])?.pattern || '';
+    return schedules.length > 1 ? `${first} +${schedules.length - 1}` : first;
+  }, [schedules, describeSchedule]);
+  const checklist = useMemo(
+    () => buildSettingsChecklist(nodes, edges, lookups, t, { scheduleSummary }),
+    [nodes, edges, lookups, t, scheduleSummary],
+  );
+
+  // ── Sửa tại chỗ: mỗi lúc một thẻ ─────────────────────────────────────────────────────────────────────────────
+  const [editingNodeId, setEditingNodeId] = useState(null);
+  const [formDirty, setFormDirty] = useState(false);
+  const formDirtyRef = useRef(false);
+  const [pendingEditId, setPendingEditId] = useState(null);
+  const cardRefs = useRef(new Map());
+
+  const setDirty = useCallback((value) => {
+    formDirtyRef.current = value;
+    setFormDirty(value);
+  }, []);
+
+  const handleFormChange = useCallback((_formData, isDirty) => {
+    if (formDirtyRef.current !== isDirty) setDirty(isDirty);
+  }, [setDirty]);
+
+  const beginEdit = useCallback((nodeId) => {
+    setDirty(false);
+    setEditingNodeId(String(nodeId));
+  }, [setDirty]);
+
+  /** Mở thẻ của `nodeId`; đang có thẻ khác mở với thay đổi dở → hỏi trước (hộp xác nhận của trang). */
+  const requestEdit = useCallback((nodeId) => {
+    if (!canEdit) return;
+    const id = String(nodeId);
+    if (editingNodeId === id) return;
+    if (editingNodeId && formDirtyRef.current) {
+      setPendingEditId(id);
+      return;
+    }
+    beginEdit(id);
+  }, [beginEdit, canEdit, editingNodeId]);
+
+  const closeEdit = useCallback(() => {
+    setEditingNodeId(null);
+    setDirty(false);
+  }, [setDirty]);
+
+  const handleSaveEdit = useCallback(async (node, formData) => {
+    const changed = formDirtyRef.current && !isNodeConfigFormUnchanged(node, formData, campaignType);
+    closeEdit();
+    if (!changed) return;
+    await onSaveNode(node, formData);
+  }, [campaignType, closeEdit, onSaveNode]);
+
+  // Callback đọc qua ref: chỉ báo khi trạng thái đổi, và báo "sạch" đúng một lần khi tab Thiết lập bị gỡ.
+  const dirtyCallbackRef = useRef(onInlineDirtyChange);
+  dirtyCallbackRef.current = onInlineDirtyChange;
+  useEffect(() => {
+    dirtyCallbackRef.current(Boolean(editingNodeId) && formDirty);
+  }, [editingNodeId, formDirty]);
+  useEffect(() => () => dirtyCallbackRef.current(false), []);
+
+  // Khối đang sửa biến mất (bị xoá ở nơi khác) → đóng thẻ.
+  useEffect(() => {
+    if (editingNodeId && !nodes.some((node) => String(node.id) === editingNodeId)) closeEdit();
+  }, [closeEdit, editingNodeId, nodes]);
+
+  useEffect(() => {
+    if (!editingNodeId) return;
+    cardRefs.current.get(editingNodeId)?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  }, [editingNodeId]);
+
+  const formProps = { campaignType, campaignId, emailTemplates, zaloTemplates, emailSettings, runLogs, onCheckSheetConnection };
 
   const renderCard = (entry) => (
     <NodeCard
       key={entry.node.id}
       entry={entry}
       nodes={nodes}
+      edges={edges}
       lookups={lookups}
       registry={registry}
       canEdit={canEdit}
-      onEditNode={onEditNode}
+      isEditing={editingNodeId === String(entry.node.id)}
+      editLocked={Boolean(editingNodeId) && editingNodeId !== String(entry.node.id)}
+      onStartEdit={requestEdit}
+      onCancelEdit={closeEdit}
+      onSaveEdit={handleSaveEdit}
+      onFormChange={handleFormChange}
+      formProps={formProps}
+      cardRef={(element) => {
+        if (element) cardRefs.current.set(String(entry.node.id), element);
+        else cardRefs.current.delete(String(entry.node.id));
+      }}
       nodeTitleOf={nodeTitleOf}
       t={t}
       locale={locale}
@@ -383,7 +613,15 @@ export default function CampaignSettingsPanel({
         />
 
         <div className="min-w-0 space-y-4">
-        {!hasNodes ? (
+        <Checklist
+          rows={checklist}
+          canEdit={canEdit}
+          canOpenSchedule={!isNewCampaign}
+          onEditRow={requestEdit}
+          onOpenSchedule={onOpenSchedule}
+          t={t}
+        />
+        {!hasCards ? (
           <section className={`${CARD} flex flex-col items-center gap-3 px-4 py-10 text-center`} data-testid="settings-empty">
             <HiOutlineViewGrid className={`h-10 w-10 ${MUTED}`} aria-hidden="true" />
             <p className="text-sm font-semibold text-gray-900 dark:text-dk-text">{t('campaignSettings.emptyTitle')}</p>
@@ -402,20 +640,36 @@ export default function CampaignSettingsPanel({
             <section aria-label={t('campaignSettings.blocksTitle')}>
               <h2 className="mb-2 text-base font-bold text-gray-900 dark:text-dk-text">{t('campaignSettings.blocksTitle')}</h2>
               <p className={`mb-3 text-sm ${MUTED}`}>{t('campaignSettings.blocksHint')}</p>
-              <ol className="space-y-3" data-testid="settings-ordered-list">{ordered.map(renderCard)}</ol>
+              <ol className="space-y-3" data-testid="settings-ordered-list">{visibleOrdered.map(renderCard)}</ol>
             </section>
-            {unconnected.length > 0 && (
+            {visibleUnconnected.length > 0 && (
               <section aria-label={t('campaignSettings.unconnectedTitle')} data-testid="settings-unconnected">
                 <h2 className="mb-2 text-base font-bold text-gray-900 dark:text-dk-text">{t('campaignSettings.unconnectedTitle')}</h2>
                 <p className={`mb-3 text-sm ${MUTED}`}>{t('campaignSettings.unconnectedHint')}</p>
                 <ul className="space-y-3">
-                  {unconnected.map((node) => renderCard({ node, step: null, branch: null }))}
+                  {visibleUnconnected.map((node) => renderCard({ node, step: null, branch: null }))}
                 </ul>
               </section>
             )}
           </>
         )}
         </div>
+        <ConfirmModal
+          isOpen={Boolean(pendingEditId)}
+          onClose={() => setPendingEditId(null)}
+          onConfirm={() => {
+            const next = pendingEditId;
+            setPendingEditId(null);
+            beginEdit(next);
+          }}
+          title={t('campaignSettings.discard.title')}
+          message={t('campaignSettings.discard.message')}
+          confirmLabel={t('campaignSettings.discard.confirm')}
+          cancelLabel={t('campaignSettings.discard.stay')}
+          confirmButtonClassName="bg-primary-500 text-white hover:bg-primary-600"
+          iconClassName="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0"
+          iconColorClassName="w-6 h-6 text-amber-600"
+        />
       </div>
     </div>
   );

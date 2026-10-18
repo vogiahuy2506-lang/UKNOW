@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../../../../i18n';
 import CampaignSettingsPanel from '../CampaignSettingsPanel';
@@ -16,6 +16,22 @@ vi.mock('../useSettingsAccountLookups', () => ({
 vi.mock('../../hooks/useCampaignEstimate', () => ({ default: (...args) => mockSavedEstimate(...args) }));
 vi.mock('../useRunRemainingEstimate', () => ({ default: (...args) => mockRunEstimate(...args) }));
 vi.mock('../useCampaignLatestRun', () => ({ default: (...args) => mockLatestRun(...args) }));
+// Form thật có spec riêng (NodeConfigForm.spec.jsx); ở đây chỉ kiểm cách Panel mở / đóng / lưu / hỏi xác nhận quanh form.
+vi.mock('../../components/NodeConfigForm', () => ({
+  default: ({ node, onSave, onCancel, onFormChange }) => (
+    <div data-testid="form-stub" data-node-id={node.id}>
+      <button type="button" data-testid="stub-type" onClick={() => onFormChange?.({ label: 'x' }, true)}>type</button>
+      <button
+        type="button"
+        data-testid="stub-save"
+        onClick={() => onSave({ ...(node.data.config || {}), label: node.data.label, edited: true })}
+      >
+        save
+      </button>
+      <button type="button" data-testid="stub-cancel" onClick={onCancel}>cancel</button>
+    </div>
+  ),
+}));
 
 const node = (id, nodeType, config = {}, label = '', type = 'task') => ({ id, type, data: { label, nodeType, config } });
 const edge = (source, target, label) => ({ id: `${source}-${target}`, source, target, ...(label ? { label } : {}) });
@@ -70,8 +86,8 @@ describe('CampaignSettingsPanel — danh sách khối', () => {
   it('liệt kê khối theo thứ tự chạy, mỗi khối một thẻ với các dòng "Nhãn: giá trị" tường minh', () => {
     renderPanel();
     const cards = screen.getAllByTestId('settings-node-card');
-    expect(cards.map((card) => card.getAttribute('data-node-id'))).toEqual(['start', 'sheet', 'mail']);
-    const mail = within(cards[2]);
+    expect(cards.map((card) => card.getAttribute('data-node-id'))).toEqual(['sheet', 'mail']);
+    const mail = within(cards[1]);
     expect(mail.getByText('Gửi thư chăm sóc')).toBeInTheDocument();
     expect(mail.getByText('CSKH (cskh@abc.vn)')).toBeInTheDocument();
     expect(mail.getByText('Từ khối “Danh sách khách”, cột “email”')).toBeInTheDocument();
@@ -81,7 +97,7 @@ describe('CampaignSettingsPanel — danh sách khối', () => {
 
   it('thứ tự theo luồng chứ không theo thứ tự mảng khối', () => {
     renderPanel({ nodes: [...EMAIL_FLOW.nodes].reverse() });
-    expect(screen.getAllByTestId('settings-node-card').map((card) => card.getAttribute('data-node-id'))).toEqual(['start', 'sheet', 'mail']);
+    expect(screen.getAllByTestId('settings-node-card').map((card) => card.getAttribute('data-node-id'))).toEqual(['sheet', 'mail']);
   });
 
   it('thiếu bắt buộc → dòng đỏ "Chưa chọn …"', () => {
@@ -103,7 +119,7 @@ describe('CampaignSettingsPanel — danh sách khối', () => {
     ];
     renderPanel({ nodes, edges: [edge('start', 'cond'), edge('cond', 'yes', 'Không có email')] });
     expect(screen.getByTestId('settings-branch-label')).toHaveTextContent('Nhánh “Không có email” của “Có email?”');
-    expect(within(screen.getAllByTestId('settings-node-card')[2]).getByTestId('settings-branch-label')).toBeInTheDocument();
+    expect(within(screen.getAllByTestId('settings-node-card')[1]).getByTestId('settings-branch-label')).toBeInTheDocument();
   });
 
   it('khối chưa nối nằm ở nhóm riêng bên dưới', () => {
@@ -125,12 +141,14 @@ describe('CampaignSettingsPanel — danh sách khối', () => {
 });
 
 describe('CampaignSettingsPanel — nút Sửa', () => {
-  it('bấm Sửa gọi onEditNode với đúng khối (trình dựng mở hộp cấu hình)', () => {
-    const onEditNode = vi.fn();
-    renderPanel({ onEditNode });
+  it('bấm Sửa mở form NGAY TRONG thẻ (không overlay), ẩn các dòng tóm tắt của thẻ đó', () => {
+    renderPanel();
     fireEvent.click(screen.getByTestId('settings-edit-mail'));
-    expect(onEditNode).toHaveBeenCalledTimes(1);
-    expect(onEditNode.mock.calls[0][0]).toBe(EMAIL_FLOW.nodes[2]);
+    const mailCard = screen.getAllByTestId('settings-node-card').find((card) => card.getAttribute('data-node-id') === 'mail');
+    expect(mailCard.getAttribute('data-editing')).toBe('true');
+    expect(within(mailCard).getByTestId('form-stub')).toBeInTheDocument();
+    expect(within(mailCard).queryAllByTestId('settings-line')).toHaveLength(0);
+    expect(screen.getAllByTestId('form-stub')).toHaveLength(1);
   });
 
   it('chỉ có quyền xem (canEdit=false) → không có nút Sửa và nút Lên lịch', () => {
@@ -299,5 +317,136 @@ describe('CampaignSettingsPanel — Lần chạy gần nhất', () => {
     renderPanel();
     expect(screen.getByTestId('settings-latest-run-error')).toBeInTheDocument();
     expect(screen.queryByTestId('settings-latest-run-counts')).not.toBeInTheDocument();
+  });
+});
+
+describe('CampaignSettingsPanel — sửa tại chỗ', () => {
+  it('mỗi lúc MỘT thẻ: đang mở thẻ A thì nút Sửa của thẻ khác bị khoá + có title; bấm cũng không mở thêm', () => {
+    renderPanel();
+    fireEvent.click(screen.getByTestId('settings-edit-mail'));
+    const other = screen.getByTestId('settings-edit-sheet');
+    expect(other).toBeDisabled();
+    expect(other.getAttribute('title')).toBe('Lưu hoặc huỷ mục đang sửa trước');
+    fireEvent.click(other);
+    expect(screen.getAllByTestId('form-stub')).toHaveLength(1);
+    expect(screen.getByTestId('form-stub').getAttribute('data-node-id')).toBe('mail');
+  });
+
+  it('Hủy đóng thẻ, nút Sửa của các thẻ mở lại', () => {
+    renderPanel();
+    fireEvent.click(screen.getByTestId('settings-edit-mail'));
+    fireEvent.click(screen.getByTestId('stub-cancel'));
+    expect(screen.queryByTestId('form-stub')).not.toBeInTheDocument();
+    expect(screen.getByTestId('settings-edit-sheet')).not.toBeDisabled();
+  });
+
+  it('Lưu khi form ĐÃ đổi → onSaveNode(node, formData) đúng một lần và thẻ đóng', async () => {
+    const onSaveNode = vi.fn();
+    renderPanel({ onSaveNode });
+    fireEvent.click(screen.getByTestId('settings-edit-mail'));
+    fireEvent.click(screen.getByTestId('stub-type'));
+    fireEvent.click(screen.getByTestId('stub-save'));
+    await waitFor(() => expect(onSaveNode).toHaveBeenCalledTimes(1));
+    expect(onSaveNode.mock.calls[0][0]).toBe(EMAIL_FLOW.nodes[2]);
+    expect(onSaveNode.mock.calls[0][1].edited).toBe(true);
+    expect(screen.queryByTestId('form-stub')).not.toBeInTheDocument();
+  });
+
+  it('Lưu khi form KHÔNG đổi → đóng thẻ, không gọi onSaveNode', async () => {
+    const onSaveNode = vi.fn();
+    renderPanel({ onSaveNode });
+    fireEvent.click(screen.getByTestId('settings-edit-mail'));
+    fireEvent.click(screen.getByTestId('stub-save'));
+    await waitFor(() => expect(screen.queryByTestId('form-stub')).not.toBeInTheDocument());
+    expect(onSaveNode).not.toHaveBeenCalled();
+  });
+
+  it('báo trang khi thẻ có thay đổi dở (true) và khi đóng (false)', () => {
+    const onInlineDirtyChange = vi.fn();
+    renderPanel({ onInlineDirtyChange });
+    fireEvent.click(screen.getByTestId('settings-edit-mail'));
+    fireEvent.click(screen.getByTestId('stub-type'));
+    expect(onInlineDirtyChange).toHaveBeenLastCalledWith(true);
+    fireEvent.click(screen.getByTestId('stub-cancel'));
+    expect(onInlineDirtyChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it('Sửa ở dòng checklist khi thẻ khác đang dở → hỏi xác nhận; "Tiếp tục sửa" giữ nguyên, "Bỏ thay đổi" chuyển thẻ', () => {
+    renderPanel({ nodes: [...EMAIL_FLOW.nodes.slice(0, 2), node('mail', 'send_email', {}, 'Gửi thư')], edges: EMAIL_FLOW.edges });
+    fireEvent.click(screen.getByTestId('settings-edit-sheet'));
+    fireEvent.click(screen.getByTestId('stub-type'));
+    fireEvent.click(screen.getByTestId('settings-checklist-edit-sender'));
+    expect(screen.getByText('Bỏ thay đổi đang sửa?')).toBeInTheDocument();
+    expect(screen.getByTestId('form-stub').getAttribute('data-node-id')).toBe('sheet');
+
+    fireEvent.click(screen.getByText('Tiếp tục sửa'));
+    expect(screen.queryByText('Bỏ thay đổi đang sửa?')).not.toBeInTheDocument();
+    expect(screen.getByTestId('form-stub').getAttribute('data-node-id')).toBe('sheet');
+
+    fireEvent.click(screen.getByTestId('settings-checklist-edit-sender'));
+    fireEvent.click(screen.getByText('Bỏ thay đổi'));
+    expect(screen.getByTestId('form-stub').getAttribute('data-node-id')).toBe('mail');
+  });
+
+  it('thẻ chưa đổi gì → Sửa ở checklist chuyển thẳng, không hỏi', () => {
+    renderPanel({ nodes: [...EMAIL_FLOW.nodes.slice(0, 2), node('mail', 'send_email', {}, 'Gửi thư')], edges: EMAIL_FLOW.edges });
+    fireEvent.click(screen.getByTestId('settings-edit-sheet'));
+    fireEvent.click(screen.getByTestId('settings-checklist-edit-content'));
+    expect(screen.queryByText('Bỏ thay đổi đang sửa?')).not.toBeInTheDocument();
+    expect(screen.getByTestId('form-stub').getAttribute('data-node-id')).toBe('mail');
+  });
+});
+
+describe('CampaignSettingsPanel — checklist "Trước khi chạy"', () => {
+  it('chiến dịch đủ → "Sẵn sàng chạy", 4 dòng, khối khởi chạy không hiện thành thẻ', () => {
+    renderPanel();
+    expect(screen.getByTestId('settings-checklist-summary')).toHaveTextContent('Sẵn sàng chạy');
+    ['sender', 'audience', 'content', 'timing'].forEach((key) => {
+      expect(screen.getByTestId(`settings-checklist-row-${key}`).getAttribute('data-status')).toBe('ok');
+    });
+    expect(screen.getAllByTestId('settings-node-card').some((card) => card.getAttribute('data-node-type') === 'manual_trigger')).toBe(false);
+  });
+
+  it('thiếu → đếm "Còn N mục", dòng ⚠ đỏ, thẻ khối thiếu có nhãn "Còn thiếu"', () => {
+    renderPanel({ nodes: [node('start', 'manual_trigger', {}, 'Khởi chạy', 'start'), node('mail', 'send_email', {}, 'Gửi thư')], edges: [edge('start', 'mail')] });
+    expect(screen.getByTestId('settings-checklist-summary')).toHaveTextContent('Còn 3 mục cần điền trước khi chạy');
+    expect(screen.getByTestId('settings-checklist-row-sender').getAttribute('data-status')).toBe('missing');
+    expect(screen.getByTestId('settings-checklist-summary-sender').className).toContain('text-rose-600');
+    expect(within(screen.getByTestId('settings-node-card')).getByTestId('settings-card-missing')).toBeInTheDocument();
+  });
+
+  it('Sửa ở dòng checklist mở đúng thẻ giữ dòng thiếu đầu tiên của vai', () => {
+    const nodes = [
+      node('start', 'manual_trigger', {}, 'Khởi chạy', 'start'),
+      node('sheetA', 'read_sheet', { sheetUrl: 'https://docs.google.com/spreadsheets/d/x' }, 'Sheet A'),
+      node('sheetB', 'read_sheet', {}, 'Sheet B'),
+      node('mail', 'send_email', { fromEmailId: 3, recipientSource: 'node', recipientNodeId: 'sheetA', recipientField: 'email', emailSteps: [{ templateId: 7 }] }, 'Gửi'),
+    ];
+    renderPanel({ nodes, edges: [edge('start', 'sheetA'), edge('sheetA', 'sheetB'), edge('sheetB', 'mail')] });
+    fireEvent.click(screen.getByTestId('settings-checklist-edit-audience'));
+    expect(screen.getByTestId('form-stub').getAttribute('data-node-id')).toBe('sheetB');
+  });
+
+  it('Thời điểm luôn ✓; Sửa mở hộp lên lịch', () => {
+    const onOpenSchedule = vi.fn();
+    renderPanel({ onOpenSchedule });
+    expect(screen.getByTestId('settings-checklist-row-timing').getAttribute('data-status')).toBe('ok');
+    fireEvent.click(screen.getByTestId('settings-checklist-edit-timing'));
+    expect(onOpenSchedule).toHaveBeenCalledTimes(1);
+  });
+
+  it('chiến dịch trống → ba dòng ⚠ "Chưa có", không có nút Sửa ở các dòng đó, vẫn hiện trạng thái rỗng', () => {
+    renderPanel({ nodes: [], edges: [] });
+    expect(screen.getByTestId('settings-checklist-summary')).toHaveTextContent('Còn 3 mục cần điền trước khi chạy');
+    expect(screen.getByTestId('settings-checklist-summary-sender')).toHaveTextContent('Chưa có');
+    expect(screen.queryByTestId('settings-checklist-edit-sender')).not.toBeInTheDocument();
+    expect(screen.getByTestId('settings-empty')).toBeInTheDocument();
+  });
+
+  it('chỉ có quyền xem → checklist hiện nhưng không có nút Sửa nào', () => {
+    renderPanel({ canEdit: false });
+    expect(screen.getByTestId('settings-checklist')).toBeInTheDocument();
+    expect(screen.queryByTestId('settings-checklist-edit-sender')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('settings-checklist-edit-timing')).not.toBeInTheDocument();
   });
 });
