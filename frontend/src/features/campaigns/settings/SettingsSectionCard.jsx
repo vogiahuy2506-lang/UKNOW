@@ -1,3 +1,4 @@
+import { Children } from 'react';
 import { HiOutlineCheckCircle, HiOutlineExclamation, HiOutlinePencil } from 'react-icons/hi';
 
 export const CARD = 'rounded-xl border border-gray-200 bg-white shadow-sm dark:border-dk-border dark:bg-dk-surface';
@@ -81,9 +82,9 @@ export default function SettingsSectionCard({
           </button>
         )}
       </div>
-      {children && <div className="mt-3 min-w-0 border-t border-gray-100 pt-3 dark:border-dk-border">{children}</div>}
+      {Children.toArray(children).length > 0 && <div className="mt-3 min-w-0 border-t border-gray-100 pt-3 dark:border-dk-border">{children}</div>}
       {!editing && (reason || onAdvanced) && (
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 pl-9">
           {reason && <p className={`text-xs ${MUTED}`} data-testid={`settings-section-reason-${sectionKey}`}>{reason}</p>}
           {onAdvanced && (
             <button
