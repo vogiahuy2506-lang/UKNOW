@@ -6,6 +6,7 @@ import FullScreenOverlay from '../../../components/FullScreenOverlay';
 import { useI18n } from '../../../i18n';
 import { useThemeStore } from '../../../stores/themeStore';
 import { isLogicNodeType } from '../utils/campaignBuilderFlow';
+import { createBuilderNode } from '../utils/createBuilderNode';
 
 export const CampaignNameModal = ({
   isOpen,
@@ -208,38 +209,12 @@ export const FlowCanvas = ({
       position.x -= nodeDropOffsetX;
       position.y -= nodeDropOffsetY;
 
-      const isVi = locale === 'vi';
-      const nodeData = data?.nodeData || {};
-      const baseName = (isVi && nodeData.nameVi) ? nodeData.nameVi : nodeData.name;
-      let nodeName = baseName;
-      const existingNames = nodes.map((n) => n.data?.label).filter(Boolean);
-      const samePrefixNames = existingNames.filter(
-        (name) =>
-          name === nodeName ||
-          name.match(new RegExp(`^${nodeName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\d+$`))
-      );
-      if (samePrefixNames.length > 0) {
-        let counter = 1;
-        let newName = `${nodeName} ${counter}`;
-        while (existingNames.includes(newName)) {
-          counter += 1;
-          newName = `${nodeName} ${counter}`;
-        }
-        nodeName = newName;
-      }
-
-      // Determine node type for ReactFlow
-      // All nodes from palette use 'task' type (TaskNode component)
-      // Trigger nodes use 'start' type (StartNode component)
-      const isTrigger = isTriggerNodeType(nodeType);
-      const flowNodeType = isTrigger ? 'start' : 'task';
-
-      const newNode = {
-        id: `${nodeType}-${Date.now()}`,
-        type: flowNodeType,
-        position,
-        data: { label: nodeName, nodeType: nodeType },
-      };
+      // Dựng khối bằng hàm dùng chung với tab Thiết lập (`createBuilderNode`): id, tên không trùng, kiểu ReactFlow.
+      const newNode = createBuilderNode(nodeType, position, {
+        locale,
+        nodeData: data?.nodeData || {},
+        existingNames: nodes.map((n) => n.data?.label).filter(Boolean),
+      });
 
       if (isTriggerNodeType(nodeType)) {
         const existingTrigger = nodes.find((n) => isTriggerNodeType(n.data?.nodeType || n.type));
