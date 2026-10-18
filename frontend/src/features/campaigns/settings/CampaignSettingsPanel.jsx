@@ -992,7 +992,8 @@ export default function CampaignSettingsPanel({
           onOpenSchedule={onOpenSchedule}
           t={t}
         />
-        <div className="order-3 min-w-0 space-y-4 lg:order-none">
+        {/* Chiến dịch trống: thẻ "Gửi cho ai?" là việc cần làm ngay → lên ngay sau Checklist trên màn hẹp (trước Tổng quan). */}
+        <div className={`${hasCards ? 'order-3' : 'order-1'} min-w-0 space-y-4 lg:order-none`}>
         {!hasCards ? (
           canEdit && startAudienceTypes.length > 0 ? (
             <StartCard

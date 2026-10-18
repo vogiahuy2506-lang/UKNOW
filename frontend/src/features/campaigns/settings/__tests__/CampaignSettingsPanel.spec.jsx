@@ -207,6 +207,14 @@ describe('CampaignSettingsPanel — chiến dịch rỗng', () => {
     expect(onApplyGraph).not.toHaveBeenCalled();
   });
 
+  it('màn hẹp: thẻ "Gửi cho ai?" xếp ngay sau Checklist (order-1), còn khi đã có khối thì danh sách khối xếp sau Tổng quan (order-3)', () => {
+    const { unmount } = renderPanel({ nodes: [], edges: [] });
+    expect(screen.getByTestId('settings-start').parentElement.className).toContain('order-1');
+    unmount();
+    renderPanel();
+    expect(screen.getByTestId('settings-ordered-list').closest('div.order-3')).not.toBeNull();
+  });
+
   it('chỉ có quyền xem hoặc loại chiến dịch lạ → vẫn là trạng thái rỗng cũ (không có thẻ nguồn)', () => {
     const { unmount } = renderPanel({ nodes: [], edges: [], canEdit: false });
     expect(screen.getByTestId('settings-empty')).toBeInTheDocument();
