@@ -447,12 +447,15 @@ describe('readSettingsSections', () => {
 
   it('bước phụ: liệt kê gắn thẻ / cập nhật / lưu khách với tóm tắt chữ thường, xoá được khi thẳng hàng', () => {
     const nodes = [node('t', 'manual_trigger'), node('e', 'send_email', { recipientSource: 'manual', recipientEmails: 'a@x.vn' }),
-      node('g', 'tag_contact', { tagName: 'vip', tagSourceNodeId: 'e' }, 'Gắn thẻ'), node('s', 'save_customer', {}, 'Lưu khách')];
-    const sections = readSettingsSections(nodes, chain('t', 'e', 'g', 's'), ctxFor('email'));
-    expect(sections.after.items.map((item) => [item.subtype, item.removable])).toEqual([['tag_contact', true], ['save_customer', true]]);
-    expect(sections.after.items[0].summary).toBe('Gắn thẻ “vip”');
-    // Máy chủ bỏ qua tag_contact / update_attribute khi gửi thật → có cờ notRun; save_customer thì không.
-    expect(sections.after.items.map((item) => item.notRun)).toEqual([true, false]);
+      node('g', 'tag_contact', { tagName: 'vip', tagSourceNodeId: 'e' }, 'Gắn tag'), node('s', 'save_customer', {}, 'Lưu khách'),
+      node('u', 'update_attribute', { attributeField: 'city', attributeSourceNodeId: 'e' }, 'Cập nhật')];
+    const sections = readSettingsSections(nodes, chain('t', 'e', 'g', 's', 'u'), ctxFor('email'));
+    expect(sections.after.items.map((item) => [item.subtype, item.removable])).toEqual([['tag_contact', true], ['save_customer', true], ['update_attribute', true]]);
+    expect(sections.after.items[0].summary).toBe('Gắn tag “vip”');
+    // Từ PR-T2 máy chủ chạy thật tag_contact; chỉ update_attribute còn bị bỏ qua khi gửi thật → cờ notRun.
+    expect(sections.after.items.map((item) => item.notRun)).toEqual([false, false, true]);
+    // Gắn tag có biểu mẫu riêng (tagValue); bước khác thì không.
+    expect(sections.after.items.map((item) => item.tagValue)).toEqual([{ action: 'add', name: 'vip' }, null, null]);
     expect(sections.after.canAdd).toBe(true);
   });
 });

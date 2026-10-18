@@ -6,6 +6,7 @@ import { readAfterSend, readTiming } from './summarySections';
 export { audienceChangeNeedsRebuild, buildAudienceGraph, readAudience, validateAudience, writeAudience } from './audienceSection';
 export { readSender, writeSender } from './senderSection';
 export { readAfterSend, readTiming } from './summarySections';
+export { TAG_NAME_MAX, isTagStepChanged, readTagStep, validateTagStep, writeTagStep } from './afterSection';
 export {
   CONTENT_SEND_SPEC,
   CUSTOM_BODY_MAX,

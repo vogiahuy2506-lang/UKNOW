@@ -8,7 +8,8 @@ import CampaignSettingsPanel from '../CampaignSettingsPanel';
 import emailTemplateApiService from '../../../templates/services/emailTemplateApi.service';
 import zaloTemplateApiService from '../../../templates/services/zaloTemplateApi.service';
 
-const { mockSavedEstimate, mockRunEstimate, mockLatestRun, mockLoadSenders } = vi.hoisted(() => ({
+const { mockSavedEstimate, mockRunEstimate, mockLatestRun, mockLoadSenders, mockGetTags } = vi.hoisted(() => ({
+  mockGetTags: vi.fn(),
   mockLoadSenders: vi.fn(),
   mockSavedEstimate: vi.fn(),
   mockRunEstimate: vi.fn(),
@@ -31,6 +32,8 @@ vi.mock('../../../templates/services/emailTemplateApi.service', () => ({
 vi.mock('../../../templates/services/zaloTemplateApi.service', () => ({
   default: { getTemplates: vi.fn(), getTemplateById: vi.fn(), createTemplate: vi.fn(), deleteTemplate: vi.fn() },
 }));
+// Danh sách tag có sẵn của biểu mẫu Gắn tag gọi API → giả.
+vi.mock('../../../customers/services/customerApi.service', () => ({ default: { getTags: (...args) => mockGetTags(...args) } }));
 vi.mock('react-hot-toast', () => ({ default: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }) }));
 // Hộp cài đặt khối thật có spec riêng (NodeConfigForm.spec.jsx); ở đây chỉ kiểm tab Thiết lập mở đúng khối / đúng mục và lưu qua onSaveNode.
 vi.mock('../../components/NodeConfigModal', async () => {
@@ -460,8 +463,8 @@ describe('CampaignSettingsPanel — Thời điểm / Sau khi gửi', () => {
     const onApplyGraph = vi.fn().mockResolvedValue(undefined);
     renderHarness({ onApplyGraph, nodes: EMAIL_FLOW.nodes, edges: EMAIL_FLOW.edges });
     fireEvent.click(screen.getByTestId('settings-add-step-button'));
-    // Menu chỉ mời bước máy chủ THẬT SỰ chạy: Lưu khách hàng. Gắn thẻ / Cập nhật thông tin không có trong menu.
-    expect(screen.getAllByTestId(/^settings-add-step-(?!button|menu|hint)/).map((el) => el.getAttribute('data-testid'))).toEqual(['settings-add-step-save_customer']);
+    // Menu chỉ mời bước máy chủ THẬT SỰ chạy: Lưu khách hàng + Gắn tag (chuỗi này có khối nguồn). Cập nhật thông tin không có trong menu.
+    expect(screen.getAllByTestId(/^settings-add-step-(?!button|menu|hint)/).map((el) => el.getAttribute('data-testid'))).toEqual(['settings-add-step-save_customer', 'settings-add-step-tag_contact']);
     fireEvent.click(screen.getByTestId('settings-add-step-save_customer'));
     await waitFor(() => expect(onApplyGraph).toHaveBeenCalledTimes(1));
     const [nextNodes, nextEdges] = onApplyGraph.mock.calls[0];
@@ -470,11 +473,11 @@ describe('CampaignSettingsPanel — Thời điểm / Sau khi gửi', () => {
     expect((await screen.findByTestId('modal-stub')).getAttribute('data-node-id')).toBe(nextNodes[3].id);
   });
 
-  it('Sau khi gửi: bước Gắn thẻ đã có (dựng tay) hiện cảnh báo "chưa chạy khi gửi thật", xoá được, và không làm tăng số mục cần điền', () => {
-    const nodes = [...EMAIL_FLOW.nodes, node('tag', 'tag_contact', { tagName: 'vip', tagSourceNodeId: 'sheet' }, 'Gắn thẻ VIP')];
-    renderPanel({ nodes, edges: [...EMAIL_FLOW.edges, edge('mail', 'tag')] });
+  it('Sau khi gửi: bước Cập nhật thông tin đã có (dựng tay) hiện cảnh báo "chưa chạy khi gửi thật", xoá được, và không làm tăng số mục cần điền', () => {
+    const nodes = [...EMAIL_FLOW.nodes, node('attr', 'update_attribute', { attributeField: 'city', attributeValue: 'HN', attributeSourceNodeId: 'sheet' }, 'Cập nhật thành phố')];
+    renderPanel({ nodes, edges: [...EMAIL_FLOW.edges, edge('mail', 'attr')] });
     expect(screen.getByTestId('settings-after-not-run')).toHaveTextContent('Bước này hiện chưa chạy khi gửi thật — hệ thống bỏ qua.');
-    expect(screen.getByTestId('settings-remove-tag')).toBeInTheDocument();
+    expect(screen.getByTestId('settings-remove-attr')).toBeInTheDocument();
     expect(screen.getByTestId('settings-status')).toHaveAttribute('data-missing-count', '0');
     expect(screen.getByTestId('settings-status-summary')).toHaveTextContent('Sẵn sàng chạy');
   });
@@ -487,14 +490,85 @@ describe('CampaignSettingsPanel — Thời điểm / Sau khi gửi', () => {
 
   it('Sau khi gửi: bước phụ có Sửa + Xoá (xác nhận) → nối lại khối trước với khối sau; rẽ nhánh thì nút thêm bị tắt', async () => {
     const onApplyGraph = vi.fn().mockResolvedValue(undefined);
-    const nodes = [...EMAIL_FLOW.nodes, node('tag', 'tag_contact', { tagName: 'vip', tagSourceNodeId: 'sheet' }, 'Gắn thẻ VIP')];
+    const nodes = [...EMAIL_FLOW.nodes, node('tag', 'tag_contact', { tagName: 'vip', tagSourceNodeId: 'sheet' }, 'Gắn tag VIP')];
     const edges = [...EMAIL_FLOW.edges, edge('mail', 'tag')];
     renderPanel({ nodes, edges, onApplyGraph });
-    expect(screen.getByTestId('settings-after-body')).toHaveTextContent('Gắn thẻ “vip”');
+    expect(screen.getByTestId('settings-after-body')).toHaveTextContent('Gắn tag “vip”');
+    // Máy chủ chạy thật Gắn tag → KHÔNG còn cảnh báo "chưa chạy".
+    expect(screen.queryByTestId('settings-after-not-run')).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId('settings-remove-tag'));
     fireEvent.click(screen.getAllByRole('button', { name: 'Xoá bước' }).pop());
     await waitFor(() => expect(onApplyGraph).toHaveBeenCalledTimes(1));
     expect(onApplyGraph.mock.calls[0][0].map((item) => item.id)).toEqual(['start', 'sheet', 'mail']);
+  });
+
+  describe('bước Gắn tag có biểu mẫu riêng', () => {
+    const TAG_NODES = [...EMAIL_FLOW.nodes, node('tag', 'tag_contact', { tagAction: 'add', tagName: 'vip', tagSourceNodeId: 'sheet' }, 'Gắn tag')];
+    const TAG_EDGES = [...EMAIL_FLOW.edges, edge('mail', 'tag')];
+
+    it('Sửa mở biểu mẫu ngay trong mục (không mở hộp cài đặt), không hiện chữ "node"; chọn tag có sẵn rồi Lưu ghi đúng tagName và GIỮ nguồn', async () => {
+      mockGetTags.mockResolvedValue({ data: { data: [{ id: 1, name: 'vip' }, { id: 2, name: 'lead nóng' }] } });
+      const onApplyGraph = vi.fn().mockResolvedValue(undefined);
+      renderHarness({ nodes: TAG_NODES, edges: TAG_EDGES, onApplyGraph });
+      fireEvent.click(screen.getByTestId('settings-after-edit-tag'));
+      expect(screen.queryByTestId('modal-stub')).not.toBeInTheDocument();
+      const form = await screen.findByTestId('settings-tag-form');
+      expect(form.textContent.toLowerCase()).not.toContain('node');
+      expect(screen.getByTestId('settings-tag-save')).toBeDisabled();
+      fireEvent.click(await screen.findByTestId('settings-tag-pick-2'));
+      expect(screen.getByTestId('settings-tag-name')).toHaveValue('lead nóng');
+      fireEvent.click(screen.getByTestId('settings-tag-save'));
+      await waitFor(() => expect(onApplyGraph).toHaveBeenCalledTimes(1));
+      const tag = onApplyGraph.mock.calls[0][0].find((item) => item.id === 'tag');
+      expect(tag.data.config).toMatchObject({ tagAction: 'add', tagName: 'lead nóng', tagSourceNodeId: 'sheet' });
+      expect(screen.queryByTestId('settings-tag-form')).not.toBeInTheDocument();
+    });
+
+    it('chuyển sang Gỡ tag rồi Lưu → tagAction remove; tên trống thì không lưu được', async () => {
+      mockGetTags.mockResolvedValue({ data: { data: [] } });
+      const onApplyGraph = vi.fn().mockResolvedValue(undefined);
+      renderHarness({ nodes: TAG_NODES, edges: TAG_EDGES, onApplyGraph });
+      fireEvent.click(screen.getByTestId('settings-after-edit-tag'));
+      fireEvent.click(await screen.findByTestId('settings-tag-action-remove'));
+      fireEvent.change(screen.getByTestId('settings-tag-name'), { target: { value: '  ' } });
+      expect(screen.getByTestId('settings-tag-save')).toBeDisabled();
+      expect(screen.getByTestId('settings-tag-problem')).toHaveTextContent('Nhập tên tag.');
+      fireEvent.change(screen.getByTestId('settings-tag-name'), { target: { value: 'vip' } });
+      fireEvent.click(screen.getByTestId('settings-tag-save'));
+      await waitFor(() => expect(onApplyGraph).toHaveBeenCalledTimes(1));
+      expect(onApplyGraph.mock.calls[0][0].find((item) => item.id === 'tag').data.config).toMatchObject({ tagAction: 'remove', tagName: 'vip' });
+    });
+
+    it('Huỷ đóng biểu mẫu, không ghi gì', async () => {
+      mockGetTags.mockResolvedValue({ data: { data: [] } });
+      const onApplyGraph = vi.fn().mockResolvedValue(undefined);
+      renderHarness({ nodes: TAG_NODES, edges: TAG_EDGES, onApplyGraph });
+      fireEvent.click(screen.getByTestId('settings-after-edit-tag'));
+      fireEvent.click(await screen.findByTestId('settings-tag-cancel'));
+      expect(screen.queryByTestId('settings-tag-form')).not.toBeInTheDocument();
+      expect(onApplyGraph).not.toHaveBeenCalled();
+    });
+
+    it('thêm bước Gắn tag từ menu: nối cuối chuỗi, tự điền nguồn, rồi mở biểu mẫu riêng (không mở hộp cài đặt)', async () => {
+      mockGetTags.mockResolvedValue({ data: { data: [] } });
+      const onApplyGraph = vi.fn().mockResolvedValue(undefined);
+      renderHarness({ nodes: EMAIL_FLOW.nodes, edges: EMAIL_FLOW.edges, onApplyGraph });
+      fireEvent.click(screen.getByTestId('settings-add-step-button'));
+      fireEvent.click(screen.getByTestId('settings-add-step-tag_contact'));
+      await waitFor(() => expect(onApplyGraph).toHaveBeenCalledTimes(1));
+      const added = onApplyGraph.mock.calls[0][0][3];
+      expect(added.data.nodeType).toBe('tag_contact');
+      expect(added.data.config.tagSourceNodeId).toBe('sheet');
+      expect(await screen.findByTestId('settings-tag-form')).toBeInTheDocument();
+      expect(screen.queryByTestId('modal-stub')).not.toBeInTheDocument();
+    });
+
+    it('chuỗi không có khối nguồn (email nhập tay): menu không mời Gắn tag', () => {
+      renderHarness({ nodes: MANUAL_EMAIL_FLOW.nodes, edges: MANUAL_EMAIL_FLOW.edges, onApplyGraph: vi.fn() });
+      fireEvent.click(screen.getByTestId('settings-add-step-button'));
+      expect(screen.queryByTestId('settings-add-step-tag_contact')).not.toBeInTheDocument();
+      expect(screen.getByTestId('settings-add-step-save_customer')).toBeInTheDocument();
+    });
   });
 
   it('Cài đặt nâng cao của hộp: mở hộp của đúng khối nguồn', () => {

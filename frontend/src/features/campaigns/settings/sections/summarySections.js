@@ -8,6 +8,7 @@ import describeNodeSettings from '../describeNodeSettings';
 import buildSettingsOrder from '../buildSettingsOrder';
 import { NOT_RUN_SIDE_STEP_SUBTYPES, SIDE_STEP_SUBTYPES, analyzeSettingsGraph, canRemoveSideStep, findAppendAnchor } from '../settingsGraph';
 import { configOf, idOf, subtypeOf, text } from './sectionUtils';
+import { readTagStep } from './afterSection';
 
 const orderedNodes = (nodes, edges) => {
   const { ordered, unconnected } = buildSettingsOrder(nodes, edges);
@@ -57,6 +58,8 @@ export function readAfterSend(nodes, edges, ctx) {
         // Máy chủ bỏ qua bước này khi gửi thật: cảnh báo riêng, KHÔNG tính vào "Còn N mục" (mục Sau khi gửi không nằm trong đó).
         notRun: NOT_RUN_SIDE_STEP_SUBTYPES.includes(subtypeOf(node)),
         removable: canRemoveSideStep(nodes, edges, node.id),
+        // Bước Gắn tag có biểu mẫu riêng (ngay trong mục); các bước phụ khác sửa qua hộp cài đặt nâng cao.
+        tagValue: subtypeOf(node) === 'tag_contact' ? readTagStep(node) : null,
       };
     });
   return {

@@ -32,12 +32,14 @@ import SettingsSectionCard, { CARD, MUTED } from './SettingsSectionCard';
 import SenderSectionForm, { SENDER_LOAD_OPTIONS } from './SenderSectionForm';
 import AudienceSectionForm from './AudienceSectionForm';
 import ContentSectionForm from './ContentSectionForm';
-import { buildAudienceGraph, countMissingSections, readSettingsSections, writeAudience, writeContent, writeSender } from './sections';
+import TagStepForm from './TagStepForm';
+import { buildAudienceGraph, countMissingSections, readSettingsSections, writeAudience, writeContent, writeSender, writeTagStep } from './sections';
 import { resolveCustomSteps } from './sections/contentTemplates';
 import {
   ADDABLE_SIDE_STEP_SUBTYPES,
   analyzeSettingsGraph,
   appendSideStep,
+  findChainRoles,
   getSendSubtypeFor,
   getSkeletonAudienceTypes,
   removeSideStep,
@@ -367,7 +369,7 @@ const ContentBody = ({ items, canEdit, editingNodeId, editLocked, renderForm, on
 );
 
 /** Thân mục Sau khi gửi: các bước phụ (Sửa tạm mở hộp cài đặt, Xoá) + "+ Thêm bước sau khi gửi". */
-const AfterBody = ({ items, canEdit, canAdd, branched, locked, lockTitle, addMenuOpen, addOptions, onToggleAdd, onPickAdd, onEdit, onRemove, t }) => (
+const AfterBody = ({ items, canEdit, canAdd, branched, locked, lockTitle, addMenuOpen, addOptions, onToggleAdd, onPickAdd, onEdit, onRemove, editingNodeId, renderTagForm, t }) => (
   <div className="space-y-3" data-testid="settings-after-body">
     {items.length > 0 && (
       <ul className="space-y-2">
@@ -384,7 +386,7 @@ const AfterBody = ({ items, canEdit, canAdd, branched, locked, lockTitle, addMen
             </span>
             {canEdit && (
               <span className="flex shrink-0 gap-2">
-                <button type="button" onClick={() => onEdit(item.nodeId)} disabled={locked} title={locked ? lockTitle : undefined} data-testid={`settings-after-edit-${item.nodeId}`} className={SMALL_BUTTON}>
+                <button type="button" onClick={() => onEdit(item)} disabled={locked} title={locked ? lockTitle : undefined} data-testid={`settings-after-edit-${item.nodeId}`} className={SMALL_BUTTON}>
                   <HiOutlinePencil className="h-4 w-4" aria-hidden="true" />
                   {t('campaignSettings.section.edit')}
                 </button>
@@ -403,6 +405,7 @@ const AfterBody = ({ items, canEdit, canAdd, branched, locked, lockTitle, addMen
                 )}
               </span>
             )}
+            {item.tagValue && editingNodeId === item.nodeId && <div className="mt-1 w-full basis-full min-w-0">{renderTagForm(item)}</div>}
           </li>
         ))}
       </ul>
@@ -695,8 +698,11 @@ export default function CampaignSettingsPanel({
 
   const sideStepOptions = useMemo(() => {
     const dataTypes = getAllowedDataNodeTypesByCampaignType(campaignType);
+    // Gắn tag cần danh sách người để gắn: chỉ mời thêm khi chuỗi có khối nguồn (đọc khách / landing / biểu mẫu / Google Sheet / Zalo).
+    const hasSource = Boolean(findChainRoles(nodes, analyzeSettingsGraph(nodes, edges).chain).sourceNode);
     return ADDABLE_SIDE_STEP_SUBTYPES
       .filter((type) => type !== 'save_customer' || !dataTypes || dataTypes.has('save_customer'))
+      .filter((type) => type !== 'tag_contact' || hasSource)
       .map((type) => {
         const config = registry.find((item) => item.type === type) || {};
         return {
@@ -705,15 +711,29 @@ export default function CampaignSettingsPanel({
           description: locale === 'vi' ? (config.descriptionVi || config.description || '') : (config.description || config.descriptionVi || ''),
         };
       });
-  }, [campaignType, locale, registry]);
+  }, [campaignType, edges, locale, nodes, registry]);
 
   const handleAddSideStep = useCallback(async (subtype) => {
     setAddMenuOpen(false);
     const result = appendSideStep({ nodes, edges, subtype, locale });
     if (!result) return;
     await commitGraph(result);
-    openAdvanced(result.newNodeId);
-  }, [commitGraph, edges, locale, nodes, openAdvanced]);
+    // Gắn tag có biểu mẫu riêng ngay trong mục; bước khác mở hộp cài đặt của đúng khối.
+    if (subtype === 'tag_contact') openEdit(`after:${result.newNodeId}`);
+    else openAdvanced(result.newNodeId);
+  }, [commitGraph, edges, locale, nodes, openAdvanced, openEdit]);
+
+  const tagEditingNodeId = !startMode && typeof editingKey === 'string' && editingKey.startsWith('after:') ? editingKey.slice('after:'.length) : null;
+  const handleEditAfterStep = useCallback((item) => {
+    if (item.tagValue) requestEdit(`after:${item.nodeId}`);
+    else openAdvanced(item.nodeId);
+  }, [openAdvanced, requestEdit]);
+  const handleSaveTagStep = useCallback(async (nodeId, value) => {
+    const result = writeTagStep(nodes, edges, nodeId, value);
+    closeEdit();
+    if (!result || result.nodes === nodes) return;
+    await commitGraph(result);
+  }, [closeEdit, commitGraph, edges, nodes]);
 
   const handleConfirmRemove = useCallback(() => {
     const nodeId = removeTargetId;
@@ -927,8 +947,21 @@ export default function CampaignSettingsPanel({
             addOptions={sideStepOptions}
             onToggleAdd={() => setAddMenuOpen((value) => !value)}
             onPickAdd={handleAddSideStep}
-            onEdit={(nodeId) => openAdvanced(nodeId)}
+            onEdit={handleEditAfterStep}
             onRemove={setRemoveTargetId}
+            editingNodeId={tagEditingNodeId}
+            renderTagForm={(item) => (
+              <TagStepForm
+                key={item.nodeId}
+                nodeId={item.nodeId}
+                value={item.tagValue}
+                onSave={(value) => handleSaveTagStep(item.nodeId, value)}
+                onCancel={closeEdit}
+                onDirtyChange={handleFormDirty}
+                busy={structureBusy}
+                t={t}
+              />
+            )}
             t={t}
           />
         </SettingsSectionCard>
