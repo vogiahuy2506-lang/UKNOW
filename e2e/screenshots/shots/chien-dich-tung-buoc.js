@@ -22,7 +22,7 @@ import { highlight, hideVolatileChrome, settle, contentShot } from '../lib/shotH
 import { api, withDb } from '../lib/shotFixtures.js';
 
 /** Chạy `cleanup` sau khi ảnh đã chụp (capture.spec chụp SAU khi `take` trả về nên không dọn trong `take` được). */
-function withCleanup(target, cleanup) {
+export function withCleanup(target, cleanup) {
   return {
     screenshot: async (options) => {
       try {
@@ -35,7 +35,7 @@ function withCleanup(target, cleanup) {
 }
 
 /** Nâng trần số chiến dịch email của tài khoản e2etest (cột `users.max_email_campaigns`) thêm `extra`; trả hàm trả lại giá trị cũ. */
-async function raiseEmailCampaignCap(extra) {
+export async function raiseEmailCampaignCap(extra) {
   const original = await withDb(async (db) => {
     const { rows } = await db.query(`SELECT id, max_email_campaigns FROM users WHERE username = 'e2etest'`);
     const user = rows[0];
@@ -163,12 +163,14 @@ export async function takeSettingsTab(page) {
     await page.goto(`/app/campaigns/${campaignId}`);
     const panel = page.getByTestId('campaign-settings-panel');
     await panel.waitFor({ state: 'visible', timeout: 30_000 });
-    await page.getByTestId('settings-node-card').first().waitFor({ state: 'visible', timeout: 30_000 });
+    await page.locator('[data-testid^="settings-section-"]').first().waitFor({ state: 'visible', timeout: 30_000 });
     await settle(page);
     await hideVolatileChrome(page);
     await highlight(page.getByTestId('settings-overview'));
-    const cards = page.getByTestId('settings-node-card');
-    for (let i = 0; i < await cards.count(); i += 1) await highlight(cards.nth(i));
+    // Năm mục: Gửi từ / Gửi cho ai / Nội dung / Thời điểm / Sau khi gửi (testid `settings-section-<khoá>`, không có dấu gạch phụ).
+    const keys = await page.evaluate(() => [...document.querySelectorAll('[data-testid^="settings-section-"]')]
+      .map((el) => el.getAttribute('data-testid')).filter((id) => /^settings-section-[a-zA-Z]+$/.test(id)));
+    for (const id of keys) await highlight(page.getByTestId(id));
     await page.waitForTimeout(200);
     const shot = await contentShot(page, page.getByTestId('campaign-view-tabs').locator('xpath=../..'), { pad: 20, maxHeight: 1070 });
     return withCleanup(shot, async () => {
@@ -291,7 +293,7 @@ export default {
     },
     {
       name: 'tab-thiet-lap',
-      caption: 'tab Thiết lập của một chiến dịch email, khoanh đỏ thẻ Tổng quan và danh sách khối theo thứ tự chạy',
+      caption: 'tab Thiết lập của một chiến dịch email, khoanh đỏ thẻ Tổng quan và năm mục cài đặt',
       localOnly: true,
       take: takeSettingsTab,
     },

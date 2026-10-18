@@ -22,7 +22,8 @@ import {
   sidebarShot, highlight, hideVolatileChrome, settle, contentShot, paddedShot,
 } from '../lib/shotHelpers.js';
 import { ensureDemoForm, ensureFormSubmissionsNodeDemo } from '../lib/shotFixtures.js';
-import { takeSettingsTab } from './chien-dich-tung-buoc.js';
+import { takeSettingsTab, withCleanup, raiseEmailCampaignCap } from './chien-dich-tung-buoc.js';
+import { api, withDb } from '../lib/shotFixtures.js';
 
 /**
  * Mở trình dựng của chiến dịch nháp đã có luồng mẫu.
@@ -61,9 +62,240 @@ async function openNodeConfig(page, nodeName) {
   await page.waitForTimeout(1800);
 }
 
+/** Mở hộp "Tạo chiến dịch mới" qua nút Tạo -> thẻ "Thủ công". */
+async function openCreateModal(page) {
+  await page.goto('/app/campaigns');
+  await settle(page);
+  await hideVolatileChrome(page);
+  await page.getByRole('button', { name: 'Tạo', exact: true }).click();
+  await page.getByTestId('create-method-modal').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.getByTestId('create-method-blocks').click();
+  const dialog = page.getByRole('heading', { name: 'Tạo chiến dịch mới', exact: true }).locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]');
+  await dialog.waitFor({ state: 'visible', timeout: 15_000 });
+  await hideVolatileChrome(page);
+  return dialog;
+}
+
+/** Hộp tạo chiến dịch với tên điền sẵn, khoanh đỏ nút kênh `channelId` (hoặc cả hàng kênh + nút Tạo và thiết kế). */
+async function createModalShot(page, channelId) {
+  const dialog = await openCreateModal(page);
+  await dialog.locator('input[type="text"]').first().fill('Ưu đãi tháng 10');
+  if (channelId) {
+    await highlight(page.getByTestId(`create-campaign-type-${channelId}`));
+  } else {
+    for (const id of ['email', 'zalo', 'telegram', 'whatsapp']) {
+      const button = page.getByTestId(`create-campaign-type-${id}`);
+      if (await button.isVisible().catch(() => false)) await highlight(button);
+    }
+    await highlight(dialog.getByRole('button', { name: 'Tạo và thiết kế', exact: true }));
+  }
+  await page.waitForTimeout(200);
+  return paddedShot(page, dialog, { pad: 16 });
+}
+
+/** Tạo chiến dịch trống qua hộp "Thủ công" (loại Email), dừng ở tab Thiết lập. Trả id + hàm dọn. */
+async function createEmptyViaModal(page) {
+  const restoreCap = await raiseEmailCampaignCap(2);
+  const dialog = await openCreateModal(page);
+  await dialog.locator('input[type="text"]').first().fill('Ưu đãi tháng 10');
+  await page.getByTestId('create-campaign-type-email').click();
+  await dialog.getByRole('button', { name: 'Tạo và thiết kế', exact: true }).click();
+  await page.waitForURL(/\/app\/campaigns\/\d+\?tab=settings/, { timeout: 30_000 });
+  const campaignId = Number(page.url().match(/campaigns\/(\d+)/)[1]);
+  await page.getByTestId('campaign-settings-panel').waitFor({ state: 'visible', timeout: 30_000 });
+  await settle(page);
+  await hideVolatileChrome(page);
+  const cleanup = async () => {
+    await api(page, 'DELETE', `/campaigns/${campaignId}`).catch(() => {});
+    await restoreCap();
+  };
+  return { campaignId, cleanup };
+}
+
+/** Ẩn ô "Tên node" (thuật ngữ nội bộ, bài hướng dẫn không nhắc) trước khi chụp hộp cấu hình khối gửi. */
+async function hideNodeNameField(dialog) {
+  await dialog.locator('input[placeholder^="VD: Gửi tin"]').first().evaluate((el) => {
+    const block = el.parentElement;
+    if (block) block.style.display = 'none';
+  });
+}
+
+/**
+ * Dựng chiến dịch nháp kênh Telegram/WhatsApp trong DB e2e: Khởi chạy -> khối gửi (chưa cấu hình gì), mở bảng cài đặt khối
+ * gửi bằng bấm đúp. Trả hàm dọn (xoá chiến dịch). Không gửi gì, chỉ mở hộp.
+ */
+async function openChannelSendConfig(page, channel, nodeName) {
+  const campaignId = await withDb(async (db) => {
+    const user = (await db.query(`SELECT id FROM users WHERE username = 'e2etest'`)).rows[0];
+    const camp = (await db.query(
+      `INSERT INTO campaigns (id_user, workspace_owner_id, created_by, campaign_name, description, campaign_type, status, created_at, updated_at)
+       VALUES ($1, $1, $1, 'Ưu đãi tháng 10', '', $2, 'draft', NOW(), NOW()) RETURNING id`,
+      [user.id, channel],
+    )).rows[0];
+    const t = (await db.query(
+      `INSERT INTO campaign_nodes (id_campaign, node_type, node_subtype, node_name, position_x, position_y, config, execution_order)
+       VALUES ($1, 'trigger', 'manual_trigger', 'Khởi chạy', 120, 220, '{}'::jsonb, 1) RETURNING id`, [camp.id],
+    )).rows[0];
+    const a = (await db.query(
+      `INSERT INTO campaign_nodes (id_campaign, node_type, node_subtype, node_name, position_x, position_y, config, execution_order)
+       VALUES ($1, 'action', $2, $3, 460, 220, '{}'::jsonb, 2) RETURNING id`, [camp.id, `send_${channel}`, nodeName],
+    )).rows[0];
+    await db.query(
+      `INSERT INTO campaign_connections (id_campaign, source_node_id, target_node_id, connection_type) VALUES ($1, $2, $3, 'default')`,
+      [camp.id, t.id, a.id],
+    );
+    return camp.id;
+  });
+  const cleanup = async () => { await api(page, 'DELETE', `/campaigns/${campaignId}`).catch(() => {}); };
+  await page.goto('/app/campaigns');
+  await settle(page);
+  await page.goto(`/app/campaigns/${campaignId}/builder`);
+  await page.getByText('Sơ đồ khối', { exact: true }).first().click();
+  const node = page.locator('.react-flow__node').filter({ hasText: nodeName }).first();
+  await node.waitFor({ state: 'visible', timeout: 20_000 });
+  await settle(page);
+  await hideVolatileChrome(page);
+  await node.click();
+  await page.waitForTimeout(120);
+  await node.click();
+  await page.waitForTimeout(1800);
+  return cleanup;
+}
+
 export default {
   slug: 'campaign-create',
   shots: [
+    {
+      name: 'menu-quan-ly-chien-dich',
+      caption: 'menu bên trái đang mở nhóm Chiến dịch, khoanh đỏ mục "Quản lý chiến dịch"',
+      localOnly: true,
+      async take(page, { baseURL }) {
+        return sidebarShot(page, { groupName: 'Chiến dịch', itemName: 'Quản lý chiến dịch', baseURL });
+      },
+    },
+    {
+      name: 'the-tu-tao',
+      caption: 'đầu trang Quản lý chiến dịch, khoanh đỏ thẻ "Tự tạo" đang được chọn',
+      localOnly: true,
+      async take(page) {
+        await page.goto('/app/campaigns');
+        await settle(page);
+        await hideVolatileChrome(page);
+        const tab = page.getByRole('button', { name: 'Tự tạo', exact: true }).first();
+        await tab.waitFor({ state: 'visible', timeout: 30_000 });
+        await highlight(tab);
+        await page.waitForTimeout(200);
+        return contentShot(page, page.locator('main').first(), { maxHeight: 220 });
+      },
+    },
+    {
+      name: 'nut-tao-chien-dich',
+      caption: 'góc trên bên phải, khoanh đỏ nút "Tạo"',
+      localOnly: true,
+      async take(page) {
+        await page.goto('/app/campaigns');
+        await settle(page);
+        await hideVolatileChrome(page);
+        const button = page.getByRole('button', { name: 'Tạo', exact: true }).first();
+        await button.waitFor({ state: 'visible', timeout: 30_000 });
+        await highlight(button);
+        await page.waitForTimeout(200);
+        return contentShot(page, page.locator('main').first(), { maxHeight: 220 });
+      },
+    },
+    {
+      name: 'hop-tao-chien-dich-moi',
+      caption: 'hộp thoại "Tạo chiến dịch mới", khoanh đỏ hàng nút chọn loại chiến dịch và nút "Tạo và thiết kế"',
+      localOnly: true,
+      take: (page) => createModalShot(page, null),
+    },
+    {
+      name: 'tab-thiet-lap-con-trong',
+      caption: 'tab Thiết lập của chiến dịch vừa tạo còn trống, thẻ "Gửi cho ai?" với các thẻ nguồn người nhận',
+      localOnly: true,
+      async take(page) {
+        await page.setViewportSize({ width: 1440, height: 1250 });
+        const { cleanup } = await createEmptyViaModal(page);
+        try {
+          const audience = page.getByTestId('settings-section-audience');
+          await highlight(audience);
+          await page.waitForTimeout(200);
+          const shot = await contentShot(page, page.getByTestId('campaign-view-tabs').locator('xpath=../..'), { pad: 20, maxHeight: 1250 });
+          return withCleanup(shot, async () => { await page.setViewportSize({ width: 1440, height: 900 }); await cleanup(); });
+        } catch (error) {
+          await cleanup();
+          throw error;
+        }
+      },
+    },
+    {
+      name: 'tab-thiet-lap-thieu-noi-dung',
+      caption: 'tab Thiết lập sau khi bấm Tạo, các mục Gửi từ và Gửi cho ai đã đủ, mục Nội dung còn thiếu',
+      localOnly: true,
+      async take(page) {
+        await page.setViewportSize({ width: 1440, height: 1100 });
+        const { cleanup } = await createEmptyViaModal(page);
+        try {
+          await page.getByText('Tự nhập danh sách', { exact: true }).first().click();
+          await page.locator('textarea').first().fill('an@example.com\nbinh@example.com');
+          const audience = page.getByTestId('settings-section-audience');
+          await audience.getByRole('button', { name: 'Tạo', exact: true }).click();
+          await page.waitForTimeout(1500);
+          await settle(page);
+          await hideVolatileChrome(page);
+          for (const key of ['sender', 'audience', 'content']) await highlight(page.getByTestId(`settings-section-${key}`));
+          await page.waitForTimeout(200);
+          const shot = await contentShot(page, page.getByTestId('campaign-view-tabs').locator('xpath=../..'), { pad: 20, maxHeight: 1100 });
+          return withCleanup(shot, async () => { await page.setViewportSize({ width: 1440, height: 900 }); await cleanup(); });
+        } catch (error) {
+          await cleanup();
+          throw error;
+        }
+      },
+    },
+    {
+      name: 'khoi-gui-telegram',
+      caption: 'hộp cấu hình khối Gửi tin nhắn Telegram, khoanh đỏ ô chọn tài khoản, nguồn người nhận và ô nội dung',
+      localOnly: true,
+      async take(page) {
+        const cleanup = await openChannelSendConfig(page, 'telegram', 'Gửi tin nhắn Telegram');
+        const dialog = page.locator('div.fixed').filter({ hasText: 'Cấu hình:' }).last();
+        await hideNodeNameField(dialog);
+        await highlight(dialog.locator('select').nth(0));
+        await highlight(dialog.locator('select').nth(1).locator('xpath=ancestor::div[1]'));
+        await highlight(dialog.locator('textarea').first());
+        await page.waitForTimeout(200);
+        const shot = await contentShot(page, dialog.locator('> div').first());
+        return withCleanup(shot, cleanup);
+      },
+    },
+    {
+      name: 'khoi-gui-whatsapp',
+      caption: 'hộp cấu hình khối Gửi tin nhắn WhatsApp, khoanh đỏ ô chọn tài khoản và ba cách chọn người nhận',
+      localOnly: true,
+      async take(page) {
+        const cleanup = await openChannelSendConfig(page, 'whatsapp', 'Gửi tin nhắn WhatsApp');
+        const dialog = page.locator('div.fixed').filter({ hasText: 'Cấu hình:' }).last();
+        await hideNodeNameField(dialog);
+        await highlight(dialog.locator('select').nth(0));
+        await highlight(dialog.locator('select').nth(1).locator('xpath=ancestor::div[1]'));
+        await page.waitForTimeout(200);
+        const shot = await contentShot(page, dialog.locator('> div').first());
+        return withCleanup(shot, cleanup);
+      },
+    },
+    {
+      name: 'hop-tao-chon-telegram',
+      caption: 'hộp thoại "Tạo chiến dịch mới", khoanh đỏ nút "Telegram" trong hàng chọn loại chiến dịch',
+      localOnly: true,
+      take: (page) => createModalShot(page, 'telegram'),
+    },
+    {
+      name: 'hop-tao-chon-whatsapp',
+      caption: 'hộp thoại "Tạo chiến dịch mới", khoanh đỏ nút "WhatsApp" trong hàng chọn loại chiến dịch',
+      localOnly: true,
+      take: (page) => createModalShot(page, 'whatsapp'),
+    },
     {
       name: 'keo-khoi-khoi-chay',
       caption: 'kéo khối Khởi chạy từ bảng bên trái thả vào khu vực dựng',
@@ -260,7 +492,7 @@ export default {
     },
     {
       name: 'tab-thiet-lap',
-      caption: 'tab Thiết lập của một chiến dịch email, khoanh đỏ thẻ Tổng quan và danh sách khối theo thứ tự chạy',
+      caption: 'tab Thiết lập của một chiến dịch email, khoanh đỏ thẻ Tổng quan và năm mục cài đặt',
       localOnly: true,
       take: takeSettingsTab,
     },
