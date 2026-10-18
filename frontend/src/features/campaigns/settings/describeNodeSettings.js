@@ -37,7 +37,12 @@ const EXCERPT_LENGTH = 48;
 
 const text = (value) => String(value ?? '').trim();
 
-const line = (label, value, tone = 'normal') => ({ label, value, tone });
+/**
+ * `role` = dòng này thuộc mục nào của checklist "Trước khi chạy": 'sender' (gửi từ) | 'audience' (gửi cho ai) | 'content' (nội dung) |
+ * 'timing' (thời điểm) | 'other'. Bỏ trống → lấy vai mặc định theo loại khối (`DEFAULT_ROLE_BY_SUBTYPE`). MỘT nguồn sự thật cho cả thẻ khối lẫn checklist.
+ */
+const line = (label, value, tone = 'normal', role = undefined) => ({ label, value, tone, ...(role ? { role } : {}) });
+const withRole = (role, lines) => lines.map((item) => ({ ...item, role }));
 
 /** Cắt chuỗi dài, thêm "…". */
 const excerpt = (value, max = EXCERPT_LENGTH) => {
@@ -90,21 +95,21 @@ const describeTiming = ({ index, scheduled, delayValue, delayUnit, delayFrom }, 
 const describeEmailSender = (config, lookups, t) => {
   const label = t(`${PREFIX}.label.sender`);
   const id = text(config.fromEmailId);
-  if (!id) return line(label, t(`${PREFIX}.missing.emailSender`), 'missing');
+  if (!id) return line(label, t(`${PREFIX}.missing.emailSender`), 'missing', 'sender');
   const found = (Array.isArray(lookups?.emailSettings) ? lookups.emailSettings : []).find((item) => sameId(item?.id, id));
-  if (!found) return line(label, t(`${PREFIX}.accountById`, { id }));
+  if (!found) return line(label, t(`${PREFIX}.accountById`, { id }), 'normal', 'sender');
   const name = text(found.name);
   const email = text(found.email);
-  return line(label, name && email ? `${name} (${email})` : (email || name));
+  return line(label, name && email ? `${name} (${email})` : (email || name), 'normal', 'sender');
 };
 
 /** "Dữ liệu từ khối “X”, cột “Y”" — khối/cột thiếu thì thành dòng đỏ. */
 const describeNodeSource = (label, nodeId, field, lookups, t) => {
-  if (!text(nodeId)) return line(label, t(`${PREFIX}.missing.sourceNode`), 'missing');
+  if (!text(nodeId)) return line(label, t(`${PREFIX}.missing.sourceNode`), 'missing', 'audience');
   const node = findNode(lookups, nodeId);
-  if (!node) return line(label, t(`${PREFIX}.missing.sourceNodeGone`), 'missing');
-  if (!text(field)) return line(label, t(`${PREFIX}.missing.column`), 'missing');
-  return line(label, t(`${PREFIX}.fromNode`, { node: nodeTitle(node, t), field: text(field) }));
+  if (!node) return line(label, t(`${PREFIX}.missing.sourceNodeGone`), 'missing', 'audience');
+  if (!text(field)) return line(label, t(`${PREFIX}.missing.column`), 'missing', 'audience');
+  return line(label, t(`${PREFIX}.fromNode`, { node: nodeTitle(node, t), field: text(field) }), 'normal', 'audience');
 };
 
 const templateName = (templates, id, t) => {
@@ -129,7 +134,7 @@ const describeEmailRecipients = (config, lookups, t) => {
 /** Các tin dựng từ mẫu (email / Zalo cá nhân / Zalo nhóm): "Tin N: <tên mẫu> · <nhịp chờ>". */
 const describeTemplateSteps = ({ steps, templates, scheduled }, t) => steps.map((step, index) => {
   const label = t(`${PREFIX}.label.step`, { n: index + 1 });
-  if (!text(step?.templateId)) return line(label, t(`${PREFIX}.missing.template`), 'missing');
+  if (!text(step?.templateId)) return line(label, t(`${PREFIX}.missing.template`), 'missing', 'content');
   const timing = describeTiming({
     index,
     scheduled,
@@ -137,15 +142,15 @@ const describeTemplateSteps = ({ steps, templates, scheduled }, t) => steps.map(
     delayUnit: step.delayUnit,
     delayFrom: step.delayFrom,
   }, t);
-  return line(label, `${templateName(templates, step.templateId, t)} · ${timing}`);
+  return line(label, `${templateName(templates, step.templateId, t)} · ${timing}`, 'normal', 'content');
 });
 
 const describeEmail = (config, lookups, t) => {
   const rawSteps = Array.isArray(config.emailSteps) ? config.emailSteps : [];
   const steps = rawSteps.length === 0 && config.emailTemplateId ? [{ templateId: config.emailTemplateId }] : rawSteps;
-  const lines = [describeEmailSender(config, lookups, t), describeEmailRecipients(config, lookups, t)];
+  const lines = [describeEmailSender(config, lookups, t), ...withRole('audience', [describeEmailRecipients(config, lookups, t)])];
   if (steps.length === 0) {
-    lines.push(line(t(`${PREFIX}.label.step`, { n: 1 }), t(`${PREFIX}.missing.emailTemplate`), 'missing'));
+    lines.push(line(t(`${PREFIX}.label.step`, { n: 1 }), t(`${PREFIX}.missing.emailTemplate`), 'missing', 'content'));
     return lines;
   }
   lines.push(...describeTemplateSteps({
@@ -188,11 +193,12 @@ const describeSelectZaloAccount = (config, lookups, t) => {
 const describeOwnZaloAccount = (config, lookups, t) => {
   if (!text(config.zaloAccountId)) return [];
   const resolved = resolveZaloAccountNames({ zaloAccountId: config.zaloAccountId }, lookups, t);
-  return resolved ? [line(t(`${PREFIX}.label.zaloAccount`), resolved.names[0])] : [];
+  return resolved ? [line(t(`${PREFIX}.label.zaloAccount`), resolved.names[0], 'normal', 'sender')] : [];
 };
 
 const describeZaloPersonal = (config, lookups, t) => {
   const lines = describeOwnZaloAccount(config, lookups, t);
+  const audienceFrom = lines.length;
   const recipientLabel = t(`${PREFIX}.label.recipients`);
   const source = text(config.zaloRecipientSource) || 'manual';
   const isUid = text(config.zaloRecipientType) === 'uid';
@@ -206,6 +212,7 @@ const describeZaloPersonal = (config, lookups, t) => {
   } else {
     lines.push(line(recipientLabel, t(`${PREFIX}.missing.recipientSource`), 'missing'));
   }
+  lines.splice(audienceFrom, lines.length - audienceFrom, ...withRole('audience', lines.slice(audienceFrom)));
   const steps = Array.isArray(config.zaloPersonalTemplateSteps) ? config.zaloPersonalTemplateSteps : [];
   if (steps.length > 0) {
     lines.push(...describeTemplateSteps({
@@ -214,15 +221,16 @@ const describeZaloPersonal = (config, lookups, t) => {
       scheduled: text(config.zaloPersonalSendMode) === 'schedule',
     }, t));
   } else if (text(config.zaloMessage)) {
-    lines.push(line(t(`${PREFIX}.label.content`), t(`${PREFIX}.typedMessage`, { text: excerpt(config.zaloMessage) })));
+    lines.push(line(t(`${PREFIX}.label.content`), t(`${PREFIX}.typedMessage`, { text: excerpt(config.zaloMessage) }), 'normal', 'content'));
   } else {
-    lines.push(line(t(`${PREFIX}.label.step`, { n: 1 }), t(`${PREFIX}.missing.zaloContent`), 'missing'));
+    lines.push(line(t(`${PREFIX}.label.step`, { n: 1 }), t(`${PREFIX}.missing.zaloContent`), 'missing', 'content'));
   }
   return lines;
 };
 
 const describeZaloFriendRequest = (config, lookups, t) => {
   const lines = describeOwnZaloAccount(config, lookups, t);
+  const audienceFrom = lines.length;
   const recipientLabel = t(`${PREFIX}.label.recipients`);
   const source = text(config.zaloFriendSource) || 'manual';
   if (source === 'manual') {
@@ -235,15 +243,16 @@ const describeZaloFriendRequest = (config, lookups, t) => {
   } else {
     lines.push(line(recipientLabel, t(`${PREFIX}.missing.recipientSource`), 'missing'));
   }
+  lines.splice(audienceFrom, lines.length - audienceFrom, ...withRole('audience', lines.slice(audienceFrom)));
   const contentLabel = t(`${PREFIX}.label.requestMessage`);
   if ((text(config.zaloFriendContentMode) || 'manual') === 'template') {
     lines.push(text(config.zaloFriendTemplateId)
-      ? line(contentLabel, templateName(lookups?.zaloTemplates, config.zaloFriendTemplateId, t))
-      : line(contentLabel, t(`${PREFIX}.missing.friendTemplate`), 'missing'));
+      ? line(contentLabel, templateName(lookups?.zaloTemplates, config.zaloFriendTemplateId, t), 'normal', 'content')
+      : line(contentLabel, t(`${PREFIX}.missing.friendTemplate`), 'missing', 'content'));
   } else {
     lines.push(text(config.zaloFriendRequestMessage)
-      ? line(contentLabel, t(`${PREFIX}.typedMessage`, { text: excerpt(config.zaloFriendRequestMessage) }))
-      : line(contentLabel, t(`${PREFIX}.missing.friendMessage`), 'missing'));
+      ? line(contentLabel, t(`${PREFIX}.typedMessage`, { text: excerpt(config.zaloFriendRequestMessage) }), 'normal', 'content')
+      : line(contentLabel, t(`${PREFIX}.missing.friendMessage`), 'missing', 'content'));
   }
   return lines;
 };
@@ -268,9 +277,9 @@ const describeGetAllGroups = (config, lookups, t) => {
   if (resolved && resolved.names.length > 0) {
     lines.push(line(accountLabel, resolved.pool
       ? t(`${PREFIX}.zaloPool`, { n: resolved.names.length, names: joinShown(resolved.names) })
-      : resolved.names[0]));
+      : resolved.names[0], 'normal', 'other'));
   } else if (accountNode) {
-    lines.push(line(accountLabel, t(`${PREFIX}.fromAccountNode`, { node: nodeTitle(accountNode, t) })));
+    lines.push(line(accountLabel, t(`${PREFIX}.fromAccountNode`, { node: nodeTitle(accountNode, t) }), 'normal', 'other'));
   }
   const selection = describeGroupSelection(config, t);
   lines.push(line(t(`${PREFIX}.label.groups`), selection.value, selection.tone));
@@ -279,6 +288,7 @@ const describeGetAllGroups = (config, lookups, t) => {
 
 const describeZaloGroup = (config, lookups, t) => {
   const lines = describeOwnZaloAccount(config, lookups, t);
+  const audienceFrom = lines.length;
   const label = t(`${PREFIX}.label.groups`);
   const source = text(config.zaloGroupSource) || 'manual';
   if (source === 'manual') {
@@ -301,6 +311,7 @@ const describeZaloGroup = (config, lookups, t) => {
   } else {
     lines.push(line(label, t(`${PREFIX}.missing.recipientSource`), 'missing'));
   }
+  lines.splice(audienceFrom, lines.length - audienceFrom, ...withRole('audience', lines.slice(audienceFrom)));
   const steps = Array.isArray(config.zaloGroupTemplateSteps) ? config.zaloGroupTemplateSteps : [];
   if (steps.length > 0) {
     lines.push(...describeTemplateSteps({
@@ -309,9 +320,9 @@ const describeZaloGroup = (config, lookups, t) => {
       scheduled: text(config.zaloGroupSendMode) === 'schedule',
     }, t));
   } else if (text(config.zaloGroupMessage)) {
-    lines.push(line(t(`${PREFIX}.label.content`), t(`${PREFIX}.typedMessage`, { text: excerpt(config.zaloGroupMessage) })));
+    lines.push(line(t(`${PREFIX}.label.content`), t(`${PREFIX}.typedMessage`, { text: excerpt(config.zaloGroupMessage) }), 'normal', 'content'));
   } else {
-    lines.push(line(t(`${PREFIX}.label.step`, { n: 1 }), t(`${PREFIX}.missing.zaloGroupContent`), 'missing'));
+    lines.push(line(t(`${PREFIX}.label.step`, { n: 1 }), t(`${PREFIX}.missing.zaloGroupContent`), 'missing', 'content'));
   }
   return lines;
 };
@@ -326,6 +337,8 @@ const describeGetAllFriends = (config, lookups, t) => {
       resolved && resolved.names.length > 0
         ? (resolved.pool ? t(`${PREFIX}.zaloPool`, { n: resolved.names.length, names: joinShown(resolved.names) }) : resolved.names[0])
         : t(`${PREFIX}.fromAccountNode`, { node: nodeTitle(accountNode, t) }),
+      'normal',
+      'other',
     ));
   }
   const mode = text(config.zaloFriendSelectionMode) || 'all';
@@ -357,20 +370,22 @@ const describeChannelSteps = (config, lookups, t) => {
   const steps = Array.isArray(config.steps) ? config.steps : [];
   const hasContent = (step) => text(step?.templateId) || text(step?.message);
   if (steps.length === 0 || !steps.some(hasContent)) {
-    return [line(t(`${PREFIX}.label.step`, { n: 1 }), t(`${PREFIX}.missing.channelMessage`), 'missing')];
+    return [line(t(`${PREFIX}.label.step`, { n: 1 }), t(`${PREFIX}.missing.channelMessage`), 'missing', 'content')];
   }
   return steps.map((step, index) => {
     const label = t(`${PREFIX}.label.step`, { n: index + 1 });
-    if (!hasContent(step)) return line(label, t(`${PREFIX}.missing.channelMessage`), 'missing');
+    if (!hasContent(step)) return line(label, t(`${PREFIX}.missing.channelMessage`), 'missing', 'content');
     const body = text(step.templateId)
       ? templateName(lookups?.zaloTemplates, step.templateId, t)
       : t(`${PREFIX}.typedMessage`, { text: excerpt(step.message) });
-    return line(label, `${body} · ${describeChannelStepTiming(step, index, t)}`);
+    return line(label, `${body} · ${describeChannelStepTiming(step, index, t)}`, 'normal', 'content');
   });
 };
 
 /** Người nhận Telegram / WhatsApp theo nguồn đã lưu. */
-const describeChannelRecipients = (config, lookups, t, channel) => {
+const describeChannelRecipients = (config, lookups, t, channel) => withRole('audience', [describeChannelRecipientsRaw(config, lookups, t, channel)])[0];
+
+const describeChannelRecipientsRaw = (config, lookups, t, channel) => {
   const label = t(`${PREFIX}.label.recipients`);
   const source = text(config.recipientSource);
   const conversations = `${channel}_conversations`;
@@ -397,8 +412,8 @@ const describeTelegram = (config, lookups, t) => {
   const id = text(config.telegramAccountId);
   const found = (Array.isArray(lookups?.telegramAccounts) ? lookups.telegramAccounts : []).find((item) => sameId(item?.id, id));
   const account = !id
-    ? line(label, t(`${PREFIX}.missing.telegramAccount`), 'missing')
-    : line(label, found ? (text(found.username) ? `${text(found.name)} (@${text(found.username).replace(/^@/, '')})` : text(found.name)) : t(`${PREFIX}.accountById`, { id }));
+    ? line(label, t(`${PREFIX}.missing.telegramAccount`), 'missing', 'sender')
+    : line(label, found ? (text(found.username) ? `${text(found.name)} (@${text(found.username).replace(/^@/, '')})` : text(found.name)) : t(`${PREFIX}.accountById`, { id }), 'normal', 'sender');
   return [account, describeChannelRecipients(config, lookups, t, 'telegram'), ...describeChannelSteps(config, lookups, t)];
 };
 
@@ -407,8 +422,8 @@ const describeWhatsApp = (config, lookups, t) => {
   const key = text(config.whatsappSessionKey);
   const found = (Array.isArray(lookups?.whatsappAccounts) ? lookups.whatsappAccounts : []).find((item) => text(item?.sessionKey) === key);
   const account = !key
-    ? line(label, t(`${PREFIX}.missing.whatsappAccount`), 'missing')
-    : line(label, text(found?.display) || t(`${PREFIX}.accountById`, { id: key }));
+    ? line(label, t(`${PREFIX}.missing.whatsappAccount`), 'missing', 'sender')
+    : line(label, text(found?.display) || t(`${PREFIX}.accountById`, { id: key }), 'normal', 'sender');
   return [account, describeChannelRecipients(config, lookups, t, 'whatsapp'), ...describeChannelSteps(config, lookups, t)];
 };
 
@@ -524,6 +539,23 @@ const describeSaveCustomer = (config, lookups, t) => {
   return lines;
 };
 
+/**
+ * Vai mặc định của dòng KHÔNG ghi `role` riêng: khối nguồn → 'audience', chọn tài khoản → 'sender', khởi chạy → 'timing'.
+ * Test ghim từng phần tử (`describeNodeSettings.spec.js`).
+ */
+export const DEFAULT_ROLE_BY_SUBTYPE = Object.freeze({
+  manual_trigger: 'timing',
+  select_zalo_account: 'sender',
+  read_sheet: 'audience',
+  read_courses_db: 'audience',
+  read_products_db: 'audience',
+  read_interested_customers: 'audience',
+  read_landing_leads: 'audience',
+  read_form_submissions: 'audience',
+  get_all_friends: 'audience',
+  get_all_groups: 'audience',
+});
+
 const DESCRIBERS = Object.freeze({
   manual_trigger: (config, lookups, t) => [line(t(`${PREFIX}.label.start`), t(`${PREFIX}.triggerManual`))],
   send_email: describeEmail,
@@ -552,14 +584,16 @@ const DESCRIBERS = Object.freeze({
  * @param {object} lookups dữ liệu tra tên đã tải: `emailTemplates`, `zaloTemplates`, `emailSettings`, `zaloAccounts`,
  *   `telegramAccounts`, `whatsappAccounts`, `nodes` (mọi khối của chiến dịch, để tra khối nguồn)
  * @param {(key: string, params?: object) => string} t
- * @returns {Array<{ label: string, value: string, tone: 'normal'|'missing' }>} các dòng "Nhãn: giá trị"; khối lạ → một dòng chung
+ * @returns {Array<{ label: string, value: string, tone: 'normal'|'missing', role: 'sender'|'audience'|'content'|'timing'|'other' }>}
+ *   các dòng "Nhãn: giá trị"; khối lạ → một dòng chung
  */
 export function describeNodeSettings(node, lookups, t) {
   const nodeType = text(node?.data?.nodeType || node?.type);
   const config = node?.data?.config && typeof node.data.config === 'object' ? node.data.config : {};
   const describer = Object.prototype.hasOwnProperty.call(DESCRIBERS, nodeType) ? DESCRIBERS[nodeType] : null;
-  if (!describer) return [line(t(`${PREFIX}.label.settings`), t(`${PREFIX}.unknownNode`))];
-  return describer(config, lookups || {}, t);
+  if (!describer) return [{ ...line(t(`${PREFIX}.label.settings`), t(`${PREFIX}.unknownNode`)), role: 'other' }];
+  const fallbackRole = DEFAULT_ROLE_BY_SUBTYPE[nodeType] || 'other';
+  return describer(config, lookups || {}, t).map((item) => ({ ...item, role: item.role || fallbackRole }));
 }
 
 export default describeNodeSettings;

@@ -78,7 +78,7 @@ describe('describeNodeSettings — bảng subtype', () => {
 
   it('subtype lạ → một dòng chung, không ném lỗi', () => {
     const lines = describeNodeSettings(node('mystery_block'), lookups, t);
-    expect(lines).toEqual([{ label: 'Cài đặt', value: 'Bấm Sửa để xem cài đặt', tone: 'normal' }]);
+    expect(lines).toEqual([{ label: 'Cài đặt', value: 'Bấm Sửa để xem cài đặt', tone: 'normal', role: 'other' }]);
     expect(describeNodeSettings(null, lookups, t)).toHaveLength(1);
     // Tên trùng thuộc tính của Object.prototype không được trúng nhánh nào.
     expect(describeNodeSettings(node('constructor'), lookups, t)[0].value).toBe('Bấm Sửa để xem cài đặt');
@@ -420,5 +420,60 @@ describe('describeNodeSettings — nội dung dài và tiếng Anh', () => {
       'Message 1: Chào mừng · send now',
       'Message 2: Nhắc lại · 2 days after the previous message',
     ]);
+  });
+});
+
+/**
+ * Vai (`role`) của TỪNG dòng, theo thứ tự dòng, với config rỗng — checklist "Trước khi chạy" gộp dòng theo vai này,
+ * nên đổi vai một dòng là đổi nghĩa của checklist. Ghim từng phần tử của DESCRIBED_NODE_SUBTYPES.
+ */
+describe('describeNodeSettings — vai (role) của từng dòng', () => {
+  const EXPECTED_ROLES = {
+    manual_trigger: ['timing'],
+    send_email: ['sender', 'audience', 'content'],
+    send_zalo_personal: ['audience', 'content'],
+    send_zalo_friend_request: ['audience', 'content'],
+    send_zalo_group: ['audience', 'content'],
+    send_telegram: ['sender', 'audience', 'content'],
+    send_whatsapp: ['sender', 'audience', 'content'],
+    condition: ['other'],
+    tag_contact: ['other', 'other', 'other'],
+    update_attribute: ['other', 'other'],
+    read_sheet: ['audience'],
+    read_courses_db: ['audience'],
+    read_products_db: ['audience'],
+    read_interested_customers: ['audience', 'audience'],
+    read_landing_leads: ['audience'],
+    read_form_submissions: ['audience'],
+    save_customer: ['other', 'other'],
+    select_zalo_account: ['sender'],
+    get_all_friends: ['audience'],
+    get_all_groups: ['audience'],
+  };
+
+  it('bảng vai phủ đúng mọi subtype đã mô tả', () => {
+    expect(Object.keys(EXPECTED_ROLES).sort()).toEqual([...DESCRIBED_NODE_SUBTYPES].sort());
+  });
+
+  it.each(DESCRIBED_NODE_SUBTYPES)('%s → vai từng dòng khớp bảng', (subtype) => {
+    const roles = describeNodeSettings(node(subtype), lookups, t).map((item) => item.role);
+    expect(roles).toEqual(EXPECTED_ROLES[subtype]);
+  });
+
+  it('dòng nguồn người nhận của Telegram / WhatsApp là audience, tin là content, tài khoản là sender', () => {
+    const tg = describeNodeSettings(node('send_telegram', { telegramAccountId: 4, recipientSource: 'telegram_groups', recipientKeys: ['a'], steps: [{ message: 'xin chào' }] }), lookups, t);
+    expect(tg.map((item) => [item.label, item.role])).toEqual([
+      [expect.stringContaining('Telegram'), 'sender'],
+      ['Gửi cho', 'audience'],
+      ['Tin 1', 'content'],
+    ]);
+  });
+
+  it('mọi dòng của mọi subtype đều có role hợp lệ', () => {
+    DESCRIBED_NODE_SUBTYPES.forEach((subtype) => {
+      describeNodeSettings(node(subtype), lookups, t).forEach((item) => {
+        expect(['sender', 'audience', 'content', 'timing', 'other']).toContain(item.role);
+      });
+    });
   });
 });
