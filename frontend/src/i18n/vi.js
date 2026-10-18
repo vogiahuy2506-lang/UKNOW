@@ -8879,6 +8879,10 @@ export default {
     actions: 'Hành động (Actions)',
     data: 'Dữ liệu (Data)',
     logic: 'Xử lý (Logic)',
+    comingSoon: {
+      badge: 'Sắp có',
+      tip: 'Khối này sắp có — hệ thống chưa chạy được khi gửi thật nên chưa kéo vào sơ đồ được. Chiến dịch cũ đã có khối này vẫn giữ nguyên.',
+    },
     zalo: 'Zalo (Tài khoản & Nhóm)',
     paletteOrderHint: 'Số ở đầu mỗi node là thứ tự thực thi gợi ý. Email: Triggers → Data → Logic → Actions. Zalo: Triggers → Zalo → Data → Logic → Actions.',
     properties: 'Thuộc tính',

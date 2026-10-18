@@ -22,6 +22,7 @@ import { nodeConfigs } from './CampaignBuilderFlowNodes';
 import { Link } from 'react-router-dom';
 import { formatCampaignDateTime } from '../utils/campaignDateTime.helpers';
 import { getRunPauseI18nKey } from '../utils/campaignQuotaPause.helpers';
+import { isComingSoonNodeType } from '../utils/comingSoonNodes';
 
 /**
  * Số thứ tự cho mỗi node trên palette, đánh theo thứ tự thực thi gợi ý:
@@ -112,6 +113,24 @@ const NodePaletteItem = ({ node, orderIndex, onDragStart, lockedChannel = null, 
       </span>
     </>
   );
+
+  // Khối máy chủ chưa chạy thật (Điều kiện, Cập nhật thông tin): thẻ mờ nhãn "Sắp có", KHÔNG kéo thả được, không có hành động bấm.
+  if (isComingSoonNodeType(node.type)) {
+    return (
+      <div
+        aria-disabled="true"
+        data-testid={`palette-node-${node.type}`}
+        data-coming-soon="true"
+        title={t('campaignBuilder.comingSoon.tip')}
+        className="flex cursor-not-allowed items-center gap-2 rounded-lg px-2.5 py-1.5 opacity-60 sm:gap-2.5 sm:px-3 sm:py-2"
+      >
+        {body}
+        <span className="ml-auto shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-950/60 dark:text-amber-300" data-testid={`palette-coming-soon-${node.type}`}>
+          {t('campaignBuilder.comingSoon.badge')}
+        </span>
+      </div>
+    );
+  }
 
   // Bước của kênh chưa dùng được (11/10/2026, PLAN_KENH_KHONG_AN_KHOA_VA_GOI_Y_MUA): vẫn hiện nhưng mờ + khoá, KHÔNG kéo thả
   // được (không `draggable`), bấm mở modal giải thích + gợi ý mua. Chiến dịch cũ đã có node này trên canvas giữ nguyên.

@@ -8868,6 +8868,10 @@ export default {
     actions: 'Actions',
     data: 'Data',
     logic: 'Logic',
+    comingSoon: {
+      badge: 'Coming soon',
+      tip: 'This block is coming soon — the system cannot run it for real yet, so it cannot be dragged into the flow. Campaigns that already have it keep it.',
+    },
     zalo: 'Zalo (Accounts & Groups)',
     paletteOrderHint: 'The number on each node is the suggested execution order. Email: Triggers → Data → Logic → Actions. Zalo: Triggers → Zalo → Data → Logic → Actions.',
     properties: 'Properties',

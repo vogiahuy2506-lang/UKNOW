@@ -61,6 +61,25 @@ function renderPalette(props = {}) {
   return { onDragStart, onLockedNodeClick };
 }
 
+describe('CampaignBuilderPageLayout — khối "Sắp có" trên bảng khối (PLAN_TAG_KHACH_HANG PR-T2)', () => {
+  it('Điều kiện + Cập nhật thông tin: thẻ mờ nhãn "Sắp có", KHÔNG draggable, có title giải thích; Gắn tag kéo thả bình thường', () => {
+    const { onDragStart } = renderPalette({ lockedNodeChannels: {} });
+    for (const type of ['condition', 'update_attribute']) {
+      const item = screen.getByTestId(`palette-node-${type}`);
+      expect(item).toHaveAttribute('data-coming-soon', 'true');
+      expect(item).toHaveAttribute('aria-disabled', 'true');
+      expect(item).not.toHaveAttribute('draggable');
+      expect(item.getAttribute('title')).toMatch(/sắp có/i);
+      expect(screen.getByTestId(`palette-coming-soon-${type}`)).toHaveTextContent('Sắp có');
+      fireEvent.dragStart(item);
+    }
+    expect(onDragStart).not.toHaveBeenCalled();
+    const tag = screen.getByTestId('palette-node-tag_contact');
+    expect(tag).toHaveAttribute('draggable', 'true');
+    expect(tag).not.toHaveAttribute('data-coming-soon');
+  });
+});
+
 describe('CampaignBuilderPageLayout — bước của kênh bị khoá trên palette', () => {
   it('không khoá gì: mọi bước kéo thả được (draggable), không có aria-disabled', () => {
     renderPalette({ lockedNodeChannels: {} });
