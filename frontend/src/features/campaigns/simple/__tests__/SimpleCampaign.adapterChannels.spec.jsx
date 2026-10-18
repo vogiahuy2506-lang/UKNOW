@@ -189,7 +189,8 @@ describe('bước Kênh — thẻ Telegram / WhatsApp', () => {
     renderPage();
     fireEvent.click(await screen.findByTestId('simple-channel-telegram'));
     const account = await screen.findByTestId('simple-sender-5');
-    expect(within(account).getByRole('button', { pressed: true })).toHaveTextContent('Shop Telegram');
+    // Tự chọn tài khoản duy nhất chạy ở effect SAU lượt vẽ danh sách → chờ như ca WhatsApp (máy tải nặng thì lệch một nhịp, ca đỏ giả).
+    await waitFor(() => expect(within(account).getByRole('button', { pressed: true })).toHaveTextContent('Shop Telegram'));
     expect(within(account).getByText('@shop_tg')).toBeInTheDocument();
     expect(screen.getByTestId('simple-sender-conversations-5')).toHaveTextContent('12 người đã nhắn');
     expect(campaignBuilderApiService.getTelegramAccountsForBuilder).toHaveBeenCalledTimes(1);
