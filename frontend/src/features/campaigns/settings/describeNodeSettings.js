@@ -91,16 +91,33 @@ const describeTiming = ({ index, scheduled, delayValue, delayUnit, delayFrom }, 
   return t(delayFrom === 'prev' ? `${PREFIX}.timing.afterPrev` : `${PREFIX}.timing.afterFirst`, { wait });
 };
 
-/** Tài khoản email gửi: "Tên (địa chỉ)". */
+const emailAccountText = (account) => {
+  const name = text(account?.name);
+  const email = text(account?.email);
+  return name && email ? `${name} (${email})` : (email || name);
+};
+
+/**
+ * Tài khoản email gửi: "Tên (địa chỉ)".
+ * `fromEmailId` trống: lúc CHẠY THẬT backend tự dùng tài khoản mặc định (`findDefaultEmailSettings`: tài khoản đang hoạt động có
+ * id nhỏ nhất) nên KHÔNG phải thiếu — nếu danh sách tài khoản đang hoạt động có phần tử thì tóm tắt "Tài khoản mặc định: …"
+ * (gần đúng: trình duyệt không biết tài khoản bị khoá do nạp tiền). Danh sách rỗng → vẫn là dòng thiếu.
+ * Chạy thử trên Sơ đồ khối thì KHÔNG tự lấy mặc định (POST /email-settings/send-email đòi `fromEmailId` hợp lệ).
+ */
 const describeEmailSender = (config, lookups, t) => {
   const label = t(`${PREFIX}.label.sender`);
   const id = text(config.fromEmailId);
-  if (!id) return line(label, t(`${PREFIX}.missing.emailSender`), 'missing', 'sender');
-  const found = (Array.isArray(lookups?.emailSettings) ? lookups.emailSettings : []).find((item) => sameId(item?.id, id));
+  const accounts = Array.isArray(lookups?.emailSettings) ? lookups.emailSettings : [];
+  if (!id) {
+    const fallback = accounts
+      .filter((item) => Number.isFinite(Number(item?.id)))
+      .sort((a, b) => Number(a.id) - Number(b.id))[0];
+    if (!fallback) return line(label, t(`${PREFIX}.missing.emailSender`), 'missing', 'sender');
+    return line(label, t(`${PREFIX}.defaultEmailSender`, { sender: emailAccountText(fallback) }), 'normal', 'sender');
+  }
+  const found = accounts.find((item) => sameId(item?.id, id));
   if (!found) return line(label, t(`${PREFIX}.accountById`, { id }), 'normal', 'sender');
-  const name = text(found.name);
-  const email = text(found.email);
-  return line(label, name && email ? `${name} (${email})` : (email || name), 'normal', 'sender');
+  return line(label, emailAccountText(found), 'normal', 'sender');
 };
 
 /** "Dữ liệu từ khối “X”, cột “Y”" — khối/cột thiếu thì thành dòng đỏ. */

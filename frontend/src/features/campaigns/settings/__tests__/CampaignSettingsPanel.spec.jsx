@@ -101,7 +101,7 @@ describe('CampaignSettingsPanel — danh sách khối', () => {
   });
 
   it('thiếu bắt buộc → dòng đỏ "Chưa chọn …"', () => {
-    renderPanel({ nodes: [node('mail', 'send_email', {}, 'Gửi thư')], edges: [] });
+    renderPanel({ emailSettings: [], nodes: [node('mail', 'send_email', {}, 'Gửi thư')], edges: [] });
     const missing = screen.getAllByTestId('settings-line').filter((line) => line.getAttribute('data-tone') === 'missing');
     expect(missing.map((line) => line.textContent)).toEqual([
       'Gửi từChưa chọn tài khoản gửi email',
@@ -109,6 +109,13 @@ describe('CampaignSettingsPanel — danh sách khối', () => {
       'Tin 1Chưa chọn mẫu email',
     ]);
     expect(within(missing[0]).getByText('Chưa chọn tài khoản gửi email').className).toContain('text-rose-600');
+  });
+
+  it('email trống tài khoản gửi nhưng có tài khoản mặc định → dòng thường "Tài khoản mặc định", checklist Gửi từ ✓', () => {
+    renderPanel({ nodes: [node('mail', 'send_email', { recipientSource: 'manual', recipientEmails: 'a@x.vn', emailSteps: [{ templateId: 7 }] }, 'Gửi thư')], edges: [] });
+    expect(screen.getByTestId('settings-checklist-row-sender').getAttribute('data-status')).toBe('ok');
+    expect(screen.getByTestId('settings-checklist-summary-sender')).toHaveTextContent('Tài khoản mặc định: CSKH (cskh@abc.vn)');
+    expect(screen.getByTestId('settings-checklist-summary')).toHaveTextContent('Sẵn sàng chạy');
   });
 
   it('nhánh điều kiện ghi nhãn nhánh + tên khối điều kiện', () => {
@@ -410,7 +417,7 @@ describe('CampaignSettingsPanel — checklist "Trước khi chạy"', () => {
   });
 
   it('thiếu → đếm "Còn N mục", dòng ⚠ đỏ, thẻ khối thiếu có nhãn "Còn thiếu"', () => {
-    renderPanel({ nodes: [node('start', 'manual_trigger', {}, 'Khởi chạy', 'start'), node('mail', 'send_email', {}, 'Gửi thư')], edges: [edge('start', 'mail')] });
+    renderPanel({ emailSettings: [], nodes: [node('start', 'manual_trigger', {}, 'Khởi chạy', 'start'), node('mail', 'send_email', {}, 'Gửi thư')], edges: [edge('start', 'mail')] });
     expect(screen.getByTestId('settings-checklist-summary')).toHaveTextContent('Còn 3 mục cần điền trước khi chạy');
     expect(screen.getByTestId('settings-checklist-row-sender').getAttribute('data-status')).toBe('missing');
     expect(screen.getByTestId('settings-checklist-summary-sender').className).toContain('text-rose-600');

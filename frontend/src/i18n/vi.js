@@ -2050,6 +2050,7 @@ export default {
     edit: 'Sửa',
     branch: 'Nhánh “{label}” của “{node}”',
     accountById: 'Tài khoản #{id}',
+    defaultEmailSender: 'Tài khoản mặc định: {sender}',
     templateById: 'Mẫu #{id}',
     fromNode: 'Từ khối “{node}”, cột “{field}”',
     fromNodeOnly: 'Từ khối “{node}”',

@@ -151,7 +151,7 @@ const OverviewCard = ({
   const typeMeta = getCampaignTypeMeta(campaignType);
   const statusKey = campaignStatus === 'active' ? 'active' : campaignStatus === 'paused' ? 'paused' : 'draft';
   return (
-    <section className={`${CARD} p-4 sm:p-5 lg:sticky lg:top-0`} data-testid="settings-overview">
+    <section className={`${CARD} order-2 p-4 sm:p-5 lg:order-none lg:sticky lg:top-0`} data-testid="settings-overview">
       <h2 className="text-base font-bold text-gray-900 dark:text-dk-text">{t('campaignSettings.overview')}</h2>
       <dl className="mt-3 grid grid-cols-1 gap-x-4 gap-y-1 text-sm sm:grid-cols-[7rem_minmax(0,1fr)] sm:gap-y-2">
         <dt className={MUTED}>{t('campaignSettings.label.name')}</dt>
@@ -374,7 +374,7 @@ const NodeCard = ({
 const Checklist = ({ rows, canEdit, canOpenSchedule, onEditRow, onOpenSchedule, t }) => {
   const missingCount = rows.filter((row) => row.status === 'missing').length;
   return (
-    <section className={`${CARD} p-4 sm:p-5`} data-testid="settings-checklist" data-missing-count={missingCount} aria-label={t('campaignSettings.checklist.title')}>
+    <section className={`${CARD} order-1 min-w-0 p-4 sm:p-5 lg:order-none`} data-testid="settings-checklist" data-missing-count={missingCount} aria-label={t('campaignSettings.checklist.title')}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <h2 className="text-base font-bold text-gray-900 dark:text-dk-text">{t('campaignSettings.checklist.title')}</h2>
         <p
@@ -615,7 +615,9 @@ export default function CampaignSettingsPanel({
           t={t}
         />
 
-        <div className="min-w-0 space-y-4">
+        {/* <lg: wrapper `contents` → Checklist, Tổng quan, Các khối là ba ô của cùng một lưới, xếp bằng `order` (Checklist lên đầu);
+            ≥lg: cột phải như cũ (Checklist + các khối), Tổng quan nằm cột trái. Checklist chỉ render MỘT lần. */}
+        <div className="contents lg:block lg:min-w-0 lg:space-y-4">
         <Checklist
           rows={checklist}
           canEdit={canEdit}
@@ -624,6 +626,7 @@ export default function CampaignSettingsPanel({
           onOpenSchedule={onOpenSchedule}
           t={t}
         />
+        <div className="order-3 min-w-0 space-y-4 lg:order-none">
         {!hasCards ? (
           <section className={`${CARD} flex flex-col items-center gap-3 px-4 py-10 text-center`} data-testid="settings-empty">
             <HiOutlineViewGrid className={`h-10 w-10 ${MUTED}`} aria-hidden="true" />
@@ -656,6 +659,7 @@ export default function CampaignSettingsPanel({
             )}
           </>
         )}
+        </div>
         </div>
         <ConfirmModal
           isOpen={Boolean(pendingEditId)}

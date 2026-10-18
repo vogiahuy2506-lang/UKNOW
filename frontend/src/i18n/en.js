@@ -2045,6 +2045,7 @@ export default {
     edit: 'Edit',
     branch: 'Branch “{label}” of “{node}”',
     accountById: 'Account #{id}',
+    defaultEmailSender: 'Default account: {sender}',
     templateById: 'Template #{id}',
     fromNode: 'From block “{node}”, column “{field}”',
     fromNodeOnly: 'From block “{node}”',

@@ -145,14 +145,26 @@ describe('describeNodeSettings — email', () => {
     expect(lines[1]).toBe('Gửi cho: 3 email nhập tay');
   });
 
-  it('thiếu bắt buộc → dòng đỏ "Chưa chọn …" cho tài khoản gửi, nguồn người nhận và mẫu', () => {
+  it('thiếu bắt buộc → dòng đỏ "Chưa chọn …" cho nguồn người nhận và mẫu; tài khoản gửi trống nhưng có tài khoản đang hoạt động → "mặc định" (runtime tự dùng)', () => {
     const empty = node('send_email', {});
     expect(text(empty)).toEqual([
-      'Gửi từ: Chưa chọn tài khoản gửi email',
+      'Gửi từ: Tài khoản mặc định: CSKH (cskh@abc.vn)',
       'Gửi cho: Chưa chọn nguồn người nhận',
       'Tin 1: Chưa chọn mẫu email',
     ]);
-    expect(tones(empty)).toEqual(['missing', 'missing', 'missing']);
+    expect(tones(empty)).toEqual(['normal', 'missing', 'missing']);
+  });
+
+  it('fromEmailId trống: lấy tài khoản có id SỐ nhỏ nhất (như findDefaultEmailSettings), không theo thứ tự mảng', () => {
+    const accounts = [{ id: 10, name: 'Mười', email: 'm@x.vn' }, { id: 2, name: 'Hai', email: 'h@x.vn' }, { id: 7, name: 'Bảy', email: 'b@x.vn' }];
+    const lines = describeNodeSettings(node('send_email', {}), { ...lookups, emailSettings: accounts }, t);
+    expect(lines[0]).toMatchObject({ value: 'Tài khoản mặc định: Hai (h@x.vn)', tone: 'normal', role: 'sender' });
+  });
+
+  it('fromEmailId trống và KHÔNG có tài khoản đang hoạt động nào → vẫn là dòng thiếu', () => {
+    const lines = describeNodeSettings(node('send_email', {}), { ...lookups, emailSettings: [] }, t);
+    expect(lines[0]).toMatchObject({ value: 'Chưa chọn tài khoản gửi email', tone: 'missing', role: 'sender' });
+    expect(describeNodeSettings(node('send_email', {}), { ...lookups, emailSettings: undefined }, t)[0].tone).toBe('missing');
   });
 
   it('một tin thiếu mẫu → chỉ dòng của tin đó đỏ; khối nguồn bị xoá → đỏ', () => {

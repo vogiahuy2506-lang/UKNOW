@@ -48,14 +48,18 @@ describe('buildSettingsChecklist', () => {
     expect(rows[2].summary).toContain('Chào mừng');
   });
 
-  it('email thiếu tài khoản + mẫu → ⚠ ở Gửi từ và Nội dung, Gửi cho vẫn ✓', () => {
+  it('email trống tài khoản gửi: có tài khoản đang hoạt động → Gửi từ ✓ "mặc định"; danh sách rỗng → ⚠. Thiếu mẫu → Nội dung ⚠', () => {
     const nodes = [
       node('start', 'manual_trigger'),
       node('mail', 'send_email', { recipientSource: 'manual', recipientEmails: 'a@b.vn', emailSteps: [{ templateId: '' }] }),
     ];
-    const rows = run(nodes, chain('start', 'mail'));
-    expect(statuses(rows)).toEqual({ sender: 'missing', audience: 'ok', content: 'missing', timing: 'ok' });
-    expect(rows[0].targetNodeId).toBe('mail');
+    const withDefault = run(nodes, chain('start', 'mail'));
+    expect(statuses(withDefault)).toEqual({ sender: 'ok', audience: 'ok', content: 'missing', timing: 'ok' });
+    expect(withDefault[0].summary).toBe('Tài khoản mặc định: CSKH (cskh@abc.vn)');
+
+    const noAccounts = buildSettingsChecklist(nodes, chain('start', 'mail'), { ...lookups, emailSettings: [] }, t);
+    expect(statuses(noAccounts)).toEqual({ sender: 'missing', audience: 'ok', content: 'missing', timing: 'ok' });
+    expect(noAccounts[0].targetNodeId).toBe('mail');
   });
 
   it('Sửa trỏ khối giữ dòng thiếu ĐẦU TIÊN của vai (không phải khối đầu tiên của vai)', () => {
