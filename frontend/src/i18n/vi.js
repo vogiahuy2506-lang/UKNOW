@@ -6263,7 +6263,7 @@ export default {
     suggestedAndSystemVariables: 'Biến hệ thống & gợi ý',
     searchVariables: 'Tìm kiếm biến...',
     insertedVariable: 'Đã chèn {key}',
-    variableInsertionTip: 'Gõ {{ hoặc bấm vào mục ở cột bên phải để chèn tên, email, số điện thoại của khách vào ô bạn đang soạn.',
+    variableInsertionTip: 'Gõ {{ hoặc bấm vào mục trong khung “Chèn thông tin khách” để chèn tên, email, số điện thoại của khách vào ô bạn đang soạn.',
     insertCustomerInfo: 'Chèn thông tin khách',
     insertCustomerInfoHint: 'Bấm để chèn vào ô bạn đang soạn (tiêu đề hoặc nội dung). Khi gửi, hệ thống tự thay bằng thông tin của từng người nhận.',
     usedInTemplate: 'Đang dùng trong mẫu',

@@ -6250,7 +6250,7 @@ export default {
     suggestedAndSystemVariables: 'System & Suggested Variables',
     searchVariables: 'Search variables...',
     insertedVariable: 'Inserted {key}',
-    variableInsertionTip: 'Type {{ or click an item in the right-hand panel to insert the customer\'s name, email or phone into the field you are editing.',
+    variableInsertionTip: 'Type {{ or click an item in the “Insert customer info” panel to insert the customer\'s name, email or phone into the field you are editing.',
     insertCustomerInfo: 'Insert customer info',
     insertCustomerInfoHint: 'Click to insert into the field you are editing (subject or content). When sending, each recipient\'s own details replace it.',
     usedInTemplate: 'Used in this template',
