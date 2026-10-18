@@ -2044,7 +2044,7 @@ export default {
       stay: 'Tiếp tục sửa',
     },
     blocksTitle: 'Các khối theo thứ tự chạy',
-    blocksHint: 'Bấm Sửa để đổi cài đặt của một khối. Thay đổi hiện ngay ở Sơ đồ khối — nhớ bấm Lưu.',
+    blocksHint: 'Bấm Sửa để đổi cài đặt ngay tại thẻ. Bấm Lưu ở thẻ là chiến dịch được lưu luôn.',
     unconnectedTitle: 'Chưa nối vào luồng',
     unconnectedHint: 'Các khối này chưa nối từ khối Khởi chạy nên sẽ không chạy. Hãy nối chúng ở Sơ đồ khối.',
     edit: 'Sửa',

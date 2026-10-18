@@ -136,7 +136,9 @@ describe('CampaignSettingsPanel — danh sách khối', () => {
       nodes: [node('acc', 'select_zalo_account', { zaloAccountId: '5' }, 'Chọn tài khoản')],
       edges: [],
     });
-    expect(screen.getByText('Shop Hoa')).toBeInTheDocument();
+    // Một lần ở thẻ khối, một lần ở dòng "Gửi từ" của checklist.
+    expect(within(screen.getByTestId('settings-node-card')).getByText('Shop Hoa')).toBeInTheDocument();
+    expect(screen.getByTestId('settings-checklist-summary-sender')).toHaveTextContent('Shop Hoa');
   });
 });
 

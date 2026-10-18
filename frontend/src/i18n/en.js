@@ -2039,7 +2039,7 @@ export default {
       stay: 'Keep editing',
     },
     blocksTitle: 'Blocks in run order',
-    blocksHint: 'Press Edit to change a block. The change shows in the Flow diagram right away — remember to Save.',
+    blocksHint: 'Press Edit to change a block right in its card. Pressing Save in the card saves the campaign too.',
     unconnectedTitle: 'Not connected to the flow',
     unconnectedHint: 'These blocks are not connected from the Start block, so they will not run. Connect them in the Flow diagram.',
     edit: 'Edit',

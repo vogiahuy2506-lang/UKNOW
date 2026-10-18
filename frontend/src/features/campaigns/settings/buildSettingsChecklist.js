@@ -33,10 +33,12 @@ export function buildSettingsChecklist(nodes, edges, lookups, t, extras = {}) {
     });
   });
 
-  const summarize = (entries) => {
+  // Dòng Gửi từ / Gửi cho ai đã có tiêu đề ở checklist → chỉ in giá trị; Nội dung giữ nhãn "Tin N" để biết tin nào.
+  const textOf = (key, item) => (key === 'content' ? `${item.label}: ${item.value}` : item.value);
+  const summarize = (key, entries) => {
     const texts = [];
     entries.forEach(({ item }) => {
-      const textValue = `${item.label}: ${item.value}`;
+      const textValue = textOf(key, item);
       if (!texts.includes(textValue)) texts.push(textValue);
     });
     const rest = texts.length - MAX_SHOWN;
@@ -53,11 +55,11 @@ export function buildSettingsChecklist(nodes, edges, lookups, t, extras = {}) {
       return {
         key,
         status: 'missing',
-        summary: `${firstMissing.item.label}: ${firstMissing.item.value}`,
+        summary: textOf(key, firstMissing.item),
         targetNodeId: String(firstMissing.node.id),
       };
     }
-    return { key, status: 'ok', summary: summarize(entries), targetNodeId: String(entries[0].node.id) };
+    return { key, status: 'ok', summary: summarize(key, entries), targetNodeId: String(entries[0].node.id) };
   });
 
   rows.push({

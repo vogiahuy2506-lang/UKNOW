@@ -333,6 +333,8 @@ const NodeCard = ({
       </div>
       {isEditing ? (
         <div className="mt-3 min-w-0 overflow-x-auto border-t border-gray-100 dark:border-dk-border" data-testid="settings-inline-form">
+          {/* Form email/Zalo có cột mục lục w-64 bên trái: ở màn hẹp cho cuộn ngang TRONG thẻ thay vì ép nội dung còn ~60px. */}
+          <div className="min-w-[34rem] md:min-w-0">
           <NodeConfigForm
             key={node.id}
             variant="inline"
@@ -350,6 +352,7 @@ const NodeCard = ({
             onCancel={onCancelEdit}
             onFormChange={onFormChange}
           />
+          </div>
         </div>
       ) : (
       <dl className="mt-3 space-y-1.5 border-t border-gray-100 pt-3 text-sm dark:border-dk-border">
