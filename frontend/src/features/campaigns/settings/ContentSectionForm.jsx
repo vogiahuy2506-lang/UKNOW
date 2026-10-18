@@ -21,7 +21,7 @@ const withKey = (step) => {
   return { ...step, key: `content-step-${stepKeySeq}` };
 };
 
-const stripKey = ({ key, ...step }) => step; // eslint-disable-line no-unused-vars
+const stripKey = ({ key, ...step }) => step;
 
 /**
  * Biểu mẫu mục "Nội dung" của MỘT khối gửi: danh sách tin (tối đa theo kênh), mỗi tin chọn mẫu có sẵn (ô chọn mẫu của trình từng bước) hoặc

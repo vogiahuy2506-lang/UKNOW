@@ -176,6 +176,21 @@ const CAMPAIGN_WITH_MAIL = {
   connections: [{ sourceNodeId: 'start', targetNodeId: 'mail' }],
 };
 
+// Email lưu kiểu cũ (`emailTemplateId`, không có bước): mục Nội dung KHÔNG sửa nhanh được → chỉ còn "Cài đặt nâng cao" mở hộp cài đặt của khối.
+const CAMPAIGN_WITH_LEGACY_MAIL = {
+  ...CAMPAIGN_WITH_MAIL,
+  nodes: [
+    CAMPAIGN_WITH_MAIL.nodes[0],
+    { tempId: 'mail', nodeSubtype: 'send_email', nodeName: 'Gửi thư', config: { emailTemplateId: 7 } },
+  ],
+};
+const openMailModal = async () => {
+  mockGetCampaignById.mockResolvedValue({ data: { data: CAMPAIGN_WITH_LEGACY_MAIL } });
+  renderBuilder('/app/campaigns/391');
+  await waitForLoaded();
+  fireEvent.click(await screen.findByTestId('settings-content-advanced-mail'));
+};
+
 const LocationProbe = () => {
   const location = useLocation();
   return <span data-testid="location">{`${location.pathname}${location.search}`}</span>;
@@ -265,19 +280,15 @@ describe('CampaignBuilder — hai tab Thiết lập | Sơ đồ khối', () => {
     expect(screen.getByTestId('is-dirty')).toHaveTextContent('true');
   });
 
-  it('Sửa ở mục Nội dung mở HỘP cài đặt của khối gửi (hộp của Sơ đồ khối, không phải form nhúng) và không đụng hộp của trình dựng', async () => {
-    renderBuilder('/app/campaigns/391');
-    await waitForLoaded();
-    fireEvent.click(await screen.findByTestId('settings-content-edit-mail'));
+  it('Cài đặt nâng cao của mục Nội dung (nội dung lưu kiểu cũ) mở HỘP cài đặt của khối gửi (hộp của Sơ đồ khối, không phải form nhúng) và không đụng hộp của trình dựng', async () => {
+    await openMailModal();
     expect(screen.getByTestId('config-open')).toHaveTextContent('false');
     expect(screen.getByTestId('form-stub')).toBeInTheDocument();
     expect(screen.queryByTestId('settings-node-card')).not.toBeInTheDocument();
   });
 
   it('Lưu trong hộp cài đặt = áp + lưu chiến dịch: updateCampaign nhận config MỚI (không phải cũ), "Chưa lưu" về false, Sơ đồ khối thấy giá trị mới', async () => {
-    renderBuilder('/app/campaigns/391');
-    await waitForLoaded();
-    fireEvent.click(await screen.findByTestId('settings-content-edit-mail'));
+    await openMailModal();
     fireEvent.change(screen.getByTestId('stub-input'), { target: { value: 'Thư đã đổi tên' } });
     fireEvent.click(screen.getByTestId('stub-save'));
 
@@ -300,9 +311,7 @@ describe('CampaignBuilder — hai tab Thiết lập | Sơ đồ khối', () => {
 
   it('Lưu thất bại (mạng / 500) → thay đổi vẫn áp cục bộ, thanh vẫn "Chưa lưu", hộp đóng', async () => {
     mockUpdateCampaign.mockRejectedValue(Object.assign(new Error('boom'), { response: { status: 500, data: { message: 'Lỗi máy chủ' } } }));
-    renderBuilder('/app/campaigns/391');
-    await waitForLoaded();
-    fireEvent.click(await screen.findByTestId('settings-content-edit-mail'));
+    await openMailModal();
     fireEvent.change(screen.getByTestId('stub-input'), { target: { value: 'Thư lưu lỗi' } });
     fireEvent.click(screen.getByTestId('stub-save'));
 
@@ -313,9 +322,7 @@ describe('CampaignBuilder — hai tab Thiết lập | Sơ đồ khối', () => {
   });
 
   it('Lưu trong hộp khi form không đổi → đóng hộp, KHÔNG gọi API', async () => {
-    renderBuilder('/app/campaigns/391');
-    await waitForLoaded();
-    fireEvent.click(await screen.findByTestId('settings-content-edit-mail'));
+    await openMailModal();
     fireEvent.click(screen.getByTestId('stub-save'));
     await waitFor(() => expect(screen.queryByTestId('form-stub')).not.toBeInTheDocument());
     expect(mockUpdateCampaign).not.toHaveBeenCalled();

@@ -81,12 +81,10 @@ export async function resolveCustomSteps({ value, campaignName = '', fallbackNam
         && (step.needsTemplate || contentSignature(step.content) !== step.origSignature);
       if (!needs) {
         steps.push(step);
-        // eslint-disable-next-line no-continue
         continue;
       }
       const name = `${base ? `${base} – ` : ''}${messageLabel} ${index + 1}`.slice(0, TEMPLATE_NAME_MAX);
       const body = String(step.content.body || '').trim();
-      // eslint-disable-next-line no-await-in-loop
       const response = channel === 'email'
         ? await services.email.createTemplate({
           templateName: name,
