@@ -1,12 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import toast from 'react-hot-toast';
 import {
   HiOutlineCalendar,
   HiOutlineCheckCircle,
   HiOutlineClock,
   HiOutlineExclamation,
   HiOutlinePencil,
+  HiOutlinePlus,
+  HiOutlineRefresh,
+  HiOutlineTrash,
   HiOutlineViewGrid,
+  HiOutlineX,
 } from 'react-icons/hi';
+import FullScreenOverlay from '../../../components/FullScreenOverlay';
 import { useI18n } from '../../../i18n';
 import { getCampaignTypeMeta } from '../../../utils/campaignTypeDisplay';
 import { getAllNodeConfigs } from '../components/CampaignBuilderFlowNodes';
@@ -14,6 +20,10 @@ import CampaignEstimatePanel from '../components/CampaignEstimatePanel';
 import { ConfirmModal } from '../components/CampaignBuilderLayout';
 import NodeConfigForm from '../components/NodeConfigForm';
 import { isNodeConfigFormUnchanged } from '../utils/nodeConfigUnchanged';
+import { getAllowedDataNodeTypesByCampaignType } from '../utils/campaignBuilderFlow';
+import SimpleChoiceCard from '../simple/SimpleChoiceCard';
+import { AUDIENCE_CARDS } from '../simple/audienceCards';
+import { AUDIENCE_TYPES_BY_CHANNEL } from '../simple/simpleCampaign.helpers';
 import useCampaignEstimate from '../hooks/useCampaignEstimate';
 import { buildEstimateView, describeEstimateDuration, formatEstimateDateTime } from '../utils/campaignEstimate.helpers';
 import { formatCampaignDateTime } from '../utils/campaignDateTime.helpers';
@@ -24,6 +34,21 @@ import { formatVnDayMonthTime, formatVnResumeTime, getWaitReasonI18nKey } from '
 import useCampaignLatestRun from './useCampaignLatestRun';
 import useRunRemainingEstimate from './useRunRemainingEstimate';
 import useSettingsAccountLookups from './useSettingsAccountLookups';
+import {
+  AUDIENCE_SOURCE_SUBTYPE,
+  SIDE_STEP_SUBTYPES,
+  SWAPPABLE_SOURCE_SUBTYPES,
+  analyzeSettingsGraph,
+  appendSideStep,
+  buildSettingsSkeleton,
+  classifyAudienceChange,
+  findChainRoles,
+  getSendSubtypeFor,
+  getSkeletonAudienceTypes,
+  removeSideStep,
+  replaceAudienceSource,
+  resolveCampaignChannel,
+} from './settingsGraph';
 
 const CARD = 'rounded-xl border border-gray-200 bg-white shadow-sm dark:border-dk-border dark:bg-dk-surface';
 const MUTED = 'text-gray-500 dark:text-dk-text2';
@@ -266,6 +291,7 @@ const NodeCard = ({
   formProps,
   cardRef,
   nodeTitleOf,
+  structure,
   t,
   locale,
 }) => {
@@ -355,6 +381,7 @@ const NodeCard = ({
           </div>
         </div>
       ) : (
+      <>
       <dl className="mt-3 space-y-1.5 border-t border-gray-100 pt-3 text-sm dark:border-dk-border">
         {lines.map((item, index) => (
           <div key={`${item.label}-${index}`} className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:gap-3" data-testid="settings-line" data-tone={item.tone}>
@@ -365,6 +392,37 @@ const NodeCard = ({
           </div>
         ))}
       </dl>
+      {structure && (structure.changeSource || structure.remove) && (
+        <div className="mt-3 flex flex-wrap gap-2 border-t border-gray-100 pt-3 dark:border-dk-border">
+          {structure.changeSource && (
+            <button
+              type="button"
+              onClick={() => structure.changeSource.onClick(node.id)}
+              disabled={structure.changeSource.disabled}
+              title={structure.changeSource.title}
+              data-testid={`settings-change-source-${node.id}`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent dark:border-dk-border dark:text-dk-text dark:hover:bg-dk-raised"
+            >
+              <HiOutlineRefresh className="h-4 w-4" aria-hidden="true" />
+              {t('campaignSettings.changeSource.button')}
+            </button>
+          )}
+          {structure.remove && (
+            <button
+              type="button"
+              onClick={() => structure.remove.onClick(node.id)}
+              disabled={structure.remove.disabled}
+              title={structure.remove.title}
+              data-testid={`settings-remove-${node.id}`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 px-3 py-1.5 text-sm font-medium text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent dark:border-rose-500/40 dark:text-rose-400 dark:hover:bg-rose-950/30"
+            >
+              <HiOutlineTrash className="h-4 w-4" aria-hidden="true" />
+              {t('campaignSettings.removeStep.button')}
+            </button>
+          )}
+        </div>
+      )}
+      </>
       )}
     </li>
   );
@@ -427,6 +485,178 @@ const Checklist = ({ rows, canEdit, canOpenSchedule, onEditRow, onOpenSchedule, 
   );
 };
 
+/** Câu mô tả của thẻ nguồn: khách đã lưu / tự nhập có hai câu theo kênh (email / số điện thoại). */
+const audienceDescription = (type, channel, t) => {
+  const kind = channel === 'email' ? 'Email' : 'Phone';
+  const key = type === 'customers' || type === 'manual' ? `simpleCampaign.audience.types.${type}.desc${kind}` : `simpleCampaign.audience.types.${type}.desc`;
+  return t(key);
+};
+
+/** Chiến dịch trống: thẻ "Gửi cho ai?" — chọn nguồn thì hệ thống dựng sẵn các khối (đúng chuỗi của bộ biên dịch), người dùng chỉ điền. */
+const StartCard = ({ channel, audienceTypes, isLocked, busy, onPick, onGoFlow, t }) => (
+  <section className={`${CARD} p-4 sm:p-5`} data-testid="settings-start" aria-busy={busy ? 'true' : 'false'}>
+    <h2 className="text-base font-bold text-gray-900 dark:text-dk-text">{t('campaignSettings.start.title')}</h2>
+    <p className={`mt-1 text-sm ${MUTED}`}>{t('campaignSettings.start.hint')}</p>
+    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+      {audienceTypes.map((type) => {
+        const card = AUDIENCE_CARDS[type];
+        const locked = isLocked(type);
+        return (
+          <SimpleChoiceCard
+            key={type}
+            testId={`settings-start-${type}`}
+            icon={card?.icon}
+            tone={card?.tone}
+            title={t(`simpleCampaign.audience.types.${type}.title`)}
+            description={locked ? t('campaignSettings.start.locked') : audienceDescription(type, channel, t)}
+            locked={locked}
+            onClick={() => {
+              if (busy) return;
+              if (locked) {
+                toast.error(t('campaignSettings.start.locked'));
+                return;
+              }
+              onPick(type);
+            }}
+          />
+        );
+      })}
+    </div>
+    <button
+      type="button"
+      onClick={onGoFlow}
+      data-testid="settings-go-flow"
+      className="mt-4 text-sm font-medium text-primary-600 hover:underline dark:text-primary-400"
+    >
+      {t('campaignSettings.start.orFlow')}
+    </button>
+  </section>
+);
+
+/** Dải báo sơ đồ có rẽ nhánh: nội dung vẫn sửa ở đây, cách nối khối sửa ở Sơ đồ khối. */
+const BranchBanner = ({ onGoFlow, t }) => (
+  <section
+    className="flex min-w-0 flex-col gap-3 rounded-xl border border-sky-200 bg-sky-50 p-4 dark:border-sky-500/40 dark:bg-sky-950/30 sm:flex-row sm:items-center sm:justify-between"
+    data-testid="settings-branch-banner"
+  >
+    <p className="min-w-0 text-sm text-sky-900 dark:text-sky-100">{t('campaignSettings.branched.banner')}</p>
+    <button
+      type="button"
+      onClick={onGoFlow}
+      data-testid="settings-branch-go-flow"
+      className="shrink-0 rounded-lg border border-sky-300 bg-white px-3 py-1.5 text-sm font-medium text-sky-800 hover:bg-sky-100 dark:border-sky-500/50 dark:bg-dk-surface dark:text-sky-200 dark:hover:bg-dk-raised"
+    >
+      {t('campaignSettings.branched.goFlow')}
+    </button>
+  </section>
+);
+
+/** Cuối danh sách bước: "+ Thêm bước sau khi gửi" (Gắn thẻ / Cập nhật thông tin / Lưu khách hàng). Rẽ nhánh → mờ + gợi ý sang Sơ đồ khối. */
+const AddStepSection = ({ options, disabled, disabledHint, open, onToggle, onPick, t }) => (
+  <section className={`${CARD} p-4`} data-testid="settings-add-step">
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={disabled}
+      title={disabledHint || undefined}
+      aria-expanded={open}
+      data-testid="settings-add-step-button"
+      className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent dark:border-dk-border-strong dark:text-dk-text dark:hover:bg-dk-raised"
+    >
+      <HiOutlinePlus className="h-4 w-4" aria-hidden="true" />
+      {t('campaignSettings.addStep.button')}
+    </button>
+    {disabled && disabledHint && <p className={`mt-2 text-xs ${MUTED}`} data-testid="settings-add-step-hint">{disabledHint}</p>}
+    {open && !disabled && (
+      <ul className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3" data-testid="settings-add-step-menu">
+        {options.map((option) => (
+          <li key={option.type} className="min-w-0">
+            <button
+              type="button"
+              onClick={() => onPick(option.type)}
+              data-testid={`settings-add-step-${option.type}`}
+              className="h-full w-full rounded-lg border border-gray-200 p-3 text-left hover:border-primary-300 hover:bg-gray-50 dark:border-dk-border dark:hover:border-primary-500/60 dark:hover:bg-dk-raised"
+            >
+              <span className="block text-sm font-semibold text-gray-900 dark:text-dk-text">{option.title}</span>
+              {option.description && <span className={`mt-0.5 block text-xs ${MUTED}`}>{option.description}</span>}
+            </button>
+          </li>
+        ))}
+      </ul>
+    )}
+  </section>
+);
+
+/** Hộp đổi nguồn: bước 1 chọn nguồn mới, bước 2 xác nhận (thay tại chỗ hoặc dựng lại các bước). */
+const ChangeSourceModal = ({ state, options, onPick, onBack, onClose, onConfirm, t }) => {
+  if (!state) return null;
+  const confirming = state.stage === 'confirm';
+  const rebuild = state.mode === 'rebuild';
+  return (
+    <FullScreenOverlay isOpen>
+      <div
+        className="mx-4 flex max-h-[90vh] w-full max-w-lg flex-col rounded-xl border border-transparent bg-white shadow-xl dark:border-dk-border dark:bg-dk-surface"
+        role="dialog"
+        aria-modal="true"
+        data-testid="settings-change-source-modal"
+      >
+        <div className="flex items-center justify-between border-b border-gray-200 p-4 dark:border-dk-border">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-dk-text">{t('campaignSettings.changeSource.title')}</h3>
+          <button type="button" onClick={onClose} aria-label={t('campaignSettings.changeSource.cancel')} className="rounded-lg p-1 text-gray-500 hover:bg-gray-100 dark:text-dk-text2 dark:hover:bg-dk-raised">
+            <HiOutlineX className="h-5 w-5" />
+          </button>
+        </div>
+        {confirming ? (
+          <div className="p-4" data-testid="settings-change-source-confirm">
+            <p className="text-sm text-gray-700 dark:text-dk-text">
+              {t(rebuild ? 'campaignSettings.changeSource.confirmRebuild' : 'campaignSettings.changeSource.confirmInPlace', {
+                source: t(`simpleCampaign.audience.types.${state.audienceType}.title`),
+              })}
+            </p>
+          </div>
+        ) : (
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
+            <p className={`mb-3 text-sm ${MUTED}`}>{t('campaignSettings.changeSource.pickHint')}</p>
+            <ul className="space-y-2">
+              {options.map((option) => (
+                <li key={option.type}>
+                  <button
+                    type="button"
+                    onClick={() => onPick(option.type)}
+                    data-testid={`settings-change-source-option-${option.type}`}
+                    className="w-full rounded-lg border border-gray-200 p-3 text-left hover:border-primary-300 hover:bg-gray-50 dark:border-dk-border dark:hover:border-primary-500/60 dark:hover:bg-dk-raised"
+                  >
+                    <span className="block text-sm font-semibold text-gray-900 dark:text-dk-text">{option.title}</span>
+                    <span className={`mt-0.5 block text-xs ${MUTED}`}>
+                      {option.mode === 'rebuild' ? t('campaignSettings.changeSource.modeRebuild') : t('campaignSettings.changeSource.modeInPlace')}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <div className="flex flex-wrap justify-end gap-3 rounded-b-xl border-t border-gray-200 bg-gray-50 p-4 dark:border-dk-border dark:bg-dk-bg">
+          {confirming ? (
+            <>
+              <button type="button" onClick={onBack} className="rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 dark:text-dk-text dark:hover:bg-dk-raised">
+                {t('campaignSettings.changeSource.back')}
+              </button>
+              <button type="button" onClick={onConfirm} data-testid="settings-change-source-confirm-button" className="rounded-lg bg-primary-500 px-4 py-2 text-white hover:bg-primary-600">
+                {rebuild ? t('campaignSettings.changeSource.confirmRebuildButton') : t('campaignSettings.changeSource.confirmButton')}
+              </button>
+            </>
+          ) : (
+            <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 dark:text-dk-text dark:hover:bg-dk-raised">
+              {t('campaignSettings.changeSource.cancel')}
+            </button>
+          )}
+        </div>
+      </div>
+    </FullScreenOverlay>
+  );
+};
+
 /**
  * Tab "Thiết lập" của chi tiết chiến dịch (PLAN_THIET_LAP_VA_SO_DO_2026-10-17): tổng quan (tên, kênh, trạng thái, lịch chạy,
  * ước tính) + mọi khối theo thứ tự chạy với cài đặt viết TƯỜNG MINH. Dùng CHUNG `nodes/edges` của trình dựng — sửa ở đây
@@ -437,6 +667,9 @@ const Checklist = ({ rows, canEdit, canOpenSchedule, onEditRow, onOpenSchedule, 
  * Lưu ở thẻ gọi `onSaveNode` (trang áp cấu hình + lưu chiến dịch). Không còn mở `NodeConfigModal` từ tab này.
  *
  * @param {(node: object, formData: object) => Promise<void>|void} props.onSaveNode áp cấu hình khối vào sơ đồ VÀ lưu chiến dịch
+ * @param {(nodes: Array<object>, edges: Array<object>) => Promise<void>|void} props.onApplyGraph PR-B: áp đồ thị MỚI (dựng khung, đổi nguồn,
+ *   thêm / xoá bước phụ) vào sơ đồ VÀ lưu chiến dịch — cùng đường lưu với `onSaveNode`, không có đường lưu thứ hai
+ * @param {Set<string>|null} [props.allowedSendNodeTypes] khối gửi dùng được theo gói (kênh khoá → thẻ nguồn mờ + ổ khoá); null = không giới hạn
  * @param {(isDirty: boolean) => void} [props.onInlineDirtyChange] báo trang biết thẻ đang mở có thay đổi chưa lưu (để hỏi khi đổi tab)
  * @param {Array<object>} [props.runLogs] log lần chạy thử (form khối dùng để gợi ý cột)
  * @param {Function} [props.onCheckSheetConnection] kiểm tra kết nối Google Sheet của khối đọc sheet
@@ -466,6 +699,8 @@ export default function CampaignSettingsPanel({
   onOpenSchedule = () => {},
   onManageSchedules = () => {},
   onSaveNode = () => {},
+  onApplyGraph = () => {},
+  allowedSendNodeTypes = null,
   onInlineDirtyChange = () => {},
   runLogs = [],
   onCheckSheetConnection = undefined,
@@ -566,6 +801,136 @@ export default function CampaignSettingsPanel({
 
   const formProps = { campaignType, campaignId, emailTemplates, zaloTemplates, emailSettings, runLogs, onCheckSheetConnection };
 
+  // ── Thao tác cấu trúc (PR-B): dựng khung, đổi nguồn, thêm / xoá bước phụ ─────────────────────────────────────────────
+  const channel = resolveCampaignChannel(campaignType);
+  const analysis = useMemo(() => analyzeSettingsGraph(nodes, edges), [nodes, edges]);
+  const roles = useMemo(() => findChainRoles(nodes, analysis.chain), [nodes, analysis.chain]);
+  const startAudienceTypes = useMemo(() => getSkeletonAudienceTypes(campaignType), [campaignType]);
+  const isAudienceLocked = useCallback((audienceType) => {
+    if (!allowedSendNodeTypes || !channel) return false;
+    return !allowedSendNodeTypes.has(getSendSubtypeFor(channel, audienceType));
+  }, [allowedSendNodeTypes, channel]);
+  const [structureBusy, setStructureBusy] = useState(false);
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [changeSource, setChangeSource] = useState(null);
+  const [removeTargetId, setRemoveTargetId] = useState(null);
+  const structureLocked = Boolean(editingNodeId) || structureBusy;
+  const structureLockTitle = editingNodeId ? t('campaignSettings.editBusy') : undefined;
+
+  /** Mở thẻ có dòng thiếu ĐẦU TIÊN theo thứ tự chạy của đồ thị vừa áp. */
+  const openFirstMissing = useCallback((nextNodes, nextEdges) => {
+    const fullLookups = { ...lookups, nodes: nextNodes };
+    const first = buildSettingsOrder(nextNodes, nextEdges).ordered.find(({ node }) => (
+      subtypeOf(node) !== 'manual_trigger' && describeNodeSettings(node, fullLookups, t).some((item) => item.tone === 'missing')
+    ));
+    if (first) requestEdit(first.node.id);
+  }, [lookups, requestEdit, t]);
+
+  /** Áp một thao tác cấu trúc: `onApplyGraph` áp + lưu (cùng đường lưu của thẻ). Lưu hỏng vẫn giữ thay đổi cục bộ — trang đã báo lỗi. */
+  const commitGraph = useCallback(async (result, after) => {
+    if (!result) return;
+    setStructureBusy(true);
+    try {
+      await onApplyGraph(result.nodes, result.edges);
+    } finally {
+      setStructureBusy(false);
+    }
+    if (after) after(result);
+  }, [onApplyGraph]);
+
+  const handlePickStartAudience = useCallback((audienceType) => {
+    const skeleton = buildSettingsSkeleton({ campaignType, audienceType, locale });
+    return commitGraph(skeleton, (result) => openFirstMissing(result.nodes, result.edges));
+  }, [campaignType, commitGraph, locale, openFirstMissing]);
+
+  const sideStepOptions = useMemo(() => {
+    const dataTypes = getAllowedDataNodeTypesByCampaignType(campaignType);
+    return SIDE_STEP_SUBTYPES
+      .filter((type) => type !== 'save_customer' || !dataTypes || dataTypes.has('save_customer'))
+      .map((type) => {
+        const config = registry.find((item) => item.type === type) || {};
+        return {
+          type,
+          title: locale === 'vi' ? (config.nameVi || config.name || type) : (config.name || config.nameVi || type),
+          description: locale === 'vi' ? (config.descriptionVi || config.description || '') : (config.description || config.descriptionVi || ''),
+        };
+      });
+  }, [campaignType, locale, registry]);
+
+  const handleAddSideStep = useCallback((subtype) => {
+    setAddMenuOpen(false);
+    const result = appendSideStep({ nodes, edges, subtype, locale });
+    return commitGraph(result, (done) => requestEdit(done.newNodeId));
+  }, [commitGraph, edges, locale, nodes, requestEdit]);
+
+  const handleConfirmRemove = useCallback(() => {
+    const nodeId = removeTargetId;
+    setRemoveTargetId(null);
+    return commitGraph(removeSideStep({ nodes, edges, nodeId }));
+  }, [commitGraph, edges, nodes, removeTargetId]);
+
+  // Nút "Đổi nguồn": trên khối nguồn (nếu có), hoặc trên khối gửi khi nguồn nằm TRONG khối gửi / nhập tay (email, Zalo, WhatsApp; Telegram đổi ngay trong form).
+  const changeSourceHostId = useMemo(() => {
+    if (!canEdit || !channel) return null;
+    // Sơ đồ rẽ nhánh: vẫn hiện nút trên khối nguồn nhưng TẮT (xem `changeSourceOptions`: rẽ nhánh → không có lựa chọn).
+    if (analysis.branched) {
+      const anySource = nodes.find((node) => SWAPPABLE_SOURCE_SUBTYPES.includes(subtypeOf(node)));
+      return anySource ? String(anySource.id) : null;
+    }
+    if (analysis.chain.length === 0) return null;
+    if (roles.sourceNode) return String(roles.sourceNode.id);
+    if (channel !== 'telegram' && roles.sendNode) return String(roles.sendNode.id);
+    return null;
+  }, [analysis.branched, analysis.chain.length, canEdit, channel, nodes, roles.sendNode, roles.sourceNode]);
+
+  const changeSourceOptions = useMemo(() => {
+    if (!changeSourceHostId) return [];
+    const currentSubtype = roles.sourceNode ? subtypeOf(roles.sourceNode) : null;
+    return (AUDIENCE_TYPES_BY_CHANNEL[channel] || [])
+      .filter((type) => !(currentSubtype && AUDIENCE_SOURCE_SUBTYPE[type] === currentSubtype))
+      .filter((type) => !isAudienceLocked(type))
+      .map((type) => ({
+        type,
+        title: t(`simpleCampaign.audience.types.${type}.title`),
+        mode: classifyAudienceChange({ nodes, edges, campaignType, audienceType: type }),
+      }))
+      .filter((option) => option.mode);
+  }, [campaignType, changeSourceHostId, channel, edges, isAudienceLocked, nodes, roles.sourceNode, t]);
+
+  const handleConfirmChangeSource = useCallback(() => {
+    const target = changeSource;
+    setChangeSource(null);
+    if (!target) return undefined;
+    if (target.mode === 'in_place') {
+      return commitGraph(replaceAudienceSource({ nodes, edges, campaignType, audienceType: target.audienceType, locale }));
+    }
+    const skeleton = buildSettingsSkeleton({ campaignType, audienceType: target.audienceType, locale });
+    return commitGraph(skeleton, (result) => openFirstMissing(result.nodes, result.edges));
+  }, [campaignType, changeSource, commitGraph, edges, locale, nodes, openFirstMissing]);
+
+  const structureFor = (nodeId) => {
+    if (!canEdit) return null;
+    const id = String(nodeId);
+    const subtype = subtypeOf(nodes.find((item) => String(item.id) === id));
+    const branchTitle = analysis.lockedIds.has(id) ? t('campaignSettings.branched.locked') : undefined;
+    const structure = {};
+    if (changeSourceHostId === id) {
+      structure.changeSource = {
+        onClick: () => setChangeSource({ stage: 'pick' }),
+        disabled: structureLocked || analysis.lockedIds.has(id) || changeSourceOptions.length === 0,
+        title: structureLockTitle || branchTitle,
+      };
+    }
+    if (SIDE_STEP_SUBTYPES.includes(subtype)) {
+      structure.remove = {
+        onClick: setRemoveTargetId,
+        disabled: structureLocked || analysis.lockedIds.has(id),
+        title: structureLockTitle || branchTitle,
+      };
+    }
+    return structure.changeSource || structure.remove ? structure : null;
+  };
+
   const renderCard = (entry) => (
     <NodeCard
       key={entry.node.id}
@@ -587,6 +952,7 @@ export default function CampaignSettingsPanel({
         else cardRefs.current.delete(String(entry.node.id));
       }}
       nodeTitleOf={nodeTitleOf}
+      structure={structureFor(entry.node.id)}
       t={t}
       locale={locale}
     />
@@ -628,26 +994,52 @@ export default function CampaignSettingsPanel({
         />
         <div className="order-3 min-w-0 space-y-4 lg:order-none">
         {!hasCards ? (
-          <section className={`${CARD} flex flex-col items-center gap-3 px-4 py-10 text-center`} data-testid="settings-empty">
-            <HiOutlineViewGrid className={`h-10 w-10 ${MUTED}`} aria-hidden="true" />
-            <p className="text-sm font-semibold text-gray-900 dark:text-dk-text">{t('campaignSettings.emptyTitle')}</p>
-            <p className={`max-w-md text-sm ${MUTED}`}>{t('campaignSettings.emptyHint')}</p>
-            <button
-              type="button"
-              onClick={onGoFlow}
-              data-testid="settings-go-flow"
-              className="rounded-lg bg-primary-500 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-600"
-            >
-              {t('campaignSettings.goFlow')}
-            </button>
-          </section>
+          canEdit && startAudienceTypes.length > 0 ? (
+            <StartCard
+              channel={channel}
+              audienceTypes={startAudienceTypes}
+              isLocked={isAudienceLocked}
+              busy={structureBusy}
+              onPick={handlePickStartAudience}
+              onGoFlow={onGoFlow}
+              t={t}
+            />
+          ) : (
+            <section className={`${CARD} flex flex-col items-center gap-3 px-4 py-10 text-center`} data-testid="settings-empty">
+              <HiOutlineViewGrid className={`h-10 w-10 ${MUTED}`} aria-hidden="true" />
+              <p className="text-sm font-semibold text-gray-900 dark:text-dk-text">{t('campaignSettings.emptyTitle')}</p>
+              <p className={`max-w-md text-sm ${MUTED}`}>{t('campaignSettings.emptyHint')}</p>
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={onGoFlow}
+                  data-testid="settings-go-flow"
+                  className="rounded-lg bg-primary-500 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-600"
+                >
+                  {t('campaignSettings.goFlow')}
+                </button>
+              )}
+            </section>
+          )
         ) : (
           <>
+            {analysis.branched && <BranchBanner onGoFlow={onGoFlow} t={t} />}
             <section aria-label={t('campaignSettings.blocksTitle')}>
               <h2 className="mb-2 text-base font-bold text-gray-900 dark:text-dk-text">{t('campaignSettings.blocksTitle')}</h2>
               <p className={`mb-3 text-sm ${MUTED}`}>{t('campaignSettings.blocksHint')}</p>
               <ol className="space-y-3" data-testid="settings-ordered-list">{visibleOrdered.map(renderCard)}</ol>
             </section>
+            {canEdit && (roles.sendNode || analysis.branched) && (
+              <AddStepSection
+                options={sideStepOptions}
+                disabled={analysis.branched || structureLocked}
+                disabledHint={analysis.branched ? t('campaignSettings.addStep.branched') : structureLockTitle}
+                open={addMenuOpen}
+                onToggle={() => setAddMenuOpen((value) => !value)}
+                onPick={handleAddSideStep}
+                t={t}
+              />
+            )}
             {visibleUnconnected.length > 0 && (
               <section aria-label={t('campaignSettings.unconnectedTitle')} data-testid="settings-unconnected">
                 <h2 className="mb-2 text-base font-bold text-gray-900 dark:text-dk-text">{t('campaignSettings.unconnectedTitle')}</h2>
@@ -676,6 +1068,29 @@ export default function CampaignSettingsPanel({
           confirmButtonClassName="bg-primary-500 text-white hover:bg-primary-600"
           iconClassName="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0"
           iconColorClassName="w-6 h-6 text-amber-600"
+        />
+        <ChangeSourceModal
+          state={changeSource}
+          options={changeSourceOptions}
+          onPick={(audienceType) => {
+            const option = changeSourceOptions.find((item) => item.type === audienceType);
+            if (option) setChangeSource({ stage: 'confirm', audienceType, mode: option.mode });
+          }}
+          onBack={() => setChangeSource({ stage: 'pick' })}
+          onClose={() => setChangeSource(null)}
+          onConfirm={handleConfirmChangeSource}
+          t={t}
+        />
+        <ConfirmModal
+          isOpen={Boolean(removeTargetId)}
+          onClose={() => setRemoveTargetId(null)}
+          onConfirm={handleConfirmRemove}
+          title={t('campaignSettings.removeStep.title')}
+          message={t('campaignSettings.removeStep.message', {
+            name: nodeTitleOf(nodes.find((item) => String(item.id) === String(removeTargetId))),
+          })}
+          confirmLabel={t('campaignSettings.removeStep.confirm')}
+          cancelLabel={t('campaignSettings.changeSource.cancel')}
         />
       </div>
     </div>

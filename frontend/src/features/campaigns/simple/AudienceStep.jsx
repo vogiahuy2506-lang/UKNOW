@@ -1,14 +1,5 @@
-import {
-  HiOutlineChatAlt2,
-  HiOutlineClipboardList,
-  HiOutlineDatabase,
-  HiOutlineGlobeAlt,
-  HiOutlinePencilAlt,
-  HiOutlineTable,
-  HiOutlineUserGroup,
-  HiOutlineUsers,
-} from 'react-icons/hi';
 import SimpleChoiceCard from './SimpleChoiceCard';
+import { AUDIENCE_CARDS } from './audienceCards';
 import { AUDIENCE_TYPES_BY_CHANNEL, isGroupAudienceType } from './simpleCampaign.helpers';
 import CustomersPanel from './audience/CustomersPanel';
 import LandingPanel from './audience/LandingPanel';
@@ -19,19 +10,6 @@ import FriendsPanel from './audience/FriendsPanel';
 import GroupsPanel from './audience/GroupsPanel';
 import AdapterGroupsPanel from './audience/AdapterGroupsPanel';
 import ConversationsPanel from './audience/ConversationsPanel';
-
-const AUDIENCE_CARDS = Object.freeze({
-  customers: { icon: HiOutlineDatabase, tone: 'blue' },
-  landing: { icon: HiOutlineGlobeAlt, tone: 'rose' },
-  form: { icon: HiOutlineClipboardList, tone: 'emerald' },
-  sheet: { icon: HiOutlineTable, tone: 'emerald' },
-  manual: { icon: HiOutlinePencilAlt, tone: 'slate' },
-  zalo_friends: { icon: HiOutlineUsers, tone: 'sky' },
-  zalo_groups: { icon: HiOutlineUserGroup, tone: 'violet' },
-  telegram_groups: { icon: HiOutlineUserGroup, tone: 'violet' },
-  whatsapp_groups: { icon: HiOutlineUserGroup, tone: 'violet' },
-  conversations: { icon: HiOutlineChatAlt2, tone: 'sky' },
-});
 
 /** Thẻ có hai câu mô tả (theo kênh): khách đã lưu cần email/SĐT hợp lệ, "Tự nhập" gõ email hay số điện thoại. */
 const DESCRIPTION_VARIANT_TYPES = new Set(['customers', 'manual']);

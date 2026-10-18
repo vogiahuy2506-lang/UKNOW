@@ -218,13 +218,13 @@ describe('CampaignBuilder — hai tab Thiết lập | Sơ đồ khối', () => {
     expect(screen.queryByTestId('flow-canvas')).not.toBeInTheDocument();
   });
 
-  it('chiến dịch mới (/new): mặc định tab SƠ ĐỒ KHỐI, vẫn có thanh tab', async () => {
+  it('chiến dịch mới (/new): cũng mặc định tab THIẾT LẬP (thẻ "Gửi cho ai?"), vẫn có thanh tab', async () => {
     renderBuilder('/app/campaigns/new');
     await waitFor(() => expect(screen.getByTestId('is-dirty')).toBeInTheDocument());
-    expect(screen.getByTestId('active-tab')).toHaveTextContent('flow');
-    expect(screen.getByTestId('campaign-tab-flow')).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByTestId('flow-canvas')).toBeInTheDocument();
-    expect(screen.queryByTestId('campaign-settings-panel')).not.toBeInTheDocument();
+    expect(screen.getByTestId('active-tab')).toHaveTextContent('settings');
+    expect(screen.getByTestId('campaign-tab-settings')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('campaign-settings-panel')).toBeInTheDocument();
+    expect(screen.queryByTestId('flow-canvas')).not.toBeInTheDocument();
   });
 
   it('?tab=flow mở sơ đồ; link cũ /:id/builder vẫn là cùng trang và mặc định Thiết lập; ?tab lạ rơi về mặc định', async () => {
@@ -386,5 +386,137 @@ describe('CampaignBuilder — hai tab Thiết lập | Sơ đồ khối', () => {
     expect(screen.getByTestId('active-tab')).toHaveTextContent('settings');
     await screen.findByTestId('campaign-settings-panel');
     expect(screen.queryByTestId('settings-edit-mail')).not.toBeInTheDocument();
+  });
+});
+
+describe('CampaignBuilder — tab Thiết lập: tạo từ chiến dịch trống + thao tác bước (PR-B)', () => {
+  const EMPTY_CAMPAIGN = { ...CAMPAIGN_WITH_MAIL, nodes: [], connections: [] };
+  const subtypesOf = (payload) => payload.nodes.map((n) => n.nodeSubtype);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useAuthStore.setState({ activeContext: { type: 'self' } });
+    mockGetCampaignRuns.mockResolvedValue({ data: { data: [] } });
+    mockUpdateCampaign.mockResolvedValue({ data: { data: { id: 391 } } });
+    mockGetCampaignById.mockResolvedValue({ data: { data: EMPTY_CAMPAIGN } });
+  });
+
+  const startWith = async (type) => {
+    renderBuilder('/app/campaigns/391');
+    await waitForLoaded();
+    fireEvent.click(await screen.findByTestId(`settings-start-${type}`));
+    await waitFor(() => expect(mockUpdateCampaign).toHaveBeenCalledTimes(1));
+    return mockUpdateCampaign.mock.calls[0][1];
+  };
+
+  it('chiến dịch email trống: thẻ "Gửi cho ai?" → chọn khách đã lưu → dựng khung + LƯU NGAY bằng đúng bộ nodes/edges mới, rồi mở thẻ thiếu đầu tiên', async () => {
+    const payload = await startWith('customers');
+    expect(subtypesOf(payload)).toEqual(['manual_trigger', 'read_interested_customers', 'send_email']);
+    expect(payload.connections.map((c) => [c.sourceNodeId, c.targetNodeId])).toEqual([
+      [payload.nodes[0].tempId, payload.nodes[1].tempId],
+      [payload.nodes[1].tempId, payload.nodes[2].tempId],
+    ]);
+    const send = payload.nodes[2];
+    expect(send.config).toMatchObject({ recipientSource: 'node', recipientNodeId: payload.nodes[1].tempId, recipientField: 'email' });
+    expect(payload.flowJson.nodes.map((n) => n.id)).toEqual(payload.nodes.map((n) => n.tempId));
+    await waitFor(() => expect(screen.getByTestId('is-dirty')).toHaveTextContent('false'));
+    // Thẻ khối gửi (còn thiếu mẫu email) tự mở form tại chỗ; checklist báo còn thiếu.
+    const sendCard = (await screen.findAllByTestId('settings-node-card')).find((c) => c.getAttribute('data-node-id') === send.tempId);
+    expect(within(sendCard).getByTestId('form-stub')).toBeInTheDocument();
+    expect(screen.queryByTestId('settings-start')).not.toBeInTheDocument();
+  });
+
+  it('chọn nguồn thì Sơ đồ khối thấy ngay chuỗi khối vừa dựng', async () => {
+    await startWith('sheet');
+    fireEvent.click(screen.getByTestId('campaign-tab-flow'));
+    await waitFor(() => expect(screen.getByTestId('active-tab')).toHaveTextContent('flow'));
+    expect((await screen.findByTestId('flow-canvas')).querySelectorAll('li')).toHaveLength(3);
+  });
+
+  it('Đổi nguồn (customers → sheet): thay tại chỗ sau hộp xác nhận, nối lại cạnh, recipientNodeId trỏ id mới, lưu ngay', async () => {
+    const first = await startWith('customers');
+    const oldSourceId = first.nodes[1].tempId;
+    fireEvent.click(await screen.findByTestId('stub-cancel'));
+    fireEvent.click(await screen.findByTestId(`settings-change-source-${oldSourceId}`));
+    fireEvent.click(await screen.findByTestId('settings-change-source-option-sheet'));
+    expect(screen.getByTestId('settings-change-source-confirm')).toBeInTheDocument();
+    expect(mockUpdateCampaign).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByTestId('settings-change-source-confirm-button'));
+
+    await waitFor(() => expect(mockUpdateCampaign).toHaveBeenCalledTimes(2));
+    const payload = mockUpdateCampaign.mock.calls[1][1];
+    expect(subtypesOf(payload)).toEqual(['manual_trigger', 'read_sheet', 'send_email']);
+    const newSourceId = payload.nodes[1].tempId;
+    expect(newSourceId).not.toBe(oldSourceId);
+    expect(payload.nodes[2].config.recipientNodeId).toBe(newSourceId);
+    expect(payload.connections.map((c) => [c.sourceNodeId, c.targetNodeId])).toEqual([
+      [payload.nodes[0].tempId, newSourceId],
+      [newSourceId, payload.nodes[2].tempId],
+    ]);
+    expect(JSON.stringify(payload)).not.toContain(oldSourceId);
+  });
+
+  it('Thêm bước Gắn thẻ rồi Xoá bước: nối đúng, lưu sau mỗi thao tác', async () => {
+    const first = await startWith('customers');
+    fireEvent.click(await screen.findByTestId('stub-cancel'));
+    fireEvent.click(await screen.findByTestId('settings-add-step-button'));
+    fireEvent.click(await screen.findByTestId('settings-add-step-tag_contact'));
+
+    await waitFor(() => expect(mockUpdateCampaign).toHaveBeenCalledTimes(2));
+    const added = mockUpdateCampaign.mock.calls[1][1];
+    expect(subtypesOf(added)).toEqual(['manual_trigger', 'read_interested_customers', 'send_email', 'tag_contact']);
+    const tagId = added.nodes[3].tempId;
+    expect(added.connections.map((c) => [c.sourceNodeId, c.targetNodeId])).toContainEqual([first.nodes[2].tempId, tagId]);
+    expect(added.nodes[3].config.tagSourceNodeId).toBe(first.nodes[1].tempId);
+
+    // Thẻ bước mới tự mở form để điền: đóng rồi xoá.
+    fireEvent.click(await screen.findByTestId('stub-cancel'));
+    fireEvent.click(await screen.findByTestId(`settings-remove-${tagId}`));
+    fireEvent.click(await screen.findByText('Xoá bước', { selector: 'button.px-4' }));
+    await waitFor(() => expect(mockUpdateCampaign).toHaveBeenCalledTimes(3));
+    const removed = mockUpdateCampaign.mock.calls[2][1];
+    expect(subtypesOf(removed)).toEqual(['manual_trigger', 'read_interested_customers', 'send_email']);
+    expect(removed.connections).toHaveLength(2);
+  });
+
+  it('sơ đồ rẽ nhánh: hiện dải thông báo, nút Thêm bước / Đổi nguồn / Xoá bước bị tắt', async () => {
+    mockGetCampaignById.mockResolvedValue({
+      data: {
+        data: {
+          ...CAMPAIGN_WITH_MAIL,
+          nodes: [
+            { tempId: 'start', nodeSubtype: 'manual_trigger', nodeName: 'Khởi chạy', config: {} },
+            { tempId: 'src', nodeSubtype: 'read_interested_customers', nodeName: 'Khách', config: { interestedCustomerType: 'all' } },
+            { tempId: 'cond', nodeSubtype: 'condition', nodeName: 'Điều kiện', config: {} },
+            { tempId: 'mail', nodeSubtype: 'send_email', nodeName: 'Gửi thư', config: {} },
+            { tempId: 'tag', nodeSubtype: 'tag_contact', nodeName: 'Gắn thẻ', config: {} },
+          ],
+          connections: [
+            { sourceNodeId: 'start', targetNodeId: 'src' },
+            { sourceNodeId: 'src', targetNodeId: 'cond' },
+            { sourceNodeId: 'cond', targetNodeId: 'mail', connectionLabel: 'Đúng' },
+            { sourceNodeId: 'cond', targetNodeId: 'tag', connectionLabel: 'Sai' },
+          ],
+        },
+      },
+    });
+    renderBuilder('/app/campaigns/391');
+    await waitForLoaded();
+    expect(await screen.findByTestId('settings-branch-banner')).toBeInTheDocument();
+    expect(screen.getByTestId('settings-add-step-button')).toBeDisabled();
+    expect(screen.getByTestId('settings-change-source-src')).toBeDisabled();
+    expect(screen.getByTestId('settings-remove-tag')).toBeDisabled();
+    // Nội dung từng bước vẫn sửa được.
+    expect(screen.getByTestId('settings-edit-mail')).not.toBeDisabled();
+    fireEvent.click(screen.getByTestId('settings-branch-go-flow'));
+    await waitFor(() => expect(screen.getByTestId('active-tab')).toHaveTextContent('flow'));
+  });
+
+  it('chuỗi thẳng bình thường KHÔNG hiện dải rẽ nhánh', async () => {
+    mockGetCampaignById.mockResolvedValue({ data: { data: CAMPAIGN_WITH_MAIL } });
+    renderBuilder('/app/campaigns/391');
+    await waitForLoaded();
+    await screen.findByTestId('campaign-settings-panel');
+    expect(screen.queryByTestId('settings-branch-banner')).not.toBeInTheDocument();
   });
 });

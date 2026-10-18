@@ -151,14 +151,15 @@ const CampaignBuilder = () => {
   const isNewCampaign = !id || id === 'new';
   // ── Tab Thiết lập | Sơ đồ khối (PLAN_THIET_LAP_VA_SO_DO_2026-10-17) ──────────────────────────────────────────────
   // Hai tab dùng CHUNG nodes/edges/isDirty của trang nên sửa bên nào bên kia thấy ngay, không cần hỏi "lưu rồi chuyển".
-  // Tab nằm trên URL (`?tab=settings|flow`). Mặc định: chiến dịch đã có → Thiết lập; chiến dịch mới → Sơ đồ khối.
+  // Tab nằm trên URL (`?tab=settings|flow`). Mặc định: Thiết lập cho mọi chiến dịch (kể cả chiến dịch mới/trống: thẻ "Gửi cho ai?" dựng khung khối);
+  // Sơ đồ khối là chế độ nâng cao.
   const [searchParams, setSearchParams] = useSearchParams();
   const { activeContext } = useAuthStore();
   // Cùng công thức PermissionRoute: chủ tài khoản luôn được; nhân viên cần quyền cụ thể.
   const isEmployeeCtx = activeContext?.type === 'employee';
   const canEditCampaign = !isEmployeeCtx || activeContext?.permissions?.campaigns_create === true;
   const requestedTab = searchParams.get('tab');
-  const defaultTab = isNewCampaign ? 'flow' : 'settings';
+  const defaultTab = 'settings';
   const requestedOrDefaultTab = requestedTab === 'settings' || requestedTab === 'flow' ? requestedTab : defaultTab;
   const activeTab = canEditCampaign ? requestedOrDefaultTab : 'settings';
   const { activePause, latestRun } = useLatestRunPause(isNewCampaign ? null : id);
@@ -1214,6 +1215,21 @@ const CampaignBuilder = () => {
     await handleSave({ nodes: applied.nodes, edges: applied.edges });
   };
 
+  /**
+   * Thao tác cấu trúc ở tab Thiết lập (dựng khung khối, đổi nguồn, thêm / xoá bước phụ): đồ thị MỚI do hàm thuần tính sẵn, áp vào
+   * sơ đồ rồi lưu qua CHÍNH `handleSave({ nodes, edges })` — không có đường lưu thứ hai.
+   */
+  const handleApplyGraphFromSettings = async (nextNodes, nextEdges) => {
+    setNodes(nextNodes);
+    setEdges(nextEdges);
+    if (selectedNode && !nextNodes.some((node) => node.id === selectedNode.id)) setSelectedNode(null);
+    if (!campaignName.trim()) {
+      setShowNameModal(true);
+      return;
+    }
+    await handleSave({ nodes: nextNodes, edges: nextEdges });
+  };
+
   const handleInlineDirtyChange = useCallback((isDirtyForm) => setInlineDirty(Boolean(isDirtyForm)), []);
 
   const campaignSchedules = useMemo(
@@ -1285,6 +1301,8 @@ const CampaignBuilder = () => {
           onOpenSchedule={() => requestServerAction('schedule')}
           onManageSchedules={() => runController.openCampaignSchedulesSummaryModal(campaignForServerActions)}
           onSaveNode={handleSaveNodeFromSettings}
+          onApplyGraph={handleApplyGraphFromSettings}
+          allowedSendNodeTypes={getAllowedActionNodeTypesForDrop(campaignType)}
           onInlineDirtyChange={handleInlineDirtyChange}
           runLogs={runLogs}
           onCheckSheetConnection={checkSheetConnection}

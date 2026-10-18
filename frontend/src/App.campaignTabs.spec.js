@@ -24,13 +24,14 @@ describe('App.jsx — chi tiết chiến dịch có hai tab Thiết lập | Sơ 
     expect(appSource).toMatch(/path="campaigns\/:id\/builder" element=\{<PermissionRoute permission="campaigns_create"><CampaignBuilder \/><\/PermissionRoute>\}/);
   });
 
-  it('danh sách chiến dịch: bấm tên và nút Sửa mở /app/campaigns/:id (tab Thiết lập); chỉ chỗ cố ý mở sơ đồ mới thêm ?tab=flow', () => {
+  it('danh sách chiến dịch: bấm tên và nút Sửa mở /app/campaigns/:id (tab Thiết lập); tạo chiến dịch TRỐNG (Thủ công) vào thẳng tab Thiết lập (?tab=settings)', () => {
     const list = read('pages/campaigns/Campaigns.jsx');
     expect(list).toMatch(/to=\{`\/app\/campaigns\/\$\{campaign\.id\}`\}/);
     expect(list).toMatch(/navigate\(`\/app\/campaigns\/\$\{campaign\.id\}`\)/);
     expect(list).not.toMatch(/campaigns\/\$\{campaign\.id\}\/builder/);
-    // Tạo chiến dịch TRỐNG bằng "Thủ công": cố ý vào sơ đồ khối.
-    expect(list).toMatch(/navigate\(`\/app\/campaigns\/\$\{createdCampaignId\}\?tab=flow`\)/);
+    // Tạo chiến dịch TRỐNG bằng "Thủ công": vào thẳng Thiết lập (thẻ "Gửi cho ai?" dựng khung khối), không vào sơ đồ trống.
+    expect(list).toMatch(/navigate\(`\/app\/campaigns\/\$\{createdCampaignId\}\?tab=settings`\)/);
+    expect(list).not.toMatch(/\?tab=flow/);
   });
 
   it('màn kết quả tạo mới có nút "Xem chiến dịch" trỏ /app/campaigns/:id, không còn trỏ /builder', () => {

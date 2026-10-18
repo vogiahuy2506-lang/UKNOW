@@ -168,14 +168,52 @@ describe('CampaignSettingsPanel — nút Sửa', () => {
 });
 
 describe('CampaignSettingsPanel — chiến dịch rỗng', () => {
-  it('hiện trạng thái rỗng + nút sang Sơ đồ khối; không có ước tính', () => {
+  it('hiện thẻ "Gửi cho ai?" theo kênh + liên kết nhỏ sang Sơ đồ khối; không có ước tính', () => {
     const onGoFlow = vi.fn();
     renderPanel({ nodes: [], edges: [], onGoFlow });
-    expect(screen.getByTestId('settings-empty')).toHaveTextContent('Chiến dịch chưa có khối nào');
+    expect(screen.getByTestId('settings-start')).toHaveTextContent('Gửi cho ai?');
+    ['customers', 'landing', 'form', 'sheet', 'manual'].forEach((type) => expect(screen.getByTestId(`settings-start-${type}`)).toBeInTheDocument());
+    expect(screen.queryByTestId('settings-start-zalo_groups')).not.toBeInTheDocument();
     expect(screen.queryByTestId('settings-ordered-list')).not.toBeInTheDocument();
     expect(screen.queryByTestId('settings-overview-estimate')).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId('settings-go-flow'));
     expect(onGoFlow).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['zalo', ['customers', 'landing', 'form', 'sheet', 'manual', 'zalo_friends', 'zalo_groups']],
+    ['telegram', ['conversations', 'telegram_groups']],
+    ['whatsapp', ['conversations', 'customers', 'landing', 'form', 'sheet', 'whatsapp_groups']],
+  ])('kênh %s → đúng các nguồn của trình từng bước', (campaignType, types) => {
+    renderPanel({ campaignType, nodes: [], edges: [] });
+    const shown = screen.getAllByTestId(/^settings-start-/).map((el) => el.getAttribute('data-testid').replace('settings-start-', '')).filter((id) => id !== 'go-flow');
+    expect(shown.sort()).toEqual([...types].sort());
+  });
+
+  it('chọn nguồn → onApplyGraph nhận đồ thị MỚI đúng chuỗi khối, rồi mở thẻ thiếu đầu tiên', async () => {
+    const onApplyGraph = vi.fn().mockResolvedValue(undefined);
+    renderPanel({ nodes: [], edges: [], onApplyGraph });
+    fireEvent.click(screen.getByTestId('settings-start-sheet'));
+    await waitFor(() => expect(onApplyGraph).toHaveBeenCalledTimes(1));
+    const [nextNodes, nextEdges] = onApplyGraph.mock.calls[0];
+    expect(nextNodes.map((n) => n.data.nodeType)).toEqual(['manual_trigger', 'read_sheet', 'send_email']);
+    expect(nextEdges).toHaveLength(2);
+  });
+
+  it('kênh khoá theo gói → thẻ nguồn có ổ khoá, bấm không dựng khung', async () => {
+    const onApplyGraph = vi.fn();
+    renderPanel({ campaignType: 'telegram', nodes: [], edges: [], onApplyGraph, allowedSendNodeTypes: new Set() });
+    fireEvent.click(screen.getByTestId('settings-start-conversations'));
+    expect(onApplyGraph).not.toHaveBeenCalled();
+  });
+
+  it('chỉ có quyền xem hoặc loại chiến dịch lạ → vẫn là trạng thái rỗng cũ (không có thẻ nguồn)', () => {
+    const { unmount } = renderPanel({ nodes: [], edges: [], canEdit: false });
+    expect(screen.getByTestId('settings-empty')).toBeInTheDocument();
+    expect(screen.queryByTestId('settings-start')).not.toBeInTheDocument();
+    unmount();
+    renderPanel({ campaignType: 'mixed', nodes: [], edges: [] });
+    expect(screen.getByTestId('settings-empty')).toBeInTheDocument();
   });
 });
 
@@ -444,12 +482,12 @@ describe('CampaignSettingsPanel — checklist "Trước khi chạy"', () => {
     expect(onOpenSchedule).toHaveBeenCalledTimes(1);
   });
 
-  it('chiến dịch trống → ba dòng ⚠ "Chưa có", không có nút Sửa ở các dòng đó, vẫn hiện trạng thái rỗng', () => {
+  it('chiến dịch trống → ba dòng ⚠ "Chưa có", không có nút Sửa ở các dòng đó, hiện thẻ "Gửi cho ai?"', () => {
     renderPanel({ nodes: [], edges: [] });
     expect(screen.getByTestId('settings-checklist-summary')).toHaveTextContent('Còn 3 mục cần điền trước khi chạy');
     expect(screen.getByTestId('settings-checklist-summary-sender')).toHaveTextContent('Chưa có');
     expect(screen.queryByTestId('settings-checklist-edit-sender')).not.toBeInTheDocument();
-    expect(screen.getByTestId('settings-empty')).toBeInTheDocument();
+    expect(screen.getByTestId('settings-start')).toBeInTheDocument();
   });
 
   it('chỉ có quyền xem → checklist hiện nhưng không có nút Sửa nào', () => {
