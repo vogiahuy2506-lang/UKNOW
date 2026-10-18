@@ -199,7 +199,7 @@ Nếu bạn gửi Zalo vào lúc gần khuya, hệ thống báo trước rằng 
     primary_route: '/app/campaigns/new',
     sort_order: 60,
     title: 'Tạo chiến dịch',
-    summary: 'Dựng luồng gửi bằng các khối nối với nhau, rồi chạy ngay hoặc lên lịch. Bài này nói rõ thứ tự và chỗ hay tắc.',
+    summary: 'Tạo chiến dịch bằng một trong hai cách: Từng bước (trả lời vài câu hỏi) hoặc Thủ công (điền ở tab Thiết lập, nối khối ở tab Sơ đồ khối), rồi chạy ngay hoặc lên lịch. Bài này nói rõ thứ tự và chỗ hay tắc.',
     body_md: `Chiến dịch là một **luồng gửi** bạn dựng bằng cách nối các khối lại với nhau. Mỗi khối làm một việc: lấy dữ liệu, chọn tài khoản gửi, gửi tin, chờ, rẽ nhánh.
 
 Cách này linh hoạt hơn Gửi nhanh, nhưng cũng nhiều bước hơn. Chỉ cần gửi một lượt cho danh sách nhỏ thì dùng [Gửi nhanh](quick-send) nhanh hơn.
