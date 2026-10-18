@@ -3,7 +3,7 @@
  * Mặc định TRUE: caller cũ không truyền cờ giữ nguyên hành vi (Zalo không biến mất với khách trả phí).
  */
 import { describe, it, expect } from 'vitest';
-import { getAllowedActionNodeTypesByCampaignType } from '../campaignBuilderFlow';
+import { getAllowedActionNodeTypesByCampaignType, getAllowedDataNodeTypesByCampaignType } from '../campaignBuilderFlow';
 
 const ZALO_TYPES = ['send_zalo_personal', 'send_zalo_friend_request', 'send_zalo_group'];
 
@@ -12,8 +12,10 @@ describe('getAllowedActionNodeTypesByCampaignType — cờ Zalo (P12)', () => {
     for (const opts of [undefined, {}, { zaloEnabled: true }]) {
       const mixed = getAllowedActionNodeTypesByCampaignType('mixed', opts);
       ZALO_TYPES.forEach((type) => expect(mixed.has(type)).toBe(true));
-      expect([...getAllowedActionNodeTypesByCampaignType('zalo', opts)].sort()).toEqual(['send_zalo_friend_request', 'send_zalo_personal']);
-      expect([...getAllowedActionNodeTypesByCampaignType('zalo_group', opts)]).toEqual(['send_zalo_group']);
+      // PLAN_THU_CONG_GOP_4_KENH: loại zalo / zalo_group cùng một bảng khối (cá nhân + kết bạn + nhóm).
+      const zaloFamily = ['send_zalo_friend_request', 'send_zalo_group', 'send_zalo_personal'];
+      expect([...getAllowedActionNodeTypesByCampaignType('zalo', opts)].sort()).toEqual(zaloFamily);
+      expect([...getAllowedActionNodeTypesByCampaignType('zalo_group', opts)].sort()).toEqual(zaloFamily);
     }
   });
 
@@ -23,5 +25,22 @@ describe('getAllowedActionNodeTypesByCampaignType — cờ Zalo (P12)', () => {
     expect(getAllowedActionNodeTypesByCampaignType('zalo', { zaloEnabled: false }).size).toBe(0);
     expect(getAllowedActionNodeTypesByCampaignType('zalo_group', { zaloEnabled: false }).size).toBe(0);
     expect([...getAllowedActionNodeTypesByCampaignType('email', { zaloEnabled: false })]).toEqual(['send_email']);
+  });
+});
+
+describe('PLAN_THU_CONG_GOP_4_KENH — thẻ Zalo: bảng khối có cả khối cá nhân lẫn nhóm', () => {
+  it.each(['zalo', 'zalo_group'])("loại '%s': khối dữ liệu có cả lấy bạn bè lẫn lấy nhóm + chọn tài khoản (chiến dịch zalo_group cũ vẫn đủ)", (type) => {
+    const data = getAllowedDataNodeTypesByCampaignType(type);
+    for (const nodeType of ['select_zalo_account', 'get_all_friends', 'get_all_groups', 'read_sheet', 'read_interested_customers']) {
+      expect(data.has(nodeType)).toBe(true);
+    }
+    expect(data.has('send_zalo_group')).toBe(false);
+  });
+
+  it("email / whatsapp / telegram không nhận khối Zalo", () => {
+    for (const type of ['email', 'whatsapp', 'telegram']) {
+      const data = getAllowedDataNodeTypesByCampaignType(type);
+      expect(data?.has('get_all_groups') ?? false).toBe(false);
+    }
   });
 });

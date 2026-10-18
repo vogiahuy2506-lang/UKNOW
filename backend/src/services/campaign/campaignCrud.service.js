@@ -1,6 +1,7 @@
 import db from '../../config/database.js';
 import { isAdminRole } from '../../utils/roleScope.util.js';
 import { enforceResourceLimitTx } from '../../utils/userResourceLimit.util.js';
+import { inferCampaignTypeFromNodes, resolveCampaignTypeLimitKey } from '../../utils/campaignTypeInference.util.js';
 import campaignCrudRepository from '../../repositories/campaign/campaignCrud.repository.js';
 import campaignFlowService from './campaignFlow.service.js';
 import { countCampaignRecipientsEstimate } from './campaignApproval.service.js';
@@ -227,7 +228,7 @@ class CampaignCrudService {
     workspaceOwnerId,
     campaignName,
     description,
-    campaignType,
+    campaignType: declaredCampaignType,
     landingPageUrl,
     startDate,
     endDate,
@@ -237,19 +238,16 @@ class CampaignCrudService {
     connections,
   }) {
     const context = resolveCampaignContext({ authUser, userId, roleCode, workspaceOwnerId });
+    // PLAN_THU_CONG_GOP_4_KENH — hộp tạo chỉ còn 4 kênh; Zalo cá nhân/nhóm, Telegram cá nhân/nhóm là khối trong sơ đồ,
+    // nên loại lưu xuống được SUY từ khối gửi thật có trong sơ đồ (hạn mức theo loại vẫn tính đúng loại cuối cùng).
+    const campaignType = inferCampaignTypeFromNodes(nodes, declaredCampaignType);
     // PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3 — nhân viên chỉ lưu được chiến dịch dùng tài khoản Zalo được giao (kể cả
     // node get_all_*). Kiểm TRƯỚC khi mở giao dịch; chủ / super admin qua. Trợ lý AI cũng tạo chiến dịch qua đây.
     await assertCampaignNodesZaloAccountsAccessible(context, nodes);
     // PLAN_GIAO_TK_TG_WA PR-H2 — như Zalo: node send_telegram / send_whatsapp chỉ dùng tài khoản được giao.
     await assertCampaignNodesChannelAccountsAccessible(context, nodes);
     // 'mixed', 'telegram', 'telegram_group' và 'whatsapp': không có hạn mức số chiến dịch riêng theo loại → null (chỉ chịu trần 'campaigns' chung).
-    const typeResourceKey = campaignType === 'email'
-      ? 'emailCampaigns'
-      : campaignType === 'zalo_group'
-        ? 'zaloGroupCampaigns'
-        : campaignType === 'zalo'
-          ? 'zaloCampaigns'
-          : null;
+    const typeResourceKey = resolveCampaignTypeLimitKey(campaignType);
 
     const client = await db.getClient();
     try {
@@ -385,7 +383,7 @@ class CampaignCrudService {
     isContentUpdate,
     campaignName,
     description,
-    campaignType,
+    campaignType: declaredCampaignType,
     status,
     landingPageUrl,
     startDate,
@@ -417,6 +415,22 @@ class CampaignCrudService {
       }
 
       assertCanChangeCampaignStatus(context, status, existing.status);
+
+      // PLAN_THU_CONG_GOP_4_KENH — loại suy từ khối gửi khi body thay sơ đồ (không thay sơ đồ thì giữ loại khai báo / loại cũ).
+      // Loại đổi so với bản đang lưu → kiểm hạn mức của loại MỚI như lúc tạo (vượt → 403, rollback, không lưu).
+      const campaignType = nodes !== undefined
+        ? inferCampaignTypeFromNodes(nodes, declaredCampaignType ?? existing.campaign_type)
+        : declaredCampaignType;
+      const typeLimitKey = campaignType && campaignType !== existing.campaign_type
+        ? resolveCampaignTypeLimitKey(campaignType)
+        : null;
+      if (typeLimitKey) {
+        await enforceResourceLimitTx(client, {
+          userId: context.workspaceOwnerId,
+          roleCode: context.roleCode,
+          resourceKey: typeLimitKey,
+        });
+      }
 
       if (isContentUpdate) {
         const hasRunning = await campaignCrudRepository.hasRunningRunTx(client, campaignId);
@@ -551,6 +565,7 @@ class CampaignCrudService {
         id: updated.id,
         campaignName: updated.campaign_name,
         status: updated.status,
+        campaignType: updated.campaign_type ?? campaignType ?? existing.campaign_type ?? null,
         nodesTruoc: nodes !== undefined ? nodesCountBefore : null,
       };
     } catch (error) {

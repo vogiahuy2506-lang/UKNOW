@@ -112,17 +112,15 @@ describe('Campaigns — P12 quyền kênh Zalo ở modal tạo chiến dịch', 
     campaignRunApiService.getCampaignSchedules.mockResolvedValue({ data: { data: [] } });
   });
 
-  it('zalo:false -> modal VẪN có nút Zalo cá nhân/nhóm nhưng khoá (aria-disabled, mờ, ổ khoá); Email dùng được; bộ lọc loại vẫn liệt kê Zalo', async () => {
+  it('zalo:false -> modal VẪN có thẻ Zalo nhưng khoá (aria-disabled, mờ, ổ khoá); Email dùng được; bộ lọc loại vẫn liệt kê Zalo', async () => {
     entitlementsState.zalo = false;
     await openCreateModal();
-    for (const id of ['zalo', 'zalo_group']) {
-      const button = screen.getByTestId(`create-campaign-type-${id}`);
-      expect(button).toHaveAttribute('aria-disabled', 'true');
-      expect(button.className).toContain('opacity-60');
-      expect(within(button).getByTestId('channel-lock-badge')).toBeTruthy();
-    }
-    expect(screen.getByRole('button', { name: viTranslations.campaigns.zaloPersonal })).toBeTruthy();
-    expect(screen.getByRole('button', { name: viTranslations.campaigns.zaloGroup })).toBeTruthy();
+    const button = screen.getByTestId('create-campaign-type-zalo');
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(button.className).toContain('opacity-60');
+    expect(within(button).getByTestId('channel-lock-badge')).toBeTruthy();
+    expect(screen.getByRole('button', { name: viTranslations.campaigns.zaloChannel })).toBeTruthy();
+    expect(screen.queryByTestId('create-campaign-type-zalo_group')).toBeNull();
     expect(screen.getByTestId('create-campaign-type-email')).not.toHaveAttribute('aria-disabled');
     expect(screen.getByRole('option', { name: viTranslations.campaigns.zaloPersonal })).toBeTruthy();
   });
@@ -140,22 +138,21 @@ describe('Campaigns — P12 quyền kênh Zalo ở modal tạo chiến dịch', 
     expect(campaignApiService.createCampaign).not.toHaveBeenCalled();
   });
 
-  it('zalo:true (limit=1) -> modal có đủ Email, Zalo cá nhân, Zalo nhóm và dùng được cả ba', async () => {
+  it('zalo:true (limit=1) -> modal có Email, Zalo và dùng được cả hai', async () => {
     entitlementsState.limits = { zalo: 1 };
     await openCreateModal();
-    await waitFor(() => expect(screen.getByRole('button', { name: viTranslations.campaigns.zaloPersonal })).toBeTruthy());
-    expect(screen.getByRole('button', { name: viTranslations.campaigns.zaloGroup })).toBeTruthy();
-    for (const id of ['email', 'zalo', 'zalo_group']) {
+    await waitFor(() => expect(screen.getByRole('button', { name: viTranslations.campaigns.zaloChannel })).toBeTruthy());
+    for (const id of ['email', 'zalo']) {
       expect(screen.getByTestId(`create-campaign-type-${id}`)).not.toHaveAttribute('aria-disabled');
     }
   });
 
-  it('gói không có Telegram/WhatsApp nhưng hệ thống bật: Telegram, Telegram nhóm, WhatsApp VẪN hiện và khoá; không gọi GET /campaigns/channels', async () => {
+  it('gói không có Telegram/WhatsApp nhưng hệ thống bật: Telegram, WhatsApp VẪN hiện và khoá; không gọi GET /campaigns/channels', async () => {
     entitlementsState.telegram = false;
     entitlementsState.whatsapp = false;
     entitlementsState.enabledAdapterChannels = SYSTEM_ADAPTERS;
     await openCreateModal();
-    for (const id of ['telegram', 'telegram_group', 'whatsapp']) {
+    for (const id of ['telegram', 'whatsapp']) {
       expect(screen.getByTestId(`create-campaign-type-${id}`)).toHaveAttribute('aria-disabled', 'true');
     }
     expect(campaignApiService.getChannels).not.toHaveBeenCalled();

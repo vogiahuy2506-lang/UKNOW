@@ -136,19 +136,10 @@ const Campaigns = () => {
     {
       id: 'zalo',
       channel: 'zalo',
-      name: t('campaigns.zaloPersonal'),
+      name: t('campaigns.zaloChannel'),
       icon: HiOutlineChat,
       iconBg: 'bg-sky-50 text-sky-600 border border-sky-100/80',
       selectedIconBg: 'bg-sky-600 text-white',
-      visible: true,
-    },
-    {
-      id: 'zalo_group',
-      channel: 'zalo',
-      name: t('campaigns.zaloGroup'),
-      icon: HiOutlineUserGroup,
-      iconBg: 'bg-violet-50 text-violet-600 border border-violet-100/80',
-      selectedIconBg: 'bg-violet-600 text-white',
       visible: true,
     },
     {
@@ -158,15 +149,6 @@ const Campaigns = () => {
       icon: FaTelegramPlane,
       iconBg: 'bg-sky-50 text-sky-500 border border-sky-100/80',
       selectedIconBg: 'bg-sky-500 text-white',
-      visible: telegramChannelEnabled,
-    },
-    {
-      id: 'telegram_group',
-      channel: 'telegram',
-      name: t('campaigns.telegramGroup'),
-      icon: FaTelegramPlane,
-      iconBg: 'bg-indigo-50 text-indigo-600 border border-indigo-100/80',
-      selectedIconBg: 'bg-indigo-600 text-white',
       visible: telegramChannelEnabled,
     },
     {
@@ -1241,7 +1223,7 @@ const Campaigns = () => {
                   </span>
                 </div>
 
-                <div className={`grid gap-2.5 ${createCampaignChannels.length <= 2 ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3'}`}>
+                <div className={`grid gap-2.5 ${'grid-cols-2'}`}>
                   {createCampaignChannels.map((ch) => {
                     const isLocked = channelAvailability[ch.channel]?.available === false;
                     const isSelected = createCampaignForm.campaignType === ch.id;

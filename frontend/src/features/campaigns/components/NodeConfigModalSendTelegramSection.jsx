@@ -42,8 +42,8 @@ export const NodeConfigSendTelegramSection = ({
   // PLAN_GIAO_TK_TG_WA H2: nhân viên 0 tài khoản được giao thì câu nhắc là "chưa giao", không phải "chưa kết nối".
   const isEmployeeContext = useAuthStore((state) => state.activeContext?.type) === 'employee';
   const recipientSource = formData.recipientSource || (campaignType === 'telegram_group' ? 'telegram_groups' : 'telegram_conversations');
-  // Nguồn nhóm: chiến dịch 'telegram_group' luôn có; chiến dịch khác chỉ hiện khi config đã lưu nguồn này.
-  const showGroupsOption = campaignType === 'telegram_group' || recipientSource === 'telegram_groups';
+  // PLAN_THU_CONG_GOP_4_KENH — mọi chiến dịch Telegram đều chọn được nguồn "Nhóm Telegram" ngay trong khối (hộp tạo chỉ còn thẻ
+  // Telegram); nguồn mặc định vẫn theo loại: 'telegram_group' (chiến dịch cũ) mặc định nhóm, 'telegram' mặc định hội thoại.
   const isGroupsSource = recipientSource === 'telegram_groups';
   const selectedGroups = getSelectedGroups(formData);
   const accountId = String(formData.telegramAccountId || '');
@@ -194,8 +194,8 @@ export const NodeConfigSendTelegramSection = ({
           onChange={(e) => handleSourceChange(e.target.value)}
           className="w-full px-3 py-2 border border-gray-300 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted rounded-lg focus:ring-2 focus:ring-primary-500"
         >
-          {showGroupsOption && <option value="telegram_groups">{t('telegramNodeSend.sourceGroups')}</option>}
           <option value="telegram_conversations">{t('telegramNodeSend.sourceConversations')}</option>
+          <option value="telegram_groups">{t('telegramNodeSend.sourceGroups')}</option>
           <option value="manual">{t('telegramNodeSend.sourceManual')}</option>
         </select>
         <p className="mt-1 text-xs text-gray-500 dark:text-dk-text2">{t('telegramNodeSend.recipientSourceNote')}</p>

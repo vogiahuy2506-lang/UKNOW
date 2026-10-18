@@ -1568,6 +1568,8 @@ export default {
     allTypes: 'Tất cả loại',
     email: 'Email',
     zaloPersonal: 'Zalo cá nhân',
+    // Hộp "Tạo chiến dịch" (Thủ công): một thẻ Zalo duy nhất; cá nhân/nhóm là khối trong sơ đồ.
+    zaloChannel: 'Zalo',
     zaloGroup: 'Zalo nhóm',
     telegram: 'Telegram',
     telegramGroup: 'Telegram nhóm',

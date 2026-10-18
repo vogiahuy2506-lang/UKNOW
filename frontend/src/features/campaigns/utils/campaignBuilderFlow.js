@@ -60,8 +60,11 @@ export const getAllowedActionNodeTypesByCampaignType = (
 ) => {
   const normalizedType = normalizeCampaignType(campaignType);
   if (normalizedType === 'email') return new Set(EMAIL_ACTION_TYPES);
-  if (normalizedType === 'zalo') return new Set(zaloEnabled ? ZALO_PERSONAL_ACTION_TYPES : []);
-  if (normalizedType === 'zalo_group') return new Set(zaloEnabled ? ZALO_GROUP_ACTION_TYPES : []);
+  // PLAN_THU_CONG_GOP_4_KENH: hộp tạo chỉ còn thẻ "Zalo" -> bảng khối có CẢ khối cá nhân/kết bạn lẫn khối nhóm; loại
+  // `zalo` / `zalo_group` lưu xuống do server suy từ sơ đồ, nên hai loại cùng một bảng khối (lưu xong bảng không co lại).
+  if (normalizedType === 'zalo' || normalizedType === 'zalo_group') {
+    return new Set(zaloEnabled ? [...ZALO_PERSONAL_ACTION_TYPES, ...ZALO_GROUP_ACTION_TYPES] : []);
+  }
   // PR-E1: loại 'telegram' chỉ có khối gửi Telegram (khi cờ bật); cờ tắt -> rỗng.
   // PR-E2: 'telegram_group' cùng khối gửi Telegram (nguồn người nhận mặc định = nhóm đã chọn).
   if (normalizedType === 'telegram' || normalizedType === 'telegram_group') {
@@ -89,11 +92,15 @@ export const getAllowedDataNodeTypesByCampaignType = (campaignType) => {
   const normalizedType = normalizeCampaignType(campaignType);
   // 'whatsapp': WhatsApp gửi được số lạ (khác Telegram) -> dùng khối dữ liệu chung như email, nguồn 'node' dùng được.
   if (normalizedType === 'email' || normalizedType === 'whatsapp') return new Set(COMMON_DATA_NODE_TYPES);
-  if (normalizedType === 'zalo') {
-    return new Set([...COMMON_DATA_NODE_TYPES, ZALO_ACCOUNT_NODE_TYPE, ...ZALO_PERSONAL_DATA_NODE_TYPES]);
-  }
-  if (normalizedType === 'zalo_group') {
-    return new Set([...ZALO_GROUP_COMMON_DATA_NODE_TYPES, ZALO_ACCOUNT_NODE_TYPE, ...ZALO_GROUP_DATA_NODE_TYPES]);
+  // Họ Zalo (xem getAllowedActionNodeTypesByCampaignType): hợp của bảng cá nhân và bảng nhóm.
+  if (normalizedType === 'zalo' || normalizedType === 'zalo_group') {
+    return new Set([
+      ...COMMON_DATA_NODE_TYPES,
+      ...ZALO_GROUP_COMMON_DATA_NODE_TYPES,
+      ZALO_ACCOUNT_NODE_TYPE,
+      ...ZALO_PERSONAL_DATA_NODE_TYPES,
+      ...ZALO_GROUP_DATA_NODE_TYPES,
+    ]);
   }
   // PR-E1: khối Telegram tự lấy người nhận (hội thoại / nhập chat id), không đọc khối dữ liệu
   // (plan PR-7 cấm nguồn 'node') -> tập rỗng: ẩn/chặn mọi khối dữ liệu + khối Zalo.

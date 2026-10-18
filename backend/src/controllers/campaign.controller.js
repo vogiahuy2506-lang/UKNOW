@@ -38,6 +38,7 @@ import chatbotTelegramRepository from '../repositories/chatbot/chatbotTelegram.r
 import { listTelegramGroupsForAccount } from '../services/campaign/telegramGroups.service.js';
 import { listWhatsAppGroupsForSession } from '../services/campaign/whatsappGroups.service.js';
 import { listWhatsAppAccountsForOwner } from '../services/campaign/channels/whatsapp.campaignChannel.js';
+import { inferCampaignTypeFromNodes, resolveCampaignTypeLimitKey } from '../utils/campaignTypeInference.util.js';
 import {
   accessChannelOfRoute,
   assertChannelAccountAccess,
@@ -269,7 +270,7 @@ class CampaignController {
       const {
         campaignName,
         description,
-        campaignType,
+        campaignType: declaredCampaignType,
         landingPageUrl,
         startDate,
         endDate,
@@ -278,6 +279,8 @@ class CampaignController {
         nodes,
         connections
       } = req.body;
+      // PLAN_THU_CONG_GOP_4_KENH — kiểm hạn mức theo loại SUY từ sơ đồ (service suy lại cùng hàm, idempotent).
+      const campaignType = inferCampaignTypeFromNodes(nodes, declaredCampaignType);
 
       const campaignLimitCheck = await checkUserResourceLimit({
         userId: workspaceContext.workspaceOwnerId,
@@ -292,13 +295,7 @@ class CampaignController {
         });
       }
 
-      const typeResourceKey = campaignType === 'email'
-        ? 'emailCampaigns'
-        : campaignType === 'zalo_group'
-          ? 'zaloGroupCampaigns'
-          : campaignType === 'zalo'
-            ? 'zaloCampaigns'
-            : null;
+      const typeResourceKey = resolveCampaignTypeLimitKey(campaignType);
       if (typeResourceKey) {
         const typeLimitCheck = await checkUserResourceLimit({
           userId: workspaceContext.workspaceOwnerId,
@@ -422,6 +419,14 @@ class CampaignController {
       });
     } catch (error) {
       console.error('Update campaign error:', error);
+      // PLAN_THU_CONG_GOP_4_KENH — đổi loại (suy từ sơ đồ) vượt hạn mức loại mới: cùng hợp đồng với tạo mới (limitReached), không lưu.
+      if (error?.code === 'RESOURCE_LIMIT_EXCEEDED' || error?.limitReached) {
+        return res.status(error.statusCode || 400).json({
+          success: false,
+          message: error.message,
+          limitReached: true,
+        });
+      }
       if (error?.statusCode === 403) {
         return res.status(403).json({
           success: false,

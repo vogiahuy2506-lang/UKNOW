@@ -64,8 +64,9 @@ export const CampaignNameModal = ({
               className="w-full px-3 py-2 border border-gray-300 dark:border-dk-border bg-white dark:bg-dk-raised text-gray-900 dark:text-dk-text rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100 dark:disabled:bg-dk-raised/60 disabled:text-gray-500 dark:disabled:text-dk-text2"
             >
               <option value="email">{t('campaignBuilder.email')}</option>
-              <option value="zalo">{t('campaignBuilder.zaloPersonal')}</option>
-              <option value="zalo_group">{t('campaignBuilder.zaloGroup')}</option>
+              {/* PLAN_THU_CONG_GOP_4_KENH — chỉ một lựa chọn Zalo; 'zalo_group' (loại server suy khi sơ đồ chỉ có khối nhóm) hiện đúng nhãn của nó. */}
+              <option value="zalo">{t('campaigns.zaloChannel')}</option>
+              {campaignType === 'zalo_group' ? <option value="zalo_group">{t('campaignBuilder.zaloGroup')}</option> : null}
               {campaignType === 'telegram' ? <option value="telegram">{t('campaigns.telegram')}</option> : null}
               {campaignType === 'telegram_group' ? <option value="telegram_group">{t('campaigns.telegramGroup')}</option> : null}
               {campaignType === 'whatsapp' ? <option value="whatsapp">{t('campaigns.whatsapp')}</option> : null}

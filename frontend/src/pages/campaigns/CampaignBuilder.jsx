@@ -760,13 +760,19 @@ const CampaignBuilder = () => {
         };
 
       let savedCampaignId = id;
+      // PLAN_THU_CONG_GOP_4_KENH — server SUY loại từ khối gửi trong sơ đồ (zalo ⇄ zalo_group, telegram ⇄ telegram_group);
+      // nhận lại loại đã lưu để nhãn trên đầu trang khớp danh sách.
+      let savedCampaignType = null;
       if (!isNewCampaign) {
-        await campaignBuilderApiService.updateCampaign(id, campaignData);
+        const response = await campaignBuilderApiService.updateCampaign(id, campaignData);
+        savedCampaignType = response?.data?.data?.campaignType || null;
       } else {
         const response = await campaignBuilderApiService.createCampaign(campaignData);
         savedCampaignId = response.data?.data?.id || savedCampaignId;
+        savedCampaignType = response?.data?.data?.campaignType || null;
         clearCampaignDraft();
       }
+      if (savedCampaignType && savedCampaignType !== campaignType) setCampaignType(savedCampaignType);
       setLastSavedTime(new Date().toISOString());
       lastSavedSnapshotRef.current = buildSnapshot(campaignName, nodes, edges);
       hasBaselineRef.current = true;

@@ -51,24 +51,16 @@ const buildPaletteOrderByCampaignType = (campaignType) => {
     return [...triggers, ...nodeConfigs.data, ...logic, ...actions];
   }
 
-  // Zalo cá nhân: trigger → chọn TK → lấy bạn bè → data → logic → action zalo cá nhân.
+  // Zalo (cả cá nhân lẫn nhóm — hộp tạo chỉ còn một thẻ Zalo): trigger → chọn TK → lấy bạn bè → lấy nhóm → data → logic →
+  // action zalo cá nhân / kết bạn / nhóm. Loại `zalo` và `zalo_group` do server suy từ sơ đồ nên dùng chung một bảng khối.
   if (normalizedType === 'zalo' || normalizedType === 'zalo_personal'
-      || normalizedType === 'zalo-individual' || normalizedType === 'zalo_individual') {
-    const zaloFlow = [selectZalo, getAllFriends].filter(Boolean);
+      || normalizedType === 'zalo-individual' || normalizedType === 'zalo_individual'
+      || normalizedType === 'zalo-group' || normalizedType === 'zalo_group' || normalizedType === 'group_zalo') {
+    const zaloFlow = [selectZalo, getAllFriends, getAllGroups].filter(Boolean);
     const actions = nodeConfigs.actions.filter(
-      (n) => n.type === 'send_zalo_personal' || n.type === 'send_zalo_friend_request'
+      (n) => n.type === 'send_zalo_personal' || n.type === 'send_zalo_friend_request' || n.type === 'send_zalo_group'
     );
     return [...triggers, ...zaloFlow, ...nodeConfigs.data, ...logic, ...actions];
-  }
-
-  // Zalo nhóm: trigger → chọn TK → lấy nhóm → data (không có read_interested_customers) → logic → action zalo group.
-  if (normalizedType === 'zalo-group' || normalizedType === 'zalo_group' || normalizedType === 'group_zalo') {
-    const zaloFlow = [selectZalo, getAllGroups].filter(Boolean);
-    const data = nodeConfigs.data.filter(
-      (n) => n.type !== 'read_interested_customers'
-    );
-    const actions = nodeConfigs.actions.filter((n) => n.type === 'send_zalo_group');
-    return [...triggers, ...zaloFlow, ...data, ...logic, ...actions];
   }
 
   // Telegram (PR-E1): chỉ trigger → logic → khối gửi Telegram (khối tự lấy người nhận, không có node dữ liệu).

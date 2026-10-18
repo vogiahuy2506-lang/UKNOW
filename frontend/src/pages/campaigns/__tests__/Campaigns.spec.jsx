@@ -378,13 +378,39 @@ describe('Campaigns — Trang gộp Quản lý & Vận hành chiến dịch', ()
     expect(campaignApiService.createCampaign.mock.calls[0][0].campaignType).toBe('telegram');
   });
 
-  // PR-E2: nút "Telegram nhóm" tạo loại 'telegram_group'.
-  it("cờ Telegram bật: chọn nút Telegram nhóm rồi tạo -> createCampaign nhận campaignType 'telegram_group'", async () => {
+  // PLAN_THU_CONG_GOP_4_KENH: hộp chỉ còn 4 thẻ (Email · Zalo · Telegram · WhatsApp); "nhóm" là khối trong sơ đồ.
+  it('hộp Tạo chiến dịch (Thủ công) chỉ có 4 thẻ kênh: Email, Zalo, Telegram, WhatsApp - không có Zalo nhóm / Telegram nhóm', async () => {
     campaignApiService.getChannels.mockResolvedValue({
-      data: { data: { channels: [{ key: 'telegram', sendNodeSubtype: 'send_telegram', label: 'Telegram' }] } },
+      data: { data: { channels: [
+        { key: 'telegram', sendNodeSubtype: 'send_telegram', label: 'Telegram' },
+        { key: 'whatsapp', sendNodeSubtype: 'send_whatsapp', label: 'WhatsApp' },
+      ] } },
     });
+
+    renderComponent(['/app/campaigns']);
+    await waitFor(() => {
+      expect(screen.getByText('Chiến dịch Chào thu')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo' }));
+    fireEvent.click(await screen.findByTestId('create-method-blocks'));
+    await screen.findByPlaceholderText(viTranslations.campaigns.campaignNamePlaceholder);
+
+    const cards = screen.getAllByTestId(/^create-campaign-type-/).map((el) => el.getAttribute('data-testid'));
+    expect(cards).toEqual([
+      'create-campaign-type-email',
+      'create-campaign-type-zalo',
+      'create-campaign-type-telegram',
+      'create-campaign-type-whatsapp',
+    ]);
+    expect(screen.getByTestId('create-campaign-type-zalo')).toHaveTextContent(viTranslations.campaigns.zaloChannel);
+    expect(screen.queryByRole('button', { name: 'Telegram nhóm' })).toBeNull();
+    expect(screen.queryByRole('button', { name: viTranslations.campaigns.zaloGroup })).toBeNull();
+  });
+
+  it("chọn thẻ Zalo rồi tạo -> createCampaign nhận campaignType 'zalo' (tạo trống = loại mặc định của kênh)", async () => {
     campaignApiService.createCampaign.mockReset();
-    campaignApiService.createCampaign.mockResolvedValue({ data: { data: { id: 556 } } });
+    campaignApiService.createCampaign.mockResolvedValue({ data: { data: { id: 557 } } });
 
     renderComponent(['/app/campaigns']);
     await waitFor(() => {
@@ -394,14 +420,14 @@ describe('Campaigns — Trang gộp Quản lý & Vận hành chiến dịch', ()
     fireEvent.click(screen.getByRole('button', { name: 'Tạo' }));
     fireEvent.click(await screen.findByTestId('create-method-blocks'));
     const nameInput = await screen.findByPlaceholderText(viTranslations.campaigns.campaignNamePlaceholder);
-    fireEvent.change(nameInput, { target: { value: 'Chiến dịch Telegram nhóm thử' } });
-    fireEvent.click(await screen.findByRole('button', { name: 'Telegram nhóm' }));
+    fireEvent.change(nameInput, { target: { value: 'Chiến dịch Zalo thử' } });
+    fireEvent.click(await screen.findByTestId('create-campaign-type-zalo'));
     fireEvent.click(screen.getByRole('button', { name: viTranslations.campaigns.createAndDesign }));
 
     await waitFor(() => {
       expect(campaignApiService.createCampaign).toHaveBeenCalledTimes(1);
     });
-    expect(campaignApiService.createCampaign.mock.calls[0][0].campaignType).toBe('telegram_group');
+    expect(campaignApiService.createCampaign.mock.calls[0][0].campaignType).toBe('zalo');
   });
 
   // PLAN_WHATSAPP_DAY_DU_2026-09-29 PR-W4b: nút WhatsApp tạo loại 'whatsapp', chỉ khi /campaigns/channels có key 'whatsapp'.

@@ -56,11 +56,14 @@ describe('NodeConfigModal — send_telegram nguồn Nhóm Telegram (PR-E2)', () 
     expect(screen.getByDisplayValue('Nhóm Telegram')).toBeInTheDocument();
   });
 
-  it("chiến dịch 'telegram' -> KHÔNG có tuỳ chọn Nhóm Telegram", async () => {
+  it("chiến dịch 'telegram' -> nguồn mặc định là hội thoại, nhưng đổi sang Nhóm Telegram được ngay trong khối (PLAN_THU_CONG_GOP_4_KENH)", async () => {
     renderModal({ campaignType: 'telegram' });
     await waitFor(() => expect(screen.getByRole('option', { name: /Bot A/ })).toBeInTheDocument());
     expect(screen.queryByTestId('telegram-groups-picker')).not.toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: 'Nhóm Telegram' })).not.toBeInTheDocument();
+    const sourceSelect = screen.getByRole('option', { name: 'Nhóm Telegram' }).closest('select');
+    expect(sourceSelect.value).toBe('telegram_conversations');
+    fireEvent.change(sourceSelect, { target: { value: 'telegram_groups' } });
+    expect(await screen.findByTestId('telegram-groups-picker')).toBeInTheDocument();
   });
 
   it('chọn tài khoản -> tải nhóm theo tài khoản đó, tick 2 nhóm -> lưu recipientKeys là 2 object đúng', async () => {
