@@ -114,7 +114,8 @@ const NodePaletteItem = ({ node, orderIndex, onDragStart, lockedChannel = null, 
     </>
   );
 
-  // Khối máy chủ chưa chạy thật (Điều kiện, Cập nhật thông tin): thẻ mờ nhãn "Sắp có", KHÔNG kéo thả được, không có hành động bấm.
+  // Khối máy chủ chưa chạy thật (Điều kiện, Cập nhật thông tin): thẻ mờ, KHÔNG kéo thả được, không có hành động bấm. Nhãn "Sắp có" nằm DƯỚI
+  // tên khối (không chung hàng) để tên không bị cắt thành "Điều ki…" trong thanh bên hẹp.
   if (isComingSoonNodeType(node.type)) {
     return (
       <div
@@ -124,10 +125,18 @@ const NodePaletteItem = ({ node, orderIndex, onDragStart, lockedChannel = null, 
         title={t('campaignBuilder.comingSoon.tip')}
         className="flex cursor-not-allowed items-center gap-2 rounded-lg px-2.5 py-1.5 opacity-60 sm:gap-2.5 sm:px-3 sm:py-2"
       >
-        {body}
-        <span className="ml-auto shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-950/60 dark:text-amber-300" data-testid={`palette-coming-soon-${node.type}`}>
-          {t('campaignBuilder.comingSoon.badge')}
+        <span className="shrink-0 w-5 h-5 rounded bg-slate-50 dark:bg-dk-raised text-slate-400 dark:text-dk-text2 text-[10px] font-medium flex items-center justify-center tabular-nums border border-slate-200/70 dark:border-dk-border/70">
+          {orderIndex}
         </span>
+        <div className="w-7 h-7 sm:w-8 sm:h-8 rounded flex items-center justify-center shrink-0" style={{ backgroundColor: node.bgColor }}>
+          <node.icon className="w-4 h-4" style={{ color: node.iconColor }} />
+        </div>
+        <div className="min-w-0">
+          <span className="block truncate text-sm leading-5 text-gray-700 dark:text-dk-text">{nodeLabel}</span>
+          <span className="mt-0.5 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold leading-none text-amber-800 dark:bg-amber-950/60 dark:text-amber-300" data-testid={`palette-coming-soon-${node.type}`}>
+            {t('campaignBuilder.comingSoon.badge')}
+          </span>
+        </div>
       </div>
     );
   }
