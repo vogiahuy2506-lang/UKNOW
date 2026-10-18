@@ -12,6 +12,8 @@ import {
   HiOutlineChevronDown,
   HiOutlineLightBulb,
   HiOutlineSearch,
+  HiOutlineChevronDoubleRight,
+  HiOutlineUserCircle,
 } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 import MessageTemplateChannelLimitNotice from './MessageTemplateChannelLimitNotice';
@@ -22,6 +24,17 @@ import {
   getVariableSource,
   normalizeCustomKey,
 } from '../utils/templateVariables';
+import {
+  PANEL_KEY_STEP,
+  PANEL_MAX_WIDTH,
+  PANEL_MIN_WIDTH,
+  STORAGE_KEYS,
+  clampPanelWidth,
+  loadBooleanPref,
+  loadPanelWidth,
+  saveBooleanPref,
+  savePanelWidth,
+} from '../utils/templateEditorLayout';
 
 /** Nhãn mặc định lưu dạng khoá thô ("marketing"): hiển thị viết hoa chữ đầu cho dễ đọc. */
 const prettifyLabelName = (value) => {
@@ -139,6 +152,106 @@ const EmailTemplateEditorModal = ({
   const [toolbarVariableSearch, setToolbarVariableSearch] = useState('');
   const [customColumn, setCustomColumn] = useState('');
 
+  // Dải "Thông tin mẫu" (mặc định đóng) + cột "Chèn thông tin khách" (mở, rộng 320px): nhớ theo trình duyệt.
+  const [infoOpen, setInfoOpen] = useState(() => loadBooleanPref(STORAGE_KEYS.infoOpen, false));
+  const [panelOpen, setPanelOpen] = useState(() => loadBooleanPref(STORAGE_KEYS.panelOpen, true));
+  const [panelWidth, setPanelWidth] = useState(() => loadPanelWidth());
+  const [isPanelResizing, setIsPanelResizing] = useState(false);
+  const [pendingFocus, setPendingFocus] = useState(null);
+  const nameInputRef = useRef(null);
+  const panelWidthRef = useRef(panelWidth);
+  const dragRef = useRef({ startX: 0, startWidth: 0 });
+
+  const toggleInfo = () => {
+    const next = !infoOpen;
+    setInfoOpen(next);
+    saveBooleanPref(STORAGE_KEYS.infoOpen, next);
+  };
+
+  const togglePanel = () => {
+    const next = !panelOpen;
+    setPanelOpen(next);
+    saveBooleanPref(STORAGE_KEYS.panelOpen, next);
+  };
+
+  const applyPanelWidth = (value) => {
+    const next = clampPanelWidth(value);
+    panelWidthRef.current = next;
+    setPanelWidth(next);
+    return next;
+  };
+
+  const handlePanelResizeStart = (e) => {
+    e.preventDefault();
+    dragRef.current = { startX: e.clientX, startWidth: panelWidthRef.current };
+    setIsPanelResizing(true);
+  };
+
+  const handlePanelResizeKeyDown = (e) => {
+    let next = null;
+    // Cột nằm bên phải: mũi tên trái = kéo mép trái sang trái = rộng hơn.
+    if (e.key === 'ArrowLeft') next = panelWidthRef.current + PANEL_KEY_STEP;
+    else if (e.key === 'ArrowRight') next = panelWidthRef.current - PANEL_KEY_STEP;
+    else if (e.key === 'Home') next = PANEL_MIN_WIDTH;
+    else if (e.key === 'End') next = PANEL_MAX_WIDTH;
+    if (next == null) return;
+    e.preventDefault();
+    savePanelWidth(applyPanelWidth(next));
+  };
+
+  useEffect(() => {
+    if (!isPanelResizing) return undefined;
+    const handleMove = (e) => {
+      applyPanelWidth(dragRef.current.startWidth + (dragRef.current.startX - e.clientX));
+    };
+    const handleUp = () => {
+      setIsPanelResizing(false);
+      savePanelWidth(panelWidthRef.current);
+    };
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+    };
+  }, [isPanelResizing]);
+
+  // Ô tiêu đề nằm trong dải đang đóng (ẩn): con trỏ không thể ở đó, nên chip/gợi ý chèn về ô nội dung.
+  useEffect(() => {
+    if (!infoOpen && activeInput === 'subject') {
+      setActiveInput(contentTab === 'text' ? 'text' : 'html');
+    }
+  }, [infoOpen, activeInput, contentTab, setActiveInput]);
+
+  // Sau khi dải mở ra (Lưu thiếu tên / tiêu đề) mới focus được ô cần nhập.
+  useEffect(() => {
+    if (!pendingFocus || !infoOpen) return;
+    const target = pendingFocus === 'subject' ? subjectInputRef?.current : nameInputRef.current;
+    if (target) target.focus();
+    setPendingFocus(null);
+  }, [pendingFocus, infoOpen, subjectInputRef]);
+
+  const subjectFieldLabel = subjectLabel || t('emailTemplateEditor.emailSubject');
+  const selectedLabel = labels.find((l) => l.name === formData.category);
+
+  /** Ô ẩn trong dải đóng không dùng được `required` HTML (trình duyệt không focus được ô ẩn) nên kiểm bằng code. */
+  const handleFormSubmit = (e) => {
+    const missingName = !String(formData.templateName || '').trim();
+    const missingSubject = !hideSubjectField && !String(formData.subject || '').trim();
+    if (missingName || missingSubject) {
+      e.preventDefault();
+      setInfoOpen(true);
+      setPendingFocus(missingName ? 'name' : 'subject');
+      toast.error(
+        missingName
+          ? t('emailTemplateEditor.nameRequired')
+          : t('emailTemplateEditor.subjectRequired', { field: subjectFieldLabel }),
+      );
+      return;
+    }
+    handleSubmit(e);
+  };
+
   /** Gợi ý khi gõ `{{`: biến đang dùng + thông tin khách có sẵn (không trùng khoá). */
   const typeaheadOptions = [
     ...detectedVariables,
@@ -222,54 +335,107 @@ const EmailTemplateEditorModal = ({
         </div>
       </div>
 
-      <form id="email-template-editor-form" onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 overflow-hidden">
-        <div className="px-4 py-2.5 border-b border-gray-200/80 dark:border-dk-border bg-slate-50/70 dark:bg-dk-surface/70 grid grid-cols-12 gap-3 items-center shrink-0">
-          <div className="col-span-12 sm:col-span-4 space-y-1">
-            <label className="text-xs font-medium text-gray-700 dark:text-dk-text">{t('emailTemplateEditor.templateName')}</label>
-            <input
-              type="text"
-              value={formData.templateName}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  templateName: e.target.value,
-                }))
-              }
-              className="w-full px-3 py-1.5 bg-white dark:bg-dk-inset border border-gray-200 dark:border-dk-border text-xs sm:text-sm text-gray-900 dark:text-dk-text placeholder:text-gray-400 dark:placeholder:text-dk-muted rounded-xl shadow-2xs focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
-              placeholder={t('emailTemplateEditor.templateNamePlaceholder')}
-              required
-            />
-          </div>
-          {!hideSubjectField && (
-            <div className="col-span-12 sm:col-span-5 space-y-1">
-              <label className="text-xs font-medium text-gray-700 dark:text-dk-text">{subjectLabel || t('emailTemplateEditor.emailSubject')}</label>
+      {isPanelResizing && <div className="fixed inset-0 z-[80] cursor-col-resize" />}
+
+      <form id="email-template-editor-form" onSubmit={handleFormSubmit} noValidate className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <div
+          data-testid="template-info-strip"
+          className="border-b border-gray-200/80 dark:border-dk-border bg-slate-50/70 dark:bg-dk-surface/70 shrink-0"
+        >
+          <button
+            type="button"
+            onClick={toggleInfo}
+            aria-expanded={infoOpen}
+            aria-controls="template-info-fields"
+            title={infoOpen ? t('emailTemplateEditor.templateInfoCollapse') : t('emailTemplateEditor.templateInfoExpand')}
+            className="w-full flex items-center gap-2 px-4 py-2 text-left hover:bg-gray-100/60 dark:hover:bg-dk-raised/50 transition-colors"
+          >
+            <HiOutlineChevronDown className={`w-4 h-4 text-gray-400 dark:text-dk-muted shrink-0 transition-transform ${infoOpen ? '' : '-rotate-90'}`} />
+            <span className="text-xs font-semibold text-gray-700 dark:text-dk-text shrink-0">{t('emailTemplateEditor.templateInfoTitle')}</span>
+            {!infoOpen && (
+              <span data-testid="template-info-summary" className="min-w-0 flex-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+                <span className="text-gray-300 dark:text-dk-border">·</span>
+                {String(formData.templateName || '').trim() ? (
+                  <span data-testid="template-info-summary-name" className="max-w-[16rem] truncate font-medium text-gray-900 dark:text-dk-text">{formData.templateName}</span>
+                ) : (
+                  <span data-testid="template-info-summary-name" className="text-amber-600 dark:text-amber-400">{t('emailTemplateEditor.templateNameEmpty')}</span>
+                )}
+                {!hideSubjectField && (
+                  <>
+                    <span className="text-gray-300 dark:text-dk-border">·</span>
+                    {String(formData.subject || '').trim() ? (
+                      <span data-testid="template-info-summary-subject" className="max-w-[22rem] truncate text-gray-600 dark:text-dk-text2">{formData.subject}</span>
+                    ) : (
+                      <span data-testid="template-info-summary-subject" className="text-amber-600 dark:text-amber-400">{t('emailTemplateEditor.subjectEmpty')}</span>
+                    )}
+                  </>
+                )}
+                {formData.category && (
+                  <>
+                    <span className="text-gray-300 dark:text-dk-border">·</span>
+                    <span data-testid="template-info-summary-label" className="inline-flex items-center gap-1 text-gray-600 dark:text-dk-text2">
+                      {selectedLabel && <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: selectedLabel.color }} />}
+                      <span className="truncate">{selectedLabel ? selectedLabel.name : prettifyLabelName(formData.category)}</span>
+                    </span>
+                  </>
+                )}
+              </span>
+            )}
+          </button>
+          <div
+            id="template-info-fields"
+            className={`${infoOpen ? '' : 'hidden'} px-4 pb-2.5 grid grid-cols-12 gap-3 items-center`}
+          >
+            <div className="col-span-12 sm:col-span-4 space-y-1">
+              <label htmlFor="template-name-input" className="text-xs font-medium text-gray-700 dark:text-dk-text">{t('emailTemplateEditor.templateName')}</label>
               <input
+                id="template-name-input"
+                ref={nameInputRef}
                 type="text"
-                value={formData.subject}
-                ref={subjectInputRef}
-                onFocus={() => setActiveInput('subject')}
-                onClick={() => setActiveInput('subject')}
+                value={formData.templateName}
                 onChange={(e) =>
-                  updateSubjectValue(e.target.value, e.target.selectionStart || 0)
+                  setFormData((prev) => ({
+                    ...prev,
+                    templateName: e.target.value,
+                  }))
                 }
                 className="w-full px-3 py-1.5 bg-white dark:bg-dk-inset border border-gray-200 dark:border-dk-border text-xs sm:text-sm text-gray-900 dark:text-dk-text placeholder:text-gray-400 dark:placeholder:text-dk-muted rounded-xl shadow-2xs focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
-                placeholder={t('emailTemplateEditor.subjectPlaceholder')}
-                required
+                placeholder={t('emailTemplateEditor.templateNamePlaceholder')}
+                aria-required="true"
               />
             </div>
-          )}
-          <div className={`space-y-1 ${hideSubjectField ? 'col-span-12 sm:col-span-8' : 'col-span-12 sm:col-span-3'}`}>
-            <label className="text-xs font-medium text-gray-700 dark:text-dk-text">{t('emailTemplateEditor.category')}</label>
-            <LabelPicker
-              value={formData.category}
-              labels={labels}
-              onChange={(val) => setFormData((prev) => ({ ...prev, category: val }))}
-            />
+            {!hideSubjectField && (
+              <div className="col-span-12 sm:col-span-5 space-y-1">
+                <label htmlFor="template-subject-input" className="text-xs font-medium text-gray-700 dark:text-dk-text">{subjectFieldLabel}</label>
+                <input
+                  id="template-subject-input"
+                  type="text"
+                  value={formData.subject}
+                  ref={subjectInputRef}
+                  onFocus={() => setActiveInput('subject')}
+                  onClick={() => setActiveInput('subject')}
+                  onChange={(e) =>
+                    updateSubjectValue(e.target.value, e.target.selectionStart || 0)
+                  }
+                  className="w-full px-3 py-1.5 bg-white dark:bg-dk-inset border border-gray-200 dark:border-dk-border text-xs sm:text-sm text-gray-900 dark:text-dk-text placeholder:text-gray-400 dark:placeholder:text-dk-muted rounded-xl shadow-2xs focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                  placeholder={t('emailTemplateEditor.subjectPlaceholder')}
+                  aria-required="true"
+                />
+              </div>
+            )}
+            <div className={`space-y-1 ${hideSubjectField ? 'col-span-12 sm:col-span-8' : 'col-span-12 sm:col-span-3'}`}>
+              <label className="text-xs font-medium text-gray-700 dark:text-dk-text">{t('emailTemplateEditor.category')}</label>
+              <LabelPicker
+                value={formData.category}
+                labels={labels}
+                onChange={(val) => setFormData((prev) => ({ ...prev, category: val }))}
+              />
+            </div>
           </div>
         </div>
 
         <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-y-auto lg:overflow-hidden">
-          <div className="flex-1 flex flex-col min-h-[460px] lg:min-h-0 lg:h-full overflow-hidden min-w-0">
+          <div className="flex-1 flex flex-col min-h-[460px] lg:min-h-0 lg:h-full overflow-hidden min-w-0 lg:min-w-[360px]">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 dark:border-dk-border px-4 py-2 bg-white dark:bg-dk-surface shrink-0">
               <div className="flex items-center gap-2">
                 <span className="text-xs text-gray-500 dark:text-dk-text2 font-medium">
@@ -618,10 +784,60 @@ const EmailTemplateEditorModal = ({
           </div>
           <aside
             data-testid="template-customer-info-panel"
-            className="shrink-0 lg:w-72 xl:w-80 border-t lg:border-t-0 lg:border-l border-gray-200 dark:border-dk-border bg-gray-50/70 dark:bg-dk-surface/70 p-3 lg:p-4 lg:overflow-y-auto space-y-4"
+            data-open={panelOpen ? 'true' : 'false'}
+            style={{ '--template-panel-w': `${panelOpen ? panelWidth : 40}px` }}
+            className="relative shrink-0 border-t lg:border-t-0 lg:border-l border-gray-200 dark:border-dk-border bg-gray-50/70 dark:bg-dk-surface/70 lg:w-[var(--template-panel-w)] lg:flex lg:flex-col lg:min-h-0"
           >
+            {panelOpen && (
+              <div
+                role="separator"
+                aria-orientation="vertical"
+                aria-label={t('emailTemplateEditor.customerPanelResize')}
+                aria-valuemin={PANEL_MIN_WIDTH}
+                aria-valuemax={PANEL_MAX_WIDTH}
+                aria-valuenow={panelWidth}
+                tabIndex={0}
+                data-testid="template-customer-info-resize"
+                onMouseDown={handlePanelResizeStart}
+                onKeyDown={handlePanelResizeKeyDown}
+                title={t('emailTemplateEditor.customerPanelResize')}
+                className="hidden lg:block absolute inset-y-0 -left-1 w-2 z-10 cursor-col-resize hover:bg-orange-400/40 focus-visible:bg-orange-400/60 focus:outline-none transition-colors"
+              />
+            )}
+            {panelOpen ? (
+              <div className="flex items-center justify-between gap-2 px-3 lg:px-4 pt-3 lg:pt-4 shrink-0">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-dk-text">{t('emailTemplateEditor.insertCustomerInfo')}</h3>
+                <button
+                  type="button"
+                  onClick={togglePanel}
+                  data-testid="template-customer-info-toggle"
+                  aria-expanded="true"
+                  aria-label={t('emailTemplateEditor.customerPanelCollapse')}
+                  title={t('emailTemplateEditor.customerPanelCollapse')}
+                  className="p-1 rounded-lg text-gray-400 dark:text-dk-muted hover:text-gray-700 dark:hover:text-dk-text hover:bg-gray-200/60 dark:hover:bg-dk-raised transition-colors"
+                >
+                  <HiOutlineChevronDoubleRight className="w-4 h-4 hidden lg:block" />
+                  <HiOutlineChevronDown className="w-4 h-4 lg:hidden" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={togglePanel}
+                data-testid="template-customer-info-toggle"
+                aria-expanded="false"
+                aria-label={t('emailTemplateEditor.customerPanelExpand')}
+                title={t('emailTemplateEditor.customerPanelExpand')}
+                className="w-full flex items-center gap-2 px-3 py-2.5 lg:flex-col lg:px-0 lg:py-3 lg:gap-3 text-gray-600 dark:text-dk-text2 hover:bg-gray-100 dark:hover:bg-dk-raised transition-colors"
+              >
+                <HiOutlineUserCircle className="w-5 h-5 shrink-0 text-primary-600 dark:text-primary-400" />
+                <span className="text-xs font-semibold lg:[writing-mode:vertical-rl] lg:whitespace-nowrap">{t('emailTemplateEditor.insertCustomerInfo')}</span>
+                <HiOutlineChevronDown className="w-4 h-4 ml-auto -rotate-90 lg:hidden" />
+              </button>
+            )}
+            {panelOpen && (
+            <div className="p-3 lg:p-4 lg:pt-3 lg:flex-1 lg:min-h-0 lg:overflow-y-auto space-y-4">
             <section>
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-dk-text">{t('emailTemplateEditor.insertCustomerInfo')}</h3>
               <p className="mt-0.5 text-xs text-gray-500 dark:text-dk-text2">{t('emailTemplateEditor.insertCustomerInfoHint')}</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {customerFields.map((field) => (
@@ -699,6 +915,8 @@ const EmailTemplateEditorModal = ({
               </div>
               <p className="mt-1 text-[11px] leading-snug text-gray-500 dark:text-dk-text2">{t('emailTemplateEditor.customInfoHelp')}</p>
             </section>
+            </div>
+            )}
           </aside>
         </div>
       </form>

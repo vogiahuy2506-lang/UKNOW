@@ -120,6 +120,8 @@ describe('Trình soạn mẫu gọn — chèn thông tin khách, không còn tab
   it('chip chèn vào TIÊU ĐỀ khi con trỏ đang ở tiêu đề', async () => {
     renderPage();
     const subject = await openOldEmail();
+    // Dải "Thông tin mẫu" mặc định đóng: mở ra thì con trỏ mới đặt được vào tiêu đề.
+    fireEvent.click(screen.getByRole('button', { name: /Thông tin mẫu/ }));
     subject.focus();
     subject.setSelectionRange(subject.value.length, subject.value.length);
     fireEvent.click(subject);

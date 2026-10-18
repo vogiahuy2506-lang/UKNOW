@@ -9,6 +9,8 @@ test.describe('Email template', () => {
     await page.getByRole('button', { name: 'Tạo template mới' }).first().click();
     await expect(page.getByRole('heading', { name: 'Tạo template mới' })).toBeVisible();
 
+    // Từ PR-M2 dải "Thông tin mẫu" mặc định ĐÓNG (ô tên / tiêu đề bị ẩn): mở ra rồi mới điền.
+    await page.getByRole('button', { name: /Thông tin mẫu/ }).click();
     await page.getByPlaceholder('Ví dụ: Chào mừng khách hàng mới').fill(tplName);
     await page.getByPlaceholder('Ví dụ: Chào mừng {{name}} đến với Founder AI!').fill('E2E subject');
 

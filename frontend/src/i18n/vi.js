@@ -6276,6 +6276,16 @@ export default {
     customInfoPlaceholder: 'Tên cột trong file của bạn',
     customInfoInsert: 'Chèn',
     customInfoHelp: 'Ví dụ: “Chức vụ”. Khi gửi, hệ thống lấy giá trị ở cột cùng tên trong Google Sheet hoặc biểu mẫu.',
+    templateInfoTitle: 'Thông tin mẫu',
+    templateInfoExpand: 'Mở thông tin mẫu',
+    templateInfoCollapse: 'Thu gọn thông tin mẫu',
+    templateNameEmpty: 'Chưa đặt tên',
+    subjectEmpty: 'Chưa có tiêu đề',
+    nameRequired: 'Vui lòng nhập tên mẫu.',
+    subjectRequired: 'Vui lòng nhập: {field}.',
+    customerPanelCollapse: 'Thu gọn khung Chèn thông tin khách',
+    customerPanelExpand: 'Mở khung Chèn thông tin khách',
+    customerPanelResize: 'Kéo để đổi độ rộng khung Chèn thông tin khách',
   },
 
   chatbot: {

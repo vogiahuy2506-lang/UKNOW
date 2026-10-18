@@ -6263,6 +6263,16 @@ export default {
     customInfoPlaceholder: 'Column name in your file',
     customInfoInsert: 'Insert',
     customInfoHelp: 'E.g. “Job title”. When sending, the value from the column with the same name in your Google Sheet or form is used.',
+    templateInfoTitle: 'Template details',
+    templateInfoExpand: 'Show template details',
+    templateInfoCollapse: 'Collapse template details',
+    templateNameEmpty: 'No name yet',
+    subjectEmpty: 'No subject yet',
+    nameRequired: 'Please enter a template name.',
+    subjectRequired: 'Please fill in: {field}.',
+    customerPanelCollapse: 'Collapse the Insert customer info panel',
+    customerPanelExpand: 'Open the Insert customer info panel',
+    customerPanelResize: 'Drag to resize the Insert customer info panel',
   },
 
   chatbot: {
