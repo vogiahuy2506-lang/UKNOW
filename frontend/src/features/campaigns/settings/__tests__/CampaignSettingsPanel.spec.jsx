@@ -134,7 +134,7 @@ describe('CampaignSettingsPanel — năm mục có biểu mẫu riêng', () => {
     renderPanel();
     const order = ['sender', 'audience', 'content', 'timing'].map((key) => screen.getByTestId(`settings-section-${key}`));
     order.reduce((prev, current) => {
-      expect(prev.compareDocumentPosition(current) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy(); // eslint-disable-line no-bitwise
+      expect(prev.compareDocumentPosition(current) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
       return current;
     });
     expect(summaryOf('sender')).toBe('CSKH (cskh@abc.vn)');
