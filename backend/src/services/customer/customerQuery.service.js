@@ -1,4 +1,5 @@
 import customerReadRepository from '../../repositories/customer/customerRead.repository.js';
+import customerTagService, { normalizeIdList, CUSTOMER_TAG_MAX_TAGS_PER_CALL } from './customerTag.service.js';
 
 class CustomerQueryService {
   /**
@@ -118,9 +119,11 @@ class CustomerQueryService {
     consentSource,
     emailStatus,
     campaignId,
+    tagIds,
     purchaseOrderStatusExpr,
   }) {
     const { page: safePage, limit: safeLimit } = this.parsePagination({ page, limit });
+    const safeTagIds = normalizeIdList(tagIds, { label: 'tagIds', max: CUSTOMER_TAG_MAX_TAGS_PER_CALL });
 
     const { rows, total } = await customerReadRepository.getAllCustomerRows({
       userId,
@@ -132,8 +135,10 @@ class CustomerQueryService {
       consentSource,
       emailStatus,
       campaignId,
+      tagIds: safeTagIds,
       purchaseOrderStatusExpr,
     });
+    const tagsByCustomer = await customerTagService.getTagsByCustomerIds(rows.map((item) => Number(item.id)));
 
     return {
       items: rows.map((item) => ({
@@ -157,7 +162,7 @@ class CustomerQueryService {
         campaignJoinedAt: item.campaign_joined_at ?? null,
         campaignCount: item.campaign_count,
         lastCampaignActivityAt: item.last_campaign_activity_at,
-        tags: [],
+        tags: tagsByCustomer.get(Number(item.id)) || [],
         createdAt: item.created_at,
         updatedAt: item.updated_at,
       })),

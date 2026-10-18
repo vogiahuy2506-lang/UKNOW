@@ -45,7 +45,7 @@ class CustomerController {
   async getAll(req, res) {
     try {
       const userId = getWorkspaceContext(req.user).workspaceOwnerId;
-      const { page = 1, limit = 10, status, search, source, campaignId, consentSource, emailStatus } = req.query;
+      const { page = 1, limit = 10, status, search, source, campaignId, consentSource, emailStatus, tagIds } = req.query;
       const purchaseOrderStatusExpr = await this.resolvePurchaseOrderStatusExpr('cp');
       const data = await customerQueryService.getAllCustomers({
         userId,
@@ -57,6 +57,7 @@ class CustomerController {
         consentSource,
         emailStatus,
         campaignId,
+        tagIds,
         purchaseOrderStatusExpr,
       });
 

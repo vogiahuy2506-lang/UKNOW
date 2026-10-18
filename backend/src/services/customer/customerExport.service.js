@@ -1,4 +1,5 @@
 import customerReadRepository from '../../repositories/customer/customerRead.repository.js';
+import { normalizeIdList, CUSTOMER_TAG_MAX_TAGS_PER_CALL } from './customerTag.service.js';
 import {
   CUSTOMER_EXPORT_MAX_ROWS,
   buildCustomerCsvHeader,
@@ -15,7 +16,7 @@ class CustomerExportService {
    *
    * @param {object} input
    * @param {number} input.userId workspace owner
-   * @param {object} [input.filters] { status, search, source, consentSource, emailStatus, campaignId }
+   * @param {object} [input.filters] { status, search, source, consentSource, emailStatus, campaignId, tagIds }
    * @param {string} input.purchaseOrderStatusExpr
    * @returns {Promise<{ header: string, lines: string[], rowCount: number, truncated: boolean }>}
    */
@@ -28,6 +29,7 @@ class CustomerExportService {
       consentSource: asString(filters.consentSource),
       emailStatus: asString(filters.emailStatus),
       campaignId: asString(filters.campaignId),
+      tagIds: normalizeIdList(filters.tagIds, { label: 'tagIds', max: CUSTOMER_TAG_MAX_TAGS_PER_CALL }),
       purchaseOrderStatusExpr,
       limit: CUSTOMER_EXPORT_MAX_ROWS + 1,
     });

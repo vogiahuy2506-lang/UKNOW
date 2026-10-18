@@ -1,6 +1,7 @@
 import express from 'express';
 import { body, param } from 'express-validator';
 import customerController from '../controllers/customer.controller.js';
+import customerTagController from '../controllers/customerTag.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 import handleValidationErrors from '../middleware/validate.middleware.js';
 import { requirePermission, requireActivePlan, requirePasswordChange, requirePhone } from '../middleware/authorization.middleware.js';
@@ -26,6 +27,16 @@ router.use(requirePermission('customers'));
 
 // Get all
 router.get('/', customerController.getAll.bind(customerController));
+
+// Tag khách hàng — khai báo TRƯỚC mọi `/:id` để 'tags' không bị bắt làm id. Quyền: `customers` (router.use phía trên).
+const tagIdParamValidator = param('tagId').isInt({ min: 1 }).withMessage('ID tag không hợp lệ');
+router.get('/tags', customerTagController.list.bind(customerTagController));
+router.post('/tags', customerTagController.create.bind(customerTagController));
+router.post('/tags/assign', customerTagController.assign.bind(customerTagController));
+router.post('/tags/unassign', customerTagController.unassign.bind(customerTagController));
+router.put('/tags/:tagId', tagIdParamValidator, handleValidationErrors, customerTagController.update.bind(customerTagController));
+router.delete('/tags/:tagId', tagIdParamValidator, handleValidationErrors, customerTagController.remove.bind(customerTagController));
+router.get('/:id/tags', idParamValidator, handleValidationErrors, customerTagController.listForCustomer.bind(customerTagController));
 // Xuất CSV theo bộ lọc danh sách — khai báo TRƯỚC `/:id` để 'export.csv' không bị bắt làm id.
 router.get('/export.csv', customerController.exportCsv.bind(customerController));
 router.get(
