@@ -126,7 +126,7 @@ const NodeConfigForm = ({
   const [selectedZaloPersonalSection, setSelectedZaloPersonalSection] = useState(() => sectionFor('send_zalo_personal'));
   const [selectedZaloGroupSection, setSelectedZaloGroupSection] = useState(() => sectionFor('send_zalo_group'));
   const contentRef = useRef(null);
-  const pendingFocusRef = useRef(false);
+  const pendingFocusRef = useRef(0); // số lượt render còn thử focus (ô nhập có thể xuất hiện sau effect khởi tạo)
   const [testPreviewItems, setTestPreviewItems] = useState([]);
   const [isLoadingTestPreview, setIsLoadingTestPreview] = useState(false);
   const [testPreviewSearchQuery, setTestPreviewSearchQuery] = useState('');
@@ -355,12 +355,12 @@ const NodeConfigForm = ({
     const setter = setters[nodeType];
     if (!setter) return;
     setter(initialSection);
-    pendingFocusRef.current = true;
+    pendingFocusRef.current = 6;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialSection, sectionRequestId, node?.id]);
 
   useEffect(() => {
-    if (!pendingFocusRef.current) return;
+    if (pendingFocusRef.current <= 0) return;
     const root = contentRef.current;
     if (!root) return;
     const shownSection = {
@@ -378,9 +378,13 @@ const NodeConfigForm = ({
     const target = root.querySelector('[data-section-focus]')
       || root.querySelector('textarea:not([disabled])')
       || root.querySelector('input:not([type=checkbox]):not([type=radio]):not([type=hidden]):not([type=number]):not([disabled]), select:not([disabled])');
-    // Giữ cờ nếu mục chưa kịp vẽ (vd dữ liệu đang tải) — render sau sẽ thử lại; không giữ nếu mục không có ô nhập nào.
-    pendingFocusRef.current = false;
-    if (target && typeof target.focus === 'function') target.focus();
+    // Chưa có ô nhập (vd bước mặc định của email do effect khởi tạo thêm ở lượt sau) → thử lại ở lượt render kế, tối đa vài lượt.
+    if (!target || typeof target.focus !== 'function') {
+      pendingFocusRef.current -= 1;
+      return;
+    }
+    pendingFocusRef.current = 0;
+    target.focus();
   });
 
   useEffect(() => {

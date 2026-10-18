@@ -46,10 +46,13 @@ describe('NodeConfigForm — initialSection', () => {
     expect(document.activeElement).toBe(select);
   });
 
-  it('email + initialSection "templates" → mở mục Danh sách email gửi', () => {
+  it('email + initialSection "templates" → mở mục Danh sách email gửi, ô chọn mẫu được focus', () => {
     render(<Harness target={EMAIL_MANUAL} initialSection="templates" />);
     expect(screen.getByRole('heading', { name: 'Danh sách email gửi' })).toBeInTheDocument();
     expect(document.querySelector('textarea')).toBeNull();
+    const picker = document.querySelector('button[data-section-focus]');
+    expect(picker).not.toBeNull();
+    expect(document.activeElement).toBe(picker);
   });
 
   it('KHÔNG truyền initialSection (Sơ đồ khối / hộp) → mục basic, không focus ô nào', () => {

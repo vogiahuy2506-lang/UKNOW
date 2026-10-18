@@ -71,6 +71,7 @@ const TemplateSearchSelect = ({
         <div className="relative flex-1" ref={rootRef}>
           <button
             type="button"
+            data-section-focus
             onClick={handleToggleOpen}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm bg-white flex items-center justify-between dark:bg-dk-inset dark:border-dk-border-strong"
           >
