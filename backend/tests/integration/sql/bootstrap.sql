@@ -996,6 +996,29 @@ CREATE INDEX idx_customers_ws_created ON customers ((COALESCE(workspace_owner_id
 CREATE INDEX idx_customers_ws_email_key ON customers ((COALESCE(workspace_owner_id, id_user)), (LOWER(email)));
 CREATE INDEX idx_customers_ws_phone_key ON customers ((COALESCE(workspace_owner_id, id_user)), (RIGHT(regexp_replace(phone, '[^0-9]', '', 'g'), 9)));
 
+-- ─── Tag khách hàng (migration 304, PLAN_TAG_KHACH_HANG PR-T1) ─────────
+CREATE TABLE customer_tags (
+  id                 BIGSERIAL PRIMARY KEY,
+  workspace_owner_id BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name               VARCHAR(60)  NOT NULL,
+  color              VARCHAR(16),
+  created_at         TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at         TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX uq_customer_tags_ws_lower_name ON customer_tags (workspace_owner_id, (LOWER(name)));
+
+CREATE TABLE customer_tag_assignments (
+  customer_id BIGINT      NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  tag_id      BIGINT      NOT NULL REFERENCES customer_tags(id) ON DELETE CASCADE,
+  assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  assigned_by BIGINT      REFERENCES users(id) ON DELETE SET NULL,
+  source      VARCHAR(20) NOT NULL DEFAULT 'manual' CHECK (source IN ('manual', 'campaign')),
+  campaign_id BIGINT,
+  run_id      BIGINT,
+  PRIMARY KEY (customer_id, tag_id)
+);
+CREATE INDEX idx_customer_tag_assignments_tag ON customer_tag_assignments (tag_id);
+
 -- ─── Courses (WooCommerce sync) ────────────────────────────────────────
 CREATE TABLE courses (
   id              BIGSERIAL PRIMARY KEY,

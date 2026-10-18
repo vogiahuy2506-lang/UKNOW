@@ -285,7 +285,7 @@ class CustomerReadRepository {
    *
    * @returns {{ whereSql: string, params: any[], campaignParamIdx: number|null }}
    */
-  buildCustomerListFilter({ userId, status, search, source, consentSource, emailStatus, campaignId, purchaseOrderStatusExpr }) {
+  buildCustomerListFilter({ userId, status, search, source, consentSource, emailStatus, campaignId, tagIds, purchaseOrderStatusExpr }) {
     const parsedCampaignId = Number.parseInt(campaignId, 10);
     const params = [userId];
 
@@ -342,6 +342,19 @@ class CustomerReadRepository {
       whereSql += ' AND c.email_hard_bounced = TRUE';
     } else if (normalizedEmailStatus === 'subscribed') {
       whereSql += ' AND c.email_subscribed = TRUE AND c.email_hard_bounced = FALSE';
+    }
+
+    // Lọc theo tag: khách mang BẤT KỲ tag nào trong danh sách (ANY, không phải AND). Tag phải thuộc đúng workspace.
+    if (Array.isArray(tagIds) && tagIds.length > 0) {
+      params.push(tagIds);
+      whereSql += ` AND EXISTS (
+        SELECT 1
+        FROM customer_tag_assignments cta
+        JOIN customer_tags ctg ON ctg.id = cta.tag_id
+        WHERE cta.customer_id = c.id
+          AND ctg.workspace_owner_id = $1
+          AND cta.tag_id = ANY($${params.length}::bigint[])
+      )`;
     }
 
     if (campaignParamIdx) {
@@ -403,11 +416,12 @@ class CustomerReadRepository {
     consentSource,
     emailStatus,
     campaignId,
+    tagIds,
     purchaseOrderStatusExpr,
   }) {
     const offset = (page - 1) * limit;
     const { whereSql, params, campaignParamIdx } = this.buildCustomerListFilter({
-      userId, status, search, source, consentSource, emailStatus, campaignId, purchaseOrderStatusExpr,
+      userId, status, search, source, consentSource, emailStatus, campaignId, tagIds, purchaseOrderStatusExpr,
     });
 
     const orderStatusFilter = campaignParamIdx ? `AND cp.id_campaign = $${campaignParamIdx}` : '';
@@ -494,10 +508,10 @@ class CustomerReadRepository {
    * @returns {Promise<object[]>}
    */
   async getCustomerExportRows({
-    userId, status, search, source, consentSource, emailStatus, campaignId, purchaseOrderStatusExpr, limit,
+    userId, status, search, source, consentSource, emailStatus, campaignId, tagIds, purchaseOrderStatusExpr, limit,
   }) {
     const { whereSql, params } = this.buildCustomerListFilter({
-      userId, status, search, source, consentSource, emailStatus, campaignId, purchaseOrderStatusExpr,
+      userId, status, search, source, consentSource, emailStatus, campaignId, tagIds, purchaseOrderStatusExpr,
     });
     const result = await db.query(
       `SELECT c.id, c.full_name, c.email, c.phone, c.consent_source,
