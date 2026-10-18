@@ -30,9 +30,11 @@ test.describe.serial('Tạo + kích hoạt chiến dịch', () => {
     await page.getByTestId('create-method-blocks').click();
     await page.getByPlaceholder('Nhập tên chiến dịch...').fill(name);
     await page.getByRole('button', { name: 'Tạo và thiết kế' }).click();
-    // Tạo trống bằng trình dựng: chiến dịch mở thẳng ở tab Sơ đồ khối (`/app/campaigns/:id?tab=flow`).
-    await page.waitForURL(/\/app\/campaigns\/\d+\?tab=flow/, { timeout: 25_000 });
-    await expect(page.getByTestId('campaign-tab-flow')).toHaveAttribute('aria-selected', 'true');
+    // Từ 18/10/2026 (PLAN_THIET_LAP_CAU_HINH_TRUC_TIEP PR-B) tạo trống mở thẳng tab Thiết lập (`?tab=settings`): chiến dịch chưa có
+    // khối hiện các mục Gửi từ / Gửi cho ai để điền (PLAN_THIET_LAP_BIEU_MAU_RIENG E1), không còn sơ đồ trống.
+    await page.waitForURL(/\/app\/campaigns\/\d+\?tab=settings/, { timeout: 25_000 });
+    await expect(page.getByTestId('campaign-tab-settings')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('settings-section-audience')).toBeVisible({ timeout: 25_000 });
   });
 
   /**
@@ -51,9 +53,9 @@ test.describe.serial('Tạo + kích hoạt chiến dịch', () => {
     // Vào builder từ tên chiến dịch.
     await row.getByRole('link', { name }).click();
     // Từ 17/10/2026 chi tiết chiến dịch là một trang hai tab; mở chiến dịch đã có vào tab Thiết lập trước (chiến dịch rỗng node
-    // hiện trạng thái rỗng) → sang tab Sơ đồ khối. Nút "Chạy ngay" nằm ở thanh trên, dùng được ở cả hai tab.
+    // hiện các mục Gửi từ / Gửi cho ai để điền — từ 18/10) → sang tab Sơ đồ khối. Nút "Chạy ngay" nằm ở thanh trên, dùng được ở cả hai tab.
     await page.waitForURL(/\/app\/campaigns\/\d+$/, { timeout: 25_000 });
-    await expect(page.getByTestId('settings-empty')).toBeVisible({ timeout: 25_000 });
+    await expect(page.getByTestId('settings-section-audience')).toBeVisible({ timeout: 25_000 });
     await page.getByTestId('campaign-tab-flow').click();
     await page.waitForURL(/\/app\/campaigns\/\d+\?tab=flow/, { timeout: 25_000 });
 
