@@ -84,7 +84,7 @@ export const getSkeletonChain = (campaignType, audienceType) => {
 };
 
 /** Cột người nhận mặc định của khối gửi theo khối nguồn ('' = chưa biết, vd Google Sheet tự đặt tên cột → người dùng chọn). */
-const defaultRecipientColumn = (sendSubtype, sourceSubtype) => {
+export const defaultRecipientColumn = (sendSubtype, sourceSubtype) => {
   if (!sourceSubtype || sourceSubtype === 'read_sheet') return '';
   if (sendSubtype === 'send_email') return 'email';
   if (sourceSubtype === 'get_all_friends') return 'uid';
@@ -101,7 +101,7 @@ const emptyTemplateStep = (extra = {}) => ({
 });
 
 /** Cấu hình khối nguồn (khớp compiler: `buildAdapterAudienceNode` / các nhánh email, Zalo). */
-const buildSourceConfig = (sourceSubtype, { accountNodeId = '' } = {}) => {
+export const buildSourceConfig = (sourceSubtype, { accountNodeId = '' } = {}) => {
   switch (sourceSubtype) {
     case 'read_sheet':
       return { sheetUrl: '', sheetName: '', headerRow: 1, dataStartRow: 2, dataSelectedColumns: [] };
@@ -111,10 +111,12 @@ const buildSourceConfig = (sourceSubtype, { accountNodeId = '' } = {}) => {
       return { landingLeadsSlugs: [] };
     case 'read_form_submissions':
       return {};
+    // Bạn bè / nhóm: khung MỚI chưa chọn ai thì phải hiện "chưa chọn" chứ không phải "tất cả" — gửi nhầm cho mọi bạn bè / mọi nhóm đắt hơn
+    // việc thiếu một lựa chọn. 'fixed' + [] (bạn bè) và khoá danh sách + [] (nhóm, runtime lọc ra 0 nhóm) là cách bộ chạy hiểu "chưa chọn".
     case 'get_all_friends':
-      return { zaloFriendAccountNodeId: accountNodeId };
+      return { zaloFriendAccountNodeId: accountNodeId, zaloFriendSelectionMode: 'fixed', zaloSelectedFriendIds: [] };
     case 'get_all_groups':
-      return { zaloGroupAccountNodeId: accountNodeId };
+      return { zaloGroupAccountNodeId: accountNodeId, zaloSelectedGroupIds: [], zaloGroupSelectionSnapshotLocked: true };
     default:
       return {};
   }
@@ -124,7 +126,7 @@ const buildSourceConfig = (sourceSubtype, { accountNodeId = '' } = {}) => {
  * Phần cấu hình khối gửi trỏ tới khối nguồn: `sourceNodeId` + cột / loại người nhận. Dùng cho khung mới và cho "Đổi nguồn tại chỗ".
  * `sourceSubtype = null` → nguồn nằm trong khối gửi (nhập tay / người đã nhắn / nhóm) hoặc nhập tay.
  */
-const buildRecipientConfig = (sendSubtype, sourceSubtype, sourceNodeId, audienceType) => {
+export const buildRecipientConfig = (sendSubtype, sourceSubtype, sourceNodeId, audienceType) => {
   const column = defaultRecipientColumn(sendSubtype, sourceSubtype);
   switch (sendSubtype) {
     case 'send_email':
@@ -518,6 +520,81 @@ export const replaceAudienceSource = ({ nodes, edges, campaignType, audienceType
       ? `edge-${idOf(edge.source) === oldId ? newNode.id : edge.source}-${idOf(edge.target) === oldId ? newNode.id : edge.target}`
       : edge.id,
   }));
+  return { nodes: nextNodes, edges: nextEdges, newNodeId: newNode.id };
+};
+
+const withConfigPatch = (node, patch) => ({ ...node, data: { ...node.data, config: { ...(node.data?.config || {}), ...patch } } });
+
+/**
+ * Đổi nguồn người nhận GIỮ NGUYÊN mọi cài đặt khác (tài khoản gửi, mẫu tin, bước phụ) — cho mục "Gửi cho ai" của tab Thiết lập.
+ * Chỉ cần khi chuỗi thẳng và khối gửi không đổi loại; mọi trường hợp còn lại trả `null` (nơi gọi hỏi rồi dựng lại khung):
+ *  - nguồn đọc dữ liệu → nguồn đọc dữ liệu khác: thay tại chỗ (`replaceAudienceSource`);
+ *  - nguồn nằm TRONG khối gửi (nhập tay / người đã nhắn / nhóm) → nguồn đọc dữ liệu: chèn khối nguồn ngay trước khối gửi;
+ *  - nguồn đọc dữ liệu → nguồn trong khối gửi: gỡ khối nguồn, nối khối trước với khối gửi, xoá tham chiếu tới khối vừa gỡ;
+ *  - trong khối gửi → trong khối gửi (vd người đã nhắn ⇄ nhóm): chỉ vá trường người nhận của khối gửi.
+ * Luôn đặt lại trường người nhận của khối gửi theo nguồn mới (`buildRecipientConfig`), mọi trường khác của khối gửi giữ nguyên.
+ *
+ * @returns {{ nodes: Array<object>, edges: Array<object>, newNodeId: string|null }|null}
+ */
+export const reshapeAudienceSource = ({ nodes, edges, campaignType, audienceType, locale = 'vi', registry = getAllNodeConfigs() }) => {
+  const channel = resolveCampaignChannel(campaignType);
+  if (!channel || !AUDIENCE_TYPES_BY_CHANNEL[channel].includes(audienceType)) return null;
+  const analysis = analyzeSettingsGraph(nodes, edges);
+  if (analysis.branched || analysis.chain.length === 0) return null;
+  const { sendNode, sourceNode, accountNode } = findChainRoles(nodes, analysis.chain);
+  if (!sendNode || subtypeOf(sendNode) !== getSendSubtypeFor(channel, audienceType)) return null;
+  const sendSubtype = subtypeOf(sendNode);
+  const sendId = idOf(sendNode.id);
+  const currentSubtype = sourceNode ? subtypeOf(sourceNode) : null;
+  const nextSubtype = AUDIENCE_SOURCE_SUBTYPE[audienceType] || null;
+  const chain = analysis.chain;
+
+  if (currentSubtype && nextSubtype) {
+    if (currentSubtype === nextSubtype) return { nodes, edges, newNodeId: idOf(sourceNode.id) };
+    return replaceAudienceSource({ nodes, edges, campaignType, audienceType, locale, registry });
+  }
+
+  if (!currentSubtype && !nextSubtype) {
+    const patch = buildRecipientConfig(sendSubtype, null, '', audienceType);
+    return { nodes: nodes.map((node) => (idOf(node.id) === sendId ? withConfigPatch(node, patch) : node)), edges, newNodeId: null };
+  }
+
+  const sendIndex = chain.indexOf(sendId);
+  if (sendIndex < 1) return null;
+  const predId = chain[sendIndex - 1];
+
+  if (currentSubtype && !nextSubtype) {
+    const sourceId = idOf(sourceNode.id);
+    // Khối nguồn phải đứng ngay trước khối gửi (chuỗi chuẩn của bộ biên dịch); khác đi → dựng lại.
+    if (chain[sendIndex - 1] !== sourceId || sendIndex < 2) return null;
+    const beforeSourceId = chain[sendIndex - 2];
+    const patch = buildRecipientConfig(sendSubtype, null, '', audienceType);
+    const kept = nodes.filter((node) => idOf(node.id) !== sourceId).map((node) => (idOf(node.id) === sendId ? withConfigPatch(node, patch) : node));
+    const nextEdges = edges.filter((edge) => idOf(edge.source) !== sourceId && idOf(edge.target) !== sourceId);
+    nextEdges.push(makeEdge(beforeSourceId, sendId));
+    return { nodes: remapAllNodes(kept, new Map([[sourceId, '']])), edges: nextEdges, newNodeId: null };
+  }
+
+  // Chèn khối nguồn mới ngay trước khối gửi, dồn khối gửi và các khối sau sang phải một ô.
+  const config = buildSourceConfig(nextSubtype, { accountNodeId: accountNode ? idOf(accountNode.id) : '' });
+  const newNode = createBuilderNode(nextSubtype, { x: sendNode.position?.x ?? NODE_X0, y: sendNode.position?.y ?? NODE_Y }, {
+    locale,
+    registry,
+    existingNames: nodes.map((node) => node.data?.label).filter(Boolean),
+    config: Object.keys(config).length > 0 ? config : undefined,
+  });
+  const shifted = new Set(chain.slice(sendIndex));
+  const patch = buildRecipientConfig(sendSubtype, nextSubtype, newNode.id, audienceType);
+  const nextNodes = nodes.map((node) => {
+    const id = idOf(node.id);
+    let next = node;
+    if (shifted.has(id)) next = { ...next, position: { ...(next.position || {}), x: (next.position?.x ?? 0) + NODE_DX } };
+    if (id === sendId) next = withConfigPatch(next, patch);
+    return next;
+  });
+  nextNodes.push(newNode);
+  const nextEdges = edges.filter((edge) => !(idOf(edge.source) === predId && idOf(edge.target) === sendId));
+  nextEdges.push(makeEdge(predId, newNode.id), makeEdge(newNode.id, sendId));
   return { nodes: nextNodes, edges: nextEdges, newNodeId: newNode.id };
 };
 

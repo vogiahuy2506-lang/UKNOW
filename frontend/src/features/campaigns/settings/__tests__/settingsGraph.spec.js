@@ -158,6 +158,13 @@ const fillSkeleton = (nodes) => nodes.map((node) => {
     case 'read_sheet':
       config.sheetUrl = 'https://docs.google.com/spreadsheets/d/abc';
       break;
+    case 'get_all_friends':
+      config.zaloSelectedFriendIds = ['u1'];
+      break;
+    case 'get_all_groups':
+      config.zaloSelectedGroupIds = ['g1'];
+      config.zaloGroupSelectionSnapshotLocked = false;
+      break;
     default:
       break;
   }
