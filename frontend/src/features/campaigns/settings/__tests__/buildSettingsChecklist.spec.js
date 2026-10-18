@@ -125,4 +125,49 @@ describe('buildSettingsChecklist', () => {
       .toMatchObject({ status: 'ok', summary: 'Hằng ngày 08:00' });
     expect(run([], []).find((row) => row.key === 'timing').summary).toBe(vi.campaignSettings.checklist.timingManual);
   });
+
+  describe('tóm tắt theo KHỐI, "+N" = số khối / tin còn lại', () => {
+    const mail = (extra = {}) => node('mail', 'send_email', {
+      fromEmailId: 3, recipientSource: 'node', recipientNodeId: 'src', recipientField: 'email',
+      emailSteps: [{ templateId: 7, delayValue: 0, delayUnit: 'minutes', delayFrom: 'start' }], ...extra,
+    });
+    const audienceOf = (rows) => rows.find((row) => row.key === 'audience');
+
+    it('email + khách đã lưu: "Tất cả khách hàng" KHÔNG có "+" (bỏ dòng tham chiếu trong khối gửi và dòng thứ hai của khối nguồn)', () => {
+      const nodes = [node('start', 'manual_trigger'), node('src', 'read_interested_customers', { interestedCustomerType: 'all' }), mail()];
+      const row = audienceOf(run(nodes, chain('start', 'src', 'mail')));
+      expect(row.summary).toBe('Tất cả khách hàng');
+      expect(row.summary).not.toContain('+');
+      expect(row.targetNodeId).toBe('src');
+    });
+
+    it('hai khối read_sheet song song: "+1" (đếm khối)', () => {
+      const sheetA = node('a', 'read_sheet', { sheetUrl: 'https://docs.google.com/spreadsheets/d/a', sheetName: 'A' });
+      const sheetB = node('b', 'read_sheet', { sheetUrl: 'https://docs.google.com/spreadsheets/d/b', sheetName: 'B' });
+      const nodes = [node('start', 'manual_trigger'), sheetA, sheetB, mail({ recipientNodeId: 'a' })];
+      const row = audienceOf(run(nodes, [edge('start', 'a'), edge('start', 'b'), edge('a', 'mail'), edge('b', 'mail')]));
+      expect(row.summary).toMatch(/\+1$/);
+      expect(row.summary).toContain('docs.google.com');
+    });
+
+    it('Telegram người đã nhắn (không có khối nguồn): dùng dòng audience của khối gửi', () => {
+      const nodes = [node('start', 'manual_trigger'), node('tg', 'send_telegram', { telegramAccountId: 4, recipientSource: 'telegram_conversations', steps: [{ message: 'Chào' }] })];
+      const row = audienceOf(run(nodes, chain('start', 'tg')));
+      expect(row.summary).toBe(vi.campaignSettings.telegramConversations);
+      expect(row.targetNodeId).toBe('tg');
+    });
+
+    it('nội dung 3 tin: "Tin 1: … +2" (đếm tin)', () => {
+      const steps = [7, 8, 7].map((templateId) => ({ templateId, delayValue: 0, delayUnit: 'minutes', delayFrom: 'start' }));
+      const nodes = [node('start', 'manual_trigger'), node('src', 'read_interested_customers', {}), mail({ emailSteps: steps })];
+      const row = run(nodes, chain('start', 'src', 'mail')).find((r) => r.key === 'content');
+      expect(row.summary).toMatch(/^Tin 1: .*\+2$/);
+    });
+
+    it('trạng thái ⚠ và targetNodeId giữ logic dòng thiếu đầu tiên', () => {
+      const nodes = [node('start', 'manual_trigger'), node('src', 'read_sheet', {}), mail()];
+      const row = audienceOf(run(nodes, chain('start', 'src', 'mail')));
+      expect(row).toMatchObject({ status: 'missing', targetNodeId: 'src' });
+    });
+  });
 });

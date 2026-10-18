@@ -1,5 +1,5 @@
 import buildSettingsOrder from './buildSettingsOrder';
-import describeNodeSettings from './describeNodeSettings';
+import describeNodeSettings, { DEFAULT_ROLE_BY_SUBTYPE } from './describeNodeSettings';
 
 /** Bốn dòng của checklist "Trước khi chạy", đúng thứ tự hiển thị. */
 export const CHECKLIST_KEYS = Object.freeze(['sender', 'audience', 'content', 'timing']);
@@ -35,7 +35,23 @@ export function buildSettingsChecklist(nodes, edges, lookups, t, extras = {}) {
 
   // Dòng Gửi từ / Gửi cho ai đã có tiêu đề ở checklist → chỉ in giá trị; Nội dung giữ nhãn "Tin N" để biết tin nào.
   const textOf = (key, item) => (key === 'content' ? `${item.label}: ${item.value}` : item.value);
-  const summarize = (key, entries) => {
+  const subtypeOf = (node) => String(node?.data?.nodeType || node?.type || '');
+  // Gửi từ / Gửi cho ai: tóm tắt theo KHỐI (mỗi khối một dòng đầu của vai) để "+N" là số khối còn lại, không phải số dòng.
+  // Gửi cho ai: có khối nguồn (vai mặc định audience) thì chỉ dùng các khối nguồn, bỏ dòng tham chiếu nằm trong khối gửi.
+  const summaryEntries = (key, entries) => {
+    if (key === 'content') return entries;
+    const hasSource = key === 'audience' && entries.some(({ node }) => DEFAULT_ROLE_BY_SUBTYPE[subtypeOf(node)] === 'audience');
+    const pool = hasSource ? entries.filter(({ node }) => DEFAULT_ROLE_BY_SUBTYPE[subtypeOf(node)] === 'audience') : entries;
+    const seen = new Set();
+    return pool.filter(({ node }) => {
+      const id = String(node.id);
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+  };
+  const summarize = (key, allEntries) => {
+    const entries = summaryEntries(key, allEntries);
     const texts = [];
     entries.forEach(({ item }) => {
       const textValue = textOf(key, item);
