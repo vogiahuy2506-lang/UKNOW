@@ -6,7 +6,7 @@
  */
 import describeNodeSettings from '../describeNodeSettings';
 import buildSettingsOrder from '../buildSettingsOrder';
-import { SEND_SUBTYPES, SIDE_STEP_SUBTYPES, analyzeSettingsGraph, canRemoveSideStep, findAppendAnchor } from '../settingsGraph';
+import { NOT_RUN_SIDE_STEP_SUBTYPES, SEND_SUBTYPES, SIDE_STEP_SUBTYPES, analyzeSettingsGraph, canRemoveSideStep, findAppendAnchor } from '../settingsGraph';
 import { configOf, idOf, subtypeOf, text } from './sectionUtils';
 
 const orderedNodes = (nodes, edges) => {
@@ -81,6 +81,8 @@ export function readAfterSend(nodes, edges, ctx) {
         title: text(node.data?.label),
         summary: sideStepSummary(node, t) || t('campaignSettings.section.after.incomplete'),
         status: missing ? 'missing' : 'ok',
+        // Máy chủ bỏ qua bước này khi gửi thật: cảnh báo riêng, KHÔNG tính vào "Còn N mục" (mục Sau khi gửi không nằm trong đó).
+        notRun: NOT_RUN_SIDE_STEP_SUBTYPES.includes(subtypeOf(node)),
         removable: canRemoveSideStep(nodes, edges, node.id),
       };
     });

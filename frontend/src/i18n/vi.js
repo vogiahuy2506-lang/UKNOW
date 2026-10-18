@@ -2112,6 +2112,7 @@ export default {
       after: {
         title: 'Sau khi gửi',
         empty: 'Chưa có bước nào sau khi gửi.',
+        notRun: 'Bước này hiện chưa chạy khi gửi thật — hệ thống bỏ qua.',
         incomplete: 'Chưa điền đủ',
         tag: 'Gắn thẻ “{name}”',
         untag: 'Gỡ thẻ “{name}”',

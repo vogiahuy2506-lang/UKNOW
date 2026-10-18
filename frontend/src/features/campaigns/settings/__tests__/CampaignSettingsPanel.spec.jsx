@@ -371,12 +371,29 @@ describe('CampaignSettingsPanel — Nội dung / Thời điểm / Sau khi gửi 
     const onApplyGraph = vi.fn().mockResolvedValue(undefined);
     renderHarness({ onApplyGraph, nodes: EMAIL_FLOW.nodes, edges: EMAIL_FLOW.edges });
     fireEvent.click(screen.getByTestId('settings-add-step-button'));
-    fireEvent.click(screen.getByTestId('settings-add-step-tag_contact'));
+    // Menu chỉ mời bước máy chủ THẬT SỰ chạy: Lưu khách hàng. Gắn thẻ / Cập nhật thông tin không có trong menu.
+    expect(screen.getAllByTestId(/^settings-add-step-(?!button|menu|hint)/).map((el) => el.getAttribute('data-testid'))).toEqual(['settings-add-step-save_customer']);
+    fireEvent.click(screen.getByTestId('settings-add-step-save_customer'));
     await waitFor(() => expect(onApplyGraph).toHaveBeenCalledTimes(1));
     const [nextNodes, nextEdges] = onApplyGraph.mock.calls[0];
-    expect(nextNodes.map((item) => item.data.nodeType)).toEqual(['manual_trigger', 'read_sheet', 'send_email', 'tag_contact']);
+    expect(nextNodes.map((item) => item.data.nodeType)).toEqual(['manual_trigger', 'read_sheet', 'send_email', 'save_customer']);
     expect(nextEdges).toHaveLength(3);
     expect((await screen.findByTestId('modal-stub')).getAttribute('data-node-id')).toBe(nextNodes[3].id);
+  });
+
+  it('Sau khi gửi: bước Gắn thẻ đã có (dựng tay) hiện cảnh báo "chưa chạy khi gửi thật", xoá được, và không làm tăng số mục cần điền', () => {
+    const nodes = [...EMAIL_FLOW.nodes, node('tag', 'tag_contact', { tagName: 'vip', tagSourceNodeId: 'sheet' }, 'Gắn thẻ VIP')];
+    renderPanel({ nodes, edges: [...EMAIL_FLOW.edges, edge('mail', 'tag')] });
+    expect(screen.getByTestId('settings-after-not-run')).toHaveTextContent('Bước này hiện chưa chạy khi gửi thật — hệ thống bỏ qua.');
+    expect(screen.getByTestId('settings-remove-tag')).toBeInTheDocument();
+    expect(screen.getByTestId('settings-status')).toHaveAttribute('data-missing-count', '0');
+    expect(screen.getByTestId('settings-status-summary')).toHaveTextContent('Sẵn sàng chạy');
+  });
+
+  it('Sau khi gửi: kênh không cho Lưu khách hàng → không còn gì để thêm, nút thêm bị ẩn', () => {
+    const nodes = [node('start', 'manual_trigger', {}, 'Khởi chạy', 'start'), node('t', 'send_telegram', { telegramAccountId: 4, recipientSource: 'telegram_conversations', steps: [{ message: 'a' }] }, 'Gửi TG')];
+    renderPanel({ campaignType: 'telegram', nodes, edges: [edge('start', 't')] });
+    expect(screen.queryByTestId('settings-add-step-button')).not.toBeInTheDocument();
   });
 
   it('Sau khi gửi: bước phụ có Sửa + Xoá (xác nhận) → nối lại khối trước với khối sau; rẽ nhánh thì nút thêm bị tắt', async () => {

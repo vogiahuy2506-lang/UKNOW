@@ -451,6 +451,8 @@ describe('readSettingsSections', () => {
     const sections = readSettingsSections(nodes, chain('t', 'e', 'g', 's'), ctxFor('email'));
     expect(sections.after.items.map((item) => [item.subtype, item.removable])).toEqual([['tag_contact', true], ['save_customer', true]]);
     expect(sections.after.items[0].summary).toBe('Gắn thẻ “vip”');
+    // Máy chủ bỏ qua tag_contact / update_attribute khi gửi thật → có cờ notRun; save_customer thì không.
+    expect(sections.after.items.map((item) => item.notRun)).toEqual([true, false]);
     expect(sections.after.canAdd).toBe(true);
   });
 });

@@ -33,7 +33,7 @@ import SenderSectionForm, { SENDER_LOAD_OPTIONS } from './SenderSectionForm';
 import AudienceSectionForm from './AudienceSectionForm';
 import { buildAudienceGraph, countMissingSections, readSettingsSections, writeAudience, writeSender } from './sections';
 import {
-  SIDE_STEP_SUBTYPES,
+  ADDABLE_SIDE_STEP_SUBTYPES,
   analyzeSettingsGraph,
   appendSideStep,
   getSendSubtypeFor,
@@ -349,6 +349,11 @@ const AfterBody = ({ items, canEdit, canAdd, branched, locked, lockTitle, addMen
             <span className="min-w-0 flex-1 basis-40 break-words text-sm">
               <span className="font-medium text-gray-900 dark:text-dk-text">{item.title}</span>
               <span className={`ml-2 ${item.status === 'missing' ? 'font-medium text-rose-600 dark:text-rose-400' : MUTED}`}>{item.summary}</span>
+              {item.notRun && (
+                <span className="mt-1 block text-xs text-amber-700 dark:text-amber-300" data-testid="settings-after-not-run">
+                  {t('campaignSettings.section.after.notRun')}
+                </span>
+              )}
             </span>
             {canEdit && (
               <span className="flex shrink-0 gap-2">
@@ -614,7 +619,7 @@ export default function CampaignSettingsPanel({
 
   const sideStepOptions = useMemo(() => {
     const dataTypes = getAllowedDataNodeTypesByCampaignType(campaignType);
-    return SIDE_STEP_SUBTYPES
+    return ADDABLE_SIDE_STEP_SUBTYPES
       .filter((type) => type !== 'save_customer' || !dataTypes || dataTypes.has('save_customer'))
       .map((type) => {
         const config = registry.find((item) => item.type === type) || {};
@@ -641,7 +646,7 @@ export default function CampaignSettingsPanel({
   }, [commitGraph, edges, nodes, removeTargetId]);
 
   const analysis = useMemo(() => analyzeSettingsGraph(nodes, edges), [nodes, edges]);
-  const afterVisible = !startMode && !noSend && (sections.after.items.length > 0 || (canEdit && (sections.after.canAdd || sections.after.branched)));
+  const afterVisible = !startMode && !noSend && (sections.after.items.length > 0 || (canEdit && ((sections.after.canAdd && sideStepOptions.length > 0) || sections.after.branched)));
 
   // ── Hiển thị từng mục ─────────────────────────────────────────────────────────────────────────────────────────────────
   const startSenderView = startMode ? describeStartSender({ channel, sender: startSender, emailSettings, t }) : null;
@@ -823,7 +828,7 @@ export default function CampaignSettingsPanel({
           <AfterBody
             items={sections.after.items}
             canEdit={canEdit}
-            canAdd={sections.after.canAdd}
+            canAdd={sections.after.canAdd && sideStepOptions.length > 0}
             branched={sections.after.branched}
             locked={locked}
             lockTitle={lockTitle}

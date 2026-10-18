@@ -2107,6 +2107,7 @@ export default {
       after: {
         title: 'After sending',
         empty: 'No steps after sending yet.',
+        notRun: 'This step does not run when you send for real yet — the system skips it.',
         incomplete: 'Not fully filled in',
         tag: 'Tag “{name}”',
         untag: 'Remove tag “{name}”',

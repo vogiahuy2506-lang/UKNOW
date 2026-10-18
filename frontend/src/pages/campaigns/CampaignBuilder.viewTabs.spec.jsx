@@ -459,17 +459,17 @@ describe('CampaignBuilder — tab Thiết lập: tạo từ chiến dịch trố
     expect(JSON.stringify(payload)).not.toContain(oldSourceId);
   });
 
-  it('Thêm bước Gắn thẻ rồi Xoá bước: nối đúng, lưu sau mỗi thao tác', async () => {
+  it('Thêm bước Lưu khách hàng rồi Xoá bước: nối đúng, lưu sau mỗi thao tác', async () => {
     const first = await startWith('customers');
     fireEvent.click(await screen.findByTestId('settings-add-step-button'));
-    fireEvent.click(await screen.findByTestId('settings-add-step-tag_contact'));
+    fireEvent.click(await screen.findByTestId('settings-add-step-save_customer'));
 
     await waitFor(() => expect(mockUpdateCampaign).toHaveBeenCalledTimes(2));
     const added = mockUpdateCampaign.mock.calls[1][1];
-    expect(subtypesOf(added)).toEqual(['manual_trigger', 'read_interested_customers', 'send_email', 'tag_contact']);
+    expect(subtypesOf(added)).toEqual(['manual_trigger', 'read_interested_customers', 'send_email', 'save_customer']);
     const tagId = added.nodes[3].tempId;
     expect(added.connections.map((c) => [c.sourceNodeId, c.targetNodeId])).toContainEqual([first.nodes[2].tempId, tagId]);
-    expect(added.nodes[3].config.tagSourceNodeId).toBe(first.nodes[1].tempId);
+    expect(added.nodes[3].config.saveCustomerNodeId).toBe(first.nodes[1].tempId);
 
     // Bước mới tự mở hộp cài đặt để điền: đóng rồi xoá.
     fireEvent.click(await screen.findByTestId('stub-cancel'));

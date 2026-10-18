@@ -30,6 +30,14 @@ export const SWAPPABLE_SOURCE_SUBTYPES = Object.freeze(Object.values(AUDIENCE_SO
 /** Bước phụ thêm / xoá được ở tab Thiết lập (rẽ nhánh `condition` thuộc Sơ đồ khối). */
 export const SIDE_STEP_SUBTYPES = Object.freeze(['tag_contact', 'update_attribute', 'save_customer']);
 
+/**
+ * Bước phụ ĐƯỢC MỜI THÊM ở tab Thiết lập: chỉ bước máy chủ thật sự chạy. `tag_contact` / `update_attribute` (và `condition`) không có nhánh
+ * chạy ở `campaignRun.service.js` — máy chủ ghi "chưa có logic chạy riêng, bỏ qua" — nên không mời thêm; bước đã có vẫn nhận diện / xoá được
+ * qua `SIDE_STEP_SUBTYPES` và hiện kèm cảnh báo `NOT_RUN_SIDE_STEP_SUBTYPES`.
+ */
+export const ADDABLE_SIDE_STEP_SUBTYPES = Object.freeze(['save_customer']);
+export const NOT_RUN_SIDE_STEP_SUBTYPES = Object.freeze(['tag_contact', 'update_attribute']);
+
 export const SEND_SUBTYPES = Object.freeze([
   'send_email',
   'send_zalo_personal',
