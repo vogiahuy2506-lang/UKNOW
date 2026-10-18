@@ -190,6 +190,69 @@ describe('khung khối dùng được thật', () => {
   });
 });
 
+describe('buildSettingsSkeleton — tài khoản "Gửi từ" chọn trước (PR-C)', () => {
+  /** Trường tài khoản đúng mà bộ biên dịch / form dùng, theo kênh: [subtype nhận, trường, giá trị mong đợi]. */
+  const SENDER_FIELD = {
+    email: ['send_email', 'fromEmailId', 7],
+    zalo: ['select_zalo_account', 'zaloAccountId', 7],
+    telegram: ['send_telegram', 'telegramAccountId', 7],
+    whatsapp: ['send_whatsapp', 'whatsappSessionKey', '40-default'],
+  };
+
+  it.each(EXPECTED)('%s × %s: có sender → điền đúng trường của khối nhận, khối khác không dính', (channel, audienceType) => {
+    const [subtype, field, expected] = SENDER_FIELD[channel];
+    const sender = { id: channel === 'whatsapp' ? '40-default' : 7, label: 'Tài khoản thử' };
+    const withSender = buildSettingsSkeleton({ campaignType: channel, audienceType, sender });
+    const receiver = withSender.nodes.find((node) => node.data.nodeType === subtype);
+    expect(receiver.data.config[field]).toBe(expected);
+    // Chỉ khối nhận có trường tài khoản; Zalo: khối gửi KHÔNG ghi zaloAccountId (runtime lấy từ khối chọn tài khoản).
+    withSender.nodes.filter((node) => node !== receiver).forEach((node) => {
+      ['fromEmailId', 'zaloAccountId', 'telegramAccountId', 'whatsappSessionKey'].forEach((key) => expect(node.data.config?.[key]).toBeUndefined());
+    });
+    // Khung (chuỗi + cạnh) không đổi vì có sender.
+    const without = buildSettingsSkeleton({ campaignType: channel, audienceType });
+    expect(withSender.nodes.map((node) => node.data.nodeType)).toEqual(without.nodes.map((node) => node.data.nodeType));
+    expect(withSender.edges).toHaveLength(without.edges.length);
+  });
+
+  it.each(EXPECTED)('%s × %s: không có sender → như cũ (email không có fromEmailId, Zalo để trống zaloAccountId, TG/WA không có trường)', (channel, audienceType) => {
+    const [subtype, field] = SENDER_FIELD[channel];
+    const receiver = buildSettingsSkeleton({ campaignType: channel, audienceType }).nodes.find((node) => node.data.nodeType === subtype);
+    if (channel === 'zalo') expect(receiver.data.config.zaloAccountId).toBe('');
+    else expect(receiver.data.config[field]).toBeUndefined();
+  });
+
+  it('Zalo nhóm: tài khoản vào khối chọn tài khoản, khối lấy nhóm vẫn trỏ khối đó', () => {
+    const skeleton = buildSettingsSkeleton({ campaignType: 'zalo_group', audienceType: 'zalo_groups', sender: { id: '12' } });
+    const [, account, groups, send] = skeleton.nodes;
+    expect(account.data.config.zaloAccountId).toBe(12);
+    expect(groups.data.config.zaloGroupAccountNodeId).toBe(account.id);
+    expect(send.data.config.zaloAccountId).toBeUndefined();
+  });
+
+  it('sender có id rỗng / không phải số (email, Zalo, Telegram) → bỏ qua, không ghi NaN', () => {
+    ['', null, undefined, 'abc'].forEach((id) => {
+      const email = buildSettingsSkeleton({ campaignType: 'email', audienceType: 'manual', sender: { id } });
+      expect(email.nodes[1].data.config.fromEmailId).toBeUndefined();
+    });
+  });
+
+  it('chọn tài khoản → checklist Gửi từ ✓ (Zalo / Telegram / WhatsApp), còn email vẫn ✓ nhờ mặc định', () => {
+    const rowOf = (campaignType, audienceType, sender) => {
+      const skeleton = buildSettingsSkeleton({ campaignType, audienceType, sender });
+      return buildSettingsChecklist(skeleton.nodes, skeleton.edges, { ...lookups, emailSettings: [] }, t).find((row) => row.key === 'sender');
+    };
+    expect(rowOf('zalo', 'customers', null).status).toBe('missing');
+    expect(rowOf('zalo', 'customers', { id: 5 }).status).toBe('ok');
+    expect(rowOf('telegram', 'conversations', null).status).toBe('missing');
+    expect(rowOf('telegram', 'conversations', { id: 4 }).status).toBe('ok');
+    expect(rowOf('whatsapp', 'conversations', null).status).toBe('missing');
+    expect(rowOf('whatsapp', 'conversations', { id: '40-default' }).status).toBe('ok');
+    expect(rowOf('email', 'manual', null).status).toBe('missing');
+    expect(rowOf('email', 'manual', { id: 3 }).status).toBe('ok');
+  });
+});
+
 // ── Phân tích rẽ nhánh ──────────────────────────────────────────────────────────────────────────────────────────────────
 const emailSkeleton = () => buildSettingsSkeleton({ campaignType: 'email', audienceType: 'customers' });
 

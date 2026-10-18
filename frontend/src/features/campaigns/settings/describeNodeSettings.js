@@ -91,7 +91,7 @@ const describeTiming = ({ index, scheduled, delayValue, delayUnit, delayFrom }, 
   return t(delayFrom === 'prev' ? `${PREFIX}.timing.afterPrev` : `${PREFIX}.timing.afterFirst`, { wait });
 };
 
-const emailAccountText = (account) => {
+export const emailAccountText = (account) => {
   const name = text(account?.name);
   const email = text(account?.email);
   return name && email ? `${name} (${email})` : (email || name);
@@ -104,14 +104,17 @@ const emailAccountText = (account) => {
  * (gần đúng: trình duyệt không biết tài khoản bị khoá do nạp tiền). Danh sách rỗng → vẫn là dòng thiếu.
  * Chạy thử trên Sơ đồ khối cũng vậy (B5b: POST /email-settings/send-email nhận `fromEmailId` trống → tài khoản mặc định của chủ workspace).
  */
+/** Tài khoản email mà chạy thật sẽ dùng khi `fromEmailId` trống (id nhỏ nhất trong các tài khoản đang hoạt động); `null` nếu chưa có. */
+export const pickDefaultEmailAccount = (accounts) => (Array.isArray(accounts) ? accounts : [])
+  .filter((item) => Number.isFinite(Number(item?.id)))
+  .sort((a, b) => Number(a.id) - Number(b.id))[0] || null;
+
 const describeEmailSender = (config, lookups, t) => {
   const label = t(`${PREFIX}.label.sender`);
   const id = text(config.fromEmailId);
   const accounts = Array.isArray(lookups?.emailSettings) ? lookups.emailSettings : [];
   if (!id) {
-    const fallback = accounts
-      .filter((item) => Number.isFinite(Number(item?.id)))
-      .sort((a, b) => Number(a.id) - Number(b.id))[0];
+    const fallback = pickDefaultEmailAccount(accounts);
     if (!fallback) return line(label, t(`${PREFIX}.missing.emailSender`), 'missing', 'sender');
     return line(label, t(`${PREFIX}.defaultEmailSender`, { sender: emailAccountText(fallback) }), 'normal', 'sender');
   }

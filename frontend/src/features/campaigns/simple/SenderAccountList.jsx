@@ -38,8 +38,12 @@ const DOT_CLASS = Object.freeze({
  * @param {(sender: { id: number, label: string }) => void} props.onSelect
  * @param {(key: string, params?: object) => string} props.t
  * @param {string} [props.locale]
+ * @param {string} [props.className] lớp của khung ngoài (mặc định `mt-8` của trình từng bước; tab Thiết lập đặt lại)
+ * @param {string} [props.titleClassName] lớp của tiêu đề
  */
-export default function SenderAccountList({ channel, selected, onSelect, t, locale = 'vi' }) {
+export default function SenderAccountList({
+  channel, selected, onSelect, t, locale = 'vi', className = 'mt-8', titleClassName = 'text-lg font-bold text-slate-900 dark:text-dk-text',
+}) {
   const kind = senderKindOf(channel);
   const resource = useAsyncResource(() => loadSenderAccounts(kind), [kind]);
   const accounts = resource.status === 'ready' ? resource.data : [];
@@ -53,8 +57,8 @@ export default function SenderAccountList({ channel, selected, onSelect, t, loca
   }, [resource.status, resource.data, selected]);
 
   return (
-    <section className="mt-8" aria-labelledby="simple-sender-title" data-testid="simple-sender-section">
-      <h3 id="simple-sender-title" className="text-lg font-bold text-slate-900 dark:text-dk-text">
+    <section className={className} aria-labelledby="simple-sender-title" data-testid="simple-sender-section">
+      <h3 id="simple-sender-title" className={titleClassName}>
         {t('simpleCampaign.channel.accountTitle')}
       </h3>
 

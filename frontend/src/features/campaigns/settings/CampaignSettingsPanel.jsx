@@ -22,6 +22,7 @@ import NodeConfigForm from '../components/NodeConfigForm';
 import { isNodeConfigFormUnchanged } from '../utils/nodeConfigUnchanged';
 import { getAllowedDataNodeTypesByCampaignType } from '../utils/campaignBuilderFlow';
 import SimpleChoiceCard from '../simple/SimpleChoiceCard';
+import SenderAccountList from '../simple/SenderAccountList';
 import { AUDIENCE_CARDS } from '../simple/audienceCards';
 import { AUDIENCE_TYPES_BY_CHANNEL } from '../simple/simpleCampaign.helpers';
 import useCampaignEstimate from '../hooks/useCampaignEstimate';
@@ -429,7 +430,7 @@ const NodeCard = ({
 };
 
 /** Checklist "Trước khi chạy": 4 dòng (Gửi từ · Gửi cho ai · Nội dung · Thời điểm), ✓ đủ / ⚠ thiếu, nút Sửa mở đúng thẻ. */
-const Checklist = ({ rows, canEdit, canOpenSchedule, onEditRow, onOpenSchedule, t }) => {
+const Checklist = ({ rows, canEdit, canOpenSchedule, onEditRow, onOpenSchedule, onJump, t }) => {
   const missingCount = rows.filter((row) => row.status === 'missing').length;
   return (
     <section className={`${CARD} order-1 min-w-0 p-4 sm:p-5 lg:order-none`} data-testid="settings-checklist" data-missing-count={missingCount} aria-label={t('campaignSettings.checklist.title')}>
@@ -445,8 +446,9 @@ const Checklist = ({ rows, canEdit, canOpenSchedule, onEditRow, onOpenSchedule, 
       <ul className="mt-3 divide-y divide-gray-100 dark:divide-dk-border">
         {rows.map((row) => {
           const ok = row.status === 'ok';
+          const idle = row.status === 'idle';
           const isTiming = row.key === 'timing';
-          const canClick = canEdit && (isTiming ? canOpenSchedule : Boolean(row.targetNodeId));
+          const canClick = canEdit && (isTiming ? canOpenSchedule : Boolean(row.targetNodeId || row.anchor));
           return (
             <li
               key={row.key}
@@ -454,14 +456,14 @@ const Checklist = ({ rows, canEdit, canOpenSchedule, onEditRow, onOpenSchedule, 
               data-testid={`settings-checklist-row-${row.key}`}
               data-status={row.status}
             >
-              <span className="flex shrink-0 items-center gap-1.5" aria-label={ok ? t('campaignSettings.checklist.okBadge') : t('campaignSettings.checklist.missingBadge')}>
-                {ok
-                  ? <HiOutlineCheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" aria-hidden="true" />
-                  : <HiOutlineExclamation className="h-5 w-5 text-amber-600 dark:text-amber-400" aria-hidden="true" />}
+              <span className="flex shrink-0 items-center gap-1.5" aria-label={ok ? t('campaignSettings.checklist.okBadge') : (idle ? t('campaignSettings.checklist.idleBadge') : t('campaignSettings.checklist.missingBadge'))}>
+                {ok && <HiOutlineCheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" aria-hidden="true" />}
+                {idle && <span className="m-1.5 h-2 w-2 rounded-full bg-gray-300 dark:bg-dk-border" aria-hidden="true" />}
+                {!ok && !idle && <HiOutlineExclamation className="h-5 w-5 text-amber-600 dark:text-amber-400" aria-hidden="true" />}
               </span>
               <span className="w-24 shrink-0 text-sm font-semibold text-gray-900 dark:text-dk-text">{t(`campaignSettings.checklist.row.${row.key}`)}</span>
               <span
-                className={`min-w-0 flex-1 basis-40 break-words text-sm ${ok ? 'text-gray-700 dark:text-dk-text' : 'font-medium text-rose-600 dark:text-rose-400'}`}
+                className={`min-w-0 flex-1 basis-40 break-words text-sm ${ok ? 'text-gray-700 dark:text-dk-text' : (idle || row.soft ? `${MUTED}` : 'font-medium text-rose-600 dark:text-rose-400')}`}
                 data-testid={`settings-checklist-summary-${row.key}`}
               >
                 {row.summary}
@@ -469,12 +471,16 @@ const Checklist = ({ rows, canEdit, canOpenSchedule, onEditRow, onOpenSchedule, 
               {canClick && (
                 <button
                   type="button"
-                  onClick={() => (isTiming ? onOpenSchedule() : onEditRow(row.targetNodeId))}
+                  onClick={() => {
+                    if (isTiming) onOpenSchedule();
+                    else if (row.anchor && !row.targetNodeId) onJump(row.anchor);
+                    else onEditRow(row.targetNodeId);
+                  }}
                   data-testid={`settings-checklist-edit-${row.key}`}
                   className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-dk-border dark:text-dk-text dark:hover:bg-dk-raised"
                 >
                   <HiOutlinePencil className="h-4 w-4" aria-hidden="true" />
-                  {t('campaignSettings.checklist.edit')}
+                  {row.anchor && !row.targetNodeId ? t(ok ? 'campaignSettings.checklist.change' : 'campaignSettings.checklist.choose') : t('campaignSettings.checklist.edit')}
                 </button>
               )}
             </li>
@@ -492,9 +498,24 @@ const audienceDescription = (type, channel, t) => {
   return t(key);
 };
 
-/** Chiến dịch trống: thẻ "Gửi cho ai?" — chọn nguồn thì hệ thống dựng sẵn các khối (đúng chuỗi của bộ biên dịch), người dùng chỉ điền. */
-const StartCard = ({ channel, audienceTypes, isLocked, busy, onPick, onGoFlow, t }) => (
+/**
+ * Chiến dịch trống: hai phần — "Gửi từ" (tài khoản gửi, dùng lại danh sách của trình từng bước) rồi "Gửi cho ai?" (chọn nguồn thì hệ thống
+ * dựng sẵn các khối đúng chuỗi của bộ biên dịch, tài khoản đã chọn được điền sẵn). Chọn phần nào trước cũng được.
+ */
+const StartCard = ({ channel, sender, onSelectSender, senderRef, audienceRef, audienceTypes, isLocked, busy, onPick, onGoFlow, t, locale }) => (
   <section className={`${CARD} p-4 sm:p-5`} data-testid="settings-start" aria-busy={busy ? 'true' : 'false'}>
+    <div ref={senderRef} className="scroll-mt-4" data-testid="settings-sender-part">
+      <SenderAccountList
+        channel={channel}
+        selected={sender}
+        onSelect={onSelectSender}
+        t={t}
+        locale={locale}
+        className="min-w-0"
+        titleClassName="text-base font-bold text-gray-900 dark:text-dk-text"
+      />
+    </div>
+    <div ref={audienceRef} className="mt-6 scroll-mt-4 border-t border-gray-100 pt-5 dark:border-dk-border" data-testid="settings-audience-part">
     <h2 className="text-base font-bold text-gray-900 dark:text-dk-text">{t('campaignSettings.start.title')}</h2>
     <p className={`mt-1 text-sm ${MUTED}`}>{t('campaignSettings.start.hint')}</p>
     <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-3">
@@ -530,6 +551,7 @@ const StartCard = ({ channel, audienceTypes, isLocked, busy, onPick, onGoFlow, t
     >
       {t('campaignSettings.start.orFlow')}
     </button>
+    </div>
   </section>
 );
 
@@ -731,9 +753,17 @@ export default function CampaignSettingsPanel({
     const first = describeSchedule(schedules[0])?.pattern || '';
     return schedules.length > 1 ? `${first} +${schedules.length - 1}` : first;
   }, [schedules, describeSchedule]);
+  const channel = resolveCampaignChannel(campaignType);
+  const startAudienceTypes = useMemo(() => getSkeletonAudienceTypes(campaignType), [campaignType]);
+  // Tài khoản "Gửi từ" chọn ở thẻ bắt đầu: giữ ở state trang tới khi chọn nguồn (lúc đó nằm vào khối), chọn trước hay sau đều được.
+  const [startSender, setStartSender] = useState(null);
+  const showStartCard = canEdit && startAudienceTypes.length > 0;
   const checklist = useMemo(
-    () => buildSettingsChecklist(nodes, edges, lookups, t, { scheduleSummary }),
-    [nodes, edges, lookups, t, scheduleSummary],
+    () => buildSettingsChecklist(nodes, edges, lookups, t, {
+      scheduleSummary,
+      start: showStartCard ? { channel, sender: startSender } : undefined,
+    }),
+    [nodes, edges, lookups, t, scheduleSummary, showStartCard, channel, startSender],
   );
 
   // ── Sửa tại chỗ: mỗi lúc một thẻ ─────────────────────────────────────────────────────────────────────────────
@@ -802,10 +832,8 @@ export default function CampaignSettingsPanel({
   const formProps = { campaignType, campaignId, emailTemplates, zaloTemplates, emailSettings, runLogs, onCheckSheetConnection };
 
   // ── Thao tác cấu trúc (PR-B): dựng khung, đổi nguồn, thêm / xoá bước phụ ─────────────────────────────────────────────
-  const channel = resolveCampaignChannel(campaignType);
   const analysis = useMemo(() => analyzeSettingsGraph(nodes, edges), [nodes, edges]);
   const roles = useMemo(() => findChainRoles(nodes, analysis.chain), [nodes, analysis.chain]);
-  const startAudienceTypes = useMemo(() => getSkeletonAudienceTypes(campaignType), [campaignType]);
   const isAudienceLocked = useCallback((audienceType) => {
     if (!allowedSendNodeTypes || !channel) return false;
     return !allowedSendNodeTypes.has(getSendSubtypeFor(channel, audienceType));
@@ -838,10 +866,17 @@ export default function CampaignSettingsPanel({
     if (after) after(result);
   }, [onApplyGraph]);
 
+  const startSenderRef = useRef(null);
+  const startAudienceRef = useRef(null);
+  const handleJumpStart = useCallback((anchor) => {
+    const element = anchor === 'sender' ? startSenderRef.current : startAudienceRef.current;
+    if (element && typeof element.scrollIntoView === 'function') element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
+
   const handlePickStartAudience = useCallback((audienceType) => {
-    const skeleton = buildSettingsSkeleton({ campaignType, audienceType, locale });
+    const skeleton = buildSettingsSkeleton({ campaignType, audienceType, locale, sender: startSender });
     return commitGraph(skeleton, (result) => openFirstMissing(result.nodes, result.edges));
-  }, [campaignType, commitGraph, locale, openFirstMissing]);
+  }, [campaignType, commitGraph, locale, openFirstMissing, startSender]);
 
   const sideStepOptions = useMemo(() => {
     const dataTypes = getAllowedDataNodeTypesByCampaignType(campaignType);
@@ -990,14 +1025,20 @@ export default function CampaignSettingsPanel({
           canOpenSchedule={!isNewCampaign}
           onEditRow={requestEdit}
           onOpenSchedule={onOpenSchedule}
+          onJump={handleJumpStart}
           t={t}
         />
         {/* Chiến dịch trống: thẻ "Gửi cho ai?" là việc cần làm ngay → lên ngay sau Checklist trên màn hẹp (trước Tổng quan). */}
         <div className={`${hasCards ? 'order-3' : 'order-1'} min-w-0 space-y-4 lg:order-none`}>
         {!hasCards ? (
-          canEdit && startAudienceTypes.length > 0 ? (
+          showStartCard ? (
             <StartCard
               channel={channel}
+              sender={startSender}
+              onSelectSender={setStartSender}
+              senderRef={startSenderRef}
+              audienceRef={startAudienceRef}
+              locale={locale}
               audienceTypes={startAudienceTypes}
               isLocked={isAudienceLocked}
               busy={structureBusy}

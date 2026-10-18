@@ -156,8 +156,31 @@ const buildRecipientConfig = (sendSubtype, sourceSubtype, sourceNodeId, audience
   }
 };
 
-const buildSendConfig = (sendSubtype, sourceSubtype, sourceNodeId, audienceType) => {
-  const recipient = buildRecipientConfig(sendSubtype, sourceSubtype, sourceNodeId, audienceType);
+/**
+ * Tài khoản gửi đã chọn → trường ĐÚNG mà bộ biên dịch / form dùng, theo khối nhận nó:
+ * email `fromEmailId` (khối gửi) · Zalo `zaloAccountId` (khối `select_zalo_account`, cá nhân lẫn nhóm — khối gửi Zalo KHÔNG cần: runtime lấy
+ * tài khoản từ khối chọn phía trên, `campaignZaloAccountResolve.util.js`) · Telegram `telegramAccountId` · WhatsApp `whatsappSessionKey` (chuỗi).
+ * Không có `sender` → `{}` (email trống = tài khoản mặc định; kênh khác để trống, thẻ báo thiếu).
+ */
+const buildSenderConfig = (subtype, sender) => {
+  const id = sender?.id;
+  if (id === null || id === undefined || String(id).trim() === '') return {};
+  switch (subtype) {
+    case 'send_email':
+      return Number.isFinite(Number(id)) ? { fromEmailId: Number(id) } : {};
+    case 'select_zalo_account':
+      return Number.isFinite(Number(id)) ? { zaloAccountId: Number(id) } : {};
+    case 'send_telegram':
+      return Number.isFinite(Number(id)) ? { telegramAccountId: Number(id) } : {};
+    case 'send_whatsapp':
+      return { whatsappSessionKey: String(id).trim() };
+    default:
+      return {};
+  }
+};
+
+const buildSendConfig = (sendSubtype, sourceSubtype, sourceNodeId, audienceType, sender = null) => {
+  const recipient = { ...buildRecipientConfig(sendSubtype, sourceSubtype, sourceNodeId, audienceType), ...buildSenderConfig(sendSubtype, sender) };
   switch (sendSubtype) {
     case 'send_email':
       return {
@@ -205,10 +228,11 @@ const NODE_Y = 200;
  * @param {string} params.audienceType một phần tử của `AUDIENCE_TYPES_BY_CHANNEL[kênh]`
  * @param {string} [params.locale='vi']
  * @param {Array<string>} [params.existingNames] tên khối đã có (khung dựng lại từ đầu thì để rỗng)
+ * @param {{ id: number|string, label?: string }|null} [params.sender] tài khoản gửi đã chọn trước (PR-C) — điền sẵn vào khối nhận nó (`buildSenderConfig`)
  * @param {Array<object>} [params.registry] bảng khối (mặc định `getAllNodeConfigs()`)
  * @returns {{ nodes: Array<object>, edges: Array<object>, sendNodeId: string, sourceNodeId: string|null }}
  */
-export const buildSettingsSkeleton = ({ campaignType, audienceType, locale = 'vi', existingNames = [], registry = getAllNodeConfigs() }) => {
+export const buildSettingsSkeleton = ({ campaignType, audienceType, locale = 'vi', existingNames = [], sender = null, registry = getAllNodeConfigs() }) => {
   const chain = getSkeletonChain(campaignType, audienceType);
   const sendSubtype = chain[chain.length - 1];
   const sourceSubtype = AUDIENCE_SOURCE_SUBTYPE[audienceType] || null;
@@ -222,9 +246,9 @@ export const buildSettingsSkeleton = ({ campaignType, audienceType, locale = 'vi
 
   const nodes = chain.map((subtype, index) => {
     let config;
-    if (subtype === sendSubtype) config = buildSendConfig(sendSubtype, sourceSubtype, sourceNodeId, audienceType);
+    if (subtype === sendSubtype) config = buildSendConfig(sendSubtype, sourceSubtype, sourceNodeId, audienceType, sender);
     else if (subtype === sourceSubtype) config = buildSourceConfig(subtype, { accountNodeId });
-    else if (subtype === 'select_zalo_account') config = { zaloAccountId: '', zaloPoolMultiAccountEnabled: false };
+    else if (subtype === 'select_zalo_account') config = { zaloAccountId: '', zaloPoolMultiAccountEnabled: false, ...buildSenderConfig('select_zalo_account', sender) };
     else config = {};
     const node = createBuilderNode(subtype, { x: NODE_X0 + index * NODE_DX, y: NODE_Y }, {
       locale,

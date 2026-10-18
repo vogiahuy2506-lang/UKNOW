@@ -1,5 +1,5 @@
 import buildSettingsOrder from './buildSettingsOrder';
-import describeNodeSettings, { DEFAULT_ROLE_BY_SUBTYPE } from './describeNodeSettings';
+import describeNodeSettings, { DEFAULT_ROLE_BY_SUBTYPE, emailAccountText, pickDefaultEmailAccount } from './describeNodeSettings';
 
 /** Bốn dòng của checklist "Trước khi chạy", đúng thứ tự hiển thị. */
 export const CHECKLIST_KEYS = Object.freeze(['sender', 'audience', 'content', 'timing']);
@@ -18,8 +18,11 @@ const MAX_SHOWN = 1;
  * @param {Array<object>} edges
  * @param {object} lookups dữ liệu tra tên (như `describeNodeSettings`)
  * @param {(key: string, params?: object) => string} t
- * @param {{ scheduleSummary?: string }} [extras]
- * @returns {Array<{ key: string, status: 'ok'|'missing', summary: string, targetNodeId: string|null }>}
+ * @param {{ scheduleSummary?: string, start?: { channel: string, sender: ({ id: *, label?: string }|null) } }} [extras]
+ *   `start` (PR-C): chiến dịch TRỐNG đang hiện thẻ bắt đầu → ba dòng đầu không đỏ "Chưa có" nữa mà chỉ đường tới thẻ bên dưới:
+ *   Gửi từ = tài khoản đã chọn / "Tài khoản mặc định: …" (email) / "Chọn ở bên dưới" (+ `anchor: 'sender'`), Gửi cho ai = "Chọn ở bên dưới"
+ *   (`anchor: 'audience'`), Nội dung = `idle` (chưa tới lượt, không tính vào "Còn N mục"). `soft: true` = thiếu nhưng chưa phải lỗi (không tô đỏ).
+ * @returns {Array<{ key: string, status: 'ok'|'missing'|'idle', summary: string, targetNodeId: string|null, anchor?: 'sender'|'audience', soft?: boolean }>}
  */
 export function buildSettingsChecklist(nodes, edges, lookups, t, extras = {}) {
   const { ordered, unconnected } = buildSettingsOrder(nodes, edges);
@@ -61,7 +64,26 @@ export function buildSettingsChecklist(nodes, edges, lookups, t, extras = {}) {
     return rest > 0 ? `${texts.slice(0, MAX_SHOWN).join(' · ')} +${rest}` : texts.join(' · ');
   };
 
+  const subtypeOfNode = (node) => String(node?.data?.nodeType || node?.type || '');
+  // Chiến dịch "trống" = chưa có khối nào ngoài khối khởi chạy thủ công (khối này không hiện thành thẻ — cùng điều kiện với thẻ bắt đầu).
+  const startMode = Boolean(extras.start) && allNodes.every((node) => subtypeOfNode(node) === 'manual_trigger');
+  const startRow = (key) => {
+    const { channel, sender } = extras.start;
+    if (key === 'content') return { key, status: 'idle', summary: t('campaignSettings.checklist.contentAfterAudience'), targetNodeId: null };
+    if (key === 'audience') {
+      return { key, status: 'missing', soft: true, summary: t('campaignSettings.checklist.chooseBelow'), targetNodeId: null, anchor: 'audience' };
+    }
+    const chosen = String(sender?.label || '').trim() || (sender?.id !== null && sender?.id !== undefined ? String(sender.id) : '');
+    if (chosen) return { key, status: 'ok', summary: chosen, targetNodeId: null, anchor: 'sender' };
+    const fallback = channel === 'email' ? pickDefaultEmailAccount(lookups?.emailSettings) : null;
+    if (fallback) {
+      return { key, status: 'ok', summary: t('campaignSettings.defaultEmailSender', { sender: emailAccountText(fallback) }), targetNodeId: null, anchor: 'sender' };
+    }
+    return { key, status: 'missing', soft: true, summary: t('campaignSettings.checklist.chooseBelow'), targetNodeId: null, anchor: 'sender' };
+  };
+
   const rows = ['sender', 'audience', 'content'].map((key) => {
+    if (startMode) return startRow(key);
     const entries = byRole[key];
     if (entries.length === 0) {
       return { key, status: 'missing', summary: t('campaignSettings.checklist.none'), targetNodeId: null };

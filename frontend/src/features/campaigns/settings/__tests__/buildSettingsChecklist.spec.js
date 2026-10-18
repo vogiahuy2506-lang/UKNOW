@@ -33,6 +33,47 @@ describe('buildSettingsChecklist', () => {
     expect(rows.map((row) => row.targetNodeId)).toEqual([null, null, null, null]);
   });
 
+  describe('chiến dịch trống có thẻ bắt đầu (extras.start)', () => {
+    const start = (channel, sender = null) => ({ start: { channel, sender } });
+
+    it('không chọn gì, email có tài khoản mặc định: Gửi từ ✓ "mặc định" (nút đưa tới phần Gửi từ), Gửi cho ai chờ chọn, Nội dung mờ không tính', () => {
+      const rows = run([], [], start('email'));
+      expect(statuses(rows)).toEqual({ sender: 'ok', audience: 'missing', content: 'idle', timing: 'ok' });
+      expect(rows[0].summary).toBe('Tài khoản mặc định: CSKH (cskh@abc.vn)');
+      expect(rows[0].anchor).toBe('sender');
+      expect(rows[1]).toMatchObject({ summary: vi.campaignSettings.checklist.chooseBelow, anchor: 'audience', soft: true, targetNodeId: null });
+      expect(rows[2]).toMatchObject({ summary: vi.campaignSettings.checklist.contentAfterAudience, targetNodeId: null });
+      expect(rows[2].anchor).toBeUndefined();
+    });
+
+    it('đã chọn tài khoản → Gửi từ hiện đúng tài khoản đó, kể cả khi email có mặc định', () => {
+      const rows = run([], [], start('email', { id: 9, label: 'sale@abc.vn' }));
+      expect(rows[0]).toMatchObject({ status: 'ok', summary: 'sale@abc.vn', anchor: 'sender' });
+    });
+
+    it.each(['zalo', 'telegram', 'whatsapp'])('%s chưa chọn tài khoản: Gửi từ chưa đủ (soft, không đỏ), có nút tới phần Gửi từ', (channel) => {
+      const rows = run([], [], start(channel));
+      expect(rows[0]).toMatchObject({ status: 'missing', soft: true, summary: vi.campaignSettings.checklist.chooseBelow, anchor: 'sender' });
+    });
+
+    it('email không có tài khoản nào: Gửi từ chưa đủ; số mục "còn" = Gửi từ + Gửi cho ai, Nội dung không tính', () => {
+      const rows = buildSettingsChecklist([], [], { ...lookups, emailSettings: [] }, t, start('email'));
+      expect(rows.filter((row) => row.status === 'missing').map((row) => row.key)).toEqual(['sender', 'audience']);
+    });
+
+    it('chỉ có khối khởi chạy thủ công vẫn là "trống"; có thêm khối khác thì quay về cách tính theo khối', () => {
+      const trig = node('s', 'manual_trigger');
+      expect(run([trig], [], start('email'))[2].status).toBe('idle');
+      const rows = run([trig, node('m', 'send_email', {})], [edge('s', 'm')], start('email'));
+      expect(rows[2].status).toBe('missing');
+      expect(rows[2].targetNodeId).toBe('m');
+    });
+
+    it('không truyền start → cách cũ "Chưa có"', () => {
+      expect(run([], [])[0].summary).toBe(vi.campaignSettings.checklist.none);
+    });
+  });
+
   it('email đủ: cả ba dòng ✓, nút Sửa trỏ khối đầu tiên của vai', () => {
     const nodes = [
       node('start', 'manual_trigger'),

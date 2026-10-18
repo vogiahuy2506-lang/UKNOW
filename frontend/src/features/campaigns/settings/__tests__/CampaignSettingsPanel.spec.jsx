@@ -1,9 +1,11 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../../../../i18n';
 import CampaignSettingsPanel from '../CampaignSettingsPanel';
 
-const { mockSavedEstimate, mockRunEstimate, mockLatestRun } = vi.hoisted(() => ({
+const { mockSavedEstimate, mockRunEstimate, mockLatestRun, mockLoadSenders } = vi.hoisted(() => ({
+  mockLoadSenders: vi.fn(),
   mockSavedEstimate: vi.fn(),
   mockRunEstimate: vi.fn(),
   mockLatestRun: vi.fn(),
@@ -13,6 +15,8 @@ const { mockSavedEstimate, mockRunEstimate, mockLatestRun } = vi.hoisted(() => (
 vi.mock('../useSettingsAccountLookups', () => ({
   default: () => ({ zaloAccounts: [{ id: '5', displayName: 'Shop Hoa' }], telegramAccounts: [], whatsappAccounts: [] }),
 }));
+// Danh sách tài khoản gửi của thẻ bắt đầu (SenderAccountList → loadSenderAccounts) gọi API → giả.
+vi.mock('../../simple/loadSenderAccounts', () => ({ loadSenderAccounts: (...args) => mockLoadSenders(...args) }));
 vi.mock('../../hooks/useCampaignEstimate', () => ({ default: (...args) => mockSavedEstimate(...args) }));
 vi.mock('../useRunRemainingEstimate', () => ({ default: (...args) => mockRunEstimate(...args) }));
 vi.mock('../useCampaignLatestRun', () => ({ default: (...args) => mockLatestRun(...args) }));
@@ -67,9 +71,11 @@ const baseProps = {
 };
 
 const renderPanel = (props = {}) => render(
-  <I18nProvider>
-    <CampaignSettingsPanel {...baseProps} {...props} />
-  </I18nProvider>,
+  <MemoryRouter>
+    <I18nProvider>
+      <CampaignSettingsPanel {...baseProps} {...props} />
+    </I18nProvider>
+  </MemoryRouter>,
 );
 
 beforeEach(() => {
@@ -79,6 +85,8 @@ beforeEach(() => {
   mockRunEstimate.mockReset();
   mockRunEstimate.mockReturnValue({ status: 'idle', continuous: false, view: null });
   mockLatestRun.mockReset();
+  mockLoadSenders.mockReset();
+  mockLoadSenders.mockResolvedValue([]);
   mockLatestRun.mockReturnValue({ status: 'ready', run: null });
 });
 
@@ -490,12 +498,37 @@ describe('CampaignSettingsPanel — checklist "Trước khi chạy"', () => {
     expect(onOpenSchedule).toHaveBeenCalledTimes(1);
   });
 
-  it('chiến dịch trống → ba dòng ⚠ "Chưa có", không có nút Sửa ở các dòng đó, hiện thẻ "Gửi cho ai?"', () => {
+  it('chiến dịch trống → không còn dòng đỏ "Chưa có": Gửi từ (mặc định) ✓, Gửi cho ai chờ chọn, Nội dung mờ; hiện thẻ Gửi từ + Gửi cho ai', () => {
     renderPanel({ nodes: [], edges: [] });
-    expect(screen.getByTestId('settings-checklist-summary')).toHaveTextContent('Còn 3 mục cần điền trước khi chạy');
-    expect(screen.getByTestId('settings-checklist-summary-sender')).toHaveTextContent('Chưa có');
-    expect(screen.queryByTestId('settings-checklist-edit-sender')).not.toBeInTheDocument();
+    expect(screen.getByTestId('settings-checklist-summary')).toHaveTextContent('Còn 1 mục cần điền trước khi chạy');
+    expect(screen.getByTestId('settings-checklist-summary-sender')).toHaveTextContent('Tài khoản mặc định: CSKH (cskh@abc.vn)');
+    expect(screen.getByTestId('settings-checklist-summary-audience')).toHaveTextContent('Chọn ở bên dưới');
+    expect(screen.getByTestId('settings-checklist-summary-content')).toHaveTextContent('Có sau khi chọn Gửi cho ai');
+    expect(screen.getByTestId('settings-checklist-row-content').getAttribute('data-status')).toBe('idle');
+    expect(screen.queryByTestId('settings-checklist-edit-content')).not.toBeInTheDocument();
     expect(screen.getByTestId('settings-start')).toBeInTheDocument();
+    expect(screen.getByTestId('settings-sender-part')).toBeInTheDocument();
+    expect(screen.getByTestId('settings-audience-part')).toBeInTheDocument();
+  });
+
+  it('chiến dịch trống: nút của dòng Gửi từ / Gửi cho ai đưa tới đúng phần bên dưới', () => {
+    const scrolled = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function scroll() { scrolled.push(this.getAttribute('data-testid')); };
+    try {
+      renderPanel({ nodes: [], edges: [] });
+      fireEvent.click(screen.getByTestId('settings-checklist-edit-audience'));
+      fireEvent.click(screen.getByTestId('settings-checklist-edit-sender'));
+      expect(scrolled).toEqual(['settings-audience-part', 'settings-sender-part']);
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
+  it('email chưa có tài khoản nào: Gửi từ cũng chờ chọn → còn 2 mục', () => {
+    renderPanel({ nodes: [], edges: [], emailSettings: [] });
+    expect(screen.getByTestId('settings-checklist-summary')).toHaveTextContent('Còn 2 mục cần điền trước khi chạy');
+    expect(screen.getByTestId('settings-checklist-summary-sender')).toHaveTextContent('Chọn ở bên dưới');
   });
 
   it('chỉ có quyền xem → checklist hiện nhưng không có nút Sửa nào', () => {
@@ -503,5 +536,94 @@ describe('CampaignSettingsPanel — checklist "Trước khi chạy"', () => {
     expect(screen.getByTestId('settings-checklist')).toBeInTheDocument();
     expect(screen.queryByTestId('settings-checklist-edit-sender')).not.toBeInTheDocument();
     expect(screen.queryByTestId('settings-checklist-edit-timing')).not.toBeInTheDocument();
+  });
+});
+
+describe('CampaignSettingsPanel — chiến dịch trống: chọn "Gửi từ" (PR-C)', () => {
+  const ACCOUNTS = {
+    email: [
+      { id: 3, label: 'cskh@abc.vn', sublabel: 'CSKH', isDefault: true, usable: true, problem: null },
+      { id: 9, label: 'sale@abc.vn', sublabel: '', isDefault: false, usable: true, problem: null },
+    ],
+    zalo: [
+      { id: 5, label: 'Shop Hoa', sublabel: '', isDefault: false, usable: true, problem: null },
+      { id: 6, label: 'Shop Bánh', sublabel: '', isDefault: false, usable: true, problem: null },
+      { id: 7, label: 'Nick hỏng', sublabel: '', isDefault: false, usable: false, problem: 'disconnected' },
+    ],
+    whatsapp: [
+      { id: '40-default', label: '+84 912 345 678', sublabel: '', isDefault: false, usable: true, problem: null },
+      { id: '41-x', label: '+84 900 000 000', sublabel: '', isDefault: false, usable: true, problem: null },
+    ],
+  };
+  const pick = async (id) => fireEvent.click(within(await screen.findByTestId(`simple-sender-${id}`)).getAllByRole('button')[0]);
+  const open = async (campaignType, props = {}) => {
+    mockLoadSenders.mockResolvedValue(ACCOUNTS[campaignType === 'zalo_group' ? 'zalo' : campaignType]);
+    const onApplyGraph = vi.fn().mockResolvedValue(undefined);
+    renderPanel({ campaignType, nodes: [], edges: [], onApplyGraph, ...props });
+    return onApplyGraph;
+  };
+
+  it('email: chọn tài khoản rồi chọn nguồn → khối gửi có fromEmailId; checklist hiện đúng tài khoản', async () => {
+    const onApplyGraph = await open('email');
+    await pick('9');
+    expect(screen.getByTestId('settings-checklist-summary-sender')).toHaveTextContent('sale@abc.vn');
+    fireEvent.click(screen.getByTestId('settings-start-sheet'));
+    await waitFor(() => expect(onApplyGraph).toHaveBeenCalledTimes(1));
+    const send = onApplyGraph.mock.calls[0][0].find((n) => n.data.nodeType === 'send_email');
+    expect(send.data.config.fromEmailId).toBe(9);
+  });
+
+  it('email: không chọn tài khoản → khối gửi không có fromEmailId (= mặc định)', async () => {
+    const onApplyGraph = await open('email');
+    await screen.findByTestId('simple-sender-9');
+    fireEvent.click(screen.getByTestId('settings-start-sheet'));
+    await waitFor(() => expect(onApplyGraph).toHaveBeenCalledTimes(1));
+    const send = onApplyGraph.mock.calls[0][0].find((n) => n.data.nodeType === 'send_email');
+    expect(send.data.config.fromEmailId).toBeUndefined();
+  });
+
+  it('Zalo: tài khoản vào khối Chọn tài khoản Zalo; tài khoản mất kết nối không chọn được', async () => {
+    const onApplyGraph = await open('zalo');
+    expect(await screen.findByTestId('simple-sender-7')).toHaveTextContent('Nick hỏng');
+    expect(within(screen.getByTestId('simple-sender-7')).getAllByRole('button')[0]).toBeDisabled();
+    await pick('6');
+    fireEvent.click(screen.getByTestId('settings-start-customers'));
+    await waitFor(() => expect(onApplyGraph).toHaveBeenCalledTimes(1));
+    const nodes = onApplyGraph.mock.calls[0][0];
+    expect(nodes.find((n) => n.data.nodeType === 'select_zalo_account').data.config.zaloAccountId).toBe(6);
+    expect(nodes.find((n) => n.data.nodeType === 'send_zalo_personal').data.config.zaloAccountId).toBeUndefined();
+  });
+
+  it('Zalo nhóm: dùng danh sách tài khoản Zalo, tài khoản vào khối chọn tài khoản', async () => {
+    const onApplyGraph = await open('zalo_group');
+    await pick('5');
+    fireEvent.click(screen.getByTestId('settings-start-zalo_groups'));
+    await waitFor(() => expect(onApplyGraph).toHaveBeenCalledTimes(1));
+    const nodes = onApplyGraph.mock.calls[0][0];
+    expect(nodes.map((n) => n.data.nodeType)).toEqual(['manual_trigger', 'select_zalo_account', 'get_all_groups', 'send_zalo_group']);
+    expect(nodes[1].data.config.zaloAccountId).toBe(5);
+  });
+
+  it('chọn nguồn TRƯỚC, không chọn tài khoản → Zalo để trống (thẻ sẽ báo thiếu)', async () => {
+    const onApplyGraph = await open('zalo');
+    await screen.findByTestId('simple-sender-5');
+    fireEvent.click(screen.getByTestId('settings-start-customers'));
+    await waitFor(() => expect(onApplyGraph).toHaveBeenCalledTimes(1));
+    expect(onApplyGraph.mock.calls[0][0].find((n) => n.data.nodeType === 'select_zalo_account').data.config.zaloAccountId).toBe('');
+  });
+
+  it('WhatsApp: whatsappSessionKey (chuỗi) vào khối gửi', async () => {
+    const onApplyGraph = await open('whatsapp');
+    await pick('41-x');
+    fireEvent.click(screen.getByTestId('settings-start-conversations'));
+    await waitFor(() => expect(onApplyGraph).toHaveBeenCalledTimes(1));
+    expect(onApplyGraph.mock.calls[0][0].find((n) => n.data.nodeType === 'send_whatsapp').data.config.whatsappSessionKey).toBe('41-x');
+  });
+
+  it('chỉ có quyền xem → không có phần chọn Gửi từ, không tải danh sách tài khoản', () => {
+    mockLoadSenders.mockClear();
+    renderPanel({ nodes: [], edges: [], canEdit: false });
+    expect(screen.queryByTestId('settings-sender-part')).not.toBeInTheDocument();
+    expect(mockLoadSenders).not.toHaveBeenCalled();
   });
 });
