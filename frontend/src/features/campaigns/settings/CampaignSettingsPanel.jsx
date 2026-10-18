@@ -51,6 +51,10 @@ import {
   resolveCampaignChannel,
 } from './settingsGraph';
 
+// Trang (CampaignBuilder) đã tải danh sách email active bằng đúng GET này; `api.js` khử trùng GET song song CÙNG khoá (method+url+params) nên
+// lượt của thẻ này mà trùng sẽ HUỶ lượt của trang → form khối gửi báo "chưa có SMTP". Khác `limit` để hai lượt không đè nhau.
+const SENDER_LOAD_OPTIONS = Object.freeze({ email: { params: { status: 'active', page: 1, limit: 99 } } });
+
 const CARD = 'rounded-xl border border-gray-200 bg-white shadow-sm dark:border-dk-border dark:bg-dk-surface';
 const MUTED = 'text-gray-500 dark:text-dk-text2';
 
@@ -512,6 +516,7 @@ const StartCard = ({ channel, sender, onSelectSender, senderRef, audienceRef, au
         t={t}
         locale={locale}
         className="min-w-0"
+        loadOptions={SENDER_LOAD_OPTIONS}
         titleClassName="text-base font-bold text-gray-900 dark:text-dk-text"
       />
     </div>

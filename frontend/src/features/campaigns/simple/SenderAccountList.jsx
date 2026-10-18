@@ -40,12 +40,13 @@ const DOT_CLASS = Object.freeze({
  * @param {string} [props.locale]
  * @param {string} [props.className] lớp của khung ngoài (mặc định `mt-8` của trình từng bước; tab Thiết lập đặt lại)
  * @param {string} [props.titleClassName] lớp của tiêu đề
+ * @param {object} [props.loadOptions] tuỳ chọn cho `loadSenderAccounts` (chỉ nhánh email)
  */
 export default function SenderAccountList({
-  channel, selected, onSelect, t, locale = 'vi', className = 'mt-8', titleClassName = 'text-lg font-bold text-slate-900 dark:text-dk-text',
+  channel, selected, onSelect, t, locale = 'vi', className = 'mt-8', titleClassName = 'text-lg font-bold text-slate-900 dark:text-dk-text', loadOptions,
 }) {
   const kind = senderKindOf(channel);
-  const resource = useAsyncResource(() => loadSenderAccounts(kind), [kind]);
+  const resource = useAsyncResource(() => loadSenderAccounts(kind, loadOptions), [kind]);
   const accounts = resource.status === 'ready' ? resource.data : [];
   const usable = accounts.filter((account) => account.usable);
 

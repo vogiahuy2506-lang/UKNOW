@@ -620,6 +620,12 @@ describe('CampaignSettingsPanel — chiến dịch trống: chọn "Gửi từ" 
     expect(onApplyGraph.mock.calls[0][0].find((n) => n.data.nodeType === 'send_whatsapp').data.config.whatsappSessionKey).toBe('41-x');
   });
 
+  it('email: lượt tải danh sách tài khoản KHÁC khoá GET của trang (limit 100) để api.js không huỷ lượt của trang', async () => {
+    await open('email');
+    await screen.findByTestId('simple-sender-9');
+    expect(mockLoadSenders).toHaveBeenCalledWith('email', { email: { params: { status: 'active', page: 1, limit: 99 } } });
+  });
+
   it('chỉ có quyền xem → không có phần chọn Gửi từ, không tải danh sách tài khoản', () => {
     mockLoadSenders.mockClear();
     renderPanel({ nodes: [], edges: [], canEdit: false });
