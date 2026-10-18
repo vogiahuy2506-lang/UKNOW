@@ -106,6 +106,8 @@ router.get('/:id/domain-verification/status',
 router.post('/send-email',
   [
     body('fromEmailId').custom((value) => {
+      // Trống/thiếu = dùng tài khoản email mặc định của chủ workspace (khớp lúc chạy thật chiến dịch); service báo 400 nếu không có tài khoản nào.
+      if (value === undefined || value === null || String(value).trim() === '') return true;
       const id = parseInt(value, 10);
       if (isNaN(id) || id < 1) {
         throw new Error('Email gửi không hợp lệ');

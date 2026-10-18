@@ -1,6 +1,7 @@
 import net from 'node:net';
 import { v4 as uuidv4 } from 'uuid';
 import emailSettingsRepository from '../../repositories/email/emailSettings.repository.js';
+import campaignEmailSenderRepository from '../../repositories/campaign/campaignEmailSender.repository.js';
 import {
   assertPublicHost,
   connectToVettedAddresses,
@@ -595,7 +596,7 @@ class EmailSettingsSmtpService {
     const isPreviewMode = this.normalizePreviewMode(payload);
     const isBuilderMode = this.normalizeBuilderMode(payload);
     const {
-      fromEmailId,
+      fromEmailId: requestedFromEmailId,
       to,
       cc,
       bcc,
@@ -646,10 +647,22 @@ class EmailSettingsSmtpService {
       );
     }
 
-    const setting = await emailSettingsRepository.getActiveById(workspaceOwnerId, fromEmailId, { roleCode });
+    // `fromEmailId` trống = lúc CHẠY THẬT chiến dịch tự dùng tài khoản email mặc định của CHỦ workspace
+    // (campaignEmailSender.service.js getEmailSettingsByRunNodeCache → findDefaultEmailSettings). Chạy thử / gửi thử phải khớp.
+    const hasFromEmailId = requestedFromEmailId !== undefined && requestedFromEmailId !== null && String(requestedFromEmailId).trim() !== '';
+    let setting = null;
+    if (hasFromEmailId) {
+      setting = await emailSettingsRepository.getActiveById(workspaceOwnerId, requestedFromEmailId, { roleCode });
+    } else {
+      setting = await campaignEmailSenderRepository.findDefaultEmailSettings(workspaceOwnerId);
+      if (!setting) {
+        throw createServiceError('Chưa có tài khoản email gửi nào đang hoạt động. Hãy thêm tài khoản email trước khi gửi.', 400);
+      }
+    }
     if (!setting) {
       throw createServiceError('Không tìm thấy cấu hình email hoặc email chưa kích hoạt', 404);
     }
+    const fromEmailId = hasFromEmailId ? requestedFromEmailId : setting.id;
 
     const hasContent = (val) => typeof val === 'string' && val.trim().length > 0;
     if (!hasContent(content) && !hasContent(htmlContent)) {

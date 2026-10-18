@@ -102,7 +102,7 @@ const emailAccountText = (account) => {
  * `fromEmailId` trống: lúc CHẠY THẬT backend tự dùng tài khoản mặc định (`findDefaultEmailSettings`: tài khoản đang hoạt động có
  * id nhỏ nhất) nên KHÔNG phải thiếu — nếu danh sách tài khoản đang hoạt động có phần tử thì tóm tắt "Tài khoản mặc định: …"
  * (gần đúng: trình duyệt không biết tài khoản bị khoá do nạp tiền). Danh sách rỗng → vẫn là dòng thiếu.
- * Chạy thử trên Sơ đồ khối thì KHÔNG tự lấy mặc định (POST /email-settings/send-email đòi `fromEmailId` hợp lệ).
+ * Chạy thử trên Sơ đồ khối cũng vậy (B5b: POST /email-settings/send-email nhận `fromEmailId` trống → tài khoản mặc định của chủ workspace).
  */
 const describeEmailSender = (config, lookups, t) => {
   const label = t(`${PREFIX}.label.sender`);

@@ -115,10 +115,8 @@ export const validateNodeForRun = (node) => {
     return null;
   };
 
-  if (nodeType === 'send_email' && !config.fromEmailId) {
-    return { status: 'failed', message: 'Chưa chọn email gửi (SMTP)' };
-  }
-
+  // `fromEmailId` trống KHÔNG phải lỗi: chạy thật tự dùng tài khoản email mặc định của chủ workspace, và POST /email-settings/send-email
+  // (Chạy thử) cũng vậy từ B5b; không có tài khoản nào thì backend trả 400 rõ ràng.
   if (nodeType === 'send_email') {
     const recipientSource = String(config.recipientSource || '').trim();
     if (!recipientSource || (recipientSource !== 'node' && recipientSource !== 'manual')) {

@@ -115,4 +115,23 @@ describe('campaignBuilderRunValidation Spec (PR-3)', () => {
       expect(res.warning).toContain('full_name');
     });
   });
+
+  describe('validateNodeForRun send_email — fromEmailId trống (B5b)', () => {
+    const emailNode = (fromEmailId) => ({
+      type: 'send_email',
+      data: {
+        config: {
+          ...(fromEmailId === undefined ? {} : { fromEmailId }),
+          recipientSource: 'node',
+          recipientNodeId: 'n2',
+          recipientField: 'email',
+          emailSteps: [{ templateId: 10, emailSubject: 'Chào', emailBody: '<p>Nội dung</p>', templateMappings: [] }],
+        },
+      },
+    });
+
+    it.each([[undefined], [''], [null]])('fromEmailId=%p -> không báo thiếu (chạy thật và Chạy thử đều dùng tài khoản mặc định)', (value) => {
+      expect(validateNodeForRun(emailNode(value)).status).toBe('success');
+    });
+  });
 });
