@@ -3,7 +3,7 @@ import vi from '../../../../i18n/vi';
 import { AUDIENCE_TYPES_BY_CHANNEL } from '../../simple/simpleCampaign.helpers';
 import { createBuilderNode, makeUniqueNodeName } from '../../utils/createBuilderNode';
 import { validateNodeForRun } from '../../utils/campaignBuilderRunValidation';
-import buildSettingsChecklist from '../buildSettingsChecklist';
+import { countMissingSections, readSettingsSections } from '../sections';
 import {
   analyzeSettingsGraph,
   appendSideStep,
@@ -121,7 +121,7 @@ describe('buildSettingsSkeleton — bảng kênh × nguồn', () => {
   });
 });
 
-// ── Kiểm thật: khung + điền đủ ở Thiết lập → validateNodeForRun sạch, checklist "Sẵn sàng" ────────────────────────────────
+// ── Kiểm thật: khung + điền đủ ở Thiết lập → validateNodeForRun sạch, không còn mục nào thiếu ────────────────────────────────
 const fillSkeleton = (nodes) => nodes.map((node) => {
   const config = { ...(node.data.config || {}) };
   switch (node.data.nodeType) {
@@ -158,6 +158,9 @@ const fillSkeleton = (nodes) => nodes.map((node) => {
     case 'read_sheet':
       config.sheetUrl = 'https://docs.google.com/spreadsheets/d/abc';
       break;
+    case 'read_landing_leads':
+      config.landingLeadsSlugs = ['trang-a'];
+      break;
     case 'get_all_friends':
       config.zaloSelectedFriendIds = ['u1'];
       break;
@@ -181,14 +184,13 @@ const lookups = {
 };
 
 describe('khung khối dùng được thật', () => {
-  it.each(EXPECTED)('%s × %s: vừa sinh còn thiếu, điền đủ thì checklist "Sẵn sàng" và validateNodeForRun không báo lỗi cấu trúc', (channel, audienceType) => {
+  it.each(EXPECTED)('%s × %s: vừa sinh còn thiếu, điền đủ thì không còn mục nào thiếu và validateNodeForRun không báo lỗi cấu trúc', (channel, audienceType) => {
     const skeleton = buildSettingsSkeleton({ campaignType: channel, audienceType });
-    const before = buildSettingsChecklist(skeleton.nodes, skeleton.edges, lookups, t);
-    expect(before.some((row) => row.status === 'missing')).toBe(true);
+    const ctx = { campaignType: channel, locale: 'vi', lookups, t };
+    expect(countMissingSections(readSettingsSections(skeleton.nodes, skeleton.edges, ctx))).toBeGreaterThan(0);
 
     const filled = fillSkeleton(skeleton.nodes);
-    const after = buildSettingsChecklist(filled, skeleton.edges, lookups, t);
-    expect(after.filter((row) => row.status === 'missing')).toEqual([]);
+    expect(countMissingSections(readSettingsSections(filled, skeleton.edges, ctx))).toBe(0);
     filled.forEach((node) => {
       const result = validateNodeForRun(node);
       // Chỉ chấp nhận lỗi "chưa có dữ liệu thật để chạy" (vd sheet thiếu tab); không được thiếu id / nguồn / cột người nhận.
@@ -244,10 +246,10 @@ describe('buildSettingsSkeleton — tài khoản "Gửi từ" chọn trước (P
     });
   });
 
-  it('chọn tài khoản → checklist Gửi từ ✓ (Zalo / Telegram / WhatsApp), còn email vẫn ✓ nhờ mặc định', () => {
+  it('chọn tài khoản → mục Gửi từ ✓ (Zalo / Telegram / WhatsApp); email để trống thì phụ thuộc có tài khoản mặc định', () => {
     const rowOf = (campaignType, audienceType, sender) => {
       const skeleton = buildSettingsSkeleton({ campaignType, audienceType, sender });
-      return buildSettingsChecklist(skeleton.nodes, skeleton.edges, { ...lookups, emailSettings: [] }, t).find((row) => row.key === 'sender');
+      return readSettingsSections(skeleton.nodes, skeleton.edges, { campaignType, locale: 'vi', lookups: { ...lookups, emailSettings: [] }, t }).sender;
     };
     expect(rowOf('zalo', 'customers', null).status).toBe('missing');
     expect(rowOf('zalo', 'customers', { id: 5 }).status).toBe('ok');

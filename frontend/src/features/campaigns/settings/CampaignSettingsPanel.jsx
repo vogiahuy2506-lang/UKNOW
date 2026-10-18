@@ -2,62 +2,45 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   HiOutlineCalendar,
-  HiOutlineCheckCircle,
   HiOutlineClock,
-  HiOutlineExclamation,
   HiOutlinePencil,
   HiOutlinePlus,
-  HiOutlineRefresh,
   HiOutlineTrash,
   HiOutlineViewGrid,
-  HiOutlineX,
 } from 'react-icons/hi';
-import FullScreenOverlay from '../../../components/FullScreenOverlay';
 import { useI18n } from '../../../i18n';
 import { getCampaignTypeMeta } from '../../../utils/campaignTypeDisplay';
 import { getAllNodeConfigs } from '../components/CampaignBuilderFlowNodes';
 import CampaignEstimatePanel from '../components/CampaignEstimatePanel';
 import { ConfirmModal } from '../components/CampaignBuilderLayout';
-import NodeConfigForm from '../components/NodeConfigForm';
+import NodeConfigModal from '../components/NodeConfigModal';
 import { isNodeConfigFormUnchanged } from '../utils/nodeConfigUnchanged';
 import { getAllowedDataNodeTypesByCampaignType } from '../utils/campaignBuilderFlow';
-import SimpleChoiceCard from '../simple/SimpleChoiceCard';
 import SenderAccountList from '../simple/SenderAccountList';
-import { AUDIENCE_CARDS } from '../simple/audienceCards';
 import { AUDIENCE_TYPES_BY_CHANNEL } from '../simple/simpleCampaign.helpers';
 import useCampaignEstimate from '../hooks/useCampaignEstimate';
 import { buildEstimateView, describeEstimateDuration, formatEstimateDateTime } from '../utils/campaignEstimate.helpers';
 import { formatCampaignDateTime } from '../utils/campaignDateTime.helpers';
-import buildSettingsChecklist from './buildSettingsChecklist';
 import buildSettingsOrder from './buildSettingsOrder';
-import describeNodeSettings from './describeNodeSettings';
-import { pickFirstMissingTarget, resolveSectionForNode, resolveSectionForRole } from './resolveEditSection';
+import { emailAccountText, pickDefaultEmailAccount } from './describeNodeSettings';
+import { resolveSectionForRole } from './resolveEditSection';
 import { formatVnDayMonthTime, formatVnResumeTime, getWaitReasonI18nKey } from '../utils/deliveryMonitor.helpers';
 import useCampaignLatestRun from './useCampaignLatestRun';
 import useRunRemainingEstimate from './useRunRemainingEstimate';
 import useSettingsAccountLookups from './useSettingsAccountLookups';
+import SettingsSectionCard, { CARD, MUTED } from './SettingsSectionCard';
+import SenderSectionForm, { SENDER_LOAD_OPTIONS } from './SenderSectionForm';
+import AudienceSectionForm from './AudienceSectionForm';
+import { buildAudienceGraph, countMissingSections, readSettingsSections, writeAudience, writeSender } from './sections';
 import {
-  AUDIENCE_SOURCE_SUBTYPE,
   SIDE_STEP_SUBTYPES,
-  SWAPPABLE_SOURCE_SUBTYPES,
   analyzeSettingsGraph,
   appendSideStep,
-  buildSettingsSkeleton,
-  classifyAudienceChange,
-  findChainRoles,
   getSendSubtypeFor,
   getSkeletonAudienceTypes,
   removeSideStep,
-  replaceAudienceSource,
   resolveCampaignChannel,
 } from './settingsGraph';
-
-// Trang (CampaignBuilder) đã tải danh sách email active bằng đúng GET này; `api.js` khử trùng GET song song CÙNG khoá (method+url+params) nên
-// lượt của thẻ này mà trùng sẽ HUỶ lượt của trang → form khối gửi báo "chưa có SMTP". Khác `limit` để hai lượt không đè nhau.
-const SENDER_LOAD_OPTIONS = Object.freeze({ email: { params: { status: 'active', page: 1, limit: 99 } } });
-
-const CARD = 'rounded-xl border border-gray-200 bg-white shadow-sm dark:border-dk-border dark:bg-dk-surface';
-const MUTED = 'text-gray-500 dark:text-dk-text2';
 
 const STATUS_CLASS = {
   active: 'bg-green-100 text-green-700 dark:bg-green-950/60 dark:text-green-300',
@@ -281,291 +264,22 @@ const OverviewCard = ({
   );
 };
 
-const NodeCard = ({
-  entry,
-  nodes,
-  edges,
-  lookups,
-  registry,
-  canEdit,
-  isEditing,
-  editLocked,
-  onStartEdit,
-  onCancelEdit,
-  onSaveEdit,
-  onFormChange,
-  editSection,
-  sectionRequestId,
-  formProps,
-  cardRef,
-  nodeTitleOf,
-  structure,
-  t,
-  locale,
-}) => {
-  const { node, step, branch } = entry;
-  const subtype = subtypeOf(node);
-  const config = registry.find((item) => item.type === subtype);
-  const Icon = config?.icon;
-  const typeName = config ? (locale === 'vi' ? (config.nameVi || config.name) : (config.name || config.nameVi)) : subtype;
-  const title = String(node?.data?.label || '').trim() || typeName;
-  const lines = describeNodeSettings(node, { ...lookups, nodes }, t);
-  const branchFrom = branch ? nodes.find((item) => String(item.id) === branch.fromId) : null;
-  const hasMissing = lines.some((item) => item.tone === 'missing');
-
-  return (
-    <li
-      ref={cardRef}
-      className={`${CARD} min-w-0 scroll-mt-4 p-4 ${isEditing ? 'ring-2 ring-primary-400 dark:ring-primary-500' : hasMissing ? 'border-amber-300 dark:border-amber-500/60' : ''}`}
-      data-testid="settings-node-card"
-      data-node-id={node.id}
-      data-node-type={subtype}
-      data-editing={isEditing ? 'true' : 'false'}
-      data-missing={hasMissing ? 'true' : 'false'}
-    >
-      <div className="flex items-start gap-3">
-        <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold tabular-nums text-gray-600 dark:bg-dk-raised dark:text-dk-text2">
-          {step ?? '–'}
-        </span>
-        <div
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
-          style={{ backgroundColor: config?.bgColor || '#E8EAF6' }}
-        >
-          {Icon && <Icon className="h-5 w-5" style={{ color: config?.iconColor || '#5C6BC0' }} aria-hidden="true" />}
-        </div>
-        <div className="min-w-0 flex-1">
-          <h3 className="break-words text-sm font-semibold text-gray-900 dark:text-dk-text">{title}</h3>
-          {title !== typeName && <p className={`text-xs ${MUTED}`}>{typeName}</p>}
-          {hasMissing && (
-            <p
-              className="mt-1 inline-flex items-center gap-1 rounded bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
-              data-testid="settings-card-missing"
-            >
-              <HiOutlineExclamation className="h-3.5 w-3.5" aria-hidden="true" />
-              {t('campaignSettings.needsAttention')}
-            </p>
-          )}
-          {branch && (
-            <p className="mt-1 inline-block rounded bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700 dark:bg-sky-950/40 dark:text-sky-300" data-testid="settings-branch-label">
-              {t('campaignSettings.branch', { label: branch.label, node: branchFrom ? nodeTitleOf(branchFrom) : '' })}
-            </p>
-          )}
-        </div>
-        {canEdit && !isEditing && (
-          <button
-            type="button"
-            onClick={() => onStartEdit(node.id)}
-            disabled={editLocked}
-            title={editLocked ? t('campaignSettings.editBusy') : undefined}
-            data-testid={`settings-edit-${node.id}`}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent dark:border-dk-border dark:text-dk-text dark:hover:bg-dk-raised"
-          >
-            <HiOutlinePencil className="h-4 w-4" aria-hidden="true" />
-            {t('campaignSettings.edit')}
-          </button>
-        )}
-      </div>
-      {isEditing ? (
-        <div className="mt-3 min-w-0 overflow-x-auto border-t border-gray-100 dark:border-dk-border" data-testid="settings-inline-form">
-          {/* Form email/Zalo có cột mục lục w-64 bên trái: ở màn hẹp cho cuộn ngang TRONG thẻ thay vì ép nội dung còn ~60px. */}
-          <div className="min-w-[34rem] md:min-w-0">
-          <NodeConfigForm
-            key={node.id}
-            variant="inline"
-            node={node}
-            nodes={nodes}
-            edges={edges}
-            campaignType={formProps.campaignType}
-            campaignId={formProps.campaignId}
-            emailTemplates={formProps.emailTemplates}
-            zaloTemplates={formProps.zaloTemplates}
-            emailSettings={formProps.emailSettings}
-            runLogs={formProps.runLogs}
-            onCheckSheetConnection={formProps.onCheckSheetConnection}
-            onSave={(formData) => onSaveEdit(node, formData)}
-            onCancel={onCancelEdit}
-            onFormChange={onFormChange}
-            initialSection={editSection}
-            sectionRequestId={sectionRequestId}
-          />
-          </div>
-        </div>
-      ) : (
-      <>
-      <dl className="mt-3 space-y-1.5 border-t border-gray-100 pt-3 text-sm dark:border-dk-border">
-        {lines.map((item, index) => (
-          <div key={`${item.label}-${index}`} className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:gap-3" data-testid="settings-line" data-tone={item.tone}>
-            <dt className={`shrink-0 sm:w-36 ${MUTED}`}>{item.label}</dt>
-            <dd className={`min-w-0 break-words ${item.tone === 'missing' ? 'font-medium text-rose-600 dark:text-rose-400' : 'text-gray-900 dark:text-dk-text'}`}>
-              {item.value}
-            </dd>
-          </div>
-        ))}
-      </dl>
-      {structure && (structure.changeSource || structure.remove) && (
-        <div className="mt-3 flex flex-wrap gap-2 border-t border-gray-100 pt-3 dark:border-dk-border">
-          {structure.changeSource && (
-            <button
-              type="button"
-              onClick={() => structure.changeSource.onClick(node.id)}
-              disabled={structure.changeSource.disabled}
-              title={structure.changeSource.title}
-              data-testid={`settings-change-source-${node.id}`}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent dark:border-dk-border dark:text-dk-text dark:hover:bg-dk-raised"
-            >
-              <HiOutlineRefresh className="h-4 w-4" aria-hidden="true" />
-              {t('campaignSettings.changeSource.button')}
-            </button>
-          )}
-          {structure.remove && (
-            <button
-              type="button"
-              onClick={() => structure.remove.onClick(node.id)}
-              disabled={structure.remove.disabled}
-              title={structure.remove.title}
-              data-testid={`settings-remove-${node.id}`}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 px-3 py-1.5 text-sm font-medium text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent dark:border-rose-500/40 dark:text-rose-400 dark:hover:bg-rose-950/30"
-            >
-              <HiOutlineTrash className="h-4 w-4" aria-hidden="true" />
-              {t('campaignSettings.removeStep.button')}
-            </button>
-          )}
-        </div>
-      )}
-      </>
-      )}
-    </li>
-  );
-};
-
-/** Checklist "Trước khi chạy": 4 dòng (Gửi từ · Gửi cho ai · Nội dung · Thời điểm), ✓ đủ / ⚠ thiếu, nút Sửa mở đúng thẻ. */
-const Checklist = ({ rows, canEdit, canOpenSchedule, onEditRow, onOpenSchedule, onJump, t }) => {
-  const missingCount = rows.filter((row) => row.status === 'missing').length;
-  return (
-    <section className={`${CARD} order-1 min-w-0 p-4 sm:p-5 lg:order-none`} data-testid="settings-checklist" data-missing-count={missingCount} aria-label={t('campaignSettings.checklist.title')}>
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <h2 className="text-base font-bold text-gray-900 dark:text-dk-text">{t('campaignSettings.checklist.title')}</h2>
-        <p
-          className={`text-sm font-medium ${missingCount > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-green-700 dark:text-green-400'}`}
-          data-testid="settings-checklist-summary"
-        >
-          {missingCount > 0 ? t('campaignSettings.checklist.remaining', { n: missingCount }) : t('campaignSettings.checklist.ready')}
-        </p>
-      </div>
-      <ul className="mt-3 divide-y divide-gray-100 dark:divide-dk-border">
-        {rows.map((row) => {
-          const ok = row.status === 'ok';
-          const idle = row.status === 'idle';
-          const isTiming = row.key === 'timing';
-          const canClick = canEdit && (isTiming ? canOpenSchedule : Boolean(row.targetNodeId || row.anchor));
-          return (
-            <li
-              key={row.key}
-              className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 py-2.5"
-              data-testid={`settings-checklist-row-${row.key}`}
-              data-status={row.status}
-            >
-              <span className="flex shrink-0 items-center gap-1.5" aria-label={ok ? t('campaignSettings.checklist.okBadge') : (idle ? t('campaignSettings.checklist.idleBadge') : t('campaignSettings.checklist.missingBadge'))}>
-                {ok && <HiOutlineCheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" aria-hidden="true" />}
-                {idle && <span className="m-1.5 h-2 w-2 rounded-full bg-gray-300 dark:bg-dk-border" aria-hidden="true" />}
-                {!ok && !idle && <HiOutlineExclamation className="h-5 w-5 text-amber-600 dark:text-amber-400" aria-hidden="true" />}
-              </span>
-              <span className="w-24 shrink-0 text-sm font-semibold text-gray-900 dark:text-dk-text">{t(`campaignSettings.checklist.row.${row.key}`)}</span>
-              <span
-                className={`min-w-0 flex-1 basis-40 break-words text-sm ${ok ? 'text-gray-700 dark:text-dk-text' : (idle || row.soft ? `${MUTED}` : 'font-medium text-rose-600 dark:text-rose-400')}`}
-                data-testid={`settings-checklist-summary-${row.key}`}
-              >
-                {row.summary}
-              </span>
-              {canClick && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (isTiming) onOpenSchedule();
-                    else if (row.anchor && !row.targetNodeId) onJump(row.anchor);
-                    else onEditRow(row.targetNodeId, row.key);
-                  }}
-                  data-testid={`settings-checklist-edit-${row.key}`}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-dk-border dark:text-dk-text dark:hover:bg-dk-raised"
-                >
-                  <HiOutlinePencil className="h-4 w-4" aria-hidden="true" />
-                  {row.anchor && !row.targetNodeId ? t(ok ? 'campaignSettings.checklist.change' : 'campaignSettings.checklist.choose') : t('campaignSettings.checklist.edit')}
-                </button>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </section>
-  );
-};
-
-/** Câu mô tả của thẻ nguồn: khách đã lưu / tự nhập có hai câu theo kênh (email / số điện thoại). */
-const audienceDescription = (type, channel, t) => {
-  const kind = channel === 'email' ? 'Email' : 'Phone';
-  const key = type === 'customers' || type === 'manual' ? `simpleCampaign.audience.types.${type}.desc${kind}` : `simpleCampaign.audience.types.${type}.desc`;
-  return t(key);
-};
-
-/**
- * Chiến dịch trống: hai phần — "Gửi từ" (tài khoản gửi, dùng lại danh sách của trình từng bước) rồi "Gửi cho ai?" (chọn nguồn thì hệ thống
- * dựng sẵn các khối đúng chuỗi của bộ biên dịch, tài khoản đã chọn được điền sẵn). Chọn phần nào trước cũng được.
- */
-const StartCard = ({ channel, sender, onSelectSender, senderRef, audienceRef, audienceTypes, isLocked, busy, onPick, onGoFlow, t, locale }) => (
-  <section className={`${CARD} p-4 sm:p-5`} data-testid="settings-start" aria-busy={busy ? 'true' : 'false'}>
-    <div ref={senderRef} className="scroll-mt-4" data-testid="settings-sender-part">
-      <SenderAccountList
-        channel={channel}
-        selected={sender}
-        onSelect={onSelectSender}
-        t={t}
-        locale={locale}
-        className="min-w-0"
-        loadOptions={SENDER_LOAD_OPTIONS}
-        titleClassName="text-base font-bold text-gray-900 dark:text-dk-text"
-      />
-    </div>
-    <div ref={audienceRef} className="mt-6 scroll-mt-4 border-t border-gray-100 pt-5 dark:border-dk-border" data-testid="settings-audience-part">
-    <h2 className="text-base font-bold text-gray-900 dark:text-dk-text">{t('campaignSettings.start.title')}</h2>
-    <p className={`mt-1 text-sm ${MUTED}`}>{t('campaignSettings.start.hint')}</p>
-    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-3">
-      {audienceTypes.map((type) => {
-        const card = AUDIENCE_CARDS[type];
-        const locked = isLocked(type);
-        return (
-          <SimpleChoiceCard
-            key={type}
-            testId={`settings-start-${type}`}
-            icon={card?.icon}
-            tone={card?.tone}
-            title={t(`simpleCampaign.audience.types.${type}.title`)}
-            description={locked ? t('campaignSettings.start.locked') : audienceDescription(type, channel, t)}
-            locked={locked}
-            onClick={() => {
-              if (busy) return;
-              if (locked) {
-                toast.error(t('campaignSettings.start.locked'));
-                return;
-              }
-              onPick(type);
-            }}
-          />
-        );
-      })}
-    </div>
-    <button
-      type="button"
-      onClick={onGoFlow}
-      data-testid="settings-go-flow"
-      className="mt-4 text-sm font-medium text-primary-600 hover:underline dark:text-primary-400"
-    >
-      {t('campaignSettings.start.orFlow')}
-    </button>
+/** Dòng trạng thái đầu cột phải: còn bao nhiêu mục cần điền trước khi chạy. */
+const StatusLine = ({ missingCount, t }) => (
+  <section className={`${CARD} min-w-0 p-4 sm:p-5`} data-testid="settings-status" data-missing-count={missingCount} aria-label={t('campaignSettings.checklist.title')}>
+    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+      <h2 className="text-base font-bold text-gray-900 dark:text-dk-text">{t('campaignSettings.checklist.title')}</h2>
+      <p
+        className={`text-sm font-medium ${missingCount > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-green-700 dark:text-green-400'}`}
+        data-testid="settings-status-summary"
+      >
+        {missingCount > 0 ? t('campaignSettings.checklist.remaining', { n: missingCount }) : t('campaignSettings.checklist.ready')}
+      </p>
     </div>
   </section>
 );
 
-/** Dải báo sơ đồ có rẽ nhánh: nội dung vẫn sửa ở đây, cách nối khối sửa ở Sơ đồ khối. */
+/** Dải báo sơ đồ có rẽ nhánh: nội dung vẫn sửa ở đây, cách nối các bước sửa ở Sơ đồ khối. */
 const BranchBanner = ({ onGoFlow, t }) => (
   <section
     className="flex min-w-0 flex-col gap-3 rounded-xl border border-sky-200 bg-sky-50 p-4 dark:border-sky-500/40 dark:bg-sky-950/30 sm:flex-row sm:items-center sm:justify-between"
@@ -583,131 +297,147 @@ const BranchBanner = ({ onGoFlow, t }) => (
   </section>
 );
 
-/** Cuối danh sách bước: "+ Thêm bước sau khi gửi" (Gắn thẻ / Cập nhật thông tin / Lưu khách hàng). Rẽ nhánh → mờ + gợi ý sang Sơ đồ khối. */
-const AddStepSection = ({ options, disabled, disabledHint, open, onToggle, onPick, t }) => (
-  <section className={`${CARD} p-4`} data-testid="settings-add-step">
-    <button
-      type="button"
-      onClick={onToggle}
-      disabled={disabled}
-      title={disabledHint || undefined}
-      aria-expanded={open}
-      data-testid="settings-add-step-button"
-      className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent dark:border-dk-border-strong dark:text-dk-text dark:hover:bg-dk-raised"
-    >
-      <HiOutlinePlus className="h-4 w-4" aria-hidden="true" />
-      {t('campaignSettings.addStep.button')}
-    </button>
-    {disabled && disabledHint && <p className={`mt-2 text-xs ${MUTED}`} data-testid="settings-add-step-hint">{disabledHint}</p>}
-    {open && !disabled && (
-      <ul className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3" data-testid="settings-add-step-menu">
-        {options.map((option) => (
-          <li key={option.type} className="min-w-0">
+const SMALL_BUTTON = 'inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent dark:border-dk-border dark:text-dk-text dark:hover:bg-dk-raised';
+
+/** Thân mục Nội dung: mỗi khối gửi một nhóm dòng "Tin N: mẫu · nhịp chờ" (PR-E2 thay bằng biểu mẫu riêng; nút Sửa tạm mở hộp cài đặt của khối gửi). */
+const ContentBody = ({ items, canEdit, editLocked, onEdit, t }) => (
+  <ul className="space-y-4" data-testid="settings-content-list">
+    {items.map((item) => (
+      <li key={item.nodeId} className="min-w-0" data-testid="settings-content-item" data-node-id={item.nodeId} data-status={item.status}>
+        <div className="flex min-w-0 items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            {items.length > 1 && (
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-dk-text2">
+                {t(`campaignSettings.section.content.send.${item.subtype}`)}
+              </p>
+            )}
+            <dl className="space-y-1.5 text-sm">
+              {item.lines.map((line, index) => (
+                <div key={`${line.label}-${index}`} className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:gap-3" data-testid="settings-content-line" data-tone={line.tone}>
+                  <dt className={`shrink-0 sm:w-20 ${MUTED}`}>{line.label}</dt>
+                  <dd className={`min-w-0 break-words ${line.tone === 'missing' ? 'font-medium text-rose-600 dark:text-rose-400' : 'text-gray-900 dark:text-dk-text'}`}>{line.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+          {canEdit && (
             <button
               type="button"
-              onClick={() => onPick(option.type)}
-              data-testid={`settings-add-step-${option.type}`}
-              className="h-full w-full rounded-lg border border-gray-200 p-3 text-left hover:border-primary-300 hover:bg-gray-50 dark:border-dk-border dark:hover:border-primary-500/60 dark:hover:bg-dk-raised"
+              onClick={() => onEdit(item.nodeId)}
+              disabled={editLocked}
+              title={editLocked ? t('campaignSettings.editBusy') : undefined}
+              data-testid={`settings-content-edit-${item.nodeId}`}
+              className={SMALL_BUTTON}
             >
-              <span className="block text-sm font-semibold text-gray-900 dark:text-dk-text">{option.title}</span>
-              {option.description && <span className={`mt-0.5 block text-xs ${MUTED}`}>{option.description}</span>}
+              <HiOutlinePencil className="h-4 w-4" aria-hidden="true" />
+              {t('campaignSettings.section.edit')}
             </button>
+          )}
+        </div>
+      </li>
+    ))}
+  </ul>
+);
+
+/** Thân mục Sau khi gửi: các bước phụ (Sửa tạm mở hộp cài đặt, Xoá) + "+ Thêm bước sau khi gửi". */
+const AfterBody = ({ items, canEdit, canAdd, branched, locked, lockTitle, addMenuOpen, addOptions, onToggleAdd, onPickAdd, onEdit, onRemove, t }) => (
+  <div className="space-y-3" data-testid="settings-after-body">
+    {items.length > 0 && (
+      <ul className="space-y-2">
+        {items.map((item) => (
+          <li key={item.nodeId} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1" data-testid="settings-after-item" data-node-id={item.nodeId} data-status={item.status}>
+            <span className="min-w-0 flex-1 basis-40 break-words text-sm">
+              <span className="font-medium text-gray-900 dark:text-dk-text">{item.title}</span>
+              <span className={`ml-2 ${item.status === 'missing' ? 'font-medium text-rose-600 dark:text-rose-400' : MUTED}`}>{item.summary}</span>
+            </span>
+            {canEdit && (
+              <span className="flex shrink-0 gap-2">
+                <button type="button" onClick={() => onEdit(item.nodeId)} disabled={locked} title={locked ? lockTitle : undefined} data-testid={`settings-after-edit-${item.nodeId}`} className={SMALL_BUTTON}>
+                  <HiOutlinePencil className="h-4 w-4" aria-hidden="true" />
+                  {t('campaignSettings.section.edit')}
+                </button>
+                {item.removable && (
+                  <button
+                    type="button"
+                    onClick={() => onRemove(item.nodeId)}
+                    disabled={locked}
+                    title={locked ? lockTitle : undefined}
+                    data-testid={`settings-remove-${item.nodeId}`}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 px-3 py-1.5 text-sm font-medium text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent dark:border-rose-500/40 dark:text-rose-400 dark:hover:bg-rose-950/30"
+                  >
+                    <HiOutlineTrash className="h-4 w-4" aria-hidden="true" />
+                    {t('campaignSettings.removeStep.button')}
+                  </button>
+                )}
+              </span>
+            )}
           </li>
         ))}
       </ul>
     )}
-  </section>
+    {canEdit && (canAdd || branched) && (
+      <div data-testid="settings-add-step">
+        <button
+          type="button"
+          onClick={onToggleAdd}
+          disabled={branched || locked}
+          title={branched ? t('campaignSettings.addStep.branched') : (locked ? lockTitle : undefined)}
+          aria-expanded={addMenuOpen}
+          data-testid="settings-add-step-button"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent dark:border-dk-border-strong dark:text-dk-text dark:hover:bg-dk-raised"
+        >
+          <HiOutlinePlus className="h-4 w-4" aria-hidden="true" />
+          {t('campaignSettings.addStep.button')}
+        </button>
+        {branched && <p className={`mt-2 text-xs ${MUTED}`} data-testid="settings-add-step-hint">{t('campaignSettings.addStep.branched')}</p>}
+        {addMenuOpen && !branched && !locked && (
+          <ul className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3" data-testid="settings-add-step-menu">
+            {addOptions.map((option) => (
+              <li key={option.type} className="min-w-0">
+                <button
+                  type="button"
+                  onClick={() => onPickAdd(option.type)}
+                  data-testid={`settings-add-step-${option.type}`}
+                  className="h-full w-full rounded-lg border border-gray-200 p-3 text-left hover:border-primary-300 hover:bg-gray-50 dark:border-dk-border dark:hover:border-primary-500/60 dark:hover:bg-dk-raised"
+                >
+                  <span className="block text-sm font-semibold text-gray-900 dark:text-dk-text">{option.title}</span>
+                  {option.description && <span className={`mt-0.5 block text-xs ${MUTED}`}>{option.description}</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    )}
+  </div>
 );
 
-/** Hộp đổi nguồn: bước 1 chọn nguồn mới, bước 2 xác nhận (thay tại chỗ hoặc dựng lại các bước). */
-const ChangeSourceModal = ({ state, options, onPick, onBack, onClose, onConfirm, t }) => {
-  if (!state) return null;
-  const confirming = state.stage === 'confirm';
-  const rebuild = state.mode === 'rebuild';
-  return (
-    <FullScreenOverlay isOpen>
-      <div
-        className="mx-4 flex max-h-[90vh] w-full max-w-lg flex-col rounded-xl border border-transparent bg-white shadow-xl dark:border-dk-border dark:bg-dk-surface"
-        role="dialog"
-        aria-modal="true"
-        data-testid="settings-change-source-modal"
-      >
-        <div className="flex items-center justify-between border-b border-gray-200 p-4 dark:border-dk-border">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-dk-text">{t('campaignSettings.changeSource.title')}</h3>
-          <button type="button" onClick={onClose} aria-label={t('campaignSettings.changeSource.cancel')} className="rounded-lg p-1 text-gray-500 hover:bg-gray-100 dark:text-dk-text2 dark:hover:bg-dk-raised">
-            <HiOutlineX className="h-5 w-5" />
-          </button>
-        </div>
-        {confirming ? (
-          <div className="p-4" data-testid="settings-change-source-confirm">
-            <p className="text-sm text-gray-700 dark:text-dk-text">
-              {t(rebuild ? 'campaignSettings.changeSource.confirmRebuild' : 'campaignSettings.changeSource.confirmInPlace', {
-                source: t(`simpleCampaign.audience.types.${state.audienceType}.title`),
-              })}
-            </p>
-          </div>
-        ) : (
-          <div className="min-h-0 flex-1 overflow-y-auto p-4">
-            <p className={`mb-3 text-sm ${MUTED}`}>{t('campaignSettings.changeSource.pickHint')}</p>
-            <ul className="space-y-2">
-              {options.map((option) => (
-                <li key={option.type}>
-                  <button
-                    type="button"
-                    onClick={() => onPick(option.type)}
-                    data-testid={`settings-change-source-option-${option.type}`}
-                    className="w-full rounded-lg border border-gray-200 p-3 text-left hover:border-primary-300 hover:bg-gray-50 dark:border-dk-border dark:hover:border-primary-500/60 dark:hover:bg-dk-raised"
-                  >
-                    <span className="block text-sm font-semibold text-gray-900 dark:text-dk-text">{option.title}</span>
-                    <span className={`mt-0.5 block text-xs ${MUTED}`}>
-                      {option.mode === 'rebuild' ? t('campaignSettings.changeSource.modeRebuild') : t('campaignSettings.changeSource.modeInPlace')}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        <div className="flex flex-wrap justify-end gap-3 rounded-b-xl border-t border-gray-200 bg-gray-50 p-4 dark:border-dk-border dark:bg-dk-bg">
-          {confirming ? (
-            <>
-              <button type="button" onClick={onBack} className="rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 dark:text-dk-text dark:hover:bg-dk-raised">
-                {t('campaignSettings.changeSource.back')}
-              </button>
-              <button type="button" onClick={onConfirm} data-testid="settings-change-source-confirm-button" className="rounded-lg bg-primary-500 px-4 py-2 text-white hover:bg-primary-600">
-                {rebuild ? t('campaignSettings.changeSource.confirmRebuildButton') : t('campaignSettings.changeSource.confirmButton')}
-              </button>
-            </>
-          ) : (
-            <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 dark:text-dk-text dark:hover:bg-dk-raised">
-              {t('campaignSettings.changeSource.cancel')}
-            </button>
-          )}
-        </div>
-      </div>
-    </FullScreenOverlay>
-  );
+/** Nhãn "Gửi từ" của chiến dịch trống: tài khoản đang chọn, hoặc tài khoản email mặc định (chạy thật tự dùng), hoặc nhắc chọn. */
+const describeStartSender = ({ channel, sender, emailSettings, t }) => {
+  const chosen = String(sender?.label || '').trim() || (sender?.id !== null && sender?.id !== undefined ? String(sender.id) : '');
+  if (chosen) return { status: 'ok', summary: chosen };
+  const fallback = channel === 'email' ? pickDefaultEmailAccount(emailSettings) : null;
+  if (fallback) return { status: 'ok', summary: t('campaignSettings.defaultEmailSender', { sender: emailAccountText(fallback) }) };
+  return { status: 'missing', summary: t('campaignSettings.section.sender.chooseBelow') };
 };
 
 /**
- * Tab "Thiết lập" của chi tiết chiến dịch (PLAN_THIET_LAP_VA_SO_DO_2026-10-17): tổng quan (tên, kênh, trạng thái, lịch chạy,
- * ước tính) + mọi khối theo thứ tự chạy với cài đặt viết TƯỜNG MINH. Dùng CHUNG `nodes/edges` của trình dựng — sửa ở đây
- * (qua hộp cấu hình của trình dựng) thì Sơ đồ khối thấy ngay, và ngược lại.
+ * Tab "Thiết lập" của chi tiết chiến dịch: tổng quan (tên, kênh, trạng thái, lịch chạy, ước tính) + năm MỤC có biểu mẫu riêng
+ * (Gửi từ · Gửi cho ai · Nội dung · Thời điểm · Sau khi gửi) — PLAN_THIET_LAP_BIEU_MAU_RIENG PR-E1. Mỗi mục đọc/ghi đúng các trường nó hiểu
+ * (`sections/`) trên CHÍNH `nodes/edges` của trình dựng, nên Sơ đồ khối thấy ngay; mục không biểu diễn được thì chỉ tóm tắt + "Cài đặt nâng cao".
+ * Không còn form khối nhúng, không còn danh sách thẻ khối.
  *
  * @param {object} props
- * Sửa khối TẠI CHỖ (PLAN_THIET_LAP_CAU_HINH_TRUC_TIEP PR-A): bấm Sửa → thẻ mở `NodeConfigForm variant="inline"`, mỗi lúc một thẻ;
- * Lưu ở thẻ gọi `onSaveNode` (trang áp cấu hình + lưu chiến dịch). Không còn mở `NodeConfigModal` từ tab này.
- *
- * @param {(node: object, formData: object) => Promise<void>|void} props.onSaveNode áp cấu hình khối vào sơ đồ VÀ lưu chiến dịch
- * @param {(nodes: Array<object>, edges: Array<object>) => Promise<void>|void} props.onApplyGraph PR-B: áp đồ thị MỚI (dựng khung, đổi nguồn,
- *   thêm / xoá bước phụ) vào sơ đồ VÀ lưu chiến dịch — cùng đường lưu với `onSaveNode`, không có đường lưu thứ hai
+ * @param {(node: object, formData: object) => Promise<void>|void} props.onSaveNode áp cấu hình khối (từ "Cài đặt nâng cao") vào sơ đồ VÀ lưu chiến dịch
+ * @param {(nodes: Array<object>, edges: Array<object>) => Promise<void>|void} props.onApplyGraph áp đồ thị MỚI (Lưu ở một mục, thêm / xoá bước phụ)
+ *   vào sơ đồ VÀ lưu chiến dịch — một đường lưu duy nhất, cùng đường với `onSaveNode`
  * @param {Set<string>|null} [props.allowedSendNodeTypes] khối gửi dùng được theo gói (kênh khoá → thẻ nguồn mờ + ổ khoá); null = không giới hạn
- * @param {(isDirty: boolean) => void} [props.onInlineDirtyChange] báo trang biết thẻ đang mở có thay đổi chưa lưu (để hỏi khi đổi tab)
- * @param {Array<object>} [props.runLogs] log lần chạy thử (form khối dùng để gợi ý cột)
- * @param {Function} [props.onCheckSheetConnection] kiểm tra kết nối Google Sheet của khối đọc sheet
+ * @param {(isDirty: boolean) => void} [props.onInlineDirtyChange] báo trang biết biểu mẫu đang mở có thay đổi chưa lưu (để hỏi khi đổi tab)
+ * @param {Array<object>} [props.runLogs] log lần chạy thử (hộp cài đặt nâng cao dùng để gợi ý cột)
+ * @param {Function} [props.onCheckSheetConnection] kiểm tra kết nối Google Sheet của hộp cài đặt nâng cao
  * @param {string|number|null} [props.latestRunKey] đổi giá trị (vd id + trạng thái lượt mới nhất) → mục "Lần chạy gần nhất" tải lại
  * @param {() => void} props.onOpenDeliveryMonitor mở trang Giám sát gửi tin
- * @param {() => void} props.onGoFlow chuyển sang tab Sơ đồ khối (nút ở trạng thái rỗng)
+ * @param {() => void} props.onGoFlow chuyển sang tab Sơ đồ khối
  * @param {boolean} [props.canEdit=true] false (chỉ có quyền xem) → ẩn nút Sửa / Lên lịch
  */
 export default function CampaignSettingsPanel({
@@ -747,16 +477,10 @@ export default function CampaignSettingsPanel({
     [emailTemplates, zaloTemplates, emailSettings, accountLookups],
   );
   const { ordered, unconnected } = useMemo(() => buildSettingsOrder(nodes, edges), [nodes, edges]);
-
-  const nodeTitleOf = (node) => String(node?.data?.label || '').trim() || subtypeOf(node);
   const hasNodes = ordered.length + unconnected.length > 0;
-  // Khối khởi chạy thủ công không hiện thành thẻ bước: thông tin của nó nằm ở dòng "Thời điểm" của checklist.
-  const visibleOrdered = useMemo(
-    () => ordered.filter((entry) => subtypeOf(entry.node) !== 'manual_trigger').map((entry, index) => ({ ...entry, step: index + 1 })),
-    [ordered],
-  );
-  const visibleUnconnected = useMemo(() => unconnected.filter((node) => subtypeOf(node) !== 'manual_trigger'), [unconnected]);
-  const hasCards = visibleOrdered.length + visibleUnconnected.length > 0;
+  // "Trống" = chưa có khối nào ngoài khối khởi chạy thủ công: dựng khung khối từ "Gửi từ" + "Gửi cho ai".
+  const blank = useMemo(() => nodes.every((node) => subtypeOf(node) === 'manual_trigger'), [nodes]);
+  const hasUnconnected = useMemo(() => unconnected.some((node) => subtypeOf(node) !== 'manual_trigger'), [unconnected]);
 
   const scheduleSummary = useMemo(() => {
     if (!Array.isArray(schedules) || schedules.length === 0) return '';
@@ -765,127 +489,61 @@ export default function CampaignSettingsPanel({
   }, [schedules, describeSchedule]);
   const channel = resolveCampaignChannel(campaignType);
   const startAudienceTypes = useMemo(() => getSkeletonAudienceTypes(campaignType), [campaignType]);
-  // Tài khoản "Gửi từ" chọn ở thẻ bắt đầu: giữ ở state trang tới khi chọn nguồn (lúc đó nằm vào khối), chọn trước hay sau đều được.
+  const startMode = canEdit && blank && startAudienceTypes.length > 0;
+  // Tài khoản "Gửi từ" chọn khi chiến dịch còn trống: giữ ở state trang tới khi chọn nguồn (lúc đó nằm vào khung khối).
   const [startSender, setStartSender] = useState(null);
-  const showStartCard = canEdit && startAudienceTypes.length > 0;
-  const checklist = useMemo(
-    () => buildSettingsChecklist(nodes, edges, lookups, t, {
-      scheduleSummary,
-      start: showStartCard ? { channel, sender: startSender } : undefined,
-    }),
-    [nodes, edges, lookups, t, scheduleSummary, showStartCard, channel, startSender],
-  );
 
-  // ── Sửa tại chỗ: mỗi lúc một thẻ ─────────────────────────────────────────────────────────────────────────────
-  const [editingNodeId, setEditingNodeId] = useState(null);
+  const sections = useMemo(
+    () => readSettingsSections(nodes, edges, { campaignType, locale, lookups, t, scheduleSummary }),
+    [nodes, edges, campaignType, locale, lookups, t, scheduleSummary],
+  );
+  const noSend = !blank && Boolean(sections.audience.empty);
+
+  // ── Biểu mẫu mở tại thẻ: mỗi lúc một mục ─────────────────────────────────────────────────────────────────────────
+  const [editingKey, setEditingKey] = useState(null);
   const [formDirty, setFormDirty] = useState(false);
   const formDirtyRef = useRef(false);
-  const [pendingEdit, setPendingEdit] = useState(null);
-  // Mục form thẻ đang mở phải hiện (PR-D); `id` tăng mỗi lần yêu cầu để thẻ đang mở cũng nhảy tới mục mới + focus lại.
-  const [editRequest, setEditRequest] = useState({ section: null, id: 0 });
-  const cardRefs = useRef(new Map());
+  const [advanced, setAdvanced] = useState(null);
+  const [rebuildTarget, setRebuildTarget] = useState(null);
 
   const setDirty = useCallback((value) => {
     formDirtyRef.current = value;
     setFormDirty(value);
   }, []);
-
-  const handleFormChange = useCallback((_formData, isDirty) => {
-    if (formDirtyRef.current !== isDirty) setDirty(isDirty);
+  const handleFormDirty = useCallback((value) => {
+    if (formDirtyRef.current !== value) setDirty(value);
   }, [setDirty]);
 
-  const beginEdit = useCallback((nodeId, section = null) => {
+  const openEdit = useCallback((key) => {
     setDirty(false);
-    setEditingNodeId(String(nodeId));
-    setEditRequest((prev) => ({ section, id: prev.id + 1 }));
+    setEditingKey(key);
   }, [setDirty]);
-
-  /**
-   * Mục form cần mở: có `role` (bấm Sửa ở dòng checklist) → mục của vai đó; không có (Sửa trên chính thẻ) → mục của dòng THIẾU đầu tiên
-   * của thẻ nếu có, không thì null (mục đầu).
-   */
-  const sectionForRequest = useCallback((nodeId, role) => {
-    const node = nodes.find((item) => String(item.id) === String(nodeId));
-    if (!node) return null;
-    if (role) return resolveSectionForRole(subtypeOf(node), role);
-    return resolveSectionForNode(node, { ...lookups, nodes }, t);
-  }, [lookups, nodes, t]);
-
-  /** Mở thẻ của `nodeId`; đang có thẻ khác mở với thay đổi dở → hỏi trước (hộp xác nhận của trang). */
-  const requestEdit = useCallback((nodeId, role = undefined, sectionOverride = undefined) => {
-    if (!canEdit) return;
-    const id = String(nodeId);
-    const section = sectionOverride !== undefined ? sectionOverride : sectionForRequest(id, role);
-    if (editingNodeId === id) {
-      // Cùng thẻ đang mở: chỉ nhảy tới mục khác (dữ liệu đang gõ giữ nguyên, không cần hỏi).
-      if (section) setEditRequest((prev) => ({ section, id: prev.id + 1 }));
-      return;
-    }
-    if (editingNodeId && formDirtyRef.current) {
-      setPendingEdit({ id, section });
-      return;
-    }
-    beginEdit(id, section);
-  }, [beginEdit, canEdit, editingNodeId, sectionForRequest]);
-
+  // Mỗi lúc một mục: nút Sửa của mục khác bị khoá khi đang mở biểu mẫu, nên không có chuyện chuyển mục lúc đang dở.
+  const requestEdit = useCallback((key) => {
+    if (!canEdit || editingKey) return;
+    openEdit(key);
+  }, [canEdit, editingKey, openEdit]);
   const closeEdit = useCallback(() => {
-    setEditingNodeId(null);
+    setEditingKey(null);
     setDirty(false);
   }, [setDirty]);
 
-  const handleSaveEdit = useCallback(async (node, formData) => {
-    const changed = formDirtyRef.current && !isNodeConfigFormUnchanged(node, formData, campaignType);
-    closeEdit();
-    if (!changed) return;
-    await onSaveNode(node, formData);
-  }, [campaignType, closeEdit, onSaveNode]);
-
-  // Callback đọc qua ref: chỉ báo khi trạng thái đổi, và báo "sạch" đúng một lần khi tab Thiết lập bị gỡ.
   const dirtyCallbackRef = useRef(onInlineDirtyChange);
   dirtyCallbackRef.current = onInlineDirtyChange;
   useEffect(() => {
-    dirtyCallbackRef.current(Boolean(editingNodeId) && formDirty);
-  }, [editingNodeId, formDirty]);
+    dirtyCallbackRef.current((Boolean(editingKey) || startMode) && formDirty);
+  }, [editingKey, formDirty, startMode]);
   useEffect(() => () => dirtyCallbackRef.current(false), []);
 
-  // Khối đang sửa biến mất (bị xoá ở nơi khác) → đóng thẻ.
+  const sectionRefs = useRef(new Map());
   useEffect(() => {
-    if (editingNodeId && !nodes.some((node) => String(node.id) === editingNodeId)) closeEdit();
-  }, [closeEdit, editingNodeId, nodes]);
+    if (!editingKey) return;
+    sectionRefs.current.get(editingKey)?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  }, [editingKey]);
 
-  useEffect(() => {
-    if (!editingNodeId) return;
-    cardRefs.current.get(editingNodeId)?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
-  }, [editingNodeId]);
-
-  const formProps = { campaignType, campaignId, emailTemplates, zaloTemplates, emailSettings, runLogs, onCheckSheetConnection };
-
-  // ── Thao tác cấu trúc (PR-B): dựng khung, đổi nguồn, thêm / xoá bước phụ ─────────────────────────────────────────────
-  const analysis = useMemo(() => analyzeSettingsGraph(nodes, edges), [nodes, edges]);
-  const roles = useMemo(() => findChainRoles(nodes, analysis.chain), [nodes, analysis.chain]);
-  const isAudienceLocked = useCallback((audienceType) => {
-    if (!allowedSendNodeTypes || !channel) return false;
-    return !allowedSendNodeTypes.has(getSendSubtypeFor(channel, audienceType));
-  }, [allowedSendNodeTypes, channel]);
+  // ── Ghi vào sơ đồ + lưu chiến dịch (một đường: `onApplyGraph`) ────────────────────────────────────────────────────
   const [structureBusy, setStructureBusy] = useState(false);
-  const [addMenuOpen, setAddMenuOpen] = useState(false);
-  const [changeSource, setChangeSource] = useState(null);
-  const [removeTargetId, setRemoveTargetId] = useState(null);
-  const structureLocked = Boolean(editingNodeId) || structureBusy;
-  const structureLockTitle = editingNodeId ? t('campaignSettings.editBusy') : undefined;
-
-  /**
-   * Sau khi dựng khung / đổi nguồn: mở thẻ cần điền trước, ĐÚNG mục chứa ô cần điền (PR-D). Ưu tiên thẻ giữ dòng thiếu vai audience
-   * (người dùng vừa chọn nguồn → điền nguồn ngay), rồi content, rồi các vai còn lại; trong một vai lấy thẻ đầu tiên theo thứ tự chạy.
-   */
-  const openFirstMissing = useCallback((nextNodes, nextEdges) => {
-    const fullLookups = { ...lookups, nodes: nextNodes };
-    const target = pickFirstMissingTarget(buildSettingsOrder(nextNodes, nextEdges).ordered, fullLookups, t);
-    if (target) requestEdit(target.node.id, undefined, target.section);
-  }, [lookups, requestEdit, t]);
-
-  /** Áp một thao tác cấu trúc: `onApplyGraph` áp + lưu (cùng đường lưu của thẻ). Lưu hỏng vẫn giữ thay đổi cục bộ — trang đã báo lỗi. */
-  const commitGraph = useCallback(async (result, after) => {
+  const commitGraph = useCallback(async (result) => {
     if (!result) return;
     setStructureBusy(true);
     try {
@@ -893,20 +551,66 @@ export default function CampaignSettingsPanel({
     } finally {
       setStructureBusy(false);
     }
-    if (after) after(result);
   }, [onApplyGraph]);
 
-  const startSenderRef = useRef(null);
-  const startAudienceRef = useRef(null);
-  const handleJumpStart = useCallback((anchor) => {
-    const element = anchor === 'sender' ? startSenderRef.current : startAudienceRef.current;
-    if (element && typeof element.scrollIntoView === 'function') element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, []);
+  const isAudienceLocked = useCallback((audienceType) => {
+    if (!allowedSendNodeTypes || !channel) return false;
+    return !allowedSendNodeTypes.has(getSendSubtypeFor(sections.audience.value?.channel || channel, audienceType));
+  }, [allowedSendNodeTypes, channel, sections.audience.value]);
 
-  const handlePickStartAudience = useCallback((audienceType) => {
-    const skeleton = buildSettingsSkeleton({ campaignType, audienceType, locale, sender: startSender });
-    return commitGraph(skeleton, (result) => openFirstMissing(result.nodes, result.edges));
-  }, [campaignType, commitGraph, locale, openFirstMissing, startSender]);
+  const senderValue = startMode ? startSender : sections.sender.value;
+
+  const handleSaveSender = useCallback(async (sender) => {
+    const result = writeSender(nodes, edges, sender);
+    closeEdit();
+    if (!result || result.nodes === nodes) return;
+    await commitGraph(result);
+  }, [closeEdit, commitGraph, edges, nodes]);
+
+  const handleSaveAudience = useCallback(async (audience) => {
+    if (startMode) {
+      await commitGraph(buildAudienceGraph({ campaignType, audience, sender: startSender, locale }));
+      return;
+    }
+    const result = writeAudience(nodes, edges, audience, { campaignType, locale });
+    if (!result) return;
+    if (result.rebuild) {
+      setRebuildTarget(audience);
+      return;
+    }
+    closeEdit();
+    if (result.nodes === nodes && result.edges === edges) return;
+    await commitGraph(result);
+  }, [campaignType, closeEdit, commitGraph, edges, locale, nodes, startMode, startSender]);
+
+  const handleConfirmRebuild = useCallback(async () => {
+    const audience = rebuildTarget;
+    setRebuildTarget(null);
+    if (!audience) return;
+    closeEdit();
+    await commitGraph(buildAudienceGraph({ campaignType, audience, sender: sections.sender.value, locale }));
+  }, [campaignType, closeEdit, commitGraph, locale, rebuildTarget, sections.sender.value]);
+
+  // ── Cài đặt nâng cao: hộp cấu hình của đúng khối (hộp của Sơ đồ khối) ─────────────────────────────────────────────
+  // Chỉ nhớ id + vai; khối và mục form được tra lúc VẼ — bước phụ vừa thêm chưa nằm trong `nodes` của lần vẽ đang gọi.
+  const openAdvanced = useCallback((nodeId, role = null) => {
+    if (!canEdit) return;
+    setAdvanced({ nodeId: String(nodeId), role });
+  }, [canEdit]);
+  const advancedNode = advanced ? nodes.find((item) => String(item.id) === advanced.nodeId) : null;
+  const handleAdvancedSave = useCallback(async (formData) => {
+    const node = advancedNode;
+    setAdvanced(null);
+    if (!node) return;
+    if (isNodeConfigFormUnchanged(node, formData, campaignType)) return;
+    await onSaveNode(node, formData);
+  }, [advancedNode, campaignType, onSaveNode]);
+
+  // ── Bước phụ sau khi gửi ─────────────────────────────────────────────────────────────────────────────────────────────
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [removeTargetId, setRemoveTargetId] = useState(null);
+  const locked = Boolean(editingKey) || structureBusy;
+  const lockTitle = editingKey ? t('campaignSettings.editBusy') : undefined;
 
   const sideStepOptions = useMemo(() => {
     const dataTypes = getAllowedDataNodeTypesByCampaignType(campaignType);
@@ -922,11 +626,13 @@ export default function CampaignSettingsPanel({
       });
   }, [campaignType, locale, registry]);
 
-  const handleAddSideStep = useCallback((subtype) => {
+  const handleAddSideStep = useCallback(async (subtype) => {
     setAddMenuOpen(false);
     const result = appendSideStep({ nodes, edges, subtype, locale });
-    return commitGraph(result, (done) => requestEdit(done.newNodeId));
-  }, [commitGraph, edges, locale, nodes, requestEdit]);
+    if (!result) return;
+    await commitGraph(result);
+    openAdvanced(result.newNodeId);
+  }, [commitGraph, edges, locale, nodes, openAdvanced]);
 
   const handleConfirmRemove = useCallback(() => {
     const nodeId = removeTargetId;
@@ -934,95 +640,204 @@ export default function CampaignSettingsPanel({
     return commitGraph(removeSideStep({ nodes, edges, nodeId }));
   }, [commitGraph, edges, nodes, removeTargetId]);
 
-  // Nút "Đổi nguồn": trên khối nguồn (nếu có), hoặc trên khối gửi khi nguồn nằm TRONG khối gửi / nhập tay (email, Zalo, WhatsApp; Telegram đổi ngay trong form).
-  const changeSourceHostId = useMemo(() => {
-    if (!canEdit || !channel) return null;
-    // Sơ đồ rẽ nhánh: vẫn hiện nút trên khối nguồn nhưng TẮT (xem `changeSourceOptions`: rẽ nhánh → không có lựa chọn).
-    if (analysis.branched) {
-      const anySource = nodes.find((node) => SWAPPABLE_SOURCE_SUBTYPES.includes(subtypeOf(node)));
-      return anySource ? String(anySource.id) : null;
-    }
-    if (analysis.chain.length === 0) return null;
-    if (roles.sourceNode) return String(roles.sourceNode.id);
-    if (channel !== 'telegram' && roles.sendNode) return String(roles.sendNode.id);
-    return null;
-  }, [analysis.branched, analysis.chain.length, canEdit, channel, nodes, roles.sendNode, roles.sourceNode]);
+  const analysis = useMemo(() => analyzeSettingsGraph(nodes, edges), [nodes, edges]);
+  const afterVisible = !startMode && !noSend && (sections.after.items.length > 0 || (canEdit && (sections.after.canAdd || sections.after.branched)));
 
-  const changeSourceOptions = useMemo(() => {
-    if (!changeSourceHostId) return [];
-    const currentSubtype = roles.sourceNode ? subtypeOf(roles.sourceNode) : null;
-    return (AUDIENCE_TYPES_BY_CHANNEL[channel] || [])
-      .filter((type) => !(currentSubtype && AUDIENCE_SOURCE_SUBTYPE[type] === currentSubtype))
-      .filter((type) => !isAudienceLocked(type))
-      .map((type) => ({
-        type,
-        title: t(`simpleCampaign.audience.types.${type}.title`),
-        mode: classifyAudienceChange({ nodes, edges, campaignType, audienceType: type }),
-      }))
-      .filter((option) => option.mode);
-  }, [campaignType, changeSourceHostId, channel, edges, isAudienceLocked, nodes, roles.sourceNode, t]);
+  // ── Hiển thị từng mục ─────────────────────────────────────────────────────────────────────────────────────────────────
+  const startSenderView = startMode ? describeStartSender({ channel, sender: startSender, emailSettings, t }) : null;
+  const senderView = startMode ? { ...startSenderView, editable: false } : sections.sender;
+  const audienceView = startMode
+    ? { status: 'missing', summary: t('campaignSettings.section.audience.chooseBelow'), editable: true, value: null }
+    : sections.audience;
+  const contentView = startMode
+    ? { ...sections.content, status: 'idle', summary: t('campaignSettings.section.content.idle'), items: [] }
+    : sections.content;
+  const missingCount = startMode
+    ? (senderView.status === 'missing' ? 1 : 0) + 1
+    : countMissingSections({ sender: senderView, audience: audienceView, content: contentView });
 
-  const handleConfirmChangeSource = useCallback(() => {
-    const target = changeSource;
-    setChangeSource(null);
-    if (!target) return undefined;
-    if (target.mode === 'in_place') {
-      return commitGraph(replaceAudienceSource({ nodes, edges, campaignType, audienceType: target.audienceType, locale }));
-    }
-    const skeleton = buildSettingsSkeleton({ campaignType, audienceType: target.audienceType, locale });
-    return commitGraph(skeleton, (result) => openFirstMissing(result.nodes, result.edges));
-  }, [campaignType, changeSource, commitGraph, edges, locale, nodes, openFirstMissing]);
-
-  const structureFor = (nodeId) => {
-    if (!canEdit) return null;
-    const id = String(nodeId);
-    const subtype = subtypeOf(nodes.find((item) => String(item.id) === id));
-    const branchTitle = analysis.lockedIds.has(id) ? t('campaignSettings.branched.locked') : undefined;
-    const structure = {};
-    if (changeSourceHostId === id) {
-      structure.changeSource = {
-        onClick: () => setChangeSource({ stage: 'pick' }),
-        disabled: structureLocked || analysis.lockedIds.has(id) || changeSourceOptions.length === 0,
-        title: structureLockTitle || branchTitle,
-      };
-    }
-    if (SIDE_STEP_SUBTYPES.includes(subtype)) {
-      structure.remove = {
-        onClick: setRemoveTargetId,
-        disabled: structureLocked || analysis.lockedIds.has(id),
-        title: structureLockTitle || branchTitle,
-      };
-    }
-    return structure.changeSource || structure.remove ? structure : null;
+  const reasonText = (view) => {
+    if (view.editable || !view.reasonIfNotEditable) return '';
+    if (view.reasonIfNotEditable === 'branched') return t('campaignSettings.section.notEditable.branched');
+    if (view.reasonIfNotEditable === 'multiSend') return t('campaignSettings.section.notEditable.multiSend');
+    return t('campaignSettings.section.notEditable.generic');
   };
 
-  const renderCard = (entry) => (
-    <NodeCard
-      key={entry.node.id}
-      entry={entry}
-      nodes={nodes}
-      edges={edges}
-      lookups={lookups}
-      registry={registry}
-      canEdit={canEdit}
-      isEditing={editingNodeId === String(entry.node.id)}
-      editLocked={Boolean(editingNodeId) && editingNodeId !== String(entry.node.id)}
-      onStartEdit={requestEdit}
-      onCancelEdit={closeEdit}
-      onSaveEdit={handleSaveEdit}
-      onFormChange={handleFormChange}
-      editSection={editRequest.section}
-      sectionRequestId={editRequest.id}
-      formProps={formProps}
-      cardRef={(element) => {
-        if (element) cardRefs.current.set(String(entry.node.id), element);
-        else cardRefs.current.delete(String(entry.node.id));
-      }}
-      nodeTitleOf={nodeTitleOf}
-      structure={structureFor(entry.node.id)}
-      t={t}
-      locale={locale}
-    />
+  const senderEditing = startMode || editingKey === 'sender';
+  const audienceEditing = startMode || editingKey === 'audience';
+  const audienceChannel = sections.audience.value?.channel || channel;
+  const audienceTypes = startMode ? startAudienceTypes : (AUDIENCE_TYPES_BY_CHANNEL[audienceChannel] || []);
+
+  const registerRef = (key) => (element) => {
+    if (element) sectionRefs.current.set(key, element);
+    else sectionRefs.current.delete(key);
+  };
+
+  const sectionsBlock = (
+    <div className="min-w-0 space-y-4" data-testid="settings-sections">
+      {analysis.branched && hasNodes && <BranchBanner onGoFlow={onGoFlow} t={t} />}
+      {hasUnconnected && !analysis.branched && (
+        <p className={`rounded-xl border border-gray-200 bg-white p-3 text-sm dark:border-dk-border dark:bg-dk-surface ${MUTED}`} data-testid="settings-unconnected">
+          {t('campaignSettings.section.unconnected')}
+        </p>
+      )}
+
+      {noSend ? (
+        <section className={`${CARD} flex flex-col items-center gap-3 px-4 py-8 text-center`} data-testid="settings-no-send">
+          <HiOutlineViewGrid className={`h-10 w-10 ${MUTED}`} aria-hidden="true" />
+          <p className="text-sm font-semibold text-gray-900 dark:text-dk-text">{t('campaignSettings.section.noSend.title')}</p>
+          <p className={`max-w-md text-sm ${MUTED}`}>{t('campaignSettings.section.noSend.hint')}</p>
+          {canEdit && (
+            <button type="button" onClick={onGoFlow} data-testid="settings-go-flow" className="rounded-lg bg-primary-500 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-600">
+              {t('campaignSettings.goFlow')}
+            </button>
+          )}
+        </section>
+      ) : (
+        <>
+          <div ref={registerRef('sender')} className="scroll-mt-4">
+            <SettingsSectionCard
+              sectionKey="sender"
+              status={senderView.status}
+              title={t('campaignSettings.section.sender.title')}
+              summary={senderView.summary}
+              keepSummary={startMode}
+              editing={senderEditing}
+              onEdit={canEdit && !startMode && senderView.editable ? () => requestEdit('sender') : undefined}
+              editDisabled={Boolean(editingKey) && editingKey !== 'sender'}
+              editDisabledTitle={t('campaignSettings.editBusy')}
+              reason={reasonText(senderView)}
+              onAdvanced={canEdit && !startMode && !senderView.editable && senderView.nodeIds?.length ? () => openAdvanced(senderView.nodeIds[0], 'sender') : undefined}
+              t={t}
+            >
+              {startMode && canEdit && (
+                <SenderAccountList
+                  channel={channel}
+                  selected={startSender}
+                  onSelect={setStartSender}
+                  t={t}
+                  locale={locale}
+                  className="min-w-0"
+                  loadOptions={SENDER_LOAD_OPTIONS}
+                  titleClassName="sr-only"
+                />
+              )}
+              {!startMode && editingKey === 'sender' && (
+                <SenderSectionForm
+                  channel={channel}
+                  initial={sections.sender.value}
+                  onSave={handleSaveSender}
+                  onCancel={closeEdit}
+                  onDirtyChange={handleFormDirty}
+                  busy={structureBusy}
+                  t={t}
+                  locale={locale}
+                />
+              )}
+            </SettingsSectionCard>
+          </div>
+
+          <div ref={registerRef('audience')} className="scroll-mt-4">
+            <SettingsSectionCard
+              sectionKey="audience"
+              status={audienceView.status}
+              title={t('campaignSettings.section.audience.title')}
+              summary={audienceView.summary}
+              keepSummary={startMode}
+              editing={audienceEditing}
+              onEdit={canEdit && !startMode && audienceView.editable ? () => requestEdit('audience') : undefined}
+              editDisabled={Boolean(editingKey) && editingKey !== 'audience'}
+              editDisabledTitle={t('campaignSettings.editBusy')}
+              reason={reasonText(audienceView)}
+              onAdvanced={canEdit && !startMode && audienceView.advancedNodeId && !audienceEditing ? () => openAdvanced(audienceView.advancedNodeId, 'audience') : undefined}
+              t={t}
+            >
+              {audienceEditing && canEdit && (
+                <>
+                  {startMode && <p className={`mb-3 text-sm ${MUTED}`}>{t('campaignSettings.section.audience.startHint')}</p>}
+                  <AudienceSectionForm
+                    key={startMode ? 'start' : 'edit'}
+                    channel={audienceChannel}
+                    types={audienceTypes}
+                    initial={startMode ? null : (sections.audience.value?.audience || null)}
+                    sender={senderValue}
+                    onSave={handleSaveAudience}
+                    onCancel={startMode ? undefined : closeEdit}
+                    onDirtyChange={handleFormDirty}
+                    saveLabel={startMode ? t('campaignSettings.section.audience.create') : undefined}
+                    busy={structureBusy}
+                    isLocked={isAudienceLocked}
+                    onLockedClick={() => toast.error(t('campaignSettings.start.locked'))}
+                    t={t}
+                    locale={locale}
+                  />
+                  {startMode && (
+                    <button type="button" onClick={onGoFlow} data-testid="settings-go-flow" className="mt-3 text-sm font-medium text-primary-600 hover:underline dark:text-primary-400">
+                      {t('campaignSettings.start.orFlow')}
+                    </button>
+                  )}
+                </>
+              )}
+            </SettingsSectionCard>
+          </div>
+
+          <SettingsSectionCard
+            sectionKey="content"
+            status={contentView.status}
+            title={t('campaignSettings.section.content.title')}
+            summary={contentView.items.length === 0 ? contentView.summary : ''}
+            t={t}
+          >
+            {contentView.items.length > 0 && (
+              <ContentBody
+                items={contentView.items}
+                canEdit={canEdit}
+                editLocked={Boolean(editingKey)}
+                onEdit={(nodeId) => openAdvanced(nodeId, 'content')}
+                t={t}
+              />
+            )}
+          </SettingsSectionCard>
+        </>
+      )}
+
+      <SettingsSectionCard
+        sectionKey="timing"
+        status="ok"
+        title={t('campaignSettings.section.timing.title')}
+        summary={sections.timing.summary}
+        onEdit={canEdit && !isNewCampaign ? onOpenSchedule : undefined}
+        editLabel={t('campaignSettings.scheduleAction')}
+        reason={isNewCampaign ? t('campaignBuilder.saveCampaignFirst') : ''}
+        t={t}
+      />
+
+      {afterVisible && (
+        <SettingsSectionCard
+          sectionKey="after"
+          status={sections.after.status}
+          title={t('campaignSettings.section.after.title')}
+          summary={sections.after.items.length === 0 ? t('campaignSettings.section.after.empty') : ''}
+          t={t}
+        >
+          <AfterBody
+            items={sections.after.items}
+            canEdit={canEdit}
+            canAdd={sections.after.canAdd}
+            branched={sections.after.branched}
+            locked={locked}
+            lockTitle={lockTitle}
+            addMenuOpen={addMenuOpen}
+            addOptions={sideStepOptions}
+            onToggleAdd={() => setAddMenuOpen((value) => !value)}
+            onPickAdd={handleAddSideStep}
+            onEdit={(nodeId) => openAdvanced(nodeId)}
+            onRemove={setRemoveTargetId}
+            t={t}
+          />
+        </SettingsSectionCard>
+      )}
+    </div>
   );
 
   return (
@@ -1048,112 +863,38 @@ export default function CampaignSettingsPanel({
           t={t}
         />
 
-        {/* <lg: wrapper `contents` → Checklist, Tổng quan, Các khối là ba ô của cùng một lưới, xếp bằng `order` (Checklist lên đầu);
-            ≥lg: cột phải như cũ (Checklist + các khối), Tổng quan nằm cột trái. Checklist chỉ render MỘT lần. */}
-        <div className="contents lg:block lg:min-w-0 lg:space-y-4">
-        <Checklist
-          rows={checklist}
-          canEdit={canEdit}
-          canOpenSchedule={!isNewCampaign}
-          onEditRow={requestEdit}
-          onOpenSchedule={onOpenSchedule}
-          onJump={handleJumpStart}
-          t={t}
-        />
-        {/* Chiến dịch trống: thẻ "Gửi cho ai?" là việc cần làm ngay → lên ngay sau Checklist trên màn hẹp (trước Tổng quan). */}
-        <div className={`${hasCards ? 'order-3' : 'order-1'} min-w-0 space-y-4 lg:order-none`}>
-        {!hasCards ? (
-          showStartCard ? (
-            <StartCard
-              channel={channel}
-              sender={startSender}
-              onSelectSender={setStartSender}
-              senderRef={startSenderRef}
-              audienceRef={startAudienceRef}
-              locale={locale}
-              audienceTypes={startAudienceTypes}
-              isLocked={isAudienceLocked}
-              busy={structureBusy}
-              onPick={handlePickStartAudience}
-              onGoFlow={onGoFlow}
-              t={t}
-            />
-          ) : (
+        {/* <lg: các mục lên TRƯỚC Tổng quan (order); ≥lg: cột phải. */}
+        <div className="order-1 min-w-0 space-y-4 lg:order-none">
+          {blank && !startMode ? (
             <section className={`${CARD} flex flex-col items-center gap-3 px-4 py-10 text-center`} data-testid="settings-empty">
               <HiOutlineViewGrid className={`h-10 w-10 ${MUTED}`} aria-hidden="true" />
-              <p className="text-sm font-semibold text-gray-900 dark:text-dk-text">{t('campaignSettings.emptyTitle')}</p>
-              <p className={`max-w-md text-sm ${MUTED}`}>{t('campaignSettings.emptyHint')}</p>
+              <p className="text-sm font-semibold text-gray-900 dark:text-dk-text">{t('campaignSettings.section.noSend.title')}</p>
+              <p className={`max-w-md text-sm ${MUTED}`}>{t('campaignSettings.section.noSend.hint')}</p>
               {canEdit && (
-                <button
-                  type="button"
-                  onClick={onGoFlow}
-                  data-testid="settings-go-flow"
-                  className="rounded-lg bg-primary-500 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-600"
-                >
+                <button type="button" onClick={onGoFlow} data-testid="settings-go-flow" className="rounded-lg bg-primary-500 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-600">
                   {t('campaignSettings.goFlow')}
                 </button>
               )}
             </section>
-          )
-        ) : (
-          <>
-            {analysis.branched && <BranchBanner onGoFlow={onGoFlow} t={t} />}
-            <section aria-label={t('campaignSettings.blocksTitle')}>
-              <h2 className="mb-2 text-base font-bold text-gray-900 dark:text-dk-text">{t('campaignSettings.blocksTitle')}</h2>
-              <p className={`mb-3 text-sm ${MUTED}`}>{t('campaignSettings.blocksHint')}</p>
-              <ol className="space-y-3" data-testid="settings-ordered-list">{visibleOrdered.map(renderCard)}</ol>
-            </section>
-            {canEdit && (roles.sendNode || analysis.branched) && (
-              <AddStepSection
-                options={sideStepOptions}
-                disabled={analysis.branched || structureLocked}
-                disabledHint={analysis.branched ? t('campaignSettings.addStep.branched') : structureLockTitle}
-                open={addMenuOpen}
-                onToggle={() => setAddMenuOpen((value) => !value)}
-                onPick={handleAddSideStep}
-                t={t}
-              />
-            )}
-            {visibleUnconnected.length > 0 && (
-              <section aria-label={t('campaignSettings.unconnectedTitle')} data-testid="settings-unconnected">
-                <h2 className="mb-2 text-base font-bold text-gray-900 dark:text-dk-text">{t('campaignSettings.unconnectedTitle')}</h2>
-                <p className={`mb-3 text-sm ${MUTED}`}>{t('campaignSettings.unconnectedHint')}</p>
-                <ul className="space-y-3">
-                  {visibleUnconnected.map((node) => renderCard({ node, step: null, branch: null }))}
-                </ul>
-              </section>
-            )}
-          </>
-        )}
+          ) : (
+            <>
+              {!noSend && <StatusLine missingCount={missingCount} t={t} />}
+              {sectionsBlock}
+            </>
+          )}
         </div>
-        </div>
+
         <ConfirmModal
-          isOpen={Boolean(pendingEdit)}
-          onClose={() => setPendingEdit(null)}
-          onConfirm={() => {
-            const next = pendingEdit;
-            setPendingEdit(null);
-            if (next) beginEdit(next.id, next.section);
-          }}
-          title={t('campaignSettings.discard.title')}
-          message={t('campaignSettings.discard.message')}
-          confirmLabel={t('campaignSettings.discard.confirm')}
-          cancelLabel={t('campaignSettings.discard.stay')}
+          isOpen={Boolean(rebuildTarget)}
+          onClose={() => setRebuildTarget(null)}
+          onConfirm={handleConfirmRebuild}
+          title={t('campaignSettings.changeSource.title')}
+          message={t('campaignSettings.changeSource.confirmRebuild', { source: rebuildTarget ? t(`simpleCampaign.audience.types.${rebuildTarget.type}.title`) : '' })}
+          confirmLabel={t('campaignSettings.changeSource.confirmRebuildButton')}
+          cancelLabel={t('campaignSettings.changeSource.cancel')}
           confirmButtonClassName="bg-primary-500 text-white hover:bg-primary-600"
           iconClassName="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0"
           iconColorClassName="w-6 h-6 text-amber-600"
-        />
-        <ChangeSourceModal
-          state={changeSource}
-          options={changeSourceOptions}
-          onPick={(audienceType) => {
-            const option = changeSourceOptions.find((item) => item.type === audienceType);
-            if (option) setChangeSource({ stage: 'confirm', audienceType, mode: option.mode });
-          }}
-          onBack={() => setChangeSource({ stage: 'pick' })}
-          onClose={() => setChangeSource(null)}
-          onConfirm={handleConfirmChangeSource}
-          t={t}
         />
         <ConfirmModal
           isOpen={Boolean(removeTargetId)}
@@ -1161,11 +902,30 @@ export default function CampaignSettingsPanel({
           onConfirm={handleConfirmRemove}
           title={t('campaignSettings.removeStep.title')}
           message={t('campaignSettings.removeStep.message', {
-            name: nodeTitleOf(nodes.find((item) => String(item.id) === String(removeTargetId))),
+            name: String(nodes.find((item) => String(item.id) === String(removeTargetId))?.data?.label || '').trim(),
           })}
           confirmLabel={t('campaignSettings.removeStep.confirm')}
           cancelLabel={t('campaignSettings.changeSource.cancel')}
         />
+        {advancedNode && (
+          <NodeConfigModal
+            key={advancedNode.id}
+            isOpen
+            node={advancedNode}
+            nodes={nodes}
+            edges={edges}
+            campaignType={campaignType}
+            campaignId={campaignId}
+            emailTemplates={emailTemplates}
+            zaloTemplates={zaloTemplates}
+            emailSettings={emailSettings}
+            runLogs={runLogs}
+            onCheckSheetConnection={onCheckSheetConnection}
+            onSave={handleAdvancedSave}
+            onClose={() => setAdvanced(null)}
+            initialSection={advanced.role ? resolveSectionForRole(subtypeOf(advancedNode), advanced.role) : null}
+          />
+        )}
       </div>
     </div>
   );

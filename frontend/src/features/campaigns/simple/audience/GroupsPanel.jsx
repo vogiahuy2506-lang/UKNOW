@@ -28,13 +28,16 @@ export default function GroupsPanel({ accountId, groupIds, groupNames, patchAudi
             {t('simpleCampaign.audience.groups.change')}
           </button>
         </div>
-        <ul className="mt-2 flex flex-wrap gap-2">
-          {groupIds.map((id, index) => (
-            <li key={id} className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs text-orange-700 dark:border-orange-500/30 dark:bg-orange-950/40 dark:text-orange-300">
-              {groupNames[index] || id}
-            </li>
-          ))}
-        </ul>
+        {/* Nhóm đã lưu từ trước (tab Thiết lập) chỉ còn mã nhóm, không còn tên: không in dãy mã vô nghĩa. */}
+        {groupNames.some(Boolean) && (
+          <ul className="mt-2 flex flex-wrap gap-2">
+            {groupIds.map((id, index) => (
+              <li key={id} className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs text-orange-700 dark:border-orange-500/30 dark:bg-orange-950/40 dark:text-orange-300">
+                {groupNames[index] || id}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     );
   }

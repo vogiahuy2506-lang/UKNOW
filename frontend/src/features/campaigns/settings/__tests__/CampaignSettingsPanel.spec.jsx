@@ -16,27 +16,30 @@ const { mockSavedEstimate, mockRunEstimate, mockLatestRun, mockLoadSenders } = v
 vi.mock('../useSettingsAccountLookups', () => ({
   default: () => ({ zaloAccounts: [{ id: '5', displayName: 'Shop Hoa' }], telegramAccounts: [], whatsappAccounts: [] }),
 }));
-// Danh sách tài khoản gửi của thẻ bắt đầu (SenderAccountList → loadSenderAccounts) gọi API → giả.
+// Danh sách tài khoản gửi (SenderAccountList → loadSenderAccounts) gọi API → giả.
 vi.mock('../../simple/loadSenderAccounts', () => ({ loadSenderAccounts: (...args) => mockLoadSenders(...args) }));
 vi.mock('../../hooks/useCampaignEstimate', () => ({ default: (...args) => mockSavedEstimate(...args) }));
 vi.mock('../useRunRemainingEstimate', () => ({ default: (...args) => mockRunEstimate(...args) }));
 vi.mock('../useCampaignLatestRun', () => ({ default: (...args) => mockLatestRun(...args) }));
-// Form thật có spec riêng (NodeConfigForm.spec.jsx); ở đây chỉ kiểm cách Panel mở / đóng / lưu / hỏi xác nhận quanh form.
-vi.mock('../../components/NodeConfigForm', () => ({
-  default: ({ node, onSave, onCancel, onFormChange, initialSection, sectionRequestId }) => (
-    <div data-testid="form-stub" data-node-id={node.id} data-initial-section={initialSection ?? ''} data-request-id={sectionRequestId}>
-      <button type="button" data-testid="stub-type" onClick={() => onFormChange?.({ label: 'x' }, true)}>type</button>
+// Hộp cài đặt khối thật có spec riêng (NodeConfigForm.spec.jsx); ở đây chỉ kiểm tab Thiết lập mở đúng khối / đúng mục và lưu qua onSaveNode.
+vi.mock('../../components/NodeConfigModal', async () => {
+  const { createNodeConfigFormData } = await import('../../utils/nodeConfigModal.helpers');
+  return {
+  default: ({ node, onSave, onClose, initialSection, campaignType }) => (
+    <div data-testid="modal-stub" data-node-id={node.id} data-initial-section={initialSection ?? ''}>
+      <button type="button" data-testid="stub-save" onClick={() => onSave({ ...(node.data.config || {}), label: node.data.label, edited: true })}>save</button>
       <button
         type="button"
-        data-testid="stub-save"
-        onClick={() => onSave({ ...(node.data.config || {}), label: node.data.label, edited: true })}
+        data-testid="stub-unchanged"
+        onClick={() => onSave(createNodeConfigFormData({ config: node.data.config || {}, label: node.data.label, normalizeEmailSteps: true, nodeType: node.data.nodeType, campaignType }))}
       >
-        save
+        unchanged
       </button>
-      <button type="button" data-testid="stub-cancel" onClick={onCancel}>cancel</button>
+      <button type="button" data-testid="stub-close" onClick={onClose}>close</button>
     </div>
   ),
-}));
+  };
+});
 
 const node = (id, nodeType, config = {}, label = '', type = 'task') => ({ id, type, data: { label, nodeType, config } });
 const edge = (source, target, label) => ({ id: `${source}-${target}`, source, target, ...(label ? { label } : {}) });
@@ -60,6 +63,14 @@ const EMAIL_FLOW = {
   edges: [edge('start', 'sheet'), edge('sheet', 'mail')],
 };
 
+const MANUAL_EMAIL_FLOW = {
+  nodes: [
+    node('start', 'manual_trigger', {}, 'Khởi chạy', 'start'),
+    node('mail', 'send_email', { fromEmailId: 3, recipientSource: 'manual', recipientEmails: 'a@x.vn\nb@x.vn', emailSteps: [{ templateId: 7, delayValue: 0, delayUnit: 'days', delayFrom: 'start' }] }, 'Gửi thư'),
+  ],
+  edges: [edge('start', 'mail')],
+};
+
 const baseProps = {
   campaignId: '391',
   campaignName: 'Chăm sóc khách mới',
@@ -79,6 +90,29 @@ const renderPanel = (props = {}) => render(
   </MemoryRouter>,
 );
 
+/** Trang thật giữ nodes/edges trong state và áp đồ thị mới trước khi lưu; harness làm đúng vậy để thẻ thấy khối vừa thêm. */
+const Harness = ({ onApplyGraph, ...props }) => {
+  const [graph, setGraph] = useState({ nodes: props.nodes, edges: props.edges });
+  return (
+    <CampaignSettingsPanel
+      {...baseProps}
+      {...props}
+      nodes={graph.nodes}
+      edges={graph.edges}
+      onApplyGraph={async (nextNodes, nextEdges) => {
+        setGraph({ nodes: nextNodes, edges: nextEdges });
+        await onApplyGraph(nextNodes, nextEdges);
+      }}
+    />
+  );
+};
+const renderHarness = (props) => render(<MemoryRouter><I18nProvider><Harness {...props} /></I18nProvider></MemoryRouter>);
+
+const EMAIL_ACCOUNTS = [
+  { id: 3, label: 'cskh@abc.vn', sublabel: 'CSKH', isDefault: true, usable: true, problem: null },
+  { id: 9, label: 'sale@abc.vn', sublabel: '', isDefault: false, usable: true, problem: null },
+];
+
 beforeEach(() => {
   localStorage.clear();
   mockSavedEstimate.mockReset();
@@ -87,104 +121,312 @@ beforeEach(() => {
   mockRunEstimate.mockReturnValue({ status: 'idle', continuous: false, view: null });
   mockLatestRun.mockReset();
   mockLoadSenders.mockReset();
-  mockLoadSenders.mockResolvedValue([]);
+  mockLoadSenders.mockResolvedValue(EMAIL_ACCOUNTS);
   mockLatestRun.mockReturnValue({ status: 'ready', run: null });
 });
 
-describe('CampaignSettingsPanel — danh sách khối', () => {
-  it('liệt kê khối theo thứ tự chạy, mỗi khối một thẻ với các dòng "Nhãn: giá trị" tường minh', () => {
+const pickSender = async (id) => fireEvent.click(within(await screen.findByTestId(`simple-sender-${id}`)).getAllByRole('button')[0]);
+const summaryOf = (key) => screen.getByTestId(`settings-section-summary-${key}`).textContent;
+const statusOf = (key) => screen.getByTestId(`settings-section-${key}`).getAttribute('data-status');
+
+describe('CampaignSettingsPanel — năm mục có biểu mẫu riêng', () => {
+  it('hiện đúng 5 mục theo thứ tự, mỗi mục tóm tắt một dòng bằng chữ của người dùng; KHÔNG còn thẻ khối hay form khối', () => {
     renderPanel();
-    const cards = screen.getAllByTestId('settings-node-card');
-    expect(cards.map((card) => card.getAttribute('data-node-id'))).toEqual(['sheet', 'mail']);
-    const mail = within(cards[1]);
-    expect(mail.getByText('Gửi thư chăm sóc')).toBeInTheDocument();
-    expect(mail.getByText('CSKH (cskh@abc.vn)')).toBeInTheDocument();
-    expect(mail.getByText('Từ khối “Danh sách khách”, cột “email”')).toBeInTheDocument();
-    expect(mail.getByText('Chào mừng · gửi ngay')).toBeInTheDocument();
-    expect(mail.getByText('Nhắc lại · 2 ngày sau tin trước')).toBeInTheDocument();
+    const order = ['sender', 'audience', 'content', 'timing'].map((key) => screen.getByTestId(`settings-section-${key}`));
+    order.reduce((prev, current) => {
+      expect(prev.compareDocumentPosition(current) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy(); // eslint-disable-line no-bitwise
+      return current;
+    });
+    expect(summaryOf('sender')).toBe('CSKH (cskh@abc.vn)');
+    expect(summaryOf('audience')).toBe('Danh sách Google Sheet: https://docs.google.com/spreadsheets/d/x · Tháng 10');
+    expect(screen.getByTestId('settings-content-list')).toHaveTextContent('Tin 1Chào mừng · gửi ngay');
+    expect(screen.getByTestId('settings-content-list')).toHaveTextContent('Tin 2Nhắc lại · 2 ngày sau tin trước');
+    expect(summaryOf('timing')).toBe('Chạy khi bạn bấm Chạy ngay');
+    expect(screen.queryByTestId('settings-node-card')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('settings-inline-form')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('settings-ordered-list')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('settings-checklist')).not.toBeInTheDocument();
   });
 
-  it('thứ tự theo luồng chứ không theo thứ tự mảng khối', () => {
-    renderPanel({ nodes: [...EMAIL_FLOW.nodes].reverse() });
-    expect(screen.getAllByTestId('settings-node-card').map((card) => card.getAttribute('data-node-id'))).toEqual(['sheet', 'mail']);
+  it('chữ hiện cho người dùng không có "node", "khối" hay "Lấy từ node trước" (trừ tên tab Sơ đồ khối)', () => {
+    renderPanel();
+    const visible = screen.getByTestId('settings-sections').textContent.replace(/Sơ đồ khối/g, '').replace(/Cài đặt nâng cao/g, '');
+    expect(visible).not.toMatch(/node|khối|Lấy từ/i);
+    expect(screen.getByTestId('campaign-settings-panel').textContent).not.toMatch(/Lấy từ node trước/i);
   });
 
-  it('thiếu bắt buộc → dòng đỏ "Chưa chọn …"', () => {
-    renderPanel({ emailSettings: [], nodes: [node('mail', 'send_email', {}, 'Gửi thư')], edges: [] });
-    const missing = screen.getAllByTestId('settings-line').filter((line) => line.getAttribute('data-tone') === 'missing');
-    expect(missing.map((line) => line.textContent)).toEqual([
-      'Gửi từChưa chọn tài khoản gửi email',
-      'Gửi choChưa chọn nguồn người nhận',
-      'Tin 1Chưa chọn mẫu email',
-    ]);
-    expect(within(missing[0]).getByText('Chưa chọn tài khoản gửi email').className).toContain('text-rose-600');
+  it('dòng trạng thái: đủ → "Sẵn sàng chạy"; thiếu → đếm "Còn N mục" (Gửi từ · Gửi cho ai · Nội dung)', () => {
+    const { unmount } = renderPanel();
+    expect(screen.getByTestId('settings-status-summary')).toHaveTextContent('Sẵn sàng chạy');
+    unmount();
+    renderPanel({ emailSettings: [], nodes: [node('start', 'manual_trigger', {}, 'Khởi chạy', 'start'), node('mail', 'send_email', {}, 'Gửi thư')], edges: [edge('start', 'mail')] });
+    expect(screen.getByTestId('settings-status')).toHaveAttribute('data-missing-count', '3');
+    expect(screen.getByTestId('settings-status-summary')).toHaveTextContent('Còn 3 mục cần điền trước khi chạy');
+    expect(statusOf('sender')).toBe('missing');
+    expect(statusOf('audience')).toBe('missing');
+    expect(statusOf('content')).toBe('missing');
+    expect(summaryOf('audience')).toBe('Chưa chọn người nhận');
   });
 
-  it('email trống tài khoản gửi nhưng có tài khoản mặc định → dòng thường "Tài khoản mặc định", checklist Gửi từ ✓', () => {
+  it('email trống tài khoản nhưng có tài khoản mặc định → Gửi từ ✓ "Tài khoản mặc định", sẵn sàng chạy', () => {
     renderPanel({ nodes: [node('mail', 'send_email', { recipientSource: 'manual', recipientEmails: 'a@x.vn', emailSteps: [{ templateId: 7 }] }, 'Gửi thư')], edges: [] });
-    expect(screen.getByTestId('settings-checklist-row-sender').getAttribute('data-status')).toBe('ok');
-    expect(screen.getByTestId('settings-checklist-summary-sender')).toHaveTextContent('Tài khoản mặc định: CSKH (cskh@abc.vn)');
-    expect(screen.getByTestId('settings-checklist-summary')).toHaveTextContent('Sẵn sàng chạy');
+    expect(statusOf('sender')).toBe('ok');
+    expect(summaryOf('sender')).toBe('Tài khoản mặc định: CSKH (cskh@abc.vn)');
+    expect(screen.getByTestId('settings-status-summary')).toHaveTextContent('Sẵn sàng chạy');
   });
 
-  it('nhánh điều kiện ghi nhãn nhánh + tên khối điều kiện', () => {
+  it('màn hẹp: các mục xếp TRƯỚC Tổng quan (order-1 / order-2)', () => {
+    renderPanel();
+    expect(screen.getByTestId('settings-sections').closest('div.order-1')).not.toBeNull();
+    expect(screen.getByTestId('settings-overview').className).toContain('order-2');
+  });
+
+  it('chỉ có quyền xem → có tóm tắt nhưng không có nút Sửa / Lên lịch / Cài đặt nâng cao nào', () => {
+    renderPanel({ canEdit: false });
+    expect(screen.getByTestId('settings-section-sender')).toBeInTheDocument();
+    expect(screen.queryByTestId('settings-section-edit-sender')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('settings-section-edit-audience')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('settings-section-edit-timing')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('settings-section-advanced-audience')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('settings-open-schedule')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('settings-content-edit-mail')).not.toBeInTheDocument();
+  });
+
+  it('rẽ nhánh: dải thông báo; Gửi cho ai không sửa nhanh được, chỉ tóm tắt + Cài đặt nâng cao', () => {
     const nodes = [
       node('start', 'manual_trigger', {}, 'Khởi chạy', 'start'),
       node('cond', 'condition', { rules: [{ field: 'email' }] }, 'Có email?'),
       node('yes', 'send_zalo_personal', { zaloRecipientSource: 'manual', zaloRecipientPhones: '0901', zaloMessage: 'Chào' }, 'Gửi Zalo'),
+      node('no', 'send_email', { recipientSource: 'manual', recipientEmails: 'a@x.vn' }, 'Gửi thư'),
     ];
-    renderPanel({ nodes, edges: [edge('start', 'cond'), edge('cond', 'yes', 'Không có email')] });
-    expect(screen.getByTestId('settings-branch-label')).toHaveTextContent('Nhánh “Không có email” của “Có email?”');
-    expect(within(screen.getAllByTestId('settings-node-card')[1]).getByTestId('settings-branch-label')).toBeInTheDocument();
+    renderPanel({ nodes, edges: [edge('start', 'cond'), edge('cond', 'yes', 'Có'), edge('cond', 'no', 'Không')] });
+    expect(screen.getByTestId('settings-branch-banner')).toBeInTheDocument();
+    expect(screen.queryByTestId('settings-section-edit-audience')).not.toBeInTheDocument();
+    expect(screen.getByTestId('settings-section-reason-audience')).toHaveTextContent('rẽ nhánh');
+    expect(screen.getByTestId('settings-section-advanced-audience')).toBeInTheDocument();
   });
 
-  it('khối chưa nối nằm ở nhóm riêng bên dưới', () => {
-    renderPanel({ nodes: [...EMAIL_FLOW.nodes, node('lac', 'tag_contact', {}, 'Gắn tag lạc')] });
-    const group = screen.getByTestId('settings-unconnected');
-    expect(within(group).getByText('Chưa nối vào luồng')).toBeInTheDocument();
-    expect(within(group).getByText('Gắn tag lạc')).toBeInTheDocument();
-    expect(within(screen.getByTestId('settings-ordered-list')).queryByText('Gắn tag lạc')).not.toBeInTheDocument();
+  it('khối chưa nối vào luồng → dải nhắc bằng chữ thường', () => {
+    renderPanel({ nodes: [...EMAIL_FLOW.nodes, node('lac', 'read_sheet', {}, 'Lạc trôi')], edges: EMAIL_FLOW.edges });
+    expect(screen.getByTestId('settings-unconnected')).toHaveTextContent('chưa nối vào luồng chạy');
   });
 
-  it('tên tài khoản Zalo tra từ danh sách đã tải', () => {
-    renderPanel({
-      campaignType: 'zalo',
-      nodes: [node('acc', 'select_zalo_account', { zaloAccountId: '5' }, 'Chọn tài khoản')],
-      edges: [],
-    });
-    // Một lần ở thẻ khối, một lần ở dòng "Gửi từ" của checklist.
-    expect(within(screen.getByTestId('settings-node-card')).getByText('Shop Hoa')).toBeInTheDocument();
-    expect(screen.getByTestId('settings-checklist-summary-sender')).toHaveTextContent('Shop Hoa');
-  });
-});
-
-describe('CampaignSettingsPanel — nút Sửa', () => {
-  it('bấm Sửa mở form NGAY TRONG thẻ (không overlay), ẩn các dòng tóm tắt của thẻ đó', () => {
-    renderPanel();
-    fireEvent.click(screen.getByTestId('settings-edit-mail'));
-    const mailCard = screen.getAllByTestId('settings-node-card').find((card) => card.getAttribute('data-node-id') === 'mail');
-    expect(mailCard.getAttribute('data-editing')).toBe('true');
-    expect(within(mailCard).getByTestId('form-stub')).toBeInTheDocument();
-    expect(within(mailCard).queryAllByTestId('settings-line')).toHaveLength(0);
-    expect(screen.getAllByTestId('form-stub')).toHaveLength(1);
-  });
-
-  it('chỉ có quyền xem (canEdit=false) → không có nút Sửa và nút Lên lịch', () => {
-    renderPanel({ canEdit: false });
-    expect(screen.queryByTestId('settings-edit-mail')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('settings-open-schedule')).not.toBeInTheDocument();
-  });
-});
-
-describe('CampaignSettingsPanel — chiến dịch rỗng', () => {
-  it('hiện thẻ "Gửi cho ai?" theo kênh + liên kết nhỏ sang Sơ đồ khối; không có ước tính', () => {
+  it('chưa có bước gửi nhưng có khối khác → báo chưa có bước gửi + nút sang Sơ đồ khối, không có biểu mẫu', () => {
     const onGoFlow = vi.fn();
-    renderPanel({ nodes: [], edges: [], onGoFlow });
-    expect(screen.getByTestId('settings-start')).toHaveTextContent('Gửi cho ai?');
-    ['customers', 'landing', 'form', 'sheet', 'manual'].forEach((type) => expect(screen.getByTestId(`settings-start-${type}`)).toBeInTheDocument());
-    expect(screen.queryByTestId('settings-start-zalo_groups')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('settings-ordered-list')).not.toBeInTheDocument();
+    renderPanel({ nodes: [node('start', 'manual_trigger', {}, 'Khởi chạy', 'start'), node('s', 'read_sheet', { sheetUrl: 'u' }, 'Đọc')], edges: [edge('start', 's')], onGoFlow });
+    expect(screen.getByTestId('settings-no-send')).toBeInTheDocument();
+    expect(screen.queryByTestId('settings-section-sender')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('settings-go-flow'));
+    expect(onGoFlow).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('CampaignSettingsPanel — Gửi từ', () => {
+  it('Sửa mở danh sách tài khoản NGAY TRONG mục; chọn tài khoản khác + Lưu → onApplyGraph nhận đồ thị mới đúng fromEmailId', async () => {
+    const onApplyGraph = vi.fn().mockResolvedValue(undefined);
+    renderPanel({ onApplyGraph });
+    fireEvent.click(screen.getByTestId('settings-section-edit-sender'));
+    expect(screen.getByTestId('settings-sender-form')).toBeInTheDocument();
+    expect(screen.getByTestId('settings-section-sender').getAttribute('data-editing')).toBe('true');
+    expect(screen.getByTestId('settings-sender-save')).toBeDisabled();
+    await pickSender('9');
+    fireEvent.click(screen.getByTestId('settings-sender-save'));
+    await waitFor(() => expect(onApplyGraph).toHaveBeenCalledTimes(1));
+    const [nextNodes, nextEdges] = onApplyGraph.mock.calls[0];
+    expect(nextNodes.find((item) => item.id === 'mail').data.config).toMatchObject({ fromEmailId: 9, recipientNodeId: 'sheet', recipientField: 'email' });
+    expect(nextNodes.find((item) => item.id === 'mail').data.config.emailSteps).toEqual(EMAIL_FLOW.nodes[2].data.config.emailSteps);
+    expect(nextNodes.find((item) => item.id === 'sheet')).toBe(EMAIL_FLOW.nodes[1]);
+    expect(nextEdges).toBe(EMAIL_FLOW.edges);
+    expect(screen.queryByTestId('settings-sender-form')).not.toBeInTheDocument();
+  });
+
+  it('Huỷ đóng biểu mẫu, không gọi onApplyGraph', async () => {
+    const onApplyGraph = vi.fn();
+    renderPanel({ onApplyGraph });
+    fireEvent.click(screen.getByTestId('settings-section-edit-sender'));
+    await pickSender('9');
+    fireEvent.click(screen.getByTestId('settings-sender-cancel'));
+    expect(screen.queryByTestId('settings-sender-form')).not.toBeInTheDocument();
+    expect(onApplyGraph).not.toHaveBeenCalled();
+  });
+
+  it('mỗi lúc MỘT mục: đang mở Gửi từ thì Sửa của Gửi cho ai mờ + có title, bấm không mở thêm; báo trang khi có thay đổi dở', async () => {
+    const onInlineDirtyChange = vi.fn();
+    renderPanel({ onInlineDirtyChange });
+    fireEvent.click(screen.getByTestId('settings-section-edit-sender'));
+    const audienceEdit = screen.getByTestId('settings-section-edit-audience');
+    expect(audienceEdit).toBeDisabled();
+    expect(audienceEdit).toHaveAttribute('title', 'Lưu hoặc huỷ mục đang sửa trước');
+    fireEvent.click(audienceEdit);
+    expect(screen.queryByTestId('settings-audience-editor')).not.toBeInTheDocument();
+    expect(onInlineDirtyChange).toHaveBeenLastCalledWith(false);
+    await pickSender('9');
+    await waitFor(() => expect(onInlineDirtyChange).toHaveBeenLastCalledWith(true));
+    fireEvent.click(screen.getByTestId('settings-sender-cancel'));
+    await waitFor(() => expect(onInlineDirtyChange).toHaveBeenLastCalledWith(false));
+  });
+
+  it('Zalo bật luân phiên nhiều tài khoản → tóm tắt "Gửi luân phiên N tài khoản", không có nút Sửa, có Cài đặt nâng cao', () => {
+    const nodes = [
+      node('start', 'manual_trigger', {}, 'Khởi chạy', 'start'),
+      node('acc', 'select_zalo_account', { zaloPoolMultiAccountEnabled: true, zaloPoolAccountIds: ['5', '6'] }, 'Chọn tài khoản'),
+      node('z', 'send_zalo_personal', { zaloRecipientSource: 'manual', zaloRecipientPhones: '0901234567', zaloPersonalTemplateSteps: [{ templateId: 21 }] }, 'Gửi Zalo'),
+    ];
+    renderPanel({ campaignType: 'zalo', nodes, edges: [edge('start', 'acc'), edge('acc', 'z')], zaloTemplates: [{ id: 21, templateName: 'Mời học' }] });
+    expect(summaryOf('sender')).toBe('Gửi luân phiên 2 tài khoản');
+    expect(screen.queryByTestId('settings-section-edit-sender')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('settings-section-advanced-sender'));
+    expect(screen.getByTestId('modal-stub')).toHaveAttribute('data-node-id', 'acc');
+  });
+});
+
+describe('CampaignSettingsPanel — Gửi cho ai', () => {
+  it('email nhập tay: Sửa mở thẻ nguồn + ô nhập của trình từng bước; nhập thêm + Lưu → recipientEmails mới, mọi trường khác giữ', async () => {
+    const onApplyGraph = vi.fn().mockResolvedValue(undefined);
+    renderPanel({ nodes: MANUAL_EMAIL_FLOW.nodes, edges: MANUAL_EMAIL_FLOW.edges, onApplyGraph });
+    expect(summaryOf('audience')).toBe('2 email nhập tay');
+    fireEvent.click(screen.getByTestId('settings-section-edit-audience'));
+    expect(screen.getByTestId('settings-audience-manual')).toHaveAttribute('aria-pressed', 'true');
+    const box = screen.getByLabelText('Danh sách email');
+    expect(box.value).toBe('a@x.vn\nb@x.vn');
+    expect(screen.getByTestId('settings-audience-save')).toBeDisabled();
+    fireEvent.change(box, { target: { value: 'a@x.vn\nb@x.vn\nc@x.vn' } });
+    fireEvent.click(screen.getByTestId('settings-audience-save'));
+    await waitFor(() => expect(onApplyGraph).toHaveBeenCalledTimes(1));
+    const config = onApplyGraph.mock.calls[0][0].find((item) => item.id === 'mail').data.config;
+    expect(config).toMatchObject({ recipientEmails: 'a@x.vn\nb@x.vn\nc@x.vn', recipientSource: 'manual', fromEmailId: 3 });
+    expect(config.emailSteps).toEqual(MANUAL_EMAIL_FLOW.nodes[1].data.config.emailSteps);
+  });
+
+  it('không Lưu được khi còn mục sai định dạng (đúng luật của trình từng bước)', () => {
+    renderPanel({ nodes: MANUAL_EMAIL_FLOW.nodes, edges: MANUAL_EMAIL_FLOW.edges });
+    fireEvent.click(screen.getByTestId('settings-section-edit-audience'));
+    fireEvent.change(screen.getByLabelText('Danh sách email'), { target: { value: 'a@x.vn\nkhong-phai-email' } });
+    expect(screen.getByTestId('settings-audience-save')).toBeDisabled();
+    expect(screen.getByTestId('simple-manual-invalid')).toBeInTheDocument();
+  });
+
+  it('đổi nguồn: nhập tay → khách đã lưu giữ tài khoản + mẫu, chèn khối nguồn (onApplyGraph nhận đồ thị mới)', async () => {
+    const onApplyGraph = vi.fn().mockResolvedValue(undefined);
+    renderPanel({ nodes: MANUAL_EMAIL_FLOW.nodes, edges: MANUAL_EMAIL_FLOW.edges, onApplyGraph });
+    fireEvent.click(screen.getByTestId('settings-section-edit-audience'));
+    fireEvent.click(screen.getByTestId('settings-audience-customers'));
+    fireEvent.click(screen.getByTestId('settings-audience-save'));
+    await waitFor(() => expect(onApplyGraph).toHaveBeenCalledTimes(1));
+    const [nextNodes] = onApplyGraph.mock.calls[0];
+    expect(nextNodes.map((item) => item.data.nodeType)).toEqual(['manual_trigger', 'send_email', 'read_interested_customers']);
+    const mail = nextNodes.find((item) => item.id === 'mail').data.config;
+    expect(mail).toMatchObject({ fromEmailId: 3, recipientSource: 'node', recipientField: 'email' });
+    expect(mail.emailSteps[0].templateId).toBe(7);
+  });
+
+  it('cấu hình ngoài khả năng của panel (Google Sheet chọn cột riêng) → chỉ tóm tắt bằng chữ thường + lý do + Cài đặt nâng cao mở đúng khối nguồn; KHÔNG có nút Sửa', () => {
+    const nodes = EMAIL_FLOW.nodes.map((item) => (item.id === 'mail' ? { ...item, data: { ...item.data, config: { ...item.data.config, recipientField: 'Mail lien he' } } } : item));
+    renderPanel({ nodes });
+    expect(summaryOf('audience')).toBe('Danh sách Google Sheet: https://docs.google.com/spreadsheets/d/x · Tháng 10 · cột “Mail lien he”');
+    expect(screen.queryByTestId('settings-section-edit-audience')).not.toBeInTheDocument();
+    expect(screen.getByTestId('settings-section-reason-audience')).toHaveTextContent('Mở Cài đặt nâng cao');
+    fireEvent.click(screen.getByTestId('settings-section-advanced-audience'));
+    expect(screen.getByTestId('modal-stub')).toHaveAttribute('data-node-id', 'sheet');
+    expect(screen.getByTestId('modal-stub')).toHaveAttribute('data-initial-section', 'basic');
+  });
+
+  it('kênh khoá theo gói → bấm thẻ nguồn khác không đổi nguồn (vẫn ô nhập email, chưa có gì để Lưu)', () => {
+    renderPanel({ nodes: MANUAL_EMAIL_FLOW.nodes, edges: MANUAL_EMAIL_FLOW.edges, allowedSendNodeTypes: new Set() });
+    fireEvent.click(screen.getByTestId('settings-section-edit-audience'));
+    fireEvent.click(screen.getByTestId('settings-audience-customers'));
+    expect(screen.getByLabelText('Danh sách email')).toBeInTheDocument();
+    expect(screen.getByTestId('settings-audience-save')).toBeDisabled();
+  });
+});
+
+describe('CampaignSettingsPanel — Nội dung / Thời điểm / Sau khi gửi (E1: chỉ tóm tắt, chỗ sửa tạm là hộp cài đặt)', () => {
+  it('Nội dung: Sửa mở hộp cài đặt của khối gửi ở mục mẫu; lưu qua onSaveNode; không đổi gì thì không lưu', async () => {
+    const onSaveNode = vi.fn();
+    renderPanel({ onSaveNode });
+    fireEvent.click(screen.getByTestId('settings-content-edit-mail'));
+    expect(screen.getByTestId('modal-stub')).toHaveAttribute('data-node-id', 'mail');
+    expect(screen.getByTestId('modal-stub')).toHaveAttribute('data-initial-section', 'templates');
+    fireEvent.click(screen.getByTestId('stub-unchanged'));
+    expect(onSaveNode).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('modal-stub')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('settings-content-edit-mail'));
+    fireEvent.click(screen.getByTestId('stub-save'));
+    await waitFor(() => expect(onSaveNode).toHaveBeenCalledTimes(1));
+    expect(onSaveNode.mock.calls[0][0].id).toBe('mail');
+    expect(onSaveNode.mock.calls[0][1]).toMatchObject({ edited: true });
+  });
+
+  it('Thời điểm: nút Đặt lịch mở hộp lên lịch có sẵn; chiến dịch mới chưa lưu thì không có nút', () => {
+    const onOpenSchedule = vi.fn();
+    const { unmount } = renderPanel({ onOpenSchedule });
+    fireEvent.click(screen.getByTestId('settings-section-edit-timing'));
+    expect(onOpenSchedule).toHaveBeenCalledTimes(1);
+    unmount();
+    renderPanel({ isNewCampaign: true, campaignId: null });
+    expect(screen.queryByTestId('settings-section-edit-timing')).not.toBeInTheDocument();
+  });
+
+  it('Sau khi gửi: thêm bước → onApplyGraph nhận đồ thị có bước mới nối cuối chuỗi, rồi mở hộp cài đặt của bước mới', async () => {
+    const onApplyGraph = vi.fn().mockResolvedValue(undefined);
+    renderHarness({ onApplyGraph, nodes: EMAIL_FLOW.nodes, edges: EMAIL_FLOW.edges });
+    fireEvent.click(screen.getByTestId('settings-add-step-button'));
+    fireEvent.click(screen.getByTestId('settings-add-step-tag_contact'));
+    await waitFor(() => expect(onApplyGraph).toHaveBeenCalledTimes(1));
+    const [nextNodes, nextEdges] = onApplyGraph.mock.calls[0];
+    expect(nextNodes.map((item) => item.data.nodeType)).toEqual(['manual_trigger', 'read_sheet', 'send_email', 'tag_contact']);
+    expect(nextEdges).toHaveLength(3);
+    expect((await screen.findByTestId('modal-stub')).getAttribute('data-node-id')).toBe(nextNodes[3].id);
+  });
+
+  it('Sau khi gửi: bước phụ có Sửa + Xoá (xác nhận) → nối lại khối trước với khối sau; rẽ nhánh thì nút thêm bị tắt', async () => {
+    const onApplyGraph = vi.fn().mockResolvedValue(undefined);
+    const nodes = [...EMAIL_FLOW.nodes, node('tag', 'tag_contact', { tagName: 'vip', tagSourceNodeId: 'sheet' }, 'Gắn thẻ VIP')];
+    const edges = [...EMAIL_FLOW.edges, edge('mail', 'tag')];
+    renderPanel({ nodes, edges, onApplyGraph });
+    expect(screen.getByTestId('settings-after-body')).toHaveTextContent('Gắn thẻ “vip”');
+    fireEvent.click(screen.getByTestId('settings-remove-tag'));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Xoá bước' }).pop());
+    await waitFor(() => expect(onApplyGraph).toHaveBeenCalledTimes(1));
+    expect(onApplyGraph.mock.calls[0][0].map((item) => item.id)).toEqual(['start', 'sheet', 'mail']);
+  });
+
+  it('Cài đặt nâng cao của hộp: mở hộp của đúng khối nguồn', () => {
+    renderPanel();
+    fireEvent.click(screen.getByTestId('settings-section-advanced-audience'));
+    expect(screen.getByTestId('modal-stub')).toHaveAttribute('data-node-id', 'sheet');
+    fireEvent.click(screen.getByTestId('stub-close'));
+    expect(screen.queryByTestId('modal-stub')).not.toBeInTheDocument();
+  });
+});
+
+describe('CampaignSettingsPanel — chiến dịch trống: Gửi từ + Gửi cho ai bằng biểu mẫu riêng', () => {
+  const ACCOUNTS = {
+    zalo: [
+      { id: 5, label: 'Shop Hoa', sublabel: '', isDefault: false, usable: true, problem: null },
+      { id: 6, label: 'Shop Bánh', sublabel: '', isDefault: false, usable: true, problem: null },
+      { id: 7, label: 'Nick hỏng', sublabel: '', isDefault: false, usable: false, problem: 'disconnected' },
+    ],
+    whatsapp: [{ id: '40-default', label: '+84 912 345 678', sublabel: '', isDefault: false, usable: true, problem: null }],
+  };
+  const open = (campaignType, props = {}) => {
+    if (ACCOUNTS[campaignType]) mockLoadSenders.mockResolvedValue(ACCOUNTS[campaignType]);
+    const onApplyGraph = vi.fn().mockResolvedValue(undefined);
+    renderPanel({ campaignType, nodes: [], edges: [], onApplyGraph, ...props });
+    return onApplyGraph;
+  };
+
+  it('hiện Gửi từ (danh sách tài khoản) + Gửi cho ai (thẻ nguồn theo kênh + liên kết nhỏ sang Sơ đồ khối); Nội dung mờ; không có ước tính; không có form khối', async () => {
+    const onGoFlow = vi.fn();
+    open('email', { onGoFlow });
+    expect(screen.getByTestId('settings-section-sender')).toBeInTheDocument();
+    expect(await screen.findByTestId('simple-sender-3')).toBeInTheDocument();
+    ['customers', 'landing', 'form', 'sheet', 'manual'].forEach((type) => expect(screen.getByTestId(`settings-audience-${type}`)).toBeInTheDocument());
+    expect(screen.queryByTestId('settings-audience-zalo_groups')).not.toBeInTheDocument();
+    expect(statusOf('content')).toBe('idle');
+    expect(summaryOf('content')).toBe('Có sau khi chọn người nhận');
     expect(screen.queryByTestId('settings-overview-estimate')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('modal-stub')).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId('settings-go-flow'));
     expect(onGoFlow).toHaveBeenCalledTimes(1);
   });
@@ -194,45 +436,77 @@ describe('CampaignSettingsPanel — chiến dịch rỗng', () => {
     ['telegram', ['conversations', 'telegram_groups']],
     ['whatsapp', ['conversations', 'customers', 'landing', 'form', 'sheet', 'whatsapp_groups']],
   ])('kênh %s → đúng các nguồn của trình từng bước', (campaignType, types) => {
-    renderPanel({ campaignType, nodes: [], edges: [] });
-    const shown = screen.getAllByTestId(/^settings-start-/).map((el) => el.getAttribute('data-testid').replace('settings-start-', '')).filter((id) => id !== 'go-flow');
+    open(campaignType);
+    const every = ['customers', 'landing', 'form', 'sheet', 'manual', 'zalo_friends', 'zalo_groups', 'telegram_groups', 'whatsapp_groups', 'conversations'];
+    const shown = every.filter((type) => screen.queryByTestId(`settings-audience-${type}`));
     expect(shown.sort()).toEqual([...types].sort());
   });
 
-  it('chọn nguồn → onApplyGraph nhận đồ thị MỚI đúng chuỗi khối, rồi mở thẻ thiếu đầu tiên', async () => {
-    const onApplyGraph = vi.fn().mockResolvedValue(undefined);
-    renderPanel({ nodes: [], edges: [], onApplyGraph });
-    fireEvent.click(screen.getByTestId('settings-start-sheet'));
+  it('email: chọn tài khoản + "Tự nhập danh sách" + gõ email + Tạo → khung dựng sẵn có fromEmailId + danh sách đã gõ; chỉ còn Nội dung thiếu', async () => {
+    const onApplyGraph = open('email');
+    await pickSender('9');
+    expect(summaryOf('sender')).toBe('sale@abc.vn');
+    fireEvent.click(screen.getByTestId('settings-audience-manual'));
+    expect(screen.getByTestId('settings-audience-save')).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Danh sách email'), { target: { value: 'a@x.vn, b@x.vn' } });
+    fireEvent.click(screen.getByTestId('settings-audience-save'));
     await waitFor(() => expect(onApplyGraph).toHaveBeenCalledTimes(1));
     const [nextNodes, nextEdges] = onApplyGraph.mock.calls[0];
-    expect(nextNodes.map((n) => n.data.nodeType)).toEqual(['manual_trigger', 'read_sheet', 'send_email']);
-    expect(nextEdges).toHaveLength(2);
+    expect(nextNodes.map((item) => item.data.nodeType)).toEqual(['manual_trigger', 'send_email']);
+    expect(nextEdges).toHaveLength(1);
+    expect(nextNodes[1].data.config).toMatchObject({ fromEmailId: 9, recipientSource: 'manual', recipientEmails: 'a@x.vn\nb@x.vn' });
   });
 
-  it('kênh khoá theo gói → thẻ nguồn có ổ khoá, bấm không dựng khung', async () => {
-    const onApplyGraph = vi.fn();
-    renderPanel({ campaignType: 'telegram', nodes: [], edges: [], onApplyGraph, allowedSendNodeTypes: new Set() });
-    fireEvent.click(screen.getByTestId('settings-start-conversations'));
-    expect(onApplyGraph).not.toHaveBeenCalled();
+  it('email: không chọn tài khoản → khối gửi không có fromEmailId (= mặc định)', async () => {
+    const onApplyGraph = open('email');
+    fireEvent.click(screen.getByTestId('settings-audience-manual'));
+    fireEvent.change(screen.getByLabelText('Danh sách email'), { target: { value: 'a@x.vn' } });
+    fireEvent.click(screen.getByTestId('settings-audience-save'));
+    await waitFor(() => expect(onApplyGraph).toHaveBeenCalledTimes(1));
+    expect(onApplyGraph.mock.calls[0][0][1].data.config.fromEmailId).toBeUndefined();
   });
 
-  it('màn hẹp: thẻ "Gửi cho ai?" xếp ngay sau Checklist (order-1), còn khi đã có khối thì danh sách khối xếp sau Tổng quan (order-3)', () => {
-    const { unmount } = renderPanel({ nodes: [], edges: [] });
-    expect(screen.getByTestId('settings-start').parentElement.className).toContain('order-1');
-    unmount();
-    renderPanel();
-    expect(screen.getByTestId('settings-ordered-list').closest('div.order-3')).not.toBeNull();
+  it('Zalo: tài khoản vào khối chọn tài khoản; nick mất kết nối không chọn được; bạn bè / nhóm chưa có tài khoản → nhắc chọn Gửi từ trước', async () => {
+    const onApplyGraph = open('zalo');
+    expect(await screen.findByTestId('simple-sender-7')).toBeInTheDocument();
+    expect(within(screen.getByTestId('simple-sender-7')).getAllByRole('button')[0]).toBeDisabled();
+    fireEvent.click(screen.getByTestId('settings-audience-zalo_groups'));
+    expect(screen.getByTestId('settings-audience-need-account')).toHaveTextContent('Hãy chọn tài khoản gửi ở mục Gửi từ trước');
+    await pickSender('5');
+    fireEvent.click(screen.getByTestId('settings-audience-manual'));
+    fireEvent.change(screen.getByLabelText('Danh sách số điện thoại'), { target: { value: '0901234567' } });
+    fireEvent.click(screen.getByTestId('settings-audience-save'));
+    await waitFor(() => expect(onApplyGraph).toHaveBeenCalledTimes(1));
+    const [nextNodes] = onApplyGraph.mock.calls[0];
+    expect(nextNodes.map((item) => item.data.nodeType)).toEqual(['manual_trigger', 'select_zalo_account', 'send_zalo_personal']);
+    expect(nextNodes[1].data.config.zaloAccountId).toBe(5);
+    expect(nextNodes[2].data.config).toMatchObject({ zaloRecipientSource: 'manual', zaloRecipientPhones: '0901234567' });
   });
 
-  it('chỉ có quyền xem hoặc loại chiến dịch lạ → vẫn là trạng thái rỗng cũ (không có thẻ nguồn)', () => {
+  it('báo trang có thay đổi dở khi đã chọn nguồn mà chưa Tạo', () => {
+    const onInlineDirtyChange = vi.fn();
+    open('email', { onInlineDirtyChange });
+    fireEvent.click(screen.getByTestId('settings-audience-manual'));
+    expect(onInlineDirtyChange).toHaveBeenLastCalledWith(true);
+  });
+
+  it('chỉ có quyền xem hoặc loại chiến dịch lạ → vẫn là trạng thái rỗng (không có biểu mẫu), không tải danh sách tài khoản', () => {
     const { unmount } = renderPanel({ nodes: [], edges: [], canEdit: false });
     expect(screen.getByTestId('settings-empty')).toBeInTheDocument();
-    expect(screen.queryByTestId('settings-start')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('settings-section-sender')).not.toBeInTheDocument();
+    expect(mockLoadSenders).not.toHaveBeenCalled();
     unmount();
     renderPanel({ campaignType: 'mixed', nodes: [], edges: [] });
     expect(screen.getByTestId('settings-empty')).toBeInTheDocument();
   });
+
+  it('email: lượt tải danh sách tài khoản KHÁC khoá GET của trang (limit 100) để api.js không huỷ lượt của trang', async () => {
+    open('email');
+    await screen.findByTestId('simple-sender-3');
+    expect(mockLoadSenders).toHaveBeenCalledWith('email', { email: { params: { status: 'active', page: 1, limit: 99 } } });
+  });
 });
+
 
 describe('CampaignSettingsPanel — tổng quan', () => {
   it('tên, kênh, trạng thái; chưa có lịch thì nói rõ; bấm Lên lịch gọi onOpenSchedule', () => {
@@ -384,330 +658,3 @@ describe('CampaignSettingsPanel — Lần chạy gần nhất', () => {
   });
 });
 
-describe('CampaignSettingsPanel — sửa tại chỗ', () => {
-  it('mỗi lúc MỘT thẻ: đang mở thẻ A thì nút Sửa của thẻ khác bị khoá + có title; bấm cũng không mở thêm', () => {
-    renderPanel();
-    fireEvent.click(screen.getByTestId('settings-edit-mail'));
-    const other = screen.getByTestId('settings-edit-sheet');
-    expect(other).toBeDisabled();
-    expect(other.getAttribute('title')).toBe('Lưu hoặc huỷ mục đang sửa trước');
-    fireEvent.click(other);
-    expect(screen.getAllByTestId('form-stub')).toHaveLength(1);
-    expect(screen.getByTestId('form-stub').getAttribute('data-node-id')).toBe('mail');
-  });
-
-  it('Hủy đóng thẻ, nút Sửa của các thẻ mở lại', () => {
-    renderPanel();
-    fireEvent.click(screen.getByTestId('settings-edit-mail'));
-    fireEvent.click(screen.getByTestId('stub-cancel'));
-    expect(screen.queryByTestId('form-stub')).not.toBeInTheDocument();
-    expect(screen.getByTestId('settings-edit-sheet')).not.toBeDisabled();
-  });
-
-  it('Lưu khi form ĐÃ đổi → onSaveNode(node, formData) đúng một lần và thẻ đóng', async () => {
-    const onSaveNode = vi.fn();
-    renderPanel({ onSaveNode });
-    fireEvent.click(screen.getByTestId('settings-edit-mail'));
-    fireEvent.click(screen.getByTestId('stub-type'));
-    fireEvent.click(screen.getByTestId('stub-save'));
-    await waitFor(() => expect(onSaveNode).toHaveBeenCalledTimes(1));
-    expect(onSaveNode.mock.calls[0][0]).toBe(EMAIL_FLOW.nodes[2]);
-    expect(onSaveNode.mock.calls[0][1].edited).toBe(true);
-    expect(screen.queryByTestId('form-stub')).not.toBeInTheDocument();
-  });
-
-  it('Lưu khi form KHÔNG đổi → đóng thẻ, không gọi onSaveNode', async () => {
-    const onSaveNode = vi.fn();
-    renderPanel({ onSaveNode });
-    fireEvent.click(screen.getByTestId('settings-edit-mail'));
-    fireEvent.click(screen.getByTestId('stub-save'));
-    await waitFor(() => expect(screen.queryByTestId('form-stub')).not.toBeInTheDocument());
-    expect(onSaveNode).not.toHaveBeenCalled();
-  });
-
-  it('báo trang khi thẻ có thay đổi dở (true) và khi đóng (false)', () => {
-    const onInlineDirtyChange = vi.fn();
-    renderPanel({ onInlineDirtyChange });
-    fireEvent.click(screen.getByTestId('settings-edit-mail'));
-    fireEvent.click(screen.getByTestId('stub-type'));
-    expect(onInlineDirtyChange).toHaveBeenLastCalledWith(true);
-    fireEvent.click(screen.getByTestId('stub-cancel'));
-    expect(onInlineDirtyChange).toHaveBeenLastCalledWith(false);
-  });
-
-  it('Sửa ở dòng checklist khi thẻ khác đang dở → hỏi xác nhận; "Tiếp tục sửa" giữ nguyên, "Bỏ thay đổi" chuyển thẻ', () => {
-    renderPanel({ nodes: [...EMAIL_FLOW.nodes.slice(0, 2), node('mail', 'send_email', {}, 'Gửi thư')], edges: EMAIL_FLOW.edges });
-    fireEvent.click(screen.getByTestId('settings-edit-sheet'));
-    fireEvent.click(screen.getByTestId('stub-type'));
-    fireEvent.click(screen.getByTestId('settings-checklist-edit-sender'));
-    expect(screen.getByText('Bỏ thay đổi đang sửa?')).toBeInTheDocument();
-    expect(screen.getByTestId('form-stub').getAttribute('data-node-id')).toBe('sheet');
-
-    fireEvent.click(screen.getByText('Tiếp tục sửa'));
-    expect(screen.queryByText('Bỏ thay đổi đang sửa?')).not.toBeInTheDocument();
-    expect(screen.getByTestId('form-stub').getAttribute('data-node-id')).toBe('sheet');
-
-    fireEvent.click(screen.getByTestId('settings-checklist-edit-sender'));
-    fireEvent.click(screen.getByText('Bỏ thay đổi'));
-    expect(screen.getByTestId('form-stub').getAttribute('data-node-id')).toBe('mail');
-  });
-
-  it('thẻ chưa đổi gì → Sửa ở checklist chuyển thẳng, không hỏi', () => {
-    renderPanel({ nodes: [...EMAIL_FLOW.nodes.slice(0, 2), node('mail', 'send_email', {}, 'Gửi thư')], edges: EMAIL_FLOW.edges });
-    fireEvent.click(screen.getByTestId('settings-edit-sheet'));
-    fireEvent.click(screen.getByTestId('settings-checklist-edit-content'));
-    expect(screen.queryByText('Bỏ thay đổi đang sửa?')).not.toBeInTheDocument();
-    expect(screen.getByTestId('form-stub').getAttribute('data-node-id')).toBe('mail');
-  });
-});
-
-describe('CampaignSettingsPanel — checklist "Trước khi chạy"', () => {
-  it('chiến dịch đủ → "Sẵn sàng chạy", 4 dòng, khối khởi chạy không hiện thành thẻ', () => {
-    renderPanel();
-    expect(screen.getByTestId('settings-checklist-summary')).toHaveTextContent('Sẵn sàng chạy');
-    ['sender', 'audience', 'content', 'timing'].forEach((key) => {
-      expect(screen.getByTestId(`settings-checklist-row-${key}`).getAttribute('data-status')).toBe('ok');
-    });
-    expect(screen.getAllByTestId('settings-node-card').some((card) => card.getAttribute('data-node-type') === 'manual_trigger')).toBe(false);
-  });
-
-  it('thiếu → đếm "Còn N mục", dòng ⚠ đỏ, thẻ khối thiếu có nhãn "Còn thiếu"', () => {
-    renderPanel({ emailSettings: [], nodes: [node('start', 'manual_trigger', {}, 'Khởi chạy', 'start'), node('mail', 'send_email', {}, 'Gửi thư')], edges: [edge('start', 'mail')] });
-    expect(screen.getByTestId('settings-checklist-summary')).toHaveTextContent('Còn 3 mục cần điền trước khi chạy');
-    expect(screen.getByTestId('settings-checklist-row-sender').getAttribute('data-status')).toBe('missing');
-    expect(screen.getByTestId('settings-checklist-summary-sender').className).toContain('text-rose-600');
-    expect(within(screen.getByTestId('settings-node-card')).getByTestId('settings-card-missing')).toBeInTheDocument();
-  });
-
-  it('Sửa ở dòng checklist mở đúng thẻ giữ dòng thiếu đầu tiên của vai', () => {
-    const nodes = [
-      node('start', 'manual_trigger', {}, 'Khởi chạy', 'start'),
-      node('sheetA', 'read_sheet', { sheetUrl: 'https://docs.google.com/spreadsheets/d/x' }, 'Sheet A'),
-      node('sheetB', 'read_sheet', {}, 'Sheet B'),
-      node('mail', 'send_email', { fromEmailId: 3, recipientSource: 'node', recipientNodeId: 'sheetA', recipientField: 'email', emailSteps: [{ templateId: 7 }] }, 'Gửi'),
-    ];
-    renderPanel({ nodes, edges: [edge('start', 'sheetA'), edge('sheetA', 'sheetB'), edge('sheetB', 'mail')] });
-    fireEvent.click(screen.getByTestId('settings-checklist-edit-audience'));
-    expect(screen.getByTestId('form-stub').getAttribute('data-node-id')).toBe('sheetB');
-  });
-
-  it('Thời điểm luôn ✓; Sửa mở hộp lên lịch', () => {
-    const onOpenSchedule = vi.fn();
-    renderPanel({ onOpenSchedule });
-    expect(screen.getByTestId('settings-checklist-row-timing').getAttribute('data-status')).toBe('ok');
-    fireEvent.click(screen.getByTestId('settings-checklist-edit-timing'));
-    expect(onOpenSchedule).toHaveBeenCalledTimes(1);
-  });
-
-  it('chiến dịch trống → không còn dòng đỏ "Chưa có": Gửi từ (mặc định) ✓, Gửi cho ai chờ chọn, Nội dung mờ; hiện thẻ Gửi từ + Gửi cho ai', () => {
-    renderPanel({ nodes: [], edges: [] });
-    expect(screen.getByTestId('settings-checklist-summary')).toHaveTextContent('Còn 1 mục cần điền trước khi chạy');
-    expect(screen.getByTestId('settings-checklist-summary-sender')).toHaveTextContent('Tài khoản mặc định: CSKH (cskh@abc.vn)');
-    expect(screen.getByTestId('settings-checklist-summary-audience')).toHaveTextContent('Chọn ở bên dưới');
-    expect(screen.getByTestId('settings-checklist-summary-content')).toHaveTextContent('Có sau khi chọn Gửi cho ai');
-    expect(screen.getByTestId('settings-checklist-row-content').getAttribute('data-status')).toBe('idle');
-    expect(screen.queryByTestId('settings-checklist-edit-content')).not.toBeInTheDocument();
-    expect(screen.getByTestId('settings-start')).toBeInTheDocument();
-    expect(screen.getByTestId('settings-sender-part')).toBeInTheDocument();
-    expect(screen.getByTestId('settings-audience-part')).toBeInTheDocument();
-  });
-
-  it('chiến dịch trống: nút của dòng Gửi từ / Gửi cho ai đưa tới đúng phần bên dưới', () => {
-    const scrolled = [];
-    const original = Element.prototype.scrollIntoView;
-    Element.prototype.scrollIntoView = function scroll() { scrolled.push(this.getAttribute('data-testid')); };
-    try {
-      renderPanel({ nodes: [], edges: [] });
-      fireEvent.click(screen.getByTestId('settings-checklist-edit-audience'));
-      fireEvent.click(screen.getByTestId('settings-checklist-edit-sender'));
-      expect(scrolled).toEqual(['settings-audience-part', 'settings-sender-part']);
-    } finally {
-      Element.prototype.scrollIntoView = original;
-    }
-  });
-
-  it('email chưa có tài khoản nào: Gửi từ cũng chờ chọn → còn 2 mục', () => {
-    renderPanel({ nodes: [], edges: [], emailSettings: [] });
-    expect(screen.getByTestId('settings-checklist-summary')).toHaveTextContent('Còn 2 mục cần điền trước khi chạy');
-    expect(screen.getByTestId('settings-checklist-summary-sender')).toHaveTextContent('Chọn ở bên dưới');
-  });
-
-  it('chỉ có quyền xem → checklist hiện nhưng không có nút Sửa nào', () => {
-    renderPanel({ canEdit: false });
-    expect(screen.getByTestId('settings-checklist')).toBeInTheDocument();
-    expect(screen.queryByTestId('settings-checklist-edit-sender')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('settings-checklist-edit-timing')).not.toBeInTheDocument();
-  });
-});
-
-describe('CampaignSettingsPanel — chiến dịch trống: chọn "Gửi từ" (PR-C)', () => {
-  const ACCOUNTS = {
-    email: [
-      { id: 3, label: 'cskh@abc.vn', sublabel: 'CSKH', isDefault: true, usable: true, problem: null },
-      { id: 9, label: 'sale@abc.vn', sublabel: '', isDefault: false, usable: true, problem: null },
-    ],
-    zalo: [
-      { id: 5, label: 'Shop Hoa', sublabel: '', isDefault: false, usable: true, problem: null },
-      { id: 6, label: 'Shop Bánh', sublabel: '', isDefault: false, usable: true, problem: null },
-      { id: 7, label: 'Nick hỏng', sublabel: '', isDefault: false, usable: false, problem: 'disconnected' },
-    ],
-    whatsapp: [
-      { id: '40-default', label: '+84 912 345 678', sublabel: '', isDefault: false, usable: true, problem: null },
-      { id: '41-x', label: '+84 900 000 000', sublabel: '', isDefault: false, usable: true, problem: null },
-    ],
-  };
-  const pick = async (id) => fireEvent.click(within(await screen.findByTestId(`simple-sender-${id}`)).getAllByRole('button')[0]);
-  const open = async (campaignType, props = {}) => {
-    mockLoadSenders.mockResolvedValue(ACCOUNTS[campaignType === 'zalo_group' ? 'zalo' : campaignType]);
-    const onApplyGraph = vi.fn().mockResolvedValue(undefined);
-    renderPanel({ campaignType, nodes: [], edges: [], onApplyGraph, ...props });
-    return onApplyGraph;
-  };
-
-  it('email: chọn tài khoản rồi chọn nguồn → khối gửi có fromEmailId; checklist hiện đúng tài khoản', async () => {
-    const onApplyGraph = await open('email');
-    await pick('9');
-    expect(screen.getByTestId('settings-checklist-summary-sender')).toHaveTextContent('sale@abc.vn');
-    fireEvent.click(screen.getByTestId('settings-start-sheet'));
-    await waitFor(() => expect(onApplyGraph).toHaveBeenCalledTimes(1));
-    const send = onApplyGraph.mock.calls[0][0].find((n) => n.data.nodeType === 'send_email');
-    expect(send.data.config.fromEmailId).toBe(9);
-  });
-
-  it('email: không chọn tài khoản → khối gửi không có fromEmailId (= mặc định)', async () => {
-    const onApplyGraph = await open('email');
-    await screen.findByTestId('simple-sender-9');
-    fireEvent.click(screen.getByTestId('settings-start-sheet'));
-    await waitFor(() => expect(onApplyGraph).toHaveBeenCalledTimes(1));
-    const send = onApplyGraph.mock.calls[0][0].find((n) => n.data.nodeType === 'send_email');
-    expect(send.data.config.fromEmailId).toBeUndefined();
-  });
-
-  it('Zalo: tài khoản vào khối Chọn tài khoản Zalo; tài khoản mất kết nối không chọn được', async () => {
-    const onApplyGraph = await open('zalo');
-    expect(await screen.findByTestId('simple-sender-7')).toHaveTextContent('Nick hỏng');
-    expect(within(screen.getByTestId('simple-sender-7')).getAllByRole('button')[0]).toBeDisabled();
-    await pick('6');
-    fireEvent.click(screen.getByTestId('settings-start-customers'));
-    await waitFor(() => expect(onApplyGraph).toHaveBeenCalledTimes(1));
-    const nodes = onApplyGraph.mock.calls[0][0];
-    expect(nodes.find((n) => n.data.nodeType === 'select_zalo_account').data.config.zaloAccountId).toBe(6);
-    expect(nodes.find((n) => n.data.nodeType === 'send_zalo_personal').data.config.zaloAccountId).toBeUndefined();
-  });
-
-  it('Zalo nhóm: dùng danh sách tài khoản Zalo, tài khoản vào khối chọn tài khoản', async () => {
-    const onApplyGraph = await open('zalo_group');
-    await pick('5');
-    fireEvent.click(screen.getByTestId('settings-start-zalo_groups'));
-    await waitFor(() => expect(onApplyGraph).toHaveBeenCalledTimes(1));
-    const nodes = onApplyGraph.mock.calls[0][0];
-    expect(nodes.map((n) => n.data.nodeType)).toEqual(['manual_trigger', 'select_zalo_account', 'get_all_groups', 'send_zalo_group']);
-    expect(nodes[1].data.config.zaloAccountId).toBe(5);
-  });
-
-  it('chọn nguồn TRƯỚC, không chọn tài khoản → Zalo để trống (thẻ sẽ báo thiếu)', async () => {
-    const onApplyGraph = await open('zalo');
-    await screen.findByTestId('simple-sender-5');
-    fireEvent.click(screen.getByTestId('settings-start-customers'));
-    await waitFor(() => expect(onApplyGraph).toHaveBeenCalledTimes(1));
-    expect(onApplyGraph.mock.calls[0][0].find((n) => n.data.nodeType === 'select_zalo_account').data.config.zaloAccountId).toBe('');
-  });
-
-  it('WhatsApp: whatsappSessionKey (chuỗi) vào khối gửi', async () => {
-    const onApplyGraph = await open('whatsapp');
-    await pick('41-x');
-    fireEvent.click(screen.getByTestId('settings-start-conversations'));
-    await waitFor(() => expect(onApplyGraph).toHaveBeenCalledTimes(1));
-    expect(onApplyGraph.mock.calls[0][0].find((n) => n.data.nodeType === 'send_whatsapp').data.config.whatsappSessionKey).toBe('41-x');
-  });
-
-  it('email: lượt tải danh sách tài khoản KHÁC khoá GET của trang (limit 100) để api.js không huỷ lượt của trang', async () => {
-    await open('email');
-    await screen.findByTestId('simple-sender-9');
-    expect(mockLoadSenders).toHaveBeenCalledWith('email', { email: { params: { status: 'active', page: 1, limit: 99 } } });
-  });
-
-  it('chỉ có quyền xem → không có phần chọn Gửi từ, không tải danh sách tài khoản', () => {
-    mockLoadSenders.mockClear();
-    renderPanel({ nodes: [], edges: [], canEdit: false });
-    expect(screen.queryByTestId('settings-sender-part')).not.toBeInTheDocument();
-    expect(mockLoadSenders).not.toHaveBeenCalled();
-  });
-});
-
-describe('CampaignSettingsPanel — mở thẻ ĐÚNG mục cần điền (PR-D)', () => {
-  // Trang thật áp đồ thị mới vào `nodes/edges` rồi render lại panel; harness này làm đúng việc đó.
-  const Stateful = ({ initialNodes = [], initialEdges = [], ...rest }) => {
-    const [graph, setGraph] = useState({ nodes: initialNodes, edges: initialEdges });
-    return (
-      <CampaignSettingsPanel
-        {...baseProps}
-        {...rest}
-        nodes={graph.nodes}
-        edges={graph.edges}
-        onApplyGraph={(nextNodes, nextEdges) => setGraph({ nodes: nextNodes, edges: nextEdges })}
-      />
-    );
-  };
-  const renderStateful = (props = {}) => render(
-    <MemoryRouter>
-      <I18nProvider>
-        <Stateful {...props} />
-      </I18nProvider>
-    </MemoryRouter>,
-  );
-  const openForm = async () => screen.findByTestId('form-stub');
-
-  it('email: chọn "Tự nhập danh sách" → thẻ khối gửi mở ngay ở mục recipient', async () => {
-    renderStateful();
-    fireEvent.click(screen.getByTestId('settings-start-manual'));
-    const form = await openForm();
-    expect(form.getAttribute('data-initial-section')).toBe('recipient');
-    expect(screen.getAllByTestId('settings-node-card').find((c) => c.getAttribute('data-editing') === 'true').getAttribute('data-node-type')).toBe('send_email');
-  });
-
-  it('email: chọn Google Sheet → mở thẻ khối đọc sheet ở mục basic (ô link), không phải khối gửi', async () => {
-    renderStateful();
-    fireEvent.click(screen.getByTestId('settings-start-sheet'));
-    const form = await openForm();
-    expect(form.getAttribute('data-initial-section')).toBe('basic');
-    expect(screen.getAllByTestId('settings-node-card').find((c) => c.getAttribute('data-editing') === 'true').getAttribute('data-node-type')).toBe('read_sheet');
-  });
-
-  const MANUAL_MAIL = [
-    node('start', 'manual_trigger', {}, 'Khởi chạy', 'start'),
-    node('mail', 'send_email', { fromEmailId: 3, recipientSource: 'manual', recipientEmails: '', emailSteps: [] }, 'Gửi thư'),
-  ];
-  const MANUAL_EDGES = [edge('start', 'mail')];
-
-  it('nút Sửa của dòng checklist → mục của VAI dòng đó (Gửi cho ai → recipient, Nội dung → templates, Gửi từ → basic)', async () => {
-    renderStateful({ initialNodes: MANUAL_MAIL, initialEdges: MANUAL_EDGES });
-    fireEvent.click(screen.getByTestId('settings-checklist-edit-audience'));
-    expect((await openForm()).getAttribute('data-initial-section')).toBe('recipient');
-    fireEvent.click(screen.getByTestId('settings-checklist-edit-content'));
-    await waitFor(() => expect(screen.getByTestId('form-stub').getAttribute('data-initial-section')).toBe('templates'));
-    fireEvent.click(screen.getByTestId('settings-checklist-edit-sender'));
-    await waitFor(() => expect(screen.getByTestId('form-stub').getAttribute('data-initial-section')).toBe('basic'));
-  });
-
-  it('thẻ đang mở, bấm Sửa dòng khác cùng khối → cùng form (không dựng lại), id yêu cầu tăng để form nhảy mục + focus lại', async () => {
-    renderStateful({ initialNodes: MANUAL_MAIL, initialEdges: MANUAL_EDGES });
-    fireEvent.click(screen.getByTestId('settings-checklist-edit-audience'));
-    const before = Number((await openForm()).getAttribute('data-request-id'));
-    fireEvent.click(screen.getByTestId('settings-checklist-edit-content'));
-    await waitFor(() => expect(Number(screen.getByTestId('form-stub').getAttribute('data-request-id'))).toBe(before + 1));
-    expect(screen.getAllByTestId('form-stub')).toHaveLength(1);
-  });
-
-  it('nút Sửa trên chính thẻ → mục của dòng thiếu ĐẦU TIÊN; thẻ không thiếu gì → không ép mục (null = mục đầu)', async () => {
-    renderStateful({ initialNodes: MANUAL_MAIL, initialEdges: MANUAL_EDGES });
-    fireEvent.click(screen.getByTestId('settings-edit-mail'));
-    expect((await openForm()).getAttribute('data-initial-section')).toBe('recipient');
-  });
-
-  it('thẻ đã đủ cấu hình → Sửa mở không ép mục', async () => {
-    renderStateful({ initialNodes: EMAIL_FLOW.nodes, initialEdges: EMAIL_FLOW.edges });
-    fireEvent.click(screen.getByTestId('settings-edit-mail'));
-    expect((await openForm()).getAttribute('data-initial-section')).toBe('');
-  });
-});
