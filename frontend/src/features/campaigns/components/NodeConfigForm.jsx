@@ -66,12 +66,17 @@ import {
  * @param {(formData: object) => void} props.onSave bấm Lưu (sau khi qua kiểm tra riêng của từng loại khối)
  * @param {'modal'|'inline'} [props.variant='modal'] 'modal' = thân cuộn 70vh + chân nút; 'inline' = nằm trong thẻ, không khung cuộn
  * @param {(formData: object, isDirty: boolean) => void} [props.onFormChange] báo mỗi lần form đổi; `isDirty` = khác bản vừa khởi tạo
+ * @param {string|null} [props.initialSection] id mục form mở sẵn (email / Zalo cá nhân / Zalo nhóm / đọc sheet / khách đã lưu / khoá học /
+ *   sản phẩm / lưu khách). Không truyền → mục `basic` như cũ (Sơ đồ khối không truyền). Có truyền → focus ô nhập đầu tiên của mục.
+ * @param {number} [props.sectionRequestId] đổi giá trị → áp lại `initialSection` + focus lại (nút Sửa của checklist bấm khi thẻ này đang mở)
  */
 const NodeConfigForm = ({
   isOpen = true,
   onCancel,
   variant = 'modal',
   onFormChange,
+  initialSection = null,
+  sectionRequestId = 0,
   node,
   onSave,
   onCheckSheetConnection,
@@ -110,14 +115,18 @@ const NodeConfigForm = ({
   const [interestedCourseOptions, setInterestedCourseOptions] = useState([]);
   const [isLoadingInterestedCourses, setIsLoadingInterestedCourses] = useState(false);
   const [courseSearchQuery, setCourseSearchQuery] = useState('');
-  const [selectedEmailSection, setSelectedEmailSection] = useState('basic');
-  const [selectedSaveCustomerSection, setSelectedSaveCustomerSection] = useState('basic');
-  const [selectedReadSheetSection, setSelectedReadSheetSection] = useState('basic');
-  const [selectedReadInterestedCustomersSection, setSelectedReadInterestedCustomersSection] = useState('basic');
-  const [selectedReadCoursesDbSection, setSelectedReadCoursesDbSection] = useState('basic');
-  const [selectedReadProductsDbSection, setSelectedReadProductsDbSection] = useState('basic');
-  const [selectedZaloPersonalSection, setSelectedZaloPersonalSection] = useState('basic');
-  const [selectedZaloGroupSection, setSelectedZaloGroupSection] = useState('basic');
+  // Mục mở sẵn theo loại khối (PR-D): chỉ loại khối nào có thanh mục mới nhận `initialSection`, loại khác giữ 'basic'.
+  const sectionFor = (type) => (initialSection && nodeType === type ? initialSection : 'basic');
+  const [selectedEmailSection, setSelectedEmailSection] = useState(() => sectionFor('send_email'));
+  const [selectedSaveCustomerSection, setSelectedSaveCustomerSection] = useState(() => sectionFor('save_customer'));
+  const [selectedReadSheetSection, setSelectedReadSheetSection] = useState(() => sectionFor('read_sheet'));
+  const [selectedReadInterestedCustomersSection, setSelectedReadInterestedCustomersSection] = useState(() => sectionFor('read_interested_customers'));
+  const [selectedReadCoursesDbSection, setSelectedReadCoursesDbSection] = useState(() => sectionFor('read_courses_db'));
+  const [selectedReadProductsDbSection, setSelectedReadProductsDbSection] = useState(() => sectionFor('read_products_db'));
+  const [selectedZaloPersonalSection, setSelectedZaloPersonalSection] = useState(() => sectionFor('send_zalo_personal'));
+  const [selectedZaloGroupSection, setSelectedZaloGroupSection] = useState(() => sectionFor('send_zalo_group'));
+  const contentRef = useRef(null);
+  const pendingFocusRef = useRef(false);
   const [testPreviewItems, setTestPreviewItems] = useState([]);
   const [isLoadingTestPreview, setIsLoadingTestPreview] = useState(false);
   const [testPreviewSearchQuery, setTestPreviewSearchQuery] = useState('');
@@ -328,6 +337,51 @@ const NodeConfigForm = ({
     // trạng thái khối, mà dựng lại form lúc đó là mất chữ người dùng đang gõ.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [node?.id, campaignType]);
+
+  // PR-D: áp `initialSection` (lúc mở và mỗi lần `sectionRequestId` đổi) — khai báo SAU effect khởi tạo ở trên, vì effect đó đặt lại
+  // mục Zalo về 'basic'. Sau khi mục hiển thị thì focus ô nhập đầu tiên (effect không deps bên dưới).
+  useEffect(() => {
+    if (!initialSection || !node) return;
+    const setters = {
+      send_email: setSelectedEmailSection,
+      send_zalo_personal: setSelectedZaloPersonalSection,
+      send_zalo_group: setSelectedZaloGroupSection,
+      read_sheet: setSelectedReadSheetSection,
+      read_interested_customers: setSelectedReadInterestedCustomersSection,
+      read_courses_db: setSelectedReadCoursesDbSection,
+      read_products_db: setSelectedReadProductsDbSection,
+      save_customer: setSelectedSaveCustomerSection,
+    };
+    const setter = setters[nodeType];
+    if (!setter) return;
+    setter(initialSection);
+    pendingFocusRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialSection, sectionRequestId, node?.id]);
+
+  useEffect(() => {
+    if (!pendingFocusRef.current) return;
+    const root = contentRef.current;
+    if (!root) return;
+    const shownSection = {
+      send_email: selectedEmailSection,
+      send_zalo_personal: selectedZaloPersonalSection,
+      send_zalo_group: selectedZaloGroupSection,
+      read_sheet: selectedReadSheetSection,
+      read_interested_customers: selectedReadInterestedCustomersSection,
+      read_courses_db: selectedReadCoursesDbSection,
+      read_products_db: selectedReadProductsDbSection,
+      save_customer: selectedSaveCustomerSection,
+    }[nodeType];
+    // Mục yêu cầu chưa hiển thị (state vừa đặt, chờ lượt render kế) → chờ, đừng focus nhầm ô của mục cũ.
+    if (shownSection !== initialSection) return;
+    const target = root.querySelector('[data-section-focus]')
+      || root.querySelector('textarea:not([disabled])')
+      || root.querySelector('input:not([type=checkbox]):not([type=radio]):not([type=hidden]):not([type=number]):not([disabled]), select:not([disabled])');
+    // Giữ cờ nếu mục chưa kịp vẽ (vd dữ liệu đang tải) — render sau sẽ thử lại; không giữ nếu mục không có ô nhập nào.
+    pendingFocusRef.current = false;
+    if (target && typeof target.focus === 'function') target.focus();
+  });
 
   useEffect(() => {
     if (typeof onFormChange !== 'function') return;
@@ -877,6 +931,7 @@ const NodeConfigForm = ({
   return (
     <>
       <div
+        ref={contentRef}
         className={isInline ? 'pt-3' : 'p-4 max-h-[70vh] overflow-y-auto'}
         data-testid={isInline ? 'node-config-form-inline' : undefined}
       >

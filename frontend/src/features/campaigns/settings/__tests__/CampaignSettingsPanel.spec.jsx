@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -22,8 +23,8 @@ vi.mock('../useRunRemainingEstimate', () => ({ default: (...args) => mockRunEsti
 vi.mock('../useCampaignLatestRun', () => ({ default: (...args) => mockLatestRun(...args) }));
 // Form thật có spec riêng (NodeConfigForm.spec.jsx); ở đây chỉ kiểm cách Panel mở / đóng / lưu / hỏi xác nhận quanh form.
 vi.mock('../../components/NodeConfigForm', () => ({
-  default: ({ node, onSave, onCancel, onFormChange }) => (
-    <div data-testid="form-stub" data-node-id={node.id}>
+  default: ({ node, onSave, onCancel, onFormChange, initialSection, sectionRequestId }) => (
+    <div data-testid="form-stub" data-node-id={node.id} data-initial-section={initialSection ?? ''} data-request-id={sectionRequestId}>
       <button type="button" data-testid="stub-type" onClick={() => onFormChange?.({ label: 'x' }, true)}>type</button>
       <button
         type="button"
@@ -631,5 +632,82 @@ describe('CampaignSettingsPanel — chiến dịch trống: chọn "Gửi từ" 
     renderPanel({ nodes: [], edges: [], canEdit: false });
     expect(screen.queryByTestId('settings-sender-part')).not.toBeInTheDocument();
     expect(mockLoadSenders).not.toHaveBeenCalled();
+  });
+});
+
+describe('CampaignSettingsPanel — mở thẻ ĐÚNG mục cần điền (PR-D)', () => {
+  // Trang thật áp đồ thị mới vào `nodes/edges` rồi render lại panel; harness này làm đúng việc đó.
+  const Stateful = ({ initialNodes = [], initialEdges = [], ...rest }) => {
+    const [graph, setGraph] = useState({ nodes: initialNodes, edges: initialEdges });
+    return (
+      <CampaignSettingsPanel
+        {...baseProps}
+        {...rest}
+        nodes={graph.nodes}
+        edges={graph.edges}
+        onApplyGraph={(nextNodes, nextEdges) => setGraph({ nodes: nextNodes, edges: nextEdges })}
+      />
+    );
+  };
+  const renderStateful = (props = {}) => render(
+    <MemoryRouter>
+      <I18nProvider>
+        <Stateful {...props} />
+      </I18nProvider>
+    </MemoryRouter>,
+  );
+  const openForm = async () => screen.findByTestId('form-stub');
+
+  it('email: chọn "Tự nhập danh sách" → thẻ khối gửi mở ngay ở mục recipient', async () => {
+    renderStateful();
+    fireEvent.click(screen.getByTestId('settings-start-manual'));
+    const form = await openForm();
+    expect(form.getAttribute('data-initial-section')).toBe('recipient');
+    expect(screen.getAllByTestId('settings-node-card').find((c) => c.getAttribute('data-editing') === 'true').getAttribute('data-node-type')).toBe('send_email');
+  });
+
+  it('email: chọn Google Sheet → mở thẻ khối đọc sheet ở mục basic (ô link), không phải khối gửi', async () => {
+    renderStateful();
+    fireEvent.click(screen.getByTestId('settings-start-sheet'));
+    const form = await openForm();
+    expect(form.getAttribute('data-initial-section')).toBe('basic');
+    expect(screen.getAllByTestId('settings-node-card').find((c) => c.getAttribute('data-editing') === 'true').getAttribute('data-node-type')).toBe('read_sheet');
+  });
+
+  const MANUAL_MAIL = [
+    node('start', 'manual_trigger', {}, 'Khởi chạy', 'start'),
+    node('mail', 'send_email', { fromEmailId: 3, recipientSource: 'manual', recipientEmails: '', emailSteps: [] }, 'Gửi thư'),
+  ];
+  const MANUAL_EDGES = [edge('start', 'mail')];
+
+  it('nút Sửa của dòng checklist → mục của VAI dòng đó (Gửi cho ai → recipient, Nội dung → templates, Gửi từ → basic)', async () => {
+    renderStateful({ initialNodes: MANUAL_MAIL, initialEdges: MANUAL_EDGES });
+    fireEvent.click(screen.getByTestId('settings-checklist-edit-audience'));
+    expect((await openForm()).getAttribute('data-initial-section')).toBe('recipient');
+    fireEvent.click(screen.getByTestId('settings-checklist-edit-content'));
+    await waitFor(() => expect(screen.getByTestId('form-stub').getAttribute('data-initial-section')).toBe('templates'));
+    fireEvent.click(screen.getByTestId('settings-checklist-edit-sender'));
+    await waitFor(() => expect(screen.getByTestId('form-stub').getAttribute('data-initial-section')).toBe('basic'));
+  });
+
+  it('thẻ đang mở, bấm Sửa dòng khác cùng khối → cùng form (không dựng lại), id yêu cầu tăng để form nhảy mục + focus lại', async () => {
+    renderStateful({ initialNodes: MANUAL_MAIL, initialEdges: MANUAL_EDGES });
+    fireEvent.click(screen.getByTestId('settings-checklist-edit-audience'));
+    const before = Number((await openForm()).getAttribute('data-request-id'));
+    fireEvent.click(screen.getByTestId('settings-checklist-edit-content'));
+    await waitFor(() => expect(Number(screen.getByTestId('form-stub').getAttribute('data-request-id'))).toBe(before + 1));
+    expect(screen.getAllByTestId('form-stub')).toHaveLength(1);
+  });
+
+  it('nút Sửa trên chính thẻ → mục của dòng thiếu ĐẦU TIÊN; thẻ không thiếu gì → không ép mục (null = mục đầu)', async () => {
+    renderStateful({ initialNodes: MANUAL_MAIL, initialEdges: MANUAL_EDGES });
+    fireEvent.click(screen.getByTestId('settings-edit-mail'));
+    expect((await openForm()).getAttribute('data-initial-section')).toBe('recipient');
+  });
+
+  it('thẻ đã đủ cấu hình → Sửa mở không ép mục', async () => {
+    renderStateful({ initialNodes: EMAIL_FLOW.nodes, initialEdges: EMAIL_FLOW.edges });
+    fireEvent.click(screen.getByTestId('settings-edit-mail'));
+    expect((await openForm()).getAttribute('data-initial-section')).toBe('');
   });
 });

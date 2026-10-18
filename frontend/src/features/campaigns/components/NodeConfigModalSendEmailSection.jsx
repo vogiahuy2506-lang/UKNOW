@@ -174,6 +174,7 @@ export const NodeConfigSendEmailSection = ({
                 {t('campaignNodeConfig.emailSend.fromEmail')} <span className="text-red-500">*</span>
               </label>
               <select
+                data-section-focus
                 value={formData.fromEmailId || ''}
                 onChange={(e) => setFormData((prev) => ({ ...prev, fromEmailId: parseInt(e.target.value, 10) || '' }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text"

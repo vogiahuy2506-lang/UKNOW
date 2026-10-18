@@ -90,6 +90,7 @@ export const NodeConfigReadSheetSection = ({
               </label>
               <input
                 type="url"
+                data-section-focus
                 value={formData.sheetUrl}
                 onChange={(e) => setFormData((prev) => ({ ...prev, sheetUrl: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"

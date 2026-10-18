@@ -31,6 +31,7 @@ import { formatCampaignDateTime } from '../utils/campaignDateTime.helpers';
 import buildSettingsChecklist from './buildSettingsChecklist';
 import buildSettingsOrder from './buildSettingsOrder';
 import describeNodeSettings from './describeNodeSettings';
+import { pickFirstMissingTarget, resolveSectionForNode, resolveSectionForRole } from './resolveEditSection';
 import { formatVnDayMonthTime, formatVnResumeTime, getWaitReasonI18nKey } from '../utils/deliveryMonitor.helpers';
 import useCampaignLatestRun from './useCampaignLatestRun';
 import useRunRemainingEstimate from './useRunRemainingEstimate';
@@ -293,6 +294,8 @@ const NodeCard = ({
   onCancelEdit,
   onSaveEdit,
   onFormChange,
+  editSection,
+  sectionRequestId,
   formProps,
   cardRef,
   nodeTitleOf,
@@ -382,6 +385,8 @@ const NodeCard = ({
             onSave={(formData) => onSaveEdit(node, formData)}
             onCancel={onCancelEdit}
             onFormChange={onFormChange}
+            initialSection={editSection}
+            sectionRequestId={sectionRequestId}
           />
           </div>
         </div>
@@ -478,7 +483,7 @@ const Checklist = ({ rows, canEdit, canOpenSchedule, onEditRow, onOpenSchedule, 
                   onClick={() => {
                     if (isTiming) onOpenSchedule();
                     else if (row.anchor && !row.targetNodeId) onJump(row.anchor);
-                    else onEditRow(row.targetNodeId);
+                    else onEditRow(row.targetNodeId, row.key);
                   }}
                   data-testid={`settings-checklist-edit-${row.key}`}
                   className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-dk-border dark:text-dk-text dark:hover:bg-dk-raised"
@@ -775,7 +780,9 @@ export default function CampaignSettingsPanel({
   const [editingNodeId, setEditingNodeId] = useState(null);
   const [formDirty, setFormDirty] = useState(false);
   const formDirtyRef = useRef(false);
-  const [pendingEditId, setPendingEditId] = useState(null);
+  const [pendingEdit, setPendingEdit] = useState(null);
+  // Mục form thẻ đang mở phải hiện (PR-D); `id` tăng mỗi lần yêu cầu để thẻ đang mở cũng nhảy tới mục mới + focus lại.
+  const [editRequest, setEditRequest] = useState({ section: null, id: 0 });
   const cardRefs = useRef(new Map());
 
   const setDirty = useCallback((value) => {
@@ -787,22 +794,39 @@ export default function CampaignSettingsPanel({
     if (formDirtyRef.current !== isDirty) setDirty(isDirty);
   }, [setDirty]);
 
-  const beginEdit = useCallback((nodeId) => {
+  const beginEdit = useCallback((nodeId, section = null) => {
     setDirty(false);
     setEditingNodeId(String(nodeId));
+    setEditRequest((prev) => ({ section, id: prev.id + 1 }));
   }, [setDirty]);
 
+  /**
+   * Mục form cần mở: có `role` (bấm Sửa ở dòng checklist) → mục của vai đó; không có (Sửa trên chính thẻ) → mục của dòng THIẾU đầu tiên
+   * của thẻ nếu có, không thì null (mục đầu).
+   */
+  const sectionForRequest = useCallback((nodeId, role) => {
+    const node = nodes.find((item) => String(item.id) === String(nodeId));
+    if (!node) return null;
+    if (role) return resolveSectionForRole(subtypeOf(node), role);
+    return resolveSectionForNode(node, { ...lookups, nodes }, t);
+  }, [lookups, nodes, t]);
+
   /** Mở thẻ của `nodeId`; đang có thẻ khác mở với thay đổi dở → hỏi trước (hộp xác nhận của trang). */
-  const requestEdit = useCallback((nodeId) => {
+  const requestEdit = useCallback((nodeId, role = undefined, sectionOverride = undefined) => {
     if (!canEdit) return;
     const id = String(nodeId);
-    if (editingNodeId === id) return;
-    if (editingNodeId && formDirtyRef.current) {
-      setPendingEditId(id);
+    const section = sectionOverride !== undefined ? sectionOverride : sectionForRequest(id, role);
+    if (editingNodeId === id) {
+      // Cùng thẻ đang mở: chỉ nhảy tới mục khác (dữ liệu đang gõ giữ nguyên, không cần hỏi).
+      if (section) setEditRequest((prev) => ({ section, id: prev.id + 1 }));
       return;
     }
-    beginEdit(id);
-  }, [beginEdit, canEdit, editingNodeId]);
+    if (editingNodeId && formDirtyRef.current) {
+      setPendingEdit({ id, section });
+      return;
+    }
+    beginEdit(id, section);
+  }, [beginEdit, canEdit, editingNodeId, sectionForRequest]);
 
   const closeEdit = useCallback(() => {
     setEditingNodeId(null);
@@ -850,13 +874,14 @@ export default function CampaignSettingsPanel({
   const structureLocked = Boolean(editingNodeId) || structureBusy;
   const structureLockTitle = editingNodeId ? t('campaignSettings.editBusy') : undefined;
 
-  /** Mở thẻ có dòng thiếu ĐẦU TIÊN theo thứ tự chạy của đồ thị vừa áp. */
+  /**
+   * Sau khi dựng khung / đổi nguồn: mở thẻ cần điền trước, ĐÚNG mục chứa ô cần điền (PR-D). Ưu tiên thẻ giữ dòng thiếu vai audience
+   * (người dùng vừa chọn nguồn → điền nguồn ngay), rồi content, rồi các vai còn lại; trong một vai lấy thẻ đầu tiên theo thứ tự chạy.
+   */
   const openFirstMissing = useCallback((nextNodes, nextEdges) => {
     const fullLookups = { ...lookups, nodes: nextNodes };
-    const first = buildSettingsOrder(nextNodes, nextEdges).ordered.find(({ node }) => (
-      subtypeOf(node) !== 'manual_trigger' && describeNodeSettings(node, fullLookups, t).some((item) => item.tone === 'missing')
-    ));
-    if (first) requestEdit(first.node.id);
+    const target = pickFirstMissingTarget(buildSettingsOrder(nextNodes, nextEdges).ordered, fullLookups, t);
+    if (target) requestEdit(target.node.id, undefined, target.section);
   }, [lookups, requestEdit, t]);
 
   /** Áp một thao tác cấu trúc: `onApplyGraph` áp + lưu (cùng đường lưu của thẻ). Lưu hỏng vẫn giữ thay đổi cục bộ — trang đã báo lỗi. */
@@ -986,6 +1011,8 @@ export default function CampaignSettingsPanel({
       onCancelEdit={closeEdit}
       onSaveEdit={handleSaveEdit}
       onFormChange={handleFormChange}
+      editSection={editRequest.section}
+      sectionRequestId={editRequest.id}
       formProps={formProps}
       cardRef={(element) => {
         if (element) cardRefs.current.set(String(entry.node.id), element);
@@ -1101,12 +1128,12 @@ export default function CampaignSettingsPanel({
         </div>
         </div>
         <ConfirmModal
-          isOpen={Boolean(pendingEditId)}
-          onClose={() => setPendingEditId(null)}
+          isOpen={Boolean(pendingEdit)}
+          onClose={() => setPendingEdit(null)}
           onConfirm={() => {
-            const next = pendingEditId;
-            setPendingEditId(null);
-            beginEdit(next);
+            const next = pendingEdit;
+            setPendingEdit(null);
+            if (next) beginEdit(next.id, next.section);
           }}
           title={t('campaignSettings.discard.title')}
           message={t('campaignSettings.discard.message')}
