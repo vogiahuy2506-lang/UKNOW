@@ -102,7 +102,7 @@ vi.mock('../../features/campaigns/components/NodeConfigForm', async () => {
   const React = await import('react');
   const build = (label) => ({ label, fromEmailId: 3, recipientSource: 'manual', recipientEmails: 'a@x.vn', emailSteps: [] });
   return {
-    default: ({ node, onSave, onCancel, onFormChange }) => {
+    default: function FormStub({ node, onSave, onCancel, onFormChange }) {
       const [label, setLabel] = React.useState(node.data.label);
       return (
         <div data-testid="form-stub">
