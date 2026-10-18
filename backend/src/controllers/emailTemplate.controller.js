@@ -5,6 +5,7 @@ import { isAdminRole } from '../utils/roleScope.util.js';
 import { checkUserResourceLimit, enforceResourceLimitTx } from '../utils/userResourceLimit.util.js';
 import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
 import auditService, { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
+import { convertMarkdownMarkersKeepingVariables } from '../utils/templateMarkdownMarkers.util.js';
 
 class EmailTemplateController {
   async logMutation(req, action, item) {
@@ -193,11 +194,7 @@ class EmailTemplateController {
       const hasBodyHtml = Object.prototype.hasOwnProperty.call(req.body, 'bodyHtml');
       const hasBodyText = Object.prototype.hasOwnProperty.call(req.body, 'bodyText');
       // Strip markdown bold/italic markers from bodyHtml before saving
-      const stripMarkdown = (str) => String(str || '')
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>') // **bold** → <strong>bold</strong>
-        .replace(/\*(.+?)\*/g, '<em>$1</em>')             // *italic* → <em>italic</em>
-        .replace(/__(.+?)__/g, '<strong>$1</strong>')     // __bold__ → <strong>bold</strong>
-        .replace(/_(.+?)_/g, '<em>$1</em>');              // _italic_ → <em>italic</em>
+      const stripMarkdown = convertMarkdownMarkersKeepingVariables; // giữ nguyên {{biến_có_gạch_dưới}}
       const normalizedBodyHtml = hasBodyHtml && typeof bodyHtml === 'string' && bodyHtml.trim() ? stripMarkdown(bodyHtml) : null;
       const normalizedBodyText = hasBodyText && typeof bodyText === 'string' && bodyText.trim() ? bodyText : null;
 
@@ -330,11 +327,7 @@ class EmailTemplateController {
       const hasBodyHtml = Object.prototype.hasOwnProperty.call(req.body, 'bodyHtml');
       const hasBodyText = Object.prototype.hasOwnProperty.call(req.body, 'bodyText');
       // Strip markdown bold/italic markers from bodyHtml before saving
-      const stripMarkdown = (str) => String(str || '')
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>') // **bold** → <strong>bold</strong>
-        .replace(/\*(.+?)\*/g, '<em>$1</em>')             // *italic* → <em>italic</em>
-        .replace(/__(.+?)__/g, '<strong>$1</strong>')     // __bold__ → <strong>bold</strong>
-        .replace(/_(.+?)_/g, '<em>$1</em>');              // _italic_ → <em>italic</em>
+      const stripMarkdown = convertMarkdownMarkersKeepingVariables; // giữ nguyên {{biến_có_gạch_dưới}}
       const normalizedBodyHtml = hasBodyHtml && typeof bodyHtml === 'string' && bodyHtml.trim() ? stripMarkdown(bodyHtml) : null;
       const normalizedBodyText = hasBodyText && typeof bodyText === 'string' && bodyText.trim() ? bodyText : null;
 
