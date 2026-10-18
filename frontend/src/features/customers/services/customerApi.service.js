@@ -75,6 +75,36 @@ export const customerApiService = {
     return api.get(endpoint);
   },
 
+  // ---- Tag khách hàng (PLAN_TAG_KHACH_HANG PR-T1) ----
+  getTags() {
+    return api.get('/customers/tags');
+  },
+
+  createTag(payload) {
+    return api.post('/customers/tags', payload);
+  },
+
+  updateTag(tagId, payload) {
+    return api.put(`/customers/tags/${tagId}`, payload);
+  },
+
+  deleteTag(tagId) {
+    return api.delete(`/customers/tags/${tagId}`);
+  },
+
+  /** Gắn tag cho nhiều khách. `tagNames` = tên tag mới gõ tay (chưa có thì backend tự tạo). */
+  assignTags({ customerIds, tagIds = [], tagNames = [] }) {
+    return api.post('/customers/tags/assign', { customerIds, tagIds, tagNames });
+  },
+
+  unassignTags({ customerIds, tagIds }) {
+    return api.post('/customers/tags/unassign', { customerIds, tagIds });
+  },
+
+  getCustomerTags(customerId) {
+    return api.get(`/customers/${customerId}/tags`);
+  },
+
   /**
    * Lấy presigned URL tải/xem tệp Zalo theo storage key (S3 key).
    * Dùng cho tệp đính kèm trong Zalo message không lưu fileId riêng.

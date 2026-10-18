@@ -26,6 +26,7 @@ vi.mock('react-hot-toast', () => {
 vi.mock('../../services/customerApi.service', () => ({
   default: {
     getCustomers: vi.fn(),
+    getTags: vi.fn(),
     exportCustomersCsv: vi.fn(),
     deleteCustomer: vi.fn(),
     createCustomer: vi.fn(),
@@ -60,6 +61,7 @@ describe('AllCustomersTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     customerApiService.getCustomers.mockResolvedValue(listResponse([makeCustomer()]));
+    customerApiService.getTags.mockResolvedValue({ data: { data: [] } });
   });
 
   describe('danh sách + bộ lọc', () => {

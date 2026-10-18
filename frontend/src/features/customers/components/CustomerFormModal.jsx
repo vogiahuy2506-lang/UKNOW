@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { useI18n } from '../../../i18n';
 import customerApiService from '../services/customerApi.service';
 import BaseModal from './CustomerModalBase';
+import CustomerTagEditor from './CustomerTagEditor';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const EMPTY_FORM = { fullName: '', email: '', phone: '', notes: '' };
@@ -16,8 +17,10 @@ const EMPTY_FORM = { fullName: '', email: '', phone: '', notes: '' };
  * @param {object|null} props.customer khách đang sửa (hàng từ danh sách), null = thêm mới
  * @param {() => void} props.onClose
  * @param {() => void} props.onSaved gọi sau khi lưu thành công (tải lại danh sách)
+ * @param {object[]} [props.allTags] mọi tag của workspace — có thì khi sửa khách hiện ô thêm/bỏ tag
+ * @param {() => void} [props.onTagsChanged] gọi khi tag của khách đổi (tải lại danh sách, không đóng form)
  */
-export default function CustomerFormModal({ isOpen, customer, onClose, onSaved }) {
+export default function CustomerFormModal({ isOpen, customer, onClose, onSaved, allTags, onTagsChanged }) {
   const { t } = useI18n();
   const isEdit = Boolean(customer?.id);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -124,6 +127,14 @@ export default function CustomerFormModal({ isOpen, customer, onClose, onSaved }
             onChange={setField('notes')}
           />
         </div>
+        {isEdit && allTags && (
+          <CustomerTagEditor
+            customerId={customer.id}
+            initialTags={customer.tags}
+            allTags={allTags}
+            onChanged={onTagsChanged}
+          />
+        )}
         {isEdit && <p className="text-xs text-gray-500 dark:text-dk-text2">{t('customers.form.editHint')}</p>}
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>

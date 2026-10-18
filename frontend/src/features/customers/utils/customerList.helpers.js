@@ -13,15 +13,18 @@ export const EMAIL_STATUS_OPTIONS = Object.freeze(['subscribed', 'unsubscribed',
  * Tham số bộ lọc dùng CHUNG cho danh sách và xuất CSV, để file xuất luôn khớp cái đang nhìn thấy.
  * Giá trị rỗng bị bỏ (không gửi `search=`).
  *
- * @param {{ search?: string, consentSource?: string, emailStatus?: string }} filters
+ * `tagIds` (mảng id) gửi dạng chuỗi phẩy; backend lọc khách có BẤT KỲ tag nào trong danh sách.
+ *
+ * @param {{ search?: string, consentSource?: string, emailStatus?: string, tagIds?: number[] }} filters
  * @returns {Record<string, string>}
  */
-export function buildCustomerFilterParams({ search = '', consentSource = '', emailStatus = '' } = {}) {
+export function buildCustomerFilterParams({ search = '', consentSource = '', emailStatus = '', tagIds = [] } = {}) {
   const params = {};
   const trimmedSearch = String(search || '').trim();
   if (trimmedSearch) params.search = trimmedSearch;
   if (consentSource) params.consentSource = consentSource;
   if (emailStatus) params.emailStatus = emailStatus;
+  if (Array.isArray(tagIds) && tagIds.length > 0) params.tagIds = tagIds.join(',');
   return params;
 }
 
@@ -49,3 +52,8 @@ export function getCustomerInitial(customer) {
   const name = customer?.fullName || customer?.email || customer?.phone || '';
   return name ? String(name).trim()[0]?.toUpperCase() || '?' : '?';
 }
+
+/** Bảng màu gợi ý cho tag (hex 6 ký tự, khớp ràng buộc backend). */
+export const CUSTOMER_TAG_COLORS = Object.freeze([
+  '#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#3b82f6', '#8b5cf6', '#ec4899', '#64748b',
+]);

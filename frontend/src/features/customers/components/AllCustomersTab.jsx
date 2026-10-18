@@ -10,6 +10,7 @@ import {
   HiOutlinePhone,
   HiOutlinePlus,
   HiOutlineSearch,
+  HiOutlineTag,
   HiOutlineTrash,
   HiOutlineUpload,
   HiOutlineUsers,
@@ -32,6 +33,13 @@ import {
 import CustomerEmailStatusBadge from './CustomerEmailStatusBadge';
 import CustomerFormModal from './CustomerFormModal';
 import CustomerImportModal from './CustomerImportModal';
+import CustomerTagAssignModal from './CustomerTagAssignModal';
+import CustomerTagChip from './CustomerTagChip';
+import CustomerTagFilter from './CustomerTagFilter';
+import CustomerTagManageModal from './CustomerTagManageModal';
+
+/** Số chip tag hiện tối đa trong một ô; phần dư gom thành "+n". */
+const MAX_VISIBLE_TAGS = 3;
 
 /**
  * Tab "Tất cả khách" của `/app/customers`: toàn bộ khách trong không gian làm việc (không theo chiến dịch),
@@ -43,6 +51,11 @@ export default function AllCustomersTab() {
   const [search, setSearch] = useState('');
   const [consentSource, setConsentSource] = useState('');
   const [emailStatus, setEmailStatus] = useState('');
+  const [tagFilter, setTagFilter] = useState([]);
+  const [tags, setTags] = useState([]);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [assignMode, setAssignMode] = useState(null); // null | 'assign' | 'unassign'
+  const [showManageTags, setShowManageTags] = useState(false);
   const [page, setPage] = useState(1);
   const [reloadKey, setReloadKey] = useState(0);
   const [items, setItems] = useState([]);
@@ -55,7 +68,32 @@ export default function AllCustomersTab() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
-  const hasFilters = Boolean(search || consentSource || emailStatus);
+  const hasFilters = Boolean(search || consentSource || emailStatus || tagFilter.length > 0);
+
+  const loadTags = useCallback(() => {
+    return customerApiService
+      .getTags()
+      .then((res) => {
+        const list = res.data?.data || [];
+        setTags(list);
+        // Tag vừa bị xoá không được kẹt lại trong bộ lọc (sẽ lọc ra danh sách rỗng khó hiểu).
+        setTagFilter((prev) => {
+          const alive = prev.filter((id) => list.some((tag) => tag.id === id));
+          return alive.length === prev.length ? prev : alive;
+        });
+      })
+      .catch(() => toast.error(t('customers.tags.loadFailed')));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    loadTags();
+  }, [loadTags]);
+
+  // Chọn khách chỉ có nghĩa trong trang/bộ lọc đang xem.
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [page, search, consentSource, emailStatus, tagFilter]);
 
   useEffect(() => {
     // Mỗi lần đổi trang/bộ lọc huỷ lượt cũ: lượt chậm trả về sau không được ghi đè kết quả mới.
@@ -63,7 +101,7 @@ export default function AllCustomersTab() {
     setIsLoading(true);
     customerApiService
       .getCustomers(
-        { page, limit: CUSTOMER_PAGE_SIZE, ...buildCustomerFilterParams({ search, consentSource, emailStatus }) },
+        { page, limit: CUSTOMER_PAGE_SIZE, ...buildCustomerFilterParams({ search, consentSource, emailStatus, tagIds: tagFilter }) },
         { signal: controller.signal },
       )
       .then((res) => {
@@ -83,7 +121,7 @@ export default function AllCustomersTab() {
     return () => controller.abort();
     // `t` đổi tham chiếu không được kéo theo tải lại danh sách.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, search, consentSource, emailStatus, reloadKey]);
+  }, [page, search, consentSource, emailStatus, tagFilter, reloadKey]);
 
   const reload = useCallback(() => setReloadKey((key) => key + 1), []);
 
@@ -98,6 +136,7 @@ export default function AllCustomersTab() {
     setSearch('');
     setConsentSource('');
     setEmailStatus('');
+    setTagFilter([]);
     setPage(1);
   };
 
@@ -105,7 +144,7 @@ export default function AllCustomersTab() {
     setIsExporting(true);
     try {
       const response = await customerApiService.exportCustomersCsv(
-        buildCustomerFilterParams({ search, consentSource, emailStatus }),
+        buildCustomerFilterParams({ search, consentSource, emailStatus, tagIds: tagFilter }),
       );
       const blob = response.data instanceof Blob ? response.data : new Blob([response.data]);
       saveBlobAsFile(blob, filenameFromDisposition(response.headers?.['content-disposition']));
@@ -195,6 +234,12 @@ export default function AllCustomersTab() {
               <option key={status} value={status}>{t(`customers.all.emailStatuses.${status}`)}</option>
             ))}
           </select>
+          <CustomerTagFilter
+            tags={tags}
+            value={tagFilter}
+            onChange={(ids) => { setTagFilter(ids); setPage(1); }}
+            className="lg:w-48"
+          />
           <button type="submit" className="btn btn-secondary shrink-0">{t('common.search')}</button>
         </form>
         {hasFilters && (
@@ -208,6 +253,10 @@ export default function AllCustomersTab() {
 
       <PageHeaderActions>
         <div className="flex flex-wrap items-center gap-2">
+          <button type="button" className="btn btn-secondary" onClick={() => setShowManageTags(true)}>
+            <HiOutlineTag className="w-4 h-4 mr-1.5" aria-hidden="true" />
+            {t('customers.tags.manage')}
+          </button>
           <button type="button" className="btn btn-secondary" onClick={handleExport} disabled={isExporting}>
             <HiOutlineDownload className="w-4 h-4 mr-1.5" aria-hidden="true" />
             {isExporting ? t('customers.exportFlow.exporting') : t('customers.exportFlow.button')}
@@ -223,15 +272,46 @@ export default function AllCustomersTab() {
         </div>
       </PageHeaderActions>
 
+      {selectedIds.length > 0 && (
+        <div
+          data-testid="customer-bulk-bar"
+          className="flex flex-wrap items-center gap-2 rounded-xl border border-primary-200 bg-primary-50 px-3.5 py-2.5 dark:border-primary-900/50 dark:bg-primary-950/30"
+        >
+          <span className="text-sm font-medium text-primary-800 dark:text-primary-200">
+            {t('customers.tags.selectedCount', { count: selectedIds.length })}
+          </span>
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => setAssignMode('assign')}>
+            {t('customers.tags.assign')}
+          </button>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setAssignMode('unassign')}>
+            {t('customers.tags.unassign')}
+          </button>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSelectedIds([])}>
+            {t('customers.tags.clearSelection')}
+          </button>
+        </div>
+      )}
+
       <div className="card bg-white dark:bg-dk-surface border-slate-200 dark:border-dk-border">
         <div className="table-container">
           <table className="table">
             <thead>
               <tr className="border-b border-gray-200 dark:border-dk-border bg-slate-50/80 dark:bg-dk-raised/50">
+                <th className="w-10">
+                  <input
+                    type="checkbox"
+                    aria-label={t('customers.tags.selectAll')}
+                    checked={items.length > 0 && selectedIds.length === items.length}
+                    disabled={items.length === 0}
+                    onChange={(e) => setSelectedIds(e.target.checked ? items.map((item) => item.id) : [])}
+                    className="h-4 w-4 rounded border-gray-300 text-primary-600"
+                  />
+                </th>
                 <th className="text-slate-500 dark:text-dk-text2">{t('campaignCustomers.customer')}</th>
                 <th className="text-slate-500 dark:text-dk-text2">{t('campaignCustomers.email')}</th>
                 <th className="text-slate-500 dark:text-dk-text2">{t('campaignCustomers.phone')}</th>
                 <th className="text-slate-500 dark:text-dk-text2">{t('customers.all.emailStatus')}</th>
+                <th className="text-slate-500 dark:text-dk-text2">{t('customers.tags.column')}</th>
                 <th className="text-slate-500 dark:text-dk-text2">{t('customers.all.source')}</th>
                 <th className="text-slate-500 dark:text-dk-text2">{t('customers.all.createdAt')}</th>
                 <th className="!text-right text-slate-500 dark:text-dk-text2">{t('customers.all.actions')}</th>
@@ -240,11 +320,11 @@ export default function AllCustomersTab() {
             <tbody className="divide-y divide-gray-100 dark:divide-dk-border">
               {isLoading ? (
                 <tr>
-                  <td colSpan={7} className="py-10 text-center"><div className="spinner w-8 h-8 mx-auto" /></td>
+                  <td colSpan={9} className="py-10 text-center"><div className="spinner w-8 h-8 mx-auto" /></td>
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-gray-400 dark:text-dk-muted">
+                  <td colSpan={9} className="py-12 text-center text-gray-400 dark:text-dk-muted">
                     <HiOutlineUsers className="w-8 h-8 mx-auto mb-2" aria-hidden="true" />
                     {hasFilters ? t('customers.all.emptyFiltered') : t('customers.all.empty')}
                   </td>
@@ -252,6 +332,15 @@ export default function AllCustomersTab() {
               ) : (
                 items.map((customer) => (
                   <tr key={customer.id} data-testid="customer-row" className="hover:bg-gray-50 dark:hover:bg-dk-raised/40 transition-colors">
+                    <td>
+                      <input
+                        type="checkbox"
+                        aria-label={t('customers.tags.selectRow', { name: getCustomerDisplayName(customer) || `#${customer.id}` })}
+                        checked={selectedIds.includes(customer.id)}
+                        onChange={(e) => setSelectedIds((prev) => (e.target.checked ? [...prev, customer.id] : prev.filter((id) => id !== customer.id)))}
+                        className="h-4 w-4 rounded border-gray-300 text-primary-600"
+                      />
+                    </td>
                     <td>
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-full bg-primary-100 dark:bg-primary-950/40 flex items-center justify-center shrink-0">
@@ -279,6 +368,25 @@ export default function AllCustomersTab() {
                       )}
                     </td>
                     <td><CustomerEmailStatusBadge customer={customer} /></td>
+                    <td>
+                      {customer.tags?.length ? (
+                        <div className="flex max-w-[260px] flex-wrap gap-1">
+                          {customer.tags.slice(0, MAX_VISIBLE_TAGS).map((tag) => (
+                            <CustomerTagChip key={tag.id} tag={tag} />
+                          ))}
+                          {customer.tags.length > MAX_VISIBLE_TAGS && (
+                            <span
+                              className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-dk-raised dark:text-dk-text2"
+                              title={customer.tags.slice(MAX_VISIBLE_TAGS).map((tag) => tag.name).join(', ')}
+                            >
+                              {t('customers.tags.more', { count: customer.tags.length - MAX_VISIBLE_TAGS })}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 dark:text-dk-muted text-xs">--</span>
+                      )}
+                    </td>
                     <td>
                       {customer.consentSource ? (
                         <span className="badge badge-info text-xs">
@@ -351,11 +459,27 @@ export default function AllCustomersTab() {
         customer={formState.customer}
         onClose={() => setFormState({ open: false, customer: null })}
         onSaved={reload}
+        allTags={tags}
+        onTagsChanged={() => { reload(); loadTags(); }}
       />
       <CustomerImportModal
         isOpen={showImport}
         onClose={() => setShowImport(false)}
         onImported={() => { setPage(1); reload(); }}
+      />
+      <CustomerTagAssignModal
+        isOpen={assignMode !== null}
+        mode={assignMode || 'assign'}
+        customerIds={selectedIds}
+        tags={tags}
+        onClose={() => setAssignMode(null)}
+        onDone={() => { setSelectedIds([]); reload(); loadTags(); }}
+      />
+      <CustomerTagManageModal
+        isOpen={showManageTags}
+        tags={tags}
+        onClose={() => setShowManageTags(false)}
+        onChanged={() => { reload(); loadTags(); }}
       />
       <ConfirmModal
         isOpen={Boolean(customerToDelete)}

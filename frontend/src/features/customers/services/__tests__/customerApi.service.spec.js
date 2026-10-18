@@ -38,4 +38,20 @@ describe('customerApiService — URL và tham số khớp backend', () => {
   it('không còn hàm gọi sai URL journey-detail', () => {
     expect(customerApiService.getCustomerCampaignJourneyDetail).toBeUndefined();
   });
+  it('tag: đúng đường dẫn và body (khớp route backend /customers/tags…)', () => {
+    customerApiService.getTags();
+    expect(api.get).toHaveBeenCalledWith('/customers/tags');
+    customerApiService.createTag({ name: 'VIP', color: '#ef4444' });
+    expect(api.post).toHaveBeenCalledWith('/customers/tags', { name: 'VIP', color: '#ef4444' });
+    customerApiService.updateTag(5, { name: 'X' });
+    expect(api.put).toHaveBeenCalledWith('/customers/tags/5', { name: 'X' });
+    customerApiService.deleteTag(5);
+    expect(api.delete).toHaveBeenCalledWith('/customers/tags/5');
+    customerApiService.assignTags({ customerIds: [1, 2], tagIds: [3], tagNames: ['Mới'] });
+    expect(api.post).toHaveBeenCalledWith('/customers/tags/assign', { customerIds: [1, 2], tagIds: [3], tagNames: ['Mới'] });
+    customerApiService.unassignTags({ customerIds: [1], tagIds: [3] });
+    expect(api.post).toHaveBeenCalledWith('/customers/tags/unassign', { customerIds: [1], tagIds: [3] });
+    customerApiService.getCustomerTags(9);
+    expect(api.get).toHaveBeenCalledWith('/customers/9/tags');
+  });
 });
