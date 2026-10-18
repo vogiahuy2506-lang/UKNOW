@@ -228,16 +228,22 @@ function compileAdapterChannelCampaign({ channel, sender, audience, schedule, co
       stepSlots.push({ day, slot });
     }
   }
+  // Nhóm đã chọn (Telegram/WhatsApp): lưu thẳng ở config.recipientKeys dạng [{ recipientKey, display }] — đúng hình dạng trình dựng lưu.
+  const groupKeys = Array.isArray(audience.groups)
+    ? audience.groups.map((group) => ({ recipientKey: String(group.recipientKey), display: String(group.display ?? group.recipientKey) }))
+    : [];
   const sendConfig = isWhatsApp
     ? {
       whatsappSessionKey: String(sender.sessionKey).trim(),
-      recipientSource: audienceNode ? 'node' : 'whatsapp_conversations',
+      recipientSource: audience.type === 'whatsapp_groups' ? 'whatsapp_groups' : (audienceNode ? 'node' : 'whatsapp_conversations'),
+      ...(audience.type === 'whatsapp_groups' ? { recipientKeys: groupKeys } : {}),
       ...(audienceNode ? { recipientNodeId: audienceNode.id, recipientColumn: '' } : {}),
       steps,
     }
     : {
       telegramAccountId: Number(sender.id),
-      recipientSource: 'telegram_conversations',
+      recipientSource: audience.type === 'telegram_groups' ? 'telegram_groups' : 'telegram_conversations',
+      ...(audience.type === 'telegram_groups' ? { recipientKeys: groupKeys } : {}),
       steps,
     };
 

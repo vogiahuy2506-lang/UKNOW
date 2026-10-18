@@ -85,13 +85,13 @@ export const CAMPAIGN_INTENT_V1_SCHEMA = {
 
 const VALID_CHANNELS = new Set(['email', 'zalo', 'zalo_group', 'telegram', 'whatsapp']);
 const VALID_SENDER_TYPES = new Set(['email_account', 'zalo_account', 'telegram_account', 'whatsapp_session']);
-const VALID_AUDIENCE_TYPES = new Set(['sheet', 'db', 'landing', 'form', 'manual', 'zalo_contacts', 'conversations']);
+const VALID_AUDIENCE_TYPES = new Set(['sheet', 'db', 'landing', 'form', 'manual', 'zalo_contacts', 'conversations', 'telegram_groups', 'whatsapp_groups']);
 // P8a — nguồn người nhận compiler dựng được cho kênh adapter. Telegram không gửi được cho người lạ
 // (chỉ hội thoại đang mở); WhatsApp thêm các nguồn node dữ liệu (cột SĐT). 'manual' KHÔNG có (danh sách nhập
 // tay đi qua lớp phủ directRecipients của Email/Zalo — chưa nối cho Telegram/WhatsApp).
 const ADAPTER_AUDIENCE_TYPES = {
-  telegram: new Set(['conversations']),
-  whatsapp: new Set(['conversations', 'sheet', 'db', 'landing', 'form']),
+  telegram: new Set(['conversations', 'telegram_groups']),
+  whatsapp: new Set(['conversations', 'sheet', 'db', 'landing', 'form', 'whatsapp_groups']),
 };
 const ADAPTER_SENDER_TYPE = { telegram: 'telegram_account', whatsapp: 'whatsapp_session' };
 const VALID_RECIPIENT_KINDS = new Set(['email', 'phone']);
@@ -439,9 +439,18 @@ export function isCompilableIntent(intent) {
     if (!intent.audience.type || !VALID_AUDIENCE_TYPES.has(intent.audience.type)
       || (isAdapterChannel && !ADAPTER_AUDIENCE_TYPES[intent.channel]?.has(intent.audience.type))
       // 'conversations' chỉ có nghĩa với kênh adapter (Email/Zalo không có "hội thoại đang mở" làm nguồn).
-      || (!isAdapterChannel && intent.audience.type === 'conversations')) {
+      || (!isAdapterChannel && intent.audience.type === 'conversations')
+      // Nhóm Telegram/WhatsApp cũng chỉ có nghĩa với kênh adapter tương ứng (ADAPTER_AUDIENCE_TYPES lo cặp đúng kênh).
+      || (!isAdapterChannel && (intent.audience.type === 'telegram_groups' || intent.audience.type === 'whatsapp_groups'))) {
       missing.push('audience.type');
     } else {
+      if (
+        (intent.audience.type === 'telegram_groups' || intent.audience.type === 'whatsapp_groups')
+        && (!Array.isArray(intent.audience.groups) || intent.audience.groups.length === 0)
+      ) {
+        // Danh sách nhóm rỗng = không có ai để gửi (khác Zalo nhóm, nơi rỗng nghĩa là mọi nhóm) → bắt buộc ≥ 1 nhóm.
+        missing.push('audience.groups');
+      }
       if (intent.audience.type === 'sheet' && (!intent.audience.url || !String(intent.audience.url).trim())) {
         missing.push('audience.url');
         reasons['audience.url'] = intent.audience.attachedSpreadsheet === true

@@ -21,10 +21,10 @@ const stateFor = (channel, patch = {}) => applyChannelChange({ ...createInitialW
 const images = (n) => Array.from({ length: n }, (_v, i) => ({ key: `${i}.png`, name: `${i}.png`, size: 10 }));
 
 describe('kênh Telegram / WhatsApp trong bảng của trình từng bước', () => {
-  it('có đủ 5 kênh; Telegram chỉ nhận "conversations"; WhatsApp nhận conversations/customers/landing/form/sheet (không nhập tay)', () => {
-    expect(SIMPLE_CHANNELS).toEqual(['email', 'zalo', 'zalo_group', 'telegram', 'whatsapp']);
-    expect(AUDIENCE_TYPES_BY_CHANNEL.telegram).toEqual(['conversations']);
-    expect(AUDIENCE_TYPES_BY_CHANNEL.whatsapp).toEqual(['conversations', 'customers', 'landing', 'form', 'sheet']);
+  it('đúng 4 kênh (Nhóm là nguồn, không phải kênh); Telegram: conversations + nhóm; WhatsApp: conversations/customers/landing/form/sheet + nhóm (không nhập tay)', () => {
+    expect(SIMPLE_CHANNELS).toEqual(['email', 'zalo', 'telegram', 'whatsapp']);
+    expect(AUDIENCE_TYPES_BY_CHANNEL.telegram).toEqual(['conversations', 'telegram_groups']);
+    expect(AUDIENCE_TYPES_BY_CHANNEL.whatsapp).toEqual(['conversations', 'customers', 'landing', 'form', 'sheet', 'whatsapp_groups']);
   });
 
   it('trần chuỗi: Telegram/WhatsApp 4 tin sau (tổng 5); email/Zalo 9 tin sau (tổng 10)', () => {

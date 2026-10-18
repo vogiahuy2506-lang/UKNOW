@@ -241,7 +241,6 @@ describe('Tạo chiến dịch từng bước (PR-3) — bước "Khi nào gửi
       renderPage();
       fireEvent.click(await screen.findByTestId('simple-channel-email'));
       expect(orangeTokens(screen.getByTestId('simple-channel-zalo'))).toEqual([]);
-      expect(orangeTokens(screen.getByTestId('simple-channel-zalo_group'))).toEqual([]);
       fireEvent.click(await enabledNext());
 
       fireEvent.click(await screen.findByTestId('simple-audience-form'));
@@ -265,9 +264,10 @@ describe('Tạo chiến dịch từng bước (PR-3) — bước "Khi nào gửi
       expect(screen.queryByTestId('simple-when-continuous')).toBeNull();
     });
 
-    it('Zalo nhóm: KHÔNG có thẻ "Tự động gửi cho người mới"', async () => {
+    it('Nhóm Zalo: KHÔNG có thẻ "Tự động gửi cho người mới"', async () => {
       renderPage();
-      await chooseChannel('zalo_group');
+      await chooseChannel('zalo');
+      fireEvent.click(await screen.findByTestId('simple-audience-zalo_groups'));
       await chooseGroupAudience();
       await chooseTemplate('Mẫu Zalo chào mừng');
       await screen.findByTestId('simple-when-now');

@@ -124,10 +124,10 @@ afterEach(() => {
 });
 
 describe('bảng kênh + nguồn người nhận', () => {
-  it('Telegram CHỈ nhận nguồn "conversations"; WhatsApp: conversations + khách đã lưu + landing + biểu mẫu + Sheet (KHÔNG nhập tay)', () => {
+  it('Telegram: conversations + nhóm; WhatsApp: conversations + khách đã lưu + landing + biểu mẫu + Sheet + nhóm (KHÔNG nhập tay)', () => {
     expect(SIMPLE_CHANNELS).toEqual(expect.arrayContaining(['telegram', 'whatsapp']));
-    expect(SIMPLE_AUDIENCE_TYPES_BY_CHANNEL.telegram).toEqual(['conversations']);
-    expect(SIMPLE_AUDIENCE_TYPES_BY_CHANNEL.whatsapp).toEqual(['conversations', 'customers', 'landing', 'form', 'sheet']);
+    expect(SIMPLE_AUDIENCE_TYPES_BY_CHANNEL.telegram).toEqual(['conversations', 'telegram_groups']);
+    expect(SIMPLE_AUDIENCE_TYPES_BY_CHANNEL.whatsapp).toEqual(['conversations', 'customers', 'landing', 'form', 'sheet', 'whatsapp_groups']);
   });
 
   it('nguồn không hợp kênh → 400 INVALID_AUDIENCE: Telegram + sheet/customers/manual, WhatsApp + manual/zalo_friends, kênh khác + conversations', async () => {
@@ -212,6 +212,74 @@ describe('WhatsApp — đồ thị biên dịch thật', () => {
     await expect(normalizeSimpleBody(whatsappBody({ content: { mode: 'custom', body: 'a'.repeat(4096) } }), { ownerId: 7 })).resolves.toBeDefined();
     await expect(normalizeSimpleBody(whatsappBody({ content: { mode: 'custom', body: 'a'.repeat(4097) } }), { ownerId: 7 }))
       .rejects.toMatchObject({ code: 'CONTENT_TOO_LONG' });
+  });
+});
+
+describe('nhóm Telegram / WhatsApp (thẻ "Nhóm" của trình từng bước)', () => {
+  const tgGroups = [{ recipientKey: '-1001234567890', display: 'Nhóm A' }, { recipientKey: '-100987', display: 'Nhóm B' }];
+  const waGroups = [{ recipientKey: '120363025246125486@g.us', display: 'Lớp 1' }];
+
+  it('Telegram nhóm: manual → send_telegram, recipientSource telegram_groups + recipientKeys [{recipientKey, display}], campaignType telegram_group', async () => {
+    const { script } = await buildSimpleDraft({ body: telegramBody({ audience: { type: 'telegram_groups', groups: tgGroups } }), authUser: user });
+    expect(subtypes(script)).toEqual(['manual', 'send_telegram']);
+    const cfg = sendNode(script, 'send_telegram').config;
+    expect(cfg.telegramAccountId).toBe(5);
+    expect(cfg.recipientSource).toBe('telegram_groups');
+    expect(cfg.recipientKeys).toEqual(tgGroups);
+    expect(cfg.steps[0].message).toBe('Xin chào bạn');
+    expect(script.campaignType).toBe('telegram_group');
+  });
+
+  it('WhatsApp nhóm: manual → send_whatsapp, recipientSource whatsapp_groups + recipientKeys; campaignType vẫn whatsapp', async () => {
+    const { script } = await buildSimpleDraft({ body: whatsappBody({ audience: { type: 'whatsapp_groups', groups: waGroups } }), authUser: user });
+    expect(subtypes(script)).toEqual(['manual', 'send_whatsapp']);
+    const cfg = sendNode(script, 'send_whatsapp').config;
+    expect(cfg.whatsappSessionKey).toBe(SESSION_KEY);
+    expect(cfg.recipientSource).toBe('whatsapp_groups');
+    expect(cfg.recipientKeys).toEqual(waGroups);
+    expect(cfg.recipientNodeId).toBeUndefined();
+    expect(script.campaignType).toBe('whatsapp');
+  });
+
+  it('0 nhóm / thiếu groups → 400 GROUPS_REQUIRED; khoá nhóm sai dạng → 400 GROUPS_INVALID; chéo kênh → 400 INVALID_AUDIENCE', async () => {
+    for (const body of [telegramBody, whatsappBody]) {
+      const type = body === telegramBody ? 'telegram_groups' : 'whatsapp_groups';
+      await expect(buildSimpleDraft({ body: body({ audience: { type, groups: [] } }), authUser: user })).rejects.toMatchObject({ statusCode: 400, code: 'GROUPS_REQUIRED' });
+      await expect(buildSimpleDraft({ body: body({ audience: { type } }), authUser: user })).rejects.toMatchObject({ code: 'GROUPS_REQUIRED' });
+      await expect(buildSimpleDraft({ body: body({ audience: { type, groups: [{ recipientKey: 'abc', display: 'x' }] } }), authUser: user })).rejects.toMatchObject({ code: 'GROUPS_INVALID' });
+    }
+    await expect(buildSimpleDraft({ body: telegramBody({ audience: { type: 'whatsapp_groups', groups: waGroups } }), authUser: user })).rejects.toMatchObject({ code: 'INVALID_AUDIENCE' });
+    await expect(buildSimpleDraft({ body: whatsappBody({ audience: { type: 'telegram_groups', groups: tgGroups } }), authUser: user })).rejects.toMatchObject({ code: 'INVALID_AUDIENCE' });
+    expect(mockPrepareScript).not.toHaveBeenCalled();
+  });
+
+  it('trình biên dịch: intent nhóm rỗng → thiếu audience.groups; nhóm Telegram gắn kênh WhatsApp (hoặc Email) → audience.type', async () => {
+    const { buildSimpleIntent } = service;
+    const { isCompilableIntent } = await import('../../ai/campaignIntent.schema.js');
+    const intent = buildSimpleIntent(await normalizeSimpleBody(telegramBody({ audience: { type: 'telegram_groups', groups: tgGroups } }), { ownerId: 7 }));
+    expect(isCompilableIntent(intent).ok).toBe(true);
+    expect(isCompilableIntent({ ...intent, audience: { type: 'telegram_groups', groups: [] } })).toMatchObject({ ok: false, missing: ['audience.groups'] });
+    expect(isCompilableIntent({ ...intent, channel: 'whatsapp', sender: { type: 'whatsapp_session', sessionKey: SESSION_KEY } }).missing).toContain('audience.type');
+    expect(isCompilableIntent({ ...intent, channel: 'email', sender: { type: 'email_account', id: 5 } }).missing).toContain('audience.type');
+  });
+
+  it('khử trùng nhóm; preview: recipientUnit group + recipientCount = số nhóm', async () => {
+    mockBuildConfirmationView.mockResolvedValue(readyView({
+      steps: [{ sender: { id: 5, label: '@shop' }, content: { bodyText: 'x' }, recipients: { mode: 'manual', count: 2 } }],
+    }));
+    const body = telegramBody({ audience: { type: 'telegram_groups', groups: [...tgGroups, tgGroups[0]] } });
+    const result = await previewSimpleCampaign({ body, authUser: user });
+    expect(result.recipientUnit).toBe('group');
+    expect(result.recipientCount).toBe(2);
+    expect(result.summary).toMatchObject({ channel: 'telegram', audienceType: 'telegram_groups' });
+  });
+
+  it('tạo chiến dịch Telegram nhóm: buildSimpleCreateDraft trả campaignType telegram_group (controller lưu loại này)', async () => {
+    const draft = await buildSimpleCreateDraft({ body: telegramBody({ audience: { type: 'telegram_groups', groups: tgGroups } }), authUser: user, createdTemplates: { emailTemplateIds: [], zaloTemplateIds: [] } });
+    expect(draft.campaignType).toBe('telegram_group');
+    expect(draft.channel).toBe('telegram');
+    const wa = await buildSimpleCreateDraft({ body: whatsappBody({ audience: { type: 'whatsapp_groups', groups: waGroups } }), authUser: user, createdTemplates: { emailTemplateIds: [], zaloTemplateIds: [] } });
+    expect(wa.campaignType).toBe('whatsapp');
   });
 });
 

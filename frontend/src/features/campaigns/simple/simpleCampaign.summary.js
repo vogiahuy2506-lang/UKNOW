@@ -1,4 +1,4 @@
-import { WEEKDAY_OPTIONS, parseManualRecipients, totalFollowUpMinutes } from './simpleCampaign.helpers';
+import { WEEKDAY_OPTIONS, parseManualRecipients, resolveSendChannel, totalFollowUpMinutes } from './simpleCampaign.helpers';
 
 const MAX_NAMES_SHOWN = 2;
 
@@ -70,6 +70,7 @@ const joinNames = (names, { withQuotes }) => {
 const resolveRecipientCount = (state, preview) => {
   const { audience, channel } = state;
   if (audience.type === 'zalo_groups') return audience.groupIds.length;
+  if (audience.type === 'telegram_groups' || audience.type === 'whatsapp_groups') return audience.groups.length;
   if (preview?.recipientCount !== null && preview?.recipientCount !== undefined) return preview.recipientCount;
   if (audience.type === 'zalo_friends') return audience.uids.length;
   if (audience.type === 'manual') {
@@ -131,7 +132,7 @@ export const buildReviewSummary = ({ state, preview, t, locale }) => {
   }
 
   return t('simpleCampaign.review.summary', {
-    channel: t(`simpleCampaign.review.channelName.${channel}`),
+    channel: t(`simpleCampaign.review.channelName.${resolveSendChannel(channel, audience.type)}`),
     sender: sender?.label || '',
     audience: audienceText,
     content: contentText,

@@ -12,7 +12,7 @@ import ContentStep from './ContentStep';
 import WhenStep from './WhenStep';
 import ReviewStep from './ReviewStep';
 import { ApprovalScreen, DoneScreen, ScheduledScreen } from './ResultScreens';
-import { isScheduleBased } from './simpleCampaign.helpers';
+import { isGroupAudienceType, isScheduleBased } from './simpleCampaign.helpers';
 
 /**
  * Vỏ của trình "Tạo chiến dịch từng bước": thanh tiến trình, bước hiện tại, chân trang Quay lại / Tiếp tục
@@ -74,7 +74,7 @@ export default function SimpleCampaignWizard({ wizard }) {
     if (!wizard.goBack()) navigate('/app/campaigns');
   };
 
-  const needsKey = stepId === 'audience' && state.channel === 'zalo_group' ? 'audienceGroups' : stepId;
+  const needsKey = stepId === 'audience' && isGroupAudienceType(state.audience.type) ? 'audienceGroups' : stepId;
   const isSubmitting = submitState.status === 'submitting';
   const scheduleBased = isScheduleBased(state.schedule);
 

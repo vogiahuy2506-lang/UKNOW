@@ -30,6 +30,8 @@ vi.mock('../../services/campaignBuilderApi.service', () => ({
     getZaloAccounts: vi.fn(),
     getTelegramAccountsForBuilder: vi.fn(),
     getWhatsAppAccountsForBuilder: vi.fn(),
+    getTelegramAccountGroups: vi.fn(),
+    getWhatsAppAccountGroups: vi.fn(),
     listForms: vi.fn(),
     checkGoogleSheet: vi.fn(),
     getPreviewZaloGroups: vi.fn(),
@@ -126,7 +128,7 @@ beforeEach(() => {
 });
 
 describe('bước Kênh — thẻ Telegram / WhatsApp', () => {
-  it('hệ thống chưa bật kênh (visible=false) → KHÔNG vẽ thẻ; chỉ còn 3 thẻ cũ', async () => {
+  it('hệ thống chưa bật kênh (visible=false) → KHÔNG vẽ thẻ; chỉ còn Email + Zalo', async () => {
     availabilityState.value = availability({
       telegram: { visible: false, available: true, ...meter },
       whatsapp: { visible: false, available: true, ...meter },
@@ -135,21 +137,28 @@ describe('bước Kênh — thẻ Telegram / WhatsApp', () => {
     await screen.findByTestId('simple-channel-email');
     expect(screen.queryByTestId('simple-channel-telegram')).toBeNull();
     expect(screen.queryByTestId('simple-channel-whatsapp')).toBeNull();
-    expect(within(screen.getByTestId('simple-channel-grid')).getAllByRole('button')).toHaveLength(3);
+    expect(within(screen.getByTestId('simple-channel-grid')).getAllByRole('button')).toHaveLength(2);
+    expect(screen.queryByTestId('simple-channel-zalo_group')).toBeNull();
   });
 
-  it('chỉ một kênh được bật → chỉ thẻ đó hiện (4 thẻ)', async () => {
+  it('chỉ một kênh được bật → chỉ thẻ đó hiện (3 thẻ)', async () => {
     availabilityState.value = availability({ whatsapp: { visible: false, available: true, ...meter } });
     renderPage();
     expect(await screen.findByTestId('simple-channel-telegram')).toBeInTheDocument();
     expect(screen.queryByTestId('simple-channel-whatsapp')).toBeNull();
   });
 
-  it('bật + gói có → 5 thẻ, không mờ', async () => {
+  it('bật + gói có → ĐÚNG 4 thẻ (Email · Zalo · Telegram · WhatsApp), không mờ, lưới 4 cột từ lg; không còn thẻ Zalo nhóm', async () => {
     renderPage();
     expect(await screen.findByTestId('simple-channel-telegram')).not.toHaveAttribute('aria-disabled');
     expect(screen.getByTestId('simple-channel-whatsapp')).not.toHaveAttribute('aria-disabled');
-    expect(within(screen.getByTestId('simple-channel-grid')).getAllByRole('button')).toHaveLength(5);
+    const grid = screen.getByTestId('simple-channel-grid');
+    expect(within(grid).getAllByRole('button').map((button) => button.getAttribute('data-testid'))).toEqual([
+      'simple-channel-email', 'simple-channel-zalo', 'simple-channel-telegram', 'simple-channel-whatsapp',
+    ]);
+    expect(grid.className).toContain('lg:grid-cols-4');
+    expect(screen.getByTestId('simple-channel-zalo')).toHaveTextContent('Zalo');
+    expect(screen.queryByTestId('simple-channel-zalo_group')).toBeNull();
   });
 
   it('bật nhưng gói không có → thẻ MỜ + ổ khoá, bấm mở modal gợi ý mua đúng kênh và KHÔNG chọn kênh', async () => {
@@ -201,13 +210,14 @@ describe('bước Kênh — thẻ Telegram / WhatsApp', () => {
 });
 
 describe('bước Người nhận theo kênh', () => {
-  it('Telegram: CHỈ một lựa chọn "Người đã nhắn với tài khoản", chọn sẵn, có giải thích Telegram không nhắn người lạ, không có dòng đồng ý nhận tin', async () => {
+  it('Telegram: hai nguồn "Người đã nhắn với tài khoản" (chọn sẵn) + "Nhóm Telegram", có giải thích Telegram không nhắn người lạ, không có dòng đồng ý nhận tin', async () => {
     renderPage();
     fireEvent.click(await screen.findByTestId('simple-channel-telegram'));
     fireEvent.click(await enabledNext());
     const card = await screen.findByTestId('simple-audience-conversations');
     expect(card).toHaveAttribute('aria-pressed', 'true');
-    for (const type of ['customers', 'landing', 'form', 'sheet', 'manual', 'zalo_friends']) {
+    expect(screen.getByTestId('simple-audience-telegram_groups')).toHaveAttribute('aria-pressed', 'false');
+    for (const type of ['customers', 'landing', 'form', 'sheet', 'manual', 'zalo_friends', 'zalo_groups', 'whatsapp_groups']) {
       expect(screen.queryByTestId(`simple-audience-${type}`)).toBeNull();
     }
     expect(await screen.findByTestId('simple-conversations-panel')).toHaveTextContent('Telegram không cho nhắn người chưa từng nhắn với bạn');
@@ -226,15 +236,15 @@ describe('bước Người nhận theo kênh', () => {
     expect(await screen.findByTestId('simple-conversations-empty')).toHaveTextContent('chưa có ai nhắn tới');
   });
 
-  it('WhatsApp: 5 nguồn (đã nhắn · khách đã lưu · landing · biểu mẫu · Sheet), KHÔNG có "Tự nhập danh sách" / "Bạn bè Zalo" / "Chọn nhóm"', async () => {
+  it('WhatsApp: 6 nguồn (đã nhắn · khách đã lưu · landing · biểu mẫu · Sheet · Nhóm WhatsApp), KHÔNG có "Tự nhập danh sách" / "Bạn bè Zalo" / Nhóm Zalo / Nhóm Telegram', async () => {
     renderPage();
     fireEvent.click(await screen.findByTestId('simple-channel-whatsapp'));
     fireEvent.click(await enabledNext());
     await screen.findByTestId('simple-audience-conversations');
-    for (const type of ['customers', 'landing', 'form', 'sheet']) {
+    for (const type of ['customers', 'landing', 'form', 'sheet', 'whatsapp_groups']) {
       expect(screen.getByTestId(`simple-audience-${type}`)).toBeInTheDocument();
     }
-    for (const type of ['manual', 'zalo_friends', 'zalo_groups']) {
+    for (const type of ['manual', 'zalo_friends', 'zalo_groups', 'telegram_groups']) {
       expect(screen.queryByTestId(`simple-audience-${type}`)).toBeNull();
     }
     // WhatsApp không tự chọn nguồn; Tiếp tục khoá cho tới khi bấm.
@@ -243,6 +253,138 @@ describe('bước Người nhận theo kênh', () => {
     fireEvent.click(screen.getByTestId('simple-audience-conversations'));
     expect(await screen.findByTestId('simple-conversations-panel')).toHaveTextContent('Chiến dịch gửi cho mọi người đã từng nhắn tới số WhatsApp này');
     expect(await enabledNext()).toBeEnabled();
+  });
+});
+
+describe('thẻ Nhóm — Zalo / Telegram / WhatsApp', () => {
+  const TG_GROUPS = [
+    { chatId: -1001234567890, title: 'Lớp Telegram A', type: 'supergroup', membersCount: 120 },
+    { chatId: -100987, title: 'Cộng đồng B', type: 'group', membersCount: null },
+  ];
+  const WA_GROUPS = [
+    { recipientKey: '120363025246125486@g.us', title: 'Lớp WhatsApp 1', membersCount: 45 },
+    { recipientKey: '120363025246125487@g.us', title: 'Khách VIP', membersCount: 9 },
+  ];
+  const lastPreviewBody = () => campaignApiService.previewSimpleCampaign.mock.calls.at(-1)[0];
+
+  beforeEach(() => {
+    campaignBuilderApiService.getTelegramAccountGroups.mockResolvedValue({ data: { data: TG_GROUPS } });
+    campaignBuilderApiService.getWhatsAppAccountGroups.mockResolvedValue({ data: { data: WA_GROUPS } });
+    campaignBuilderApiService.getZaloAccounts.mockResolvedValue({
+      data: { data: { items: [{ id: 21, displayName: 'Nick A', status: 'connected', isActive: true, isLocked: false }] } },
+    });
+    campaignBuilderApiService.getPreviewZaloGroups.mockResolvedValue({ data: { data: { groups: [{ groupId: 'g1', groupName: 'Nhóm Khách VIP' }] } } });
+  });
+
+  async function toAudience(channel) {
+    renderPage();
+    fireEvent.click(await screen.findByTestId(`simple-channel-${channel}`));
+    fireEvent.click(await enabledNext());
+  }
+
+  async function finishAfterAudience() {
+    fireEvent.click(await enabledNext());
+    fireEvent.click(await screen.findByTestId('simple-content-custom'));
+    fireEvent.change(await screen.findByLabelText('Nội dung', { selector: 'textarea' }), { target: { value: 'Xin chào các nhóm' } });
+    fireEvent.click(await enabledNext());
+    await screen.findByTestId('simple-when-now');
+    fireEvent.click(await enabledNext());
+    const start = await screen.findByTestId('simple-start');
+    await waitFor(() => expect(start).toBeEnabled());
+    return start;
+  }
+
+  it('Nhóm Telegram: đọc nhóm của tài khoản, Tiếp tục khoá tới khi tick ≥ 1 nhóm; body gửi channel telegram + audience.groups [{recipientKey, display}]', async () => {
+    await toAudience('telegram');
+    fireEvent.click(await screen.findByTestId('simple-audience-telegram_groups'));
+    expect(await screen.findByTestId('simple-adapter-groups-panel')).toBeInTheDocument();
+    expect(campaignBuilderApiService.getTelegramAccountGroups).toHaveBeenCalledWith(5, {});
+    expect(await screen.findByRole('checkbox', { name: /Lớp Telegram A/ })).not.toBeChecked();
+    expect(nextButton()).toBeDisabled();
+    expect(screen.getByTestId('simple-needs')).toHaveTextContent('ít nhất một nhóm');
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /Lớp Telegram A/ }));
+    expect(screen.getByTestId('simple-adapter-groups-selected')).toHaveTextContent('Đã chọn 1 nhóm');
+    expect(screen.queryByTestId('simple-consent-note')).toBeNull();
+    const start = await finishAfterAudience();
+    expect(lastPreviewBody()).toMatchObject({
+      channel: 'telegram',
+      senderId: 5,
+      audience: { type: 'telegram_groups', groups: [{ recipientKey: '-1001234567890', display: 'Lớp Telegram A' }] },
+      content: { mode: 'custom', body: 'Xin chào các nhóm' },
+    });
+    expect(screen.getByTestId('simple-summary')).toHaveTextContent('nhóm Telegram');
+    fireEvent.click(start);
+    await screen.findByTestId('simple-done');
+    expect(campaignApiService.createSimpleCampaign.mock.calls[0][0].audience.type).toBe('telegram_groups');
+  });
+
+  it('Nhóm WhatsApp: đọc nhóm theo mã phiên; body mang senderKey + audience.groups; lọc theo tên', async () => {
+    await toAudience('whatsapp');
+    fireEvent.click(await screen.findByTestId('simple-audience-whatsapp_groups'));
+    expect(await screen.findByRole('checkbox', { name: /Khách VIP/ })).toBeInTheDocument();
+    expect(campaignBuilderApiService.getWhatsAppAccountGroups).toHaveBeenCalledWith(SESSION_KEY, {});
+    fireEvent.change(screen.getByLabelText('Tìm nhóm theo tên'), { target: { value: 'vip' } });
+    expect(screen.queryByRole('checkbox', { name: /Lớp WhatsApp 1/ })).toBeNull();
+    fireEvent.click(screen.getByRole('checkbox', { name: /Khách VIP/ }));
+    await finishAfterAudience();
+    expect(lastPreviewBody()).toMatchObject({
+      channel: 'whatsapp',
+      senderKey: SESSION_KEY,
+      audience: { type: 'whatsapp_groups', groups: [{ recipientKey: '120363025246125487@g.us', display: 'Khách VIP' }] },
+    });
+    expect(lastPreviewBody().senderId).toBeUndefined();
+  });
+
+  it('tài khoản chưa ở nhóm nào → báo rõ, Tiếp tục vẫn khoá', async () => {
+    campaignBuilderApiService.getTelegramAccountGroups.mockResolvedValueOnce({ data: { data: [] } });
+    await toAudience('telegram');
+    fireEvent.click(await screen.findByTestId('simple-audience-telegram_groups'));
+    expect(await screen.findByTestId('simple-adapter-groups-empty')).toHaveTextContent('chưa ở trong nhóm nào');
+    expect(nextButton()).toBeDisabled();
+  });
+
+  it('đổi nguồn người ↔ nhóm KHÔNG mất nội dung đã soạn (Telegram)', async () => {
+    await toAudience('telegram');
+    fireEvent.click(await screen.findByTestId('simple-audience-telegram_groups'));
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Cộng đồng B/ }));
+    fireEvent.click(await enabledNext());
+    fireEvent.click(await screen.findByTestId('simple-content-custom'));
+    fireEvent.change(await screen.findByLabelText('Nội dung', { selector: 'textarea' }), { target: { value: 'Giữ nguyên nhé' } });
+    // Lùi về bước người nhận, đổi sang "người đã nhắn" rồi đi lại.
+    fireEvent.click(screen.getByTestId('simple-back'));
+    fireEvent.click(await screen.findByTestId('simple-audience-conversations'));
+    fireEvent.click(await enabledNext());
+    expect(await screen.findByLabelText('Nội dung', { selector: 'textarea' })).toHaveValue('Giữ nguyên nhé');
+    fireEvent.click(screen.getByTestId('simple-back'));
+    // Quay lại nhóm: nhóm đã tick vẫn còn.
+    fireEvent.click(await screen.findByTestId('simple-audience-telegram_groups'));
+    expect(await screen.findByRole('checkbox', { name: /Cộng đồng B/ })).toBeChecked();
+  });
+
+  it('Zalo: thẻ "Nhóm Zalo" cạnh các nguồn cá nhân; chọn nhóm → body gửi channel zalo_group + groupIds; đổi về "Khách hàng đã lưu" → channel zalo, giữ nội dung', async () => {
+    await toAudience('zalo');
+    for (const type of ['customers', 'landing', 'form', 'sheet', 'manual', 'zalo_friends', 'zalo_groups']) {
+      expect(screen.getByTestId(`simple-audience-${type}`)).toBeInTheDocument();
+    }
+    fireEvent.click(screen.getByTestId('simple-audience-zalo_groups'));
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Nhóm Khách VIP/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dùng các nhóm đã chọn' }));
+    await finishAfterAudience();
+    expect(lastPreviewBody()).toMatchObject({ channel: 'zalo_group', senderId: 21, audience: { type: 'zalo_groups', groupIds: ['g1'] } });
+    expect(screen.getByTestId('simple-summary')).toHaveTextContent('Zalo nhóm');
+
+    // Về bước người nhận, đổi sang khách đã lưu: body gửi kênh Zalo thường, nội dung còn nguyên.
+    fireEvent.click(screen.getByTestId('simple-back'));
+    fireEvent.click(await screen.findByTestId('simple-back'));
+    fireEvent.click(await screen.findByTestId('simple-back'));
+    fireEvent.click(await screen.findByTestId('simple-audience-customers'));
+    fireEvent.click(await enabledNext());
+    expect(await screen.findByLabelText('Nội dung', { selector: 'textarea' })).toHaveValue('Xin chào các nhóm');
+    fireEvent.click(await enabledNext());
+    await screen.findByTestId('simple-when-now');
+    fireEvent.click(await enabledNext());
+    await waitFor(() => expect(lastPreviewBody()).toMatchObject({ channel: 'zalo', audience: { type: 'customers' } }));
   });
 });
 

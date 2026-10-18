@@ -123,21 +123,22 @@ describe('thẻ "Tự động gửi cho người mới" chỉ hiện đúng ngu�
   });
 
   it('Zalo nhóm → không, dù nguồn nào', () => {
-    expect(has(stateWith({ channel: 'zalo_group', audience: { type: 'zalo_groups' } }))).toBe(false);
-    expect(has(stateWith({ channel: 'zalo_group', audience: { type: 'form' } }))).toBe(false);
+    expect(has(stateWith({ channel: 'zalo', audience: { type: 'zalo_groups' } }))).toBe(false);
+    expect(has(stateWith({ channel: 'telegram', audience: { type: 'telegram_groups' } }))).toBe(false);
+    expect(has(stateWith({ channel: 'whatsapp', audience: { type: 'whatsapp_groups' } }))).toBe(false);
   });
 
-  it('đang chọn "Tự động gửi" rồi đổi sang Zalo nhóm → về "Gửi ngay"', () => {
+  it('đang chọn "Tự động gửi" rồi đổi sang nguồn Nhóm Zalo → về "Gửi ngay"', () => {
     const before = stateWith({
       channel: 'zalo',
       audience: { type: 'form', formIds: [7] },
       schedule: createDefaultSchedule('continuous', { pollIntervalMinutes: 180 }),
     });
-    expect(applyChannelChange(before, 'zalo_group').schedule).toEqual({ type: 'now' });
+    expect(reconcileSchedule({ ...before, audience: { ...before.audience, type: 'zalo_groups' } }).schedule).toEqual({ type: 'now' });
     expect(reconcileSchedule({ ...before, audience: { ...before.audience, type: 'manual' } }).schedule).toEqual({ type: 'now' });
     // Cách gửi khác vẫn giữ nguyên khi đổi kênh.
     const scheduled = stateWith({ schedule: { type: 'scheduled', date: '2026-10-20', time: '10:00' } });
-    expect(applyChannelChange(scheduled, 'zalo_group').schedule).toEqual(scheduled.schedule);
+    expect(applyChannelChange(scheduled, 'zalo').schedule).toEqual(scheduled.schedule);
   });
 });
 

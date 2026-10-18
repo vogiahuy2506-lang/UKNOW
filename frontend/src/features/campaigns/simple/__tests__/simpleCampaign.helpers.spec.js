@@ -53,25 +53,26 @@ describe('applyChannelChange — đổi kênh xoá lựa chọn không còn hợ
     expect(withForm.sender).toBeNull(); // email ↔ Zalo: khác loại tài khoản
   });
 
-  it('sang Zalo nhóm: chọn sẵn nguồn "Chọn nhóm" và dọn nguồn cũ; rời Zalo nhóm thì bỏ danh sách nhóm', () => {
-    const email = stateWith({ channel: 'email', audience: { type: 'form', formIds: [7], formTitles: ['A'] } });
-    const group = applyChannelChange(email, 'zalo_group');
-    expect(group.audience.type).toBe('zalo_groups');
-    expect(group.audience.formIds).toEqual([]);
+  it('sang Zalo: không chọn sẵn nguồn nào và dọn nguồn cũ; rời Zalo (đang chọn Nhóm Zalo) thì bỏ danh sách nhóm', () => {
+    const wa = stateWith({ channel: 'whatsapp', audience: { type: 'whatsapp_groups', groups: [{ recipientKey: '1@g.us', display: 'L' }] } });
+    const zalo = applyChannelChange(wa, 'zalo');
+    expect(zalo.audience.type).toBeNull();
+    expect(zalo.audience.groups).toEqual([]);
 
-    const picked = { ...group, sender: { id: 21, label: 'Nick A' }, audience: { ...group.audience, groupIds: ['g1'], groupNames: ['VIP'] } };
-    const back = applyChannelChange(picked, 'zalo');
-    expect(back.audience.type).toBeNull();
+    const picked = { ...zalo, sender: { id: 21, label: 'Nick A' }, audience: { ...zalo.audience, type: 'zalo_groups', groupIds: ['g1'], groupNames: ['VIP'] } };
+    const back = applyChannelChange(picked, 'telegram');
+    expect(back.audience.type).toBe('conversations'); // Telegram chọn sẵn "Người đã nhắn"
     expect(back.audience.groupIds).toEqual([]);
-    expect(back.sender).toEqual({ id: 21, label: 'Nick A' }); // Zalo cá nhân ↔ nhóm dùng chung tài khoản
   });
 
-  it('"Tự nhập" đổi giữa email ↔ số điện thoại thì xoá chữ đã gõ; Zalo cá nhân ↔ nhóm giữ nguyên mẫu tin', () => {
+  it('"Tự nhập" đổi giữa email ↔ số điện thoại thì xoá chữ đã gõ; đổi nguồn người ↔ nhóm trong Zalo giữ nguyên mẫu tin và tài khoản', () => {
     const email = stateWith({ channel: 'email', audience: { type: 'manual', manualText: 'a@b.com' } });
     expect(applyChannelChange(email, 'zalo').audience.manualText).toBe('');
 
     const tpl = stateWith({ channel: 'zalo', content: { mode: 'template', templateId: 5, templateName: 'X' } });
-    expect(applyChannelChange(tpl, 'zalo_group').content.templateId).toBe(5);
+    const toGroup = { ...tpl, sender: { id: 21, label: 'A' }, audience: { ...tpl.audience, type: 'zalo_groups' } }; // đổi nguồn không đụng mẫu/tài khoản
+    expect(toGroup.content.templateId).toBe(5);
+    expect(toGroup.sender).toEqual({ id: 21, label: 'A' });
     expect(applyChannelChange(tpl, 'email').content.templateId).toBeNull();
     expect(applyChannelChange(stateWith({ channel: 'email', content: { mode: 'custom', body: 'xin chào' } }), 'zalo').content.body).toBe('xin chào');
   });
@@ -85,7 +86,7 @@ describe('applyChannelChange — đổi kênh xoá lựa chọn không còn hợ
 describe('applySenderChange', () => {
   it('đổi tài khoản thì bỏ nhóm/bạn bè của nick cũ; chọn lại đúng tài khoản đó thì giữ', () => {
     const state = stateWith({
-      channel: 'zalo_group',
+      channel: 'zalo',
       sender: { id: 21, label: 'A' },
       audience: { type: 'zalo_groups', groupIds: ['g1'], groupNames: ['VIP'], uids: ['u1'] },
     });
@@ -125,9 +126,19 @@ describe('isStepComplete', () => {
   });
 
   it('Zalo nhóm: PHẢI có ít nhất 1 nhóm (nhóm rỗng = server gửi mọi nhóm của nick)', () => {
-    const base = { channel: 'zalo_group', sender: { id: 21, label: 'A' } };
+    const base = { channel: 'zalo', sender: { id: 21, label: 'A' } };
     expect(isStepComplete('audience', stateWith({ ...base, audience: { type: 'zalo_groups', groupIds: [] } }))).toBe(false);
     expect(isStepComplete('audience', stateWith({ ...base, audience: { type: 'zalo_groups', groupIds: ['g1'] } }))).toBe(true);
+  });
+
+  it('Nhóm Telegram / Nhóm WhatsApp: PHẢI có ít nhất 1 nhóm đã chọn; nguồn nhóm không hợp kênh thì không đủ', () => {
+    const tg = { channel: 'telegram', sender: { id: 5, label: '@a' } };
+    expect(isStepComplete('audience', stateWith({ ...tg, audience: { type: 'telegram_groups', groups: [] } }))).toBe(false);
+    expect(isStepComplete('audience', stateWith({ ...tg, audience: { type: 'telegram_groups', groups: [{ recipientKey: '-100', display: 'A' }] } }))).toBe(true);
+    const wa = { channel: 'whatsapp', sender: { id: '7-main', label: 'Shop' } };
+    expect(isStepComplete('audience', stateWith({ ...wa, audience: { type: 'whatsapp_groups', groups: [] } }))).toBe(false);
+    expect(isStepComplete('audience', stateWith({ ...wa, audience: { type: 'whatsapp_groups', groups: [{ recipientKey: '1@g.us', display: 'L' }] } }))).toBe(true);
+    expect(isStepComplete('audience', stateWith({ ...tg, audience: { type: 'whatsapp_groups', groups: [{ recipientKey: '1@g.us', display: 'L' }] } }))).toBe(false);
   });
 
   it('nguồn không thuộc kênh thì không hợp lệ dù có dữ liệu', () => {
@@ -212,13 +223,30 @@ describe('buildSimpleCampaignBody — đúng hợp đồng PR-1', () => {
     expect(body.senderId).toBe(21);
   });
 
-  it('Zalo nhóm + nhóm: groupIds là chuỗi; Zalo cá nhân + tự nhập: phones; Zalo + bạn bè: uids; landing: slugs; sheet: sheetUrl (+ sheetName khi có)', () => {
+  it('Nhóm Telegram / WhatsApp: body mang audience.groups [{recipientKey, display}] và channel giữ telegram / whatsapp (không đổi sang kênh nhóm)', () => {
+    const groups = [{ recipientKey: '-1001', display: 'Nhóm A', extra: 'bỏ' }, { recipientKey: 2, display: '' }];
+    const tg = buildSimpleCampaignBody(stateWith({
+      channel: 'telegram', sender: { id: 5, label: '@a' }, audience: { type: 'telegram_groups', groups }, content: { mode: 'custom', body: 'Chào' },
+    }));
+    expect(tg.channel).toBe('telegram');
+    expect(tg.senderId).toBe(5);
+    expect(tg.audience).toEqual({ type: 'telegram_groups', groups: [{ recipientKey: '-1001', display: 'Nhóm A' }, { recipientKey: '2', display: '2' }] });
+    const wa = buildSimpleCampaignBody(stateWith({
+      channel: 'whatsapp', sender: { id: '7-main', label: 'Shop' }, audience: { type: 'whatsapp_groups', groups: [{ recipientKey: '1@g.us', display: 'Lớp' }] }, content: { mode: 'custom', body: 'Chào' },
+    }));
+    expect(wa.channel).toBe('whatsapp');
+    expect(wa.senderKey).toBe('7-main');
+    expect(wa.audience).toEqual({ type: 'whatsapp_groups', groups: [{ recipientKey: '1@g.us', display: 'Lớp' }] });
+  });
+
+  it('Zalo + nhóm: groupIds là chuỗi; Zalo cá nhân + tự nhập: phones; Zalo + bạn bè: uids; landing: slugs; sheet: sheetUrl (+ sheetName khi có)', () => {
     const group = buildSimpleCampaignBody(stateWith({
-      channel: 'zalo_group',
+      channel: 'zalo',
       sender: { id: 21, label: 'A' },
       audience: { type: 'zalo_groups', groupIds: [123, 'g2'], groupNames: ['a', 'b'] },
       content: { mode: 'template', templateId: 9 },
     }));
+    expect(group.channel).toBe('zalo_group'); // thẻ Zalo + nguồn Nhóm Zalo → server nhận kênh Zalo nhóm
     expect(group.audience).toEqual({ type: 'zalo_groups', groupIds: ['123', 'g2'] });
 
     const phones = buildSimpleCampaignBody(stateWith({
@@ -307,10 +335,13 @@ describe('phản hồi server', () => {
 });
 
 describe('bảng nguồn người nhận theo kênh', () => {
-  it('Bạn bè Zalo chỉ có ở Zalo cá nhân; Zalo nhóm chỉ có "Chọn nhóm"', () => {
+  it('Bạn bè Zalo chỉ có ở Zalo; mỗi kênh nhắn tin (Zalo/Telegram/WhatsApp) có đúng một thẻ Nhóm, Email thì không', () => {
     expect(AUDIENCE_TYPES_BY_CHANNEL.email).not.toContain('zalo_friends');
     expect(AUDIENCE_TYPES_BY_CHANNEL.zalo).toContain('zalo_friends');
-    expect(AUDIENCE_TYPES_BY_CHANNEL.zalo_group).toEqual(['zalo_groups']);
+    expect(AUDIENCE_TYPES_BY_CHANNEL.zalo).toContain('zalo_groups');
+    expect(AUDIENCE_TYPES_BY_CHANNEL.telegram).toContain('telegram_groups');
+    expect(AUDIENCE_TYPES_BY_CHANNEL.whatsapp).toContain('whatsapp_groups');
+    expect(AUDIENCE_TYPES_BY_CHANNEL.email.filter((type) => type.endsWith('_groups'))).toEqual([]);
     expect(Object.keys(AUDIENCE_TYPES_BY_CHANNEL).sort()).toEqual([...SIMPLE_CHANNELS].sort());
     expect(EMPTY_AUDIENCE.groupIds).toEqual([]);
   });

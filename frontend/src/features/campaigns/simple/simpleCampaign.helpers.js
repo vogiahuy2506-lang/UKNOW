@@ -13,7 +13,27 @@ import { resolveScheduleEstimateStartAt } from '../utils/campaignEstimate.helper
 import { validateChannelAttachments } from '../utils/channelAttachments';
 import { MAX_CHANNEL_STEPS } from '../utils/channelSteps';
 
-export const SIMPLE_CHANNELS = Object.freeze(['email', 'zalo', 'zalo_group', 'telegram', 'whatsapp']);
+/**
+ * Bốn kênh của bước 1. "Nhóm" KHÔNG phải kênh: là một nguồn người nhận của kênh (Nhóm Zalo / Nhóm Telegram / Nhóm WhatsApp).
+ * Riêng Zalo, server vẫn phân biệt Zalo cá nhân và Zalo nhóm bằng `channel: 'zalo_group'` — xem `resolveSendChannel`.
+ */
+export const SIMPLE_CHANNELS = Object.freeze(['email', 'zalo', 'telegram', 'whatsapp']);
+
+/** Nguồn người nhận là NHÓM (chọn các nhóm của tài khoản gửi). */
+export const GROUP_AUDIENCE_TYPES = Object.freeze(['zalo_groups', 'telegram_groups', 'whatsapp_groups']);
+export const isGroupAudienceType = (type) => GROUP_AUDIENCE_TYPES.includes(type);
+
+/** Nguồn nhóm của Telegram/WhatsApp lưu ở `audience.groups` = [{ recipientKey, display }] (Zalo lưu `groupIds` + `groupNames`). */
+export const isAdapterGroupAudienceType = (type) => type === 'telegram_groups' || type === 'whatsapp_groups';
+
+/**
+ * Giá trị `channel` gửi cho server: Zalo + nguồn "Nhóm Zalo" → `zalo_group` (server giữ hai kênh Zalo riêng: bảng hạn mức, sơ đồ
+ * khối gửi nhóm); mọi trường hợp khác giữ nguyên. Telegram/WhatsApp nhóm vẫn là `telegram`/`whatsapp` — nhóm nằm ở `audience`.
+ *
+ * @param {string} channel kênh đang chọn ở bước 1
+ * @param {string|null} audienceType
+ */
+export const resolveSendChannel = (channel, audienceType) => (channel === 'zalo' && audienceType === 'zalo_groups' ? 'zalo_group' : channel);
 
 /** Kênh "adapter" (Telegram/WhatsApp): hệ thống phải bật kênh, gói phải có kênh; chuỗi tối đa 5 tin; chữ có trần ký tự riêng. */
 export const ADAPTER_CHANNELS = Object.freeze(['telegram', 'whatsapp']);
@@ -26,17 +46,18 @@ export const ADAPTER_MESSAGE_MAX = Object.freeze({ telegram: 4000, whatsapp: 409
 export const SIMPLE_STEP_IDS = Object.freeze(['channel', 'audience', 'content', 'when', 'review']);
 
 /**
- * Nguồn người nhận hợp lệ cho từng kênh (khớp bảng ánh xạ PR-1). Zalo nhóm chỉ có một thẻ "Chọn nhóm";
- * Bạn bè Zalo chỉ có ở Zalo cá nhân.
+ * Nguồn người nhận hợp lệ cho từng kênh (khớp bảng ánh xạ PR-1). Mỗi kênh nhắn tin có thêm một thẻ "Nhóm …"; bạn bè Zalo chỉ có ở
+ * Zalo. Telegram không nhắn được người lạ nên ngoài nhóm chỉ có "người đã nhắn"; WhatsApp thêm các nguồn có cột SĐT. KHÔNG có nhập tay.
  */
 export const AUDIENCE_TYPES_BY_CHANNEL = Object.freeze({
   email: Object.freeze(['customers', 'landing', 'form', 'sheet', 'manual']),
-  zalo: Object.freeze(['customers', 'landing', 'form', 'sheet', 'manual', 'zalo_friends']),
-  zalo_group: Object.freeze(['zalo_groups']),
-  // Telegram không nhắn được người lạ nên chỉ có "người đã nhắn"; WhatsApp thêm các nguồn có cột SĐT. KHÔNG có nhập tay.
-  telegram: Object.freeze(['conversations']),
-  whatsapp: Object.freeze(['conversations', 'customers', 'landing', 'form', 'sheet']),
+  zalo: Object.freeze(['customers', 'landing', 'form', 'sheet', 'manual', 'zalo_friends', 'zalo_groups']),
+  telegram: Object.freeze(['conversations', 'telegram_groups']),
+  whatsapp: Object.freeze(['conversations', 'customers', 'landing', 'form', 'sheet', 'whatsapp_groups']),
 });
+
+/** Nguồn chọn sẵn khi đổi sang kênh (kênh không có mặt ở đây: để người dùng tự chọn). */
+const DEFAULT_AUDIENCE_TYPE_BY_CHANNEL = Object.freeze({ telegram: 'conversations' });
 
 /**
  * Cách gửi ở bước "Khi nào gửi?": gửi ngay · hẹn một thời điểm · tự gửi cho người mới (chế độ liên tục) · lặp lại định kỳ.
@@ -81,6 +102,8 @@ export const EMPTY_AUDIENCE = Object.freeze({
   uids: [],
   groupIds: [],
   groupNames: [],
+  /** Nhóm Telegram/WhatsApp đã chọn: [{ recipientKey, display }]. */
+  groups: [],
 });
 
 /**
@@ -207,7 +230,7 @@ export const templateKindOf = (channel) => (channel === 'email' ? 'email' : 'zal
 
 /**
  * Cách gửi nào đang dùng được với kênh + nguồn người nhận hiện tại. `continuous` chỉ khi nguồn là landing / biểu mẫu / Google Sheet
- * và kênh KHÁC Zalo nhóm (chế độ liên tục bị tắt cho Zalo nhóm ở giao diện cũ, `useCampaignRunController`).
+ * (nhóm không bao giờ có: chế độ liên tục bị tắt cho Zalo nhóm ở giao diện cũ, `useCampaignRunController`).
  *
  * Telegram/WhatsApp: KHÔNG có "Tự động gửi cho người mới". Bộ chạy có cờ `continuousSupported`, nhưng mới được thử với kênh giả + nguồn
  * nhập tay (campaignChannelStepsP7.test.js) — chưa có phép thử nào với nguồn Sheet/landing/biểu mẫu/hội thoại của kênh thật, nên ẩn
@@ -217,8 +240,8 @@ export const templateKindOf = (channel) => (channel === 'email' ? 'email' : 'zal
  * @returns {string[]}
  */
 export const getAvailableWhenOptions = (state) => {
-  const continuousOk = state.channel !== 'zalo_group'
-    && !isAdapterChannel(state.channel)
+  const continuousOk = !isAdapterChannel(state.channel)
+    && !isGroupAudienceType(state.audience?.type)
     && CONTINUOUS_AUDIENCE_TYPES.includes(state.audience?.type);
   return WHEN_OPTION_IDS.filter((id) => id !== 'continuous' || continuousOk);
 };
@@ -336,11 +359,11 @@ export const resolveScheduleStartAt = (schedule, now = new Date()) => {
 };
 
 /** Trường dữ liệu gắn với tài khoản gửi: đổi tài khoản thì phải chọn lại (nhóm/bạn bè của nick khác). */
-const ACCOUNT_BOUND_AUDIENCE = Object.freeze({ uids: [], groupIds: [], groupNames: [] });
+const ACCOUNT_BOUND_AUDIENCE = Object.freeze({ uids: [], groupIds: [], groupNames: [], groups: [] });
 
 /**
  * Đổi kênh: xoá mọi lựa chọn không còn hợp lệ với kênh mới.
- * - Tài khoản gửi: giữ nếu cùng loại (Zalo cá nhân ↔ Zalo nhóm dùng chung nick), còn lại xoá.
+ * - Tài khoản gửi: giữ nếu cùng loại, còn lại xoá.
  * - Nguồn người nhận: loại không thuộc kênh mới → xoá sạch; "Tự nhập" đổi giữa email ↔ số điện thoại → xoá chữ đã gõ.
  * - Mẫu tin: đổi giữa email ↔ Zalo thì bỏ mẫu đã chọn (khác kho mẫu); chữ tự soạn được giữ.
  *
@@ -358,8 +381,8 @@ export const applyChannelChange = (state, channel) => {
 
   const allowedTypes = AUDIENCE_TYPES_BY_CHANNEL[channel] || [];
   if (!allowedTypes.includes(state.audience.type)) {
-    // Zalo nhóm ("Chọn nhóm") và Telegram ("Người đã nhắn") chỉ có đúng một nguồn nên được chọn sẵn; các kênh khác để người dùng tự chọn.
-    next.audience = { ...EMPTY_AUDIENCE, type: allowedTypes.length === 1 ? allowedTypes[0] : null };
+    // Telegram chọn sẵn "Người đã nhắn" (nguồn quen thuộc nhất); các kênh khác để người dùng tự chọn.
+    next.audience = { ...EMPTY_AUDIENCE, type: DEFAULT_AUDIENCE_TYPE_BY_CHANNEL[channel] || null };
   } else if (state.audience.type === 'manual' && senderKindOf(state.channel) !== senderKindOf(channel)) {
     next.audience = { ...state.audience, manualText: '' };
   }
@@ -502,6 +525,10 @@ export const isStepComplete = (stepId, state, now = new Date()) => {
         case 'zalo_groups':
           // Bắt buộc ≥ 1 nhóm: groupIds rỗng = server gửi MỌI nhóm của nick (PLAN §5).
           return audience.groupIds.length > 0;
+        case 'telegram_groups':
+        case 'whatsapp_groups':
+          // Bắt buộc ≥ 1 nhóm: không có nhóm nào = không có ai để gửi (server trả 400 GROUPS_REQUIRED).
+          return audience.groups.length > 0;
         case 'conversations':
           // Telegram/WhatsApp: mọi người đã nhắn tới tài khoản gửi — không có gì để chọn thêm.
           return true;
@@ -553,6 +580,10 @@ export const buildSimpleCampaignBody = (state) => {
     case 'zalo_groups':
       audienceBody.groupIds = audience.groupIds.map(String);
       break;
+    case 'telegram_groups':
+    case 'whatsapp_groups':
+      audienceBody.groups = audience.groups.map((group) => ({ recipientKey: String(group.recipientKey), display: String(group.display || group.recipientKey) }));
+      break;
     default:
       break;
   }
@@ -560,7 +591,7 @@ export const buildSimpleCampaignBody = (state) => {
   const contentBody = buildMessageContentBody(channel, content);
 
   const body = {
-    channel,
+    channel: resolveSendChannel(channel, audience.type),
     audience: audienceBody,
     content: contentBody,
   };

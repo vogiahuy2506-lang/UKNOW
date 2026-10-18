@@ -88,9 +88,9 @@ describe('applyChannelChange — chuỗi tin', () => {
     expect(next.followUps[2].content).toMatchObject({ mode: 'template', templateId: null, templateName: '' });
   });
 
-  it('Zalo cá nhân → Zalo nhóm cùng kho mẫu: giữ nguyên templateId của các tin sau', () => {
-    const state = { ...emailState([fu({}, { mode: 'template', templateId: 9 })]), channel: 'zalo_personal' };
-    const next = applyChannelChange(state, 'zalo_group');
+  it('Zalo → Telegram cùng kho mẫu: giữ nguyên templateId của các tin sau', () => {
+    const state = { ...emailState([fu({}, { mode: 'template', templateId: 9 })]), channel: 'zalo' };
+    const next = applyChannelChange(state, 'telegram');
     expect(next.followUps[0].content.templateId).toBe(9);
   });
 });

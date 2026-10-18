@@ -1,26 +1,26 @@
-import { HiOutlineAnnotation, HiOutlineChat, HiOutlineMail, HiOutlinePaperAirplane, HiOutlineUserGroup } from 'react-icons/hi';
+import { HiOutlineAnnotation, HiOutlineChat, HiOutlineMail, HiOutlinePaperAirplane } from 'react-icons/hi';
 import SimpleChoiceCard from './SimpleChoiceCard';
 import SenderAccountList from './SenderAccountList';
 import { isAdapterChannel, senderKindOf } from './simpleCampaign.helpers';
 
 /**
- * `availabilityKey`: Zalo cá nhân và Zalo nhóm cùng nằm dưới kênh `zalo` của useChannelAvailability.
+ * Bốn thẻ kênh: Email, Zalo, Telegram, WhatsApp ("Nhóm" là một nguồn người nhận ở bước sau, không phải kênh).
+ * `availabilityKey`: khoá của kênh trong useChannelAvailability.
  * Telegram/WhatsApp là kênh "adapter": hệ thống chưa bật (`visible` khác true) thì KHÔNG vẽ thẻ; bật nhưng gói không có/hết hạn thì
  * vẽ MỜ + ổ khoá (cùng cách thẻ Zalo) — bấm vào mở modal giải thích/gợi ý mua.
  */
 const CHANNEL_CARDS = Object.freeze([
   { id: 'email', availabilityKey: 'email', icon: HiOutlineMail, tone: 'blue' },
   { id: 'zalo', availabilityKey: 'zalo', icon: HiOutlineChat, tone: 'sky' },
-  { id: 'zalo_group', availabilityKey: 'zalo', icon: HiOutlineUserGroup, tone: 'violet' },
   { id: 'telegram', availabilityKey: 'telegram', icon: HiOutlinePaperAirplane, tone: 'sky' },
   { id: 'whatsapp', availabilityKey: 'whatsapp', icon: HiOutlineAnnotation, tone: 'emerald' },
 ]);
 
-/** Số cột theo số thẻ đang hiện: 3 thẻ giữ nguyên bố cục cũ; 4–5 thẻ xuống hai/ba cột để tiêu đề không bị bóp. */
+/** Số cột theo số thẻ đang hiện (Telegram/WhatsApp có thể ẩn): 4 thẻ vừa một hàng từ `lg`, hẹp hơn thì hai cột rồi một cột. */
 const GRID_CLASS_BY_COUNT = Object.freeze({
+  2: 'grid-cols-1 sm:grid-cols-2',
   3: 'grid-cols-1 sm:grid-cols-3',
   4: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4',
-  5: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5',
 });
 
 /**

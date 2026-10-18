@@ -59,7 +59,7 @@ const GROUPS = [
   { groupId: 'g1', groupName: 'Nhóm Khách VIP' },
   { groupId: 'g2', groupName: 'Nhóm Đối tác' },
 ];
-const CREATED_NAME_PATTERN = /^(Email|Zalo cá nhân|Zalo nhóm) – \d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/;
+const CREATED_NAME_PATTERN = /^(Email|Zalo|Zalo nhóm) – \d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/;
 const readyPreview = (patch = {}) => ({
   data: { success: true, data: { readyToCreate: true, issues: [], estimate: null, recipientCount: 12, summary: {}, ...patch } },
 });
@@ -102,6 +102,12 @@ async function chooseFormAudience() {
   fireEvent.click(await screen.findByRole('checkbox', { name: /Đăng ký học thử/ }));
   fireEvent.click(await screen.findByRole('checkbox', { name: /Đặt lịch tư vấn/ }));
   fireEvent.click(await enabledNext());
+}
+
+/** Thẻ Zalo + nguồn "Nhóm Zalo" (kênh nhóm là một nguồn người nhận, không còn là thẻ kênh). */
+async function chooseZaloGroupChannel() {
+  await chooseChannel('zalo');
+  fireEvent.click(await screen.findByTestId('simple-audience-zalo_groups'));
 }
 
 async function chooseGroupAudience() {
@@ -244,7 +250,7 @@ describe('Tạo chiến dịch từng bước (PR-2)', () => {
       const card = await screen.findByTestId('simple-channel-zalo');
       expect(card).toHaveAttribute('aria-disabled', 'true');
       expect(within(card).getByTestId('channel-lock-badge')).toBeInTheDocument();
-      expect(screen.getByTestId('simple-channel-zalo_group')).toHaveAttribute('aria-disabled', 'true');
+      expect(screen.queryByTestId('simple-channel-zalo_group')).toBeNull(); // chỉ còn 4 thẻ kênh
       expect(screen.getByTestId('simple-channel-email')).not.toHaveAttribute('aria-disabled');
 
       fireEvent.click(card);
@@ -256,10 +262,9 @@ describe('Tạo chiến dịch từng bước (PR-2)', () => {
   });
 
   describe('bước 2 — người nhận', () => {
-    it('Zalo nhóm: Tiếp tục khoá khi chưa chọn nhóm nào, mở khi đã chọn ít nhất 1 nhóm', async () => {
+    it('Nhóm Zalo: Tiếp tục khoá khi chưa chọn nhóm nào, mở khi đã chọn ít nhất 1 nhóm', async () => {
       renderPage();
-      await chooseChannel('zalo_group');
-      // Đã chọn sẵn thẻ duy nhất "Chọn nhóm": chỉ còn danh sách nhóm của nick.
+      await chooseZaloGroupChannel();
       expect(await screen.findByRole('checkbox', { name: /Nhóm Khách VIP/ })).toBeInTheDocument();
       expect(campaignBuilderApiService.getPreviewZaloGroups).toHaveBeenCalledWith({ accountId: 21 });
       expect(nextButton()).toBeDisabled();
@@ -453,9 +458,9 @@ describe('Tạo chiến dịch từng bước (PR-2)', () => {
       expect(screen.getByTestId('simple-summary')).toHaveTextContent('Gửi Zalo cá nhân từ Nick A');
     });
 
-    it('Zalo nhóm + nhóm đã chọn + mẫu Zalo: groupIds đúng, dùng kho mẫu Zalo', async () => {
+    it('Zalo + Nhóm Zalo + nhóm đã chọn + mẫu Zalo: body gửi channel zalo_group, groupIds đúng, dùng kho mẫu Zalo', async () => {
       renderPage();
-      await chooseChannel('zalo_group');
+      await chooseZaloGroupChannel();
       await chooseGroupAudience();
       await chooseTemplate('Mẫu Zalo chào mừng');
       await acceptSendNow();

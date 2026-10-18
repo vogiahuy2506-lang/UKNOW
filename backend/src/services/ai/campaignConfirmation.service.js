@@ -461,7 +461,7 @@ class CampaignConfirmationService {
           ? selectedGroupIdsOnNode(config)
           : [];
         const manual = isAdapterChannel
-          ? (config.recipientSource === 'manual' || config.recipientSource === 'telegram_groups')
+          ? (config.recipientSource === 'manual' || config.recipientSource === 'telegram_groups' || config.recipientSource === 'whatsapp_groups')
           : channel === 'email'
           ? config.recipientSource === 'manual'
           : channel === 'zalo_group'

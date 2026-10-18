@@ -61,8 +61,9 @@ export const SIMPLE_AUDIENCE_TYPES_BY_CHANNEL = Object.freeze({
   zalo_group: Object.freeze(['zalo_groups']),
   // Telegram không nhắn được người lạ (chỉ hội thoại đang mở); WhatsApp thêm các nguồn node dữ liệu (cột SĐT). KHÔNG có nhập tay:
   // `manual` chưa nối cho hai kênh này (campaignIntent.schema.js ADAPTER_AUDIENCE_TYPES).
-  telegram: Object.freeze(['conversations']),
-  whatsapp: Object.freeze(['conversations', 'customers', 'landing', 'form', 'sheet']),
+  // 'telegram_groups' / 'whatsapp_groups': NHÓM đã chọn của tài khoản (audience.groups = [{ recipientKey, display }]).
+  telegram: Object.freeze(['conversations', 'telegram_groups']),
+  whatsapp: Object.freeze(['conversations', 'customers', 'landing', 'form', 'sheet', 'whatsapp_groups']),
 });
 
 const CHANNEL_LABELS = Object.freeze({
@@ -80,6 +81,10 @@ const WHATSAPP_SESSION_KEY_PATTERN = /^\d+-[A-Za-z0-9_-]{1,128}$/;
 const MAX_CAMPAIGN_NAME_LENGTH = 255;
 const MAX_LANDING_SLUGS = 50;
 const MAX_ZALO_GROUPS = 500;
+const MAX_ADAPTER_GROUPS = 500;
+/** Khoá nhóm hợp lệ — khớp bộ chạy kênh (telegram.campaignChannel.js TELEGRAM_CHAT_ID_PATTERN, whatsapp.campaignChannel.js WHATSAPP_GROUP_JID_PATTERN). */
+const ADAPTER_GROUP_KEY_PATTERN = Object.freeze({ telegram_groups: /^-?\d+$/, whatsapp_groups: /^\d+(?:-\d+)*@g\.us$/ });
+const ADAPTER_GROUP_LABEL = Object.freeze({ telegram_groups: 'Telegram', whatsapp_groups: 'WhatsApp' });
 const MAX_CUSTOM_BODY_LENGTH = Object.freeze({ email: 100000, zalo: 4000, zalo_group: 4000, telegram: 4000, whatsapp: 4096 });
 const MAX_EMAIL_SUBJECT_LENGTH = 150;
 /** Chuỗi tin: tin 1 + tối đa 9 tin tiếp theo (tổng 10 tin) — PLAN_HAI_TAB_TUNG_BUOC §3.1. */
@@ -381,12 +386,35 @@ export async function normalizeSimpleBody(body, { ownerId, now = new Date(), ski
     if (groupIds.length > MAX_ZALO_GROUPS) throw bad('ZALO_GROUPS_TOO_MANY', `Chỉ chọn tối đa ${MAX_ZALO_GROUPS} nhóm Zalo.`);
     audience.groupIds = groupIds;
     recipientCountHint = groupIds.length;
+  } else if (type === 'telegram_groups' || type === 'whatsapp_groups') {
+    // Danh sách nhóm rỗng = không có ai để gửi (bộ chạy kênh không có "mọi nhóm") → bắt buộc ≥ 1 nhóm.
+    const label = ADAPTER_GROUP_LABEL[type];
+    const rawGroups = Array.isArray(rawAudience.groups) ? rawAudience.groups : [];
+    const groups = [];
+    const seen = new Set();
+    for (const item of rawGroups) {
+      const recipientKey = toTrimmedString(item && typeof item === 'object' ? item.recipientKey : item);
+      if (!recipientKey) continue;
+      if (!ADAPTER_GROUP_KEY_PATTERN[type].test(recipientKey)) {
+        throw bad('GROUPS_INVALID', `Có nhóm ${label} không hợp lệ.`);
+      }
+      if (seen.has(recipientKey)) continue;
+      seen.add(recipientKey);
+      groups.push({ recipientKey, display: toTrimmedString(item.display).slice(0, 255) || recipientKey });
+    }
+    if (groups.length === 0) throw bad('GROUPS_REQUIRED', `Vui lòng chọn ít nhất một nhóm ${label} để gửi.`);
+    if (groups.length > MAX_ADAPTER_GROUPS) throw bad('GROUPS_TOO_MANY', `Chỉ chọn tối đa ${MAX_ADAPTER_GROUPS} nhóm ${label}.`);
+    audience.groups = groups;
+    recipientCountHint = groups.length;
   }
 
   const content = normalizeStepContent(source.content, channel);
   const followUps = normalizeFollowUps(source.followUps, channel);
+  // Loại chiến dịch lưu DB: nhóm Telegram dùng `telegram_group` như trình dựng (danh sách chiến dịch hiện đúng nhãn). WhatsApp nhóm
+  // KHÔNG có loại riêng (enum chỉ có `whatsapp`; trình dựng cũng lưu nguồn nhóm trong cấu hình khối `send_whatsapp`).
+  const campaignType = type === 'telegram_groups' ? 'telegram_group' : channel;
 
-  return { campaignName, channel, senderId, senderKey, audience, content, followUps, directRecipients, recipientCountHint };
+  return { campaignName, channel, campaignType, senderId, senderKey, audience, content, followUps, directRecipients, recipientCountHint };
 }
 
 function buildIntentSender(channel, senderId, senderKey) {
@@ -434,6 +462,10 @@ export function buildSimpleIntent(input) {
       break;
     case 'conversations':
       intentAudience = { type: 'conversations' };
+      break;
+    case 'telegram_groups':
+    case 'whatsapp_groups':
+      intentAudience = { type: audience.type, groups: audience.groups };
       break;
     default:
       throw bad('INVALID_AUDIENCE', 'Nguồn người nhận không hợp lệ.');
@@ -709,7 +741,7 @@ export async function buildSimpleDraft({ body, authUser, includeEstimate = false
   const script = {
     campaignName: input.campaignName,
     description: '',
-    campaignType: input.channel,
+    campaignType: input.campaignType || input.channel,
     nodes,
     connections,
     compilerApplied: true,
@@ -916,7 +948,7 @@ export async function previewSimpleCampaign({ body, authUser, now = new Date() }
     issues: issuesOut,
     estimate,
     recipientCount: recipientCount ?? null,
-    recipientUnit: input.channel === 'zalo_group' ? 'group' : 'person',
+    recipientUnit: input.channel === 'zalo_group' || input.audience.type === 'telegram_groups' || input.audience.type === 'whatsapp_groups' ? 'group' : 'person',
     summary: {
       channel: input.channel,
       senderLabel: view.steps?.[0]?.sender?.label || null,
@@ -964,6 +996,7 @@ export async function buildSimpleCreateDraft({ body, authUser, createdTemplates,
     ownerId,
     campaignName: script.campaignName || input.campaignName,
     channel: input.channel,
+    campaignType: input.campaignType || input.channel,
     nodes: script.nodes,
     connections: script.connections,
     recipientCountHint: input.recipientCountHint,

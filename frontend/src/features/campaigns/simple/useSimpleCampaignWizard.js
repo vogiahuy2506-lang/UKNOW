@@ -21,6 +21,7 @@ import {
   isStepComplete,
   normalizePreview,
   reconcileSchedule,
+  resolveSendChannel,
   unwrapResponseData,
   validateSchedule,
 } from './simpleCampaign.helpers';
@@ -173,7 +174,7 @@ export default function useSimpleCampaignWizard() {
     if (index < 0 || index >= SIMPLE_STEP_IDS.length - 1 || !isStepComplete(stepId, current)) return;
     const nextStep = SIMPLE_STEP_IDS[index + 1];
     if (nextStep === 'review' && !current.campaignName.trim()) {
-      const channelTitle = tRef.current(`simpleCampaign.channel.${current.channel}.title`);
+      const channelTitle = tRef.current(`simpleCampaign.channel.${resolveSendChannel(current.channel, current.audience.type)}.title`);
       setState((prev) => ({
         ...prev,
         campaignName: `${channelTitle} – ${formatEstimateDateTime(new Date())}`,

@@ -64,7 +64,7 @@ class CampaignSimpleController {
         body: {
           campaignName: draft.campaignName,
           description: '',
-          campaignType: draft.channel,
+          campaignType: draft.campaignType || draft.channel,
           nodes: draft.nodes,
           connections: draft.connections,
         },
