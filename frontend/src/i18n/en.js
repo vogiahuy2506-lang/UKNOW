@@ -3999,6 +3999,9 @@ export default {
     webChatShort: 'Web',
     zaloOA: 'Zalo OA',
     facebook: 'Facebook',
+    // PR-5 của plan tiktok-business-messaging-integration.md: nhãn cho
+    // channel tiktok_business trong Hộp thư (English).
+    tiktok: 'TikTok',
     zaloPersonal: 'Zalo Personal',
     zaloPersonalShort: 'Zalo',
     zaloGroup: 'Zalo Group',
@@ -13696,7 +13699,6 @@ Feel free to ask me anything!`,
     copyFailed: 'Could not copy',
     savedCodesCheckbox: 'I have saved my recovery codes in a safe place',
   },
-
   landingCustomizer: {
     title: 'Landing Customizer',
     visualMode: 'Visual',
@@ -13956,4 +13958,69 @@ Feel free to ask me anything!`,
       'pricing.proDesc': 'Plan 3: Short Description',
     },
   },
+
+  // PR-4 của plan tiktok-business-messaging-integration.md: English translations
+  // cho tab TikTok. Key path khớp với `vi.js` để fallback tự động.
+  tiktokBusiness: {
+    title: 'TikTok Business',
+    subtitle: 'Connect a TikTok Business account so your chatbot can auto-reply to DM messages.',
+    connect: 'Connect TikTok Business',
+    empty: 'No TikTok Business account yet. Click "Connect" to start.',
+    confirmDelete: 'Disconnect this TikTok account?',
+    status: {
+      connected: 'Connected',
+      disconnected: 'Disconnected',
+      expired: 'Token expired',
+      expiringSoon: 'Expiring soon',
+    },
+    action: {
+      refresh: 'Refresh',
+      delete: 'Disconnect',
+    },
+    toast: {
+      refreshed: 'Token refreshed.',
+      disconnected: 'Disconnected.',
+    },
+    rateLimit: {
+      title: 'Auto-reply rate limit',
+      hint: 'TikTok limits auto-replies to 10 messages per 48 hours after the user\'s last reply. After that, only 3 follow-ups are allowed. If the user doesn\'t reply within 48 hours, the window resets.',
+    },
+    regions: {
+      title: 'Supported regions',
+      hint: 'TikTok Business Messaging currently supports APAC, LATAM, METAP, NA. EEA / CH / UK are not yet opened by TikTok.',
+    },
+      errors: {
+      generic: 'Could not connect TikTok',
+      regionUnsupported: {
+        title: 'Region not supported',
+        hint: 'TikTok Business Messaging currently supports APAC, LATAM, METAP, NA. EEA/CH/UK are not yet opened by TikTok.',
+      },
+      personalAccount: {
+        title: 'Business account required',
+        hint: 'TikTok Business Messaging only works with a Business Account. Open TikTok app > Settings > Account > Switch to Business Account.',
+      },
+    },
+      hints: {
+      dmPrivacy: {
+        title: 'Connected! Check DM Privacy',
+        hint: 'To allow users to message you: TikTok app > Settings > Privacy > Direct Messages > select "Everyone". If you keep "Friends", the API will not receive messages.',
+      },
+    },
+  },
+  // PR-5 của plan tiktok-business-messaging-integration.md: English translations
+  // cho inbox TikTok.
+  tiktokInbox: {
+    section: 'TikTok accounts',
+    empty: {
+      title: 'No TikTok account yet',
+      hint: 'Connect a TikTok Business account at Settings → Channels → TikTok before using the Inbox.',
+    },
+    error: 'Could not load TikTok accounts',
+    conversations: 'conversations',
+    noConversations: 'No conversations yet.',
+    aiResume: 'Resume AI',
+    aiPause: 'Pause AI',
+    toggleAiFailed: 'Could not change AI status. Please try again.',
+  },
+
 };

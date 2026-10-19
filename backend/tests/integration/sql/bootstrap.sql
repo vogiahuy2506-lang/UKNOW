@@ -4315,3 +4315,61 @@ ON CONFLICT (event_type) DO NOTHING;
 -- --- Migration 303: zalo_settings.auto_accept_friend_requests (PLAN_ZALO_TU_DONG_DONG_Y_KET_BAN: Zalo ca nhan tu dong dong y loi moi ket ban, bat/tat theo nick) ---
 ALTER TABLE zalo_settings
   ADD COLUMN IF NOT EXISTS auto_accept_friend_requests BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- --- Migration 305: TikTok Business Messaging — mở rộng chatbot_channel_connections.channel_type + bảng tài khoản riêng ---
+-- (PLAN_TIKTOK_BUSINESS_MESSAGING_INTEGRATION PR-1: chat voi khach TikTok qua Business Messaging API.
+-- Pattern: copy từ migration 200 (SUPERSET CHECK, DROP+ADD ngay trong cùng transaction, không table rewrite;
+-- giá trị mới bao trùm giá trị cũ nên existing rows vẫn valid). Bảng tài khoản riêng copy từ pattern
+-- telegram_accounts / zalo_accounts vì mỗi user có thể liên kết nhiều tài khoản TikTok Business.
+-- access_token / refresh_token mã hoá bằng `encryptSmtpSecret` ở app layer
+-- (backend/src/utils/smtpSecretCrypto.js:51-64, AES-256-GCM, key SMTP_SECRET_KEY env, prefix `enc:v1:`),
+-- KHÔNG phải ở SQL — tương tự zaloCookieCrypto / baileysAuthCrypto. Migration chỉ tạo cột TEXT.)
+ALTER TABLE chatbot_channel_connections
+  DROP CONSTRAINT IF EXISTS chatbot_channel_connections_channel_type_check;
+ALTER TABLE chatbot_channel_connections
+  ADD CONSTRAINT chatbot_channel_connections_channel_type_check
+    CHECK (channel_type IN ('zalo_oa', 'facebook', 'whatsapp', 'whatsapp_baileys', 'tiktok_business'));
+
+CREATE TABLE IF NOT EXISTS tiktok_business_accounts (
+  id BIGSERIAL PRIMARY KEY,
+  id_user BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  business_id TEXT NOT NULL,                   -- open_id từ TikTok OAuth
+  display_name TEXT,                           -- tên hiển thị trong FE
+  access_token TEXT NOT NULL,                  -- đã mã hoá bằng encryptSmtpSecret (enc:v1:...)
+  refresh_token TEXT NOT NULL,                 -- đã mã hoá
+  scope TEXT,                                  -- các scope user đã grant
+  access_token_expires_at TIMESTAMPTZ NOT NULL,
+  refresh_token_expires_at TIMESTAMPTZ NOT NULL,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  last_webhook_at TIMESTAMPTZ,
+  -- Region + tier (Bẫy 14, 16): từ GET /v2/user/info/ response
+  region TEXT,                                 -- 'APAC' | 'LATAM' | 'METAP' | 'NA' (EEA/CH/UK blocked)
+  role TEXT,                                   -- 'business_account' (Verified / Advanced / General) | 'personal_account'
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT uq_tiktok_business_accounts_user_business UNIQUE (id_user, business_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_tiktok_business_accounts_user_active
+  ON tiktok_business_accounts (id_user, is_active);
+CREATE INDEX IF NOT EXISTS idx_tiktok_business_accounts_expiring
+  ON tiktok_business_accounts (access_token_expires_at)
+  WHERE is_active = true;
+
+-- --- Migration 306: tiktok_outbound_log (PLAN_TIKTOK_BUSINESS_MESSAGING_INTEGRATION PR-3 việc 6) ---
+-- Audit log cho rate limit 10 tin/48h (Bẫy 3). Mỗi row = 1 tin bot gửi đi. Chỉ lưu metadata
+-- (business_id, unique_identifier, conversation_id, sent_at) — KHÔNG lưu body để tránh PII.
+-- Redis là lớp rate limit chính; bảng này là fallback khi Redis miss/fail + audit cross-check.
+CREATE TABLE IF NOT EXISTS tiktok_outbound_log (
+  id BIGSERIAL PRIMARY KEY,
+  business_id TEXT NOT NULL,
+  unique_identifier TEXT NOT NULL,
+  conversation_id TEXT NOT NULL,
+  sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_tiktok_outbound_log_business_user_recent
+  ON tiktok_outbound_log (business_id, unique_identifier, sent_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_tiktok_outbound_log_sent_at
+  ON tiktok_outbound_log (sent_at);

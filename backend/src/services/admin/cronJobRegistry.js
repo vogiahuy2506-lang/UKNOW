@@ -335,6 +335,24 @@ export const CRON_JOBS = [
     tracked: true,
     monthly: true,
   },
+  {
+    code: 'tiktok_token_refresh',
+    label: 'Làm mới token TikTok Business',
+    schedule: '03:30 hàng ngày',
+    description: 'Làm mới access_token TikTok Business sắp hết hạn (buffer 2 giờ). Tự deactivate tài khoản refresh fail quá 3 lần. ENV: TIKTOK_TOKEN_REFRESH_ENABLED (mặc định true).',
+    impact: 'Tài khoản TikTok Business mất phiên khi access_token hết hạn → không nhận/gửi được tin nhắn.',
+    tracked: true,
+    optional: true,
+  },
+  {
+    code: 'tiktok_outbound_log_cleanup',
+    label: 'Dọn log rate limit TikTok cũ',
+    schedule: '03:30 hàng ngày',
+    description: 'Xoá log tiktok_outbound_log cũ hơn 7 ngày (chỉ phục vụ rate limit + audit, không cần giữ lâu).',
+    impact: 'Bảng tiktok_outbound_log phình dần, query count rate limit 48h chậm dần.',
+    tracked: true,
+    optional: true,
+  },
 ];
 
 /** Mã các job chạy hằng tháng — giữ lịch sử lâu hơn khi dọn `cron_job_runs`. */

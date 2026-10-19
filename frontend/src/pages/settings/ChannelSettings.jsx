@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { HiOutlineMail, HiOutlineChat } from 'react-icons/hi';
 import { FaFacebookF, FaTelegramPlane, FaWhatsapp } from 'react-icons/fa';
+import { FaTiktok } from 'react-icons/fa6';
 import EmailSettings from './EmailSettings';
 import ZaloSettings from './ZaloSettings';
 import WhatsAppSettings from './WhatsAppSettings';
 import TelegramSettings from './TelegramSettings';
 import FacebookSettings from './FacebookSettings';
+import TiktokBusinessSettings from './TiktokBusinessSettings';
 import ChannelNotInPlanNotice from '../../features/settings/components/ChannelNotInPlanNotice';
 import { useChannelEntitlements } from '../../hooks/queries/useChannelEntitlements';
 
@@ -15,6 +17,8 @@ const TABS = [
   { key: 'zalo', label: 'Zalo', icon: HiOutlineChat, color: 'text-sky-600 dark:text-sky-400', bg: 'bg-sky-50 dark:bg-sky-950/40 border-sky-100 dark:border-sky-800' },
   { key: 'whatsapp', label: 'WhatsApp', icon: FaWhatsapp, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-100 dark:border-emerald-800' },
   { key: 'telegram', label: 'Telegram', icon: FaTelegramPlane, color: 'text-sky-500 dark:text-sky-400', bg: 'bg-sky-50 dark:bg-sky-950/40 border-sky-100 dark:border-sky-800' },
+  // PR-4 của plan tiktok-business-messaging-integration.md: tab TikTok thứ 6.
+  { key: 'tiktok', label: 'TikTok', icon: FaTiktok, color: 'text-pink-600 dark:text-pink-400', bg: 'bg-pink-50 dark:bg-pink-950/40 border-pink-100 dark:border-pink-800' },
 ];
 
 const ChannelSettings = () => {
@@ -96,6 +100,12 @@ const ChannelSettings = () => {
         <>
           {!entitlements.telegram && <ChannelNotInPlanNotice channel="telegram" />}
           <TelegramSettings readOnly={!entitlements.telegram} />
+        </>
+      ))}
+      {active === 'tiktok' && (entitlements.isLoading ? null : (
+        <>
+          {!entitlements.tiktok && <ChannelNotInPlanNotice channel="tiktok" />}
+          <TiktokBusinessSettings />
         </>
       ))}
     </div>

@@ -87,18 +87,33 @@ export class LocalStorageBackend {
       let written = 0;
       let failure = null;
       let settled = false;
+      let outOpened = false;
 
       const settle = (error) => {
         if (settled) return;
         settled = true;
         if (error) {
-          out.destroy();
-          fs.unlink(absPath).catch(() => {}).then(() => reject(error));
+          // Cần chờ fd release trước khi unlink. Có thể dùng 'finish' (nếu gọi .end()) hoặc
+          // 'close' (luôn emit kể cả khi destroyed). Subscribe cả hai rồi unlink 1 lần.
+          let unlinked = false;
+          const doUnlink = () => {
+            if (unlinked) return;
+            unlinked = true;
+            fs.unlink(absPath).catch(() => {});
+          };
+          out.once('close', doUnlink);
+          // Nếu stream chưa mở file (destroy quá sớm), 'close' vẫn fire — nhưng file chưa
+          // từng tồn tại nên unlink ENOENT được catch nuốt.
+          out.end();
+          reject(error);
         } else {
           resolve({ size: written });
         }
       };
 
+      out.on('open', () => {
+        outOpened = true;
+      });
       out.on('error', (error) => {
         failure = failure || error;
         readable.resume();
@@ -108,7 +123,8 @@ export class LocalStorageBackend {
         written += chunk.length;
         if (written > maxBytes) {
           failure = new StorageObjectTooLargeError(maxBytes);
-          out.destroy();
+          // Vẫn tiêu thụ nốt stream để response tới được client (xem ghi chú đầu hàm) — settle
+          // sẽ xử lý close + unlink khi readable 'end' về.
           return;
         }
         if (!out.write(chunk)) {

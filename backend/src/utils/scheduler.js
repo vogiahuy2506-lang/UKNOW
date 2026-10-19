@@ -1763,4 +1763,82 @@ export const initScheduler = () => {
   } else {
     console.log('[Scheduler] Facebook token refresh TẮT (FACEBOOK_TOKEN_REFRESH_ENABLED=false)');
   }
+
+  // ── TikTok Business Token Auto-Refresh — 02:00 hàng ngày ────────────────
+  // Access_token hết hạn sau 24h, refresh_token sau 365d. Cron refresh tất cả
+  // account có access_token_expires_at < now() + 2h (buffer). Pattern copy y
+  // từ Facebook token refresh ở trên (wrap recordRun + lệch giờ để tránh
+  // trùng phút 0 với cron Facebook 03:00).
+  // ENV: TIKTOK_TOKEN_REFRESH_ENABLED=true (mặc định), đặt false để tắt.
+  // PLAN tiktok-business-messaging-integration.md việc 2.3.
+  const tiktokTokenRefreshEnabled = String(
+    process.env.TIKTOK_TOKEN_REFRESH_ENABLED ?? 'true'
+  ).toLowerCase() !== 'false';
+  if (tiktokTokenRefreshEnabled) {
+    const refreshTikTokTokens = async () => {
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      try {
+        await cronJobRunRepository.recordRun('tiktok_token_refresh', async () => {
+          const { refreshExpiringTikTokTokens } = await import(
+            '../services/tiktok/tiktokTokenRefresh.service.js'
+          );
+          const result = await refreshExpiringTikTokTokens({ bufferHours: 2 });
+          if (result.refreshed > 0 || result.failed > 0 || result.deactivated > 0) {
+            console.log(
+              `[Scheduler][TikTok] Token refresh: total=${result.total} `
+                + `refreshed=${result.refreshed} failed=${result.failed} `
+                + `deactivated=${result.deactivated}`
+            );
+          }
+          return {
+            total: result.total,
+            refreshed: result.refreshed,
+            failed: result.failed,
+            deactivated: result.deactivated,
+            synced: result.refreshed,
+          };
+        });
+      } catch (error) {
+        console.error('[Scheduler] Lỗi refresh TikTok tokens:', error.message);
+      }
+    };
+
+    // Chạy 02:00 mỗi ngày — lệch giờ với Facebook 03:00 để tránh trùng phút 0.
+    cron.schedule('0 2 * * *', async () => {
+      await refreshTikTokTokens();
+    }, { timezone: HANOI_TIME_ZONE });
+
+    console.log('[Scheduler] Đã khởi tạo TikTok token refresh: 02:00 hàng ngày');
+  } else {
+    console.log('[Scheduler] TikTok token refresh TẮT (TIKTOK_TOKEN_REFRESH_ENABLED=false)');
+  }
+
+  // ── TikTok rate limit log cleanup — 03:30 hàng ngày ────────────────
+  // Xoá log cũ > 7 ngày trong bảng tiktok_outbound_log để tránh phình DB.
+  // Bảng này chỉ phục vụ rate limit + audit — không cần giữ lâu.
+  // (PLAN_TIKTOK_BUSINESS_MESSAGING_INTEGRATION việc 6)
+  const cleanupTikTokLogs = async () => {
+    const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+    await cronJobRunRepository.recordRun('tiktok_outbound_log_cleanup', async () => {
+      const { default: tiktokRateLimitService } = await import(
+        '../services/chatbot/tiktokRateLimit.service.js'
+      );
+      const result = await tiktokRateLimitService.cleanupOldLogs();
+      if (result.deleted > 0) {
+        console.log(`[Scheduler][TikTok] Cleanup outbound log: deleted=${result.deleted}`);
+      }
+      return { deleted: result.deleted };
+    });
+  };
+
+  cron.schedule('30 3 * * *', async () => {
+    try {
+      await cleanupTikTokLogs();
+    } catch (err) {
+      // recordRun đã nuốt lỗi nội bộ; nếu vẫn thoát ra ngoài thì chỉ log, không để crash scheduler.
+      console.error('[Scheduler] Lỗi cleanup TikTok outbound log:', err.message);
+    }
+  }, { timezone: HANOI_TIME_ZONE });
+
+  console.log('[Scheduler] Đã khởi tạo TikTok outbound log cleanup: 03:30 hàng ngày');
 };

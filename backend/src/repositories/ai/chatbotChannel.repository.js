@@ -44,6 +44,33 @@ class ChatbotChannelRepository {
   }
 
   /**
+   * Find active channel by (channel_type, external_channel_id). Dùng cho TikTok
+   * Business webhook: mỗi event TikTok gửi kèm `business_id` (tức `external_channel_id`
+   * trong schema UKNOW), không có chatbot_id — phải tra ngược từ `tiktok_business_accounts`
+   * rồi mới lookup channel. Pattern copy từ `findActiveChannel` ở trên.
+   *
+   * Lưu ý: schema `chatbot_channel_connections` có UNIQUE(id_chatbot, channel_type)
+   * → 1 chatbot chỉ có 1 row `tiktok_business`. Khi user liên kết nhiều business
+   * cho 1 chatbot, cần tạo nhiều chatbot. PR-2 đã chuẩn bị multi-account ở
+   * bảng `tiktok_business_accounts`; PR-3 giữ giản (1 chatbot ↔ 1 business).
+   *
+   * @param {string} channelType - e.g. 'tiktok_business'
+   * @param {string} externalChannelId - e.g. TikTok business_id
+   * @returns {Promise<object|null>}
+   */
+  async findActiveByExternalChannelId(channelType, externalChannelId) {
+    const { rows } = await db.query(
+      `SELECT * FROM chatbot_channel_connections
+       WHERE channel_type = $1
+         AND external_channel_id = $2
+         AND is_active = true
+       LIMIT 1`,
+      [channelType, externalChannelId]
+    );
+    return rows[0] || null;
+  }
+
+  /**
    * Create or update channel connection for chatbot
    */
   async upsertChannel(chatbotId, channelType, data) {

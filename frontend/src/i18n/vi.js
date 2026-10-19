@@ -4004,6 +4004,9 @@ export default {
     webChatShort: 'Web chat',
     zaloOA: 'Zalo OA',
     facebook: 'Facebook',
+    // PR-5 của plan tiktok-business-messaging-integration.md: nhãn cho
+    // channel tiktok_business trong Hộp thư.
+    tiktok: 'TikTok',
     zaloPersonal: 'Zalo Cá nhân',
     zaloPersonalShort: 'Zalo',
     zaloGroup: 'Zalo Nhóm',
@@ -13710,7 +13713,6 @@ export default {
     copyFailed: 'Không thể sao chép',
     savedCodesCheckbox: 'Tôi đã lưu mã khôi phục ở nơi an toàn',
   },
-
   landingCustomizer: {
     title: 'Tuỳ chỉnh Landing',
     visualMode: 'Trực quan',
@@ -13970,4 +13972,69 @@ export default {
       'pricing.proDesc': 'Gói 3: Mô tả ngắn',
     },
   },
+
+  // PR-4 của plan tiktok-business-messaging-integration.md: i18n cho tab TikTok
+  // trong ChannelSettings. Pattern copy từ tab Telegram/WhatsApp.
+  tiktokBusiness: {
+    title: 'TikTok Business',
+    subtitle: 'Kết nối tài khoản TikTok Business để chatbot tự động trả lời tin nhắn DM.',
+    connect: 'Kết nối TikTok Business',
+    empty: 'Chưa có tài khoản TikTok Business nào. Bấm "Kết nối" để bắt đầu.',
+    confirmDelete: 'Ngắt kết nối tài khoản TikTok này?',
+    status: {
+      connected: 'Đã kết nối',
+      disconnected: 'Đã ngắt',
+      expired: 'Token hết hạn',
+      expiringSoon: 'Hết hạn trong vài giờ',
+    },
+    action: {
+      refresh: 'Làm mới',
+      delete: 'Ngắt',
+    },
+    toast: {
+      refreshed: 'Đã làm mới token.',
+      disconnected: 'Đã ngắt kết nối.',
+    },
+    rateLimit: {
+      title: 'Giới hạn gửi tự động',
+      hint: 'TikTok giới hạn tối đa 10 tin tự động trong 48 giờ sau lần user cuối cùng reply. Sau đó chỉ gửi được 3 tin cuối. Sau 48h không reply, khung cửa sổ được reset.',
+    },
+    regions: {
+      title: 'Region hỗ trợ',
+      hint: 'TikTok Business Messaging hiện chỉ hỗ trợ APAC, LATAM, METAP, NA. EEA / CH / UK chưa được TikTok mở.',
+    },
+      errors: {
+      generic: 'Có lỗi khi kết nối TikTok',
+      regionUnsupported: {
+        title: 'Region chưa hỗ trợ',
+        hint: 'TikTok Business Messaging hiện chỉ hỗ trợ APAC, LATAM, METAP, NA. EEA/CH/UK chưa được TikTok mở.',
+      },
+      personalAccount: {
+        title: 'Cần tài khoản Business',
+        hint: 'TikTok Business Messaging chỉ hoạt động với Business Account. Mở TikTok app > Settings > Account > Switch to Business Account.',
+      },
+    },
+      hints: {
+      dmPrivacy: {
+        title: 'Đã kết nối! Kiểm tra DM Privacy',
+        hint: 'Để user có thể nhắn cho bạn: TikTok app > Settings > Privacy > Direct Messages > chọn "Everyone". Nếu để "Friends", API sẽ không nhận được tin.',
+      },
+    },
+  },
+  // PR-5 của plan tiktok-business-messaging-integration.md: i18n cho inbox
+  // TikTok (sidebar + conversation list + toggle AI).
+  tiktokInbox: {
+    section: 'Tài khoản TikTok',
+    empty: {
+      title: 'Chưa có tài khoản TikTok',
+      hint: 'Kết nối TikTok Business ở Settings → Channels → TikTok trước khi dùng Hộp thư.',
+    },
+    error: 'Có lỗi khi tải tài khoản TikTok',
+    conversations: 'hội thoại',
+    noConversations: 'Chưa có hội thoại nào.',
+    aiResume: 'Bật AI',
+    aiPause: 'Tạm dừng AI',
+    toggleAiFailed: 'Không thể đổi trạng thái AI. Vui lòng thử lại.',
+  },
+
 };

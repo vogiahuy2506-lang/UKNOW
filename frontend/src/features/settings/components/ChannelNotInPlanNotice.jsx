@@ -9,7 +9,7 @@ import { useI18n } from '../../../i18n';
  */
 export default function ChannelNotInPlanNotice({ channel }) {
   const { t } = useI18n();
-  const name = { telegram: 'Telegram', whatsapp: 'WhatsApp', zalo: 'Zalo' }[channel] || 'WhatsApp';
+  const name = { telegram: 'Telegram', whatsapp: 'WhatsApp', zalo: 'Zalo', tiktok: 'TikTok' }[channel] || 'WhatsApp';
   return (
     <div
       role="alert"

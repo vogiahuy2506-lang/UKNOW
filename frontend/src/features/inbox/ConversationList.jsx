@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useI18n } from '../../i18n';
 import ConfirmModal from './ConfirmModal';
 import { getConversationPreview } from './utils/conversationPreview';
+import { formatTime } from './utils/formatTime';
 
 const isPlaceholderGroupName = (name) => {
   const value = String(name || '').trim();
@@ -18,6 +19,9 @@ const CHANNEL_LABELS = (t) => ({
   zalo_group: { label: t('inbox.zaloGroup') || 'Zalo Nhóm', icon: '👥', bg: 'bg-violet-500', text: 'text-violet-500' },
   whatsapp_baileys: { label: 'WhatsApp', icon: '🟢', bg: 'bg-green-500', text: 'text-green-500' },
   telegram: { label: 'Telegram', icon: '✈️', bg: 'bg-sky-500', text: 'text-sky-500' },
+  // PR-3 của plan tiktok-business-messaging-integration.md: thêm nhãn cho
+  // channel tiktok_business (PR-5 dùng để hiển thị pill trong Hộp thư).
+  tiktok_business: { label: 'TikTok', icon: '🎵', bg: 'bg-pink-500', text: 'text-pink-500' },
 });
 
 const parseVisitorInfo = (visitorInfo) => {
@@ -66,23 +70,6 @@ const isGroupConversation = (conv) => {
 
 const getLastMessageAt = (conv) =>
   conv.lastMessageAt || conv.last_message_at || conv.updatedAt || conv.createdAt || '';
-
-const formatTime = (dateString, t, locale) => {
-  if (!dateString) return '';
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now - date;
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 1) return t('inbox.justNow');
-  // H-22: có dấu cách giữa số và đơn vị ("6 giờ", "45 phút", "3 ngày"); tiếng Anh giữ "6h".
-  if (diffMins < 60) return t('inbox.timeMinutes', { n: diffMins });
-  if (diffHours < 24) return t('inbox.timeHours', { n: diffHours });
-  if (diffDays < 7) return t('inbox.timeDays', { n: diffDays });
-  return date.toLocaleDateString(locale === 'en' ? 'en-US' : 'vi-VN', { day: 'numeric', month: 'short' });
-};
 
 /**
  * Huy hiệu AI của một hội thoại (H-09). Chỉ hiện khi nó có nghĩa:

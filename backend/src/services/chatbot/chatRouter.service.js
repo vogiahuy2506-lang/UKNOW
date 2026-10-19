@@ -9,6 +9,7 @@ import facebookAdapter from './channelAdapters/facebook.adapter.js';
 import zaloPersonalAdapter from './channelAdapters/zaloPersonal.adapter.js';
 import whatsappAdapter from './channelAdapters/whatsapp.adapter.js';
 import telegramAdapter from './channelAdapters/telegram.adapter.js';
+import tiktokBusinessAdapter from './channelAdapters/tiktokBusiness.adapter.js';
 import businessProfileService from '../ai/businessProfile.service.js';
 import { stripMarkdown } from '../../utils/aiResponseFormatter.util.js';
 import { generateGeminiContent } from '../../utils/geminiClient.util.js';
@@ -34,6 +35,7 @@ const ADAPTERS = {
   zalo_personal: zaloPersonalAdapter,
   whatsapp: whatsappAdapter,
   telegram_personal: telegramAdapter,
+  tiktok_business: tiktokBusinessAdapter,
 };
 
 const MAX_HISTORY_MESSAGES = 20;

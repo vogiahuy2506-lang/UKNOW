@@ -38,6 +38,7 @@ import zaloTemplateRoutes from './routes/zaloTemplate.routes.js';
 import whatsappSettingsRoutes from './routes/whatsappSettings.routes.js';
 import whatsappBaileysRoutes from './routes/whatsappBaileys.routes.js';
 import facebookSettingsRoutes from './routes/facebookSettings.routes.js';
+import tiktokSettingsRoutes from './routes/tiktokSettings.routes.js';
 import publicPromotionRoutes from './routes/publicPromotion.routes.js';
 import landingCmsPublicRoutes from './routes/landingCmsPublic.routes.js';
 import leadPublicRoutes from './routes/leadPublic.routes.js';
@@ -205,6 +206,7 @@ export function createApp() {
   app.use('/api/zalo', zaloSettingsRoutes);
   app.use('/api/zalo-templates', zaloTemplateRoutes);
   app.use('/api/settings', facebookSettingsRoutes);
+  app.use('/api/settings', tiktokSettingsRoutes);
   app.use('/api/whatsapp', whatsappSettingsRoutes);
   app.use('/api/whatsapp-qr', whatsappBaileysRoutes); // Baileys QR flow — separate prefix to avoid collision with /api/whatsapp/* routes above
   app.use('/api/public', publicRoutes);

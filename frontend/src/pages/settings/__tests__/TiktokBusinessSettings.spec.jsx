@@ -1,0 +1,206 @@
+/**
+ * TiktokBusinessSettings.spec.jsx
+ *
+ * Test cho component TikTok tab ở ChannelSettings. Pattern copy từ
+ * `TelegramSettings.spec.jsx` (vitest + @testing-library/react + I18nProvider).
+ *
+ * Coverage:
+ * - Render: loading → empty state → list accounts
+ * - 3 bẫy OAuth notice: region (Bẫy 14), personal (Bẫy 16), dm_privacy (Bẫy 15)
+ * - Action: refresh + delete (confirm dialog)
+ * - AccountStatus pill: 3 trạng thái (connected / expired / expiring)
+ * - URL params từ OAuth callback: đọc rồi clear
+ */
+
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, waitFor, act } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
+import { I18nProvider } from '../../../i18n';
+
+const listAccountsMock = vi.fn();
+const refreshAccountMock = vi.fn();
+const deleteAccountMock = vi.fn();
+
+vi.mock('../../../features/settings/services/tiktokBusinessApi.service', () => ({
+  default: {
+    listAccounts: (...args) => listAccountsMock(...args),
+    refreshAccount: (...args) => refreshAccountMock(...args),
+    deleteAccount: (...args) => deleteAccountMock(...args),
+    testSend: vi.fn(),
+    getConnectUrl: () => '/api/settings/tiktok-business/connect',
+  },
+}));
+
+const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+const importComponent = () =>
+  import('../TiktokBusinessSettings.jsx').then((m) => m.default);
+
+const renderSettings = async () => {
+  const TiktokBusinessSettings = await importComponent();
+  return render(
+    <I18nProvider>
+      <MemoryRouter>
+        <TiktokBusinessSettings />
+      </MemoryRouter>
+    </I18nProvider>
+  );
+};
+
+const fakeAccount = (overrides = {}) => ({
+  id: 1,
+  business_id: 'biz_abc',
+  display_name: 'My TikTok Shop',
+  region: 'APAC',
+  role: 'business_account',
+  is_active: true,
+  has_access_token: true,
+  has_refresh_token: true,
+  access_token_expires_at: new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString(), // 5 ngày
+  ...overrides,
+});
+
+describe('TiktokBusinessSettings — render', () => {
+  beforeEach(() => {
+    listAccountsMock.mockReset();
+    refreshAccountMock.mockReset();
+    deleteAccountMock.mockReset();
+    // Reset URL params
+    window.history.replaceState({}, '', '/');
+  });
+
+  it('Loading → empty state khi không có account', async () => {
+    listAccountsMock.mockResolvedValueOnce({ data: { data: [] } });
+    await renderSettings();
+    await waitFor(() => expect(listAccountsMock).toHaveBeenCalled());
+    expect(await screen.findByText(/Chưa có tài khoản TikTok Business/)).toBeInTheDocument();
+  });
+
+  it('List accounts với status pill + nút action', async () => {
+    listAccountsMock.mockResolvedValueOnce({
+      data: { data: [fakeAccount(), fakeAccount({ id: 2, business_id: 'biz_def', display_name: 'Shop 2' })] },
+    });
+    await renderSettings();
+    expect(await screen.findByText('My TikTok Shop')).toBeInTheDocument();
+    expect(screen.getByText('Shop 2')).toBeInTheDocument();
+    // 2 nút "Làm mới" + 2 nút "Ngắt"
+    expect(screen.getAllByText(/Làm mới/)).toHaveLength(2);
+    expect(screen.getAllByText(/Ngắt/)).toHaveLength(2);
+  });
+
+  it('Hiển thị 2 notice thường trực: rate limit + region', async () => {
+    listAccountsMock.mockResolvedValueOnce({ data: { data: [] } });
+    await renderSettings();
+    expect(await screen.findByText(/Giới hạn gửi tự động/)).toBeInTheDocument();
+    expect(screen.getByText(/Region hỗ trợ/)).toBeInTheDocument();
+  });
+});
+
+describe('TiktokBusinessSettings — 3 bẫy OAuth', () => {
+  beforeEach(() => {
+    listAccountsMock.mockReset().mockResolvedValue({ data: { data: [] } });
+  });
+
+  it('Bẫy 14: error=region_unsupported → notice hồng', async () => {
+    window.history.replaceState({}, '', '/?error=region_unsupported&reason=EEA');
+    await renderSettings();
+    expect(await screen.findByText(/Region chưa hỗ trợ/)).toBeInTheDocument();
+    // URL params đã clear
+    expect(window.location.search).toBe('');
+  });
+
+  it('Bẫy 16: error=personal_account → notice hướng dẫn switch', async () => {
+    window.history.replaceState({}, '', '/?error=personal_account');
+    await renderSettings();
+    expect(await screen.findByText(/Cần tài khoản Business/)).toBeInTheDocument();
+    expect(screen.getByText(/Switch to Business Account/)).toBeInTheDocument();
+  });
+
+  it('Bẫy 15: hint=check_dm_privacy → notice xanh hướng dẫn DM = Everyone', async () => {
+    window.history.replaceState({}, '', '/?hint=check_dm_privacy');
+    await renderSettings();
+    expect(await screen.findByText(/Kiểm tra DM Privacy/)).toBeInTheDocument();
+    expect(screen.getByText(/Everyone/)).toBeInTheDocument();
+  });
+});
+
+describe('TiktokBusinessSettings — actions', () => {
+  beforeEach(() => {
+    listAccountsMock.mockReset().mockResolvedValue({ data: { data: [fakeAccount()] } });
+    refreshAccountMock.mockReset();
+    deleteAccountMock.mockReset();
+    // Confirm dialog OK
+    window.confirm = vi.fn(() => true);
+  });
+
+  it('Bấm "Làm mới" gọi refreshAccount', async () => {
+    refreshAccountMock.mockResolvedValueOnce({ data: { success: true } });
+    const user = userEvent.setup();
+    await renderSettings();
+    const refreshBtn = await screen.findByText('Làm mới');
+    await user.click(refreshBtn);
+    await waitFor(() => expect(refreshAccountMock).toHaveBeenCalledWith(1));
+  });
+
+  it('Bấm "Ngắt" + confirm OK → gọi deleteAccount', async () => {
+    deleteAccountMock.mockResolvedValueOnce({ data: { success: true } });
+    const user = userEvent.setup();
+    await renderSettings();
+    const deleteBtn = await screen.findByText('Ngắt');
+    await user.click(deleteBtn);
+    await waitFor(() => expect(window.confirm).toHaveBeenCalled());
+    await waitFor(() => expect(deleteAccountMock).toHaveBeenCalledWith(1));
+  });
+
+  it('Bấm "Ngắt" + confirm cancel → KHÔNG gọi deleteAccount', async () => {
+    window.confirm = vi.fn(() => false);
+    const user = userEvent.setup();
+    await renderSettings();
+    const deleteBtn = await screen.findByText('Ngắt');
+    await user.click(deleteBtn);
+    expect(window.confirm).toHaveBeenCalled();
+    expect(deleteAccountMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('TiktokBusinessSettings — AccountStatus pill', () => {
+  beforeEach(() => {
+    listAccountsMock.mockReset();
+    window.history.replaceState({}, '', '/');
+  });
+
+  it('Token hết hạn (expires_at < now) → pill đỏ "Token hết hạn"', async () => {
+    listAccountsMock.mockResolvedValueOnce({
+      data: {
+        data: [fakeAccount({ access_token_expires_at: new Date(Date.now() - 1000).toISOString() })],
+      },
+    });
+    await renderSettings();
+    expect(await screen.findByText('Token hết hạn')).toBeInTheDocument();
+  });
+
+  it('Sắp hết hạn (≤ 24h) → pill vàng "Hết hạn trong vài giờ"', async () => {
+    listAccountsMock.mockResolvedValueOnce({
+      data: {
+        data: [fakeAccount({ access_token_expires_at: new Date(Date.now() + 12 * 3600 * 1000).toISOString() })],
+      },
+    });
+    await renderSettings();
+    expect(await screen.findByText('Hết hạn trong vài giờ')).toBeInTheDocument();
+  });
+
+  it('is_active=false → pill xám "Đã ngắt"', async () => {
+    listAccountsMock.mockResolvedValueOnce({
+      data: { data: [fakeAccount({ is_active: false })] },
+    });
+    await renderSettings();
+    expect(await screen.findByText('Đã ngắt')).toBeInTheDocument();
+  });
+});
+
+afterEach(() => {
+  warnSpy.mockRestore();
+  errorSpy.mockRestore();
+});

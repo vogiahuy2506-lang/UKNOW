@@ -1,7 +1,9 @@
 import express from 'express';
 import webhookController from '../controllers/webhook.controller.js';
 import chatbotChannelWebhookController from '../controllers/chatbotChannelWebhook.controller.js';
+import tiktokBusinessWebhookController from '../controllers/tiktokBusinessWebhook.controller.js';
 import oauthController from '../controllers/oauth.controller.js';
+import tiktokSettingsController from '../controllers/tiktokSettings.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 
 const router = express.Router();
@@ -88,5 +90,17 @@ router.get('/oauth/callback/zalo-oa', oauthController.handleZaloCallback.bind(oa
 
 // WhatsApp Embedded Signup callback (public). state-signed HMAC carries userId.
 router.get('/oauth/callback/whatsapp', oauthController.handleWhatsAppCallback.bind(oauthController));
+
+// TikTok Business OAuth (PR-2 của plan tiktok-business-messaging-integration.md).
+// Public callback — state HMAC xác minh userId (Bẫy 11). KHÔNG authMiddleware.
+// Mount cùng prefix /api/webhooks/oauth/callback/{channel} cho nhất quán với
+// Facebook / Zalo / WhatsApp. Tên controller phương thức callback khớp pattern.
+router.get('/oauth/callback/tiktok', tiktokSettingsController.callback.bind(tiktokSettingsController));
+
+// TikTok Business Messaging webhook (PR-3 của plan, việc 5).
+// POST /api/webhooks/tiktok-business — không auth (TikTok không có user session).
+// Verify qua TIKTOK_APP_CLIENT_KEYS whitelist (fail-open theo pattern zaloOaWebhookSecrets).
+// Phải respond < 3s (Bẫy 5 plan) → controller trả 200 ngay rồi xử lý background.
+router.post('/tiktok-business', tiktokBusinessWebhookController.handle.bind(tiktokBusinessWebhookController));
 
 export default router;

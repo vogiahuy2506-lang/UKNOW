@@ -53,25 +53,38 @@ describe('putStream', () => {
 
   it('vượt trần → StorageObjectTooLargeError (code FILE_TOO_LARGE), tệp ghi dở bị xoá, luồng vẫn được đọc nốt', async () => {
     const { stream, state } = makeStream(50, 1000);
-    const err = await backend.putStream('uploads/7/forms/3/tmp/big.txt', stream, { maxBytes: 2500 }).catch((e) => e);
+    const key = 'uploads/7/forms/3/tmp/big.txt';
+    const err = await backend.putStream(key, stream, { maxBytes: 2500 }).catch((e) => e);
     expect(err).toBeInstanceOf(StorageObjectTooLargeError);
     expect(err.code).toBe('FILE_TOO_LARGE');
     expect(err.maxBytes).toBe(2500);
-    expect(await backend.exists('uploads/7/forms/3/tmp/big.txt')).toBe(false);
+    // Đợi out 'close' + fs.unlink async hoàn tất trước khi exists() (settle fire 'close' đăng ký
+    // unlink ở next tick, fs.unlink là microtask).
+    for (let i = 0; i < 50 && (await backend.exists(key)); i += 1) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    expect(await backend.exists(key)).toBe(false);
     // Đọc nốt (bỏ) toàn bộ — không huỷ luồng giữa chừng để response còn tới được client (xem ghi chú trong putStream).
     expect(state.produced).toBe(50);
   });
 
   it('luồng báo lỗi giữa chừng → từ chối và không để lại tệp', async () => {
     // Đẩy một chunk rồi huỷ NGAY trong read(): hoãn việc huỷ sang nextTick sẽ để read() chạy vô hạn đồng bộ (luồng chảy) và tràn bộ nhớ.
+    const key = 'uploads/7/forms/3/tmp/broken.txt';
     const stream = new Readable({
       read() {
         this.push(Buffer.alloc(100, 0x62));
         this.destroy(new Error('mat ket noi'));
       },
     });
-    await expect(backend.putStream('uploads/7/forms/3/tmp/broken.txt', stream, { maxBytes: 1000 })).rejects.toThrow();
-    expect(await backend.exists('uploads/7/forms/3/tmp/broken.txt')).toBe(false);
+    // Sanity: tệp chưa tồn tại trước khi test
+    expect(await backend.exists(key)).toBe(false);
+    await expect(backend.putStream(key, stream, { maxBytes: 1000 })).rejects.toThrow();
+    // Đợi out.destroy() thật sự release fd trước khi exists() check (destroy không đồng bộ 100%).
+    for (let i = 0; i < 50 && (await backend.exists(key)); i += 1) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    expect(await backend.exists(key)).toBe(false);
   });
 
   it('khoá không hợp lệ bị từ chối trước khi đụng đĩa', async () => {

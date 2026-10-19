@@ -98,8 +98,9 @@ describe('cronJobRegistry ↔ scheduler recordRun', () => {
     // 36 → 37: thêm support_ticket_auto_close (PLAN_TICKET_GOP_Y_VA_CHUONG_THONG_BAO PR-4 — đóng ticket chờ khách quá 7 ngày, 03:20).
     // 37 → 38: thêm abandoned_checkout_reminder (PLAN_NHAC_THANH_TOAN_LAI_SAU_2_GIO PR-A — nhắc thanh toán lại đơn bỏ dở, mỗi 15 phút).
     // 38 → 39: thêm zalo_friend_auto_accept (PLAN_ZALO_TU_DONG_DONG_Y_KET_BAN Việc 5 — quét bù lời mời kết bạn Zalo, mỗi 10 phút).
-    expect(CRON_JOBS).toHaveLength(39);
+    // 39 → 41: thêm tiktok_token_refresh + tiktok_outbound_log_cleanup (PLAN_TIKTOK_BUSINESS_MESSAGING_INTEGRATION việc 2.3 + 6 — refresh token 03:30 và dọn log cũ 7 ngày).
+    expect(CRON_JOBS).toHaveLength(41);
     const codes = CRON_JOBS.map((j) => j.code);
-    expect(new Set(codes).size).toBe(39);
+    expect(new Set(codes).size).toBe(41);
   });
 });
