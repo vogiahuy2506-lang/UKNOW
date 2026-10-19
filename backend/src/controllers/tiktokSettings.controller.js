@@ -55,8 +55,20 @@ function buildErrorRedirect(errorCode, reason) {
 class TiktokSettingsController {
   /**
    * GET /api/settings/tiktok-business/connect
-   * Bước 1: sinh state HMAC (chứa userId) rồi redirect user sang TikTok authorize URL.
+   * Bước 1: sinh state HMAC (chứa userId) rồi trả về `auth_url` để FE redirect.
+   *
+   * Lý do trả JSON thay vì `res.redirect()`: FE đang dùng Bearer token trong
+   * localStorage (xem `frontend/src/services/api.js`). Khi click nút bằng
+   * `window.location.href = ...`, browser KHÔNG gửi `Authorization` header
+   * (chỉ gửi khi qua axios/fetch) → authMiddleware trả 401 "Không tìm thấy
+   * token xác thực". FE phải gọi endpoint này bằng axios (có gắn Bearer), rồi
+   * tự `window.location.href = data.auth_url` để redirect sang TikTok.
+   *
    * Phải qua authMiddleware để biết userId.
+   *
+   * @param {object} req Express request — `req.user.id` được authMiddleware gắn vào.
+   * @param {object} res Express response.
+   * @returns {Promise<{ auth_url: string, state: string }>}
    */
   async connect(req, res) {
     try {
@@ -69,7 +81,7 @@ class TiktokSettingsController {
         redirectUri: REDIRECT_URI,
         state,
       });
-      return res.redirect(url);
+      return res.json({ success: true, data: { auth_url: url, state } });
     } catch (err) {
       console.error('[TikTokSettings] connect error:', err);
       return res.status(500).json({ success: false, message: err.message });

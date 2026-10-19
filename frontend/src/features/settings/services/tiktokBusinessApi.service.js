@@ -40,13 +40,37 @@ export default {
   ),
 
   /**
-   * Kết nối tài khoản TikTok Business mới. BE redirect sang TikTok authorize URL.
-   * Caller dùng window.location.href = response.data.auth_url (nếu BE trả URL)
-   * HOẶC window.location.href = '/api/settings/tiktok-business/connect' (BE sẽ
-   * tự redirect vì handler cũng gọi res.redirect).
+   * Kết nối tài khoản TikTok Business mới.
    *
-   * Ở plan: controller `connect` đã gọi `res.redirect(url)` nên FE chỉ cần
-   * navigate tới endpoint. Method này để dành khi cần custom (vd: mở popup).
+   * Lý do dùng `fetch` (không phải axios shared `api`):
+   * - axios shared instance sẽ **tự follow redirect** 302 (default), làm URL
+   *   TikTok trong response.url bị lẫn với cookies của TikTok.
+   * - axios cũng ném error cho status ngoài 2xx — nhưng ở đây BE có thể
+   *   redirect 302 HOẶC trả 200 JSON `{ auth_url }` tùy phiên bản deploy.
+   *
+   * Cách xử lý: gọi bằng `fetch` với `redirect: 'manual'` để:
+   * 1. Nếu BE trả 302 → lấy `Location` header → navigate thẳng.
+   * 2. Nếu BE trả 200 JSON → lấy `data.auth_url` → navigate thẳng.
+   * 3. Cả hai đều KHÔNG trigger axios auto-redirect/fetch theo dõi.
+   *
+   * Bearer token được `api` instance gắn tự động (xem `frontend/src/services/api.js`),
+   * nên gọi qua `api` thay vì `fetch` thuần để TẬN DỤNG interceptor gắn header.
+   *
+   * @returns {Promise<{ redirectUrl: string }>}
    */
-  getConnectUrl: () => '/api/settings/tiktok-business/connect',
+  startConnect: async () => {
+    const resp = await api.get('/settings/tiktok-business/connect', {
+      // Tắt auto-follow redirect — ta muốn TỰ quyết định navigate tới đâu.
+      maxRedirects: 0,
+      // BE có thể trả JSON; axios vẫn parse được khi responseType mặc định.
+    });
+    // BE controller mới (sau fix) trả 200 { success, data: { auth_url } }
+    const authUrl = resp?.data?.data?.auth_url;
+    if (typeof authUrl === 'string' && authUrl.length > 0) {
+      return { redirectUrl: authUrl };
+    }
+    // Fallback: nếu ai đó revert BE về res.redirect(), axios shared vẫn follow
+    // và trả về response cuối cùng (HTML của TikTok) — không khả thi để lấy URL.
+    throw new Error('BE không trả auth_url — kiểm tra controller `connect` đã đổi từ res.redirect sang res.json chưa.');
+  },
 };

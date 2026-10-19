@@ -123,20 +123,45 @@ describe('tiktokSettings.controller — connect', () => {
     mockGetAuthorizeUrl.mockReturnValue('https://tiktok.com/v2/auth/authorize/?...');
   });
 
-  test('Sinh state + redirect tới TikTok authorize URL', async () => {
+  test('Sinh state + trả về auth_url (FE tự navigate — Bearer token qua axios)', async () => {
     const res = mockRes();
     await controller.connect(mockReq({ user: { id: 42 } }), res);
     expect(mockSignState).toHaveBeenCalledWith(42);
     expect(mockGetAuthorizeUrl).toHaveBeenCalledWith(
       expect.objectContaining({ state: 'signed-state-123' })
     );
-    expect(res.redirect).toHaveBeenCalledWith('https://tiktok.com/v2/auth/authorize/?...');
+    // Controller mới KHÔNG `res.redirect()` nữa — browser navigation qua
+    // `window.location.href` không gửi `Authorization: Bearer ...` (token
+    // trong localStorage), authMiddleware 401. Trả JSON `{ auth_url }` để
+    // FE axios gắn header rồi tự navigate.
+    expect(res.redirect).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        data: expect.objectContaining({
+          auth_url: 'https://tiktok.com/v2/auth/authorize/?...',
+          state: 'signed-state-123',
+        }),
+      })
+    );
   });
 
   test('Thiếu req.user.id → 401', async () => {
     const res = mockRes();
     await controller.connect(mockReq({ user: null }), res);
     expect(res.status).toHaveBeenCalledWith(401);
+  });
+
+  test('signState throw → 500 với message', async () => {
+    mockSignState.mockImplementationOnce(() => {
+      throw new Error('Chưa cấu hình OAUTH_STATE_SECRET');
+    });
+    const res = mockRes();
+    await controller.connect(mockReq({ user: { id: 42 } }), res);
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ success: false, message: expect.stringContaining('OAUTH_STATE_SECRET') })
+    );
   });
 });
 

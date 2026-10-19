@@ -13965,6 +13965,7 @@ Feel free to ask me anything!`,
     title: 'TikTok Business',
     subtitle: 'Connect a TikTok Business account so your chatbot can auto-reply to DM messages.',
     connect: 'Connect TikTok Business',
+    connecting: 'Redirecting...',
     empty: 'No TikTok Business account yet. Click "Connect" to start.',
     confirmDelete: 'Disconnect this TikTok account?',
     status: {
@@ -13980,6 +13981,8 @@ Feel free to ask me anything!`,
     toast: {
       refreshed: 'Token refreshed.',
       disconnected: 'Disconnected.',
+      connectMissingUrl: 'Backend did not return a connect URL — please contact support.',
+      sessionExpired: 'Your session has expired. Please log in again.',
     },
     rateLimit: {
       title: 'Auto-reply rate limit',

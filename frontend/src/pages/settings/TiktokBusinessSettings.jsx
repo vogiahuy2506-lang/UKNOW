@@ -136,6 +136,9 @@ export default function TiktokBusinessSettings() {
   const [loading, setLoading] = useState(true);
   const [refreshingId, setRefreshingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  // Disable nút "Kết nối" trong khi chờ axios lấy `auth_url` rồi navigate —
+  // tránh user bấm đúp khi request đang bay.
+  const [connecting, setConnecting] = useState(false);
   // Đọc ?error / ?success / ?hint từ URL (set bởi BE OAuth callback redirect).
   const [oauthError, setOauthError] = useState(null);
   const [oauthHint, setOauthHint] = useState(null);
@@ -180,9 +183,38 @@ export default function TiktokBusinessSettings() {
     loadAccounts();
   }, [loadAccounts]);
 
-  const handleConnect = () => {
-    // BE controller `connect` đã gọi `res.redirect()` nên chỉ cần navigate
-    window.location.href = tiktokBusinessApiService.getConnectUrl();
+  const handleConnect = async () => {
+    // Phải gọi qua axios thay vì window.location.href thẳng tới endpoint:
+    // FE lưu access token trong localStorage (xem `frontend/src/services/api.js`
+    // `getStoredToken('accessToken')`), và axios interceptor tự gắn
+    // `Authorization: Bearer ...`. Khi navigate bằng `window.location.href`,
+    // browser KHÔNG gửi header đó (chỉ gửi khi qua fetch/axios) →
+    // authMiddleware ở BE trả 401 "Không tìm thấy token xác thực".
+    //
+    // Sau khi axios lấy `{ auth_url }` từ BE controller, ta TỰ navigate
+    // tới TikTok authorize URL (cross-origin) — bước này không cần Bearer.
+    try {
+      setConnecting(true);
+      const { redirectUrl } = await tiktokBusinessApiService.startConnect();
+      if (!redirectUrl) {
+        toast.error(t('tiktokBusiness.toast.connectMissingUrl', 'BE không trả URL kết nối — liên hệ hỗ trợ.'));
+        return;
+      }
+      window.location.href = redirectUrl;
+    } catch (err) {
+      // Lỗi 401 ở đây nghĩa là access token trong storage không hợp lệ (hết
+      // hạn / bị xoá). api.js đã TỰ refresh token và retry — nếu vẫn fail là
+      // refresh token cũng hỏng → buộc logout. Tránh hiển thị "Đã xảy ra lỗi"
+      // chung chung vì sẽ khiến user bấm lại vô ích.
+      const status = err?.response?.status;
+      if (status === 401) {
+        toast.error(t('tiktokBusiness.toast.sessionExpired', 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'));
+      } else {
+        toast.error(err?.response?.data?.message || err.message);
+      }
+    } finally {
+      setConnecting(false);
+    }
   };
 
   const handleRefresh = async (id) => {
@@ -231,10 +263,13 @@ export default function TiktokBusinessSettings() {
           <button
             type="button"
             onClick={handleConnect}
-            className="inline-flex items-center gap-2 rounded-xl bg-pink-600 px-4 py-2 text-sm font-semibold text-white hover:bg-pink-700 transition-colors"
+            disabled={connecting}
+            className="inline-flex items-center gap-2 rounded-xl bg-pink-600 px-4 py-2 text-sm font-semibold text-white hover:bg-pink-700 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
           >
             <HiOutlineLink className="h-4 w-4" aria-hidden="true" />
-            {t('tiktokBusiness.connect', 'Kết nối TikTok Business')}
+            {connecting
+              ? t('tiktokBusiness.connecting', 'Đang chuyển hướng...')
+              : t('tiktokBusiness.connect', 'Kết nối TikTok Business')}
           </button>
         </div>
 

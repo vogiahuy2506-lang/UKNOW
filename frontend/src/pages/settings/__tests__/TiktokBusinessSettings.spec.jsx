@@ -28,7 +28,10 @@ vi.mock('../../../features/settings/services/tiktokBusinessApi.service', () => (
     refreshAccount: (...args) => refreshAccountMock(...args),
     deleteAccount: (...args) => deleteAccountMock(...args),
     testSend: vi.fn(),
-    getConnectUrl: () => '/api/settings/tiktok-business/connect',
+    // `startConnect` mới thay thế `getConnectUrl` cũ (BE đổi từ
+    // `res.redirect()` sang `res.json({ auth_url })` để gắn được Bearer token
+    // qua axios interceptor — xem commit fix).
+    startConnect: vi.fn(),
   },
 }));
 
@@ -166,9 +169,17 @@ describe('TiktokBusinessSettings — actions', () => {
 });
 
 describe('TiktokBusinessSettings — AccountStatus pill', () => {
-  beforeEach(() => {
+  let startConnectMock;
+  beforeEach(async () => {
     listAccountsMock.mockReset();
     window.history.replaceState({}, '', '/');
+    // Reset startConnect (cùng instance vi.fn() từ vi.mock) để tránh
+    // pollution giữa 2 test click trong describe này.
+    const serviceModule = await import(
+      '../../../features/settings/services/tiktokBusinessApi.service'
+    );
+    startConnectMock = serviceModule.default.startConnect;
+    startConnectMock.mockReset();
   });
 
   it('Token hết hạn (expires_at < now) → pill đỏ "Token hết hạn"', async () => {
@@ -197,6 +208,77 @@ describe('TiktokBusinessSettings — AccountStatus pill', () => {
     });
     await renderSettings();
     expect(await screen.findByText('Đã ngắt')).toBeInTheDocument();
+  });
+
+  // Sau khi BE controller `connect` đổi từ `res.redirect()` sang trả
+  // `{ auth_url }` JSON, FE phải gọi qua axios (để gắn `Authorization: Bearer
+  // ...`) rồi TỰ navigate. Test này khóa contract: click nút → gọi
+  // `startConnect` → set `window.location.href = auth_url`.
+  it('Click "Kết nối" → gọi startConnect, navigate tới auth_url', async () => {
+    listAccountsMock.mockResolvedValueOnce({ data: { data: [] } });
+
+    startConnectMock.mockResolvedValueOnce({
+      redirectUrl: 'https://www.tiktok.com/v2/auth/authorize/?client_key=abc&state=xyz',
+    });
+
+    // Theo dõi window.location.href — happy-dom không tự reload khi gán.
+    const originalLocation = window.location;
+    const hrefSetter = vi.fn();
+    delete window.location;
+    window.location = { ...originalLocation, href: '' };
+    Object.defineProperty(window.location, 'href', {
+      set: hrefSetter,
+      get: () => originalLocation.href,
+      configurable: true,
+    });
+
+    const user = userEvent.setup();
+    await renderSettings();
+    const connectBtn = await screen.findByRole('button', { name: /Kết nối TikTok Business/i });
+    await user.click(connectBtn);
+
+    await waitFor(() => {
+      expect(startConnectMock).toHaveBeenCalledTimes(1);
+    });
+    expect(hrefSetter).toHaveBeenCalledWith(
+      'https://www.tiktok.com/v2/auth/authorize/?client_key=abc&state=xyz'
+    );
+
+    window.location = originalLocation;
+  });
+
+  it('Click "Kết nối" khi BE lỗi 401 → toast "Phiên đã hết hạn", KHÔNG navigate', async () => {
+    listAccountsMock.mockResolvedValueOnce({ data: { data: [] } });
+    startConnectMock.mockRejectedValueOnce({
+      response: { status: 401, data: { message: 'Token hết hạn' } },
+    });
+
+    const hrefSetter = vi.fn();
+    const originalLocation = window.location;
+    delete window.location;
+    window.location = { ...originalLocation, href: '' };
+    Object.defineProperty(window.location, 'href', {
+      set: hrefSetter,
+      get: () => originalLocation.href,
+      configurable: true,
+    });
+
+    const user = userEvent.setup();
+    await renderSettings();
+    const connectBtn = await screen.findByRole('button', { name: /Kết nối TikTok Business/i });
+    await user.click(connectBtn);
+
+    await waitFor(() => {
+      expect(startConnectMock).toHaveBeenCalledTimes(1);
+    });
+    // Đợi setConnecting(false) từ finally để tránh warning "update not wrapped in act"
+    // — vitest cảnh báo khi state update xảy ra ngoài act(...) sau khi test xong.
+    await waitFor(() => {
+      expect(connectBtn).not.toBeDisabled();
+    });
+    expect(hrefSetter).not.toHaveBeenCalled();
+
+    window.location = originalLocation;
   });
 });
 

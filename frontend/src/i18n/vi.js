@@ -13979,6 +13979,9 @@ export default {
     title: 'TikTok Business',
     subtitle: 'Kết nối tài khoản TikTok Business để chatbot tự động trả lời tin nhắn DM.',
     connect: 'Kết nối TikTok Business',
+    // Hiển thị trên nút trong khi axios đang gọi `startConnect` lấy `auth_url`
+    // — user biết nút đã được bấm, tránh bấm đúp gây duplicate request.
+    connecting: 'Đang chuyển hướng...',
     empty: 'Chưa có tài khoản TikTok Business nào. Bấm "Kết nối" để bắt đầu.',
     confirmDelete: 'Ngắt kết nối tài khoản TikTok này?',
     status: {
@@ -13994,6 +13997,13 @@ export default {
     toast: {
       refreshed: 'Đã làm mới token.',
       disconnected: 'Đã ngắt kết nối.',
+      // BE trả 200 nhưng response.data.data.auth_url rỗng — controller lỗi
+      // hoặc schema thay đổi. Hướng dẫn user liên hệ hỗ trợ thay vì bấm lại.
+      connectMissingUrl: 'BE không trả URL kết nối — liên hệ hỗ trợ.',
+      // axios interceptor đã retry refresh token 1 lần — fail nghĩa là
+      // refresh token cũng hỏng. Toast này tránh hiển thị chung chung kiểu
+      // "Đã xảy ra lỗi" khiến user bấm lại vô ích.
+      sessionExpired: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
     },
     rateLimit: {
       title: 'Giới hạn gửi tự động',
