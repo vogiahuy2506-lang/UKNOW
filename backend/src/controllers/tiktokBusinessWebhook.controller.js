@@ -6,7 +6,12 @@
  * pattern chat-router khác với Business Messaging flow) để dễ test + bảo trì.
  *
  * Flow:
- *   1. Verify client_key ∈ TIKTOK_APP_CLIENT_KEYS (Bẫy plan §5.2).
+ *   0. Bí mật trong đường dẫn: `POST /api/webhooks/tiktok-business/:secret` phải khớp env
+ *      TIKTOK_WEBHOOK_PATH_SECRET (so sánh hằng thời gian; thiếu cấu hình = từ chối). `client_key`
+ *      KHÔNG phải bí mật (nằm trong URL OAuth công khai) nên không đủ làm xác thực, và bản TikTok
+ *      hiện chưa có chữ ký webhook đã kiểm chứng — dùng cùng mẫu với webhook Mắt Bão (`/einvoice/webhook/:secret`).
+ *      Sai/thiếu bí mật vẫn trả 200 (TikTok không gửi lại dồn dập) nhưng KHÔNG xử lý sự kiện nào.
+ *   1. Verify client_key ∈ TIKTOK_APP_CLIENT_KEYS (Bẫy plan §5.2) — lớp phụ.
  *   2. Parse body — KHÔNG cần raw body (Bẫy 5 plan — verified ở PR-1).
  *   3. Branch theo 8 event từ docs v1.3 (research §event types).
  *   4. im_send_msg / im_receive_msg / im_referral_msg → route qua
@@ -21,6 +26,7 @@
  * Việc 5 của plan tiktok-business-messaging-integration.md.
  */
 
+import crypto from 'crypto';
 import chatbotChannelRepository from '../repositories/ai/chatbotChannel.repository.js';
 import tiktokBusinessAccountRepository from
   '../repositories/ai/tiktokBusinessAccount.repository.js';
@@ -39,6 +45,27 @@ const SUPPORTED_EVENTS = new Set([
   'policy_violation',
   'business_profile_update',
 ]);
+
+/**
+ * Bí mật nằm trong đường dẫn webhook (`/tiktok-business/:secret`). So sánh hằng thời gian; thiếu cấu hình
+ * (`TIKTOK_WEBHOOK_PATH_SECRET` trống) hoặc thiếu giá trị gửi lên → false (đóng-khi-lỗi, khác whitelist client_key bên dưới).
+ * Cùng mẫu với `verifyMatbaoWebhookSecret` (einvoiceView.service.js).
+ *
+ * @param {unknown} provided phần `:secret` trong URL
+ * @returns {boolean}
+ */
+export function verifyTiktokWebhookPathSecret(provided) {
+  const expected = String(process.env.TIKTOK_WEBHOOK_PATH_SECRET || '');
+  if (!expected || !provided) return false;
+  const a = Buffer.from(String(provided));
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  try {
+    return crypto.timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Whitelist client_key. Mỗi app TikTok có 1 client_key riêng. Khi UKNOW
@@ -62,14 +89,22 @@ function isClientKeyAllowed(clientKey) {
 
 class TiktokBusinessWebhookController {
   /**
-   * POST /api/webhooks/tiktok-business
-   * Entry point. TikTok gửi batch 1 hoặc nhiều event.
+   * POST /api/webhooks/tiktok-business/:secret
+   * Entry point. TikTok gửi batch 1 hoặc nhiều event. Đường cũ KHÔNG có `:secret` vẫn được mount nhưng
+   * không bao giờ xử lý (trả 200 để TikTok không gửi lại) — xem verifyTiktokWebhookPathSecret.
    */
   async handle(req, res) {
     try {
       // 1. Phải respond 200 trong vòng 3s (Bẫy plan §5).
       // Trả 200 ngay, xử lý event trong background.
       res.status(200).json({ success: true });
+
+      // 1b. Bí mật đường dẫn — KHÔNG xử lý gì (kể cả vô hiệu hoá tài khoản ở account_status_update) nếu sai/thiếu.
+      // Không ghi giá trị bí mật vào log.
+      if (!verifyTiktokWebhookPathSecret(req.params?.secret)) {
+        console.warn('[TikTokWebhook] bỏ qua webhook: thiếu hoặc sai bí mật đường dẫn (TIKTOK_WEBHOOK_PATH_SECRET)');
+        return;
+      }
 
       const body = req.body || {};
       const events = Array.isArray(body.events) ? body.events : [body];

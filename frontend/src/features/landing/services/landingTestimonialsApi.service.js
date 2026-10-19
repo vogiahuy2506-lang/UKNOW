@@ -1,12 +1,18 @@
 import api from '../../../services/api.js';
 
 /**
- * Lấy danh sách đánh giá từ API công khai (landing `/l`).
+ * Lấy danh sách đánh giá từ API công khai.
  *
+ * Dữ liệu là CỦA TỪNG tài khoản: server chỉ trả dòng của chủ landing ĐÃ XUẤT BẢN có `slug` này
+ * (thiếu slug / chưa xuất bản → rỗng), không còn gộp mọi tài khoản.
+ *
+ * @param {string} slug slug landing đã xuất bản
  * @returns {Promise<object[]>}
  */
-export async function fetchPublicLandingTestimonials() {
-  const { data } = await api.get('/public/landing-testimonials');
+export async function fetchPublicLandingTestimonials(slug) {
+  const normalizedSlug = String(slug ?? '').trim();
+  if (!normalizedSlug) return [];
+  const { data } = await api.get('/public/landing-testimonials', { params: { slug: normalizedSlug } });
   if (!data?.success || !Array.isArray(data.data)) return [];
   return data.data;
 }

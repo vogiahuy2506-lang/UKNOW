@@ -12,6 +12,7 @@ import { fetchInterestedCustomerCoursesLocal } from '../utils/nodeConfigModal.he
 import { INTERESTED_CUSTOMER_COLUMN_OPTIONS } from '../constants/dataNodeColumnOptions';
 import { NodeConfigDataColumnPicker } from './NodeConfigDataColumnPicker';
 import NumberInput from '../../../components/common/NumberInput';
+import { useAuthStore } from '../../../stores/authStore';
 
 /** Trần số khách của loại 'all' (khớp ALL_CUSTOMERS_LIMIT_CAP ở backend). */
 const ALL_CUSTOMERS_MAX_LIMIT = 50000;
@@ -67,6 +68,9 @@ export const NodeConfigReadInterestedCustomersSection = ({
   campaignId,
 }) => {
   const { t } = useI18n();
+  // Nguồn "API Founder AI" đọc khách/đơn của cửa hàng NỀN TẢNG (khoá WooCommerce của nền tảng) — backend chỉ cho workspace của super admin
+  // (403 / 0 người với chủ tài khoản thường). Cách nhận biết super admin dùng chung với phần còn lại của app: `user.role === 'admin'`.
+  const isSuperAdmin = useAuthStore((state) => state.user?.role === 'admin');
   const [lastAutoLoadTestKey, setLastAutoLoadTestKey] = useState('');
 
   const INTERESTED_COURSE_STATUS_LABELS = {
@@ -231,12 +235,16 @@ export const NodeConfigReadInterestedCustomersSection = ({
           { value: 'purchased', label: t('nodeConfig.purchased'), desc: t('nodeConfig.purchasedDesc') },
           { value: 'both', label: t('nodeConfig.both'), desc: t('nodeConfig.bothDesc') },
         ];
-        const dataSourceOpts = [
-          { value: 'database', label: t('nodeConfig.database'), desc: t('nodeConfig.databaseDesc') },
-          { value: 'api', label: t('nodeConfig.api'), desc: t('nodeConfig.apiDesc') },
-        ];
         const currentCustomerType = formData.interestedCustomerType || 'interested';
         const currentDataSource = formData.interestedDataSource || 'database';
+        // Tài khoản thường KHÔNG thấy lựa chọn API. Node đã lưu sẵn `api` thì vẫn hiện đúng giá trị đang lưu (không âm thầm đổi
+        // cấu hình đã lưu — người dùng tự chuyển sang Cơ sở dữ liệu nếu muốn; backend vẫn chặn lúc chạy).
+        const dataSourceOpts = [
+          { value: 'database', label: t('nodeConfig.database'), desc: t('nodeConfig.databaseDesc') },
+          ...(isSuperAdmin || currentDataSource === 'api'
+            ? [{ value: 'api', label: t('nodeConfig.api'), desc: t('nodeConfig.apiDesc') }]
+            : []),
+        ];
         return (
           <div className="space-y-4">
             <div>

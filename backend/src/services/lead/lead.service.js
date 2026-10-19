@@ -454,8 +454,12 @@ class LeadService {
    * @returns {Promise<object[]>}
    */
   async listCustomFieldDefinitions(scope = {}) {
+    const ownerId = scope.workspaceOwnerId || scope.userId || scope.idUser;
+    // `userId` BẮT BUỘC: buildLandingScopeCondition thiếu userId thì trả `1 = 0` — danh sách luôn rỗng (lỗi cũ): tra kiểu trường
+    // tùy chỉnh khi lọc lead và cột tùy chỉnh của CSV không chạy. Chủ workspace dùng làm cả hai (không lấy id người thao tác).
     const rows = await landingPageRepository.listLeadFormConfigsInScope({
-      workspaceOwnerId: scope.workspaceOwnerId || scope.userId || scope.idUser,
+      userId: ownerId,
+      workspaceOwnerId: ownerId,
       isSuperAdmin: scope.isSuperAdmin,
     });
     const byKey = new Map();

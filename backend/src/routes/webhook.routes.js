@@ -98,9 +98,12 @@ router.get('/oauth/callback/whatsapp', oauthController.handleWhatsAppCallback.bi
 router.get('/oauth/callback/tiktok', tiktokSettingsController.callback.bind(tiktokSettingsController));
 
 // TikTok Business Messaging webhook (PR-3 của plan, việc 5).
-// POST /api/webhooks/tiktok-business — không auth (TikTok không có user session).
-// Verify qua TIKTOK_APP_CLIENT_KEYS whitelist (fail-open theo pattern zaloOaWebhookSecrets).
+// POST /api/webhooks/tiktok-business/:secret — không auth (TikTok không có user session); bí mật trong đường dẫn
+// phải khớp env TIKTOK_WEBHOOK_PATH_SECRET (cùng mẫu webhook Mắt Bão). `client_key` KHÔNG phải bí mật nên chỉ là
+// lớp phụ (TIKTOK_APP_CLIENT_KEYS whitelist). Sai/thiếu bí mật vẫn trả 200 nhưng không xử lý sự kiện.
+// Đường cũ không có :secret giữ lại CHỈ để trả 200 (đã đăng ký với TikTok thì không bị gửi lại dồn dập) — không xử lý.
 // Phải respond < 3s (Bẫy 5 plan) → controller trả 200 ngay rồi xử lý background.
+router.post('/tiktok-business/:secret', tiktokBusinessWebhookController.handle.bind(tiktokBusinessWebhookController));
 router.post('/tiktok-business', tiktokBusinessWebhookController.handle.bind(tiktokBusinessWebhookController));
 
 export default router;
