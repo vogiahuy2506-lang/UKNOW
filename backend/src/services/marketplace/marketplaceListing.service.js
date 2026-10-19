@@ -8,6 +8,11 @@ import {
   sanitizeLandingSnapshotForSharing,
   stripSellerPrivateLandingConfig,
 } from '../../utils/marketplaceLandingSnapshot.util.js';
+import {
+  stripSellerBoundFlowJson,
+  stripSellerBoundSnapshotNodes,
+} from '../../utils/marketplaceCampaignSnapshot.util.js';
+import marketplaceCampaignContentService from './marketplaceCampaignContent.service.js';
 
 // Mapping resource_type -> auto category (không cho user chọn category thủ công)
 const AUTO_CATEGORY_MAP = {
@@ -85,21 +90,33 @@ class MarketplaceListingService {
     const connections = await campaignCrudRepository.findConnectionsByCampaignId(campaignId);
 
     // Create snapshot
+    const rawSnapshotNodes = nodes.map(n => ({
+      id: n.id,
+      nodeType: n.node_type,
+      nodeSubtype: n.node_subtype,
+      nodeName: n.node_name,
+      nodeDescription: n.node_description,
+      positionX: n.position_x,
+      positionY: n.position_y,
+      config: n.config,
+      executionOrder: n.execution_order,
+    }));
+
+    // Nội dung MẪU mà khối gửi thật sự dùng (email / Zalo) chụp vào snapshot: id mẫu trong config trỏ mẫu của NGƯỜI BÁN, mà đường gửi
+    // lọc mẫu theo chủ chiến dịch — người mua chỉ gửi được nhờ bản sao mẫu tạo lúc mua. Mẫu bị xoá / không thuộc người bán → 400
+    // (nêu tên khối), không đăng hàng hỏng.
+    const templates = await marketplaceCampaignContentService.buildListingTemplates({
+      sellerId: userId,
+      nodes: rawSnapshotNodes,
+    });
+
+    // Snapshot không mang dữ liệu gắn người bán (tài khoản gửi, người nhận nhúng, nguồn dữ liệu…) — gỡ cả ở `nodes` lẫn `flowJson`
+    // (trình dựng mở sơ đồ từ flow_json). Id mẫu giữ nguyên làm khoá tra `templates`; đổi sang id của người mua lúc mua.
     const snapshotData = {
       campaignName: campaign.campaign_name,
       campaignType: campaign.campaign_type,
-      flowJson: campaign.flow_json,
-      nodes: nodes.map(n => ({
-        id: n.id,
-        nodeType: n.node_type,
-        nodeSubtype: n.node_subtype,
-        nodeName: n.node_name,
-        nodeDescription: n.node_description,
-        positionX: n.position_x,
-        positionY: n.position_y,
-        config: n.config,
-        executionOrder: n.execution_order,
-      })),
+      flowJson: stripSellerBoundFlowJson(campaign.flow_json),
+      nodes: stripSellerBoundSnapshotNodes(rawSnapshotNodes),
       connections: connections.map(c => ({
         id: c.id,
         sourceNodeId: c.source_node_id,
@@ -108,6 +125,7 @@ class MarketplaceListingService {
         connectionLabel: c.connection_label,
         conditionConfig: c.condition_config,
       })),
+      templates,
     };
 
     // Ensure title is not empty

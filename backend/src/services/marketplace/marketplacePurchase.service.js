@@ -8,10 +8,20 @@ import { getWalletBalance } from '../../repositories/payment/topup.repository.js
 import chatbotCloneRepository from '../../repositories/ai/chatbotClone.repository.js';
 import { assertChatbotSlotAvailable } from '../ai/chatbotSlot.service.js';
 import campaignNodeReferences from '../campaign/campaignNodeReferences.service.js';
+import marketplaceCampaignContentService from './marketplaceCampaignContent.service.js';
 import {
   sanitizeLandingSnapshotForSharing,
   stripSellerPrivateLandingConfig,
 } from '../../utils/marketplaceLandingSnapshot.util.js';
+import {
+  stripSellerBoundFlowJson,
+  stripSellerBoundNodeConfig,
+} from '../../utils/marketplaceCampaignSnapshot.util.js';
+import {
+  createTemplateIdMaps,
+  remapTemplateIdsInConfig,
+  remapTemplateIdsInFlowJson,
+} from '../../utils/campaignTemplateReference.util.js';
 import { replaceFormEmbedsWithSlots } from '../../utils/landingHtmlInjection.util.js';
 
 class MarketplacePurchaseService {
@@ -52,6 +62,8 @@ class MarketplacePurchaseService {
    */
   async purchase(listingId, buyerId, { roleCode } = {}) {
     const client = await db.getClient();
+    // Tệp đã chép sang kho của người mua (chiến dịch kèm mẫu có tệp đính kèm): nằm NGOÀI transaction DB nên phải tự dọn khi rollback.
+    const copiedKeys = [];
 
     try {
       await client.query('BEGIN');
@@ -102,6 +114,14 @@ class MarketplacePurchaseService {
         await assertChatbotSlotAvailable(buyerId, { client, roleCode });
       }
 
+      // 4c. Chiến dịch: gom nội dung mẫu đi kèm (snapshot, hoặc mẫu sống của người bán với listing cũ) và chặn bán hàng hỏng — thiếu
+      // mẫu / mất tệp đính kèm → LISTING_CONTENT_UNAVAILABLE; không đủ dung lượng cho tệp → MARKETPLACE_STORAGE_QUOTA_EXCEEDED —
+      // TRƯỚC khi trừ credit. Bước này không ghi gì, không chép tệp.
+      let preparedContent = null;
+      if (listing.resource_type === 'campaign') {
+        preparedContent = await marketplaceCampaignContentService.prepareForPurchase({ client, listing, buyerId });
+      }
+
       // 5. Process credits if price > 0 (sau khi check limit)
       if (listing.price_credits > 0) {
         const amount = listing.price_credits;
@@ -135,7 +155,7 @@ class MarketplacePurchaseService {
       // 6. Clone resource
       let clonedResource;
       if (listing.resource_type === 'campaign') {
-        clonedResource = await this._cloneCampaign(client, buyerId, listing);
+        clonedResource = await this._cloneCampaign(client, buyerId, listing, preparedContent, copiedKeys);
       } else if (listing.resource_type === 'chatbot') {
         clonedResource = await this._cloneChatbot(client, buyerId, listing);
       } else {
@@ -168,6 +188,7 @@ class MarketplacePurchaseService {
       return { success: true, clonedResource };
     } catch (error) {
       await client.query('ROLLBACK');
+      await marketplaceCampaignContentService.discardCopiedFiles(copiedKeys);
       throw error;
     } finally {
       client.release();
@@ -175,13 +196,39 @@ class MarketplacePurchaseService {
   }
 
   /**
+   * Cấu hình một khối của snapshot → cấu hình cho người mua: gỡ dữ liệu gắn người bán (tài khoản gửi, danh sách người nhận, nguồn dữ
+   * liệu…) rồi đổi id mẫu của người bán sang id bản sao của người mua. Cùng một hàm cho `campaign_nodes.config` và `flow_json`.
+   * @private
+   */
+  _buyerNodeConfig(subtype, config, templateMaps) {
+    return remapTemplateIdsInConfig(subtype, stripSellerBoundNodeConfig(subtype, config), templateMaps);
+  }
+
+  /**
    * Clone campaign from listing snapshot.
    * Snapshot phải chứa nodes (với id) và connections (với sourceNodeId/targetNodeId).
    * Bỏ qua connections nếu thiếu node tương ứng (defensive — bản cũ có thể đã lỡ).
+   *
+   * @param {object} client client của transaction mua
+   * @param {number|string} userId người mua (chủ workspace)
+   * @param {object} listing
+   * @param {object|null} [preparedContent] kết quả `marketplaceCampaignContentService.prepareForPurchase` (null = không kèm mẫu)
+   * @param {string[]} [copiedKeys] nhận các khoá tệp đã chép sang kho người mua để người gọi dọn khi rollback
    * @private
    */
-  async _cloneCampaign(client, userId, listing) {
+  async _cloneCampaign(client, userId, listing, preparedContent = null, copiedKeys = []) {
     const snapshot = listing.snapshot_data || {};
+
+    // Bản sao mẫu của người mua (+ tệp đính kèm) → bản đồ id mẫu cũ → mới. Không có mẫu nào cần chép thì bản đồ rỗng.
+    const { maps: templateMaps } = preparedContent
+      ? await marketplaceCampaignContentService.materializeTemplates(client, { buyerId: userId, prepared: preparedContent, copiedKeys })
+      : { maps: createTemplateIdMaps() };
+
+    // flow_json là NGUỒN HIỂN THỊ của trình dựng (config trong đó đè lên campaign_nodes) và được ghi ngược khi lưu, nên phải gỡ dữ liệu
+    // người bán + đổi id mẫu ở đây giống hệt campaign_nodes. Id khối trong flow_json giữ nguyên (cùng không gian id với cạnh của nó).
+    const flowJson = snapshot.flowJson
+      ? remapTemplateIdsInFlowJson(stripSellerBoundFlowJson(snapshot.flowJson), templateMaps)
+      : { nodes: [], connections: [] };
 
     // Tạo campaign mới. flow_json lưu trực tiếp để giữ nguyên trạng thái.
     // marketplace_purchase_id sẽ được SET bởi trigger sau khi INSERT
@@ -194,7 +241,7 @@ class MarketplacePurchaseService {
         snapshot.campaignName || 'Imported Campaign',
         listing.description || null,
         snapshot.campaignType || 'email',
-        JSON.stringify(snapshot.flowJson || { nodes: [], connections: [] }),
+        JSON.stringify(flowJson),
       ]
     );
 
@@ -203,8 +250,13 @@ class MarketplacePurchaseService {
     // Clone nodes (bỏ qua node không hợp lệ)
     const nodeIdMap = new Map();
     const nodes = Array.isArray(snapshot.nodes) ? snapshot.nodes : [];
+    const buyerConfigs = new Map();
     for (const node of nodes) {
       if (!node || node.id == null) continue;
+      const buyerConfig = node.config
+        ? this._buyerNodeConfig(node.nodeSubtype, node.config, templateMaps)
+        : node.config;
+      buyerConfigs.set(String(node.id), buyerConfig);
       const { rows } = await client.query(
         `INSERT INTO campaign_nodes
          (id_campaign, node_type, node_subtype, node_name, node_description, position_x, position_y, config, execution_order)
@@ -218,7 +270,7 @@ class MarketplacePurchaseService {
           node.nodeDescription || null,
           node.positionX ?? 0,
           node.positionY ?? 0,
-          node.config ? JSON.stringify(node.config) : null,
+          buyerConfig ? JSON.stringify(buyerConfig) : null,
           Number.isFinite(node.executionOrder) ? node.executionOrder : null,
         ]
       );
@@ -233,8 +285,9 @@ class MarketplacePurchaseService {
     );
     for (const node of nodes) {
       if (!node || node.id == null || !node.config) continue;
-      const nextConfig = campaignNodeReferences.remapNodeReferencesDeep(node.config, referenceIdMap);
-      if (nextConfig === node.config) continue;
+      const buyerConfig = buyerConfigs.get(String(node.id));
+      const nextConfig = campaignNodeReferences.remapNodeReferencesDeep(buyerConfig, referenceIdMap);
+      if (nextConfig === buyerConfig) continue;
       await client.query(
         'UPDATE campaign_nodes SET config = $1 WHERE id = $2',
         [JSON.stringify(nextConfig), nodeIdMap.get(String(node.id))]

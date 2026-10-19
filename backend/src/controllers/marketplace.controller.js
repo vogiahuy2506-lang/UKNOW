@@ -337,6 +337,15 @@ class MarketplaceController {
           limitReached: true,
         });
       }
+      // Chiến dịch kèm tệp đính kèm: người mua hết dung lượng để nhận bản sao tệp. Giữ `code` để giao diện chỉ đúng chỗ (xoá bớt tệp /
+      // nâng dung lượng); bộ xử lý lỗi chung chỉ trả `message` cho lỗi 4xx.
+      if (error.code === 'MARKETPLACE_STORAGE_QUOTA_EXCEEDED') {
+        return res.status(error.status || 400).json({
+          success: false,
+          code: error.code,
+          message: error.message,
+        });
+      }
       next(error);
     }
   }

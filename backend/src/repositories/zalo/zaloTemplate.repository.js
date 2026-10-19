@@ -118,11 +118,35 @@ class ZaloTemplateRepository {
     return result.rows[0] || null;
   }
 
-  async create({ userId, templateName, templateCode, subject, bodyText, attachments, variables, category }, client = null) {
+  /**
+   * Nội dung các mẫu Zalo của MỘT chủ theo danh sách id (Marketplace: chụp nội dung lúc đăng bán, đọc lại mẫu sống của người bán cho
+   * listing cũ). Điều kiện `id_user = ownerUserId` là bắt buộc — id của chủ khác không bao giờ trả về.
+   *
+   * @param {Array<number|string>} ids
+   * @param {number|string} ownerUserId
+   * @param {object|null} [client]
+   * @returns {Promise<Array<object>>}
+   */
+  async findContentByIdsForOwner(ids, ownerUserId, client = null) {
+    const idList = (Array.isArray(ids) ? ids : [])
+      .map((id) => Number.parseInt(id, 10))
+      .filter((id) => Number.isSafeInteger(id) && id > 0);
+    if (idList.length === 0) return [];
     const queryable = client || db;
     const result = await queryable.query(
-      `INSERT INTO zalo_templates (id_user, template_name, template_code, subject, body_text, attachments, variables, category)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `SELECT id, template_name, template_code, subject, body_html, body_text, attachments, variables, category
+       FROM zalo_templates
+       WHERE id = ANY($1::bigint[]) AND id_user = $2`,
+      [idList, ownerUserId]
+    );
+    return result.rows;
+  }
+
+  async create({ userId, templateName, templateCode, subject, bodyText, bodyHtml = null, attachments, variables, category }, client = null) {
+    const queryable = client || db;
+    const result = await queryable.query(
+      `INSERT INTO zalo_templates (id_user, template_name, template_code, subject, body_text, attachments, variables, category, body_html)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
       [
         userId,
@@ -133,6 +157,7 @@ class ZaloTemplateRepository {
         JSON.stringify(attachments),
         JSON.stringify(Array.isArray(variables) ? variables : []),
         category || null,
+        bodyHtml,
       ]
     );
     return result.rows[0];
