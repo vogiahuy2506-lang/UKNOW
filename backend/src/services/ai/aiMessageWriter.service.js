@@ -138,7 +138,8 @@ export function restoreMarkup(text, tokens) {
 
 // ───────────────────────── Biến {{...}} ─────────────────────────
 
-const VARIABLE_RE = /\{\{\s*([^{}\s]+)\s*\}\}/g;
+// Cùng cách bắt biến với frontend (templateVariables.js) và bộ chạy: khoá có thể chứa khoảng trắng/dấu ({{Họ Tên}}), nên không giới hạn ký tự.
+const VARIABLE_RE = /\{\{\s*([^{}]+?)\s*\}\}/g;
 
 export function extractVariables(text) {
   return [...String(text || '').matchAll(VARIABLE_RE)].map((match) => match[1]);

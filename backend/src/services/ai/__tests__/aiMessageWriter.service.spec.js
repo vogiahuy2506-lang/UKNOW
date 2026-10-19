@@ -186,6 +186,14 @@ describe('aiMessageWriter.service', () => {
       expect(out.body).toBe('Chào {{ten_cong_ty}}');
     });
 
+    it('biến có khoảng trắng/dấu ({{Họ Tên}}) cũng được nhận diện: giữ khi đã có trong bản cũ, mất thì cảnh báo', async () => {
+      const input = validateWriteMessageInput({ mode: 'edit', channel: 'zalo', quickAction: 'shorter', current: { body: 'Chào {{Họ Tên}}, mời bạn' } });
+      mockRunChat.mockResolvedValue({ status: 'ok', body: 'Chào {{Họ Tên}}' });
+      expect((await writeMessage({ userId: 1, input })).body).toBe('Chào {{Họ Tên}}');
+      mockRunChat.mockResolvedValue({ status: 'ok', body: 'Chào bạn' });
+      expect(await writeMessage({ userId: 1, input })).toMatchObject({ warnings: ['missing_variables'], missingVariables: ['Họ Tên'] });
+    });
+
     it('email: HTML đầu ra được lọc (script, style, onclick, ảnh bị bỏ), tiêu đề cắt ≤150 và một dòng', async () => {
       mockRunChat.mockResolvedValue({
         status: 'ok',
