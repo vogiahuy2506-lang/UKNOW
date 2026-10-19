@@ -9,6 +9,9 @@ const mockValidate = jest.fn();
 
 jest.unstable_mockModule('../../services/ai/aiLandingPage.service.js', () => ({ default: {} }));
 jest.unstable_mockModule('../../services/ai/aiCampaignDraft.service.js', () => ({ default: {} }));
+// campaignConfirmation kéo theo whatsappBaileys.service, nạp xong tự chạy hydrateProfileCache và ghi log SAU khi test kết thúc
+// ("Cannot log after tests are done") → jest thoát mã 1 dù mọi ca xanh, chặn pre-push.
+jest.unstable_mockModule('../../services/ai/campaignConfirmation.service.js', () => ({ default: {} }));
 jest.unstable_mockModule('../../services/ai/businessProfile.service.js', () => ({ default: {} }));
 jest.unstable_mockModule('../../services/ai/customChat.service.js', () => ({ default: {} }));
 jest.unstable_mockModule('../../services/ai/aiCampaign.service.js', () => ({ default: {} }));
