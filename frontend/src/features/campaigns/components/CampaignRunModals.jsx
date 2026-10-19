@@ -590,16 +590,16 @@ const CampaignRunModals = ({
                             )}
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-900 dark:text-dk-text">
-                            {run.totalRecipients || 0}
+                            {run.status === 'running' && !run.totalRecipients ? '—' : (run.totalRecipients || 0)}
                           </td>
                           <td className="px-4 py-3 text-sm text-green-600 dark:text-green-400">
-                            {run.successfulSends || 0}
+                            {run.sendStats ? (run.sendStats.sent || 0) : (run.successfulSends || 0)}
                           </td>
                           <td className="px-4 py-3 text-sm text-amber-600 dark:text-amber-400">
                             {run.skippedSends || 0}
                           </td>
                           <td className="px-4 py-3 text-sm text-red-600 dark:text-red-400">
-                            {run.failedSends || 0}
+                            {run.sendStats ? (run.sendStats.failed || 0) : (run.failedSends || 0)}
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-500 dark:text-dk-text2">
                             {formatCampaignDateTime(run.completedAt)}

@@ -2,6 +2,7 @@ import { serverError } from '../helpers.js';
 import customerHelperService from '../services/customer/customerHelper.service.js';
 import campaignRunService from '../services/campaign/campaignRun.service.js';
 import campaignRunRepository from '../repositories/campaign/campaignRun.repository.js';
+import sendStats from '../services/stats/sendStats.service.js';
 import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
 
 class CampaignRunController {
@@ -20,6 +21,25 @@ class CampaignRunController {
         limit,
       });
 
+      // Số gửi THẬT của từng lượt, đọc từ bảng tin (cùng nguồn màn Giám sát gửi tin) — bộ đếm
+      // campaign_runs có thể thiếu khi lượt nhả slot giữa khối. Cộng mọi kênh của cùng một lượt.
+      // Lỗi đọc không được làm hỏng cả màn lịch sử: bỏ sendStats, frontend lui về bộ đếm cũ.
+      let sendStatsByRun = null;
+      try {
+        const runIds = rows.map((row) => Number(row.id)).filter((id) => Number.isSafeInteger(id) && id > 0);
+        const scope = context.isSuperAdmin ? { ownerId: null } : { ownerId: context.workspaceOwnerId };
+        const totals = await sendStats.getRunTotals(scope, runIds);
+        sendStatsByRun = new Map();
+        for (const total of totals) {
+          const acc = sendStatsByRun.get(Number(total.runId)) || { sent: 0, failed: 0 };
+          acc.sent += Number(total.sent) || 0;
+          acc.failed += Number(total.failed) || 0;
+          sendStatsByRun.set(Number(total.runId), acc);
+        }
+      } catch (statsError) {
+        console.warn('[CampaignRunController.getAll] không đọc được sendStats:', statsError?.message || statsError);
+      }
+
       const runs = rows.map(row => ({
         id: row.id,
         campaignId: row.id_campaign,
@@ -35,6 +55,10 @@ class CampaignRunController {
         successfulSends: row.successful_sends,
         failedSends: row.failed_sends,
         skippedSends: row.skipped_sends,
+        // Lượt không có dòng tin nào => 0/0 (module đếm không trả lượt đó). Đọc lỗi => không có trường.
+        ...(sendStatsByRun
+          ? { sendStats: { ...(sendStatsByRun.get(Number(row.id)) || { sent: 0, failed: 0 }) } }
+          : {}),
         errorMessage: row.error_message,
         runMetadata: row.run_metadata,
         createdAt: row.created_at,
