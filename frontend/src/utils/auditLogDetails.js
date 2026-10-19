@@ -581,6 +581,14 @@ register(['AI_SYSTEM_MODEL_UPDATED', 'AI_FALLBACK_MODEL_UPDATED'], (t, d) => {
   return isNil(d.previousModel) ? String(next) : tr(t, 'arrow', { before: d.previousModel, after: next });
 });
 
+// adminSystem.controller.js (reconcileSendQuotaReservation) → { reservationId, outcome, billingUserId, quantity, walletQuantity, note }
+register(['SEND_QUOTA_RESERVATION_RECONCILED'], (t, d, locale) => joinParts([
+  isNil(d.reservationId) ? '' : tr(t, 'quotaReconcile.reservation', { id: d.reservationId }),
+  d.outcome === 'sent' ? tr(t, 'quotaReconcile.sent') : d.outcome === 'not_sent' ? tr(t, 'quotaReconcile.notSent') : '',
+  typeof d.walletQuantity === 'number' && d.walletQuantity > 0 ? tr(t, 'quotaReconcile.wallet', { n: fmtNumber(d.walletQuantity, locale) }) : '',
+  isNil(d.note) ? '' : tr(t, 'quotaReconcile.note', { note: clip(d.note) }),
+]));
+
 // ai.controller.js:560 → { sessionId, gate, count, channel }: cùng một bước bị trợ lý AI hỏi lại tới lần thứ 3 liên tiếp
 register(['WIZARD_DEAD_END'], (t, d, locale) => joinParts([
   tr(t, 'wizard.stuck', { n: fmtNumber(typeof d.count === 'number' ? d.count : 3, locale) }),
