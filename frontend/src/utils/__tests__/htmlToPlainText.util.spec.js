@@ -30,4 +30,9 @@ describe('htmlToPlainText', () => {
   it('collapses whitespace and decodes common entities', () => {
     expect(htmlToPlainText('<p>  Hello&nbsp;&amp;World  </p>')).toBe('Hello &World');
   });
+
+  it('keeps template variables with underscores intact (markdown _..._ must not eat them)', () => {
+    expect(htmlToPlainText('<p>Chào {{ten_khach}} - {{email_khach}}</p>')).toBe('Chào {{ten_khach}} - {{email_khach}}');
+    expect(htmlToPlainText('<p>SĐT {{so_dien_thoai}}, _nhấn mạnh_ và **đậm**</p>')).toBe('SĐT {{so_dien_thoai}}, nhấn mạnh và đậm');
+  });
 });
