@@ -250,6 +250,16 @@ const aiApi = {
     });
     return response.data;
   },
+
+  /**
+   * "Viết bằng AI" cho mẫu tin / nội dung chiến dịch (PLAN_AI_VIET_MAU_TIN_2026-10-19.md). Bị từ chối vẫn là 200 `{ refused: true, message }` (không trừ lượt).
+   * @param {object} payload `{ mode, channel, context, instruction?, quickAction?, current?, selection?, locale }`
+   * @returns {Promise<{ success: boolean, data: { refused: boolean, message?: string, subject?: string, body?: string, warnings?: string[], missingVariables?: string[] } }>}
+   */
+  writeMessage: async (payload) => {
+    const response = await api.post('/ai/write-message', payload, { timeout: 120000 });
+    return response.data;
+  },
 };
 
 export default aiApi;
