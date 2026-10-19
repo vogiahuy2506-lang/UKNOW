@@ -105,6 +105,19 @@ async function loadLiveTemplates(sellerId, idsByChannel, queryable = null) {
   return loaded;
 }
 
+/**
+ * Mẫu SỐNG của MỘT chủ cho danh sách tham chiếu (kênh → id chuỗi → nội dung). Truy vấn luôn có điều kiện `id_user = ownerId`.
+ * Dùng cho script bù dữ liệu (đọc mẫu của người bán / kiểm một mẫu có phải của người mua không).
+ *
+ * @param {number|string} ownerId
+ * @param {Array<{ channel: 'email'|'zalo', id: number|null }>} refs
+ * @param {object|null} [queryable]
+ * @returns {Promise<{ email: Record<string, object>, zalo: Record<string, object> }>}
+ */
+export async function loadSellerTemplates(ownerId, refs, queryable = null) {
+  return loadLiveTemplates(ownerId, groupIdsByChannel(refs), queryable);
+}
+
 function groupIdsByChannel(refs) {
   const ids = { [TEMPLATE_CHANNEL.EMAIL]: new Set(), [TEMPLATE_CHANNEL.ZALO]: new Set() };
   for (const ref of refs) {
@@ -136,11 +149,7 @@ function describeReferences(refs) {
  * @throws {Error} 400 `MARKETPLACE_TEMPLATE_MISSING` — có khối trỏ mẫu đã xoá / không thuộc người bán (nêu tên khối)
  */
 export async function buildListingTemplates({ sellerId, nodes }, queryable = null) {
-  const refs = collectRequiredTemplateReferences(nodes);
-  if (refs.length === 0) return emptyByChannel();
-
-  const live = await loadLiveTemplates(sellerId, groupIdsByChannel(refs), queryable);
-  const missing = findMissingReferences(refs, live);
+  const { templates, missing } = await tryBuildListingTemplates({ sellerId, nodes }, queryable);
   if (missing.length > 0) {
     throw httpError(
       `Không thể đăng bán: ${describeReferences(missing)} đã bị xoá hoặc không thuộc tài khoản của bạn. `
@@ -149,11 +158,28 @@ export async function buildListingTemplates({ sellerId, nodes }, queryable = nul
       MARKETPLACE_TEMPLATE_MISSING
     );
   }
+  return templates;
+}
+
+/**
+ * Như `buildListingTemplates` nhưng KHÔNG ném lỗi khi thiếu mẫu: trả luôn danh sách tham chiếu thiếu (script bù dữ liệu cần báo chứ không dừng).
+ *
+ * @param {{ sellerId: number|string, nodes: Array<object> }} input
+ * @param {object|null} [queryable]
+ * @returns {Promise<{ templates: { email: Record<string, object>, zalo: Record<string, object> }, missing: Array<object> }>}
+ */
+export async function tryBuildListingTemplates({ sellerId, nodes }, queryable = null) {
+  const refs = collectRequiredTemplateReferences(nodes);
+  const templates = emptyByChannel();
+  if (refs.length === 0) return { templates, missing: [] };
+
+  const live = await loadLiveTemplates(sellerId, groupIdsByChannel(refs), queryable);
+  const missing = findMissingReferences(refs, live);
+  if (missing.length > 0) return { templates, missing };
 
   // Chỉ giữ mẫu được tham chiếu (không chụp mẫu thừa).
-  const templates = emptyByChannel();
   for (const ref of refs) templates[ref.channel][String(ref.id)] = live[ref.channel][String(ref.id)];
-  return templates;
+  return { templates, missing: [] };
 }
 
 function unavailableError(detail) {
@@ -173,7 +199,8 @@ function quotaError(requestedBytes, usage) {
   );
 }
 
-async function assertBuyerStorageAvailable(client, buyerId, requestedBytes) {
+/** Người mua còn đủ chỗ cho `requestedBytes` không? Không đủ → 400 `MARKETPLACE_STORAGE_QUOTA_EXCEEDED`. */
+export async function assertBuyerStorageAvailable(client, buyerId, requestedBytes) {
   if (!(requestedBytes > 0)) return;
   const usage = await getStorageUsage(buyerId, client);
   try {
@@ -195,10 +222,11 @@ async function assertBuyerStorageAvailable(client, buyerId, requestedBytes) {
  * @returns {Promise<{ sources: { email: Map<string, object>, zalo: Map<string, object> }, totalBytes: number }>}
  */
 export async function prepareForPurchase({ client, listing, buyerId }) {
-  const sources = { [TEMPLATE_CHANNEL.EMAIL]: new Map(), [TEMPLATE_CHANNEL.ZALO]: new Map() };
   const snapshot = listing?.snapshot_data && typeof listing.snapshot_data === 'object' ? listing.snapshot_data : {};
   const refs = collectRequiredTemplateReferences(Array.isArray(snapshot.nodes) ? snapshot.nodes : []);
-  if (refs.length === 0) return { sources, totalBytes: 0 };
+  if (refs.length === 0) {
+    return { sources: { [TEMPLATE_CHANNEL.EMAIL]: new Map(), [TEMPLATE_CHANNEL.ZALO]: new Map() }, totalBytes: 0 };
+  }
 
   const sellerId = listing.id_user;
   const hasSnapshotTemplates = Boolean(snapshot.templates) && typeof snapshot.templates === 'object';
@@ -209,6 +237,21 @@ export async function prepareForPurchase({ client, listing, buyerId }) {
     }
     : await loadLiveTemplates(sellerId, groupIdsByChannel(refs), client);
 
+  const collected = await collectTemplateSources({ client, refs, available, sellerId });
+  await assertBuyerStorageAvailable(client, buyerId, collected.totalBytes);
+  return collected;
+}
+
+/**
+ * Lõi dùng chung của mua và script bù dữ liệu: từ các tham chiếu mẫu + nội dung sẵn có (`available`: kênh → id chuỗi → nội dung) dựng
+ * nguồn chép cho từng mẫu, kiểm tệp đính kèm của người bán CÒN trên kho và cộng dung lượng thật. Không ghi gì, không chép tệp.
+ *
+ * @param {{ client: object|null, refs: Array<object>, available: { email: Record<string, object>, zalo: Record<string, object> }, sellerId: number|string }} input
+ * @returns {Promise<{ sources: { email: Map<string, object>, zalo: Map<string, object> }, totalBytes: number }>}
+ * @throws {Error} 400 `LISTING_CONTENT_UNAVAILABLE` — thiếu nội dung mẫu hoặc tệp đính kèm đã mất khỏi kho
+ */
+export async function collectTemplateSources({ refs, available, sellerId }) {
+  const sources = { [TEMPLATE_CHANNEL.EMAIL]: new Map(), [TEMPLATE_CHANNEL.ZALO]: new Map() };
   const missing = findMissingReferences(refs, available);
   if (missing.length > 0) throw unavailableError(`${describeReferences(missing)} không còn nội dung mẫu`);
 
@@ -232,8 +275,6 @@ export async function prepareForPurchase({ client, listing, buyerId }) {
     }
     sources[ref.channel].set(idKey, { ...content, attachments });
   }
-
-  await assertBuyerStorageAvailable(client, buyerId, totalBytes);
   return { sources, totalBytes };
 }
 
@@ -366,6 +407,10 @@ export async function discardCopiedFiles(copiedKeys) {
 
 export default {
   buildListingTemplates,
+  tryBuildListingTemplates,
+  loadSellerTemplates,
+  collectTemplateSources,
+  assertBuyerStorageAvailable,
   prepareForPurchase,
   materializeTemplates,
   discardCopiedFiles,

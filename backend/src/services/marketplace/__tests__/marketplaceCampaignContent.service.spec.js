@@ -257,6 +257,41 @@ describe('prepareForPurchase (mua, TRƯỚC khi trừ credit)', () => {
   });
 });
 
+describe('tryBuildListingTemplates / loadSellerTemplates / collectTemplateSources (dùng chung với script bù dữ liệu)', () => {
+  it('tryBuildListingTemplates: thiếu mẫu thì KHÔNG ném lỗi, trả danh sách tham chiếu thiếu và không chụp gì', async () => {
+    mockFindZalo.mockResolvedValue([zaloRow(31)]);
+    const result = await content.tryBuildListingTemplates({ sellerId: SELLER, nodes: [zaloGroupNode(31), { ...zaloGroupNode(32, 'Nhom hai'), id: 9 }] });
+    expect(result.missing.map((ref) => [ref.nodeName, ref.id])).toEqual([['Nhom hai', 32]]);
+    expect(result.templates).toEqual({ email: {}, zalo: {} });
+  });
+
+  it('tryBuildListingTemplates: đủ mẫu → templates đầy đủ, missing rỗng', async () => {
+    mockFindEmail.mockResolvedValue([emailRow(11)]);
+    const result = await content.tryBuildListingTemplates({ sellerId: SELLER, nodes: [emailNode(11)] });
+    expect(result.missing).toEqual([]);
+    expect(result.templates.email['11'].name).toBe('Email 11');
+  });
+
+  it('loadSellerTemplates: đọc đúng theo chủ được truyền (mẫu của người MUA khác mẫu của người bán)', async () => {
+    mockFindZalo.mockResolvedValue([zaloRow(44)]);
+    const loaded = await content.loadSellerTemplates(BUYER, [{ channel: 'zalo', id: 44 }, { channel: 'zalo', id: null }, { channel: 'email', id: 5 }]);
+    expect(mockFindZalo).toHaveBeenCalledWith([44], BUYER, null);
+    expect(mockFindEmail).toHaveBeenCalledWith([5], BUYER, null);
+    expect(Object.keys(loaded.zalo)).toEqual(['44']);
+  });
+
+  it('collectTemplateSources: nguồn đủ → gom tệp + cộng dung lượng thật; thiếu nội dung → LISTING_CONTENT_UNAVAILABLE', async () => {
+    mockGetObjectInfo.mockResolvedValue({ size: 1234 });
+    const refs = [{ channel: 'zalo', id: 31, raw: '31', nodeName: 'Gui nhom' }];
+    const available = { email: {}, zalo: { 31: { name: 'M', bodyText: 'x', attachments: [attachment(`uploads/${SELLER}/a.pdf`)] } } };
+    const collected = await content.collectTemplateSources({ refs, available, sellerId: SELLER });
+    expect(collected.totalBytes).toBe(1234);
+    expect(collected.sources.zalo.get('31').attachments).toHaveLength(1);
+    await expect(content.collectTemplateSources({ refs, available: { email: {}, zalo: {} }, sellerId: SELLER }))
+      .rejects.toMatchObject({ code: content.LISTING_CONTENT_UNAVAILABLE });
+  });
+});
+
 describe('materializeTemplates (mua, trong transaction)', () => {
   const makePrepared = () => ({
     totalBytes: 1500,
