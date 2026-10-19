@@ -5,13 +5,28 @@
  * repositories/admin/__tests__/deliveryMonitor.repository.spec.js.)
  */
 import { describe, expect, it } from '@jest/globals';
-import { runDeferredReasonSql, runDeferredUntilSql } from '../runDeferMetadataSql.util.js';
+import { runDeferredReasonSql, runDeferredUntilLatestSql, runDeferredUntilSql } from '../runDeferMetadataSql.util.js';
 
 describe('runDeferMetadataSql', () => {
-  it('mốc chờ: thứ tự quota → bước kế (one-shot) → Zalo → kênh adapter, NGUYÊN VĂN như bản admin cũ', () => {
+  it('mốc chờ: thứ tự quota → bước kế (one-shot) → Zalo (mốc chạy tiếp THẬT trước, mốc hoãn sau) → kênh adapter', () => {
     expect(runDeferredUntilSql('rm')).toBe(
-      "COALESCE(rm.run_metadata->>'quotaDeferredUntil', rm.run_metadata->>'nonContinuousDeferredUntil', rm.run_metadata->>'zaloOutboundDeferredUntil', rm.run_metadata->>'channelDeferredUntil')"
+      "COALESCE(rm.run_metadata->>'quotaDeferredUntil', rm.run_metadata->>'nonContinuousDeferredUntil', COALESCE(rm.run_metadata->>'zaloOutboundResumeEffectiveAt', rm.run_metadata->>'zaloOutboundDeferredUntil'), rm.run_metadata->>'channelDeferredUntil')"
     );
+  });
+
+  it('mốc chờ: khoá effective đứng TRƯỚC khoá hoãn Zalo (run có cả hai lấy 06:00, không phải 00:00)', () => {
+    const sql = runDeferredUntilSql('cr');
+    expect(sql.indexOf("'zaloOutboundResumeEffectiveAt'")).toBeGreaterThan(-1);
+    expect(sql.indexOf("'zaloOutboundResumeEffectiveAt'")).toBeLessThan(sql.indexOf("'zaloOutboundDeferredUntil'"));
+  });
+
+  it('mốc chờ "muộn nhất" (đếm/lọc đang chờ): GREATEST gồm CẢ khoá effective bên cạnh bốn khoá cũ', () => {
+    const sql = runDeferredUntilLatestSql('cr');
+    expect(sql.startsWith('GREATEST(')).toBe(true);
+    for (const key of ['quotaDeferredUntil', 'zaloOutboundDeferredUntil', 'zaloOutboundResumeEffectiveAt', 'nonContinuousDeferredUntil', 'channelDeferredUntil']) {
+      expect(sql).toContain(`cr.run_metadata->>'${key}'`);
+    }
+    expect(sql).not.toContain('rm.');
   });
 
   it('lý do chờ: cùng thứ tự, cùng bốn họ khoá', () => {
@@ -22,7 +37,7 @@ describe('runDeferMetadataSql', () => {
 
   it('bí danh bảng được thay vào mọi khoá', () => {
     const sql = runDeferredUntilSql('cr');
-    expect(sql.match(/cr\.run_metadata/g)).toHaveLength(4);
+    expect(sql.match(/cr\.run_metadata/g)).toHaveLength(5);
     expect(sql).not.toContain('rm.');
   });
 });
