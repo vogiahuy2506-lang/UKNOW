@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { HiOutlineEye, HiOutlinePencilAlt, HiOutlinePlus, HiOutlineTemplate, HiOutlineTrash } from 'react-icons/hi';
 import SimpleChoiceCard from './SimpleChoiceCard';
+import AiMessageWriter from '../../ai/AiMessageWriter';
 import TemplateSearchSelect from '../components/TemplateSearchSelect';
 import NodeConfigTemplatePreviewModal from '../components/NodeConfigTemplatePreviewModal';
 import { loadTemplates, serviceFor } from './loadTemplates';
@@ -177,6 +178,12 @@ function TemplatePanel(props) {
   return <TemplatePanelView resource={resource} {...props} />;
 }
 
+/** Kênh của bước chiến dịch (zalo cá nhân / nhóm / kết bạn…) → kênh mà POST /ai/write-message nhận (email|zalo|telegram|whatsapp). */
+const aiWriterChannel = (channel) => {
+  if (channel === 'email' || channel === 'telegram' || channel === 'whatsapp') return channel;
+  return 'zalo';
+};
+
 /** Tự soạn: Email = Tiêu đề + Nội dung; Zalo/Telegram/WhatsApp = Nội dung (Telegram/WhatsApp có trần ký tự + bộ đếm). */
 export function CustomPanel({ isEmail, channel, content, patchContent, t, idPrefix, bodyMax: bodyMaxOverride, subjectMax = 200 }) {
   const bodyMax = bodyMaxOverride || ADAPTER_MESSAGE_MAX[channel] || 10000;
@@ -200,9 +207,30 @@ export function CustomPanel({ isEmail, channel, content, patchContent, t, idPref
         </div>
       )}
       <div>
-        <label htmlFor={`${idPrefix}-body`} className="block text-sm font-semibold text-slate-800 dark:text-dk-text">
-          {t('simpleCampaign.content.bodyLabel')}
-        </label>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <label htmlFor={`${idPrefix}-body`} className="block text-sm font-semibold text-slate-800 dark:text-dk-text">
+            {t('simpleCampaign.content.bodyLabel')}
+          </label>
+          {/* "Viết bằng AI" cho tin tự soạn: tin email ở đây là chữ thuần (server lưu thành mẫu), nên format 'text' (PLAN_AI_VIET_MAU_TIN_2026-10-19). */}
+          <div className="flex flex-wrap items-center gap-2">
+            <AiMessageWriter
+              channel={aiWriterChannel(channel)}
+              context="campaign"
+              format="text"
+              subject={content.subject || ''}
+              body={content.body || ''}
+              testId={`${idPrefix}-ai-writer`}
+              getSelection={() => {
+                const el = document.getElementById(`${idPrefix}-body`);
+                return el ? { start: el.selectionStart ?? 0, end: el.selectionEnd ?? 0 } : null;
+              }}
+              onApply={({ subject: nextSubject, body: nextBody }) => patchContent({
+                body: nextBody,
+                ...(nextSubject !== undefined ? { subject: nextSubject } : {}),
+              })}
+            />
+          </div>
+        </div>
         <textarea
           id={`${idPrefix}-body`}
           rows={8}
