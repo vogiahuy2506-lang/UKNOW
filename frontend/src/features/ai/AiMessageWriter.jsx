@@ -33,14 +33,14 @@ function VersionView({ html, text, testId }) {
         data-testid={testId}
         sandbox=""
         srcDoc={html}
-        className="h-40 w-full rounded-lg border border-slate-200 bg-white dark:border-dk-border"
+        className="h-64 w-full rounded-lg border border-slate-200 bg-white dark:border-dk-border"
       />
     );
   }
   return (
     <pre
       data-testid={testId}
-      className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-slate-200 bg-white p-2 text-xs text-slate-800 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text"
+      className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-slate-200 bg-white p-2 text-xs text-slate-800 dark:border-dk-border dark:bg-dk-inset dark:text-dk-text"
     >
       {text}
     </pre>
@@ -221,13 +221,15 @@ export default function AiMessageWriter({
     : ['exampleMessage1', 'exampleMessage2', 'exampleMessage3'];
   const asHtml = format === 'html';
   const currentView = result?.selection ? result.selection.text : body;
+  // Viết mới trên ô trống: không có "bản hiện tại" để đặt cạnh, chỉ hiện bản AI viết (rộng hơn, dễ đọc).
+  const showOld = String(currentView || '').trim().length > 0;
 
   const panel = open && createPortal(
     <div
       role="dialog"
       aria-label={t('aiMessageWriter.panelTitle')}
       data-testid={`${testId}-panel`}
-      className="fixed inset-x-0 bottom-0 z-[10001] flex max-h-[88vh] flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl dark:border-dk-border dark:bg-dk-surface sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-[440px] sm:rounded-2xl"
+      className={`fixed inset-x-0 bottom-0 z-[10001] flex max-h-[88vh] flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl dark:border-dk-border dark:bg-dk-surface sm:inset-x-auto sm:bottom-6 sm:right-6 sm:rounded-2xl ${result && showOld ? 'sm:w-[660px]' : 'sm:w-[440px]'}`}
     >
       <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-2.5 dark:border-dk-border">
         <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-900 dark:text-dk-text">
@@ -377,11 +379,13 @@ export default function AiMessageWriter({
                 <span data-testid={`${testId}-result-subject`}>{result.subject}</span>
               </p>
             )}
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <div className="min-w-0">
-                <p className="mb-1 text-[11px] font-semibold text-slate-500 dark:text-dk-text2">{t('aiMessageWriter.currentVersion')}</p>
-                <VersionView html={asHtml ? currentView : null} text={currentView} testId={`${testId}-old`} />
-              </div>
+            <div className={`grid grid-cols-1 gap-2 ${showOld ? 'sm:grid-cols-2' : ''}`}>
+              {showOld && (
+                <div className="min-w-0">
+                  <p className="mb-1 text-[11px] font-semibold text-slate-500 dark:text-dk-text2">{t('aiMessageWriter.currentVersion')}</p>
+                  <VersionView html={asHtml ? currentView : null} text={currentView} testId={`${testId}-old`} />
+                </div>
+              )}
               <div className="min-w-0">
                 <p className="mb-1 text-[11px] font-semibold text-slate-500 dark:text-dk-text2">{t('aiMessageWriter.newVersion')}</p>
                 <VersionView html={asHtml ? result.body : null} text={result.body} testId={`${testId}-new`} />
