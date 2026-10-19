@@ -14,6 +14,7 @@ import campaignZaloSenderService from './campaignZaloSender.service.js';
 import zaloCampaignRecipientService from './zaloCampaignRecipient.service.js';
 import { getSharedZaloRateLimiter } from './zaloOutboundRateLimiterSingleton.js';
 import {
+  isZaloAccountStrangerBanError,
   isZaloGroupUnreachableError,
   isZaloSenderBlockedError,
   isZaloUnreachableRecipientError,
@@ -6422,15 +6423,16 @@ class CampaignRunService {
               // PR-4 Việc 4.4 — Zalo tạm CẤM CẢ TÀI KHOẢN nhắn người chưa kết bạn ("Bạn đang bị cấm nhắn tin cho người lạ").
               // Đây là lỗi của TÀI KHOẢN (mọi người lạ đều dính), khác `isZaloSenderBlockedError` ("không thể nhận tin nhắn từ
               // bạn" = một người nhận chặn mình) — đếm nó như lỗi từng người thì mỗi người bị "đốt" 3–5 lần rồi bỏ vĩnh viễn
-              // (run 476: 195 người). Phân loại bằng đúng bộ sẵn có (category NOT_FRIEND_OR_BLOCKED ↔ ledger `stranger_blocked`),
-              // loại thêm lỗi quyền riêng tư CỦA NGƯỜI NHẬN (`isZaloUnreachableRecipientError`: "chặn không nhận tin nhắn từ
-              // người lạ"...) vì nhóm category này rộng, cùng rơi vào đó. Chỉ MỘT tài khoản: nhiều tài khoản thì tài khoản khác
+              // (run 476: 195 người). Nhận diện bằng `isZaloAccountStrangerBanError` (cụm "bị cấm nhắn tin") — KHÔNG dùng
+              // category NOT_FRIEND_OR_BLOCKED vì nhóm đó rộng ("chặn", "hạn chế"...: một câu lỗi tương lai về MỘT người nhận sẽ làm
+              // hoãn cả lượt mỗi ngày); category là phép "người lạ" nên cụm hẹp này đã nằm trong nó, giữ category chỉ thừa. Vẫn loại
+              // lỗi quyền riêng tư CỦA NGƯỜI NHẬN (`isZaloUnreachableRecipientError`). Chỉ MỘT tài khoản: nhiều tài khoản thì tài khoản khác
               // trong pool có thể vẫn nhắn được → giữ nguyên hành vi cũ. KHÔNG tăng zaloSendFailureCount, KHÔNG ghi failed:
               // hoãn cả lượt tới sáng 06:00 VN kế tiếp (thời hạn cấm của Zalo không ai biết — mỗi sáng thử lại một tin là đủ rẻ).
               if (
                 !multiEnabled
                 && !isZaloUnreachableRecipientError(error)
-                && mapZaloErrorCategoryToLedgerReason(buildZaloPersonalErrorObservation(error).errorCategory) === 'stranger_blocked'
+                && isZaloAccountStrangerBanError(error)
               ) {
                 const banWaitMs = Math.max(
                   1,

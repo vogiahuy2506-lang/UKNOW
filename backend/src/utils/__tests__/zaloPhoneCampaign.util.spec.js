@@ -3,6 +3,7 @@ import {
   normalizePhoneForZaloCampaign,
   isZaloUnreachableRecipientError,
   inferZaloUnreachableReason,
+  isZaloAccountStrangerBanError,
 } from '../zaloPhoneCampaign.util.js';
 
 describe('normalizePhoneForZaloCampaign', () => {
@@ -85,3 +86,20 @@ describe('inferZaloUnreachableReason', () => {
   });
 });
 
+
+describe('isZaloAccountStrangerBanError (PR-4 Việc 4.4)', () => {
+  it.each([
+    ['câu thật ở production', new Error('Bạn đang bị cấm nhắn tin cho người lạ.'), true],
+    ['có tiền tố', new Error('Zalo: Bạn đang bị cấm nhắn tin cho người lạ.'), true],
+    ['chuỗi thuần', 'BẠN ĐANG BỊ CẤM NHẮN TIN CHO NGƯỜI LẠ', true],
+    ['lỗi bọc trong cause', Object.assign(new Error('send failed'), { cause: new Error('Bạn đang bị cấm nhắn tin cho người lạ.') }), true],
+    ['một người nhận chặn mình', new Error('Không thể nhận tin nhắn từ bạn.'), false],
+    ['người nhận chặn người lạ', new Error('Người dùng chặn không nhận tin nhắn từ người lạ.'), false],
+    ['không muốn nhận tin', new Error('Xin lỗi! Hiện tại tôi không muốn nhận tin nhắn.'), false],
+    ['câu tương lai: đã chặn bạn', new Error('Người này đã chặn bạn.'), false],
+    ['câu tương lai: bị hạn chế', new Error('Tài khoản người nhận bị hạn chế.'), false],
+    ['rỗng', null, false],
+  ])('%s → %s', (_label, error, expected) => {
+    expect(isZaloAccountStrangerBanError(error)).toBe(expected);
+  });
+});

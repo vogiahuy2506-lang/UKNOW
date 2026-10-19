@@ -649,6 +649,46 @@ describe('CampaignRun — Zalo: tài khoản bị cấm nhắn người lạ (PR
     expect(dbLedger.get('uid-người-nhận-1').meta.zaloSendFailureCount).toBe(1);
   }, 30000);
 
+  // Câu lỗi về MỘT người nhận (hoặc câu lạ) có thể khớp category NOT_FRIEND_OR_BLOCKED nhưng KHÔNG phải tài khoản bị cấm:
+  // phải đi nhánh đếm lỗi từng người như cũ, không được hoãn cả lượt tới sáng hôm sau mỗi ngày.
+  it.each([
+    ['phone', 'Người này đã chặn bạn.'],
+    ['uid', 'Người này đã chặn bạn.'],
+    ['phone', 'Tài khoản người nhận bị hạn chế.'],
+    ['uid', 'Tài khoản người nhận bị hạn chế.'],
+  ])('người nhận %s, lỗi "%s" → KHÔNG hoãn cả lượt, đếm lỗi từng người như cũ (zaloSendFailureCount = 1)', async (recipientType, message) => {
+    if (recipientType === 'uid') {
+      nodeConfigOverrides = { zaloRecipientType: 'uid', zaloRecipientField: 'zalo_id' };
+      mockGetCustomersFromDataNode.mockResolvedValue({ items: [{ zalo_id: 'uid-1', name: 'U1' }], dataLoadMeta: {} });
+    } else {
+      mockGetCustomersFromDataNode.mockResolvedValue({ items: [{ phone: '0900000001', name: 'P1' }], dataLoadMeta: {} });
+    }
+    mockSendPersonalMessageQueued.mockRejectedValue(new Error(message));
+
+    await runCampaignPumpingTimers(383, 200, 10);
+
+    expect(deferPatch()).toBeUndefined();
+    expect(notifySpy).not.toHaveBeenCalled();
+    const key = recipientType === 'uid' ? 'uid-1' : '0900000001';
+    expect(dbLedger.get(key).meta.zaloSendFailureCount).toBe(1);
+  }, 30000);
+
+  it.each([
+    'Bạn đang bị cấm nhắn tin cho người lạ.',
+    'Zalo: Bạn đang bị cấm nhắn tin cho người lạ.',
+  ])('câu cấm tài khoản thật "%s" → hoãn cả lượt tới 06:00 VN', async (message) => {
+    mockSendPersonalMessageQueued.mockRejectedValue(new Error(message));
+
+    await runCampaignPumpingTimers(383, 200, 10);
+
+    expect(deferPatch()).toMatchObject({
+      zaloDeferredReason: 'stranger_messaging_banned',
+      zaloOutboundDeferredUntil: '2026-10-19T23:00:00.000Z',
+    });
+    expect(mockSendPersonalMessageQueued).toHaveBeenCalledTimes(1);
+    expect(notifySpy).toHaveBeenCalledTimes(1);
+  }, 30000);
+
   it('nhiều tài khoản (pool): giữ nguyên như cũ — không hoãn cả lượt, không chuông stranger_ban', async () => {
     nodeConfigOverrides = {
       zaloPersonalMultiAccountEnabled: true,
