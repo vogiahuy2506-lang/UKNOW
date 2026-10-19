@@ -67,6 +67,7 @@ describe('getWaitReasonI18nKey', () => {
     ['phone_lookup_cooldown', 'quickSend.deferredReasonPhoneLookupCooldown'],
     ['phone_lookup_cooldown_api_error', 'quickSend.deferredReasonPhoneLookupCooldown'],
     ['all_accounts_phone_lookup_cooldown', 'quickSend.deferredReasonPhoneLookupCooldown'],
+    ['stranger_messaging_banned', 'quickSend.deferredReasonStrangerBan'],
     ['channel_rate_limit', 'quickSendAdapter.deferredReasonProviderRateLimit'],
     ['smtp_rate_limited', 'userDeliveryMonitor.waitReason.smtpRateLimited'],
     ['smtp_transient_burst', 'userDeliveryMonitor.waitReason.smtpUnstable'],

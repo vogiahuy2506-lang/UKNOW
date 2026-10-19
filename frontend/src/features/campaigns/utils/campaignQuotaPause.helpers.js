@@ -117,6 +117,10 @@ export function getRunPauseI18nKey(pauseOrKind, maybeReason) {
     ) {
       return 'campaignRun.zaloPhoneLookupPausedUntil';
     }
+    // PR-4 — tài khoản bị Zalo tạm cấm nhắn người chưa kết bạn: run hoãn tới sáng hôm sau.
+    if (reason === 'stranger_messaging_banned') {
+      return 'campaignRun.zaloStrangerBanPausedUntil';
+    }
     if (reason === 'quiet_hours') {
       return 'campaignRun.zaloQuietHoursUntil';
     }

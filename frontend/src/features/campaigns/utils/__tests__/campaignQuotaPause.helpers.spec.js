@@ -226,6 +226,10 @@ describe('getRunPauseI18nKey', () => {
     expect(getRunPauseI18nKey('zalo', 'all_accounts_phone_lookup_cooldown')).toBe('campaignRun.zaloPhoneLookupPausedUntil');
     expect(getRunPauseI18nKey({ kind: 'zalo', reason: 'phone_lookup_cooldown' })).toBe('campaignRun.zaloPhoneLookupPausedUntil');
 
+    // 1b. PR-4 Việc 4.4 — tài khoản bị Zalo tạm cấm nhắn người chưa kết bạn
+    expect(getRunPauseI18nKey('zalo', 'stranger_messaging_banned')).toBe('campaignRun.zaloStrangerBanPausedUntil');
+    expect(getRunPauseI18nKey({ kind: 'zalo', reason: 'stranger_messaging_banned' })).toBe('campaignRun.zaloStrangerBanPausedUntil');
+
     // 2. Khung giờ yên lặng
     expect(getRunPauseI18nKey('zalo', 'quiet_hours')).toBe('campaignRun.zaloQuietHoursUntil');
     expect(getRunPauseI18nKey({ kind: 'zalo', reason: 'quiet_hours' })).toBe('campaignRun.zaloQuietHoursUntil');
