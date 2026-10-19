@@ -461,6 +461,20 @@ export const removeSideStep = ({ nodes, edges, nodeId }) => {
 };
 
 /**
+ * Xoá một khối bất kỳ trên sơ đồ (nút xoá ở canvas): gỡ khối + mọi cạnh dính nó, và XOÁ tham chiếu tới nó ở các khối còn lại
+ * (`recipientNodeId`, `zaloGroupNodeId`, `templateMappings[].nodeId`…) — không xoá thì ô nguồn giữ id chết, lưu xong chạy ra 0 người.
+ * Không nối lại cạnh (khác `removeSideStep`): người dùng tự nối khi cần.
+ * @returns {{ nodes: Array<object>, edges: Array<object> }}
+ */
+export const removeNodeClearingReferences = ({ nodes, edges, nodeId }) => {
+  const id = idOf(nodeId);
+  const remaining = (Array.isArray(nodes) ? nodes : []).filter((node) => idOf(node.id) !== id);
+  const nextEdges = (Array.isArray(edges) ? edges : [])
+    .filter((edge) => idOf(edge.source) !== id && idOf(edge.target) !== id);
+  return { nodes: remapAllNodes(remaining, new Map([[id, '']])), edges: nextEdges };
+};
+
+/**
  * Cách đổi sang nguồn khác: `in_place` = chỉ thay khối nguồn (khung còn lại giữ nguyên) · `rebuild` = dựng lại cả khung (khác khối
  * gửi / khác có-không khối nguồn) · `null` = không đổi được ở đây (rẽ nhánh / khối dính nhánh / loại chiến dịch lạ).
  */
