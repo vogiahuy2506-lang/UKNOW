@@ -35,6 +35,14 @@ import {
   countZaloSentToday,
 } from '../../src/utils/userSendLimit.util.js';
 import { getBillingCycle } from '../../src/utils/billingCycle.util.js';
+import {
+  countEmailSentInCycleWithLedger,
+  countCombinedSentInCycleWithLedger,
+  countEmailSentTodayWithLedger,
+  countZaloSentTodayWithLedger,
+} from '../../src/repositories/sendQuota.repository.js';
+import { reserveSendQuota, getVnDayBoundaries } from '../../src/services/quota/sendQuotaReservation.service.js';
+import { buildDirectReservationKey } from '../../src/services/quota/sendQuotaKey.service.js';
 
 const DAY = 86400000;
 const daysAgo = (days) => new Date(Date.now() - days * DAY);
@@ -273,6 +281,105 @@ describe('GET /api/users/profile — tin gửi theo kỳ, bằng số cổng ch�
     expect(data.telegramSentCycle).toBeNull();
     expect(data.whatsappSentCycle).toBeNull();
     expect(data.combinedSentCycle).toBeNull();
+  });
+});
+
+// ===========================================================================
+// 1b. PR-E3 (PLAN_SAN_SANG_BAT_ENFORCE_HAN_MUC): màn mức dùng đếm cả tin đi qua ĐẶT CHỖ hạn mức
+// ===========================================================================
+describe('GET /api/users/profile — PR-E3: đếm cả đặt chỗ hạn mức (enforce)', () => {
+  const PLAN_E3 = {
+    monthlyEmailLimit: 10000,
+    monthlyZaloLimit: 5000,
+    dailyEmailLimit: 500,
+    dailyZaloLimit: 200,
+    messagesPerPeriod: 100,
+    aiCreditsPerPeriod: 100,
+  };
+
+  async function reserve(userId, channel) {
+    const payload = { channel, recipient: 'khach@example.com', subject: 'S', content: 'C', quantity: 1, sourceType: 'direct' };
+    const reservationKey = buildDirectReservationKey({
+      channel, billingUserId: userId, clientKey: uniq('e3'), recipient: payload.recipient,
+    });
+    return reserveSendQuota(
+      { userId, channel, quantity: 1, reservationKey, requestPayload: payload },
+      { modeOverride: 'test_enforce' }
+    );
+  }
+
+  it('gửi nhanh qua đặt chỗ (email, Zalo, Telegram): màn đếm 1 mỗi kênh (trước sửa: 0) và = hàm *WithLedger của cổng', async () => {
+    const { user } = await customerOnPlan('e3_reserved', PLAN_E3);
+    await reserve(user.id, 'email');
+    await reserve(user.id, 'zalo');
+    await reserve(user.id, 'telegram');
+
+    const data = await getProfile(await loginAs(user));
+
+    expect(data.emailSentCycle).toBe(1);
+    expect(data.messagingSentCycle).toBe(1);
+    expect(data.telegramSentCycle).toBe(1);
+    expect(data.whatsappSentCycle).toBe(0);
+    expect(data.combinedSentCycle).toBe(3); // email 1 + zalo 1 + telegram 1
+    expect(data.emailSentToday).toBe(1);
+    expect(data.messagingSentToday).toBe(1);
+
+    // Bản cũ (cổng luật cũ) loại tin đã gắn đặt chỗ → thấy 0: đây chính là chỗ màn từng THẤP hơn số cổng chặn.
+    const cycle = await getBillingCycle(user.id);
+    _clearQuotaCache();
+    expect(await countEmailSentInCycle(user.id, cycle.cycleStart, cycle.cycleEnd)).toBe(0);
+    // Cùng hàm với luật chặn mới, cùng kỳ / cùng mốc ngày VN.
+    const { vnDayStart, vnDayEnd } = getVnDayBoundaries(new Date());
+    expect(data.emailSentCycle).toBe(await countEmailSentInCycleWithLedger(db, user.id, cycle.cycleStart, cycle.cycleEnd));
+    expect(data.combinedSentCycle).toBe(await countCombinedSentInCycleWithLedger(db, user.id, cycle.cycleStart, cycle.cycleEnd));
+    expect(data.emailSentToday).toBe(await countEmailSentTodayWithLedger(db, user.id, vnDayStart, vnDayEnd));
+    expect(data.messagingSentToday).toBe(await countZaloSentTodayWithLedger(db, user.id, vnDayStart, vnDayEnd));
+  });
+
+  it('cộng dồn: tin cũ không qua đặt chỗ + tin qua đặt chỗ, mỗi tin đúng MỘT nguồn', async () => {
+    const { user } = await customerOnPlan('e3_mixed', PLAN_E3);
+    const other = await createUser({ username: 'e3_mixed_other' });
+    await seedSendHistory(user.id, other.id);
+    await reserve(user.id, 'email');
+    await reserve(user.id, 'zalo');
+
+    const data = await getProfile(await loginAs(user));
+
+    expect(data.emailSentCycle).toBe(EMAIL_KY + 1);
+    expect(data.messagingSentCycle).toBe(NHAN_TIN_KY + 1);
+    expect(data.telegramSentCycle).toBe(TELEGRAM_KY);
+    expect(data.combinedSentCycle).toBe(TONG_KY + 2);
+    expect(data.emailSentToday).toBe(EMAIL_HOM_NAY + 1);
+    expect(data.messagingSentToday).toBe(NHAN_TIN_HOM_NAY + 1);
+  });
+
+  it('đặt chỗ đã released không tính; sổ cái rỗng (shadow/off) → số Y NHƯ hàm cũ của cổng, kể cả hôm nay', async () => {
+    const { user } = await customerOnPlan('e3_parity', PLAN_E3);
+    const other = await createUser({ username: 'e3_parity_other' });
+    await seedSendHistory(user.id, other.id);
+    const released = await reserve(user.id, 'email');
+    await db.query(`UPDATE send_quota_reservations SET status = 'released', released_at = NOW() WHERE id = $1`, [released.id]);
+
+    const data = await getProfile(await loginAs(user));
+
+    const cycle = await getBillingCycle(user.id);
+    _clearQuotaCache();
+    expect(data.emailSentCycle).toBe(await countEmailSentInCycle(user.id, cycle.cycleStart, cycle.cycleEnd));
+    _clearQuotaCache();
+    expect(data.messagingSentCycle).toBe(await countZaloSentInCycle(user.id, cycle.cycleStart, cycle.cycleEnd));
+    _clearQuotaCache();
+    expect(data.telegramSentCycle).toBe(await countAdapterSentInCycle(user.id, 'telegram', cycle.cycleStart, cycle.cycleEnd));
+    _clearQuotaCache();
+    expect(data.whatsappSentCycle).toBe(await countAdapterSentInCycle(user.id, 'whatsapp', cycle.cycleStart, cycle.cycleEnd));
+    _clearQuotaCache();
+    expect(data.combinedSentCycle).toBe(await countCombinedSentInCycle(user.id, cycle.cycleStart, cycle.cycleEnd));
+    _clearQuotaCache();
+    expect(data.emailSentToday).toBe(await countEmailSentToday(user.id));
+    _clearQuotaCache();
+    expect(data.messagingSentToday).toBe(await countZaloSentToday(user.id));
+    // và đúng bảng chân lý cộng tay
+    expect(data.emailSentCycle).toBe(EMAIL_KY);
+    expect(data.combinedSentCycle).toBe(TONG_KY);
   });
 });
 
