@@ -12,6 +12,7 @@ import {
   sanitizeLandingSnapshotForSharing,
   stripSellerPrivateLandingConfig,
 } from '../../utils/marketplaceLandingSnapshot.util.js';
+import { replaceFormEmbedsWithSlots } from '../../utils/landingHtmlInjection.util.js';
 
 class MarketplacePurchaseService {
   /**
@@ -284,6 +285,10 @@ class MarketplacePurchaseService {
     // Snapshot đã lưu trước đây có thể còn khoá riêng của người bán (webhook Google Sheet — lead của NGƯỜI MUA sẽ bị đẩy về Sheet
     // của người bán — và id biểu mẫu của người bán): lọc ngay lúc clone.
     const customConfig = stripSellerPrivateLandingConfig(snapshot.customConfig || snapshot.custom_config);
+    // Khối nhúng biểu mẫu của người bán (`data-founderai-form="<publicKey>"`) trỏ tới biểu mẫu CÔNG KHAI của người bán: để nguyên thì
+    // trang của người mua hiện biểu mẫu của người bán và bài nộp của khách người mua chảy về người bán. Đổi thành chỗ trống — lúc người
+    // mua lưu trang, hệ thống tạo biểu mẫu thuộc về người mua (landingPageAdmin.service.js).
+    const htmlContent = replaceFormEmbedsWithSlots(snapshot.htmlContent || snapshot.html_content || '');
 
     // Tạo landing page mới
     const { rows } = await client.query(
@@ -294,7 +299,7 @@ class MarketplacePurchaseService {
         userId,
         snapshot.title || 'Imported Landing Page',
         `${snapshot.slug || 'landing'}-${Date.now()}`,
-        snapshot.htmlContent || snapshot.html_content || '',
+        htmlContent,
         customConfig ? JSON.stringify(customConfig) : '{}',
       ]
     );

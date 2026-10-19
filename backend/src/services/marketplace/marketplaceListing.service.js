@@ -58,16 +58,25 @@ class MarketplaceListingService {
       sanitizedPrice = Math.floor(price);
     }
 
-    // Get campaign data
+    // Get campaign data. `allowShared: false` — chiến dịch người khác CHIA SẺ cho mình (xem/sửa được) không phải của mình:
+    // đăng bán là đưa cả sơ đồ node + cấu hình của nó cho bất kỳ ai mua, nên chỉ chủ workspace mới được đăng.
     const campaign = await campaignCrudRepository.findCampaignById({
       campaignId,
       isAdmin: false,
       userId,
+      allowShared: false,
     });
 
     if (!campaign) {
       const error = new Error('Chiến dịch không tồn tại');
       error.status = 404;
+      throw error;
+    }
+
+    // Chiến dịch mua từ Marketplace không được bán lại (cùng quy tắc với chatbot).
+    if (await marketplacePurchaseRepository.isClonedResourcePurchased('campaign', campaignId)) {
+      const error = new Error('Không thể bán chiến dịch đã mua từ marketplace');
+      error.status = 403;
       throw error;
     }
 
@@ -187,6 +196,14 @@ class MarketplaceListingService {
     const isPurchased = await marketplacePurchaseRepository.isChatbotPurchased(chatbotId);
     if (isPurchased) {
       const error = new Error('Không thể bán chatbot đã mua từ marketplace');
+      error.status = 403;
+      throw error;
+    }
+
+    // Chatbot người khác CHIA SẺ cho mình (origin = 'shared', chatbotClone.repository.js#cloneFromSource) là bản sao của bot
+    // của chủ khác — không phải sản phẩm của mình để bán.
+    if (chatbot.origin === 'shared') {
+      const error = new Error('Không thể bán chatbot được chia sẻ từ tài khoản khác');
       error.status = 403;
       throw error;
     }
@@ -603,6 +620,13 @@ class MarketplaceListingService {
     // userId từ req.user.id là chuỗi (BIGINT) — chủ luôn bị 403 nếu so thẳng với Number.
     if (ownerId !== Number(userId)) {
       const error = new Error('Bạn không có quyền tạo listing từ landing page này');
+      error.status = 403;
+      throw error;
+    }
+
+    // Landing page mua từ Marketplace không được bán lại (cùng quy tắc với chatbot).
+    if (await marketplacePurchaseRepository.isClonedResourcePurchased('landing_page', landingPageId)) {
+      const error = new Error('Không thể bán landing page đã mua từ marketplace');
       error.status = 403;
       throw error;
     }

@@ -703,4 +703,199 @@ describe('Marketplace API', () => {
       expect(Number(rows[0].pending_payout)).toBe(50000);
     });
   });
+
+  // PLAN_VA_CO_LAP_DU_LIEU_TENANT_DOT2 PR-C (C1): đăng bán chỉ tài nguyên CỦA MÌNH — không phải bản được chia sẻ, không phải bản đã mua.
+  describe('đăng bán: không bán lại tài nguyên được chia sẻ hoặc đã mua từ Marketplace', () => {
+    async function createSeller(username) {
+      const user = await createUser(username);
+      await assignPlanToUser(user, await createPlan(`plan-${username}`));
+      return { user, token: await loginAs(user) };
+    }
+    const countListings = async () => (await db.query('SELECT COUNT(*)::int AS n FROM marketplace_listings')).rows[0].n;
+    const insertChatbot = async (userId, origin = 'self_created') => {
+      const { rows } = await db.query(
+        `INSERT INTO custom_chatbots (id_user, name, widget_key, system_instruction, origin) VALUES ($1, 'Bot', $2, 'huong dan', $3) RETURNING id`,
+        [userId, `k_${Date.now()}_${Math.floor(Math.random() * 1e6)}`, origin]
+      );
+      return Number(rows[0].id);
+    };
+    const insertLanding = async (userId, html = '<h1>Trang</h1>') => {
+      const { rows } = await db.query(
+        `INSERT INTO landing_pages (id_user, workspace_owner_id, slug, title, html_content) VALUES ($1, $1, $2, 'Trang', $3) RETURNING id`,
+        [userId, `lp-${Date.now()}-${Math.floor(Math.random() * 1e6)}`, html]
+      );
+      return Number(rows[0].id);
+    };
+
+    it('B được A chia sẻ chiến dịch (edit) -> B đăng bán -> 404, không có listing', async () => {
+      const a = await createSeller('owner-a');
+      const b = await createSeller('recipient-b');
+      const campaign = await insertCampaign({ userId: a.user.id, campaignName: 'Chien dich cua A' });
+      await db.query(
+        `INSERT INTO campaign_shares (id_campaign, id_owner, id_recipient, recipient_email, share_type, can_run)
+         VALUES ($1, $2, $3, $4, 'edit', false)`,
+        [campaign.id, a.user.id, b.user.id, b.user.email]
+      );
+
+      const res = await request(app).post('/api/marketplace/listings')
+        .set('Authorization', `Bearer ${b.token}`).send({ campaignId: campaign.id, title: 'Ban lai' });
+
+      expect(res.status).toBe(404);
+      expect(await countListings()).toBe(0);
+    });
+
+    it('B được A chia sẻ chiến dịch (view) -> cũng 404', async () => {
+      const a = await createSeller('owner-a2');
+      const b = await createSeller('recipient-b2');
+      const campaign = await insertCampaign({ userId: a.user.id });
+      await db.query(
+        `INSERT INTO campaign_shares (id_campaign, id_owner, id_recipient, recipient_email, share_type, can_run)
+         VALUES ($1, $2, $3, $4, 'view', false)`,
+        [campaign.id, a.user.id, b.user.id, b.user.email]
+      );
+
+      const res = await request(app).post('/api/marketplace/listings')
+        .set('Authorization', `Bearer ${b.token}`).send({ campaignId: campaign.id });
+
+      expect(res.status).toBe(404);
+      expect(await countListings()).toBe(0);
+    });
+
+    it('B tạo listing từ chatbot origin = shared -> 403, không có listing', async () => {
+      const b = await createSeller('recipient-b3');
+      const chatbotId = await insertChatbot(b.user.id, 'shared');
+
+      const res = await request(app).post('/api/marketplace/chatbots')
+        .set('Authorization', `Bearer ${b.token}`).send({ chatbotId, title: 'Ban lai bot' });
+
+      expect(res.status).toBe(403);
+      expect(await countListings()).toBe(0);
+    });
+
+    it('chiến dịch B đã MUA từ Marketplace (qua endpoint mua thật) -> đăng bán lại 403', async () => {
+      const a = await createSeller('seller-a4');
+      const b = await createSeller('buyer-b4');
+      await insertUsageLog(b.user.id, 100);
+      const source = await insertListing({ userId: a.user.id, resourceType: 'campaign', priceCredits: 0, status: 'published' });
+      const bought = await request(app).post(`/api/marketplace/purchase/${source.id}`).set('Authorization', `Bearer ${b.token}`);
+      expect(bought.status).toBe(200);
+      const clonedCampaignId = bought.body.data.clonedResource.id;
+      const before = await countListings();
+
+      const res = await request(app).post('/api/marketplace/listings')
+        .set('Authorization', `Bearer ${b.token}`).send({ campaignId: clonedCampaignId, title: 'Ban lai' });
+
+      expect(res.status).toBe(403);
+      expect(await countListings()).toBe(before);
+    });
+
+    it('landing B đã MUA từ Marketplace (qua endpoint mua thật) -> đăng bán lại 403', async () => {
+      const a = await createSeller('seller-a5');
+      const b = await createSeller('buyer-b5');
+      await insertUsageLog(b.user.id, 100);
+      const source = await insertListing({
+        userId: a.user.id,
+        resourceType: 'landing_page',
+        priceCredits: 0,
+        status: 'published',
+        snapshotData: { title: 'Landing mua', slug: 'landing-mua', htmlContent: '<h1>X</h1>', customConfig: {} },
+      });
+      const bought = await request(app).post(`/api/marketplace/purchase/${source.id}`).set('Authorization', `Bearer ${b.token}`);
+      expect(bought.status).toBe(200);
+      const clonedLandingId = bought.body.data.clonedResource.id;
+      const before = await countListings();
+
+      const res = await request(app).post('/api/marketplace/landing-pages')
+        .set('Authorization', `Bearer ${b.token}`).send({ landingPageId: clonedLandingId, title: 'Ban lai' });
+
+      expect(res.status).toBe(403);
+      expect(await countListings()).toBe(before);
+    });
+
+    it('tài nguyên CỦA CHÍNH MÌNH (chiến dịch, chatbot tự tạo, landing) -> đăng bán như cũ (201)', async () => {
+      const u = await createSeller('own-seller');
+      const campaign = await insertCampaign({ userId: u.user.id });
+      const chatbotId = await insertChatbot(u.user.id, 'self_created');
+      const landingId = await insertLanding(u.user.id);
+      const post = (path, body) => request(app).post(path).set('Authorization', `Bearer ${u.token}`).send(body);
+
+      expect((await post('/api/marketplace/listings', { campaignId: campaign.id, title: 'C' })).status).toBe(201);
+      expect((await post('/api/marketplace/chatbots', { chatbotId, title: 'B' })).status).toBe(201);
+      expect((await post('/api/marketplace/landing-pages', { landingPageId: landingId, title: 'L' })).status).toBe(201);
+      expect(await countListings()).toBe(3);
+    });
+  });
+
+  // PLAN_VA_CO_LAP_DU_LIEU_TENANT_DOT2 PR-C (C2): landing mua về không mang khối nhúng biểu mẫu của người bán.
+  describe('landing mua về: khối nhúng biểu mẫu của người bán đổi thành chỗ trống', () => {
+    const embed = (key) => `<section data-founderai-form-section>
+  <div data-founderai-form="${key}"></div>
+  <noscript><a href="https://founderai.biz/f/${key}">Mở biểu mẫu</a></noscript>
+  <script src="https://founderai.biz/form-embed.js" defer></script>
+</section>`;
+    const SELLER_KEYS = ['SELLERKEY_AAA', 'SELLERKEY_BBB'];
+    const SELLER_HTML = `<h1>Landing bán</h1>\n${embed(SELLER_KEYS[0])}\n<p>Giữa trang</p>\n${embed(SELLER_KEYS[1])}\n<p>Cuối</p>`;
+
+    async function buyLandingWithHtml(html) {
+      const seller = await createUser('seller-c2');
+      const buyer = await createUser('buyer-c2');
+      await assignPlanToUser(buyer, await createPlan('plan-c2'));
+      await insertUsageLog(buyer.id, 100);
+      const listing = await insertListing({
+        userId: seller.id,
+        resourceType: 'landing_page',
+        priceCredits: 0,
+        status: 'published',
+        snapshotData: { title: 'Landing mua', slug: 'landing-mua', htmlContent: html, customConfig: {} },
+      });
+      const token = await loginAs(buyer);
+      const res = await request(app).post(`/api/marketplace/purchase/${listing.id}`).set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(200);
+      return { seller, buyer, token, landingId: res.body.data.clonedResource.id };
+    }
+
+    it('mua landing có 2 khối nhúng của người bán -> html_content của người mua: 0 data-founderai-form=", 2 chỗ trống', async () => {
+      const { landingId } = await buyLandingWithHtml(SELLER_HTML);
+
+      const { rows } = await db.query('SELECT html_content, is_published FROM landing_pages WHERE id = $1', [landingId]);
+      const html = rows[0].html_content;
+      expect(html).not.toContain('data-founderai-form="');
+      expect(html).not.toContain('SELLERKEY');
+      expect(html).not.toContain('form-embed.js');
+      expect(html.match(/data-founderai-form-slot/g)).toHaveLength(2);
+      expect(html).toContain('<h1>Landing bán</h1>');
+      expect(html).toContain('<p>Giữa trang</p>');
+      expect(rows[0].is_published).toBe(false);
+    });
+
+    it('mua landing KHÔNG có khối nhúng -> html_content giữ nguyên từng byte', async () => {
+      const plain = '<!DOCTYPE html>\r\n<html><body>\t<h1>Trang thường</h1> \r\n<div data-founderai-form-slot></div></body></html>';
+      const { landingId } = await buyLandingWithHtml(plain);
+
+      const { rows } = await db.query('SELECT html_content FROM landing_pages WHERE id = $1', [landingId]);
+      expect(rows[0].html_content).toBe(plain);
+    });
+
+    it('người mua mở trang rồi LƯU -> 2 chỗ trống thành 2 biểu mẫu CỦA NGƯỜI MUA, HTML nhúng khoá của người mua (không phải của người bán)', async () => {
+      const { buyer, seller, token, landingId } = await buyLandingWithHtml(SELLER_HTML);
+      const { rows: stored } = await db.query('SELECT html_content, slug FROM landing_pages WHERE id = $1', [landingId]);
+
+      const res = await request(app)
+        .put(`/api/admin/landing-pages/${landingId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ slug: stored[0].slug, title: 'Landing cua nguoi mua', htmlContent: stored[0].html_content, isPublished: true });
+
+      expect(res.status).toBe(200);
+      const { rows: saved } = await db.query('SELECT html_content, is_published FROM landing_pages WHERE id = $1', [landingId]);
+      const keys = [...saved[0].html_content.matchAll(/data-founderai-form="([A-Za-z0-9_-]+)"/g)].map((m) => m[1]);
+      expect(keys).toHaveLength(2);
+      for (const key of SELLER_KEYS) expect(keys).not.toContain(key);
+      expect(saved[0].html_content).not.toContain('data-founderai-form-slot');
+      const { rows: forms } = await db.query('SELECT public_key, workspace_owner_id FROM forms WHERE public_key = ANY($1)', [keys]);
+      expect(forms).toHaveLength(2);
+      for (const form of forms) expect(Number(form.workspace_owner_id)).toBe(Number(buyer.id));
+      const { rows: sellerForms } = await db.query('SELECT 1 FROM forms WHERE workspace_owner_id = $1', [seller.id]);
+      expect(sellerForms).toHaveLength(0);
+    });
+  });
 });

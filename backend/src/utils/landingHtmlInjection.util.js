@@ -478,3 +478,40 @@ export function buildFormEmbedSectionHtml({ publicKey, origin, fallbackText = 'M
   <script src="${org}/form-embed.js" defer></script>
 </section>`;
 }
+
+/** Khối nhúng biểu mẫu CỐ ĐỊNH: cả `<section …data-founderai-form-section…>…</section>` (xem buildFormEmbedSectionHtml). */
+const FORM_EMBED_SECTION_RE = /<section\b[^>]*\bdata-founderai-form-section\b[^>]*>[\s\S]*?<\/section\s*>/gi;
+/** Thuộc tính khoá biểu mẫu `data-founderai-form="KEY"` — CÙNG mẫu với `listFormEmbedKeys` (landingEditGuard.util.js): nháy đơn/đôi, khoảng trắng quanh `=`; thêm cờ `i` (HTML không phân biệt hoa/thường tên thuộc tính). */
+const FORM_EMBED_KEY_ATTR_RE = /\bdata-founderai-form\s*=\s*(["'])[A-Za-z0-9_-]+\1/i;
+/** Phần tử RỖNG mang khoá biểu mẫu (`<div data-founderai-form="KEY"></div>` đứng riêng, không bọc trong section). */
+const FORM_EMBED_EMPTY_ELEMENT_RE = /<([a-z][a-z0-9-]*)\b[^<>]*\bdata-founderai-form\s*=\s*(["'])[A-Za-z0-9_-]+\2[^<>]*>\s*<\/\1\s*>/gi;
+/** Thẻ mở bất kỳ còn mang khoá biểu mẫu — chỉ tìm TRONG thẻ (không đụng bộ chọn CSS `[data-founderai-form="x"]` trong <style>). */
+const FORM_EMBED_TAG_WITH_KEY_RE = /<[a-z][^<>]*\bdata-founderai-form\s*=\s*(["'])[A-Za-z0-9_-]+\1[^<>]*>/gi;
+const FORM_EMBED_KEY_ATTR_GLOBAL_RE = /\s*\bdata-founderai-form\s*=\s*(["'])[A-Za-z0-9_-]+\1/gi;
+
+/**
+ * Landing MUA từ Marketplace: đổi MỌI khối nhúng biểu mẫu của người bán thành CHỖ TRỐNG biểu mẫu
+ * `<div data-founderai-form-slot></div>`. Khối nhúng trỏ tới biểu mẫu công khai theo `publicKey` của NGƯỜI BÁN — để nguyên thì
+ * trang của người mua hiển thị biểu mẫu của người bán và bài nộp của khách người mua chảy về người bán. Chỗ trống thì khác: lúc
+ * người mua lưu landing, hệ thống tự tạo biểu mẫu thuộc về CHỦ TRANG (landingPageAdmin.service.js — createFormsForSlots).
+ *
+ *  - Mỗi `<section data-founderai-form-section>…</section>` có khoá biểu mẫu → đúng MỘT chỗ trống (tổng chỗ trống + khối nhúng
+ *    không tăng, nên không vượt MAX_FORMS_PER_LANDING).
+ *  - Phần tử rỗng đứng riêng mang `data-founderai-form="KEY"` (không bọc section) → một chỗ trống.
+ *  - Còn sót thuộc tính khoá trên thẻ khác (có nội dung con, định dạng lạ) → GỠ thuộc tính (không để khoá người bán lại trong HTML).
+ *  - Không có khối nào → trả về chuỗi NGUYÊN VẸN (từng byte).
+ *
+ * Hàm thuần, không đụng DB. Một lượt, không quét lại phần vừa chèn.
+ *
+ * @param {string} html
+ * @returns {string}
+ */
+export function replaceFormEmbedsWithSlots(html) {
+  const source = String(html ?? '');
+  if (!FORM_EMBED_KEY_ATTR_RE.test(source)) return source;
+  const slot = '<div data-founderai-form-slot></div>';
+  let out = source.replace(FORM_EMBED_SECTION_RE, (block) => (FORM_EMBED_KEY_ATTR_RE.test(block) ? slot : block));
+  out = out.replace(FORM_EMBED_EMPTY_ELEMENT_RE, slot);
+  out = out.replace(FORM_EMBED_TAG_WITH_KEY_RE, (tag) => tag.replace(FORM_EMBED_KEY_ATTR_GLOBAL_RE, ''));
+  return out;
+}
