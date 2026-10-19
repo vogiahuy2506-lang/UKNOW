@@ -400,7 +400,8 @@ const CASES = [
   { id: 'E-D11', name: 'email/ngày: hạn mức = 0 (gói không có kênh) → chặn disabled', channel: 'email', plan: { dailyEmail: 0 }, e: 'D:disabled' },
   { id: 'E-D12', name: 'email/ngày: Enterprise tất cả NULL, đã gửi 300 → không giới hạn', channel: 'email', plan: {}, seed: (h) => h.email(300), e: 'A' },
   { id: 'E-D13', name: 'email/ngày: dữ liệu workspace khác không tính (5 thư của chủ khác) → cho phép', channel: 'email', plan: { dailyEmail: 5 }, seed: async (h) => { const other = await createUser({ username: `qm_other_${nextSeq()}` }); await db.query(`INSERT INTO email_messages (workspace_owner_id, recipient_email, sender_email, subject, status, is_preview, sent_at) SELECT $1, 'x'||g||'@e.com', 's@e.com', 'S', 'sent', false, LOCALTIMESTAMP FROM generate_series(1,5) g`, [other.id]); }, e: 'A' },
-  { id: 'E-D14', name: 'email/ngày: có ownerContextId = chủ (đúng như middleware ngữ cảnh) — 5/5 → chặn', channel: 'email', plan: { dailyEmail: 5 }, ownerContext: true, seed: (h) => h.email(5), e: 'D:daily' },
+  { id: 'E-D15', name: 'email/ngày: trần ngày KHÔNG có lối thoát bằng ví (5/5 hôm nay, ví emails 10) → chặn daily', channel: 'email', plan: { dailyEmail: 5, monthlyEmail: 100 }, seed: async (h) => { await h.email(5); await h.grant('emails', 10); }, e: 'D:daily' },
+  { id: 'E-D14',name: 'email/ngày: có ownerContextId = chủ (đúng như middleware ngữ cảnh) — 5/5 → chặn', channel: 'email', plan: { dailyEmail: 5 }, ownerContext: true, seed: (h) => h.email(5), e: 'D:daily' },
 
   // ── Email · đặt chỗ (ledger) ──
   { id: 'E-R1', name: 'email/ngày + đặt chỗ treo: 3 đã gửi + 2 reserved (=5) → luật mới chặn, luật cũ không thấy chỗ đặt', channel: 'email', plan: { dailyEmail: 5 }, seed: async (h) => { await h.email(3); await h.reservation({ channel: 'email', qty: 1 }); await h.reservation({ channel: 'email', qty: 1 }); }, e: { legacy: 'A', atomic: 'D:daily', blind: 'đặt chỗ treo' } },
@@ -426,7 +427,8 @@ const CASES = [
   { id: 'E-M8', name: 'email/kỳ: hết hạn mức gói, ví 1 nhưng đã bị đặt chỗ giữ → luật mới chặn, luật cũ không thấy giữ chỗ', channel: 'email', plan: { monthlyEmail: 10 }, seed: async (h) => { await h.email(10); await h.grant('emails', 1); await h.reservation({ channel: 'email', qty: 1, walletKey: 'emails', walletQty: 1 }); }, e: { legacy: 'A', atomic: 'D:monthly', blind: 'giữ chỗ ví' } },
   { id: 'E-M9', name: 'email/kỳ: còn 1 chỗ gói + gửi 3, ví 2 (phủ 1 + ví 2) → cho phép, giữ 2 ví', channel: 'email', plan: { monthlyEmail: 10 }, quantity: 3, seed: async (h) => { await h.email(9); await h.grant('emails', 2); }, e: 'A', wallet: { key: 'emails', qty: 2 } },
   { id: 'E-M10', name: 'email/kỳ: còn 1 chỗ gói + gửi 3, ví chỉ 1 (cần 2) → chặn', channel: 'email', plan: { monthlyEmail: 10 }, quantity: 3, seed: async (h) => { await h.email(9); await h.grant('emails', 1); }, e: 'D:monthly' },
-  { id: 'E-M11', name: 'email/kỳ: hạn mức tháng = 0 → chặn disabled', channel: 'email', plan: { monthlyEmail: 0 }, e: 'D:disabled' },
+  { id: 'E-M14', name: 'email/kỳ: còn 1 chỗ gói + gửi 2, ví đúng 1 (phủ 1 + ví 1) → cho phép, giữ 1 ví', channel: 'email', plan: { monthlyEmail: 10 }, quantity: 2, seed: async (h) => { await h.email(9); await h.grant('emails', 1); }, e: 'A', wallet: { key: 'emails', qty: 1 } },
+  { id: 'E-M11',name: 'email/kỳ: hạn mức tháng = 0 → chặn disabled', channel: 'email', plan: { monthlyEmail: 0 }, e: 'D:disabled' },
   { id: 'E-M12', name: 'email/kỳ + ngày: ngày còn chỗ nhưng kỳ đầy và ví rỗng → chặn monthly (thứ tự: ngày qua, tháng chặn)', channel: 'email', plan: { dailyEmail: 50, monthlyEmail: 10 }, seed: async (h) => { await h.email(10, { at: 'twoDaysAgo' }); }, e: 'D:monthly' },
   { id: 'E-M13', name: 'email/kỳ: ví Zalo không cứu được email (grant zalo_messages 5, email hết kỳ) → chặn', channel: 'email', plan: { monthlyEmail: 10 }, seed: async (h) => { await h.email(10); await h.grant('zalo_messages', 5); }, e: 'D:monthly' },
 
