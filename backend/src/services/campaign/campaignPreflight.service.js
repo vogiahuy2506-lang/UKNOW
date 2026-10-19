@@ -11,6 +11,7 @@ import { checkSheetForChannel } from '../ai/sheetRecipientCheck.service.js';
 import { MAX_SHEET_RECIPIENTS } from '../../utils/manualRecipients.util.js';
 import { resourceIsLocked } from '../../utils/topupLockGate.util.js';
 import campaignChannelRegistry from './campaignChannelRegistry.service.js';
+import campaignNodeReferences from './campaignNodeReferences.service.js';
 import { validateChannelSteps } from '../../utils/channelSteps.util.js';
 import { assertChannelEntitled } from './channelEntitlement.service.js';
 import { resolveZaloAccountEntries } from '../../utils/campaignZaloAccountResolve.util.js';
@@ -60,7 +61,7 @@ export async function validateCampaignPreflight({
   }
 
   const { rows: nodes } = await db.query(
-    `SELECT id, node_type, node_subtype, config FROM campaign_nodes WHERE id_campaign = $1`,
+    `SELECT id, node_type, node_subtype, node_name, execution_order, config FROM campaign_nodes WHERE id_campaign = $1`,
     [parsedCampaignId]
   );
 
@@ -90,6 +91,35 @@ export async function validateCampaignPreflight({
     error.code = 'UNSUPPORTED_SEND_NODE';
     error.statusCode = 400;
     throw error;
+  }
+
+  // 1b'. Tham chiếu khối hụt (thường sinh ra do nhân bản chiến dịch cũ): khối gửi đang ở chế độ "lấy từ khối" mà khối
+  // nguồn không còn / không đi tới được → engine nhận danh sách rỗng và lượt chạy "completed" 0/0 mà không ai biết.
+  // Chặn cứng tại đây (chạy tay, chạy tiếp, bật lịch, lịch nổ đều đi qua preflight). Chỉ trường runtime thật sự đọc —
+  // luật nằm ở campaignNodeReferences.collectBlockingNodeReferences. Chỉ đọc thêm DB khi có khối thuộc diện kiểm.
+  const hasReferenceCandidates = nodes.some(
+    (node) => campaignNodeReferences.collectBlockingNodeReferences(node.node_subtype, node.config).length > 0
+  );
+  if (hasReferenceCandidates) {
+    const [{ rows: connectionRows }, { rows: campaignRows }] = await Promise.all([
+      db.query(
+        `SELECT source_node_id, target_node_id FROM campaign_connections WHERE id_campaign = $1`,
+        [parsedCampaignId]
+      ),
+      db.query(`SELECT flow_json FROM campaigns WHERE id = $1`, [parsedCampaignId]),
+    ]);
+    const danglingReferences = campaignNodeReferences.findDanglingNodeReferences({
+      flowJson: campaignRows?.[0]?.flow_json ?? null,
+      nodes,
+      connections: connectionRows,
+    });
+    if (danglingReferences.length > 0) {
+      const error = new Error(campaignNodeReferences.buildDanglingReferenceMessage(danglingReferences));
+      error.code = 'DANGLING_NODE_REFERENCE';
+      error.statusCode = 400;
+      error.details = danglingReferences;
+      throw error;
+    }
   }
 
   // 1c. PR-3 (tách tầng kênh gửi) — node kênh 'adapter' (Telegram/WhatsApp từ PR-6+, mock ở test)

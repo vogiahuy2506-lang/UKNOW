@@ -7,6 +7,7 @@ import { checkUserResourceLimit } from '../../utils/userResourceLimit.util.js';
 import { getWalletBalance } from '../../repositories/payment/topup.repository.js';
 import chatbotCloneRepository from '../../repositories/ai/chatbotClone.repository.js';
 import { assertChatbotSlotAvailable } from '../ai/chatbotSlot.service.js';
+import campaignNodeReferences from '../campaign/campaignNodeReferences.service.js';
 
 class MarketplacePurchaseService {
   /**
@@ -216,15 +217,31 @@ class MarketplacePurchaseService {
           Number.isFinite(node.executionOrder) ? node.executionOrder : null,
         ]
       );
-      nodeIdMap.set(node.id, rows[0].id);
+      nodeIdMap.set(String(node.id), rows[0].id);
+    }
+
+    // Lượt 2 — snapshot chứa config nguyên văn của khối gốc; tham chiếu giữa các khối (zaloGroupNodeId, recipientNodeId,
+    // templateMappings[].nodeId…) trỏ id khối của chiến dịch người bán → đổi sang id khối vừa tạo, không thì mỗi lượt mua
+    // sinh thêm một chiến dịch hụt nguồn. Khoá/giá trị đều là chuỗi (BIGSERIAL pg trả chuỗi, snapshot có thể lưu số).
+    const referenceIdMap = new Map(
+      [...nodeIdMap.entries()].map(([oldId, newId]) => [String(oldId), String(newId)])
+    );
+    for (const node of nodes) {
+      if (!node || node.id == null || !node.config) continue;
+      const nextConfig = campaignNodeReferences.remapNodeReferencesDeep(node.config, referenceIdMap);
+      if (nextConfig === node.config) continue;
+      await client.query(
+        'UPDATE campaign_nodes SET config = $1 WHERE id = $2',
+        [JSON.stringify(nextConfig), nodeIdMap.get(String(node.id))]
+      );
     }
 
     // Clone connections — bỏ qua nếu source/target không có trong node map
     const connections = Array.isArray(snapshot.connections) ? snapshot.connections : [];
     for (const conn of connections) {
       if (!conn) continue;
-      const newSourceId = nodeIdMap.get(conn.sourceNodeId);
-      const newTargetId = nodeIdMap.get(conn.targetNodeId);
+      const newSourceId = nodeIdMap.get(String(conn.sourceNodeId));
+      const newTargetId = nodeIdMap.get(String(conn.targetNodeId));
       if (!newSourceId || !newTargetId) continue; // defensive skip
       await client.query(
         `INSERT INTO campaign_connections

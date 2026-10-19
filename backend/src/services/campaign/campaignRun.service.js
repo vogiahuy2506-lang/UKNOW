@@ -2,6 +2,7 @@ import db from '../../config/database.js';
 import campaignRunRepository from '../../repositories/campaign/campaignRun.repository.js';
 import recipientLedgerRepository from '../../repositories/campaign/recipientLedger.repository.js';
 import campaignFlowService from './campaignFlow.service.js';
+import campaignNodeReferences from './campaignNodeReferences.service.js';
 import campaignNodeDataService from './campaignNodeData.service.js';
 import campaignTagStepService from './campaignTagStep.service.js';
 import campaignEmailSenderService from './campaignEmailSender.service.js';
@@ -3243,6 +3244,24 @@ class CampaignRunService {
         if (!key) return '';
         return flowNodeIdMap.get(key) || key;
       };
+
+      // Lưới thứ hai cho tham chiếu khối hụt (preflight là lưới thứ nhất): khối gửi lấy người nhận / nhóm / khách từ một khối
+      // không còn tồn tại thì nhận danh sách rỗng và lượt chạy kết thúc "completed" 0/0 trong im lặng. Dừng TRƯỚC khi chạy
+      // khối nào: đóng sổ 'failed' + báo chủ (cùng khuôn `zaloAccessBlocked` ở trên — nhánh RUN_STOPPED ở catch tổng chỉ log
+      // rồi return, không tự đóng sổ). Kiểm trên dữ liệu thô, trước vòng chuẩn hoá bên dưới (vòng đó ghi đè config/thứ tự).
+      const danglingReferences = campaignNodeReferences.findDanglingNodeReferences({
+        flowJson: campaign?.flow_json,
+        nodes,
+        connections,
+      });
+      if (danglingReferences.length > 0) {
+        const danglingMessage = campaignNodeReferences.buildDanglingReferenceMessage(danglingReferences);
+        await this._failRunAndNotify(runId, campaignId, danglingMessage, 'dangling_node_reference');
+        const stopError = new Error(danglingMessage);
+        stopError.code = 'RUN_STOPPED';
+        stopError.danglingReference = true;
+        throw stopError;
+      }
 
       for (let idx = 0; idx < orderedNodes.length; idx += 1) {
         const node = orderedNodes[idx];
@@ -9471,6 +9490,8 @@ class CampaignRunService {
       if (error?.code === 'RUN_STOPPED') {
         console.log(error?.quotaBlocked
           ? `[Campaign ${campaignId}] Run ${runId} dừng do hết hạn mức gói: ${error.message}`
+          : error?.danglingReference
+            ? `[Campaign ${campaignId}] Run ${runId} dừng vì khối đang trỏ tới khối nguồn không còn tồn tại: ${error.message}`
           : (error?.zaloAccessBlocked || error?.channelAccessBlocked)
             ? `[Campaign ${campaignId}] Run ${runId} dừng vì tài khoản ${error.channelAccessBlocked ? 'Telegram/WhatsApp' : 'Zalo'} chưa được giao: ${error.message}`
             : `[Campaign ${campaignId}] Lượt chạy ${runId} đã được dừng bởi người dùng`);

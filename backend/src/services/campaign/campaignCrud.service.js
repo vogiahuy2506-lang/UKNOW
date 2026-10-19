@@ -4,6 +4,7 @@ import { enforceResourceLimitTx } from '../../utils/userResourceLimit.util.js';
 import { inferCampaignTypeFromNodes, resolveCampaignTypeLimitKey } from '../../utils/campaignTypeInference.util.js';
 import campaignCrudRepository from '../../repositories/campaign/campaignCrud.repository.js';
 import campaignFlowService from './campaignFlow.service.js';
+import campaignNodeReferences from './campaignNodeReferences.service.js';
 import { countCampaignRecipientsEstimate } from './campaignApproval.service.js';
 import uploadController from '../../controllers/upload.controller.js';
 import { getWorkspaceContext } from '../../utils/workspaceContext.util.js';
@@ -740,6 +741,22 @@ class CampaignCrudService {
           executionOrder: node.execution_order,
         });
         nodeIdMap[node.id] = newNodeId;
+      }
+
+      // Lượt 2 — khối giữ tham chiếu tới khối khác trong `config` (zaloGroupNodeId, recipientNodeId, templateMappings[].nodeId…).
+      // Chép nguyên văn thì bản sao trỏ id khối của chiến dịch GỐC → nguồn hụt, run "completed" 0/0. Đổi sang id khối mới.
+      // Khoá/giá trị đều là chuỗi (BIGSERIAL pg trả chuỗi, config có khi lưu số). Tham chiếu ngoài chiến dịch nguồn giữ nguyên.
+      const referenceIdMap = new Map(
+        Object.entries(nodeIdMap).map(([oldId, newId]) => [String(oldId), String(newId)])
+      );
+      for (const node of nodesRows) {
+        // config có thể về dạng chuỗi JSON (cột json/text cũ) — parse trước, không thì remap bỏ qua cả khối.
+        const sourceConfig = campaignNodeReferences.parseNodeConfig(node.config);
+        if (!sourceConfig) continue;
+        const nextConfig = campaignNodeReferences.remapNodeReferencesDeep(sourceConfig, referenceIdMap);
+        if (nextConfig !== sourceConfig) {
+          await campaignCrudRepository.updateNodeConfigTx(client, nodeIdMap[node.id], nextConfig);
+        }
       }
 
       const connectionsRows = await campaignCrudRepository.findConnectionsByCampaignIdTx(client, campaignId);
