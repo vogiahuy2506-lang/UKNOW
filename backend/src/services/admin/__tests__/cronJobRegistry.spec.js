@@ -84,7 +84,7 @@ describe('cronJobRegistry ↔ scheduler recordRun', () => {
     }
   });
 
-  it('đúng 39 cron cố định, không trùng mã', () => {
+  it('đúng 42 cron cố định, không trùng mã', () => {
     // 29 → 30: thêm notification_templates (PLAN_NOTIFICATION_CENTER_SAVE_AS_TEMPLATE,
     // PR-1 — Save As Template MVP, dispatch mark-only vì template chưa lưu targeting).
     // 30 → 31: thêm facebook_token_refresh (06209dca, 21/09/2026 — làm mới Page Access Token 03:00
@@ -99,8 +99,9 @@ describe('cronJobRegistry ↔ scheduler recordRun', () => {
     // 37 → 38: thêm abandoned_checkout_reminder (PLAN_NHAC_THANH_TOAN_LAI_SAU_2_GIO PR-A — nhắc thanh toán lại đơn bỏ dở, mỗi 15 phút).
     // 38 → 39: thêm zalo_friend_auto_accept (PLAN_ZALO_TU_DONG_DONG_Y_KET_BAN Việc 5 — quét bù lời mời kết bạn Zalo, mỗi 10 phút).
     // 39 → 41: thêm tiktok_token_refresh + tiktok_outbound_log_cleanup (PLAN_TIKTOK_BUSINESS_MESSAGING_INTEGRATION việc 2.3 + 6 — refresh token 03:30 và dọn log cũ 7 ngày).
-    expect(CRON_JOBS).toHaveLength(41);
+    // 41 → 42: thêm send_quota_reservation_sweep (PLAN_SAN_SANG_BAT_ENFORCE_HAN_MUC_2026-10-19 PR-E1 — bộ dọn đặt chỗ hạn mức, mỗi phút).
+    expect(CRON_JOBS).toHaveLength(42);
     const codes = CRON_JOBS.map((j) => j.code);
-    expect(new Set(codes).size).toBe(41);
+    expect(new Set(codes).size).toBe(42);
   });
 });

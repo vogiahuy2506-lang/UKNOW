@@ -5361,6 +5361,12 @@ export default {
         description: 'Reloads active schedules, resumes interrupted continuous campaigns, and resumes interrupted one-off campaigns.',
         impact: 'New/edited schedules take no effect, and interrupted campaigns do not automatically resume.',
       },
+      send_quota_reservation_sweep: {
+        label: 'Send Quota Reservation Sweeper',
+        schedule: 'Every minute (second 40)',
+        description: 'Releases send-quota reservations whose lease expired (interrupted sends, dead processes) to give quota and wallet back; marks sends stuck for over 30 minutes as "uncertain" to await reconciliation (still counted against quota, never auto-refunded). Logs "noop" when there is nothing to do.',
+        impact: 'Once reservation-based quota enforcement is on, a send that dies midway holds quota and wallet forever: customers see "quota exceeded" without having sent, and retrying with the same key is rejected.',
+      },
       scheduled_notifications: {
         label: 'Scheduled Admin Notifications',
         schedule: 'Every minute',

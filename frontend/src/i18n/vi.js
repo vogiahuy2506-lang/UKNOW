@@ -5374,6 +5374,12 @@ export default {
         description: 'Ba việc trong một lượt: nạp lại danh sách lịch chạy đang bật, khôi phục chiến dịch chạy liên tục bị gián đoạn, và khôi phục chiến dịch chạy một lần bị gián đoạn.',
         impact: 'Lịch mới tạo hoặc vừa sửa không có hiệu lực, và chiến dịch bị gián đoạn (khởi động lại máy chủ, mất kết nối) không tự chạy tiếp.',
       },
+      send_quota_reservation_sweep: {
+        label: 'Dọn đặt chỗ hạn mức gửi tin',
+        schedule: 'Mỗi phút (giây 40)',
+        description: 'Giải phóng đặt chỗ hạn mức đã hết lease (gửi dở, tiến trình chết) để trả lại hạn mức và ví; đánh dấu "chưa rõ" các lượt gửi treo quá 30 phút để chờ đối soát (vẫn tính hạn mức, không tự trả lại). Không có việc thì ghi "không có gì".',
+        impact: 'Khi bật chặn hạn mức theo đặt chỗ, lượt gửi chết giữa chừng giữ hạn mức và ví vĩnh viễn: khách thấy hết hạn mức dù chưa gửi, gửi lại cùng khoá bị từ chối.',
+      },
       scheduled_notifications: {
         label: 'Gửi thông báo hẹn giờ',
         schedule: 'Mỗi phút',

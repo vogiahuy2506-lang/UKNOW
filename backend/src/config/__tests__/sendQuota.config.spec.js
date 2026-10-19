@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from '@jest/globals';
-import { DEFAULT_STALE_SENDING_SECONDS, getStaleSendingSeconds } from '../sendQuota.config.js';
+import {
+  DEFAULT_STALE_SENDING_SECONDS,
+  DEFAULT_SWEEPER_SENDING_UNCERTAIN_SECONDS,
+  getStaleSendingSeconds,
+} from '../sendQuota.config.js';
 
 describe('sendQuota.config getStaleSendingSeconds', () => {
   const originalEnv = process.env.SEND_QUOTA_SENDING_UNCERTAIN_SECONDS;
@@ -69,5 +73,16 @@ describe('sendQuota.config getStaleSendingSeconds', () => {
   it('clamps values to safe boundaries [1s, 86400s]', () => {
     expect(getStaleSendingSeconds(100000)).toBe(86400);
     expect(getStaleSendingSeconds('999999')).toBe(86400);
+  });
+
+  it('defaultSeconds: bộ dọn mặc định 1800s; env và override vẫn thắng; mặc định hỏng rơi về 300', () => {
+    expect(DEFAULT_SWEEPER_SENDING_UNCERTAIN_SECONDS).toBe(1800);
+    expect(getStaleSendingSeconds(undefined, DEFAULT_SWEEPER_SENDING_UNCERTAIN_SECONDS)).toBe(1800);
+    expect(getStaleSendingSeconds()).toBe(300);
+    process.env.SEND_QUOTA_SENDING_UNCERTAIN_SECONDS = '900';
+    expect(getStaleSendingSeconds(undefined, DEFAULT_SWEEPER_SENDING_UNCERTAIN_SECONDS)).toBe(900);
+    expect(getStaleSendingSeconds(60, DEFAULT_SWEEPER_SENDING_UNCERTAIN_SECONDS)).toBe(60);
+    delete process.env.SEND_QUOTA_SENDING_UNCERTAIN_SECONDS;
+    expect(getStaleSendingSeconds(undefined, 'abc')).toBe(300);
   });
 });

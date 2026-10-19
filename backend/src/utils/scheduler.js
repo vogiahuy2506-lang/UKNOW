@@ -840,7 +840,7 @@ export const initScheduler = () => {
     try {
       const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
       await cronJobRunRepository.recordRun('data_retention_cleanup', async () => {
-        const { runDataRetentionCleanup, cleanupAiCallEvents } = await import('../services/admin/dataRetentionCleanup.service.js');
+        const { runDataRetentionCleanup, cleanupAiCallEvents, cleanupReleasedSendQuotaReservations } = await import('../services/admin/dataRetentionCleanup.service.js');
         const result = await runDataRetentionCleanup();
         // Sổ lỗi AI (ai_call_events) > 30 ngày: KHÔNG phụ thuộc cờ DATA_RETENTION_ENABLED (xem cleanupAiCallEvents). Hỏng ở đây không được làm hỏng
         // phần dọn dữ liệu cá nhân ở trên (kết quả của nó đã có) — ghi lỗi vào kết quả của lượt chạy để thấy ở trang "Tác vụ định kỳ".
@@ -852,11 +852,27 @@ export const initScheduler = () => {
           aiCallEventsError = error?.message || String(error);
           console.error('[Scheduler] data_retention_cleanup: dọn ai_call_events lỗi:', aiCallEventsError);
         }
+        // Đặt chỗ hạn mức `released` > 30 ngày (CHỈ released; uncertain/consumed không bao giờ xoá ở đây). Cùng cách cô lập lỗi như trên.
+        let sendQuotaReleasedDeleted = 0;
+        let sendQuotaReleasedError = null;
+        try {
+          sendQuotaReleasedDeleted = await cleanupReleasedSendQuotaReservations();
+        } catch (error) {
+          sendQuotaReleasedError = error?.message || String(error);
+          console.error('[Scheduler] data_retention_cleanup: dọn send_quota_reservations released lỗi:', sendQuotaReleasedError);
+        }
         console.log(
           `[Scheduler] data_retention_cleanup: enabled=${result.enabled} `
-          + `totalDeleted=${result.totalDeleted} aiCallEventsDeleted=${aiCallEventsDeleted} durationMs=${result.durationMs}`
+          + `totalDeleted=${result.totalDeleted} aiCallEventsDeleted=${aiCallEventsDeleted} `
+          + `sendQuotaReleasedDeleted=${sendQuotaReleasedDeleted} durationMs=${result.durationMs}`
         );
-        return { ...result, aiCallEventsDeleted, ...(aiCallEventsError ? { aiCallEventsError } : {}) };
+        return {
+          ...result,
+          aiCallEventsDeleted,
+          sendQuotaReleasedDeleted,
+          ...(aiCallEventsError ? { aiCallEventsError } : {}),
+          ...(sendQuotaReleasedError ? { sendQuotaReleasedError } : {}),
+        };
       });
     } catch (error) {
       console.error('[Scheduler] Lỗi khi dọn dữ liệu quá hạn lưu trữ:', error.message);
@@ -1101,6 +1117,34 @@ export const initScheduler = () => {
   }, { timezone: HANOI_TIME_ZONE });
 
   console.log('[Scheduler] Đã khởi tạo Zalo tự động đồng ý kết bạn: phút 7/17/27/...');
+
+  // ── Bộ dọn đặt chỗ hạn mức gửi tin (send_quota_reservations) — mỗi phút, giây 40 ──
+  // PLAN_SAN_SANG_BAT_ENFORCE_HAN_MUC_2026-10-19 PR-E1. `reserved` hết lease → `released` (trả hạn mức + ví);
+  // `sending` treo quá SEND_QUOTA_SENDING_UNCERTAIN_SECONDS (mặc định 1800s) → `uncertain` (KHÔNG BAO GIỜ `released`).
+  // Chạy ở MỌI chế độ: shadow/off không có dòng nào nên là no-op rẻ, bật enforce là có ngay. Giây 40 để lệch
+  // campaign_scheduler_tick (giây 20). Cờ chặn chồng lượt: lượt chậm không được chạy song song với lượt sau.
+  let sendQuotaReservationSweepRunning = false;
+  const sweepSendQuotaReservations = async () => {
+    if (sendQuotaReservationSweepRunning) return;
+    sendQuotaReservationSweepRunning = true;
+    try {
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      await cronJobRunRepository.recordRun('send_quota_reservation_sweep', async () => {
+        const { sweepReservations } = await import('../services/quota/sendQuotaReservationSweeper.service.js');
+        return sweepReservations();
+      });
+    } catch (error) {
+      console.error('[Scheduler] Lỗi bộ dọn đặt chỗ hạn mức:', error.message);
+    } finally {
+      sendQuotaReservationSweepRunning = false;
+    }
+  };
+
+  cron.schedule('40 * * * * *', async () => {
+    await sweepSendQuotaReservations();
+  }, { timezone: HANOI_TIME_ZONE });
+
+  console.log('[Scheduler] Đã khởi tạo bộ dọn đặt chỗ hạn mức gửi tin: mỗi phút (giây 40)');
 
   // ── Zalo Account Session Restoration - Khôi phục các tài khoản bị ngắt kết nối ────
   // Chạy mỗi 15 phút để thử khôi phục các tài khoản Zalo bị out (do server restart hoặc cookie hết hạn)

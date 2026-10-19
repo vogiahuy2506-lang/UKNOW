@@ -1,5 +1,6 @@
 import db from '../../config/database.js';
 import * as aiCallEventRepo from '../../repositories/ai/aiCallEvent.repository.js';
+import { deleteReleasedReservationsOlderThan } from '../../repositories/sendQuota.repository.js';
 import { AI_CALL_EVENTS_RETENTION_DAYS } from '../ai/aiCallEvents.service.js';
 
 /**
@@ -320,4 +321,33 @@ export async function cleanupAiCallEvents({ batchSize = 1000 } = {}) {
     console.log(`[DataRetention] ai_call_events: đã xoá ${deleted} dòng cũ hơn ${AI_CALL_EVENTS_RETENTION_DAYS} ngày`);
   }
   return deleted;
+}
+
+/** Đặt chỗ hạn mức đã `released` được giữ 30 ngày rồi dọn (thiết kế gốc Wave 2 §5.1 "Retention và Lifecycle dọn dẹp"). */
+export const SEND_QUOTA_RELEASED_RETENTION_DAYS = 30;
+
+/**
+ * Dọn `send_quota_reservations` ở trạng thái `released` quá 30 ngày (tính từ `released_at`), theo lô.
+ *
+ * CHỈ `released`. `uncertain` (có thể là tin đã gửi, chờ đối soát) và `consumed` (sổ cái hạn mức/ví, giữ tối thiểu 13 tháng)
+ * KHÔNG BAO GIỜ bị xoá ở đây. Như `cleanupAiCallEvents`: không đi qua cờ DATA_RETENTION_ENABLED (đây là sổ vận hành, không
+ * phải tiêu huỷ dữ liệu cá nhân) nhưng chạy trong cùng cron `data_retention_cleanup`.
+ *
+ * @param {{ batchSize?: number, maxBatches?: number }} [options]
+ * @returns {Promise<number>} số dòng đã xoá
+ */
+export async function cleanupReleasedSendQuotaReservations({ batchSize = 1000, maxBatches = 50 } = {}) {
+  let total = 0;
+  for (let i = 0; i < maxBatches; i += 1) {
+    const deleted = await deleteReleasedReservationsOlderThan(db, {
+      olderThanDays: SEND_QUOTA_RELEASED_RETENTION_DAYS,
+      limit: batchSize,
+    });
+    total += deleted;
+    if (deleted < batchSize) break;
+  }
+  if (total > 0) {
+    console.log(`[DataRetention] send_quota_reservations: đã xoá ${total} đặt chỗ 'released' cũ hơn ${SEND_QUOTA_RELEASED_RETENTION_DAYS} ngày`);
+  }
+  return total;
 }
