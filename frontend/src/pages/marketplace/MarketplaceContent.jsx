@@ -43,6 +43,7 @@ const TYPE_OPTIONS = [
     { value: 'all', label: 'Tất cả' },
     { value: 'campaign', label: 'Chiến dịch' },
     { value: 'chatbot', label: 'Chatbot' },
+    { value: 'landing_page', label: 'Landing page' },
   ];
 
   const filterTimeoutRef = useRef(null);

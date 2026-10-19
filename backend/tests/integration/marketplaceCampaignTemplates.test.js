@@ -623,6 +623,7 @@ describe('Marketplace chiến dịch kèm mẫu', () => {
       const res = await purchase(buyer, listing.id);
 
       expect(res.status).toBe(400);
+      expect(res.body.code).toBe('LISTING_CONTENT_UNAVAILABLE');
       expect(res.body.message).toContain('thiếu nội dung');
       expect(deductCreditsSpy).not.toHaveBeenCalled();
       expect(await countRows('marketplace_seller_stats')).toBe(0);
@@ -654,13 +655,64 @@ describe('Marketplace chiến dịch kèm mẫu', () => {
       const res = await purchase(buyer, rows[0].id);
 
       expect(res.status).toBe(400);
+      expect(res.body.code).toBe('LISTING_CONTENT_UNAVAILABLE');
       expect(res.body.message).toContain('thiếu nội dung');
+      expect(res.body.message).toContain('Gui ca nhan'); // nêu khối đang trỏ mẫu đã mất
       expect(deductCreditsSpy).not.toHaveBeenCalled();
       expect(await countRows('marketplace_seller_stats')).toBe(0);
       expect(await countRows('marketplace_purchases')).toBe(0);
       expect(await countRows('campaigns', 'id_user = $1', [buyer.user.id])).toBe(0);
       expect(await countRows('zalo_templates', 'id_user = $1', [buyer.user.id])).toBe(0);
       expect((await db.query('SELECT purchase_count FROM marketplace_listings WHERE id = $1', [rows[0].id])).rows[0].purchase_count).toBe(0);
+      // KHÔNG tự đổi trạng thái listing của người bán
+      expect((await db.query('SELECT status FROM marketplace_listings WHERE id = $1', [rows[0].id])).rows[0].status).toBe('published');
+    });
+
+    it('snapshot MỚI mà người bán đã xoá hết mẫu gốc thì vẫn mua được (bản chụp lúc đăng bán là nguồn, không phụ thuộc mẫu sống)', async () => {
+      const seller = await createActor('seller');
+      const buyer = await createActor('buyer');
+      const ids = await seedSellerWithTemplates(seller.user.id);
+      const campaign = await seedSellerCampaign(seller.user.id, ids);
+      const listing = (await publishListing(seller, campaign.id, 50)).body.data;
+      await db.query('DELETE FROM zalo_templates WHERE id_user = $1', [seller.user.id]);
+
+      const res = await purchase(buyer, listing.id);
+
+      expect(res.status).toBe(200);
+      expect(deductCreditsSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('thanh lọc loại: Landing page', () => {
+    async function seedBrowseListings() {
+      const seller = await createUser('seller');
+      const viewer = await createActor('viewer');
+      const insert = async (resourceType, title, status = 'published') => db.query(
+        `INSERT INTO marketplace_listings (id_user, resource_type, resource_id, title, status, snapshot_data) VALUES ($1, $2, 1, $3, $4, '{}'::jsonb)`,
+        [seller.id, resourceType, title, status]
+      );
+      await insert('campaign', 'Chien dich');
+      await insert('chatbot', 'Chatbot');
+      await insert('landing_page', 'Landing A');
+      await insert('landing_page', 'Landing B');
+      await insert('landing_page', 'Landing nhap', 'draft');
+      return viewer;
+    }
+    const browse = (viewer, query) => request(app).get(`/api/marketplace/browse?${query}`).set('Authorization', `Bearer ${viewer.token}`);
+
+    it('resource_type=landing_page (tham số trang Marketplace gửi) → chỉ ra listing landing đã xuất bản', async () => {
+      const viewer = await seedBrowseListings();
+      const res = await browse(viewer, 'resource_type=landing_page');
+      expect(res.status).toBe(200);
+      expect(res.body.data.map((row) => row.title).sort()).toEqual(['Landing A', 'Landing B']);
+      expect(res.body.data.every((row) => row.resource_type === 'landing_page')).toBe(true);
+    });
+
+    it('type=landing_page (khoá gốc) vẫn hoạt động; resource_type=campaign lọc đúng; loại lạ bị bỏ qua (ra tất cả)', async () => {
+      const viewer = await seedBrowseListings();
+      expect((await browse(viewer, 'type=landing_page')).body.data).toHaveLength(2);
+      expect((await browse(viewer, 'resource_type=campaign')).body.data.map((row) => row.title)).toEqual(['Chien dich']);
+      expect((await browse(viewer, 'resource_type=khong-co-loai-nay')).body.data).toHaveLength(4);
     });
   });
 });

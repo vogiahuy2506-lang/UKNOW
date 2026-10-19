@@ -248,7 +248,10 @@ class MarketplaceController {
    */
   async browse(req, res, next) {
     try {
-      const { type, category, sort, page = 1, limit = 20, search } = req.query;
+      const { category, sort, page = 1, limit = 20, search } = req.query;
+      // Bộ lọc loại: `type` (khoá gốc) hoặc `resource_type` — trang Marketplace ở frontend gửi `resource_type`, nên trước đây các nút
+      // lọc Chiến dịch / Chatbot không có tác dụng gì (backend chỉ đọc `type`).
+      const type = req.query.type ?? req.query.resource_type;
 
       // Sanitize params
       const sanitizedLimit = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
@@ -337,9 +340,10 @@ class MarketplaceController {
           limitReached: true,
         });
       }
-      // Chiến dịch kèm tệp đính kèm: người mua hết dung lượng để nhận bản sao tệp. Giữ `code` để giao diện chỉ đúng chỗ (xoá bớt tệp /
-      // nâng dung lượng); bộ xử lý lỗi chung chỉ trả `message` cho lỗi 4xx.
-      if (error.code === 'MARKETPLACE_STORAGE_QUOTA_EXCEEDED') {
+      // Hai lỗi 400 của chiến dịch kèm mẫu — giữ `code` để giao diện chỉ đúng chỗ (bộ xử lý lỗi chung chỉ trả `message` cho lỗi 4xx):
+      //  - LISTING_CONTENT_UNAVAILABLE: listing thiếu nội dung (mẫu của người bán đã xoá / tệp đính kèm mất) → báo người bán cập nhật;
+      //  - MARKETPLACE_STORAGE_QUOTA_EXCEEDED: người mua hết dung lượng để nhận bản sao tệp (xoá bớt tệp / nâng dung lượng).
+      if (error.code === 'LISTING_CONTENT_UNAVAILABLE' || error.code === 'MARKETPLACE_STORAGE_QUOTA_EXCEEDED') {
         return res.status(error.status || 400).json({
           success: false,
           code: error.code,
