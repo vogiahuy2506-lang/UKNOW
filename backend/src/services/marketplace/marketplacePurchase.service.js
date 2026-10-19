@@ -8,6 +8,10 @@ import { getWalletBalance } from '../../repositories/payment/topup.repository.js
 import chatbotCloneRepository from '../../repositories/ai/chatbotClone.repository.js';
 import { assertChatbotSlotAvailable } from '../ai/chatbotSlot.service.js';
 import campaignNodeReferences from '../campaign/campaignNodeReferences.service.js';
+import {
+  sanitizeLandingSnapshotForSharing,
+  stripSellerPrivateLandingConfig,
+} from '../../utils/marketplaceLandingSnapshot.util.js';
 
 class MarketplacePurchaseService {
   /**
@@ -277,6 +281,9 @@ class MarketplacePurchaseService {
    */
   async _cloneLandingPage(client, userId, listing) {
     const snapshot = listing.snapshot_data || {};
+    // Snapshot đã lưu trước đây có thể còn khoá riêng của người bán (webhook Google Sheet — lead của NGƯỜI MUA sẽ bị đẩy về Sheet
+    // của người bán — và id biểu mẫu của người bán): lọc ngay lúc clone.
+    const customConfig = stripSellerPrivateLandingConfig(snapshot.customConfig || snapshot.custom_config);
 
     // Tạo landing page mới
     const { rows } = await client.query(
@@ -288,7 +295,7 @@ class MarketplacePurchaseService {
         snapshot.title || 'Imported Landing Page',
         `${snapshot.slug || 'landing'}-${Date.now()}`,
         snapshot.htmlContent || snapshot.html_content || '',
-        snapshot.customConfig || snapshot.custom_config ? JSON.stringify(snapshot.customConfig || snapshot.custom_config) : '{}',
+        customConfig ? JSON.stringify(customConfig) : '{}',
       ]
     );
 
@@ -306,7 +313,13 @@ class MarketplacePurchaseService {
       marketplacePurchaseRepository.findByUserId(userId, options),
       marketplacePurchaseRepository.countByUserId(userId, { resourceType: options.resourceType }),
     ]);
-    return { purchases, total };
+    // Danh sách đã mua kèm `snapshot_data` đầy đủ: với landing, bỏ cấu hình riêng của người bán (snapshot cũ có thể còn khoá đó).
+    const sanitized = purchases.map((purchase) => (
+      purchase.resource_type === 'landing_page' && purchase.snapshot_data
+        ? { ...purchase, snapshot_data: sanitizeLandingSnapshotForSharing(purchase.snapshot_data) }
+        : purchase
+    ));
+    return { purchases: sanitized, total };
   }
 }
 

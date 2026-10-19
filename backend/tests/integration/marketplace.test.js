@@ -509,6 +509,131 @@ describe('Marketplace API', () => {
     });
   });
 
+  // PLAN_VA_CO_LAP_DU_LIEU_TENANT PR-3 (việc 3b): snapshot landing không mang cấu hình riêng của người bán
+  // (webhook + secret Google Sheet, id biểu mẫu) — lọc ở CẢ ba chỗ: tạo snapshot, trả snapshot/preview, clone.
+  describe('landing: snapshot không mang cấu hình riêng của người bán', () => {
+    const SELLER_SECRET = 'SECRET_SHEET_CUA_NGUOI_BAN';
+    const SELLER_CONFIG = {
+      googleSheetsSync: { enabled: true, webhookUrl: 'https://script.google.com/macros/s/AKfy/exec', secret: SELLER_SECRET },
+      googleSheetsLastSyncAt: '2026-10-01T00:00:00Z',
+      googleSheetsLastError: 'loi cu',
+      sheetsSync: { enabled: true, webhookUrl: 'https://script.google.com/macros/s/OLD/exec' },
+      chosenFormId: 77,
+      category: 'khoa-hoc',
+    };
+    const PRIVATE_KEYS = ['googleSheetsSync', 'googleSheetsLastSyncAt', 'googleSheetsLastError', 'sheetsSync', 'chosenFormId'];
+    const expectNoPrivateKeys = (customConfig) => {
+      expect(customConfig).toBeDefined();
+      for (const key of PRIVATE_KEYS) expect(customConfig).not.toHaveProperty(key);
+      expect(customConfig.category).toBe('khoa-hoc'); // phần còn lại giữ nguyên
+    };
+    const OLD_SNAPSHOT = {
+      title: 'Landing cu',
+      slug: 'landing-cu',
+      htmlContent: '<h1>NOI DUNG LANDING</h1>',
+      customConfig: SELLER_CONFIG,
+    };
+
+    async function insertLandingListing(sellerId, { snapshotData = OLD_SNAPSHOT, priceCredits = 0 } = {}) {
+      return insertListing({ userId: sellerId, resourceType: 'landing_page', resourceId: 1, priceCredits, status: 'published', snapshotData });
+    }
+    async function recordPurchase(buyerId, listing) {
+      await db.query(
+        `INSERT INTO marketplace_purchases (id_user, listing_id, seller_id, credits_spent, transaction_type)
+         VALUES ($1, $2, $3, 0, 'purchase')`,
+        [buyerId, listing.id, listing.id_user]
+      );
+    }
+
+    it('đăng bán landing có customConfig.googleSheetsSync -> snapshot_data.customConfig không còn khoá googleSheets*, sheetsSync, chosenFormId', async () => {
+      const seller = await createUser('seller');
+      const plan = await createPlan();
+      await assignPlanToUser(seller, plan);
+      const { rows } = await db.query(
+        `INSERT INTO landing_pages (id_user, workspace_owner_id, slug, title, html_content, custom_config)
+         VALUES ($1, $1, 'landing-ban', 'Landing ban', '<h1>X</h1>', $2::jsonb) RETURNING id`,
+        [seller.id, JSON.stringify(SELLER_CONFIG)]
+      );
+
+      const res = await request(app)
+        .post('/api/marketplace/landing-pages')
+        .set('Authorization', `Bearer ${await loginAs(seller)}`)
+        .send({ landingPageId: rows[0].id, title: 'Landing ban', priceCredits: 0 });
+
+      expect(res.status).toBe(201);
+      const { rows: stored } = await db.query('SELECT snapshot_data FROM marketplace_listings WHERE id = $1', [res.body.data.id]);
+      expectNoPrivateKeys(stored[0].snapshot_data.customConfig);
+      expect(JSON.stringify(stored[0].snapshot_data)).not.toContain(SELLER_SECRET);
+      expect(stored[0].snapshot_data.htmlContent).toBe('<h1>X</h1>');
+      // Landing gốc của người bán KHÔNG bị đổi.
+      const { rows: original } = await db.query('SELECT custom_config FROM landing_pages WHERE id = $1', [rows[0].id]);
+      expect(original[0].custom_config.googleSheetsSync.secret).toBe(SELLER_SECRET);
+    });
+
+    it('listing cũ đã lưu kèm khoá riêng: người CHƯA mua xem -> preview không có khoá đó và không lộ secret', async () => {
+      const seller = await createUser('seller');
+      const viewer = await createUser('viewer');
+      const listing = await insertLandingListing(seller.id);
+
+      const res = await request(app).get(`/api/marketplace/listings/${listing.id}`)
+        .set('Authorization', `Bearer ${await loginAs(viewer)}`);
+
+      expect(res.status).toBe(200);
+      expectNoPrivateKeys(res.body.data.preview_data.customConfig);
+      expect(JSON.stringify(res.body)).not.toContain(SELLER_SECRET);
+    });
+
+    it('listing cũ đã lưu kèm khoá riêng: người ĐÃ mua xem -> snapshot_data đủ nội dung nhưng không có khoá đó', async () => {
+      const seller = await createUser('seller');
+      const buyer = await createUser('buyer');
+      const listing = await insertLandingListing(seller.id);
+      await recordPurchase(buyer.id, listing);
+
+      const res = await request(app).get(`/api/marketplace/listings/${listing.id}`)
+        .set('Authorization', `Bearer ${await loginAs(buyer)}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.snapshot_data.htmlContent).toBe('<h1>NOI DUNG LANDING</h1>');
+      expectNoPrivateKeys(res.body.data.snapshot_data.customConfig);
+      expect(JSON.stringify(res.body)).not.toContain(SELLER_SECRET);
+    });
+
+    it('danh sách "đã mua" của người mua cũng không có khoá riêng của người bán', async () => {
+      const seller = await createUser('seller');
+      const buyer = await createUser('buyer');
+      const listing = await insertLandingListing(seller.id);
+      await recordPurchase(buyer.id, listing);
+
+      const res = await request(app).get('/api/marketplace/purchases')
+        .set('Authorization', `Bearer ${await loginAs(buyer)}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(1);
+      expectNoPrivateKeys(res.body.data[0].snapshot_data.customConfig);
+      expect(JSON.stringify(res.body)).not.toContain(SELLER_SECRET);
+    });
+
+    it('mua listing landing cũ có khoá đó -> landing_pages.custom_config của người mua không có khoá đó', async () => {
+      const seller = await createUser('seller');
+      const buyer = await createUser('buyer');
+      const plan = await createPlan();
+      await assignPlanToUser(buyer, plan);
+      await insertUsageLog(buyer.id, 100);
+      const listing = await insertLandingListing(seller.id);
+
+      const res = await request(app)
+        .post(`/api/marketplace/purchase/${listing.id}`)
+        .set('Authorization', `Bearer ${await loginAs(buyer)}`);
+
+      expect(res.status).toBe(200);
+      const { rows } = await db.query('SELECT custom_config, html_content FROM landing_pages WHERE id = $1', [res.body.data.clonedResource.id]);
+      expect(rows).toHaveLength(1);
+      expectNoPrivateKeys(rows[0].custom_config);
+      expect(JSON.stringify(rows[0].custom_config)).not.toContain(SELLER_SECRET);
+      expect(rows[0].html_content).toBe('<h1>NOI DUNG LANDING</h1>');
+    });
+  });
+
   // PLAN_VA_CO_LAP_DU_LIEU_TENANT PR-1 (việc 1b): rút tiền chỉ chủ tài khoản; nhân viên có `marketplace_manage` không tạo được yêu cầu rút.
   describe('POST /api/marketplace/seller/withdraw', () => {
     async function seedSellerWithBalance(username) {

@@ -4,6 +4,10 @@ import campaignCrudRepository from '../../repositories/campaign/campaignCrud.rep
 import chatbotRepository from '../../repositories/ai/chatbot.repository.js';
 import landingPageRepository from '../../repositories/landingPage.repository.js';
 import db from '../../config/database.js';
+import {
+  sanitizeLandingSnapshotForSharing,
+  stripSellerPrivateLandingConfig,
+} from '../../utils/marketplaceLandingSnapshot.util.js';
 
 // Mapping resource_type -> auto category (không cho user chọn category thủ công)
 const AUTO_CATEGORY_MAP = {
@@ -277,7 +281,8 @@ class MarketplaceListingService {
         title: snapshotData.title || '',
         slug: snapshotData.slug || '',
         htmlContent: html,
-        customConfig: snapshotData.customConfig || {},
+        // Snapshot cũ đã lưu có thể còn khoá riêng của người bán (webhook Google Sheet...) — lọc lúc ĐỌC, không chỉ lúc tạo.
+        customConfig: stripSellerPrivateLandingConfig(snapshotData.customConfig) || {},
       };
     }
 
@@ -361,6 +366,9 @@ class MarketplaceListingService {
         listing.preview_data = this._buildSafePreview(listing.resource_type, listing.snapshot_data);
         delete listing.snapshot_data;
       }
+    } else if (!isOwner && listing.resource_type === 'landing_page' && listing.snapshot_data) {
+      // Người ĐÃ MUA nhận nội dung đầy đủ nhưng KHÔNG nhận cấu hình riêng của người bán (webhook + secret Google Sheet, id biểu mẫu).
+      listing.snapshot_data = sanitizeLandingSnapshotForSharing(listing.snapshot_data);
     }
 
     return listing;
@@ -612,7 +620,8 @@ class MarketplaceListingService {
       title: landingPage.title || landingPage.slug,
       slug: landingPage.slug,
       htmlContent: landingPage.htmlContent || landingPage.html_content,
-      customConfig: landingPage.customConfig || landingPage.custom_config,
+      // Không chép cấu hình riêng của người bán (webhook Google Sheet, id biểu mẫu) vào bản chia sẻ.
+      customConfig: stripSellerPrivateLandingConfig(landingPage.customConfig || landingPage.custom_config),
     };
 
     // Ensure title is not empty

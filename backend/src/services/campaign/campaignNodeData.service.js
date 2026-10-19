@@ -225,9 +225,14 @@ class CampaignNodeDataService {
       }
 
       case 'read_landing_leads': {
+        // Phạm vi (chủ workspace) do SERVER quyết định = chủ chiến dịch. `config` do client ghi trong `flow_json` nên KHÔNG được tin
+        // các khoá phạm vi trong đó: ghi đè SAU khi spread (đặt trước thì `config` thắng và đọc được lead của tenant khác).
         const { items: landingItems } = await leadService.getLeadsForCampaignConfig({
           ...config,
+          workspaceOwnerId: userId,
           idUser: userId,
+          userId,
+          isSuperAdmin: false,
         });
         return applyDataColumnSelectionToItems(landingItems, config.dataSelectedColumns, 'landing');
       }
