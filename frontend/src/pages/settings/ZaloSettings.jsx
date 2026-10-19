@@ -763,7 +763,7 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
                           onClick={() => handleToggleAutoAccept(account)}
                           className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
                             readOnly || savingAutoAcceptIds.includes(account.id) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-                          } ${account.autoAcceptFriendRequests ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dk-strong'}`}
+                          } ${account.autoAcceptFriendRequests ? 'bg-primary-500' : 'bg-gray-300 dark:bg-dk-muted'}`}
                         >
                           <span
                             className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
