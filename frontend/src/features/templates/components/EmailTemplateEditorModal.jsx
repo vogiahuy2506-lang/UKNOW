@@ -17,6 +17,7 @@ import {
 } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 import MessageTemplateChannelLimitNotice from './MessageTemplateChannelLimitNotice';
+import AiMessageWriter from '../../ai/AiMessageWriter';
 import {
   CUSTOMER_FIELDS,
   buildDetectedVariables,
@@ -443,6 +444,27 @@ const EmailTemplateEditorModal = ({
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                  {/* "Viết bằng AI": ô soạn trống thì viết mới, có chữ thì sửa trên bản đang có (PLAN_AI_VIET_MAU_TIN_2026-10-19) */}
+                  <AiMessageWriter
+                    channel={templateKindLabel === 'zalo' ? 'zalo' : 'email'}
+                    context="template"
+                    format={contentTab === 'html' ? 'html' : 'text'}
+                    subject={formData.subject || ''}
+                    body={(contentTab === 'html' ? formData.bodyHtml : formData.bodyText) || ''}
+                    testId="template-ai-writer"
+                    getSelection={() => {
+                      const ref = contentTab === 'html' ? htmlTextareaRef.current : textTextareaRef.current;
+                      return ref ? { start: ref.selectionStart ?? 0, end: ref.selectionEnd ?? 0 } : null;
+                    }}
+                    onApply={({ subject: nextSubject, body: nextBody }) => {
+                      setFormData((prev) => ({
+                        ...prev,
+                        [contentTab === 'html' ? 'bodyHtml' : 'bodyText']: nextBody,
+                        ...(nextSubject !== undefined ? { subject: nextSubject } : {}),
+                      }));
+                    }}
+                  />
+
                   {/* Nút Dropdown Chèn biến */}
                   <div className="relative">
                     <button
