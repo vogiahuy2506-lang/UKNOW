@@ -1,5 +1,6 @@
 import db from '../../config/database.js';
 import campaignRunRepository from '../../repositories/campaign/campaignRun.repository.js';
+import campaignScheduleRepository from '../../repositories/campaign/campaignSchedule.repository.js';
 import recipientLedgerRepository from '../../repositories/campaign/recipientLedger.repository.js';
 import campaignFlowService from './campaignFlow.service.js';
 import campaignNodeReferences from './campaignNodeReferences.service.js';
@@ -898,6 +899,45 @@ class CampaignRunService {
     const randomStep = Math.floor(Math.random() * (totalSteps + 1));
     const selectedMinutes = minMinutes + (randomStep * stepMinutes);
     return selectedMinutes * 60 * 1000;
+  }
+
+  /**
+   * Chặn sớm chiến dịch không thuộc phạm vi chạy của người gọi (404, cùng thông điệp với
+   * createCampaignRunRecord). Gọi TRƯỚC mọi bước đọc/ghi theo `campaignId` do client gửi — nhất là
+   * đánh giá ngưỡng duyệt của nhân viên, vốn nêu số người nhận và đổi trạng thái chiến dịch.
+   *
+   * @param {{ campaignId: number, isAdmin?: boolean, workspaceOwnerId: number }} input
+   * @returns {Promise<void>}
+   */
+  async assertCampaignInRunScope({ campaignId, isAdmin = false, workspaceOwnerId }) {
+    const inScope = Number.isInteger(campaignId) && campaignId > 0
+      ? await campaignRunRepository.existsInRunScope({ campaignId, isAdmin, workspaceOwnerId })
+      : false;
+    if (!inScope) {
+      const error = new Error('Không tìm thấy chiến dịch');
+      error.statusCode = 404;
+      throw error;
+    }
+  }
+
+  /**
+   * `scheduleId` do client gửi chỉ được gắn vào lượt chạy khi đúng là lịch CỦA chiến dịch đang chạy và
+   * cùng workspace. Không khớp thì bỏ về null (không báo lỗi): qua HTTP không có người dùng hợp lệ
+   * nào gửi tham số này — lượt chạy theo lịch do scheduler tạo, không đi đường này.
+   *
+   * @param {{ scheduleId: number|null, campaignId: number, isAdmin?: boolean, workspaceOwnerId: number }} input
+   * @returns {Promise<number|null>}
+   */
+  async resolveVerifiedScheduleId({ scheduleId, campaignId, isAdmin = false, workspaceOwnerId }) {
+    if (!Number.isInteger(scheduleId) || scheduleId <= 0) return null;
+    const schedule = await campaignScheduleRepository.findById({
+      id: scheduleId,
+      userId: workspaceOwnerId,
+      workspaceOwnerId,
+      isAdmin,
+    });
+    if (!schedule || Number(schedule.id_campaign) !== Number(campaignId)) return null;
+    return Number(schedule.id);
   }
 
   /**

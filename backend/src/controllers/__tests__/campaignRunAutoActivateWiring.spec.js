@@ -34,6 +34,8 @@ jest.unstable_mockModule('../../services/campaign/campaignRun.service.js', () =>
   default: {
     createCampaignRunRecord: mockCreateCampaignRunRecord,
     executeCampaign: mockExecuteCampaign,
+    // scheduleId trong body được xác minh trước khi xuống service (PLAN_VA_CO_LAP_DU_LIEU_TENANT_DOT2 PR-A).
+    resolveVerifiedScheduleId: jest.fn(async () => null),
   },
   EMAIL_API_DELAY_MIN_MS: 50,
   EMAIL_API_DELAY_MAX_MS: 250,

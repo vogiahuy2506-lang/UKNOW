@@ -386,6 +386,7 @@ const triggerCampaignSchedule = async (schedule) => {
             `— chuyển pending_owner_approval, tắt lịch, không tạo run`
         );
         await markPendingOwnerApproval({
+          ownerId: workspaceOwnerId,
           campaignId: schedule.id_campaign,
           auditContext: { userId: actorUserId, ownerId: workspaceOwnerId },
           threshold,
