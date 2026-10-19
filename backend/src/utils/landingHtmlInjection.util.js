@@ -488,6 +488,27 @@ const FORM_EMBED_EMPTY_ELEMENT_RE = /<([a-z][a-z0-9-]*)\b[^<>]*\bdata-founderai-
 /** Thẻ mở bất kỳ còn mang khoá biểu mẫu — chỉ tìm TRONG thẻ (không đụng bộ chọn CSS `[data-founderai-form="x"]` trong <style>). */
 const FORM_EMBED_TAG_WITH_KEY_RE = /<[a-z][^<>]*\bdata-founderai-form\s*=\s*(["'])[A-Za-z0-9_-]+\1[^<>]*>/gi;
 const FORM_EMBED_KEY_ATTR_GLOBAL_RE = /\s*\bdata-founderai-form\s*=\s*(["'])[A-Za-z0-9_-]+\1/gi;
+/**
+ * `<iframe …>` cùng nội dung tới `</iframe>` gần nhất (nếu có). Nội dung KHÔNG được chứa một `<iframe` khác: iframe không đóng /
+ * tự đóng `<iframe … />` (HTML không có iframe tự đóng thật) chỉ ăn đúng thẻ mở, không nuốt phần trang sau nó tới iframe kế.
+ */
+const IFRAME_ELEMENT_RE = /<iframe\b[^<>]*>(?:(?:(?!<iframe\b)[\s\S])*?<\/iframe\s*>)?/gi;
+/** Thuộc tính `src` của thẻ mở (không nhầm `data-src`): nháy đôi / nháy đơn / không nháy. */
+const IFRAME_SRC_ATTR_RE = /(?<![\w-])src\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/i;
+/**
+ * `src` trỏ vào biểu mẫu của nền tảng: ĐƯỜNG DẪN (không tính query) là `/f/<publicKey>` — màn "Chia sẻ biểu mẫu" cho copy
+ * `<iframe src="${origin}/f/${publicKey}?embed=1">` (ShareModal.jsx) — hoặc `/embed/lead-form` (lớp tương thích landing cũ,
+ * `/embed/lead-form?slug=…`). Tuyệt đối (`https://host/…`), cùng giao thức (`//host/…`) hay tương đối (`/f/…`) đều tính.
+ */
+const SELLER_FORM_IFRAME_SRC_RE = /^(?:[a-z][a-z0-9+.-]*:)?(?:\/\/[^/?#]*)?\/(?:f\/[A-Za-z0-9_-]+|embed\/lead-form)(?:[/?#]|$)/i;
+
+/** iframe này nhúng biểu mẫu / form lead của nền tảng (theo `src` của thẻ mở)? iframe khác (YouTube, bản đồ…) → false. */
+function isFormIframe(iframeHtml) {
+  const openTag = String(iframeHtml).match(/^<iframe\b[^<>]*>/i)?.[0] || '';
+  const src = openTag.match(IFRAME_SRC_ATTR_RE);
+  const value = (src ? (src[1] ?? src[2] ?? src[3] ?? '') : '').trim();
+  return Boolean(value) && SELLER_FORM_IFRAME_SRC_RE.test(value);
+}
 
 /**
  * Landing MUA từ Marketplace: đổi MỌI khối nhúng biểu mẫu của người bán thành CHỖ TRỐNG biểu mẫu
@@ -499,6 +520,9 @@ const FORM_EMBED_KEY_ATTR_GLOBAL_RE = /\s*\bdata-founderai-form\s*=\s*(["'])[A-Z
  *    không tăng, nên không vượt MAX_FORMS_PER_LANDING).
  *  - Phần tử rỗng đứng riêng mang `data-founderai-form="KEY"` (không bọc section) → một chỗ trống.
  *  - Còn sót thuộc tính khoá trên thẻ khác (có nội dung con, định dạng lạ) → GỠ thuộc tính (không để khoá người bán lại trong HTML).
+ *  - `<iframe …>…</iframe>` có `src` là `/f/<key>` (kiểu `?embed=1` của màn Chia sẻ biểu mẫu) hoặc `/embed/lead-form` → một chỗ trống.
+ *    iframe khác (YouTube, bản đồ…) giữ nguyên từng byte. KHÔNG đụng thẻ `<a href=".../f/...">` — liên kết người bán tự đặt là GIỚI
+ *    HẠN CÒN LẠI (bấm vào mở biểu mẫu của người bán; không nhúng vào trang người mua).
  *  - Không có khối nào → trả về chuỗi NGUYÊN VẸN (từng byte).
  *
  * Hàm thuần, không đụng DB. Một lượt, không quét lại phần vừa chèn.
@@ -508,10 +532,18 @@ const FORM_EMBED_KEY_ATTR_GLOBAL_RE = /\s*\bdata-founderai-form\s*=\s*(["'])[A-Z
  */
 export function replaceFormEmbedsWithSlots(html) {
   const source = String(html ?? '');
-  if (!FORM_EMBED_KEY_ATTR_RE.test(source)) return source;
+  const hasKeyAttr = FORM_EMBED_KEY_ATTR_RE.test(source);
+  const hasIframe = /<iframe\b/i.test(source);
+  if (!hasKeyAttr && !hasIframe) return source;
   const slot = '<div data-founderai-form-slot></div>';
-  let out = source.replace(FORM_EMBED_SECTION_RE, (block) => (FORM_EMBED_KEY_ATTR_RE.test(block) ? slot : block));
-  out = out.replace(FORM_EMBED_EMPTY_ELEMENT_RE, slot);
-  out = out.replace(FORM_EMBED_TAG_WITH_KEY_RE, (tag) => tag.replace(FORM_EMBED_KEY_ATTR_GLOBAL_RE, ''));
+  let out = source;
+  if (hasKeyAttr) {
+    out = out.replace(FORM_EMBED_SECTION_RE, (block) => (FORM_EMBED_KEY_ATTR_RE.test(block) ? slot : block));
+    out = out.replace(FORM_EMBED_EMPTY_ELEMENT_RE, slot);
+    out = out.replace(FORM_EMBED_TAG_WITH_KEY_RE, (tag) => tag.replace(FORM_EMBED_KEY_ATTR_GLOBAL_RE, ''));
+  }
+  if (hasIframe) {
+    out = out.replace(IFRAME_ELEMENT_RE, (iframe) => (isFormIframe(iframe) ? slot : iframe));
+  }
   return out;
 }

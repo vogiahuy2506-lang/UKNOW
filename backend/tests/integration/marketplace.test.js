@@ -868,6 +868,27 @@ describe('Marketplace API', () => {
       expect(rows[0].is_published).toBe(false);
     });
 
+    it('mua landing có IFRAME biểu mẫu của người bán (/f/<key>?embed=1 và /embed/lead-form) -> thành chỗ trống; iframe YouTube và liên kết <a> giữ nguyên', async () => {
+      const youtube = '<iframe width="560" height="315" src="https://www.youtube.com/embed/dQw4w9WgXcQ" title="Video"></iframe>';
+      const link = '<a href="https://founderai.biz/f/SELLERKEY_LINK">Đăng ký</a>';
+      const html = [
+        '<h1>Landing bán</h1>',
+        '<iframe src="https://founderai.biz/f/SELLERKEY_IFR?embed=1" style="width:100%;border:0;min-height:480px" title="Đăng ký"></iframe>',
+        youtube,
+        '<iframe src="/embed/lead-form?slug=landing-cu" style="width:100%"></iframe>',
+        link,
+      ].join('\n');
+      const { landingId } = await buyLandingWithHtml(html);
+
+      const { rows } = await db.query('SELECT html_content FROM landing_pages WHERE id = $1', [landingId]);
+      const saved = rows[0].html_content;
+      expect(saved).not.toContain('SELLERKEY_IFR');
+      expect(saved).not.toContain('lead-form');
+      expect(saved.match(/data-founderai-form-slot/g)).toHaveLength(2);
+      expect(saved).toContain(youtube);
+      expect(saved).toContain(link); // giới hạn còn lại đã biết: liên kết <a> của người bán không bị đụng
+    });
+
     it('mua landing KHÔNG có khối nhúng -> html_content giữ nguyên từng byte', async () => {
       const plain = '<!DOCTYPE html>\r\n<html><body>\t<h1>Trang thường</h1> \r\n<div data-founderai-form-slot></div></body></html>';
       const { landingId } = await buyLandingWithHtml(plain);

@@ -93,3 +93,92 @@ describe('replaceFormEmbedsWithSlots', () => {
     expect(replaceFormEmbedsWithSlots(once)).toBe(once);
   });
 });
+
+/**
+ * C2 mở rộng — người bán dán IFRAME biểu mẫu thay vì khối `<section>`: màn "Chia sẻ biểu mẫu" cho copy
+ * `<iframe src="${origin}/f/${publicKey}?embed=1" …></iframe>`, landing cũ có `<iframe src="/embed/lead-form?slug=…">`.
+ * Bản clone vẫn đẩy lead về người bán nếu để nguyên → đổi thành chỗ trống; iframe khác giữ nguyên từng byte.
+ */
+describe('replaceFormEmbedsWithSlots — iframe biểu mẫu của người bán', () => {
+  const YOUTUBE = '<iframe width="560" height="315" src="https://www.youtube.com/embed/dQw4w9WgXcQ" title="Video" allowfullscreen></iframe>';
+  const MAP = '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12" loading="lazy"></iframe>';
+
+  it.each([
+    ['tuyệt đối, ?embed=1 (đúng mã ShareModal)', '<iframe src="https://founderai.biz/f/ABC_def-123?embed=1" style="width:100%;border:0;min-height:480px" title="Đăng ký"></iframe>'],
+    ['tương đối, nháy đơn', "<iframe src='/f/KEY99?embed=1' style='width:100%'></iframe>"],
+    ['tuyệt đối trên tên miền riêng của người bán', '<iframe src="https://khoahoc.nguoiban.vn/f/KEY99?embed=1&theme=dark"></iframe>'],
+    ['cùng giao thức //host', '<iframe src="//founderai.biz/f/KEY99"></iframe>'],
+    ['không có query', '<iframe src="https://founderai.biz/f/KEY99"></iframe>'],
+    ['có fragment', '<iframe src="/f/KEY99#top"></iframe>'],
+    ['thuộc tính src đứng sau, nhiều thuộc tính, xuống dòng', '<iframe\n  class="form"\n  title="Đăng ký"\n  src="https://founderai.biz/f/KEY99?embed=1"\n  loading="lazy"\n></iframe>'],
+    ['không nháy', '<iframe src=/f/KEY99?embed=1 width=100%></iframe>'],
+    ['viết hoa thẻ và thuộc tính', '<IFRAME SRC="https://founderai.biz/f/KEY99?embed=1"></IFRAME>'],
+    ['khoảng trắng quanh dấu =', '<iframe src = "https://founderai.biz/f/KEY99?embed=1"></iframe>'],
+    ['có nội dung bên trong (fallback)', '<iframe src="/f/KEY99?embed=1">Trình duyệt không hỗ trợ iframe</iframe>'],
+    ['form lead cũ /embed/lead-form?slug=', '<iframe src="/embed/lead-form?slug=landing-cu" style="width:100%"></iframe>'],
+    ['form lead cũ, tuyệt đối, nháy đơn', "<iframe src='https://founderai.biz/embed/lead-form?slug=x'></iframe>"],
+    ['form lead cũ, không query', '<iframe src="/embed/lead-form"></iframe>'],
+  ])('%s -> đúng MỘT chỗ trống, phần trang quanh nó giữ nguyên', (_label, iframe) => {
+    const out = replaceFormEmbedsWithSlots(`<h1>Trên</h1>${iframe}<p>Dưới</p>`);
+    expect(out).toBe(`<h1>Trên</h1>${SLOT}<p>Dưới</p>`);
+    expect(countFormSlots(out)).toBe(1);
+  });
+
+  it('iframe tự đóng / không có thẻ đóng -> chỉ thẻ mở thành chỗ trống, KHÔNG nuốt phần trang phía sau', () => {
+    expect(replaceFormEmbedsWithSlots('<p>a</p><iframe src="/f/KEY99?embed=1" /><p>b</p>')).toBe(`<p>a</p>${SLOT}<p>b</p>`);
+    expect(replaceFormEmbedsWithSlots('<p>a</p><iframe src="/f/KEY99?embed=1"><p>b</p>')).toBe(`<p>a</p>${SLOT}<p>b</p>`);
+    // iframe không đóng đứng TRƯỚC một iframe khác có đóng: không ăn qua iframe kế.
+    expect(replaceFormEmbedsWithSlots(`<iframe src="/f/KEY99"><p>giữa</p>${YOUTUBE}`)).toBe(`${SLOT}<p>giữa</p>${YOUTUBE}`);
+  });
+
+  it('iframe KHÁC (YouTube, bản đồ, src rỗng/thiếu, đường dẫn chỉ chứa /f/ ở query) giữ nguyên từng byte', () => {
+    const others = [
+      YOUTUBE,
+      MAP,
+      '<iframe src="https://player.vimeo.com/video/123"></iframe>',
+      '<iframe title="trống"></iframe>',
+      '<iframe src=""></iframe>',
+      '<iframe src="https://example.com/page?u=/f/ABC"></iframe>',
+      '<iframe src="https://example.com/form/f/ABC"></iframe>',
+      '<iframe data-src="/f/KEY99?embed=1" src="https://www.youtube.com/embed/x"></iframe>',
+      '<iframe src="/files/KEY99"></iframe>',
+      '<iframe src="/f/"></iframe>',
+    ];
+    for (const iframe of others) {
+      const html = `<main>\r\n\t${iframe} \r\n</main>`;
+      expect(replaceFormEmbedsWithSlots(html)).toBe(html);
+    }
+  });
+
+  it('trộn: khối section + iframe /f/ + iframe lead cũ + YouTube + bản đồ -> 3 chỗ trống, hai iframe khác nguyên vẹn, đúng thứ tự', () => {
+    const html = [
+      '<h1>Đầu</h1>',
+      block('SECT'),
+      YOUTUBE,
+      '<iframe src="https://founderai.biz/f/IFR?embed=1"></iframe>',
+      '<p>Giữa</p>',
+      MAP,
+      '<iframe src="/embed/lead-form?slug=cu"></iframe>',
+    ].join('\n');
+
+    const out = replaceFormEmbedsWithSlots(html);
+
+    expect(out).toBe(['<h1>Đầu</h1>', SLOT, YOUTUBE, SLOT, '<p>Giữa</p>', MAP, SLOT].join('\n'));
+    expect(countFormSlots(out)).toBe(3);
+    expect(listFormEmbedKeys(out)).toEqual([]);
+    expect(out).not.toContain('/f/');
+    expect(out).not.toContain('lead-form');
+  });
+
+  it('thẻ <a href=".../f/..."> KHÔNG bị đụng (giới hạn còn lại đã biết: liên kết người bán tự đặt vẫn trỏ về biểu mẫu của người bán)', () => {
+    const html = '<a href="https://founderai.biz/f/KEY99" class="btn">Đăng ký ngay</a><noscript><a href="/f/KEY99">Mở</a></noscript>';
+    expect(replaceFormEmbedsWithSlots(html)).toBe(html);
+  });
+
+  it('idempotent và không đổi tổng số: chạy lần hai không đổi gì', () => {
+    const html = `${block('SECT')}<iframe src="/f/IFR?embed=1"></iframe>${YOUTUBE}`;
+    const once = replaceFormEmbedsWithSlots(html);
+    expect(once).toBe(`${SLOT}${SLOT}${YOUTUBE}`);
+    expect(replaceFormEmbedsWithSlots(once)).toBe(once);
+  });
+});
