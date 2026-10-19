@@ -688,9 +688,11 @@ describe('POST /api/founderai/sync/orders', () => {
 // ═══════════════════════════════════════════════════════════════════════
 // POST /api/campaigns/:id/sync-founderai
 // ═══════════════════════════════════════════════════════════════════════
+// Route dùng khoá WooCommerce của NỀN TẢNG -> chỉ workspace super admin (xem describe cổng PLATFORM_STORE_ADMIN_ONLY bên dưới);
+// các ca nghiệp vụ dưới đây dùng chủ super admin.
 describe('POST /api/campaigns/:id/sync-founderai', () => {
   it('campaignId không hợp lệ → 400', async () => {
-    const user = await createUser({ username: 'fa-cmp-1' });
+    const user = await createUser({ username: 'fa-cmp-1', role: 'admin' });
     const token = await loginAs(user);
     const res = await request(app)
       .post('/api/campaigns/abc/sync-founderai')
@@ -700,7 +702,7 @@ describe('POST /api/campaigns/:id/sync-founderai', () => {
 
   it('Không phải owner → 404', async () => {
     const owner = await createUser({ username: 'fa-cmp-owner' });
-    const other = await createUser({ username: 'fa-cmp-other' });
+    const other = await createUser({ username: 'fa-cmp-other', role: 'admin' });
     const camp = await createCampaign({ userId: owner.id });
     const token = await loginAs(other);
     const res = await request(app)
@@ -710,7 +712,7 @@ describe('POST /api/campaigns/:id/sync-founderai', () => {
   });
 
   it('Customer có completed order → uknow_status=purchased', async () => {
-    const user = await createUser({ username: 'fa-cmp-2' });
+    const user = await createUser({ username: 'fa-cmp-2', role: 'admin' });
     const camp = await createCampaign({ userId: user.id });
     const cust = await createCustomer({ userId: user.id, email: 'sub@u.local' });
     await db.query(
@@ -740,7 +742,7 @@ describe('POST /api/campaigns/:id/sync-founderai', () => {
   });
 
   it('Customer chỉ có on-hold order → uknow_status=lead', async () => {
-    const user = await createUser({ username: 'fa-cmp-3' });
+    const user = await createUser({ username: 'fa-cmp-3', role: 'admin' });
     const camp = await createCampaign({ userId: user.id });
     const cust = await createCustomer({ userId: user.id, email: 'hold@u.local' });
     await db.query(
@@ -762,7 +764,7 @@ describe('POST /api/campaigns/:id/sync-founderai', () => {
   });
 
   it('Customer không có order Woo → unchanged++, không update uknow_status', async () => {
-    const user = await createUser({ username: 'fa-cmp-4' });
+    const user = await createUser({ username: 'fa-cmp-4', role: 'admin' });
     const camp = await createCampaign({ userId: user.id });
     const cust = await createCustomer({ userId: user.id, email: 'none@u.local' });
     await db.query(
@@ -866,6 +868,49 @@ describe('cổng PLATFORM_STORE_ADMIN_ONLY — chủ tài khoản thường khô
 
     expect(res.status).toBe(200);
     expect(mockAxiosGet).toHaveBeenCalled();
+  });
+
+  describe('POST /api/campaigns/:id/sync-founderai', () => {
+    async function seedCampaignWithCustomer(owner, email) {
+      const camp = await createCampaign({ userId: owner.id });
+      const cust = await createCustomer({ userId: owner.id, email });
+      await db.query(
+        `INSERT INTO campaign_customers (id_campaign, id_customer, joined_at) VALUES ($1, $2, NOW())`,
+        [camp.id, cust.id]
+      );
+      return { camp, cust };
+    }
+
+    it('chủ role user có chiến dịch của mình -> 403 PLATFORM_STORE_ADMIN_ONLY, KHÔNG gọi Founder AI, uknow_status không đổi', async () => {
+      const { owner, token } = await createRegularOwner('fa-gate-cmp-user');
+      const { camp, cust } = await seedCampaignWithCustomer(owner, 'probe@u.local');
+      mockAxiosGet.mockResolvedValue({ status: 200, data: [{ id: 1, status: 'completed' }] });
+
+      const res = await request(app)
+        .post(`/api/campaigns/${camp.id}/sync-founderai`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('PLATFORM_STORE_ADMIN_ONLY');
+      expect(mockAxiosGet).not.toHaveBeenCalled();
+      const cc = await db.query('SELECT uknow_status FROM campaign_customers WHERE id_customer = $1', [cust.id]);
+      expect(cc.rows[0].uknow_status).toBeNull();
+    });
+
+    it('chủ super admin -> không bị cổng chặn (200, có gọi Founder AI)', async () => {
+      const admin = await createUser({ username: 'fa-gate-cmp-admin', role: 'admin' });
+      const token = await loginAs(admin);
+      const { camp } = await seedCampaignWithCustomer(admin, 'buyer-probe@u.local');
+      mockAxiosGet.mockResolvedValue({ status: 200, data: [{ id: 1, status: 'completed' }] });
+
+      const res = await request(app)
+        .post(`/api/campaigns/${camp.id}/sync-founderai`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.code).not.toBe('PLATFORM_STORE_ADMIN_ONLY');
+      expect(mockAxiosGet).toHaveBeenCalled();
+    });
   });
 
   describe('GET /api/customers/interested-courses-from-api', () => {
