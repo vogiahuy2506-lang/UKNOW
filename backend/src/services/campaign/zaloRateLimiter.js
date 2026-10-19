@@ -191,6 +191,24 @@ class ZaloRateLimiter {
   }
 
   /**
+   * Mốc "sáng kế tiếp" theo giờ VN: giờ hết khung yên lặng (mặc định 06:00) sớm nhất còn ở tương lai.
+   * Dùng khi cần hẹn thử lại vào sáng hôm sau (vd tài khoản bị Zalo tạm cấm nhắn người lạ — PR-4 Việc 4.4).
+   * Cùng kỹ thuật cộng offset +7 rồi đọc getUTC* như `computeNextAllowedSendAtByQuietHours` — KHÔNG dùng múi giờ OS/VPS.
+   *
+   * @param {number} nowMs
+   * @returns {number} epoch ms, luôn > nowMs
+   */
+  computeNextMorningSendAtMs(nowMs) {
+    const utcPlusSevenOffsetMs = 7 * 60 * 60 * 1000;
+    const shifted = new Date(nowMs + utcPlusSevenOffsetMs);
+    const quietEnd = this.ZALO_OUTBOUND_QUIET_HOURS_END_SAFE;
+    const todayMorningMs = Date.UTC(
+      shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate(), quietEnd, 0, 0, 0
+    ) - utcPlusSevenOffsetMs;
+    return todayMorningMs > nowMs ? todayMorningMs : todayMorningMs + 24 * 60 * 60 * 1000;
+  }
+
+  /**
    * Tính toán các tham số rate-limit cho từng kênh Zalo.
    *
    * @param {'zalo_personal'|'zalo_group'|'zalo_friend_request'} channel

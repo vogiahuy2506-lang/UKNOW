@@ -11,7 +11,8 @@ import { vnDayKey } from './vnTimeFormat.util.js';
  * Hai nguyên nhân (`cause`):
  *  - `phone_lookup`: Zalo báo tra số điện thoại quá nhiều → khoá tra số tới 00:00 giờ VN. Nối kích hoạt ở
  *    `campaignRun.service.js#persistZaloDeferYieldSlot` (≥ 2 ngày VN liền kề đều bị khoá).
- *  - `stranger_ban`: tài khoản bị Zalo cấm nhắn người lạ. CHƯA nối kích hoạt (PR-4); hàm đã nhận sẵn giá trị này.
+ *  - `stranger_ban`: tài khoản bị Zalo cấm nhắn người lạ. Nối kích hoạt ở `persistZaloDeferYieldSlot` khi
+ *    `reason === STRANGER_BAN_DEFER_REASON` (PR-4 Việc 4.4).
  */
 
 /** Không báo lại cùng một lượt chạy trong khoảng này (cờ `sendingSlowNotifiedAt`). */
@@ -31,6 +32,20 @@ const VN_DAY_KEY_RE = /^\d{8}$/;
  */
 export function isPhoneLookupCooldownReason(reason) {
   return String(reason || '').includes('phone_lookup_cooldown');
+}
+
+/**
+ * `reason` hoãn run khi Zalo tạm cấm CẢ TÀI KHOẢN nhắn người chưa kết bạn (PR-4 Việc 4.4) — khác khoá tra số: không tích
+ * ngày, báo khách ngay lần đầu (cờ 7 ngày của `notifyCampaignSendingSlow` chống lặp).
+ */
+export const STRANGER_BAN_DEFER_REASON = 'stranger_messaging_banned';
+
+/**
+ * @param {unknown} reason
+ * @returns {boolean}
+ */
+export function isStrangerBanReason(reason) {
+  return String(reason || '') === STRANGER_BAN_DEFER_REASON;
 }
 
 /**

@@ -56,6 +56,8 @@ import {
 } from '../../utils/campaignRunCompletedNotify.util.js';
 import {
   isPhoneLookupCooldownReason,
+  isStrangerBanReason,
+  STRANGER_BAN_DEFER_REASON,
   recordPhoneLookupDeferDay,
   notifyCampaignSendingSlow,
 } from '../../utils/campaignSlowSendNotify.util.js';
@@ -661,7 +663,12 @@ class CampaignRunService {
     // ZALO_DEFER_CLEAR_KEYS). Khoá 2 ngày VN liền kề → báo chủ chiến dịch sau khi patch.
     const reasonStr = String(reason || 'zalo_outbound_wait');
     let notifySlow = false;
-    if (isPhoneLookupCooldownReason(reasonStr)) {
+    let notifyCause = 'phone_lookup';
+    if (isStrangerBanReason(reasonStr)) {
+      // PR-4 Việc 4.4 — cả tài khoản bị cấm nhắn người lạ: báo ngay (chống lặp bằng cờ 7 ngày trong util), không cần tích ngày.
+      notifySlow = true;
+      notifyCause = 'stranger_ban';
+    } else if (isPhoneLookupCooldownReason(reasonStr)) {
       try {
         const meta = (await campaignRunRepository.getRunMetadata(runId)) || {};
         const tracked = recordPhoneLookupDeferDay(meta.phoneLookupDeferVnDays, new Date());
@@ -700,7 +707,7 @@ class CampaignRunService {
         this._notifySendingSlowFireAndForget({
           runId,
           campaignId,
-          cause: 'phone_lookup',
+          cause: notifyCause,
           accountName: accountId != null ? accountName : null,
         });
       }
@@ -6322,6 +6329,34 @@ class CampaignRunService {
                     executionData: buildSendZaloPersonalExecutionData(senderBlockedPayload),
                   });
                 }
+                if (!multiEnabled) {
+                  // PR-4 Việc 4.3 — MỘT tài khoản gửi: người nhận chặn tin từ người lạ thì bước sau cũng chặn y vậy, mà mỗi
+                  // lần thử lại là tốn thêm một lượt tra số. Đóng người đó (xong hết bước, không hẹn lại) theo khuôn nhánh
+                  // bỏ cuộc `max_zalo_send_failures`. BẪY: trả `success: false` (không phải `true`) — vòng gọi
+                  // `markRecipientStepCompleted` khi `shouldAdvanceZaloOneShotLedger`/`...ContinuousLedger` (success===true),
+                  // sẽ ghi đè tiến độ "xong hết" về `stepIndex + 1` rồi bước sau lại tra số lần nữa. Nhiều tài khoản: giữ
+                  // nguyên (tài khoản khác trong pool có thể vẫn nhắn được người này).
+                  const blockedProgress = await getRecipientProgress({
+                    nodeId: node.id,
+                    channel: 'zalo_personal',
+                    recipientKey: recipient,
+                  });
+                  const blockedTotalSteps = templateSteps.length > 0 ? templateSteps.length : 1;
+                  await upsertRecipientProgress({
+                    nodeId: node.id,
+                    channel: 'zalo_personal',
+                    recipientKey: recipient,
+                    completedStep: blockedTotalSteps,
+                    totalSteps: blockedTotalSteps,
+                    firstSentAt: blockedProgress.firstSentAt || sentAt,
+                    lastCompletedAt: sentAt,
+                    nextDueAt: null,
+                    zaloAbandonReason: 'recipient_blocks_strangers',
+                    lastFailureReason: mapZaloErrorCategoryToLedgerReason(observation.errorCategory),
+                    lastFailureAt: sentAt,
+                  });
+                  return { success: false, skippedSenderBlocked: true };
+                }
                 return { success: true, skippedSenderBlocked: true };
               }
               if (
@@ -6383,6 +6418,36 @@ class CampaignRunService {
                   });
                 }
                 return { success: true, skippedUnreachable: true };
+              }
+              // PR-4 Việc 4.4 — Zalo tạm CẤM CẢ TÀI KHOẢN nhắn người chưa kết bạn ("Bạn đang bị cấm nhắn tin cho người lạ").
+              // Đây là lỗi của TÀI KHOẢN (mọi người lạ đều dính), khác `isZaloSenderBlockedError` ("không thể nhận tin nhắn từ
+              // bạn" = một người nhận chặn mình) — đếm nó như lỗi từng người thì mỗi người bị "đốt" 3–5 lần rồi bỏ vĩnh viễn
+              // (run 476: 195 người). Phân loại bằng đúng bộ sẵn có (category NOT_FRIEND_OR_BLOCKED ↔ ledger `stranger_blocked`),
+              // loại thêm lỗi quyền riêng tư CỦA NGƯỜI NHẬN (`isZaloUnreachableRecipientError`: "chặn không nhận tin nhắn từ
+              // người lạ"...) vì nhóm category này rộng, cùng rơi vào đó. Chỉ MỘT tài khoản: nhiều tài khoản thì tài khoản khác
+              // trong pool có thể vẫn nhắn được → giữ nguyên hành vi cũ. KHÔNG tăng zaloSendFailureCount, KHÔNG ghi failed:
+              // hoãn cả lượt tới sáng 06:00 VN kế tiếp (thời hạn cấm của Zalo không ai biết — mỗi sáng thử lại một tin là đủ rẻ).
+              if (
+                !multiEnabled
+                && !isZaloUnreachableRecipientError(error)
+                && mapZaloErrorCategoryToLedgerReason(buildZaloPersonalErrorObservation(error).errorCategory) === 'stranger_blocked'
+              ) {
+                const banWaitMs = Math.max(
+                  1,
+                  this.zaloRateLimiter.computeNextMorningSendAtMs(Date.now()) - Date.now()
+                );
+                console.warn(
+                  `[CampaignRun][ZaloPersonal] run=${runId} account=${workingAccount.id} bị Zalo cấm nhắn người lạ `
+                  + `→ hoãn cả lượt ${(banWaitMs / 3600000).toFixed(1)}h (không tính lỗi người nhận ${String(recipient || '').trim()}).`
+                );
+                await this.persistZaloDeferYieldSlot({
+                  runId,
+                  campaignId,
+                  waitMs: banWaitMs,
+                  reason: STRANGER_BAN_DEFER_REASON,
+                  accountId: workingAccount.id,
+                  accountName: workingAccount.displayName || null,
+                });
               }
               /**
                * Continuous: đếm lỗi gửi liên tiếp; đạt ngưỡng → chốt recipient (không thử lại vô hạn).
@@ -6949,9 +7014,12 @@ class CampaignRunService {
              * @param {object} step
              * @param {number} stepIndex chỉ số 0-based
              * @param {string} recipient
+             * @param {{ priorityPass?: boolean }} [options] `priorityPass` (PR-4 Việc 4.2): lượt ưu tiên bước sau — chỉ gửi bước
+             *   `stepIndex` ≥ 1 cho người ĐÃ có dòng sổ cái và đang đúng bước đó; KHÔNG chạm bộ đếm (không cộng total lần đầu thấy,
+             *   không cộng skippedCompletedCount) vì vòng chính ngay sau đó vẫn duyệt lại đủ mọi người × mọi bước.
              * @returns {Promise<void>}
              */
-            const processOneZaloPersonalTemplateRecipient = async (step, stepIndex, recipient) => {
+            const processOneZaloPersonalTemplateRecipient = async (step, stepIndex, recipient, { priorityPass = false } = {}) => {
               const normalizedRecipient = String(recipient || '').trim();
               if (!normalizedRecipient) return;
               const progress = await getRecipientProgress({
@@ -6959,19 +7027,29 @@ class CampaignRunService {
                 channel: 'zalo_personal',
                 recipientKey: normalizedRecipient,
               });
-              // PR-2 — cộng total đúng MỘT LẦN cho toàn bộ số bước của người nhận này, ngay lúc
-              // lần đầu thấy (chưa có dòng ledger). Trước đây cộng blanket TRƯỚC vòng lặp step
-              // nên mỗi lượt gọi lại (resume) cộng lại từ đầu cho MỌI người nhận.
-              if (progress.updatedAt === null) {
-                countFirstSight({ nodeId: node.id, channel: 'zalo_personal', recipientKey: normalizedRecipient, n: stepsWithMessage.length });
-              }
-              if (!shouldProcessRecipientStep({
-                progress,
-                stepIndex,
-                totalSteps: stepsWithMessage.length,
-              })) {
-                skippedCompletedCount += 1;
-                return;
+              if (priorityPass) {
+                if (progress.updatedAt === null || !shouldProcessRecipientStep({
+                  progress,
+                  stepIndex,
+                  totalSteps: stepsWithMessage.length,
+                })) {
+                  return;
+                }
+              } else {
+                // PR-2 — cộng total đúng MỘT LẦN cho toàn bộ số bước của người nhận này, ngay lúc
+                // lần đầu thấy (chưa có dòng ledger). Trước đây cộng blanket TRƯỚC vòng lặp step
+                // nên mỗi lượt gọi lại (resume) cộng lại từ đầu cho MỌI người nhận.
+                if (progress.updatedAt === null) {
+                  countFirstSight({ nodeId: node.id, channel: 'zalo_personal', recipientKey: normalizedRecipient, n: stepsWithMessage.length });
+                }
+                if (!shouldProcessRecipientStep({
+                  progress,
+                  stepIndex,
+                  totalSteps: stepsWithMessage.length,
+                })) {
+                  skippedCompletedCount += 1;
+                  return;
+                }
               }
               const entry = recipientEntryMap.get(normalizedRecipient) || null;
               const mappings = Array.isArray(step?.templateMappings) ? step.templateMappings : [];
@@ -7111,6 +7189,65 @@ class CampaignRunService {
                 }
               }
             } else {
+              // PR-4 Việc 4.2 — lượt ưu tiên bước sau. Vòng chính bên dưới duyệt "bước 1 cho TẤT CẢ rồi mới bước 2": danh sách
+              // dài thì bước 1 không bao giờ hết trong ngày (mỗi ngày chỉ tra được ít số) nên bước 2 chưa từng chạy, dù
+              // hàng trăm người đã nhận bước 1 quá hạn. Người ĐÃ BIẾT uid gửi được mà không tốn lượt tra số (và không bị cổng
+              // khoá tra số chặn), nên cho họ nhận bước sau TRƯỚC khi vòng chính đi tra số người mới. Duyệt bước cuối → bước 2.
+              // Chuỗi độ trễ 0 của người mới vẫn chạy như cũ ở vòng chính (lượt này chỉ đụng người đã có sổ cái).
+              if (stepsWithMessage.length > 1) {
+                const priorityRecipients = [];
+                const needKnownUidLookup = [];
+                for (const recipient of dedupedRecipients) {
+                  const key = String(recipient || '').trim();
+                  if (!key) continue;
+                  if (
+                    recipientType === 'uid'
+                    || extractZaloUidFromRow(recipientEntryMap.get(key)?.row || null)
+                  ) {
+                    priorityRecipients.push(recipient);
+                  } else {
+                    needKnownUidLookup.push(recipient);
+                  }
+                }
+                if (needKnownUidLookup.length > 0) {
+                  try {
+                    const phonesWithKnownUid = await customerMutationRepository.findPhonesWithKnownZaloUid(
+                      userId,
+                      needKnownUidLookup
+                    );
+                    for (const recipient of needKnownUidLookup) {
+                      if (phonesWithKnownUid.has(String(recipient || '').trim())) priorityRecipients.push(recipient);
+                    }
+                  } catch (lookupError) {
+                    // Lượt ưu tiên chỉ là tối ưu thứ tự — lỗi tra uid hàng loạt không được làm hỏng lượt chạy.
+                    console.warn(
+                      `[CampaignRun][ZaloPersonal] run=${runId} bỏ lượt ưu tiên bước sau, không tra được uid hàng loạt: `
+                      + `${lookupError?.message || lookupError}`
+                    );
+                  }
+                }
+                if (priorityRecipients.length > 0) {
+                  for (let stepIndex = stepsWithMessage.length - 1; stepIndex >= 1; stepIndex -= 1) {
+                    const step = stepsWithMessage[stepIndex];
+                    if (multiEnabled) {
+                      // eslint-disable-next-line no-await-in-loop
+                      await runTasksWithConcurrency({
+                        items: priorityRecipients,
+                        concurrency: zaloPersonalPoolConcurrency,
+                        handler: async (recipient) => {
+                          await processOneZaloPersonalTemplateRecipient(step, stepIndex, recipient, { priorityPass: true });
+                        },
+                      });
+                    } else {
+                      // eslint-disable-next-line no-restricted-syntax
+                      for (const recipient of priorityRecipients) {
+                        // eslint-disable-next-line no-await-in-loop
+                        await processOneZaloPersonalTemplateRecipient(step, stepIndex, recipient, { priorityPass: true });
+                      }
+                    }
+                  }
+                }
+              }
               for (let stepIndex = 0; stepIndex < stepsWithMessage.length; stepIndex += 1) {
                 const step = stepsWithMessage[stepIndex];
                 if (multiEnabled) {

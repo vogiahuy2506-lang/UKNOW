@@ -215,4 +215,33 @@ describe('campaignRun.service — gửi chậm vì khoá tra số (PR-3)', () =>
       expect(runMeta.phoneLookupDeferVnDays).toEqual(['20261019', '20261020']);
     });
   });
+
+  describe('PR-4 Việc 4.4 — tài khoản bị cấm nhắn người lạ (stranger_messaging_banned)', () => {
+    it('lần đầu hoãn: chuông ĐÚNG 1 lần với cause stranger_ban (câu cấm nhắn người lạ), KHÔNG tích ngày khoá tra số', async () => {
+      jest.setSystemTime(vn('2026-10-19T14:00:00'));
+      await defer('stranger_messaging_banned', vn('2026-10-20T06:00:00').getTime() - Date.now());
+
+      expect(runMeta.zaloDeferredReason).toBe('stranger_messaging_banned');
+      expect(runMeta.zaloOutboundDeferredUntil).toBe(vn('2026-10-20T06:00:00').toISOString());
+      expect(runMeta.phoneLookupDeferVnDays).toBeUndefined();
+      const calls = slowCalls();
+      expect(calls).toHaveLength(1);
+      expect(calls[0][0]).toMatchObject({
+        eventType: 'campaign_sending_slow',
+        userIds: [39],
+        metadata: { runId: RUN_ID, campaignId: CAMPAIGN_ID, cause: 'stranger_ban' },
+      });
+      expect(calls[0][0].message).toContain('tạm cấm nhắn tin cho người chưa kết bạn');
+      expect(calls[0][0].message).toContain('«Zalo A»');
+    });
+
+    it('sáng hôm sau vẫn bị cấm, hoãn lại: không chuông thêm (cờ 7 ngày dùng chung)', async () => {
+      jest.setSystemTime(vn('2026-10-19T14:00:00'));
+      await defer('stranger_messaging_banned', vn('2026-10-20T06:00:00').getTime() - Date.now());
+      jest.setSystemTime(vn('2026-10-20T06:05:00'));
+      await defer('stranger_messaging_banned', vn('2026-10-21T06:00:00').getTime() - Date.now());
+
+      expect(slowCalls()).toHaveLength(1);
+    });
+  });
 });

@@ -27,6 +27,8 @@ jest.unstable_mockModule('../../services/notification/notificationDispatch.servi
 
 const {
   isPhoneLookupCooldownReason,
+  isStrangerBanReason,
+  STRANGER_BAN_DEFER_REASON,
   recordPhoneLookupDeferDay,
   buildSendingSlowCopy,
   notifyCampaignSendingSlow,
@@ -44,6 +46,17 @@ describe('campaignSlowSendNotify.util — isPhoneLookupCooldownReason', () => {
     expect(isPhoneLookupCooldownReason('quiet_hours')).toBe(false);
     expect(isPhoneLookupCooldownReason('rate_limited')).toBe(false);
     expect(isPhoneLookupCooldownReason(undefined)).toBe(false);
+  });
+});
+
+describe('campaignSlowSendNotify.util — isStrangerBanReason (PR-4 Việc 4.4)', () => {
+  it('chỉ nhận đúng mã stranger_messaging_banned, không lẫn với khoá tra số', () => {
+    expect(STRANGER_BAN_DEFER_REASON).toBe('stranger_messaging_banned');
+    expect(isStrangerBanReason('stranger_messaging_banned')).toBe(true);
+    expect(isStrangerBanReason('phone_lookup_cooldown')).toBe(false);
+    expect(isStrangerBanReason('quiet_hours')).toBe(false);
+    expect(isStrangerBanReason(undefined)).toBe(false);
+    expect(isPhoneLookupCooldownReason('stranger_messaging_banned')).toBe(false);
   });
 });
 
