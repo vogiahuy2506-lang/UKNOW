@@ -322,7 +322,10 @@ export async function findPurgeBlockers(id) {
          UNION ALL
          SELECT 1 FROM affiliate_withdrawals WHERE user_id = $1
        ) AS "hasAffiliateActivity",
-       EXISTS(SELECT 1 FROM user_consents WHERE user_id = $1) AS "hasConsents"`,
+       EXISTS(SELECT 1 FROM user_consents WHERE user_id = $1) AS "hasConsents",
+       EXISTS(
+         SELECT 1 FROM send_quota_reservations WHERE billing_user_id = $1 OR actor_user_id = $1
+       ) AS "hasSendQuotaLedger"`,
     [id]
   );
   const row = rows[0] || {};
@@ -331,6 +334,7 @@ export async function findPurgeBlockers(id) {
   if (row.hasMarketplace) reasons.push('dữ liệu marketplace (đã đăng bán/mua/đánh giá/yêu thích)');
   if (row.hasAffiliateActivity) reasons.push('hoạt động affiliate (doanh thu giới thiệu hoặc được giới thiệu)');
   if (row.hasConsents) reasons.push('bằng chứng đồng ý điều khoản/dữ liệu cá nhân (user_consents)');
+  if (row.hasSendQuotaLedger) reasons.push('lịch sử gửi tin có đặt chỗ hạn mức (send_quota_reservations)');
   return reasons;
 }
 
