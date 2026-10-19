@@ -1,4 +1,5 @@
 import db from '../../config/database.js';
+import chatbotOwnershipRepository from './chatbotOwnership.repository.js';
 
 /**
  * Repository for `chatbot_whatsapp_baileys_settings` (Baileys QR sessions).
@@ -34,6 +35,16 @@ class ChatbotWhatsAppBaileysRepository {
   }
 
   /**
+   * Phiên VÀ chatbot / trợ lý phụ (nếu có) đều thuộc `userId` — 404 nếu không. `requireActiveChatbot=true` khi BẬT
+   * (tắt thì chỉ cần đúng chủ). Trước đây chỉ kiểm tiền tố `session_key` nên A gắn được chatbot / trợ lý phụ của B.
+   */
+  async assertOwnedConfiguration(userId, sessionKey, { idChatbot = null, idSubAssistant = null, requireActiveChatbot = false } = {}) {
+    await this.assertOwnedSession(userId, sessionKey);
+    await chatbotOwnershipRepository.assertOwnedChatbot(userId, idChatbot, { requireActive: requireActiveChatbot });
+    await chatbotOwnershipRepository.assertOwnedSubAssistant(userId, idSubAssistant);
+  }
+
+  /**
    * Get a settings row for (user, session, chatbot).
    */
   async getSettings(userId, sessionKey, { idChatbot } = {}) {
@@ -56,7 +67,8 @@ class ChatbotWhatsAppBaileysRepository {
    * bản chụp cũ khiến sửa hướng dẫn trong Studio không có hiệu lực.
    */
   async setEnabled(userId, sessionKey, idChatbot, enabled) {
-    await this.assertOwnedSession(userId, sessionKey);
+    // Chặn cả khi enabled=false: tắt cũng ghi dòng (ON CONFLICT ... DO UPDATE).
+    await this.assertOwnedConfiguration(userId, sessionKey, { idChatbot, requireActiveChatbot: Boolean(enabled) });
     const { rows } = await db.query(
       `INSERT INTO chatbot_whatsapp_baileys_settings
          (id_user, session_key, id_chatbot, is_enabled)
@@ -108,7 +120,11 @@ class ChatbotWhatsAppBaileysRepository {
    * Upsert full settings row (model/temperature/welcome/system_instruction).
    */
   async upsertSettings(userId, sessionKey, data) {
-    await this.assertOwnedSession(userId, sessionKey);
+    await this.assertOwnedConfiguration(userId, sessionKey, {
+      idChatbot: data.id_chatbot || null,
+      idSubAssistant: data.id_sub_assistant || null,
+      requireActiveChatbot: data.is_enabled === true,
+    });
     const { rows } = await db.query(
       `INSERT INTO chatbot_whatsapp_baileys_settings
          (id_user, session_key, id_chatbot, is_enabled, id_sub_assistant,

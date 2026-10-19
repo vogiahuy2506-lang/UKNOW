@@ -48,6 +48,7 @@ const repoStub = {
   deactivateAccount: jest.fn(async () => ({ id: 1, is_active: false })),
   setEnabled: jest.fn(async () => ({ enabled: true })),
   assertOwned: jest.fn(async () => undefined),
+  assertOwnedConfiguration: jest.fn(async () => undefined),
   findOtherEnabledChatbot: jest.fn(async () => null),
   listAccountsForUser: jest.fn(async () => []),
   getSessionString: jest.fn(async () => null),
@@ -381,6 +382,25 @@ describe('telegramPersonalService.toggleAccountChatbot', () => {
 
     repoStub.findOtherEnabledChatbot.mockResolvedValueOnce({ id: 9, name: 'Bot Cũ' });
     await expect(telegramPersonalService.toggleAccountChatbot(100, 1, 2, false)).resolves.toEqual({ enabled: true });
+  });
+
+  it('kiểm tài khoản + chatbot đúng chủ TRƯỚC câu 409 và TRƯỚC khi ghi — chatbot lạ ra 404, không lộ tên bot đang giữ tài khoản', async () => {
+    const notFound = Object.assign(new Error('Không tìm thấy chatbot trong không gian làm việc'), { status: 404 });
+    repoStub.assertOwnedConfiguration.mockRejectedValueOnce(notFound);
+    repoStub.findOtherEnabledChatbot.mockResolvedValueOnce({ id: 9, name: 'Bot Của A' });
+    repoStub.setEnabled.mockClear();
+    repoStub.findOtherEnabledChatbot.mockClear();
+
+    await expect(telegramPersonalService.toggleAccountChatbot(100, 1, 555, true)).rejects.toMatchObject({ status: 404 });
+
+    expect(repoStub.assertOwnedConfiguration).toHaveBeenCalledWith(100, 1, 555, { requireActiveChatbot: true });
+    expect(repoStub.findOtherEnabledChatbot).not.toHaveBeenCalled();
+    expect(repoStub.setEnabled).not.toHaveBeenCalled();
+  });
+
+  it('TẮT (enabled=false) cũng kiểm chủ chatbot, nhưng không đòi chatbot còn hoạt động', async () => {
+    await telegramPersonalService.toggleAccountChatbot(100, 1, 2, false);
+    expect(repoStub.assertOwnedConfiguration).toHaveBeenCalledWith(100, 1, 2, { requireActiveChatbot: false });
   });
 });
 

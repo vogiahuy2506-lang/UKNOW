@@ -381,10 +381,8 @@ class ChatbotRepository {
   }
 
   async deleteWebChatConversation(conversationId, userId) {
-    await db.query(
-      `DELETE FROM webchat_messages WHERE id_conversation = $1`,
-      [conversationId]
-    );
+    // CHỈ xoá hội thoại (lọc chủ); tin nhắn đi theo `webchat_messages.id_conversation ... ON DELETE CASCADE` (migration 031).
+    // Trước đây câu xoá tin chạy TRƯỚC và không lọc chủ -> tài khoản khác xoá được tin của hội thoại không phải của mình.
     const result = await db.query(
       `DELETE FROM webchat_conversations WHERE id = $1 AND id_user = $2 RETURNING id`,
       [conversationId, userId]

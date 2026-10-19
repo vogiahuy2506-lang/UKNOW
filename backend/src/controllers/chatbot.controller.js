@@ -904,9 +904,14 @@ class ChatbotController {
         // PR-H2: nhân viên chỉ bật / tắt chatbot cho phiên ĐƯỢC GIAO — kiểm TRƯỚC `findOtherEnabledChatbot` (câu 409 nêu tên
         // chatbot đang giữ phiên, kiểm sau sẽ lộ tên bot của phiên chưa giao). Tắt cũng phải được giao.
         await assertChannelAccountAccess(getWorkspaceContext(req.user), 'whatsapp_baileys', session_key);
+        // Phiên VÀ chatbot phải thuộc chủ — kiểm TRƯỚC câu 409 (chatbot lạ phải ra 404, không phải 409 nêu tên bot đang giữ phiên).
+        // Cả khi enabled=false: tắt cũng ghi dòng.
+        await chatbotWhatsAppBaileysRepository.assertOwnedConfiguration(ownerUserId, session_key, {
+          idChatbot: normalizedChatbotId,
+          requireActiveChatbot: enabled,
+        });
         // 1 tài khoản = 1 chatbot: bật bot thứ hai khi bot khác đang bật thì chặn (tắt luôn được).
         if (enabled && normalizedChatbotId != null) {
-          await chatbotWhatsAppBaileysRepository.assertOwnedSession(ownerUserId, session_key);
           const holder = await chatbotWhatsAppBaileysRepository.findOtherEnabledChatbot(
             ownerUserId, session_key, normalizedChatbotId
           );
