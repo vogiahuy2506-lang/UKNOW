@@ -20,7 +20,7 @@ import { POLICY_VERSIONS } from '../policyVersions.js';
  * Support / PaymentPolicy / ComplaintPolicy. Văn bản 29/09/2026 (8:00 - 22:00, Thứ 2 - Thứ 7) được lưu ở
  * `policyArchive/<slug>/2026-09-29/`. Plan: _internal/PLAN_GIO_HO_TRO_THONG_BAO_19_10_2026-10-04.md.
  */
-const norm = (s) => s.replace(/\s+/g, ' ').replace(/ /g, ' ').trim();
+const norm = (s) => s.replace(/\s+/g, ' ').replace(/\u00a0/g, ' ').trim();
 
 // [slug, path, Component, câu giờ VI mới, câu giờ EN mới, câu giờ VI cũ, câu giờ EN cũ]
 const PAGES = [

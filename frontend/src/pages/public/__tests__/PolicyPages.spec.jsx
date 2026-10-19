@@ -11,7 +11,7 @@ import RightsAndDuties from '../RightsAndDuties.jsx';
 import TermsOfService from '../TermsOfService.jsx';
 import Support from '../Support.jsx';
 
-const norm = (s) => s.replace(/\s+/g, ' ').replace(/ /g, ' ').trim();
+const norm = (s) => s.replace(/\s+/g, ' ').replace(/\u00a0/g, ' ').trim();
 
 // Ba trang giờ hỗ trợ (complaint / payment / support) đã sang văn bản có hiệu lực 19/10/2026 (thông báo 04/10/2026);
 // sáu trang còn lại vẫn là văn bản 29/09/2026.

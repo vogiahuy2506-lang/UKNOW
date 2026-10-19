@@ -17,6 +17,8 @@ import crypto from 'crypto';
 // dùng phải đồng ý lại).
 // 11/10: hash của 3 văn bản tính lại vì chỉ thêm biến thể CSS giao diện tối (`dark:` vào class) cho các trang chính
 // sách; không đổi chữ nào → giữ nguyên version.
+// 19/10: hash của privacy + dpa tính lại vì chỉ xoá hằng số helper không dùng (N/H/OL) khi bật ESLint cho
+// `src/pages/public`; không đổi chữ hiển thị → giữ nguyên version.
 export const LEGAL_DOCUMENTS = Object.freeze({
   terms: {
     purpose: 'terms',
@@ -29,7 +31,7 @@ export const LEGAL_DOCUMENTS = Object.freeze({
   privacy: {
     purpose: 'privacy',
     version: '2026-09-29',
-    hash: 'a8be8dba08960b83a303aab8293749505007d8144514d838dc42dcd6f11c8391',
+    hash: 'ad22e7fd5c0be84431d291db03a56236094301419a6635b9219b6fa2a8a91d78',
     title: 'Chính sách bảo mật',
     path: '/privacy-policy',
     frontendRelativePath: 'src/pages/public/PrivacyPolicy.jsx',
@@ -37,7 +39,7 @@ export const LEGAL_DOCUMENTS = Object.freeze({
   dpa: {
     purpose: 'dpa',
     version: '2026-09-29',
-    hash: '03ef0da3326dc74d9ae84883094c013585a5c8c79b8c80c567680d4a857c5807',
+    hash: 'ce2f9d058276c96bfcaf69d57af686cc99014bb5dc3e0dc4e72205baa8189474',
     title: 'Thỏa thuận xử lý dữ liệu (DPA)',
     path: '/public-dpa',
     frontendRelativePath: 'src/pages/public/PublicDPA.jsx',

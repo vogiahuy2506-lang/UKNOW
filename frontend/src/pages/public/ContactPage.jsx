@@ -1,15 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   HiOutlineMail, HiOutlinePhone, HiOutlineLocationMarker,
   HiOutlineCheckCircle, HiOutlineArrowRight,
   HiOutlineClock, HiOutlineIdentification,
 } from 'react-icons/hi';
-import { FaArrowRight } from 'react-icons/fa';
 import PublicFooter from './components/PublicFooter';
 import { submitContactForm } from '../../services/contactApi.service';
-import AnimatedSection from '../../components/AnimatedSection';
 import { useI18n } from '../../i18n';
 import { usePublicLandingOverrides } from '../../features/landing-customizer';
 import HeroChatWidget from '../../features/hero/components/HeroChatWidget';

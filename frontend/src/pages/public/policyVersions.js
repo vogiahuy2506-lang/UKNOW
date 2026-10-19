@@ -39,7 +39,7 @@ export const POLICY_VERSIONS = {
     titleVi: 'Chính Sách Bảo Mật',
     titleEn: 'Privacy Policy',
     files: ['PrivacyPolicy.jsx', 'PrivacyPolicyControllerPanel.jsx', 'PrivacyPolicyProcessorPanel.jsx'],
-    currentHash: '39342dac26e364b0fc6e49bc0f07f103b02d88fc4e8a3127088af2f6a407fbb2',
+    currentHash: '9d9ceecd91bcc3458084feeb54b6ac85d54352a9f17e8718d4d74c73a4bf1c0f',
     versions: ['2026-09-29'],
   },
   dpa: {
@@ -47,7 +47,7 @@ export const POLICY_VERSIONS = {
     titleVi: 'Thỏa Thuận Xử Lý Dữ Liệu Cá Nhân',
     titleEn: 'Personal Data Processing Agreement',
     files: ['PublicDPA.jsx'],
-    currentHash: '03ef0da3326dc74d9ae84883094c013585a5c8c79b8c80c567680d4a857c5807',
+    currentHash: 'ce2f9d058276c96bfcaf69d57af686cc99014bb5dc3e0dc4e72205baa8189474',
     versions: ['2026-09-29'],
   },
   pricing: {

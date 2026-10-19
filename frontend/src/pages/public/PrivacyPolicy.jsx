@@ -20,7 +20,6 @@ function getLangClass(activeLang, itemLang) {
 
 const P = (vi, en) => ({ k: 'p', vi, en });
 const H = (vi, en) => ({ k: 'h', vi, en });
-const N = (vi, en) => ({ k: 'n', vi, en });
 const UL = (...items) => ({ k: 'ul', items });
 const OL = (...items) => ({ k: 'ol', items });
 /** Một dòng danh sách: (vi, en, nhãn đậm vi, nhãn đậm en). */

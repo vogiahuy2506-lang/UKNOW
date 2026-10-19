@@ -1,19 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
 import {
   HiOutlineSparkles,
-  HiOutlinePaperAirplane,
   HiOutlineMail,
   HiOutlineUser,
   HiOutlineUsers,
   HiOutlineViewGrid,
   HiOutlineDocumentText,
-  HiOutlinePhotograph,
-  HiOutlinePlay,
-  HiOutlinePencil,
-  HiOutlineSave,
   HiOutlineChevronRight,
-  HiOutlineCheck,
   HiOutlineX,
   HiOutlineChip,
   HiOutlineCode,
@@ -233,7 +226,6 @@ const CampaignResultCard = ({ stats }) => (
 
 // Landing preview card
 const LandingPreviewCard = ({ title, features, locale = 'vi' }) => {
-  const previewLabel = locale === 'en' ? 'Landing Page Preview' : 'Xem trước Landing Page';
 
   return (
     <div className="mt-3 rounded-2xl overflow-hidden border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface shadow-sm">
@@ -369,7 +361,7 @@ const CodePreviewCard = ({ onViewHtml, locale = 'vi' }) => {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Khóa Học Lập Trình</title>
-  <script src="https://cdn.tailwindcss.com"><\/script>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gradient-to-br from-slate-900 to-slate-800 min-h-screen">
   <!-- Hero Section -->
@@ -408,7 +400,7 @@ const CodePreviewCard = ({ onViewHtml, locale = 'vi' }) => {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Programming Course</title>
-  <script src="https://cdn.tailwindcss.com"><\/script>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gradient-to-br from-slate-900 to-slate-800 min-h-screen">
   <!-- Hero Section -->
@@ -469,7 +461,7 @@ const CodePreviewCard = ({ onViewHtml, locale = 'vi' }) => {
 };
 
 // Audience/Goal picker card
-const PickerCard = ({ options, onSelect, title }) => (
+const PickerCard = ({ options, onSelect }) => (
   <div className="grid grid-cols-2 gap-2 mt-3">
     {options.map((opt) => (
       <button
@@ -524,13 +516,13 @@ const renderCard = (card, onAction, locale = 'vi') => {
 };
 
 // Main MockChatbot component
-export default function MockChatbot({ flow, initialMessage, onComplete, locale = 'vi' }) {
+export default function MockChatbot({ initialMessage, onComplete, locale = 'vi' }) {
   const [messages, setMessages] = useState([]);
   const [isTyping, setIsTyping] = useState(false);
-  const [userSelections, setUserSelections] = useState({});
+  const [, setUserSelections] = useState({});
   const [previewHtml, setPreviewHtml] = useState(null);
   const [stepIndex, setStepIndex] = useState(0);
-  const [isAdvancing, setIsAdvancing] = useState(false);
+  const [, setIsAdvancing] = useState(false);
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const timersRef = useRef([]);
