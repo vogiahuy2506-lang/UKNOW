@@ -249,17 +249,42 @@ class CampaignEmailSenderRepository {
   }
 
   /**
-   * Fetch an email template by ID.
+   * Fetch an email template by ID — CHỈ mẫu của chủ workspace (`email_templates` chỉ có `id_user`, không có mẫu hệ thống).
+   * Id mẫu nằm trong cấu hình node (client gửi lên được): không lọc chủ thì chiến dịch của tenant này gửi ra nội dung mẫu của
+   * tenant khác. Mẫu không thuộc chủ coi như không tồn tại.
    *
    * @param {number} templateId
+   * @param {number|string} ownerId chủ workspace của chiến dịch (`workspace_owner_id || id_user`)
    * @returns {Promise<object|null>}
    */
-  async findEmailTemplateById(templateId) {
+  async findEmailTemplateById(templateId, ownerId) {
     const result = await db.query(
-      'SELECT * FROM email_templates WHERE id = $1',
-      [templateId]
+      'SELECT * FROM email_templates WHERE id = $1 AND id_user = $2',
+      [templateId, ownerId]
     );
     return result.rows[0] || null;
+  }
+
+  /**
+   * Trong các id mẫu node tham chiếu, những id CÒN TỒN TẠI và THUỘC chủ workspace của chiến dịch. Một truy vấn cho mọi id;
+   * chủ lấy thẳng từ chiến dịch (cùng quy tắc `workspace_owner_id || id_user` mà đường gửi dùng) nên không phụ thuộc người gọi.
+   *
+   * @param {number[]} templateIds
+   * @param {number|string} campaignId
+   * @returns {Promise<Set<number>>}
+   */
+  async findAvailableEmailTemplateIdsForCampaign(templateIds, campaignId) {
+    const ids = Array.isArray(templateIds) ? templateIds : [];
+    if (ids.length === 0) return new Set();
+    const result = await db.query(
+      `SELECT t.id
+       FROM email_templates t
+       JOIN campaigns c ON c.id = $2
+       WHERE t.id = ANY($1::bigint[])
+         AND t.id_user = COALESCE(c.workspace_owner_id, c.id_user)`,
+      [ids, campaignId]
+    );
+    return new Set(result.rows.map((row) => Number(row.id)));
   }
 
   /**

@@ -40,6 +40,8 @@ beforeEach(() => {
     if (/FROM campaign_nodes/.test(text)) return { rows: nodeRows };
     if (/FROM campaign_connections/.test(text)) return { rows: connectionRows };
     if (/FROM campaigns WHERE id/.test(text)) return { rows: [{ flow_json: flowJson }] };
+    // Kiểm mẫu email (EMAIL_TEMPLATE_UNAVAILABLE): mọi mẫu mà node tham chiếu coi như còn và thuộc chủ — spec này chỉ xét tham chiếu khối.
+    if (/FROM email_templates/.test(text)) return { rows: [{ id: 1 }] };
     throw new Error(`unexpected sql: ${text}`);
   });
 });
