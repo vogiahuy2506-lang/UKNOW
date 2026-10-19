@@ -1436,6 +1436,55 @@ export async function findStaleSendingReservations(queryable, staleSeconds = 120
 }
 
 /**
+ * Danh sách đặt chỗ 'uncertain' cho màn đối soát của quản trị (chỉ đọc, KHÔNG khoá).
+ *
+ * `evidence_tables` = các bảng tin nhắn đang có dòng gắn `quota_reservation_id = id` (mọi bảng có cột này:
+ * migration 178 email_messages / zalo_messages / zalo_personal_messages / usage_logs, 255 campaign_channel_messages,
+ * 272 channel_messages). Đây chỉ là GỢI Ý để người đối soát quyết định — có dòng tin gắn không đồng nghĩa nhà cung cấp
+ * đã nhận, và không có dòng tin cũng không chứng minh chưa gửi.
+ *
+ * @param {import('pg').Pool|import('pg').PoolClient} queryable
+ * @param {{ limit?: number, offset?: number }} [options]
+ * @returns {Promise<Array<object>>}
+ */
+export async function listUncertainReservationsForAdmin(queryable, { limit = 50, offset = 0 } = {}) {
+  const { rows } = await queryable.query(
+    `SELECT r.id, r.billing_user_id, r.actor_user_id, r.channel, r.quantity, r.wallet_quantity, r.wallet_item_key,
+            r.source_type, r.created_at, r.sending_at, r.uncertain_at, r.failure_code, r.provider_reference,
+            b.email AS billing_email, b.full_name AS billing_full_name, b.username AS billing_username,
+            a.email AS actor_email, a.full_name AS actor_full_name,
+            ARRAY_REMOVE(ARRAY[
+              CASE WHEN EXISTS (SELECT 1 FROM email_messages x WHERE x.quota_reservation_id = r.id) THEN 'email_messages' END,
+              CASE WHEN EXISTS (SELECT 1 FROM zalo_messages x WHERE x.quota_reservation_id = r.id) THEN 'zalo_messages' END,
+              CASE WHEN EXISTS (SELECT 1 FROM zalo_personal_messages x WHERE x.quota_reservation_id = r.id) THEN 'zalo_personal_messages' END,
+              CASE WHEN EXISTS (SELECT 1 FROM usage_logs x WHERE x.quota_reservation_id = r.id) THEN 'usage_logs' END,
+              CASE WHEN EXISTS (SELECT 1 FROM campaign_channel_messages x WHERE x.quota_reservation_id = r.id) THEN 'campaign_channel_messages' END,
+              CASE WHEN EXISTS (SELECT 1 FROM channel_messages x WHERE x.quota_reservation_id = r.id) THEN 'channel_messages' END
+            ], NULL) AS evidence_tables
+     FROM send_quota_reservations r
+     LEFT JOIN users b ON b.id = r.billing_user_id
+     LEFT JOIN users a ON a.id = r.actor_user_id
+     WHERE r.status = 'uncertain'
+     ORDER BY COALESCE(r.uncertain_at, r.created_at) ASC, r.id ASC
+     LIMIT $1 OFFSET $2`,
+    [limit, offset]
+  );
+  return rows;
+}
+
+/**
+ * Tổng số đặt chỗ 'uncertain' (cho phân trang màn đối soát).
+ * @param {import('pg').Pool|import('pg').PoolClient} queryable
+ * @returns {Promise<number>}
+ */
+export async function countUncertainReservations(queryable) {
+  const { rows } = await queryable.query(
+    "SELECT COUNT(*)::int AS total FROM send_quota_reservations WHERE status = 'uncertain'"
+  );
+  return Number(rows[0]?.total || 0);
+}
+
+/**
  * Lấy giới hạn plan và trạng thái subscription trực tiếp trong transaction client.
  * @param {import('pg').Pool|import('pg').PoolClient} queryable
  * @param {number|string} billingUserId
