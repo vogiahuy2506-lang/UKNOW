@@ -1,6 +1,7 @@
 import customerReadRepository from '../../repositories/customer/customerRead.repository.js';
 import { normalizeIdList, CUSTOMER_TAG_MAX_TAGS_PER_CALL } from './customerTag.service.js';
 import { ALL_CUSTOMERS_LIMIT_CAP, INTERESTED_LIMIT_CAP } from '../../utils/interestedLimits.util.js';
+import { assertPlatformStoreOwner } from '../founderai/platformStoreAccess.service.js';
 
 /** Thời gian chờ tối đa mỗi trang đơn hàng WooCommerce (ms). */
 const WOO_REQUEST_TIMEOUT_MS = 20000;
@@ -203,6 +204,8 @@ class CustomerInterestedService {
     courseQuery,
     customerType,
   }) {
+    // Đơn hàng WooCommerce của NỀN TẢNG (PII người mua founderai.biz) — chỉ workspace super admin; phủ cả route, node chiến dịch và ước tính.
+    await assertPlatformStoreOwner(userId);
     const axios = (await import('axios')).default;
     const baseUrl = process.env.UKNOW_API_URL || 'https://founderai.biz/wp-json';
     const consumerKey = process.env.UKNOW_CONSUMER_KEY;

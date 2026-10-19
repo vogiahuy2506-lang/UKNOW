@@ -26,6 +26,7 @@ import {
   findExistingCustomerByContact,
 } from '../../utils/customerContactMatch.util.js';
 import { extractSpreadsheetId, fetchWorksheetNames } from '../../utils/googleSheetWorksheets.util.js';
+import { PLATFORM_STORE_ADMIN_ONLY } from '../founderai/platformStoreAccess.service.js';
 
 /**
  * Số khách tối đa mỗi transaction khi lưu batch (BEGIN…COMMIT).
@@ -125,14 +126,20 @@ class CampaignNodeDataService {
           interestedData = { items: [] };
         } else if (dataSource === 'api') {
           logApiCall('uknow_api', 'customerInterestedService.getInterestedCustomersFromUknowApi');
-          interestedData = await customerInterestedService.getInterestedCustomersFromUknowApi({
-            userId,
-            limit,
-            courseIds: selectedCourseIds.join(','),
-            courseStatuses: selectedCourseStatuses.join(','),
-            courseQuery,
-            customerType,
-          });
+          try {
+            interestedData = await customerInterestedService.getInterestedCustomersFromUknowApi({
+              userId,
+              limit,
+              courseIds: selectedCourseIds.join(','),
+              courseStatuses: selectedCourseStatuses.join(','),
+              courseQuery,
+              customerType,
+            });
+          } catch (error) {
+            // Nguồn API là đơn hàng WooCommerce của NỀN TẢNG: chủ chiến dịch không phải super admin -> fail-closed (0 người), run không lỗi.
+            if (error?.code !== PLATFORM_STORE_ADMIN_ONLY) throw error;
+            interestedData = { items: [] };
+          }
         } else {
           const purchaseOrderStatusExpr = await customerHelperService.resolvePurchaseOrderStatusExpr('cp');
           const notPurchasedCourseIds = (Array.isArray(config.notPurchasedCourseIds) ? config.notPurchasedCourseIds : [])

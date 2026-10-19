@@ -508,4 +508,74 @@ describe('Marketplace API', () => {
       expect(hasPaidContent(favorites.body)).toBe(false);
     });
   });
+
+  // PLAN_VA_CO_LAP_DU_LIEU_TENANT PR-1 (việc 1b): rút tiền chỉ chủ tài khoản; nhân viên có `marketplace_manage` không tạo được yêu cầu rút.
+  describe('POST /api/marketplace/seller/withdraw', () => {
+    async function seedSellerWithBalance(username) {
+      const owner = await createUser(username);
+      await db.query(
+        `INSERT INTO marketplace_seller_stats (id_user, total_earnings, available_balance) VALUES ($1, 100000, 100000)`,
+        [owner.id]
+      );
+      return owner;
+    }
+
+    async function countPayouts(userId) {
+      const { rows } = await db.query('SELECT COUNT(*)::int AS n FROM marketplace_payout_requests WHERE id_user = $1', [userId]);
+      return rows[0].n;
+    }
+
+    it('nhân viên có marketplace_manage → 403 OWNER_ONLY, không có dòng payout, số dư chủ không đổi', async () => {
+      const owner = await seedSellerWithBalance('wd-owner');
+      const employee = await createUser('wd-employee');
+      await db.query(
+        `INSERT INTO user_members (owner_id, employee_id, permissions, status) VALUES ($1, $2, $3::jsonb, 'active')`,
+        [owner.id, employee.id, JSON.stringify({ marketplace_manage: true })]
+      );
+
+      const res = await request(app)
+        .post('/api/marketplace/seller/withdraw')
+        .set('Authorization', `Bearer ${await loginAs(employee)}`)
+        .set('X-Owner-Context', String(owner.id))
+        .send({ amount: 50000, paymentMethod: 'bank_transfer', paymentDetails: { bank: 'ATTACKER', account: '000' } });
+
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('OWNER_ONLY');
+      expect(await countPayouts(owner.id)).toBe(0);
+      const { rows } = await db.query('SELECT available_balance, pending_payout FROM marketplace_seller_stats WHERE id_user = $1', [owner.id]);
+      expect(Number(rows[0].available_balance)).toBe(100000);
+      expect(Number(rows[0].pending_payout)).toBe(0);
+    });
+
+    it('nhân viên có marketplace_manage vẫn xem được lịch sử rút tiền (200)', async () => {
+      const owner = await seedSellerWithBalance('wd-owner-hist');
+      const employee = await createUser('wd-employee-hist');
+      await db.query(
+        `INSERT INTO user_members (owner_id, employee_id, permissions, status) VALUES ($1, $2, $3::jsonb, 'active')`,
+        [owner.id, employee.id, JSON.stringify({ marketplace_manage: true })]
+      );
+
+      const res = await request(app)
+        .get('/api/marketplace/seller/withdrawals')
+        .set('Authorization', `Bearer ${await loginAs(employee)}`)
+        .set('X-Owner-Context', String(owner.id));
+
+      expect(res.status).toBe(200);
+    });
+
+    it('chủ tài khoản rút tiền bình thường → 201, có dòng payout, số dư chuyển sang pending', async () => {
+      const owner = await seedSellerWithBalance('wd-owner-ok');
+
+      const res = await request(app)
+        .post('/api/marketplace/seller/withdraw')
+        .set('Authorization', `Bearer ${await loginAs(owner)}`)
+        .send({ amount: 50000, paymentMethod: 'bank_transfer', paymentDetails: { bank: 'MB', account: '123' } });
+
+      expect(res.status).toBe(201);
+      expect(await countPayouts(owner.id)).toBe(1);
+      const { rows } = await db.query('SELECT available_balance, pending_payout FROM marketplace_seller_stats WHERE id_user = $1', [owner.id]);
+      expect(Number(rows[0].available_balance)).toBe(50000);
+      expect(Number(rows[0].pending_payout)).toBe(50000);
+    });
+  });
 });
