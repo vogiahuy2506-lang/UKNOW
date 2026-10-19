@@ -53,6 +53,11 @@ import {
   shouldNotifyRunCompleted,
   notifyCampaignRunCompleted,
 } from '../../utils/campaignRunCompletedNotify.util.js';
+import {
+  isPhoneLookupCooldownReason,
+  recordPhoneLookupDeferDay,
+  notifyCampaignSendingSlow,
+} from '../../utils/campaignSlowSendNotify.util.js';
 import { validateCampaignPreflight } from './campaignPreflight.service.js';
 import {
   assertRunZaloAccountsAssigned,
@@ -82,6 +87,14 @@ export const CAMPAIGN_EMAIL_SKIP_LABELS = {
   consent_withdrawn: 'Khách từ chối hoặc đã rút lại đồng ý nhận tin',
 };
 export const ZALO_GROUP_TEMPLATE_DELAY_MAX_MS = 1250;
+
+/** Khoá xoá khỏi run_metadata khi lượt Zalo hết hoãn và chạy tiếp (mốc hoãn cũ + mốc chạy tiếp thật). */
+export const ZALO_DEFER_CLEAR_KEYS = [
+  'zaloOutboundDeferredUntil',
+  'zaloDeferredReason',
+  'zaloDeferredAt',
+  'zaloOutboundResumeEffectiveAt',
+];
 
 class CampaignRunService {
   constructor() {
@@ -335,7 +348,9 @@ class CampaignRunService {
         reasonKey: 'zaloDeferredReason',
         atKey: 'zaloDeferredAt',
         label: 'zalo',
-        clearKeys: null,
+        // 3 khoá cũ + mốc chạy tiếp THẬT (gộp giờ yên lặng) — nếu không dọn, dòng trạng thái hiển thị mốc của lần hoãn trước.
+        // `phoneLookupDeferVnDays` / `sendingSlowNotifiedAt` CỐ Ý không nằm đây: phải sống qua các lượt resume.
+        clearKeys: ZALO_DEFER_CLEAR_KEYS,
       },
       {
         untilKey: 'nonContinuousDeferredUntil',
@@ -576,6 +591,8 @@ class CampaignRunService {
    * @param {string} input.atKey khóa metadata lưu thời điểm defer
    * @param {string} input.label nhãn phục vụ log
    * @param {object} [input.extra] metadata bổ sung (ví dụ account id, account name)
+   * @param {((resumeAtMs: number) => object)|null} [input.deriveExtra] tính thêm khoá metadata từ CHÍNH mốc resume vừa dùng cho `untilKey`
+   *   (để khoá phái sinh không lệch vài ms so với `untilKey`)
    * @returns {Promise<never>}
    */
   async persistRunDeferYieldSlot({
@@ -588,6 +605,7 @@ class CampaignRunService {
     atKey,
     label,
     extra = {},
+    deriveExtra = null,
   }) {
     const w = Math.max(0, Number.parseInt(waitMs, 10) || 0);
     const resumeAt = new Date(Date.now() + w);
@@ -597,6 +615,7 @@ class CampaignRunService {
       [reasonKey]: String(reason || 'wait'),
       [atKey]: new Date().toISOString(),
       ...extra,
+      ...(typeof deriveExtra === 'function' ? deriveExtra(resumeAt.getTime()) : {}),
     };
     await campaignRunRepository.patchRunMetadata(runId, patch);
     const quietNote = String(reason) === 'quiet_hours' ? ` — ${this._explainZaloQuietHoursPolicyForLog()}` : '';
@@ -637,16 +656,69 @@ class CampaignRunService {
     if (accountId != null) extra.zaloDeferredAccountId = accountId;
     if (accountName != null) extra.zaloDeferredAccountName = accountName;
 
-    await this.persistRunDeferYieldSlot({
-      runId,
-      campaignId,
-      waitMs,
-      reason: String(reason || 'zalo_outbound_wait'),
-      untilKey: 'zaloOutboundDeferredUntil',
-      reasonKey: 'zaloDeferredReason',
-      atKey: 'zaloDeferredAt',
-      label: 'Zalo outbound',
-      extra,
+    // Khoá tra số (cả 3 reason) → ghi ngày VN vào `phoneLookupDeferVnDays` (sống qua các lượt resume, KHÔNG nằm trong
+    // ZALO_DEFER_CLEAR_KEYS). Khoá 2 ngày VN liền kề → báo chủ chiến dịch sau khi patch.
+    const reasonStr = String(reason || 'zalo_outbound_wait');
+    let notifySlow = false;
+    if (isPhoneLookupCooldownReason(reasonStr)) {
+      try {
+        const meta = (await campaignRunRepository.getRunMetadata(runId)) || {};
+        const tracked = recordPhoneLookupDeferDay(meta.phoneLookupDeferVnDays, new Date());
+        extra.phoneLookupDeferVnDays = tracked.days;
+        notifySlow = tracked.shouldNotify;
+      } catch (error) {
+        // Đếm ngày chỉ phục vụ thông báo — lỗi đọc metadata không được chặn việc hoãn run.
+        console.warn(
+          `[CampaignRun] run=${runId} không đọc được phoneLookupDeferVnDays: ${error?.message || error}`
+        );
+      }
+    }
+
+    try {
+      await this.persistRunDeferYieldSlot({
+        runId,
+        campaignId,
+        waitMs,
+        reason: reasonStr,
+        untilKey: 'zaloOutboundDeferredUntil',
+        reasonKey: 'zaloDeferredReason',
+        atKey: 'zaloDeferredAt',
+        label: 'Zalo outbound',
+        extra,
+        // Mốc chạy tiếp THẬT: `zaloOutboundDeferredUntil` (vd 00:00 khi khoá tra số) vẫn là mốc scheduler/SQL đọc, còn nếu mốc
+        // rơi vào giờ yên lặng thì lượt chạy sẽ chỉ gửi được khi hết giờ yên lặng (06:00) — dòng trạng thái phải hiện mốc đó.
+        deriveExtra: (resumeAtMs) => ({
+          zaloOutboundResumeEffectiveAt: new Date(
+            this.zaloRateLimiter.computeNextAllowedSendAtByQuietHours(resumeAtMs) || resumeAtMs
+          ).toISOString(),
+        }),
+      });
+    } catch (err) {
+      // Patch metadata đã xong trước khi ném RUN_YIELD_SLOT → báo sau patch, không await (khuôn persistQuotaDeferYieldSlot).
+      if (err?.code === 'RUN_YIELD_SLOT' && notifySlow) {
+        this._notifySendingSlowFireAndForget({
+          runId,
+          campaignId,
+          cause: 'phone_lookup',
+          accountName: accountId != null ? accountName : null,
+        });
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Fire-and-forget chuông "chiến dịch gửi chậm bất thường" (không chặn worker, lỗi chỉ log).
+   *
+   * @param {{ runId: number, campaignId: number, cause: 'phone_lookup'|'stranger_ban', accountName?: string|null }} input
+   * @returns {void}
+   */
+  _notifySendingSlowFireAndForget(input) {
+    notifyCampaignSendingSlow(input).catch((err) => {
+      console.warn(
+        `[CampaignSlowSendNotify] notify failed run=${input?.runId}:`,
+        err?.message || err
+      );
     });
   }
 

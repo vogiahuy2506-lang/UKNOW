@@ -308,4 +308,60 @@ describe('getRunPauseI18nKey', () => {
   });
 });
 
+// PLAN_THAM_CHIEU_KHOI_VA_RUN_BO_CHAM PR-3 — dòng trạng thái run Zalo hiện mốc chạy tiếp THẬT (gộp giờ yên lặng).
+describe('getActiveRunPause — zaloOutboundResumeEffectiveAt', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const phoneLookupMeta = {
+    zaloDeferredReason: 'phone_lookup_cooldown_api_error',
+    zaloDeferredAccountName: 'Zalo A',
+    zaloOutboundDeferredUntil: '2026-10-19T17:00:00.000Z', // 00:00 VN 20/10
+    zaloOutboundResumeEffectiveAt: '2026-10-19T23:00:00.000Z', // 06:00 VN 20/10
+  };
+
+  it('có zaloOutboundResumeEffectiveAt: until hiện giờ effective (06:00 VN), không phải 00:00', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-19T08:00:00.000Z'));
+    const pause = getActiveRunPause(phoneLookupMeta);
+    expect(pause).toMatchObject({
+      kind: 'zalo',
+      untilIso: '2026-10-19T23:00:00.000Z',
+      untilMs: Date.parse('2026-10-19T23:00:00.000Z'),
+      reason: 'phone_lookup_cooldown_api_error',
+      accountName: 'Zalo A',
+    });
+    expect(getRunPauseI18nKey(pause)).toBe('campaignRun.zaloPhoneLookupPausedUntil');
+  });
+
+  it('00:30 VN (đã qua mốc hoãn 00:00 nhưng chưa tới 06:00): vẫn đang tạm dừng tới 06:00', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-19T17:30:00.000Z'));
+    expect(getActiveRunPause(phoneLookupMeta)?.untilIso).toBe('2026-10-19T23:00:00.000Z');
+  });
+
+  it('không có zaloOutboundResumeEffectiveAt (run cũ): giữ zaloOutboundDeferredUntil', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-19T08:00:00.000Z'));
+    const { zaloOutboundResumeEffectiveAt: _omit, ...legacy } = phoneLookupMeta;
+    expect(getActiveRunPause(legacy)?.untilIso).toBe('2026-10-19T17:00:00.000Z');
+  });
+
+  it('effective sai định dạng hoặc sớm hơn mốc hoãn: bỏ qua, giữ zaloOutboundDeferredUntil', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-19T08:00:00.000Z'));
+    expect(getActiveRunPause({ ...phoneLookupMeta, zaloOutboundResumeEffectiveAt: 'khong-phai-ngay' })?.untilIso)
+      .toBe('2026-10-19T17:00:00.000Z');
+    expect(getActiveRunPause({ ...phoneLookupMeta, zaloOutboundResumeEffectiveAt: '2026-10-19T10:00:00.000Z' })?.untilIso)
+      .toBe('2026-10-19T17:00:00.000Z');
+  });
+
+  it('effective đã qua: không hiện tạm dừng', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-20T00:00:00.000Z')); // 07:00 VN
+    expect(getActiveRunPause(phoneLookupMeta)).toBeNull();
+  });
+});
+
 

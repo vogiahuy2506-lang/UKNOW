@@ -4373,3 +4373,8 @@ CREATE INDEX IF NOT EXISTS idx_tiktok_outbound_log_business_user_recent
 
 CREATE INDEX IF NOT EXISTS idx_tiktok_outbound_log_sent_at
   ON tiktok_outbound_log (sent_at);
+
+-- --- Migration 307: su kien chuong campaign_sending_slow (PLAN_THAM_CHIEU_KHOI_VA_RUN_BO_CHAM PR-3: chien dich gui cham vi Zalo gioi han tra so / cam nhan nguoi la) ---
+INSERT INTO notification_event_settings (event_type, in_app_enabled, email_enabled, user_can_disable_email)
+VALUES ('campaign_sending_slow', true, false, true)
+ON CONFLICT (event_type) DO NOTHING;
