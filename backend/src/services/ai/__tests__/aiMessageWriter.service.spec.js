@@ -60,6 +60,13 @@ describe('aiMessageWriter.service', () => {
       expect(restoreMarkup(masked, tokens)).toBe(`${HTML} Xem https://x.vn/a.`);
     });
 
+    it('mã đánh số THEO THỨ TỰ XUẤT HIỆN: URL trần giữa hai thẻ nhận mã ở giữa (đo thật 19/10: URL từng nhận mã cuối → bị coi là đảo mã)', () => {
+      const { masked, tokens } = maskMarkup('<p>Xem https://x.vn/a. hoặc <a href="https://y.vn">link</a></p>', { html: true });
+      expect(masked).toBe('⟦T0⟧Xem ⟦T1⟧. hoặc ⟦T2⟧link⟦T3⟧⟦T4⟧');
+      expect(tokens[1]).toBe('https://x.vn/a');
+      expect(tokens[2]).toBe('<a href="https://y.vn">');
+    });
+
     it('thiếu mã / đảo mã / thừa mã / mã lạ → null', () => {
       const { masked, tokens } = maskMarkup('<p>a</p><p>b</p>', { html: true });
       expect(restoreMarkup(masked, tokens)).toBe('<p>a</p><p>b</p>');

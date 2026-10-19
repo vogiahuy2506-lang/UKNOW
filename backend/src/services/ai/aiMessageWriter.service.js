@@ -106,9 +106,12 @@ export function maskMarkup(source, { html }) {
   let masked = String(source || '');
   // Chữ gốc đã có sẵn ký tự ⟦ ⟧ thì bỏ đi: nếu để lại sẽ lẫn với mã thật.
   masked = masked.replaceAll(TOKEN_OPEN, '').replaceAll(TOKEN_CLOSE, '');
-  if (html) masked = masked.replace(HTML_MASK_RE, (piece) => take(piece));
-  // URL trần ở giữa chữ (tag đã che nên URL trong thuộc tính không còn ở đây).
-  masked = masked.replace(URL_RE, (piece) => {
+  // MỘT lượt quét cho cả thẻ lẫn URL trần để số mã chạy theo THỨ TỰ XUẤT HIỆN trong văn bản. Bản đầu che thẻ trước rồi mới che URL
+  // nên URL nhận mã cuối (⟦T25⟧ đứng giữa ⟦T22⟧ và ⟦T23⟧): model chép đúng thứ tự trong văn bản thì bị kiểm "đảo mã" → layout_changed (đo thật 19/10).
+  // Alternation: thẻ đứng trước URL nên URL nằm trong thuộc tính thẻ đã thuộc về mã của thẻ.
+  const maskRe = html ? new RegExp(`${HTML_MASK_RE.source}|${URL_RE.source}`, 'gi') : URL_RE;
+  masked = masked.replace(maskRe, (piece) => {
+    if (piece.startsWith('<')) return take(piece);
     const trailing = piece.match(/[.,;:!?)]+$/)?.[0] || '';
     const core = trailing ? piece.slice(0, -trailing.length) : piece;
     return `${take(core)}${trailing}`;
