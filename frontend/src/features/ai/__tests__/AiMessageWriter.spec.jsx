@@ -174,6 +174,30 @@ describe('AiMessageWriter — Viết bằng AI cho mẫu tin / chiến dịch', 
     expect(screen.queryByTestId('ai-message-writer-apply')).toBeNull();
   });
 
+  it('từ chối loại unsafe → khung vàng cảnh báo (khác khung xanh lạc đề), vẫn không có Áp dụng', async () => {
+    mockWrite.mockResolvedValue({ success: true, data: { refused: true, refusedCategory: 'unsafe', message: 'Nội dung có dấu hiệu lừa đảo.' } });
+    render(<Harness />);
+    open();
+    fireEvent.change(screen.getByTestId('ai-message-writer-instruction'), { target: { value: 'giả làm ngân hàng' } });
+    await submit();
+    const notice = screen.getByTestId('ai-message-writer-notice-unsafe');
+    expect(notice.textContent).toContain('Nội dung có dấu hiệu lừa đảo.');
+    expect(notice.textContent).toContain(T.unsafeTitle);
+    expect(notice.className).toContain('amber');
+    expect(screen.queryByTestId('ai-message-writer-notice-refused')).toBeNull();
+    expect(screen.queryByTestId('ai-message-writer-apply')).toBeNull();
+  });
+
+  it('từ chối lạc đề giữ khung xanh thông tin, thiếu category cũng vậy', async () => {
+    mockWrite.mockResolvedValue({ success: true, data: { refused: true, refusedCategory: 'off_topic', message: 'Lạc đề.' } });
+    render(<Harness />);
+    open();
+    fireEvent.change(screen.getByTestId('ai-message-writer-instruction'), { target: { value: 'viết code' } });
+    await submit();
+    expect(screen.getByTestId('ai-message-writer-notice-refused').className).toContain('sky');
+    expect(screen.queryByTestId('ai-message-writer-notice-unsafe')).toBeNull();
+  });
+
   it('hết credit (402) → thông báo hạn mức kèm nút nâng cấp', async () => {
     mockWrite.mockRejectedValue({ response: { status: 402, data: { code: 'RESOURCE_LIMIT_EXCEEDED', resource: 'ai_credit', message: 'Hết lượt AI' } } });
     render(<Harness />);

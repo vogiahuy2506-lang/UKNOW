@@ -75,13 +75,22 @@ describe('aiController.writeMessage — trừ credit', () => {
   });
 
   it('bị từ chối (refused) → 200 {refused, message}, KHÔNG trừ credit', async () => {
-    mockWriteMessage.mockResolvedValue({ refused: true, message: 'Mình chỉ giúp viết tin' });
+    mockWriteMessage.mockResolvedValue({ refused: true, refusedCategory: 'off_topic', message: 'Mình chỉ giúp viết tin' });
     const res = makeRes();
     await aiController.writeMessage({ body: {}, user: { id: 7 } }, res);
 
     expect(mockChargeAiCredit).not.toHaveBeenCalled();
     expect(res.status).not.toHaveBeenCalled();
-    expect(res.json).toHaveBeenCalledWith({ success: true, data: { refused: true, message: 'Mình chỉ giúp viết tin' } });
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: { refused: true, refusedCategory: 'off_topic', message: 'Mình chỉ giúp viết tin' } });
+  });
+
+  it('bị từ chối loại unsafe → trả refusedCategory unsafe, cũng KHÔNG trừ credit', async () => {
+    mockWriteMessage.mockResolvedValue({ refused: true, refusedCategory: 'unsafe', message: 'Nội dung có dấu hiệu lừa đảo' });
+    const res = makeRes();
+    await aiController.writeMessage({ body: {}, user: { id: 7 } }, res);
+
+    expect(mockChargeAiCredit).not.toHaveBeenCalled();
+    expect(res.json.mock.calls[0][0].data).toMatchObject({ refused: true, refusedCategory: 'unsafe' });
   });
 
   it('layout_changed (service ném 422) → trả lỗi kèm code, KHÔNG trừ credit', async () => {

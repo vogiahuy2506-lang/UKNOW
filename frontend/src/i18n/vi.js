@@ -12393,6 +12393,7 @@ export default {
     instructionRequired: 'Hãy cho biết tin này để làm gì',
     editNeedsInput: 'Hãy chọn một cách sửa hoặc nhập yêu cầu',
     refusedTitle: 'AI chưa làm được yêu cầu này',
+    unsafeTitle: 'Nội dung này không thể viết',
     layoutChangedTitle: 'Không sửa được toàn bộ mẫu',
     resultTitle: 'Xem trước — chưa áp vào mẫu',
     currentVersion: 'Bản hiện tại',

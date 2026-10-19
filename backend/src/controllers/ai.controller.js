@@ -1639,7 +1639,7 @@ class AiController {
         input,
       });
       if (data.refused) {
-        return res.json({ success: true, data: { refused: true, message: data.message } });
+        return res.json({ success: true, data: { refused: true, refusedCategory: data.refusedCategory, message: data.message } });
       }
       await chargeAiCredit(req);
       return res.json({ success: true, data: { refused: false, subject: data.subject, body: data.body, warnings: data.warnings, missingVariables: data.missingVariables } });

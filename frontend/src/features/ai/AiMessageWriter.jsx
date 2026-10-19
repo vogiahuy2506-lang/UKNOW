@@ -149,7 +149,7 @@ export default function AiMessageWriter({
       const res = await aiApi.writeMessage(payload);
       const data = res?.data || {};
       if (data.refused) {
-        setNotice({ kind: 'refused', message: data.message || t('aiMessageWriter.refusedTitle') });
+        setNotice({ kind: data.refusedCategory === 'unsafe' ? 'unsafe' : 'refused', message: data.message || t('aiMessageWriter.refusedTitle') });
       } else if (!data.body) {
         setNotice({ kind: 'error', message: t('aiMessageWriter.failed') });
       } else {
@@ -356,8 +356,11 @@ export default function AiMessageWriter({
             data-testid={`${testId}-notice-${notice.kind}`}
             className={notice.kind === 'error'
               ? 'rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300'
-              : 'rounded-lg border border-sky-200 bg-sky-50 p-2.5 text-xs text-sky-900 dark:border-sky-900/50 dark:bg-sky-950/30 dark:text-sky-200'}
+              : notice.kind === 'unsafe'
+                ? 'rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-200'
+                : 'rounded-lg border border-sky-200 bg-sky-50 p-2.5 text-xs text-sky-900 dark:border-sky-900/50 dark:bg-sky-950/30 dark:text-sky-200'}
           >
+            {notice.kind === 'unsafe' && <p className="mb-0.5 font-semibold">{t('aiMessageWriter.unsafeTitle')}</p>}
             {notice.kind === 'refused' && <p className="mb-0.5 font-semibold">{t('aiMessageWriter.refusedTitle')}</p>}
             {notice.kind === 'layout' && <p className="mb-0.5 font-semibold">{t('aiMessageWriter.layoutChangedTitle')}</p>}
             <p>{notice.message}</p>
