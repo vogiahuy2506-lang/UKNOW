@@ -46,13 +46,13 @@ export function htmlToPlainText(html) {
   const VARIABLE_STASH = [];
   s = s.replace(/\{\{[^{}]*\}\}/g, (match) => {
     VARIABLE_STASH.push(match);
-    return `\x00VAR${VARIABLE_STASH.length - 1}\x00`;
+    return `\uE000VAR${VARIABLE_STASH.length - 1}\uE001`;
   });
   s = s.replace(/\*\*(.+?)\*\*/g, '$1'); // **bold** → bold
   s = s.replace(/\*(.+?)\*/g, '$1');     // *italic* → italic
   s = s.replace(/__(.+?)__/g, '$1');     // __bold__ → bold
   s = s.replace(/_(.+?)_/g, '$1');       // _italic_ → italic
-  s = s.replace(/\x00VAR(\d+)\x00/g, (_match, index) => VARIABLE_STASH[Number(index)]);
+  s = s.replace(/\uE000VAR(\d+)\uE001/g, (_match, index) => VARIABLE_STASH[Number(index)]);
 
   // Strip horizontal rules (---) used as visual separators
   s = s.replace(/-{3,}/g, ' '); // all --- sequences → space
