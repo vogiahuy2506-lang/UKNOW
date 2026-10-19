@@ -28,13 +28,15 @@ describe('aiFeatureCatalog - ma tinh nang -> nhom (PR-8)', () => {
     admin_plan_translate: 'help', // dich tinh nang goi (cong cu admin) - nhom help de khong tinh la "khach dang dung AI"
     // PR-5 (AI soan bieu mau): dung / goi y cau hoi / viet lai cau chu - cung nhom Tro ly AI voi "AI viet ho"
     form_draft: 'assistant',
+    // Viet bang AI cho mau tin / noi dung chien dich
+    ai_write_message: 'assistant',
   };
 
   it.each(Object.entries(EXPECTED))('%s -> %s', (code, group) => {
     expect(resolveAiFeatureGroup(code)).toBe(group);
   });
 
-  it('bang chi co dung 15 ma da biet (them ma moi phai cap nhat ca test nay)', () => {
+  it('bang chi co dung 16 ma da biet (them ma moi phai cap nhat ca test nay)', () => {
     expect(AI_FEATURE_GROUP_BY_CODE).toEqual(EXPECTED);
   });
 

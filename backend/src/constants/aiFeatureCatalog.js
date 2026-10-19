@@ -36,6 +36,8 @@ export const AI_FEATURE_GROUP_BY_CODE = Object.freeze({
   // AI soạn biểu mẫu (PR-5 PLAN_BIEU_MAU_TUY_BIEN_AI_LANDING): dựng / gợi ý câu hỏi / viết lại câu chữ — công cụ soạn nội dung cho chủ, cùng nhóm "Trợ lý AI"
   // như "AI viết hộ" chỉ dẫn chatbot (không thêm nhóm mới: nhóm cần nhãn i18n + thứ tự ở trang chi phí AI).
   form_draft: AI_FEATURE_GROUPS.ASSISTANT,
+  // "Viết bằng AI" cho mẫu tin / nội dung chiến dịch (PLAN_AI_VIET_MAU_TIN_2026-10-19): công cụ soạn nội dung cho chủ, cùng nhóm "Trợ lý AI".
+  ai_write_message: AI_FEATURE_GROUPS.ASSISTANT,
   // Dịch dòng tính năng gói (công cụ ADMIN, D-22): nhóm trợ giúp/tư vấn gói — nhóm này không tính là "khách đang dùng AI" nên một admin bấm
   // dịch không làm số khách dùng AI nhích lên (rơi về `other` thì CÓ tính).
   admin_plan_translate: AI_FEATURE_GROUPS.HELP,

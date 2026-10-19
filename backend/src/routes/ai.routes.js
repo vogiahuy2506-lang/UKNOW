@@ -3,6 +3,7 @@ import aiController from '../controllers/ai.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 import { aiLimiter, uploadLimiter } from '../middleware/rateLimiter.middleware.js';
 import { assertAiCreditAvailable } from '../middleware/aiCredit.middleware.js';
+import { requireWriteMessagePermission } from '../middleware/writeMessagePermission.middleware.js';
 import { attachToExistingLandingTurn } from '../services/ai/aiLandingTurn.service.js';
 import { requireActivePlan, requirePasswordChange, requirePhone, requirePermission, requireAllPermissions, requireSelfContext } from '../middleware/authorization.middleware.js';
 import multer from 'multer';
@@ -31,6 +32,9 @@ router.post('/generate-landing-html', aiLimiter, requirePermission('landing_page
 
 // "AI viết hộ" chỉ dẫn hệ thống cho chatbot (PLAN_AI_VIET_HO_CHI_DAN_CHATBOT_2026-09-13.md)
 router.post('/generate-system-instruction', aiLimiter, requirePermission('chatbots_manage'), assertAiCreditAvailable('ai_generate_system_instruction'), aiController.generateSystemInstruction.bind(aiController));
+
+// "Viết bằng AI" cho mẫu tin / nội dung chiến dịch (PLAN_AI_VIET_MAU_TIN_2026-10-19.md): quyền theo body.context + channel, trừ 1 credit khi có kết quả dùng được.
+router.post('/write-message', requireWriteMessagePermission, aiLimiter, assertAiCreditAvailable('ai_write_message'), aiController.writeMessage.bind(aiController));
 
 // Edit existing landing page HTML (Tailwind CDN + preserve untouched sections) — cùng cơ chế luồng + requestId như route sinh trang.
 router.post('/edit-landing-html', aiLimiter, requirePermission('landing_pages'), attachToExistingLandingTurn('edit'), assertAiCreditAvailable('ai_edit_landing_html'), aiController.editLandingHtml.bind(aiController));

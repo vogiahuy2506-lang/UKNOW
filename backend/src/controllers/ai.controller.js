@@ -44,6 +44,7 @@ import { listUserFilesSinceLastLanding } from '../repositories/aiSession.reposit
 import landingPageRepository from '../repositories/landingPage.repository.js';
 import { getWorkspaceScope } from '../utils/workspaceContext.util.js';
 import { generateSystemInstruction as generateChatbotSystemInstruction } from '../services/ai/chatbotInstructionWriter.service.js';
+import { writeMessage as writeAiMessage, validateWriteMessageInput } from '../services/ai/aiMessageWriter.service.js';
 import {
   AUTO_LAYOUT_FIX_MAX_ROUNDS,
   MAX_AUTO_LAYOUT_FIX_HTML_CHARS,
@@ -1617,6 +1618,34 @@ class AiController {
     } catch (error) {
       console.error('AI generate system instruction error:', error);
       return res.status(error.status || 500).json(buildAiErrorPayload(error, 'Không thể tạo chỉ dẫn hệ thống'));
+    }
+  }
+
+  /**
+   * POST /ai/write-message — "Viết bằng AI" cho mẫu tin / nội dung chiến dịch (PLAN_AI_VIET_MAU_TIN_2026-10-19.md).
+   * Chỉ trừ credit khi AI TRẢ KẾT QUẢ DÙNG ĐƯỢC: từ chối (refused), layout_changed, quá dài, lỗi AI đều KHÔNG gọi chargeAiCredit.
+   */
+  async writeMessage(req, res) {
+    try {
+      let input;
+      try {
+        input = validateWriteMessageInput(req.body);
+      } catch (validationError) {
+        return res.status(validationError.status || 400).json({ success: false, message: validationError.message, code: validationError.code });
+      }
+      const data = await writeAiMessage({
+        userId: resolveWorkspaceOwnerId(req.user),
+        actorUserId: req.user.id,
+        input,
+      });
+      if (data.refused) {
+        return res.json({ success: true, data: { refused: true, message: data.message } });
+      }
+      await chargeAiCredit(req);
+      return res.json({ success: true, data: { refused: false, subject: data.subject, body: data.body, warnings: data.warnings, missingVariables: data.missingVariables } });
+    } catch (error) {
+      console.error('AI write message error:', error?.code || error?.message);
+      return res.status(error.status || 500).json(buildAiErrorPayload(error, 'Không thể viết nội dung bằng AI'));
     }
   }
 
