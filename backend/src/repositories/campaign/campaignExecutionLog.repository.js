@@ -151,29 +151,47 @@ class CampaignExecutionLogRepository {
   }
 
   /**
-   * Find customer id by email (case-insensitive, trimmed).
+   * Find customer id by email (case-insensitive, trimmed) TRONG workspace của chiến dịch.
+   *
+   * `customers` là dữ liệu từng workspace: email trùng giữa hai tenant không được map sang khách của
+   * tenant kia (id_customer của nhật ký thực thi sẽ trỏ vào khách người khác). Chủ workspace lấy từ
+   * chính chiến dịch bằng một truy vấn con (chạy một lần) — mọi chỗ ghi log đều đã có `campaignId`,
+   * không phải truyền thêm chủ. Thiếu / sai `campaignId` → không khớp dòng nào (đóng-khi-lỗi).
    *
    * @param {string} email
+   * @param {number|string|null} campaignId
    * @returns {Promise<number|null>}
    */
-  async findCustomerIdByEmail(email) {
+  async findCustomerIdByEmail(email, campaignId) {
     const result = await db.query(
-      `SELECT id FROM customers WHERE LOWER(TRIM(email)) = $1 ORDER BY id ASC LIMIT 1`,
-      [email]
+      `SELECT id FROM customers
+       WHERE LOWER(TRIM(email)) = $1
+         AND COALESCE(workspace_owner_id, id_user) = (
+           SELECT COALESCE(workspace_owner_id, id_user) FROM campaigns WHERE id = $2
+         )
+       ORDER BY id ASC LIMIT 1`,
+      [email, campaignId ?? null]
     );
     return result.rows[0]?.id ?? null;
   }
 
   /**
-   * Check whether a customer PK exists.
+   * Check whether a customer PK exists TRONG workspace của chiến dịch (cùng quy tắc với
+   * findCustomerIdByEmail: id thô lấy từ sheet/node không được trỏ sang khách của tenant khác).
    *
    * @param {number} customerId
+   * @param {number|string|null} campaignId
    * @returns {Promise<boolean>}
    */
-  async customerExists(customerId) {
+  async customerExists(customerId, campaignId) {
     const result = await db.query(
-      `SELECT id FROM customers WHERE id = $1 LIMIT 1`,
-      [customerId]
+      `SELECT id FROM customers
+       WHERE id = $1
+         AND COALESCE(workspace_owner_id, id_user) = (
+           SELECT COALESCE(workspace_owner_id, id_user) FROM campaigns WHERE id = $2
+         )
+       LIMIT 1`,
+      [customerId, campaignId ?? null]
     );
     return result.rows.length > 0;
   }

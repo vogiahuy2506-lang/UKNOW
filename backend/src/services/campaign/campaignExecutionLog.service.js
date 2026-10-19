@@ -141,23 +141,25 @@ class CampaignExecutionLogService {
 
   /**
    * Chuẩn hóa id_customer cho campaign_executions (FK → customers.id):
-   * 1) Ưu tiên tra `customers.id` theo email người nhận — khách hàng là dữ liệu toàn hệ thống, không lọc theo id_user.
-   * 2) Nếu không có email hoặc không tìm thấy, mới dùng id thô nếu là PK hợp lệ trong `customers`.
+   * 1) Ưu tiên tra `customers.id` theo email người nhận — CHỈ trong workspace của chiến dịch (khách là dữ liệu
+   *    từng workspace; email trùng với khách của tenant khác không được map sang khách đó).
+   * 2) Nếu không có email hoặc không tìm thấy, mới dùng id thô nếu là PK hợp lệ trong `customers` CỦA workspace đó.
    *
    * Luồng hoạt động:
-   * 1. Có `recipientEmail` → SELECT customers theo LOWER(TRIM(email)) (ORDER BY id để ổn định nếu trùng email).
-   * 2. Fallback: rawCustomerId là PK tồn tại.
+   * 1. Có `recipientEmail` → SELECT customers theo LOWER(TRIM(email)) + chủ workspace của `campaignId` (ORDER BY id để ổn định nếu trùng email).
+   * 2. Fallback: rawCustomerId là PK tồn tại trong cùng workspace.
    *
    * @param {object} input
    * @param {unknown} input.rawCustomerId id từ sheet/node (có thể sai)
    * @param {string|null|undefined} input.recipientEmail email người nhận (ưu tiên để map DB)
+   * @param {number|string|null|undefined} input.campaignId chiến dịch đang ghi log — xác định workspace; thiếu thì không map khách nào
    * @returns {Promise<number|null>}
    */
-  async resolveCustomerIdForExecutionLog({ rawCustomerId, recipientEmail }) {
+  async resolveCustomerIdForExecutionLog({ rawCustomerId, recipientEmail, campaignId }) {
     const email = String(recipientEmail || '').trim().toLowerCase();
     if (email) {
       try {
-        const id = await campaignExecutionLogRepository.findCustomerIdByEmail(email);
+        const id = await campaignExecutionLogRepository.findCustomerIdByEmail(email, campaignId);
         if (id != null) return id;
       } catch {
         // Fallback sang id thô
@@ -166,7 +168,7 @@ class CampaignExecutionLogService {
     const parsed = Number.parseInt(rawCustomerId, 10);
     if (!Number.isFinite(parsed) || parsed <= 0) return null;
     try {
-      const exists = await campaignExecutionLogRepository.customerExists(parsed);
+      const exists = await campaignExecutionLogRepository.customerExists(parsed, campaignId);
       return exists ? parsed : null;
     } catch {
       return null;
@@ -180,7 +182,7 @@ class CampaignExecutionLogService {
    * 1. Với mọi loại run, nếu có `node.id` thì coi khóa ổn định là `(id_run, node_id)`.
    * 2. Đã có bản ghi: UPDATE bản mới nhất (ORDER BY id DESC), merge `execution_data` để giữ items tiến độ và tránh trùng.
    * 3. Chưa có: INSERT hàng mới. Không có `node_id` thì luôn INSERT (không đủ khóa upsert).
-   * 4. `id_customer` được chuẩn hóa: ưu tiên tra theo email (toàn hệ thống), sau đó PK từ payload; không có thì NULL.
+   * 4. `id_customer` được chuẩn hóa: ưu tiên tra theo email (trong workspace của chiến dịch), sau đó PK từ payload (cùng workspace); không có thì NULL.
    * 5. `created_at` giữ nguyên khi UPDATE; `updated_at` luôn cập nhật.
    *
    * @param {object} input
@@ -212,6 +214,7 @@ class CampaignExecutionLogService {
     const safeCustomerId = await this.resolveCustomerIdForExecutionLog({
       rawCustomerId: customerId,
       recipientEmail,
+      campaignId,
     });
     const nodeId = node.id || null;
     const nodeName = node.node_name || null;

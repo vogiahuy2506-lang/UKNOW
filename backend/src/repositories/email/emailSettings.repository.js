@@ -302,6 +302,33 @@ class EmailSettingsRepository {
     return result.rows[0] || null;
   }
 
+  /**
+   * Trong các id do CLIENT gửi lên cho một lần gửi email (chiến dịch, khách, mẫu, lượt chạy), trả về id nào
+   * thực sự thuộc workspace — id không thuộc (hoặc không tồn tại) trả NULL. Một truy vấn cho cả bốn.
+   * Quy tắc chủ giống chỗ khác trong repo: campaigns/customers theo COALESCE(workspace_owner_id, id_user),
+   * email_templates theo id_user, campaign_runs theo chiến dịch của lượt chạy.
+   *
+   * @param {number} workspaceOwnerId
+   * @param {{ campaignId?: number|null, customerId?: number|null, templateId?: number|null, runId?: number|null }} ids đã chuẩn hoá thành số nguyên dương hoặc null
+   * @returns {Promise<{ campaign_id: string|null, customer_id: string|null, template_id: string|null, run_id: string|null }>}
+   */
+  async findWorkspaceOwnedReferenceIds(workspaceOwnerId, { campaignId = null, customerId = null, templateId = null, runId = null } = {}) {
+    const result = await db.query(
+      `SELECT
+         (SELECT id FROM campaigns
+           WHERE id = $2::bigint AND COALESCE(workspace_owner_id, id_user) = $1::bigint) AS campaign_id,
+         (SELECT id FROM customers
+           WHERE id = $3::bigint AND COALESCE(workspace_owner_id, id_user) = $1::bigint) AS customer_id,
+         (SELECT id FROM email_templates
+           WHERE id = $4::bigint AND id_user = $1::bigint) AS template_id,
+         (SELECT cr.id FROM campaign_runs cr
+            JOIN campaigns c ON c.id = cr.id_campaign
+           WHERE cr.id = $5::bigint AND COALESCE(c.workspace_owner_id, c.id_user) = $1::bigint) AS run_id`,
+      [workspaceOwnerId, campaignId, customerId, templateId, runId]
+    );
+    return result.rows[0] || { campaign_id: null, customer_id: null, template_id: null, run_id: null };
+  }
+
   async getOwnedCampaign(client, campaignId, userId) {
     const result = await client.query('SELECT id, COALESCE(workspace_owner_id, id_user) AS workspace_owner_id, created_by, id_user FROM campaigns WHERE id = $1 AND COALESCE(workspace_owner_id, id_user) = $2 LIMIT 1', [
       campaignId,
