@@ -176,7 +176,13 @@ describe('assertSendQuotaOrYield — loi quota het han/khong reset duoc phai dun
     expect(mockInsertCampaignZaloMessage).not.toHaveBeenCalled();
     // finalizeRun/updateRunProgress ghi failed_sends cho tung nguoi nhan roi continue — day la
     // dau hieu cu the cua bug: neu con goi thi nghia la van roi xuong nhanh dem-that-bai.
-    expect(mockUpdateRunProgress).not.toHaveBeenCalled();
+    // PR-2 (19/10/2026): nhánh RUN_STOPPED giờ lưu bộ đếm (chỉ cột đếm) trước khi thoát, nên
+    // updateRunProgress ĐƯỢC gọi một lần — nhưng bộ đếm phải còn nguyên 0 (không đếm thất bại).
+    for (const [, counters] of mockUpdateRunProgress.mock.calls) {
+      expect(counters).toEqual({
+        totalRecipients: 0, successfulSends: 0, failedSends: 0, skippedSends: 0,
+      });
+    }
   });
 
   it('resetAt gan tuong lai (duoi nguong yield-slot) -> van sleep roi tiep tuc, KHONG failRun', async () => {

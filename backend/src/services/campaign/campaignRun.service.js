@@ -1447,6 +1447,40 @@ class CampaignRunService {
     let successfulSends = 0;
     let failedSends = 0;
     let skippedSends = 0;
+    // Chỉ true SAU KHI bộ đếm trong RAM đã được nạp lại từ DB (getRunForExecution). Trước mốc đó
+    // RAM = 0 ≠ DB, ghi ở catch sẽ ĐÈ số cộng dồn của các lượt trước về 0.
+    let runCountersLoaded = false;
+    // Người-bước đã CỘNG vào totalRecipients (lần đầu thấy, chưa có dòng sổ cái) nhưng chưa được ghi
+    // sổ cái. Nếu lượt nhả slot/dừng giữa chừng, người này vẫn `updatedAt === null` ở lượt resume và sẽ
+    // được cộng LẦN NỮA — nên phần đã cộng của họ phải trừ đi khi lưu bộ đếm lúc thoát sớm.
+    // Khoá = buildRecipientLedgerKey(); giá trị = tổng số người-bước đã cộng cho khoá đó.
+    const pendingFirstSightTotals = new Map();
+    /**
+     * Lưu bộ đếm khi lượt gọi kết thúc sớm (nhả slot / dừng). Trước đây updateRunProgress chỉ chạy ở
+     * cuối khối gửi nên người-bước đã xử lý trong khối dở dang bị mất khỏi campaign_runs. Best-effort:
+     * lỗi ghi chỉ cảnh báo, không che lỗi gốc.
+     */
+    const pendingFirstSightTotal = () => {
+      let sum = 0;
+      for (const n of pendingFirstSightTotals.values()) sum += n;
+      return sum;
+    };
+    const persistRunCountersOnEarlyExit = async () => {
+      if (!runCountersLoaded) return;
+      try {
+        await campaignRunRepository.updateRunProgress(runId, {
+          totalRecipients: Math.max(0, totalRecipients - pendingFirstSightTotal()),
+          successfulSends,
+          failedSends,
+          skippedSends,
+        });
+      } catch (persistError) {
+        console.warn(
+          `[Campaign ${campaignId}] Run ${runId} không lưu được bộ đếm khi thoát sớm: `
+          + String(persistError?.message || persistError)
+        );
+      }
+    };
     try {
       // Reconciliation hook: quan sát reservation quá hạn lease ngay đầu run nếu có tín hiệu resume
       // Chạy trước early-return defer để không bỏ sót reservation đọng khi resume thủ công trước mốc defer.
@@ -1897,6 +1931,16 @@ class CampaignRunService {
       let isRecipientLedgerTableAvailable = true;
       const buildRecipientLedgerKey = ({ nodeId, channel, recipientKey }) =>
         `${String(nodeId)}::${String(channel)}::${String(recipientKey || '').trim().toLowerCase()}`;
+      /**
+       * Cộng total cho người-bước thấy lần đầu VÀ ghi nhớ phần đã cộng cho tới khi họ có dòng sổ cái
+       * (upsertRecipientProgress xoá khỏi pendingFirstSightTotals). Khoá chuẩn hoá y hệt sổ cái.
+       */
+      const countFirstSight = ({ nodeId, channel, recipientKey, n }) => {
+        const count = Math.max(0, Number(n) || 0);
+        totalRecipients += count;
+        const key = buildRecipientLedgerKey({ nodeId, channel, recipientKey });
+        pendingFirstSightTotals.set(key, (pendingFirstSightTotals.get(key) || 0) + count);
+      };
       const createEmptyRecipientProgress = () => ({
         lastCompletedStep: 0,
         isFullyCompleted: false,
@@ -2148,6 +2192,8 @@ class CampaignRunService {
               updatedAtEpochUs: persistedRow.updated_at_epoch_us ?? null,
             }
             : memRow);
+          // Đã có dòng sổ cái thật → lượt resume sẽ thấy updatedAt !== null, không còn "chờ cộng".
+          pendingFirstSightTotals.delete(localKey);
         } catch (error) {
           if (String(error?.code || '') === '42P01' || String(error?.code || '') === '42703') {
             isRecipientLedgerTableAvailable = false;
@@ -2546,6 +2592,7 @@ class CampaignRunService {
       successfulSends = Number(runRow?.successful_sends || 0);
       failedSends = Number(runRow?.failed_sends || 0);
       skippedSends = Number(runRow?.skipped_sends || 0);
+      runCountersLoaded = true;
       const runSource = String(runRow?.run_metadata?.source || 'campaign_run').trim() || 'campaign_run';
       const rawAdjacentDelay = Number.parseInt(runRow?.run_metadata?.adjacentZaloNodeDelayMs, 10);
       const adjacentZaloNodeDelayMs = Number.isFinite(rawAdjacentDelay) && rawAdjacentDelay > 0
@@ -4702,7 +4749,7 @@ class CampaignRunService {
                   // dòng ledger nào, updatedAt===null); cộng đủ số bước MỘT LẦN, không cộng lại
                   // mỗi chu kỳ continuous đến hạn cho cùng một khách đang ở bước đã biết.
                   if (progress.updatedAt === null) {
-                    totalRecipients += loopEmailSteps.length;
+                    countFirstSight({ nodeId: node.id, channel: 'email', recipientKey: customerKey, n: loopEmailSteps.length });
                   }
                   const sendOutcome = await sendEmailWithLogging({
                     customer,
@@ -4824,7 +4871,7 @@ class CampaignRunService {
                 // dedupedRecipients.length × emailSteps.length TRƯỚC vòng lặp step nên mỗi lượt
                 // executeCampaign gọi lại (resume) cộng lại từ đầu cho MỌI khách kể cả đã xong.
                 if (progress.updatedAt === null) {
-                  totalRecipients += emailSteps.length;
+                  countFirstSight({ nodeId: node.id, channel: 'email', recipientKey: customerKey, n: emailSteps.length });
                 }
                 if (!shouldProcessRecipientStep({
                   progress,
@@ -4935,7 +4982,7 @@ class CampaignRunService {
               });
               // PR-2 — xem chú thích ở nhánh multi-step phía trên.
               if (progress.updatedAt === null) {
-                totalRecipients += 1;
+                countFirstSight({ nodeId: node.id, channel: 'email', recipientKey: customerKey, n: 1 });
               }
               if (!shouldProcessRecipientStep({
                 progress,
@@ -6769,7 +6816,7 @@ class CampaignRunService {
                     // PR-2 — cộng đủ số bước MỘT LẦN khi lần đầu thấy người nhận, không cộng lại
                     // mỗi chu kỳ continuous đến hạn cho cùng người nhận đang ở bước đã biết.
                     if (progress.updatedAt === null) {
-                      totalRecipients += stepsWithMessage.length;
+                      countFirstSight({ nodeId: node.id, channel: 'zalo_personal', recipientKey: normalizedRecipient, n: stepsWithMessage.length });
                     }
                     const sendOutcome = await sendSingleRecipient({
                       recipient: normalizedRecipient,
@@ -6836,7 +6883,7 @@ class CampaignRunService {
                   }
                   // PR-2 — xem chú thích ở nhánh multi-step phía trên.
                   if (progress.updatedAt === null) {
-                    totalRecipients += 1;
+                    countFirstSight({ nodeId: node.id, channel: 'zalo_personal', recipientKey: normalizedRecipient, n: 1 });
                   }
                   const sendOutcome = await sendSingleRecipient({
                     recipient: normalizedRecipient,
@@ -6916,7 +6963,7 @@ class CampaignRunService {
               // lần đầu thấy (chưa có dòng ledger). Trước đây cộng blanket TRƯỚC vòng lặp step
               // nên mỗi lượt gọi lại (resume) cộng lại từ đầu cho MỌI người nhận.
               if (progress.updatedAt === null) {
-                totalRecipients += stepsWithMessage.length;
+                countFirstSight({ nodeId: node.id, channel: 'zalo_personal', recipientKey: normalizedRecipient, n: stepsWithMessage.length });
               }
               if (!shouldProcessRecipientStep({
                 progress,
@@ -7104,7 +7151,7 @@ class CampaignRunService {
               });
               // PR-2 — xem chú thích ở nhánh multi-step phía trên.
               if (progress.updatedAt === null) {
-                totalRecipients += 1;
+                countFirstSight({ nodeId: node.id, channel: 'zalo_personal', recipientKey: normalizedRecipient, n: 1 });
               }
               if (!shouldProcessRecipientStep({
                 progress,
@@ -7418,7 +7465,7 @@ class CampaignRunService {
               // PR-2 — cộng đúng MỘT LẦN khi lần đầu thấy số này (chưa có dòng ledger), không cộng
               // lại mỗi chu kỳ continuous đến hạn cho cùng số đang chờ.
               if (progress.updatedAt === null) {
-                totalRecipients += 1;
+                countFirstSight({ nodeId: node.id, channel: 'zalo_friend_request', recipientKey: phone, n: 1 });
               }
             }
             let message = String(config.zaloFriendRequestMessage || '').trim();
@@ -8777,7 +8824,7 @@ class CampaignRunService {
                     // PR-2 — cộng đủ số bước MỘT LẦN khi lần đầu thấy nhóm này, không cộng lại mỗi
                     // chu kỳ continuous đến hạn cho cùng nhóm đang ở bước đã biết.
                     if (progress.updatedAt === null) {
-                      totalRecipients += stepsWithMessage.length;
+                      countFirstSight({ nodeId: node.id, channel: 'zalo_group', recipientKey: normalizedGroupId, n: stepsWithMessage.length });
                     }
                     const sendOutcome = await sendSingleGroup({
                       groupId: normalizedGroupId,
@@ -8839,7 +8886,7 @@ class CampaignRunService {
                   if (dedupedZaloGroupSingle) return;
                   // PR-2 — xem chú thích ở nhánh multi-step phía trên.
                   if (progress.updatedAt === null) {
-                    totalRecipients += 1;
+                    countFirstSight({ nodeId: node.id, channel: 'zalo_group', recipientKey: normalizedGroupId, n: 1 });
                   }
                   const sendOutcome = await sendSingleGroup({
                     groupId: normalizedGroupId,
@@ -8924,7 +8971,7 @@ class CampaignRunService {
                 // đầu thấy (chưa có dòng ledger). Trước đây cộng blanket TRƯỚC vòng lặp step nên
                 // mỗi lượt gọi lại (resume) cộng lại từ đầu cho MỌI nhóm.
                 if (progress.updatedAt === null) {
-                  totalRecipients += stepsWithMessage.length;
+                  countFirstSight({ nodeId: node.id, channel: 'zalo_group', recipientKey: normalizedGroupId, n: stepsWithMessage.length });
                 }
                 if (!shouldProcessRecipientStep({
                   progress,
@@ -9034,7 +9081,7 @@ class CampaignRunService {
               });
               // PR-2 — xem chú thích ở nhánh multi-step phía trên.
               if (progress.updatedAt === null) {
-                totalRecipients += 1;
+                countFirstSight({ nodeId: node.id, channel: 'zalo_group', recipientKey: normalizedGroupId, n: 1 });
               }
               if (!shouldProcessRecipientStep({
                 progress,
@@ -9495,6 +9542,7 @@ class CampaignRunService {
           : (error?.zaloAccessBlocked || error?.channelAccessBlocked)
             ? `[Campaign ${campaignId}] Run ${runId} dừng vì tài khoản ${error.channelAccessBlocked ? 'Telegram/WhatsApp' : 'Zalo'} chưa được giao: ${error.message}`
             : `[Campaign ${campaignId}] Lượt chạy ${runId} đã được dừng bởi người dùng`);
+        await persistRunCountersOnEarlyExit();
         return;
       }
       if (error?.code === 'RUN_YIELD_SLOT') {
@@ -9502,6 +9550,7 @@ class CampaignRunService {
           `[Campaign ${campaignId}] Run ${runId} nhả slot chờ resume: `
           + String(error?.message || 'RUN_YIELD_SLOT')
         );
+        await persistRunCountersOnEarlyExit();
         return;
       }
       if (isNetworkTimeoutError(error)) {
