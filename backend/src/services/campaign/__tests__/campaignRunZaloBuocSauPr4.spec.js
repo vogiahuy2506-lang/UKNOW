@@ -633,6 +633,22 @@ describe('CampaignRun — Zalo: tài khoản bị cấm nhắn người lạ (PR
     expect(mockSendPersonalMessageQueued.mock.calls.length).toBeGreaterThanOrEqual(3);
   }, 30000);
 
+  it('người nhận gửi theo UID (không qua nhánh "không liên hệ được" của SĐT): lỗi quyền riêng tư CỦA NGƯỜI NHẬN vẫn là lỗi từng người — đếm lỗi như cũ, KHÔNG hoãn cả lượt', async () => {
+    nodeConfigOverrides = { zaloRecipientType: 'uid', zaloRecipientField: 'zalo_id' };
+    mockGetCustomersFromDataNode.mockResolvedValue({
+      items: [{ zalo_id: 'uid-người-nhận-1', name: 'U1' }],
+      dataLoadMeta: {},
+    });
+    mockSendPersonalMessageQueued.mockRejectedValue(new Error('Người dùng chặn không nhận tin nhắn từ người lạ'));
+
+    await runCampaignPumpingTimers(383, 200, 10);
+
+    expect(deferPatch()).toBeUndefined();
+    expect(notifySpy).not.toHaveBeenCalled();
+    // Lỗi đếm cho từng người như cũ: lần 1 → zaloSendFailureCount = 1, còn hẹn thử lại.
+    expect(dbLedger.get('uid-người-nhận-1').meta.zaloSendFailureCount).toBe(1);
+  }, 30000);
+
   it('nhiều tài khoản (pool): giữ nguyên như cũ — không hoãn cả lượt, không chuông stranger_ban', async () => {
     nodeConfigOverrides = {
       zaloPersonalMultiAccountEnabled: true,
