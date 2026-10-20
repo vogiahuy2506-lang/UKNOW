@@ -315,7 +315,7 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
     }
 
     const speed = getSendSpeedDraft(account);
-    if (!['safe', 'fast', 'very_fast'].includes(speed)) {
+    if (!['safe', 'fast'].includes(speed)) {
       return;
     }
 
@@ -716,9 +716,6 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
                             <option value="fast">
                               {t('zaloSettings.sendSpeedFast')}
                             </option>
-                            <option value="very_fast">
-                              {t('zaloSettings.sendSpeedVeryFast')}
-                            </option>
                           </select>
                         </div>
                         <button
@@ -735,11 +732,6 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
                         {getSendSpeedDraft(account) === 'fast' && (
                           <span className="text-xs text-amber-600 dark:text-amber-400">
                             {t('zaloSettings.sendSpeedFastWarning')}
-                          </span>
-                        )}
-                        {getSendSpeedDraft(account) === 'very_fast' && (
-                          <span className="text-xs text-red-600 dark:text-red-400 font-medium">
-                            {t('zaloSettings.sendSpeedVeryFastWarning')}
                           </span>
                         )}
                       </div>
