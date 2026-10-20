@@ -783,7 +783,8 @@ export const createCampaignNodeRunner = (deps) => {
         : [];
       const selectionMode = resolveSelectionMode(config.interestedSelectionMode, selectedCustomerIds);
 
-      if (selectionMode === 'fixed' && selectedCustomerIds.length > 0) {
+      // `fixed` mà chưa chọn ai → 0 khách (cùng quy tắc máy chủ: backend/src/utils/selectionMode.util.js), không rơi xuống "tất cả".
+      if (selectionMode === 'fixed') {
         rows = rows.filter((row) => {
           const customerId = parseInt(row.customerId, 10);
           return selectedCustomerIds.includes(customerId);
@@ -827,7 +828,7 @@ export const createCampaignNodeRunner = (deps) => {
             totalItems: data?.pagination?.total || 0,
             fetched: slimRows.length,
             limit: data?.pagination?.limit || slimRows.length,
-            filtered: (selectionMode === 'fixed' && selectedCustomerIds.length > 0)
+            filtered: selectionMode === 'fixed'
               || (selectionMode === 'all_exclude' && excludedCustomerIds.length > 0),
             accumulatedPayloadBytesUtf8: measureJsonUtf8Bytes(slimRows),
             dataLoadMeta: interestedDataLoadMeta,
@@ -1151,7 +1152,8 @@ export const createCampaignNodeRunner = (deps) => {
         || ''
       ).trim();
       let items = allItems;
-      if (selectionMode === 'fixed' && selectedSet.size > 0) {
+      // `fixed` mà chưa chọn ai → 0 bạn (cùng quy tắc máy chủ), không rơi xuống "tất cả bạn bè".
+      if (selectionMode === 'fixed') {
         items = allItems.filter((item) => selectedSet.has(extractFriendId(item)));
       } else if (selectionMode === 'all_exclude' && excludedSet.size > 0) {
         items = allItems.filter((item) => !excludedSet.has(extractFriendId(item)));
@@ -1171,7 +1173,7 @@ export const createCampaignNodeRunner = (deps) => {
           schema: buildSchemaFromRows(items),
           meta: {
             totalItems: items.length,
-            filtered: (selectionMode === 'fixed' && selectedSet.size > 0)
+            filtered: selectionMode === 'fixed'
               || (selectionMode === 'all_exclude' && excludedSet.size > 0),
           },
         },

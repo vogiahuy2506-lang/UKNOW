@@ -7,6 +7,7 @@ import customerInterestedService from '../customer/customerInterested.service.js
 import customerHelperService from '../customer/customerHelper.service.js';
 import { normalizeIdList, CUSTOMER_TAG_MAX_TAGS_PER_CALL } from '../customer/customerTag.service.js';
 import { ALL_CUSTOMERS_LIMIT_CAP, INTERESTED_LIMIT_CAP } from '../../utils/interestedLimits.util.js';
+import { applyIdSelection, resolveSelectionMode } from '../../utils/selectionMode.util.js';
 import outboundMessageQueueService, {
   OUTBOUND_MESSAGE_JOB_TYPES,
 } from '../queue/outboundMessageQueue.service.js';
@@ -33,21 +34,6 @@ import { PLATFORM_STORE_ADMIN_ONLY } from '../founderai/platformStoreAccess.serv
  * Giảm thời gian giữ lock và áp lực WAL trên VPS nhỏ; không dùng biến môi trường.
  */
 const SAVE_CUSTOMERS_DB_CHUNK_SIZE = 500;
-
-/**
- * Resolve selection mode with backward compatibility from legacy selected IDs.
- *
- * @param {string|undefined|null} mode
- * @param {Array<any>} selectedIds
- * @returns {'all'|'fixed'|'all_exclude'}
- */
-const resolveSelectionMode = (mode, selectedIds = []) => {
-  const normalized = String(mode || '').trim().toLowerCase();
-  if (normalized === 'fixed' || normalized === 'all_exclude') {
-    return normalized;
-  }
-  return Array.isArray(selectedIds) && selectedIds.length > 0 ? 'fixed' : 'all';
-};
 
 /**
  * Ghi log ngắn gọn để theo dõi API đang được gọi trong campaign run.
@@ -164,13 +150,14 @@ class CampaignNodeDataService {
           });
         }
 
-        let items = Array.isArray(interestedData?.items) ? interestedData.items : [];
-        if (selectionMode === 'fixed' && selectedCustomerIds.length > 0) {
-          items = items.filter((row) => selectedCustomerIds.includes(parseInt(row.customerId, 10)));
-        } else if (selectionMode === 'all_exclude' && excludedCustomerIds.length > 0) {
-          const excludedSet = new Set(excludedCustomerIds);
-          items = items.filter((row) => !excludedSet.has(parseInt(row.customerId, 10)));
-        }
+        // `fixed` mà chưa chọn ai → 0 khách (không rơi xuống "tất cả"): xem utils/selectionMode.util.js. Chạy thật, ước tính và xem trước
+        // đều đi qua hàm này nên cùng một kết quả.
+        const items = applyIdSelection(Array.isArray(interestedData?.items) ? interestedData.items : [], {
+          mode: selectionMode,
+          selectedIds: selectedCustomerIds,
+          excludedIds: excludedCustomerIds,
+          getId: (row) => parseInt(row.customerId, 10),
+        });
         return applyDataColumnSelectionToItems(items, config.dataSelectedColumns, 'interested');
       }
 

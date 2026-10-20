@@ -22,6 +22,7 @@ import {
 } from '../../utils/zaloPhoneCampaign.util.js';
 import { normalizeVietnamesePhone } from '../../utils/vietnamesePhone.util.js';
 import { isPhoneHeader } from '../../utils/columnHeaderMatch.util.js';
+import { applyIdSelection, isSelectionFiltered, resolveSelectionMode } from '../../utils/selectionMode.util.js';
 import { formatUtcAndVietnamForLog } from '../../utils/vnTimeFormat.util.js';
 import { executeWithTimeoutRetry, isNetworkTimeoutError } from '../../utils/zaloTimeoutRetry.util.js';
 import { classifyZaloSendError, mapZaloErrorCategoryToLedgerReason } from '../../utils/zaloSendErrorClassifier.util.js';
@@ -3573,13 +3574,6 @@ class CampaignRunService {
         if (!normalized) return false;
         return normalized.includes('zalo') || normalized === 'get_all_friends' || normalized === 'get_all_groups';
       };
-      const resolveSelectionMode = (mode, selectedIds = []) => {
-        const normalized = String(mode || '').trim().toLowerCase();
-        if (normalized === 'fixed' || normalized === 'all_exclude') {
-          return normalized;
-        }
-        return Array.isArray(selectedIds) && selectedIds.length > 0 ? 'fixed' : 'all';
-      };
       const refreshSourceNodeOutput = async (sourceNodeId) => {
         const safeSourceNodeId = String(sourceNodeId || '').trim();
         if (!safeSourceNodeId) return;
@@ -5190,20 +5184,19 @@ class CampaignRunService {
             .map((value) => String(value || '').trim())
             .filter((value, idx, arr) => value && arr.indexOf(value) === idx);
           const selectionMode = resolveSelectionMode(config.zaloFriendSelectionMode, selectedFriendIds);
-          const selectedSet = new Set(selectedFriendIds);
-          const excludedSet = new Set(excludedFriendIds);
           const extractFriendId = (item) => String(
             item?.uid
             || item?.id
             || item?.userId
             || ''
           ).trim();
-          let items = allItems;
-          if (selectionMode === 'fixed' && selectedSet.size > 0) {
-            items = allItems.filter((item) => selectedSet.has(extractFriendId(item)));
-          } else if (selectionMode === 'all_exclude' && excludedSet.size > 0) {
-            items = allItems.filter((item) => !excludedSet.has(extractFriendId(item)));
-          }
+          // `fixed` mà chưa chọn ai → 0 bạn (không rơi xuống "tất cả bạn bè"): xem utils/selectionMode.util.js.
+          const items = applyIdSelection(allItems, {
+            mode: selectionMode,
+            selectedIds: selectedFriendIds,
+            excludedIds: excludedFriendIds,
+            getId: extractFriendId,
+          });
           const mergedFriendData = isContinuousMode
             ? mergeContinuousNodeItems({
                 nodeId: node.id,
@@ -5231,8 +5224,7 @@ class CampaignRunService {
               schema: campaignFlowService.buildSchemaFromRows(outputFriendItems),
               meta: {
                 totalItems: mergedFriendData.allItems.length,
-                filtered: (selectionMode === 'fixed' && selectedSet.size > 0)
-                  || (selectionMode === 'all_exclude' && excludedSet.size > 0),
+                filtered: isSelectionFiltered({ mode: selectionMode, excludedIds: excludedFriendIds }),
                 selectionMode,
                 accountSourceNodeId: accountSourceNodeId || null,
                 ...(isContinuousMode
