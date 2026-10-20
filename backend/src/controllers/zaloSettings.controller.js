@@ -2095,7 +2095,7 @@ class ZaloSettingsController {
 
   /**
    * PATCH /api/zalo/accounts/:id/send-speed
-   * Cập nhật mức tốc độ gửi Zalo cá nhân (safe, fast, very_fast).
+   * Cập nhật mức tốc độ gửi Zalo cá nhân (safe, fast). Mức very_fast đã bỏ 20/10/2026 → 400.
    *
    * @param {import('express').Request} req
    * @param {import('express').Response} res
@@ -2109,11 +2109,15 @@ class ZaloSettingsController {
       if (await this.rejectIfAccountNotAssigned(res, ctx, accountId)) return;
       const { sendSpeed } = req.body || {};
 
-      const preset = ZALO_SEND_SPEED_PRESETS[sendSpeed];
+      const preset = Object.prototype.hasOwnProperty.call(ZALO_SEND_SPEED_PRESETS, sendSpeed)
+        ? ZALO_SEND_SPEED_PRESETS[sendSpeed]
+        : null;
       if (!preset) {
         return res.status(400).json({
           success: false,
-          message: 'Mức tốc độ gửi không hợp lệ (safe, fast, very_fast)',
+          message: sendSpeed === 'very_fast'
+            ? "Mức 'Rất nhanh' đã ngừng hỗ trợ — chọn 'safe' hoặc 'fast'"
+            : 'Mức tốc độ gửi không hợp lệ (safe, fast)',
         });
       }
 

@@ -2,7 +2,8 @@ import { describe, expect, it } from '@jest/globals';
 import ZaloRateLimiter, { ZALO_PERSONAL_DELAY_HARD_FLOOR_MS } from '../zaloRateLimiter.js';
 
 /**
- * 3 mức tốc độ gửi Zalo cá nhân, sàn cứng 30 giây (ZALO_PERSONAL_DELAY_HARD_FLOOR_MS).
+ * 2 mức tốc độ gửi Zalo cá nhân (safe/fast), sàn cứng 50 giây (ZALO_PERSONAL_DELAY_HARD_FLOOR_MS,
+ * nâng từ 30s ngày 20/10/2026 khi bỏ mức "Rất nhanh").
  * Production đang đặt env chung: 80.000–150.000ms (~80–150 giây).
  */
 const PROD_FLOOR_MIN = 80_000;
@@ -16,9 +17,9 @@ const makeProdLimiter = () => new ZaloRateLimiter({
 const prodPolicyFor = (hint) =>
   makeProdLimiter().resolveOutboundPolicy('zalo_personal', hint);
 
-describe('resolveOutboundPolicy — 3 mức tốc độ gửi Zalo cá nhân và sàn cứng 30s', () => {
-  it('hằng số sàn cứng là 30.000ms', () => {
-    expect(ZALO_PERSONAL_DELAY_HARD_FLOOR_MS).toBe(30_000);
+describe('resolveOutboundPolicy — mức tốc độ gửi Zalo cá nhân và sàn cứng 50s', () => {
+  it('hằng số sàn cứng là 50.000ms', () => {
+    expect(ZALO_PERSONAL_DELAY_HARD_FLOOR_MS).toBe(50_000);
   });
 
   describe('môi trường Production (env 80/150 giây)', () => {
@@ -35,13 +36,22 @@ describe('resolveOutboundPolicy — 3 mức tốc độ gửi Zalo cá nhân và
       expect(policyNullFields.maxDelayMs).toBe(PROD_FLOOR_MAX);
     });
 
-    it('very_fast (30.000–60.000ms) → đúng 30/60 (không bị kẹp lên 80 hay 150)', () => {
+    it('ghi đè 30.000–60.000ms còn sót trong DB (mức "Rất nhanh" cũ) → kẹp lên sàn 50s, max không dưới min', () => {
       const policy = prodPolicyFor({
         zaloPersonalOutboundDelayMinMs: 30_000,
         zaloPersonalOutboundDelayMaxMs: 60_000,
       });
-      expect(policy.minDelayMs).toBe(30_000);
+      expect(policy.minDelayMs).toBe(50_000);
       expect(policy.maxDelayMs).toBe(60_000);
+    });
+
+    it('ghi đè 40.000–80.000ms ("Tuỳ chỉnh" do quản trị đặt) cũng bị kẹp lên sàn 50s', () => {
+      const policy = prodPolicyFor({
+        zaloPersonalOutboundDelayMinMs: 40_000,
+        zaloPersonalOutboundDelayMaxMs: 80_000,
+      });
+      expect(policy.minDelayMs).toBe(50_000);
+      expect(policy.maxDelayMs).toBe(80_000);
     });
 
     it('fast (50.000–100.000ms) → đúng 50/100', () => {
@@ -53,31 +63,31 @@ describe('resolveOutboundPolicy — 3 mức tốc độ gửi Zalo cá nhân và
       expect(policy.maxDelayMs).toBe(100_000);
     });
 
-    it('giá trị nhỏ 5.000ms → kẹp về sàn cứng 30.000ms', () => {
+    it('giá trị nhỏ 5.000ms → kẹp về sàn cứng 50.000ms', () => {
       const policy = prodPolicyFor({
         zaloPersonalOutboundDelayMinMs: 5_000,
         zaloPersonalOutboundDelayMaxMs: 10_000,
       });
-      expect(policy.minDelayMs).toBe(30_000);
-      expect(policy.maxDelayMs).toBe(30_000);
+      expect(policy.minDelayMs).toBe(50_000);
+      expect(policy.maxDelayMs).toBe(50_000);
     });
 
-    it('ghi đè 0 giây KHÔNG hạ được xuống dưới sàn cứng 30.000ms', () => {
+    it('ghi đè 0 giây KHÔNG hạ được xuống dưới sàn cứng 50.000ms', () => {
       const policy = prodPolicyFor({
         zaloPersonalOutboundDelayMinMs: 0,
         zaloPersonalOutboundDelayMaxMs: 0,
       });
-      expect(policy.minDelayMs).toBe(30_000);
-      expect(policy.maxDelayMs).toBe(30_000);
+      expect(policy.minDelayMs).toBe(50_000);
+      expect(policy.maxDelayMs).toBe(50_000);
     });
 
     it('dmax < dmin → max = min sau khi kẹp sàn', () => {
       const policy = prodPolicyFor({
-        zaloPersonalOutboundDelayMinMs: 40_000,
-        zaloPersonalOutboundDelayMaxMs: 35_000,
+        zaloPersonalOutboundDelayMinMs: 60_000,
+        zaloPersonalOutboundDelayMaxMs: 55_000,
       });
-      expect(policy.minDelayMs).toBe(40_000);
-      expect(policy.maxDelayMs).toBe(40_000);
+      expect(policy.minDelayMs).toBe(60_000);
+      expect(policy.maxDelayMs).toBe(60_000);
     });
 
     it('ghi đè CHẬM hơn env (vd: 200.000–300.000ms) được tôn trọng', () => {

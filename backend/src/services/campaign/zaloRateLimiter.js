@@ -11,7 +11,13 @@ import { isZaloPhoneLookupRateLimitError } from '../../utils/zaloSendErrorClassi
  */
 const PHONE_LOOKUP_CHANNELS = new Set(['zalo_personal', 'zalo_friend_request']);
 
-export const ZALO_PERSONAL_DELAY_HARD_FLOOR_MS = 30_000;
+/**
+ * Sàn cứng cho giá trị ghi đè khoảng cách tin Zalo cá nhân theo tài khoản = 50 giây (điểm thấp nhất
+ * của mức "Nhanh" 50–100s). Nâng từ 30s lên 50s ngày 20/10/2026 khi bỏ mức "Rất nhanh": nick 34 ở
+ * 30–60s mất 44% tin (61/138) trong một buổi sáng. Sàn áp cho MỌI đường (kể cả "Tuỳ chỉnh do quản
+ * trị đặt" bằng SQL tay), nên không giá trị nào còn sót trong DB gửi nhanh hơn 50s.
+ */
+export const ZALO_PERSONAL_DELAY_HARD_FLOOR_MS = 50_000;
 
 /**
  * ZaloRateLimiter — Manages per-account Zalo outbound rate limiting state and policy.
@@ -264,15 +270,15 @@ class ZaloRateLimiter {
       if (Number.isFinite(accLim) && accLim > 0) {
         policy = { ...policy, limitPerWindow: accLim };
       }
-      // Ghi đè theo tài khoản — 3 mức người dùng chọn (PATCH /zalo/accounts/:id/send-speed) hoặc giá
+      // Ghi đè theo tài khoản — mức người dùng chọn (PATCH /zalo/accounts/:id/send-speed: safe/fast) hoặc giá
       // trị đặt tay bằng SQL — ĐƯỢC PHÉP nhanh hơn mức chung (từ 24/09; trước đó chỉ được chậm hơn),
-      // nhưng không bao giờ dưới sàn cứng ZALO_PERSONAL_DELAY_HARD_FLOOR_MS (30 giây). Sàn có vì hai
+      // nhưng không bao giờ dưới sàn cứng ZALO_PERSONAL_DELAY_HARD_FLOOR_MS (50 giây từ 20/10/2026, trước đó 30). Sàn có vì hai
       // lẽ: đã từng có người đặt thẳng 0 giây, tự đưa nick của khách vào diện chống spam; và mọi nick
       // của mọi khách đều gửi từ CÙNG một IP máy chủ.
       // Sàn CHỈ áp cho giá trị ghi đè: không có ghi đè thì dùng nguyên mức env (production 80–150s,
-      // dev 20–50s), không kẹp lên 30s.
-      // max kẹp theo min SAU khi kẹp, KHÔNG theo max của env — kẹp theo env max thì mức 30–60s thành
-      // 30–150s, vẫn "nhanh hơn" nên rất khó phát hiện.
+      // dev 20–50s), không kẹp lên 50s.
+      // max kẹp theo min SAU khi kẹp, KHÔNG theo max của env — kẹp theo env max thì mức 50–100s thành
+      // 50–150s, vẫn "nhanh hơn" nên rất khó phát hiện.
       const floorMin = policy.minDelayMs;
       const floorMax = policy.maxDelayMs;
       const dMin = Number.parseInt(accountHint.zaloPersonalOutboundDelayMinMs, 10);
