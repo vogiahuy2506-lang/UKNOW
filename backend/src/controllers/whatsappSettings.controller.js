@@ -244,15 +244,18 @@ class WhatsAppSettingsController {
         return res.status(400).json({ success: false, message: 'Invalid account id' });
       }
 
-      const row = await chatbotChannelRepository.findActiveChannelById(id);
-      if (!row || row.channel_type !== 'whatsapp' || String(row.id_user) !== String(userId)) {
-        return res.status(404).json({ success: false, message: 'Account not found' });
-      }
+      // Chủ lấy qua custom_chatbots: chatbot_channel_connections KHÔNG có cột id_user nên so `row.id_user`
+      // luôn undefined -> 404 (lỗi 20/10/2026). Không dùng findActiveChannelById ở đây vì nó đòi
+      // ccc.is_active = true, mà kết nối mới luôn vào với is_active = false (completeOAuth) -> không xoá được.
+      await chatbotWhatsAppAccountRepository.assertOwnedConfiguration(userId, id);
 
       const deactivated = await chatbotChannelRepository.deactivateWhatsAppById(id);
+      if (!deactivated) {
+        return res.status(404).json({ success: false, message: 'Account not found' });
+      }
       await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CHATBOT_CHANNEL_DISCONNECTED, AUDIT_ENTITY_TYPES.CHATBOT_CHANNEL, id, {
         channelType: 'whatsapp',
-        chatbotId: row.id_chatbot,
+        chatbotId: deactivated.id_chatbot,
       });
 
       return res.json({ success: true, data: this._sanitizeAccount(deactivated) });
@@ -275,13 +278,14 @@ class WhatsAppSettingsController {
         return res.status(400).json({ success: false, message: 'Invalid account id' });
       }
 
-      const row = await chatbotChannelRepository.findActiveChannelById(id);
-      if (!row || row.channel_type !== 'whatsapp' || String(row.id_user) !== String(userId)) {
-        return res.status(404).json({ success: false, message: 'Account not found' });
-      }
+      // Xem ghi chú ở deleteAccount: chủ kiểm qua custom_chatbots, không so row.id_user.
+      await chatbotWhatsAppAccountRepository.assertOwnedConfiguration(userId, id);
 
       await chatbotChannelRepository.setWhatsAppDefault(userId, id);
-      const updated = await chatbotChannelRepository.findActiveChannelById(id);
+      // Đọc lại bằng đúng truy vấn của danh sách để phản hồi có is_default/chatbot_name như getAccounts
+      // (`ccc.*` không có is_default — cờ này nằm trong settings JSONB) và không loại kết nối đang tắt.
+      const accounts = await chatbotWhatsAppAccountRepository.listAccountsForUser(userId);
+      const updated = accounts.find((account) => Number(account.id) === id) || null;
       return res.json({ success: true, data: this._sanitizeAccount(updated) });
     } catch (err) {
       console.error('[WhatsAppSettings] setDefault error:', err.message);
@@ -308,12 +312,14 @@ class WhatsAppSettingsController {
         return res.status(400).json({ success: false, message: 'enabled phải là boolean' });
       }
 
-      const row = await chatbotChannelRepository.findActiveChannelById(id);
-      if (!row || row.channel_type !== 'whatsapp' || String(row.id_user) !== String(userId)) {
-        return res.status(404).json({ success: false, message: 'Account not found' });
-      }
+      // Xem ghi chú ở deleteAccount. Bật một kết nối đang tắt (is_active = false) là luồng CHÍNH của công tắc này
+      // nên càng không được dùng findActiveChannelById (chỉ trả kết nối đang bật).
+      await chatbotWhatsAppAccountRepository.assertOwnedConfiguration(userId, id);
 
       const updated = await chatbotChannelRepository.updateWhatsAppActive(id, enabled);
+      if (!updated) {
+        return res.status(404).json({ success: false, message: 'Account not found' });
+      }
       await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CHATBOT_CHANNEL_UPDATED, AUDIT_ENTITY_TYPES.CHATBOT_CHANNEL, id, {
         channelType: 'whatsapp',
         enabled,
