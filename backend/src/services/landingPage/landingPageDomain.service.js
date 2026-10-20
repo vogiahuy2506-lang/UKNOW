@@ -252,7 +252,7 @@ export function buildOwnershipToken(workspaceOwnerId, hostname) {
   const owner = String(workspaceOwnerId ?? '').trim();
   const host = String(hostname || '').trim().toLowerCase();
   if (!owner || !host) {
-    throw new Error('Thiếu workspace hoặc hostname để tạo mã xác minh tên miền');
+    throw new Error('Thiếu không gian làm việc hoặc tên miền để tạo mã xác minh tên miền');
   }
   return crypto
     .createHmac('sha256', ownershipSecret())
