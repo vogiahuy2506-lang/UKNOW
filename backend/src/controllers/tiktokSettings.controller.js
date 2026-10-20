@@ -17,6 +17,7 @@
 import { encryptSmtpSecret, decryptSmtpSecret } from '../utils/smtpSecretCrypto.js';
 import tiktokBusinessAccountRepository from '../repositories/ai/tiktokBusinessAccount.repository.js';
 import tiktokOAuthService from '../services/tiktok/tiktokOAuth.service.js';
+import { resolveWorkspaceOwnerId } from '../utils/workspaceContext.util.js';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5174';
 const REDIRECT_URI = process.env.TIKTOK_OAUTH_REDIRECT_URI
@@ -60,7 +61,8 @@ class TiktokSettingsController {
    */
   async connect(req, res) {
     try {
-      const userId = req.user?.id;
+      // Chủ workspace (nhân viên có quyền chatbot_channels_manage thao tác tài khoản TikTok của chủ), không phải id người đang đăng nhập.
+      const userId = resolveWorkspaceOwnerId(req.user);
       if (!userId) {
         return res.status(401).json({ success: false, message: 'Chưa đăng nhập.' });
       }
@@ -185,7 +187,8 @@ class TiktokSettingsController {
    */
   async listAccounts(req, res) {
     try {
-      const userId = req.user?.id;
+      // Chủ workspace (nhân viên có quyền chatbot_channels_manage thao tác tài khoản TikTok của chủ), không phải id người đang đăng nhập.
+      const userId = resolveWorkspaceOwnerId(req.user);
       if (!userId) {
         return res.status(401).json({ success: false, message: 'Chưa đăng nhập.' });
       }
@@ -206,7 +209,8 @@ class TiktokSettingsController {
    */
   async refreshAccount(req, res) {
     try {
-      const userId = req.user?.id;
+      // Chủ workspace (nhân viên có quyền chatbot_channels_manage thao tác tài khoản TikTok của chủ), không phải id người đang đăng nhập.
+      const userId = resolveWorkspaceOwnerId(req.user);
       const id = Number.parseInt(req.params.id, 10);
       if (!userId) {
         return res.status(401).json({ success: false, message: 'Chưa đăng nhập.' });
@@ -243,7 +247,8 @@ class TiktokSettingsController {
    */
   async deleteAccount(req, res) {
     try {
-      const userId = req.user?.id;
+      // Chủ workspace (nhân viên có quyền chatbot_channels_manage thao tác tài khoản TikTok của chủ), không phải id người đang đăng nhập.
+      const userId = resolveWorkspaceOwnerId(req.user);
       const id = Number.parseInt(req.params.id, 10);
       if (!userId) {
         return res.status(401).json({ success: false, message: 'Chưa đăng nhập.' });
@@ -280,7 +285,8 @@ class TiktokSettingsController {
    */
   async testSend(req, res) {
     try {
-      const userId = req.user?.id;
+      // Chủ workspace (nhân viên có quyền chatbot_channels_manage thao tác tài khoản TikTok của chủ), không phải id người đang đăng nhập.
+      const userId = resolveWorkspaceOwnerId(req.user);
       const id = Number.parseInt(req.params.id, 10);
       const { conversationId, message } = req.body || {};
       if (!userId) {

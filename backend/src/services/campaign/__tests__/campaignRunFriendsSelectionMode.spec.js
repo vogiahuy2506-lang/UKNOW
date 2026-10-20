@@ -14,6 +14,7 @@ const mockFindConnections = jest.fn();
 const mockGetCampaignZaloAccount = jest.fn();
 const mockGetAllFriendsWithRetry = jest.fn();
 const mockNormalizeFriends = jest.fn();
+const mockGetConnectedApi = jest.fn();
 const mockLogExecutionNode = jest.fn().mockResolvedValue(null);
 
 jest.unstable_mockModule('../../../repositories/campaign/campaignRun.repository.js', () => ({
@@ -47,7 +48,7 @@ jest.unstable_mockModule('../campaignZaloSender.service.js', () => ({
   default: {
     parseListText: jest.fn((value) => String(value || '').split(',').map((item) => item.trim()).filter(Boolean)),
     getCampaignZaloAccount: mockGetCampaignZaloAccount,
-    getConnectedApiOrSyncStatus: jest.fn().mockResolvedValue({}),
+    getConnectedApiOrSyncStatus: mockGetConnectedApi,
     getAllFriendsWithRetry: mockGetAllFriendsWithRetry,
     normalizeFriendsWithProfileLookup: mockNormalizeFriends,
     getAllGroupIdSet: jest.fn().mockResolvedValue(new Set()),
@@ -112,6 +113,7 @@ describe('engine — get_all_friends: chế độ chọn bạn bè', () => {
       id: 100, id_user: OWNER, workspace_owner_id: OWNER, created_by: OWNER, status: 'active', flow_json: { nodes: [] },
     });
     mockGetCampaignZaloAccount.mockResolvedValue({ id: 99, userId: OWNER, displayName: 'Nick của người mua' });
+    mockGetConnectedApi.mockResolvedValue({});
     mockGetAllFriendsWithRetry.mockResolvedValue(FRIENDS);
     mockNormalizeFriends.mockResolvedValue(FRIENDS);
     mockFindConnections.mockResolvedValue([{ source_node_id: '4064', target_node_id: '4065' }]);
@@ -178,5 +180,44 @@ describe('engine — get_all_friends: chế độ chọn bạn bè', () => {
     mockLogExecutionNode.mockClear();
     const explicitAll = await runFriendsNode({ zaloFriendSelectionMode: 'all', zaloSelectedFriendIds: [] });
     expect(uids(explicitAll.items)).toEqual(['u1', 'u2', 'u3']);
+  });
+
+  // PLAN_GOM_MUC_NHE_2026-10-20 4b — `fixed` + danh sách rỗng đã ra 0 bạn (ca đầu file) nhưng trước đây vẫn kết nối Zalo, tải TOÀN BỘ bạn bè
+  // và tra hồ sơ từng người rồi mới lọc bỏ hết. Giờ trả rỗng ngay, không gọi Zalo.
+  it("'fixed' + danh sách RỖNG (hoặc thiếu khoá) → KHÔNG kết nối Zalo, KHÔNG tải bạn bè, KHÔNG tra hồ sơ; vẫn log 0 bạn đã lọc", async () => {
+    for (const config of [
+      { zaloFriendSelectionMode: 'fixed', zaloSelectedFriendIds: [] },
+      { zaloFriendSelectionMode: 'fixed' },
+      { zaloFriendSelectionMode: 'fixed', zaloSelectedFriendIds: ['', '   '] },
+    ]) {
+      mockLogExecutionNode.mockClear();
+      mockGetConnectedApi.mockClear();
+      mockGetAllFriendsWithRetry.mockClear();
+      mockNormalizeFriends.mockClear();
+      const result = await runFriendsNode(config);
+      expect(result.status).toBe('success');
+      expect(result.items).toEqual([]);
+      expect(result.meta).toMatchObject({ totalItems: 0, filtered: true, selectionMode: 'fixed' });
+      expect(mockGetConnectedApi).not.toHaveBeenCalled();
+      expect(mockGetAllFriendsWithRetry).not.toHaveBeenCalled();
+      expect(mockNormalizeFriends).not.toHaveBeenCalled();
+    }
+  });
+
+  it("các chế độ còn lại VẪN gọi Zalo đúng một lần: 'fixed' có id, 'all', 'all_exclude'", async () => {
+    for (const config of [
+      { zaloFriendSelectionMode: 'fixed', zaloSelectedFriendIds: ['u1'] },
+      { zaloFriendSelectionMode: 'all' },
+      { zaloFriendSelectionMode: 'all_exclude', zaloExcludedFriendIds: ['u1'] },
+    ]) {
+      mockLogExecutionNode.mockClear();
+      mockGetConnectedApi.mockClear();
+      mockGetAllFriendsWithRetry.mockClear();
+      mockNormalizeFriends.mockClear();
+      await runFriendsNode(config);
+      expect(mockGetConnectedApi).toHaveBeenCalledTimes(1);
+      expect(mockGetAllFriendsWithRetry).toHaveBeenCalledTimes(1);
+      expect(mockNormalizeFriends).toHaveBeenCalledTimes(1);
+    }
   });
 });

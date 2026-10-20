@@ -38,10 +38,6 @@ function assertRecordOwnership(existing, userId, roleCode, notFoundMessage) {
 }
 
 class LandingFeaturedCourseService {
-  async listPublic() {
-    return landingFeaturedCourseRepository.findActiveOrdered();
-  }
-
   async listAdmin(userId) {
     return landingFeaturedCourseRepository.findAllOrdered(userId);
   }

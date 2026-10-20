@@ -5147,36 +5147,6 @@ class CampaignRunService {
           }
           const config = campaignFlowService.normalizeNodeReferenceConfig(node.config || {}, resolveNodeId);
           const accountSourceNodeId = String(config.zaloFriendAccountNodeId || '').trim();
-          const sourceNodeItems = accountSourceNodeId ? pickNodeItems(accountSourceNodeId) : [];
-          const sourceNodeAccount = sourceNodeItems[0] || null;
-          const accountFromSourceNode = sourceNodeAccount?.id
-            ? await getZaloAccountForRun({
-              userId,
-              accountId: sourceNodeAccount.id,
-              roleCode,
-            })
-            : null;
-          const account = accountFromSourceNode
-            || selectedZaloAccount
-            || await getZaloAccountForRun({
-              userId,
-              accountId: config.zaloAccountId,
-              roleCode,
-            });
-          selectedZaloAccount = account;
-          const api = await campaignZaloSenderService.getConnectedApiOrSyncStatus({
-            accountId: account.id,
-            userId: account.userId || userId,
-          });
-          const count = Number.isFinite(parseInt(config.zaloFriendsCount, 10))
-            ? parseInt(config.zaloFriendsCount, 10)
-            : undefined;
-          const page = Number.isFinite(parseInt(config.zaloFriendsPage, 10))
-            ? parseInt(config.zaloFriendsPage, 10)
-            : undefined;
-          await waitRandomApiDelay('zalo_get_all_friends');
-          const friendItems = await campaignZaloSenderService.getAllFriendsWithRetry(api, count, page);
-          const allItems = await campaignZaloSenderService.normalizeFriendsWithProfileLookup(api, friendItems);
           const selectedFriendIds = (Array.isArray(config.zaloSelectedFriendIds) ? config.zaloSelectedFriendIds : [])
             .map((value) => String(value || '').trim())
             .filter((value, idx, arr) => value && arr.indexOf(value) === idx);
@@ -5190,13 +5160,48 @@ class CampaignRunService {
             || item?.userId
             || ''
           ).trim();
-          // `fixed` mà chưa chọn ai → 0 bạn (không rơi xuống "tất cả bạn bè"): xem utils/selectionMode.util.js.
-          const items = applyIdSelection(allItems, {
-            mode: selectionMode,
-            selectedIds: selectedFriendIds,
-            excludedIds: excludedFriendIds,
-            getId: extractFriendId,
-          });
+          // `fixed` mà chưa chọn ai → 0 bạn (không rơi xuống "tất cả bạn bè"): xem utils/selectionMode.util.js. Trả rỗng NGAY, không
+          // kết nối Zalo / không tải toàn bộ bạn bè (rồi tra hồ sơ từng người) chỉ để lọc bỏ hết — tốn quota gọi API và gây sự chú ý vô ích.
+          const selectsNobody = selectionMode === 'fixed' && selectedFriendIds.length === 0;
+          let items = [];
+          if (!selectsNobody) {
+            const sourceNodeItems = accountSourceNodeId ? pickNodeItems(accountSourceNodeId) : [];
+            const sourceNodeAccount = sourceNodeItems[0] || null;
+            const accountFromSourceNode = sourceNodeAccount?.id
+              ? await getZaloAccountForRun({
+                userId,
+                accountId: sourceNodeAccount.id,
+                roleCode,
+              })
+              : null;
+            const account = accountFromSourceNode
+              || selectedZaloAccount
+              || await getZaloAccountForRun({
+                userId,
+                accountId: config.zaloAccountId,
+                roleCode,
+              });
+            selectedZaloAccount = account;
+            const api = await campaignZaloSenderService.getConnectedApiOrSyncStatus({
+              accountId: account.id,
+              userId: account.userId || userId,
+            });
+            const count = Number.isFinite(parseInt(config.zaloFriendsCount, 10))
+              ? parseInt(config.zaloFriendsCount, 10)
+              : undefined;
+            const page = Number.isFinite(parseInt(config.zaloFriendsPage, 10))
+              ? parseInt(config.zaloFriendsPage, 10)
+              : undefined;
+            await waitRandomApiDelay('zalo_get_all_friends');
+            const friendItems = await campaignZaloSenderService.getAllFriendsWithRetry(api, count, page);
+            const allItems = await campaignZaloSenderService.normalizeFriendsWithProfileLookup(api, friendItems);
+            items = applyIdSelection(allItems, {
+              mode: selectionMode,
+              selectedIds: selectedFriendIds,
+              excludedIds: excludedFriendIds,
+              getId: extractFriendId,
+            });
+          }
           const mergedFriendData = isContinuousMode
             ? mergeContinuousNodeItems({
                 nodeId: node.id,

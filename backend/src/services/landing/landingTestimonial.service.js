@@ -32,10 +32,6 @@ function assertRecordOwnership(existing, userId, roleCode, notFoundMessage) {
 }
 
 class LandingTestimonialService {
-  async listPublic() {
-    return landingTestimonialRepository.findActiveOrdered();
-  }
-
   async listAdmin(userId) {
     return landingTestimonialRepository.findAllOrdered(userId);
   }

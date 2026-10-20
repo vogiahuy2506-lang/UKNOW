@@ -232,8 +232,8 @@ class UploadController {
           tempId: fileId,
           originalName,
           size: req.file.size,
-          contentType: req.file.mimetype,
-          tempPath: tempFilePath
+          contentType: req.file.mimetype
+          // KHÔNG trả đường dẫn tuyệt đối của tệp tạm trên máy chủ: client chỉ cần `tempId` (frontend không đọc `tempPath`).
         }
       });
     } catch (error) {
