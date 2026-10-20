@@ -96,6 +96,16 @@ describe('stripSellerBoundNodeConfig — từng khoá gắn người bán', () =
       });
       expect(next).toEqual({ zaloGroupAccountNodeId: '3', zaloSelectedGroupIds: [], zaloGroupSelectionSnapshotLocked: true });
     });
+    it('get_all_groups: id nhóm của người bán còn sót ở zaloGroupIds (mảng, như listing #9 production) cũng bị gỡ', () => {
+      const next = stripSellerBoundNodeConfig('get_all_groups', {
+        zaloGroupIds: ['6704258567851745496', '4543730624985843420'],
+        zaloSelectedGroupIds: [],
+        zaloGroupSelectionSnapshotLocked: true,
+      });
+      expect(next.zaloGroupIds).toEqual([]);
+      expect(next.zaloSelectedGroupIds).toEqual([]);
+      expect(next.zaloGroupSelectionSnapshotLocked).toBe(true);
+    });
     it('get_all_groups: config trống cũng được đặt về trạng thái chưa chọn (không để mặc định "mọi nhóm")', () => {
       expect(stripSellerBoundNodeConfig('get_all_groups', {})).toEqual({ zaloSelectedGroupIds: [], zaloGroupSelectionSnapshotLocked: true });
     });

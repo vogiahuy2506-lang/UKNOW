@@ -53,6 +53,9 @@ export const SELLER_BOUND_KEY_RULES = Object.freeze({
   ],
   send_zalo_friend_request: [['zaloFriendPhones', 'list']],
   send_zalo_group: [['zaloGroupIds', 'list']], // id nhóm nhập tay — nhóm của tài khoản Zalo người bán
+  // Bộ chạy KHÔNG đọc khoá này ở khối lấy nhóm (chỉ đọc ở send_zalo_group), nhưng cấu hình cũ vẫn mang id nhóm của người bán
+  // (listing #9 production 20/10: 11 id) — gỡ để không lộ sang người mua. Trạng thái chọn nhóm do FIXED_RESETS đặt riêng.
+  get_all_groups: [['zaloGroupIds', 'list']],
   send_telegram: [
     ['telegramAccountId', 'null'],
     ['recipientKeys', 'list'], // khoá hội thoại / nhóm gắn tài khoản người bán
