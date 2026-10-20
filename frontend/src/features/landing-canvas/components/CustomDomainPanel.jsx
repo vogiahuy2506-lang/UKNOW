@@ -25,6 +25,11 @@ function displayDnsValue(value) {
   return String(value || '').replace(/\.$/, '');
 }
 
+/** Bảng có dòng TXT xác minh chủ sở hữu (PLAN_TEN_MIEN_TXT) thì hiện thêm một câu giải thích vì sao phải thêm. */
+function hasTxtRecord(records) {
+  return Array.isArray(records) && records.some((record) => record?.type === 'TXT');
+}
+
 function errorMessage(err, fallback) {
   const fromServer = err?.response?.data?.message;
   if (typeof fromServer === 'string' && fromServer.trim()) return fromServer;
@@ -437,6 +442,11 @@ export default function CustomDomainPanel({ editingId, domain, slug, onChanged }
             <>
               <p className="text-xs font-medium text-amber-800 dark:text-amber-300">{tc('sections.customDomain.dnsTitle')}</p>
               <DnsRecordsTable records={check.dnsRecords} tc={tc} />
+              {hasTxtRecord(check.dnsRecords) ? (
+                <p className="text-xs text-gray-500 dark:text-dk-text2" data-testid="custom-domain-txt-note">
+                  {tc('sections.customDomain.dnsTxtNote')}
+                </p>
+              ) : null}
               <p className="text-xs font-medium text-amber-800 dark:text-amber-300" data-testid="custom-domain-dns-missing">
                 {tc('sections.customDomain.dnsMissing')}
               </p>

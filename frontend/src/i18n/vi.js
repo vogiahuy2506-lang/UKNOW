@@ -946,7 +946,8 @@ export default {
           recheck: 'Kiểm tra lại',
           checking: 'Đang kiểm tra...',
           close: 'Đóng',
-          dnsTitle: 'Thêm bản ghi này tại nơi bạn quản lý tên miền:',
+          dnsTitle: 'Thêm các bản ghi sau tại nơi bạn quản lý tên miền:',
+          dnsTxtNote: 'Bản ghi TXT dùng để xác minh bạn là chủ tên miền, cần thêm cùng bản ghi trỏ tên miền. Giá trị TXT riêng cho tài khoản của bạn.',
           dnsType: 'Loại',
           dnsHost: 'Tên (Host)',
           dnsValue: 'Giá trị (Value)',
@@ -9641,7 +9642,7 @@ export default {
     domainTypeSystem: 'Dùng subdomain miễn phí',
     domainTypeSystemHint: 'Tự động cấp slug.founderai.biz qua Cloudflare. SSL do Cloudflare Universal xử lý.',
     domainTypeCustom: 'Dùng domain riêng của tôi',
-    domainTypeCustomHint: 'Gắn subdomain hoặc apex của bạn. Tự thêm CNAME/A tại DNS provider.',
+    domainTypeCustomHint: 'Gắn subdomain hoặc apex của bạn. Tự thêm CNAME/A và bản ghi TXT xác minh chủ tên miền tại DNS provider.',
     customHostname: 'Hostname domain riêng',
   },
 

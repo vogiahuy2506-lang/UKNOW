@@ -943,7 +943,8 @@ export default {
           recheck: 'Check again',
           checking: 'Checking...',
           close: 'Close',
-          dnsTitle: 'Add this record where you manage your domain:',
+          dnsTitle: 'Add these records where you manage your domain:',
+          dnsTxtNote: 'The TXT record proves you own this domain and must be added together with the record that points the domain. Its value is unique to your account.',
           dnsType: 'Type',
           dnsHost: 'Name (Host)',
           dnsValue: 'Value',
@@ -9632,7 +9633,7 @@ export default {
     domainTypeSystem: 'Use free subdomain',
     domainTypeSystemHint: 'Automatically provision slug.founderai.biz via Cloudflare. SSL handled by Cloudflare Universal.',
     domainTypeCustom: 'Use my own domain',
-    domainTypeCustomHint: 'Attach your subdomain or apex. Add CNAME/A record at your DNS provider.',
+    domainTypeCustomHint: 'Attach your subdomain or apex. Add the CNAME/A record and the TXT record that verifies domain ownership at your DNS provider.',
     customHostname: 'Custom domain hostname',
   },
 

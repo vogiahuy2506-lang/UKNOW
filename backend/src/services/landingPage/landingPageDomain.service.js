@@ -217,12 +217,182 @@ export async function checkCnameStatus(hostname, target, forceApex = null) {
   }
 }
 
+// ── Xác minh CHỦ SỞ HỮU tên miền riêng bằng bản ghi TXT ───────────────────────────────────────────────────────────
+//
+// Trước đây chỉ cần CNAME/A trỏ về hệ thống là gắn được tên miền. Khách cũ gỡ tên miền khỏi hệ thống mà quên xoá DNS thì
+// tài khoản bất kỳ nhập đúng hostname đó là phục vụ được nội dung của họ trên tên miền của người khác. Nay phải thêm cả
+// TXT `_founderai-verify.<hostname>` = `founderai-verify=<token>`.
+//
+// Token XÁC ĐỊNH TRƯỚC (người dùng biết token trước khi có hàng DB) và gắn với CẢ workspace lẫn hostname:
+//   HMAC-SHA256(JWT_SECRET, "custom-domain-verify:<workspaceOwnerId>:<hostname thường>") lấy 32 ký tự hex đầu.
+// Kẻ gắn trộm tạo token theo workspace của HỌ nên không khớp TXT do chủ thật đặt; token của hostname này không dùng
+// được cho hostname khác. Khoá = JWT_SECRET (bí mật máy chủ đã bắt buộc lúc chạy — thiếu thì đăng nhập cũng chết;
+// cùng mẫu fileDownloadToken.js), KHÔNG thêm biến môi trường mới. Đổi JWT_SECRET thì mọi token đổi theo: tên miền
+// đang `active` không bị ảnh hưởng (xem isOwnActiveHostname), chỉ lần kết nối mới phải thêm lại TXT.
+const OWNERSHIP_TXT_LABEL = '_founderai-verify';
+const OWNERSHIP_TXT_VALUE_PREFIX = 'founderai-verify=';
+
+function ownershipSecret() {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('Chưa cấu hình JWT_SECRET — không tạo được mã xác minh tên miền');
+  }
+  return secret;
+}
+
+/**
+ * Mã xác minh chủ sở hữu tên miền (32 ký tự hex). Cùng workspace + cùng hostname (không phân biệt hoa/thường) → cùng
+ * mã; khác workspace hoặc khác hostname → khác mã.
+ *
+ * @param {number|string} workspaceOwnerId chủ workspace của landing (không phải nhân viên thao tác)
+ * @param {string} hostname
+ * @returns {string}
+ */
+export function buildOwnershipToken(workspaceOwnerId, hostname) {
+  const owner = String(workspaceOwnerId ?? '').trim();
+  const host = String(hostname || '').trim().toLowerCase();
+  if (!owner || !host) {
+    throw new Error('Thiếu workspace hoặc hostname để tạo mã xác minh tên miền');
+  }
+  return crypto
+    .createHmac('sha256', ownershipSecret())
+    .update(`custom-domain-verify:${owner}:${host}`)
+    .digest('hex')
+    .slice(0, 32);
+}
+
+/**
+ * Bản ghi TXT khách phải thêm: `name` là tên đầy đủ để tra DNS; `host` là tên hiển thị cho khách, tương đối so với vùng
+ * theo CÙNG quy ước dòng CNAME/A (subdomain → nhãn đầu tiên của hostname; tên miền chính → không có phần đuôi).
+ *
+ * @param {number|string} workspaceOwnerId
+ * @param {string} hostname
+ * @param {boolean} isApex
+ * @returns {{ name: string, host: string, value: string }}
+ */
+function buildOwnershipTxt(workspaceOwnerId, hostname, isApex) {
+  const h = String(hostname || '').trim().toLowerCase();
+  const firstLabel = h.split('.')[0] || 'lp';
+  return {
+    name: `${OWNERSHIP_TXT_LABEL}.${h}`,
+    host: isApex ? OWNERSHIP_TXT_LABEL : `${OWNERSHIP_TXT_LABEL}.${firstLabel}`,
+    value: `${OWNERSHIP_TXT_VALUE_PREFIX}${buildOwnershipToken(workspaceOwnerId, h)}`,
+  };
+}
+
+/**
+ * `dns.resolveTxt` trả MẢNG CÁC MẢNG chuỗi: mỗi bản ghi TXT dài bị chia thành nhiều mảnh ≤255 byte, phải NỐI các mảnh
+ * của từng bản ghi lại (so thẳng phần tử đầu là sai với TXT bị chia). Bỏ cặp dấu nháy kép bao quanh — khách hay dán
+ * kèm nháy vào ô Value.
+ *
+ * @param {unknown} records
+ * @returns {string[]} mỗi phần tử là giá trị đầy đủ của MỘT bản ghi TXT
+ */
+function flattenTxtRecords(records) {
+  return (Array.isArray(records) ? records : [])
+    .map((chunks) => (Array.isArray(chunks) ? chunks.join('') : String(chunks ?? '')))
+    .map((value) => value.trim().replace(/^"(.*)"$/s, '$1').trim())
+    .filter(Boolean);
+}
+
+function constantTimeEqual(a, b) {
+  const left = Buffer.from(String(a));
+  const right = Buffer.from(String(b));
+  return left.length === right.length && crypto.timingSafeEqual(left, right);
+}
+
+/**
+ * Kiểm bản ghi TXT xác minh chủ sở hữu. Nhiều bản ghi TXT cùng tên là bình thường — chỉ cần MỘT bản khớp.
+ * `ENOTFOUND`/`ENODATA` = chưa có bản ghi; lỗi DNS khác (timeout, SERVFAIL…) = `transient` để khách thử lại.
+ *
+ * @param {string} hostname
+ * @param {number|string} workspaceOwnerId
+ * @param {boolean} isApex
+ * @returns {Promise<{ verified: boolean, reason: 'ok'|'txt_missing'|'txt_wrong'|'transient', txtName: string, txtHost: string, txtValue: string, txtFound: string[] }>}
+ */
+export async function checkOwnershipTxt(hostname, workspaceOwnerId, isApex = false) {
+  const expected = buildOwnershipTxt(workspaceOwnerId, hostname, isApex);
+  const base = { txtName: expected.name, txtHost: expected.host, txtValue: expected.value };
+
+  let records;
+  try {
+    records = await dns.resolveTxt(expected.name);
+  } catch (error) {
+    const code = String(error?.code || '').trim().toUpperCase();
+    if (code === 'ENOTFOUND' || code === 'ENODATA') {
+      return { ...base, verified: false, reason: 'txt_missing', txtFound: [] };
+    }
+    return { ...base, verified: false, reason: 'transient', txtFound: [] };
+  }
+
+  const txtFound = flattenTxtRecords(records);
+  const wanted = expected.value.toLowerCase();
+  const verified = txtFound.some((value) => constantTimeEqual(value.toLowerCase(), wanted));
+  return {
+    ...base,
+    verified,
+    reason: verified ? 'ok' : (txtFound.length ? 'txt_wrong' : 'txt_missing'),
+    txtFound,
+  };
+}
+
+/**
+ * Landing này ĐÃ có đúng hostname này ở trạng thái `active` (lưu lại / bấm kết nối lại) → không đòi TXT: tên miền đã
+ * được xác minh lúc kết nối lần đầu, không bắt các tên miền đang chạy làm lại. Hàng của landing KHÁC không bao giờ
+ * vào được đây (`_prepareConnect` đã chặn 409).
+ *
+ * @param {{ hostname?: string, status?: string }|null|undefined} existing hàng landing_page_domains của landing đang thao tác
+ * @param {string} hostname hostname đã chuẩn hoá (chữ thường)
+ */
+function isOwnActiveHostname(existing, hostname) {
+  return Boolean(
+    existing
+    && existing.status === 'active'
+    && String(existing.hostname || '').trim().toLowerCase() === hostname
+  );
+}
+
+/**
+ * Trạng thái DNS để KẾT NỐI: CNAME/A trỏ đúng VÀ (trừ ngoại lệ `requireOwnership=false`) TXT chủ sở hữu khớp. TXT chỉ
+ * tra khi CNAME/A đã đúng; sai TXT thì `verified=false`, `reason` là lý do TXT và kèm `txtName/txtHost/txtValue/txtFound`
+ * cho buildDnsVerificationErrorMessage.
+ */
+async function checkConnectStatus(hostname, target, isApex, workspaceOwnerId, { requireOwnership = true } = {}) {
+  const dnsStatus = await checkCnameStatus(hostname, target, isApex);
+  if (!dnsStatus.verified || !requireOwnership) return dnsStatus;
+
+  const ownership = await checkOwnershipTxt(hostname, workspaceOwnerId, isApex);
+  if (ownership.verified) return dnsStatus;
+  return {
+    ...dnsStatus,
+    verified: false,
+    reason: ownership.reason,
+    txtName: ownership.txtName,
+    txtHost: ownership.txtHost,
+    txtValue: ownership.txtValue,
+    txtFound: ownership.txtFound,
+  };
+}
+
 export function buildDnsVerificationErrorMessage(status, hostname, target) {
   const reason = status?.reason || 'transient';
   const found = Array.isArray(status?.found) ? status.found : [];
   const isApex = status?.isApexDomain;
   const currentIp = status?.currentIp;
   const platformIp = apexFixedIp();
+
+  if ((reason === 'txt_missing' || reason === 'txt_wrong') && status?.txtValue) {
+    const txtFound = Array.isArray(status.txtFound) ? status.txtFound : [];
+    const head = reason === 'txt_wrong'
+      ? `${hostname} đã trỏ đúng về hệ thống, nhưng bản ghi TXT xác minh chủ sở hữu tên miền có giá trị chưa đúng.\n`
+        + `- Hiện tại: ${txtFound.slice(0, 3).map((value) => value.slice(0, 80)).join(' | ')}\n`
+      : `${hostname} đã trỏ đúng về hệ thống, nhưng chưa thấy bản ghi TXT xác minh chủ sở hữu tên miền.\n`;
+    return `${head}Vui lòng thêm bản ghi TXT tại nhà cung cấp domain:\n`
+      + `- Type: TXT\n`
+      + `- Name: ${status.txtHost}\n`
+      + `- Value: ${status.txtValue}\n`
+      + `(Tên đầy đủ của bản ghi: ${status.txtName}). DNS có thể mất vài phút để cập nhật, sau đó bấm Kiểm tra lại.`;
+  }
 
   if (reason === 'not_found') {
     const nsHint = getNsLookupHintDomain(hostname);
@@ -290,24 +460,31 @@ export function buildDnsVerificationErrorMessage(status, hostname, target) {
 /**
  * Bản ghi DNS khách cần thêm để tên miền trỏ về hệ thống: tên miền chính (apex) → A tới IP cố định; subdomain →
  * CNAME tới `cnameTarget()`. Cùng dạng `{ type, host, value, ttl }` với `dnsRecords` của buildDomainResponse.
- * Apex mà hệ thống chưa cấu hình IP cố định thì không có bản ghi nào để hướng dẫn (trả mảng rỗng, câu giải thích
- * nằm ở buildDnsVerificationErrorMessage).
+ * Apex mà hệ thống chưa cấu hình IP cố định thì không có dòng A để hướng dẫn (câu giải thích nằm ở
+ * buildDnsVerificationErrorMessage). Luôn kèm dòng TXT `_founderai-verify` chứng minh chủ sở hữu (xem buildOwnershipToken),
+ * tính theo workspace của landing nên mỗi workspace thấy một giá trị riêng.
  *
  * @param {string} hostname
  * @param {boolean} isApex
+ * @param {number|string} workspaceOwnerId
  * @returns {Array<{ type: string, host: string, value: string, ttl: number }>}
  */
-function buildExpectedDnsRecords(hostname, isApex) {
+function buildExpectedDnsRecords(hostname, isApex, workspaceOwnerId) {
+  const records = [];
   if (isApex) {
     const platformIp = apexFixedIp();
-    return platformIp ? [{ type: 'A', host: '@', value: platformIp, ttl: 3600 }] : [];
+    if (platformIp) records.push({ type: 'A', host: '@', value: platformIp, ttl: 3600 });
+  } else {
+    records.push({
+      type: 'CNAME',
+      host: String(hostname || '').split('.')[0] || 'lp',
+      value: cnameTarget(),
+      ttl: 3600,
+    });
   }
-  return [{
-    type: 'CNAME',
-    host: String(hostname || '').split('.')[0] || 'lp',
-    value: cnameTarget(),
-    ttl: 3600,
-  }];
+  const ownership = buildOwnershipTxt(workspaceOwnerId, hostname, isApex);
+  records.push({ type: 'TXT', host: ownership.host, value: ownership.value, ttl: 3600 });
+  return records;
 }
 
 /**
@@ -316,8 +493,9 @@ function buildExpectedDnsRecords(hostname, isApex) {
  * @param {{ verified?: boolean, reason?: string, found?: string[], currentIp?: string|null }} dnsStatus
  * @param {string} hostname
  * @param {boolean} isApex
+ * @param {number|string} workspaceOwnerId chủ workspace — cần để tính giá trị TXT xác minh trong `dnsRecords`
  */
-function buildDnsCheckResult(dnsStatus, hostname, isApex) {
+function buildDnsCheckResult(dnsStatus, hostname, isApex, workspaceOwnerId) {
   const target = cnameTarget();
   const verified = Boolean(dnsStatus?.verified);
   return {
@@ -327,7 +505,7 @@ function buildDnsCheckResult(dnsStatus, hostname, isApex) {
     reason: dnsStatus?.reason || 'transient',
     found: Array.isArray(dnsStatus?.found) ? dnsStatus.found : [],
     currentIp: dnsStatus?.currentIp || null,
-    dnsRecords: buildExpectedDnsRecords(hostname, isApex),
+    dnsRecords: buildExpectedDnsRecords(hostname, isApex, workspaceOwnerId),
     cnameTarget: target,
     apexFixedIp: apexFixedIp(),
     message: verified
@@ -641,18 +819,22 @@ class LandingPageDomainService {
    * @param {object} authUser
    */
   async checkHostname(landingPageId, hostname, isApexDomain, authUser) {
-    const { h } = await this._prepareConnect(landingPageId, hostname, authUser);
+    const { h, resourceOwnerId, existing } = await this._prepareConnect(landingPageId, hostname, authUser);
     const isApex = isApexDomain === true;
-    const dnsStatus = await checkCnameStatus(h, cnameTarget(), isApex);
-    return buildDnsCheckResult(dnsStatus, h, isApex);
+    // Cùng điều kiện với setHostname (kể cả ngoại lệ "đúng hostname đang active của chính landing") để báo trước đúng.
+    const dnsStatus = await checkConnectStatus(h, cnameTarget(), isApex, resourceOwnerId, {
+      requireOwnership: !isOwnActiveHostname(existing, h),
+    });
+    return buildDnsCheckResult(dnsStatus, h, isApex, resourceOwnerId);
   }
 
   /**
    * Gắn tên miền riêng cho landing page — CHỈ KHI DNS ĐÃ TRỎ ĐÚNG.
    *
    * Flow:
-   * 1. Khách nhập hostname (subdomain hoặc apex) và cài bản ghi CNAME/A ở nhà cung cấp tên miền của họ.
-   * 2. Backend kiểm DNS (checkCnameStatus) TRƯỚC khi ghi bất cứ thứ gì.
+   * 1. Khách nhập hostname (subdomain hoặc apex) và cài bản ghi CNAME/A cùng bản ghi TXT xác minh chủ sở hữu
+   *    (`_founderai-verify.<hostname>`, xem buildOwnershipToken) ở nhà cung cấp tên miền của họ.
+   * 2. Backend kiểm DNS (checkConnectStatus: CNAME/A rồi TXT) TRƯỚC khi ghi bất cứ thứ gì.
    * 3. DNS chưa đúng → ném lỗi 422 (`error.data` = bảng bản ghi cần thêm + lý do). KHÔNG ghi gì, KHÔNG đụng
    *    subdomain miễn phí: link miễn phí vẫn chạy cho tới khi tên miền riêng kết nối xong. (Trước đây hàm này xoá
    *    subdomain miễn phí NGAY rồi ghi hàng `pending_verification` — khách không cài DNS thì trang mất link vô thời hạn.)
@@ -661,7 +843,8 @@ class LandingPageDomainService {
    *    hoạt SSL (cron trên host lo, xem provisionSsl).
    *
    * Không còn cờ ghi `pending_verification`: không client nào cần (giao diện duy nhất gọi hàm này là modal Cài đặt
-   * trang, và nó kiểm trước bằng checkHostname). Hàng `pending_verification` cũ vẫn do verifyDns / scheduler xử lý.
+   * trang, và nó kiểm trước bằng checkHostname). Hàng `pending_verification` cũ vẫn do verifyDns / scheduler xử lý
+   * và KHÔNG đòi TXT (hàng đã gắn với chủ tạo ra nó từ trước khi có bước xác minh chủ sở hữu).
    *
    * @param {number} landingPageId
    * @param {string} hostname
@@ -678,13 +861,17 @@ class LandingPageDomainService {
     const isApex = isApexDomain === true;
     const target = cnameTarget();
 
-    // Verify DNS: kiểm tra CNAME/A record đã được thêm chưa
-    // (Customer tự thêm CNAME/A record ở DNS provider của họ, ta chỉ verify)
-    const dnsStatus = await checkCnameStatus(h, target, isApex);
+    // Verify DNS: CNAME/A đã trỏ về hệ thống VÀ bản ghi TXT chứng minh chủ sở hữu đã có
+    // (Customer tự thêm các bản ghi ở DNS provider của họ, ta chỉ verify).
+    // Ngoại lệ: landing này ĐÃ có đúng hostname này ở trạng thái active (lưu lại / bấm kết nối lại) thì không đòi TXT —
+    // tên miền đang chạy không bị buộc làm lại.
+    const dnsStatus = await checkConnectStatus(h, target, isApex, resourceOwnerId, {
+      requireOwnership: !isOwnActiveHostname(existing, h),
+    });
     if (!dnsStatus.verified) {
       const err = new Error(buildDnsVerificationErrorMessage(dnsStatus, h, target));
       err.statusCode = 422;
-      err.data = buildDnsCheckResult(dnsStatus, h, isApex);
+      err.data = buildDnsCheckResult(dnsStatus, h, isApex, resourceOwnerId);
       throw err;
     }
 
@@ -756,6 +943,9 @@ class LandingPageDomainService {
    * Xác minh DNS bằng CNAME record hoặc A record.
    * Kiểm tra CNAME có trỏ về founderai.biz không, hoặc A record có trỏ về IP platform không.
    * Sau khi verify thành công, trigger SSL provisioning qua Certbot.
+   *
+   * KHÔNG đòi bản ghi TXT chủ sở hữu (khác setHostname): chỉ xử lý hàng `pending_verification` có từ trước, đã gắn với
+   * đúng landing của chủ tạo ra nó; setHostname không còn tạo hàng pending nên đường này không mở lối gắn trộm mới.
    *
    * @param {number} landingPageId
    * @param {object} authUser

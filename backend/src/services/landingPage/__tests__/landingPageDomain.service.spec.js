@@ -51,11 +51,17 @@ jest.unstable_mockModule('dns/promises', () => ({
   default: {
     resolve: jest.fn(),
     resolve4: jest.fn(),
+    resolveTxt: jest.fn(),
   },
 }));
 
+// Khoá HMAC của mã xác minh chủ sở hữu tên miền (buildOwnershipToken) — môi trường unit không đặt JWT_SECRET.
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'unit-test-jwt-secret';
+
 const dns = (await import('dns/promises')).default;
-const landingPageDomainService = (await import('../landingPageDomain.service.js')).default;
+const landingPageDomainModule = await import('../landingPageDomain.service.js');
+const landingPageDomainService = landingPageDomainModule.default;
+const { buildOwnershipToken } = landingPageDomainModule;
 
 const authUser = { id: 1, role: 'user_admin' };
 const landingPageId = 99;
@@ -254,6 +260,7 @@ describe('landingPageDomain.service — tên miền riêng chỉ kết nối khi
   };
 
   const dnsNotFound = () => Object.assign(new Error('queryCname ENOTFOUND'), { code: 'ENOTFOUND' });
+  const txtValueFor = (ownerId, host) => `founderai-verify=${buildOwnershipToken(ownerId, host)}`;
 
   function expectNoDomainWrites() {
     expect(mockDomainRepo.upsertForLanding).not.toHaveBeenCalled();
@@ -288,6 +295,7 @@ describe('landingPageDomain.service — tên miền riêng chỉ kết nối khi
     mockCloudflareService.deleteDnsRecord.mockResolvedValue({ success: true });
     dns.resolve.mockRejectedValue(dnsNotFound());
     dns.resolve4.mockRejectedValue(dnsNotFound());
+    dns.resolveTxt.mockRejectedValue(Object.assign(new Error('queryTxt ENODATA'), { code: 'ENODATA' }));
 
     jest.spyOn(landingPageDomainService, 'provisionSsl').mockResolvedValue(undefined);
   });
@@ -305,7 +313,10 @@ describe('landingPageDomain.service — tên miền riêng chỉ kết nối khi
       reason: 'not_found',
       hostname: 'lp.example.com',
       isApexDomain: false,
-      dnsRecords: [{ type: 'CNAME', host: 'lp', value: 'founderai.biz', ttl: 3600 }],
+      dnsRecords: [
+        { type: 'CNAME', host: 'lp', value: 'founderai.biz', ttl: 3600 },
+        { type: 'TXT', host: '_founderai-verify.lp', value: `founderai-verify=${buildOwnershipToken(1, 'lp.example.com')}`, ttl: 3600 },
+      ],
       cnameTarget: 'founderai.biz',
     }));
     expectNoDomainWrites();
@@ -314,6 +325,7 @@ describe('landingPageDomain.service — tên miền riêng chỉ kết nối khi
 
   it('setHostname khi DNS đúng, trang đang dùng link miễn phí → upsert hàng riêng active THAY hàng miễn phí, dọn DNS Cloudflare cũ, domain_type=custom, không xoá hàng', async () => {
     dns.resolve.mockResolvedValue(['founderai.biz']);
+    dns.resolveTxt.mockResolvedValue([[txtValueFor(1, 'lp.example.com')]]);
 
     const result = await landingPageDomainService.setHostname(landingPageId, 'lp.example.com', false, authUser);
 
@@ -343,11 +355,15 @@ describe('landingPageDomain.service — tên miền riêng chỉ kết nối khi
     const wrong = await landingPageDomainService.checkHostname(landingPageId, 'lp.example.com', false, authUser);
     expect(wrong).toEqual(expect.objectContaining({
       verified: false,
-      dnsRecords: [expect.objectContaining({ type: 'CNAME', host: 'lp', value: 'founderai.biz' })],
+      dnsRecords: [
+        expect.objectContaining({ type: 'CNAME', host: 'lp', value: 'founderai.biz' }),
+        expect.objectContaining({ type: 'TXT', host: '_founderai-verify.lp' }),
+      ],
     }));
     expect(wrong.message).toMatch(/lp\.example\.com/);
 
     dns.resolve.mockResolvedValue(['founderai.biz']);
+    dns.resolveTxt.mockResolvedValue([[txtValueFor(1, 'lp.example.com')]]);
     const right = await landingPageDomainService.checkHostname(landingPageId, 'lp.example.com', false, authUser);
     expect(right.verified).toBe(true);
 
@@ -358,6 +374,7 @@ describe('landingPageDomain.service — tên miền riêng chỉ kết nối khi
   it('checkHostname tên miền chính (apex) → bản ghi A tới IP cố định của hệ thống', async () => {
     process.env.LP_APEX_FIXED_IP = '203.0.113.9';
     dns.resolve4.mockResolvedValue(['203.0.113.9']);
+    dns.resolveTxt.mockResolvedValue([[txtValueFor(1, 'example.com')]]);
 
     const result = await landingPageDomainService.checkHostname(landingPageId, 'example.com', true, authUser);
 
@@ -365,7 +382,10 @@ describe('landingPageDomain.service — tên miền riêng chỉ kết nối khi
       verified: true,
       isApexDomain: true,
       apexFixedIp: '203.0.113.9',
-      dnsRecords: [{ type: 'A', host: '@', value: '203.0.113.9', ttl: 3600 }],
+      dnsRecords: [
+        { type: 'A', host: '@', value: '203.0.113.9', ttl: 3600 },
+        { type: 'TXT', host: '_founderai-verify', value: txtValueFor(1, 'example.com'), ttl: 3600 },
+      ],
     }));
     expectNoDomainWrites();
   });
@@ -455,5 +475,301 @@ describe('landingPageDomain.service — tên miền riêng chỉ kết nối khi
     expect(mockDomainRepo.upsertForLanding).not.toHaveBeenCalled();
     expect(mockDomainRepo.deleteByLandingPageId).not.toHaveBeenCalled();
     expect(result.ok).toBe(true);
+  });
+});
+
+/**
+ * PLAN_TEN_MIEN_TXT (20/10/2026) — tên miền riêng phải chứng minh chủ sở hữu bằng bản ghi TXT
+ * `_founderai-verify.<hostname>` = `founderai-verify=<token>`; token gắn với workspace + hostname.
+ */
+describe('landingPageDomain.service — xác minh chủ sở hữu tên miền bằng TXT', () => {
+  const workspaceA = { id: 1, role: 'user_admin' };
+  const workspaceB = { id: 2, role: 'user_admin' };
+  const host = 'lp.example.com';
+  const freeRow = {
+    id: 5,
+    landingPageId,
+    hostname: 'launch.founderai.biz',
+    status: 'active',
+    cfManaged: true,
+    cfZoneId: 'zone-1',
+    cfRecordId: 'rec-1',
+    cfHostnameId: null,
+    isApexDomain: false,
+  };
+  const landingOf = (ownerId) => ({
+    id: landingPageId,
+    slug: 'launch',
+    title: 'Test',
+    htmlContent: '<p>x</p>',
+    isPublished: true,
+    idUser: ownerId,
+    workspaceOwnerId: ownerId,
+    domainType: 'system',
+  });
+  const txtOf = (ownerId, hostname = host) => `founderai-verify=${buildOwnershipToken(ownerId, hostname)}`;
+  const dnsError = (code) => Object.assign(new Error(`query ${code}`), { code });
+
+  function expectNoDomainWrites() {
+    expect(mockDomainRepo.upsertForLanding).not.toHaveBeenCalled();
+    expect(mockDomainRepo.updateStatusById).not.toHaveBeenCalled();
+    expect(mockLandingPageRepo.updateByIdInScope).not.toHaveBeenCalled();
+    expect(mockCloudflareService.deleteDnsRecord).not.toHaveBeenCalled();
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    process.env.LP_CNAME_TARGET = 'founderai.biz';
+    delete process.env.LP_APEX_FIXED_IP;
+    delete process.env.SSL_PROVISION_SCRIPT;
+
+    mockLandingPageRepo.findByIdInScope.mockResolvedValue(landingOf(1));
+    mockLandingPageRepo.updateByIdInScope.mockResolvedValue({});
+    mockDomainRepo.findByLandingPageId.mockResolvedValue(freeRow);
+    mockDomainRepo.findByLandingPageIdInScope.mockResolvedValue(freeRow);
+    mockDomainRepo.findByHostnameLower.mockResolvedValue(null);
+    mockDomainRepo.countPendingOrActiveInScope.mockResolvedValue(1);
+    mockDomainRepo.upsertForLanding.mockResolvedValue(undefined);
+    mockCloudflareService.isConfigured.mockReturnValue(true);
+    mockCloudflareService.deleteDnsRecord.mockResolvedValue({ success: true });
+    // Mặc định: CNAME đã trỏ đúng, TXT chưa có.
+    dns.resolve.mockResolvedValue(['founderai.biz']);
+    dns.resolve4.mockRejectedValue(dnsError('ENOTFOUND'));
+    dns.resolveTxt.mockRejectedValue(dnsError('ENODATA'));
+
+    jest.spyOn(landingPageDomainService, 'provisionSsl').mockResolvedValue(undefined);
+  });
+
+  describe('buildOwnershipToken', () => {
+    it('cùng workspace + cùng hostname (khác hoa/thường, khoảng trắng) → cùng token; 32 ký tự hex', () => {
+      const a = buildOwnershipToken(1, 'lp.example.com');
+      expect(a).toMatch(/^[0-9a-f]{32}$/);
+      expect(buildOwnershipToken(1, 'LP.Example.COM')).toBe(a);
+      expect(buildOwnershipToken('1', ' lp.example.com ')).toBe(a);
+    });
+
+    it('khác workspace → khác token; khác hostname → khác token', () => {
+      const a = buildOwnershipToken(1, 'lp.example.com');
+      expect(buildOwnershipToken(2, 'lp.example.com')).not.toBe(a);
+      expect(buildOwnershipToken(1, 'www.example.com')).not.toBe(a);
+      // Ranh giới ghép chuỗi: dấu ':' phân tách workspace và hostname nên (1, "2.example.com") ≠ (12, ".example.com").
+      expect(buildOwnershipToken(1, '2.example.com')).not.toBe(buildOwnershipToken(12, '.example.com'));
+    });
+
+    it('thiếu JWT_SECRET → ném lỗi rõ, không dùng chuỗi cố định', () => {
+      const saved = process.env.JWT_SECRET;
+      delete process.env.JWT_SECRET;
+      try {
+        expect(() => buildOwnershipToken(1, host)).toThrow(/JWT_SECRET/);
+      } finally {
+        process.env.JWT_SECRET = saved;
+      }
+    });
+
+    it('thiếu workspace hoặc hostname → ném lỗi (không sinh token cho chuỗi rỗng)', () => {
+      expect(() => buildOwnershipToken(undefined, host)).toThrow();
+      expect(() => buildOwnershipToken(1, '')).toThrow();
+    });
+  });
+
+  it('A kiểm hostname mới, CNAME đúng, CHƯA có TXT → verified=false, lý do txt_missing, bảng có dòng TXT với token của A, câu hướng dẫn nêu tên + giá trị', async () => {
+    const result = await landingPageDomainService.checkHostname(landingPageId, host, false, workspaceA);
+
+    expect(result).toEqual(expect.objectContaining({ verified: false, reason: 'txt_missing' }));
+    expect(result.dnsRecords).toEqual([
+      { type: 'CNAME', host: 'lp', value: 'founderai.biz', ttl: 3600 },
+      { type: 'TXT', host: '_founderai-verify.lp', value: txtOf(1), ttl: 3600 },
+    ]);
+    expect(result.message).toContain('TXT');
+    expect(result.message).toContain(txtOf(1));
+    expect(result.message).toContain('_founderai-verify.lp.example.com');
+    expect(dns.resolveTxt).toHaveBeenCalledWith('_founderai-verify.lp.example.com');
+    expectNoDomainWrites();
+  });
+
+  it('A thêm TXT đúng → checkHostname verified=true và setHostname thành công, ghi hàng riêng active', async () => {
+    dns.resolveTxt.mockResolvedValue([[txtOf(1)]]);
+
+    const check = await landingPageDomainService.checkHostname(landingPageId, host, false, workspaceA);
+    expect(check.verified).toBe(true);
+
+    const result = await landingPageDomainService.setHostname(landingPageId, host, false, workspaceA);
+
+    expect(mockDomainRepo.upsertForLanding).toHaveBeenCalledWith(expect.objectContaining({
+      landingPageId,
+      hostname: host,
+      status: 'active',
+      cfManaged: false,
+    }));
+    expect(landingPageDomainService.provisionSsl).toHaveBeenCalledWith(host);
+    expect(result.configured).toBe(true);
+  });
+
+  it('B (workspace khác) nhập cùng hostname, CNAME đúng, TXT là của A → 422 txt_wrong, KHÔNG ghi gì (token B ≠ token A)', async () => {
+    mockLandingPageRepo.findByIdInScope.mockResolvedValue(landingOf(2));
+    dns.resolveTxt.mockResolvedValue([[txtOf(1)]]);
+
+    const err = await landingPageDomainService
+      .setHostname(landingPageId, host, false, workspaceB)
+      .then(() => null, (e) => e);
+
+    expect(err).not.toBeNull();
+    expect(err.statusCode).toBe(422);
+    expect(err.data).toEqual(expect.objectContaining({ verified: false, reason: 'txt_wrong' }));
+    // Bảng bản ghi B được hướng dẫn thêm là token CỦA B, không phải của A.
+    const txtRow = err.data.dnsRecords.find((r) => r.type === 'TXT');
+    expect(txtRow.value).toBe(txtOf(2));
+    expect(txtRow.value).not.toBe(txtOf(1));
+    expectNoDomainWrites();
+    expect(landingPageDomainService.provisionSsl).not.toHaveBeenCalled();
+  });
+
+  it('setHostname khi CNAME đúng nhưng chưa có TXT → 422 txt_missing, KHÔNG ghi gì, không đụng Cloudflare', async () => {
+    const err = await landingPageDomainService
+      .setHostname(landingPageId, host, false, workspaceA)
+      .then(() => null, (e) => e);
+
+    expect(err.statusCode).toBe(422);
+    expect(err.data).toEqual(expect.objectContaining({ verified: false, reason: 'txt_missing', hostname: host }));
+    expect(err.message).toContain(txtOf(1));
+    expectNoDomainWrites();
+  });
+
+  it('CNAME sai thì không tra TXT (lỗi CNAME báo trước); bảng bản ghi vẫn có dòng TXT để khách cài một lượt', async () => {
+    dns.resolve.mockResolvedValue(['nhaquangcao.vn']);
+
+    const result = await landingPageDomainService.checkHostname(landingPageId, host, false, workspaceA);
+
+    expect(result).toEqual(expect.objectContaining({ verified: false, reason: 'wrong_target' }));
+    expect(result.dnsRecords.map((r) => r.type)).toEqual(['CNAME', 'TXT']);
+    expect(dns.resolveTxt).not.toHaveBeenCalled();
+  });
+
+  it('landing ĐANG active với đúng hostname này, bấm kết nối lại → KHÔNG đòi TXT (không tra TXT), thành công', async () => {
+    const own = { ...freeRow, id: 9, hostname: host, status: 'active', cfManaged: false, cfZoneId: null, cfRecordId: null };
+    mockDomainRepo.findByLandingPageId.mockResolvedValue(own);
+    // TXT không có (đã bị xoá khỏi DNS) — vẫn phải qua.
+    dns.resolveTxt.mockRejectedValue(dnsError('ENODATA'));
+
+    const check = await landingPageDomainService.checkHostname(landingPageId, host, false, workspaceA);
+    expect(check.verified).toBe(true);
+
+    const result = await landingPageDomainService.setHostname(landingPageId, 'LP.Example.com', false, workspaceA);
+
+    expect(dns.resolveTxt).not.toHaveBeenCalled();
+    expect(mockDomainRepo.upsertForLanding).toHaveBeenCalledWith(expect.objectContaining({ hostname: host, status: 'active' }));
+    expect(result.configured).toBe(true);
+  });
+
+  it('ngoại lệ chỉ áp cho ĐÚNG hostname đang active: landing đang active ở hostname A, đổi sang hostname B khác → vẫn đòi TXT', async () => {
+    const own = { ...freeRow, id: 9, hostname: 'cu.example.com', status: 'active', cfManaged: false };
+    mockDomainRepo.findByLandingPageId.mockResolvedValue(own);
+
+    const err = await landingPageDomainService
+      .setHostname(landingPageId, host, false, workspaceA)
+      .then(() => null, (e) => e);
+
+    expect(err.statusCode).toBe(422);
+    expect(err.data.reason).toBe('txt_missing');
+    expectNoDomainWrites();
+  });
+
+  it('hàng pending_verification cùng hostname KHÔNG được hưởng ngoại lệ (chỉ active): setHostname vẫn đòi TXT', async () => {
+    mockDomainRepo.findByLandingPageId.mockResolvedValue({ ...freeRow, id: 9, hostname: host, status: 'pending_verification', cfManaged: false });
+
+    const err = await landingPageDomainService
+      .setHostname(landingPageId, host, false, workspaceA)
+      .then(() => null, (e) => e);
+
+    expect(err.statusCode).toBe(422);
+    expect(err.data.reason).toBe('txt_missing');
+  });
+
+  it('hàng pending_verification cũ qua verifyDns → hành vi cũ: CNAME đúng là active, KHÔNG tra TXT', async () => {
+    const pending = { id: 9, landingPageId, hostname: host, status: 'pending_verification', cfManaged: false, isApexDomain: false };
+    mockDomainRepo.findByLandingPageIdInScope.mockResolvedValue(pending);
+    mockDomainRepo.findByLandingPageId.mockResolvedValue({ ...pending, status: 'active' });
+
+    const result = await landingPageDomainService.verifyDns(landingPageId, workspaceA);
+
+    expect(dns.resolveTxt).not.toHaveBeenCalled();
+    expect(mockDomainRepo.updateStatusById).toHaveBeenCalledWith(9, 'active');
+    expect(result.status).toBe('active');
+  });
+
+  describe('đọc bản ghi TXT', () => {
+    it('TXT bị chia nhiều mảnh (mảng các mảng) → nối lại các mảnh của MỘT bản ghi rồi so', async () => {
+      const value = txtOf(1);
+      dns.resolveTxt.mockResolvedValue([[value.slice(0, 10), value.slice(10, 25), value.slice(25)]]);
+
+      const result = await landingPageDomainService.checkHostname(landingPageId, host, false, workspaceA);
+
+      expect(result.verified).toBe(true);
+    });
+
+    it('nhiều bản ghi TXT cùng tên, chỉ một bản khớp (không phải phần tử đầu) → khớp', async () => {
+      dns.resolveTxt.mockResolvedValue([
+        ['v=spf1 include:_spf.example.com ~all'],
+        ['founderai-verify=0000000000000000000000000000dead'],
+        [txtOf(1)],
+      ]);
+
+      const result = await landingPageDomainService.checkHostname(landingPageId, host, false, workspaceA);
+
+      expect(result.verified).toBe(true);
+    });
+
+    it('khách dán kèm dấu nháy kép / khoảng trắng thừa → vẫn khớp', async () => {
+      dns.resolveTxt.mockResolvedValue([[`  "${txtOf(1)}"  `]]);
+
+      const result = await landingPageDomainService.checkHostname(landingPageId, host, false, workspaceA);
+
+      expect(result.verified).toBe(true);
+    });
+
+    it('có TXT nhưng không bản nào khớp → txt_wrong, kèm giá trị đang có trong câu hướng dẫn', async () => {
+      dns.resolveTxt.mockResolvedValue([['founderai-verify=sai-gia-tri'], ['khac']]);
+
+      const result = await landingPageDomainService.checkHostname(landingPageId, host, false, workspaceA);
+
+      expect(result).toEqual(expect.objectContaining({ verified: false, reason: 'txt_wrong' }));
+      expect(result.message).toContain('founderai-verify=sai-gia-tri');
+      expect(result.message).toContain(txtOf(1));
+    });
+
+    it('ENOTFOUND cũng là chưa có bản ghi (txt_missing)', async () => {
+      dns.resolveTxt.mockRejectedValue(dnsError('ENOTFOUND'));
+
+      const result = await landingPageDomainService.checkHostname(landingPageId, host, false, workspaceA);
+
+      expect(result).toEqual(expect.objectContaining({ verified: false, reason: 'txt_missing' }));
+    });
+
+    it('lỗi DNS tạm thời (timeout/SERVFAIL) → reason transient, không kết luận "thiếu TXT"; setHostname 422 và không ghi gì', async () => {
+      dns.resolveTxt.mockRejectedValue(dnsError('ETIMEOUT'));
+
+      const check = await landingPageDomainService.checkHostname(landingPageId, host, false, workspaceA);
+      expect(check).toEqual(expect.objectContaining({ verified: false, reason: 'transient' }));
+      expect(check.message).toMatch(/tạm thời/);
+
+      await expect(landingPageDomainService.setHostname(landingPageId, host, false, workspaceA))
+        .rejects.toMatchObject({ statusCode: 422 });
+      expectNoDomainWrites();
+    });
+
+    it('tên miền chính (apex): TXT ở _founderai-verify.<hostname>, hiển thị host _founderai-verify (không có phần đuôi)', async () => {
+      process.env.LP_APEX_FIXED_IP = '203.0.113.9';
+      dns.resolve4.mockResolvedValue(['203.0.113.9']);
+      dns.resolveTxt.mockResolvedValue([[txtOf(1, 'example.com')]]);
+
+      const result = await landingPageDomainService.checkHostname(landingPageId, 'example.com', true, workspaceA);
+
+      expect(dns.resolveTxt).toHaveBeenCalledWith('_founderai-verify.example.com');
+      expect(result.verified).toBe(true);
+      expect(result.dnsRecords).toEqual([
+        { type: 'A', host: '@', value: '203.0.113.9', ttl: 3600 },
+        { type: 'TXT', host: '_founderai-verify', value: txtOf(1, 'example.com'), ttl: 3600 },
+      ]);
+    });
   });
 });
