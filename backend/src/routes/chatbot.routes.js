@@ -223,6 +223,7 @@ router.get('/custom-chatbots', requirePermission('chatbots_manage'), chatbotCont
 router.post('/custom-chatbots', requirePermission('chatbots_manage'), chatbotController.createCustomChatbot.bind(chatbotController));
 router.get('/custom-chatbots/:chatbotId', requirePermission('chatbots_manage'), chatbotController.getCustomChatbot.bind(chatbotController));
 router.put('/custom-chatbots/:chatbotId', requirePermission('chatbots_manage'), chatbotController.updateCustomChatbot.bind(chatbotController));
+router.put('/custom-chatbots/:chatbotId/public-numeric-id', requirePermission('chatbots_manage'), chatbotController.setPublicNumericId.bind(chatbotController));
 router.delete('/custom-chatbots/:chatbotId', requirePermission('chatbots_manage'), chatbotController.deleteCustomChatbot.bind(chatbotController));
 
 // Chatbot Channel Connections

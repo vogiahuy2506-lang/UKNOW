@@ -187,6 +187,12 @@ const chatbotApi = {
     return response.data;
   },
 
+  // Bật/tắt link công khai theo id số (/chat/<id>) cho từng chatbot. Tắt trả khoá mới nếu khoá cũ dạng chatbot_<số>.
+  setPublicNumericId: async (chatbotId, enabled) => {
+    const response = await api.put(`/ai/chatbot/custom-chatbots/${chatbotId}/public-numeric-id`, { enabled });
+    return response.data;
+  },
+
   // Delete chatbot
   deleteChatbot: async (chatbotId) => {
     const response = await api.delete(`/ai/chatbot/custom-chatbots/${chatbotId}`);

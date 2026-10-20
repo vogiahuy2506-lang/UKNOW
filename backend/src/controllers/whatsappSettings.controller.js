@@ -72,12 +72,30 @@ class WhatsAppSettingsController {
    */
   async getPendingOAuth(req, res) {
     try {
+      const userId = resolveWorkspaceOwnerId(req.user);
       const state = String(req.query?.state || '');
       const entry = peekPendingOAuth(state);
-      if (!entry) {
+      // `state` nằm trong URL oauth-result.html?state=… nên ai có link đều biết nó: phải là chủ của lượt kết nối này.
+      // Khác chủ trả CÙNG thông điệp "không có" (không cho dò state nào đang tồn tại).
+      if (!entry || Number(entry.userId) !== Number(userId)) {
         return res.status(404).json({ success: false, message: 'OAuth state not found or expired' });
       }
-      return res.json({ success: true, data: entry });
+      // Chỉ trả phần giao diện cần để chọn số điện thoại. KHÔNG trả accessToken của Meta, `code` đổi token, appId hay userId:
+      // entry còn mang các trường bí mật dùng cho completeOAuth phía máy chủ (danh sách trắng, không phải loại trừ).
+      return res.json({
+        success: true,
+        data: {
+          kind: entry.kind || 'whatsapp',
+          wabaId: entry.wabaId || null,
+          phoneNumbers: (Array.isArray(entry.phoneNumbers) ? entry.phoneNumbers : []).map((p) => ({
+            id: p?.id ?? null,
+            display_phone_number: p?.display_phone_number ?? '',
+            verified_name: p?.verified_name ?? '',
+            quality_rating: p?.quality_rating ?? 'UNKNOWN',
+            code_verification_status: p?.code_verification_status ?? null,
+          })),
+        },
+      });
     } catch (err) {
       console.error('[WhatsAppSettings] getPendingOAuth error:', err.message);
       return res.status(err.status || 500).json({ success: false, message: err.message });

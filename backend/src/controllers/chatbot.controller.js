@@ -1608,6 +1608,10 @@ class ChatbotController {
         return res.status(404).json({ success: false, message: 'Chatbot not found' });
       }
       const updatePayload = { ...req.body };
+      // widget_key do máy chủ cấp (tạo bot / ensureWidgetKey / công tắc id số), KHÔNG nhận từ client: người dùng đặt được khoá tuỳ ý
+      // (vd `chatbot_<id bot người khác>`) thì `resolveWidgetForChatbot` tra/tạo `web_widget_configs` theo khoá đó mà không lọc chủ.
+      // Giao diện vẫn gửi lại đúng khoá hiện tại — bỏ qua im lặng, không lỗi.
+      delete updatePayload.widget_key;
       if (req.body.reply_limit_config !== undefined) {
         try {
           updatePayload.reply_limit_config = normalizeChatbotReplyLimitConfig(
@@ -1714,6 +1718,53 @@ class ChatbotController {
       });
     } catch (err) {
       console.error('[CustomChatbot] updateCustomChatbot error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * PUT /custom-chatbots/:chatbotId/public-numeric-id  — body `{ enabled: boolean }`.
+   * Chủ bot (hoặc nhân viên có quyền chatbots_manage) bật/tắt link công khai theo id số (/chat/<id>) cho TỪNG bot.
+   * Tắt: link/mã nhúng dùng id số cũ ngừng chạy, bot chỉ chat công khai qua khoá (widget_key — tự đổi sang khoá ngẫu nhiên nếu đang là
+   * dạng `chatbot_<số>`). Phản hồi trả khoá mới để giao diện cập nhật ngay. Bot không thuộc chủ → 404.
+   */
+  async setPublicNumericId(req, res) {
+    try {
+      const rawId = String(req.params.chatbotId ?? '');
+      if (!/^\d+$/.test(rawId)) {
+        return res.status(400).json({ success: false, message: 'Invalid chatbot ID' });
+      }
+      const id = Number(rawId);
+      const userId = resolveWorkspaceOwnerId(req.user);
+      const enabled = req.body?.enabled;
+      if (typeof enabled !== 'boolean') {
+        return res.status(400).json({
+          success: false,
+          message: 'enabled phải là true hoặc false',
+          code: 'CHATBOT_PUBLIC_NUMERIC_ID_INVALID',
+        });
+      }
+
+      const updated = await chatbotRepository.setAllowPublicNumericId(id, userId, enabled);
+      if (!updated) {
+        return res.status(404).json({ success: false, message: 'Chatbot not found' });
+      }
+      await logWorkspace(
+        getWorkspaceAuditContext(req),
+        AUDIT_ACTIONS.CHATBOT_UPDATED,
+        AUDIT_ENTITY_TYPES.CHATBOT,
+        id,
+        { allow_public_numeric_id: updated.allow_public_numeric_id }
+      );
+      return res.json({
+        success: true,
+        data: {
+          allow_public_numeric_id: updated.allow_public_numeric_id,
+          widget_key: updated.widget_key,
+        },
+      });
+    } catch (err) {
+      console.error('[CustomChatbot] setPublicNumericId error:', err);
       return res.status(500).json({ success: false, message: err.message });
     }
   }
