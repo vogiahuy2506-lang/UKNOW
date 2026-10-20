@@ -946,14 +946,13 @@ class UserController {
 
   /**
    * Lấy lịch sử mua gói dịch vụ của user đang đăng nhập.
-   * Tìm theo user_id hoặc user_email để bắt cả đơn cũ tạo trước khi có cột user_id.
+   * Chỉ theo user_id (đơn cũ chỉ có email đã được migration 309 gán user_id); không khớp theo email vì email hồ sơ không được xác minh.
    */
   async getMyOrders(req, res) {
     try {
       const userId = req.user.id;
-      const userEmail = req.user.email;
 
-      const orders = await findSuccessfulOrdersForUser({ userId, userEmail });
+      const orders = await findSuccessfulOrdersForUser({ userId });
 
       res.json({
         success: true,
