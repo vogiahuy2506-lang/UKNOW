@@ -62,6 +62,9 @@
         "setupFiles": [
           "<rootDir>/tests/setup/loopbackListen.js"
         ],
+        "setupFilesAfterEnv": [
+          "<rootDir>/tests/setup/unitJestTimeout.cjs"
+        ],
         "testMatch": [
           "<rootDir>/src/**/__tests__/**/*.spec.js",
           "<rootDir>/src/**/*.spec.js"
