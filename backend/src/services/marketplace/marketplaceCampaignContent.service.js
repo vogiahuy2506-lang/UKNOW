@@ -9,6 +9,7 @@ import {
   createTemplateIdMaps,
 } from '../../utils/campaignTemplateReference.util.js';
 import { resolveOwnedStorageKey } from '../../utils/storageKey.util.js';
+import { collectSellerBlockFiles } from '../../utils/marketplaceBlockAttachments.util.js';
 import { getStorageBackend } from '../storage/storageBackend.js';
 import {
   StorageQuotaExceededError,
@@ -27,6 +28,9 @@ import {
  *    trả bản đồ id cũ → id mới để đổi tham chiếu trong config khối và `flow_json`.
  *
  * Listing cũ (snapshot chưa có `templates`): đọc mẫu SỐNG của người bán làm nguồn. Không đủ nội dung → từ chối mua trước khi trừ credit.
+ *
+ * Tệp đính kèm CẤP KHỐI (`config.attachments`, `zaloGroupAttachments`, `steps[].attachments` — xem utils/marketplaceBlockAttachments.util.js)
+ * đi cùng đường: gom + kiểm kho + cộng dung lượng lúc `prepareForPurchase`, chép + ghi sổ lúc `materializeBlockAttachments`.
  */
 
 export const LISTING_CONTENT_UNAVAILABLE = 'LISTING_CONTENT_UNAVAILABLE';
@@ -224,8 +228,18 @@ export async function assertBuyerStorageAvailable(client, buyerId, requestedByte
 export async function prepareForPurchase({ client, listing, buyerId }) {
   const snapshot = listing?.snapshot_data && typeof listing.snapshot_data === 'object' ? listing.snapshot_data : {};
   const refs = collectRequiredTemplateReferences(Array.isArray(snapshot.nodes) ? snapshot.nodes : []);
+
+  // Tệp đính kèm cấp khối (không phụ thuộc có dùng mẫu hay không): kiểm kho + cộng dung lượng cùng bước với mẫu.
+  const block = await collectBlockFileSources({ snapshot, sellerId: listing?.id_user });
+
   if (refs.length === 0) {
-    return { sources: { [TEMPLATE_CHANNEL.EMAIL]: new Map(), [TEMPLATE_CHANNEL.ZALO]: new Map() }, totalBytes: 0 };
+    if (block.totalBytes > 0) await assertBuyerStorageAvailable(client, buyerId, block.totalBytes);
+    return {
+      sources: { [TEMPLATE_CHANNEL.EMAIL]: new Map(), [TEMPLATE_CHANNEL.ZALO]: new Map() },
+      totalBytes: 0,
+      blockFiles: block.sources,
+      blockBytes: block.totalBytes,
+    };
   }
 
   const sellerId = listing.id_user;
@@ -238,8 +252,38 @@ export async function prepareForPurchase({ client, listing, buyerId }) {
     : await loadLiveTemplates(sellerId, groupIdsByChannel(refs), client);
 
   const collected = await collectTemplateSources({ client, refs, available, sellerId });
-  await assertBuyerStorageAvailable(client, buyerId, collected.totalBytes);
-  return collected;
+  await assertBuyerStorageAvailable(client, buyerId, collected.totalBytes + block.totalBytes);
+  return { ...collected, blockFiles: block.sources, blockBytes: block.totalBytes };
+}
+
+/**
+ * Tệp đính kèm cấp khối của snapshot (cả `nodes[].config` lẫn `flowJson`): mỗi khoá của NGƯỜI BÁN một lần. Tệp ngoài không gian người bán bị
+ * bỏ (không kiểm, không chép). Tệp của người bán đã mất khỏi kho → `LISTING_CONTENT_UNAVAILABLE` (không bán hàng hỏng).
+ * Không ghi gì, không chép tệp.
+ *
+ * @returns {Promise<{ sources: Map<string, object>, totalBytes: number }>}
+ */
+async function collectBlockFileSources({ snapshot, sellerId }) {
+  const { files, skipped } = collectSellerBlockFiles(snapshot, sellerId);
+  if (skipped > 0) {
+    console.warn(`[MarketplaceCampaignContent] Bỏ ${skipped} tệp đính kèm cấp khối không thuộc workspace ${sellerId}`);
+  }
+  const sources = new Map();
+  if (files.size === 0) return { sources, totalBytes: 0 };
+
+  const backend = getStorageBackend();
+  let totalBytes = 0;
+  for (const [key, attachment] of files) {
+    // eslint-disable-next-line no-await-in-loop
+    const info = await backend.getObjectInfo(key);
+    if (!info) {
+      throw unavailableError(`tệp đính kèm "${attachment.displayName || attachment.originalName || attachment.name || key}" của một khối gửi tin không còn trên kho`);
+    }
+    const size = Number(info.size) || 0;
+    totalBytes += size;
+    sources.set(key, { ...attachment, __size: size });
+  }
+  return { sources, totalBytes };
 }
 
 /**
@@ -390,6 +434,55 @@ export async function materializeTemplates(client, { buyerId, prepared, copiedKe
 }
 
 /**
+ * MUA (trong transaction mua) — chép tệp đính kèm CẤP KHỐI sang kho của người mua + ghi sổ dung lượng của người mua.
+ * Mỗi khoá của người bán chép MỘT lần dù nhiều khối / `flowJson` cùng dùng. Cùng quy ước với `materializeTemplates`: mọi khoá đã chép được đẩy
+ * vào `copiedKeys` NGAY SAU khi chép để người gọi dọn khi rollback; dòng sổ ghi trong transaction nên rollback theo.
+ *
+ * @param {object} client client của transaction mua
+ * @param {{ buyerId: number|string, prepared: { blockFiles?: Map<string, object>, blockBytes?: number }, copiedKeys: string[] }} input
+ * @returns {Promise<{ keyMap: Map<string, object>, fileCount: number }>} `keyMap`: khoá người bán → phần tử tệp mới (khoá/URL của người mua)
+ */
+export async function materializeBlockAttachments(client, { buyerId, prepared, copiedKeys }) {
+  const keyMap = new Map();
+  const sources = prepared?.blockFiles;
+  if (!(sources instanceof Map) || sources.size === 0) return { keyMap, fileCount: 0 };
+
+  // Kiểm lại dung lượng KHI ĐÃ giữ khoá của người mua (bước prepare chỉ là kiểm sớm, không khoá).
+  const bytes = Number(prepared.blockBytes) || 0;
+  if (bytes > 0) {
+    await acquireStorageQuotaLock(client, buyerId);
+    await assertBuyerStorageAvailable(client, buyerId, bytes);
+  }
+
+  const backend = getStorageBackend();
+  let fileCount = 0;
+  for (const [oldKey, attachment] of sources) {
+    const newKey = `uploads/${buyerId}/${Date.now()}_${randomUUID()}_${safeBaseName(attachment)}`;
+    // eslint-disable-next-line no-await-in-loop
+    await backend.copy(oldKey, newKey);
+    copiedKeys.push(newKey);
+    // eslint-disable-next-line no-await-in-loop
+    const url = await buildPreviewUrl(newKey);
+    const { __size: size, tempId: _tempId, storageObjectId: _storageObjectId, ...rest } = attachment;
+    keyMap.set(oldKey, { ...rest, key: newKey, url, size: rest.size ?? size });
+    // eslint-disable-next-line no-await-in-loop
+    await insertStorageObject({
+      poolType: 'workspace',
+      ownerUserId: buyerId,
+      actorUserId: buyerId,
+      storageKey: newKey,
+      category: 'campaign',
+      state: 'active',
+      sizeBytes: size,
+      referenceType: 'campaign_node',
+      referenceId: null,
+    }, client);
+    fileCount += 1;
+  }
+  return { keyMap, fileCount };
+}
+
+/**
  * Dọn các tệp đã chép khi transaction mua rollback (tệp nằm ngoài DB nên rollback không tự xoá). Không bao giờ ném lỗi.
  *
  * @param {string[]} copiedKeys
@@ -413,5 +506,6 @@ export default {
   assertBuyerStorageAvailable,
   prepareForPurchase,
   materializeTemplates,
+  materializeBlockAttachments,
   discardCopiedFiles,
 };

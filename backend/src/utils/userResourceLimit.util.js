@@ -100,11 +100,22 @@ async function resolveEffectiveLimit(queryable, userId, resourceKey, baseLimit) 
   return baseLimit + Math.max(0, Number(grants) || 0);
 }
 
-function buildLimitExceededMessage(resourceConfig, normalizedLimit) {
+function buildLimitExceededMessage(resourceConfig, normalizedLimit, { adding = 1, currentCount = null } = {}) {
   if (normalizedLimit === 0) {
     return `Tính năng ${resourceConfig.label} không được hỗ trợ trong gói dịch vụ hiện tại. Vui lòng liên hệ admin để nâng cấp gói.`;
   }
+  if (adding > 1 && Number.isFinite(currentCount)) {
+    // Tạo nhiều bản ghi một lượt (vd mua chiến dịch Marketplace kèm nhiều mẫu): nói rõ cần bao nhiêu, còn chỗ bao nhiêu.
+    const remaining = Math.max(0, normalizedLimit - currentCount);
+    return `Thao tác này cần tạo thêm ${adding} ${resourceConfig.label} nhưng gói chỉ còn chỗ cho ${remaining} (giới hạn ${normalizedLimit}, đang có ${currentCount}). Vui lòng xoá bớt hoặc liên hệ admin để nâng giới hạn.`;
+  }
   return `Tài khoản đã đạt giới hạn ${resourceConfig.label} (${normalizedLimit}). Vui lòng liên hệ admin để nâng giới hạn.`;
+}
+
+/** Số bản ghi sắp tạo: số nguyên ≥ 1 (mặc định 1). */
+function normalizeAdding(adding) {
+  const n = Math.floor(Number(adding));
+  return Number.isFinite(n) && n >= 1 ? n : 1;
 }
 
 export function createResourceLimitExceededError(message, resourceKey) {
@@ -187,10 +198,12 @@ async function acquireResourceLimitLock(client, userId, resourceKey) {
  * Phải gọi sau BEGIN trên cùng client; insert phải nằm trong cùng tx.
  *
  * @param {import('pg').PoolClient} client
- * @param {{ userId: number|string, roleCode?: string, resourceKey: keyof typeof RESOURCE_LIMIT_MAP }} input
+ * @param {{ userId: number|string, roleCode?: string, resourceKey: keyof typeof RESOURCE_LIMIT_MAP, adding?: number }} input
+ *   `adding`: số bản ghi SẮP tạo trong cùng transaction (mặc định 1). Mua chiến dịch Marketplace tạo nhiều bản sao mẫu một lượt nên truyền số mẫu.
  */
 export async function enforceResourceLimitTx(client, input) {
   const { userId, roleCode, resourceKey } = input || {};
+  const adding = normalizeAdding(input?.adding);
   const resourceConfig = resolveResourceConfig(resourceKey);
 
   if (isAdminRole(roleCode)) return;
@@ -211,9 +224,9 @@ export async function enforceResourceLimitTx(client, input) {
   }
 
   const currentCount = await countResourceForUser(client, userId, resourceConfig);
-  if (currentCount >= normalizedLimit) {
+  if (currentCount + adding > normalizedLimit) {
     throw createResourceLimitExceededError(
-      buildLimitExceededMessage(resourceConfig, normalizedLimit),
+      buildLimitExceededMessage(resourceConfig, normalizedLimit, { adding, currentCount }),
       resourceKey
     );
   }
@@ -222,11 +235,13 @@ export async function enforceResourceLimitTx(client, input) {
 /**
  * Kiểm tra user có vượt giới hạn tạo tài nguyên hay chưa (fast-path, không atomic).
  *
- * @param {{ userId: number|string, roleCode?: string, resourceKey: keyof typeof RESOURCE_LIMIT_MAP }} input
+ * @param {{ userId: number|string, roleCode?: string, resourceKey: keyof typeof RESOURCE_LIMIT_MAP, adding?: number }} input
+ *   `adding`: số bản ghi SẮP tạo (mặc định 1); cho phép khi `đang có + adding ≤ trần`.
  * @returns {Promise<{allowed: boolean, limit: number|null, currentCount: number, message: string|null}>}
  */
 export async function checkUserResourceLimit(input) {
   const { userId, roleCode, resourceKey } = input || {};
+  const adding = normalizeAdding(input?.adding);
   const resourceConfig = resolveResourceConfig(resourceKey);
 
   if (isAdminRole(roleCode)) {
@@ -261,13 +276,13 @@ export async function checkUserResourceLimit(input) {
   }
 
   const currentCount = await countResourceForUser(db, userId, resourceConfig);
-  const isAllowed = currentCount < normalizedLimit;
+  const isAllowed = currentCount + adding <= normalizedLimit;
 
   return {
     allowed: isAllowed,
     limit: normalizedLimit,
     currentCount,
-    message: isAllowed ? null : buildLimitExceededMessage(resourceConfig, normalizedLimit),
+    message: isAllowed ? null : buildLimitExceededMessage(resourceConfig, normalizedLimit, { adding, currentCount }),
   };
 }
 

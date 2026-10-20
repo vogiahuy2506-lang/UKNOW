@@ -386,3 +386,73 @@ describe('userResourceLimit.util', () => {
     });
   });
 });
+
+describe('userResourceLimit.util — tham số `adding` (số bản ghi sắp tạo một lượt; PLAN_GOM_MUC_NHE 3c)', () => {
+  beforeEach(() => {
+    mockQuery.mockReset();
+    sumActiveTopupGrants.mockReset();
+    sumActiveTopupGrants.mockResolvedValue(0);
+  });
+
+  const limitRows = (limit, total) => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ max_zalo_templates: limit }] })
+      .mockResolvedValueOnce({ rows: [{ total }] });
+  };
+
+  it('checkUserResourceLimit: mặc định adding=1 giữ nguyên hành vi cũ (count == limit → chặn, count < limit → cho)', async () => {
+    limitRows(3, 3);
+    expect((await checkUserResourceLimit({ userId: 1, roleCode: 'user', resourceKey: 'zaloTemplates' })).allowed).toBe(false);
+    mockQuery.mockReset();
+    limitRows(3, 2);
+    expect((await checkUserResourceLimit({ userId: 1, roleCode: 'user', resourceKey: 'zaloTemplates' })).allowed).toBe(true);
+  });
+
+  it('checkUserResourceLimit adding=3: đang có + 3 ≤ trần mới cho; vượt → thông điệp nêu cần bao nhiêu, còn chỗ bao nhiêu', async () => {
+    limitRows(5, 2);
+    const ok = await checkUserResourceLimit({ userId: 1, roleCode: 'user', resourceKey: 'zaloTemplates', adding: 3 });
+    expect(ok).toMatchObject({ allowed: true, limit: 5, currentCount: 2 });
+
+    mockQuery.mockReset();
+    limitRows(5, 3);
+    const over = await checkUserResourceLimit({ userId: 1, roleCode: 'user', resourceKey: 'zaloTemplates', adding: 3 });
+    expect(over.allowed).toBe(false);
+    expect(over.message).toContain('cần tạo thêm 3');
+    expect(over.message).toContain('còn chỗ cho 2');
+    expect(over.message).toContain('giới hạn 5');
+    expect(over.message).toContain('đang có 3');
+  });
+
+  it('enforceResourceLimitTx adding=3: chặn khi đang có + 3 > trần; vừa đủ thì qua; adding rác (0, -2, "x") coi như 1', async () => {
+    const client = { query: mockQuery };
+    // advisory lock → limit → count
+    mockQuery.mockResolvedValueOnce({}).mockResolvedValueOnce({ rows: [{ max_zalo_templates: 4 }] }).mockResolvedValueOnce({ rows: [{ total: 2 }] });
+    await expect(enforceResourceLimitTx(client, { userId: 1, roleCode: 'user', resourceKey: 'zaloTemplates', adding: 3 }))
+      .rejects.toMatchObject({ code: 'RESOURCE_LIMIT_EXCEEDED', statusCode: 400, resource: 'zaloTemplates', message: expect.stringContaining('cần tạo thêm 3') });
+
+    mockQuery.mockReset();
+    mockQuery.mockResolvedValueOnce({}).mockResolvedValueOnce({ rows: [{ max_zalo_templates: 5 }] }).mockResolvedValueOnce({ rows: [{ total: 2 }] });
+    await expect(enforceResourceLimitTx(client, { userId: 1, roleCode: 'user', resourceKey: 'zaloTemplates', adding: 3 })).resolves.toBeUndefined();
+
+    for (const adding of [0, -2, 'x', undefined]) {
+      mockQuery.mockReset();
+      mockQuery.mockResolvedValueOnce({}).mockResolvedValueOnce({ rows: [{ max_zalo_templates: 3 }] }).mockResolvedValueOnce({ rows: [{ total: 2 }] });
+      await expect(enforceResourceLimitTx(client, { userId: 1, roleCode: 'user', resourceKey: 'zaloTemplates', adding })).resolves.toBeUndefined();
+    }
+  });
+
+  it('trần 0 (gói không hỗ trợ) vẫn dùng câu "không được hỗ trợ" dù adding > 1; không trần (null) → qua; admin bỏ qua', async () => {
+    const client = { query: mockQuery };
+    mockQuery.mockResolvedValueOnce({}).mockResolvedValueOnce({ rows: [{ max_email_templates: 0 }] });
+    await expect(enforceResourceLimitTx(client, { userId: 1, roleCode: 'user', resourceKey: 'emailTemplates', adding: 2 }))
+      .rejects.toMatchObject({ message: expect.stringContaining('không được hỗ trợ') });
+
+    mockQuery.mockReset();
+    mockQuery.mockResolvedValueOnce({}).mockResolvedValueOnce({ rows: [{ max_email_templates: null }] });
+    await expect(enforceResourceLimitTx(client, { userId: 1, roleCode: 'user', resourceKey: 'emailTemplates', adding: 9 })).resolves.toBeUndefined();
+
+    mockQuery.mockReset();
+    await expect(enforceResourceLimitTx(client, { userId: 1, roleCode: 'admin', resourceKey: 'emailTemplates', adding: 9 })).resolves.toBeUndefined();
+    expect(mockQuery).not.toHaveBeenCalled();
+  });
+});

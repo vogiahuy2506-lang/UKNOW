@@ -13,6 +13,10 @@ import {
   stripSellerBoundSnapshotNodes,
 } from '../../utils/marketplaceCampaignSnapshot.util.js';
 import marketplaceCampaignContentService from './marketplaceCampaignContent.service.js';
+import {
+  keepOwnedBlockAttachmentsInFlowJson,
+  keepOwnedBlockAttachmentsInNodes,
+} from '../../utils/marketplaceBlockAttachments.util.js';
 
 // Mapping resource_type -> auto category (không cho user chọn category thủ công)
 const AUTO_CATEGORY_MAP = {
@@ -20,6 +24,18 @@ const AUTO_CATEGORY_MAP = {
   chatbot: 'chatbot',
   landing_page: 'landing',
 };
+
+// Phạm vi hiển thị của listing: chỉ 'public'. Giá trị 'team' từng có trong CSDL nhưng không có luật nào định nghĩa nó (browse / mua không xét
+// visibility, giao diện không gửi trường này; production 20/10/2026: 10/10 listing public) — nhận 'team' là hứa một giới hạn không tồn tại.
+export const ALLOWED_LISTING_VISIBILITIES = Object.freeze(['public']);
+
+function assertListingVisibility(visibility) {
+  if (!ALLOWED_LISTING_VISIBILITIES.includes(visibility)) {
+    const error = new Error('Visibility chỉ nhận giá trị "public"');
+    error.status = 400;
+    throw error;
+  }
+}
 
 class MarketplaceListingService {
   /**
@@ -42,14 +58,7 @@ class MarketplaceListingService {
     const category = AUTO_CATEGORY_MAP.campaign;
 
     // Validate visibility
-    if (visibility !== undefined) {
-      const VALID_VISIBILITIES = ['public', 'team'];
-      if (!VALID_VISIBILITIES.includes(visibility)) {
-        const error = new Error('Visibility không hợp lệ');
-        error.status = 400;
-        throw error;
-      }
-    }
+    if (visibility !== undefined) assertListingVisibility(visibility);
 
     // Validate priceCredits
     let sanitizedPrice = 0;
@@ -115,8 +124,9 @@ class MarketplaceListingService {
     const snapshotData = {
       campaignName: campaign.campaign_name,
       campaignType: campaign.campaign_type,
-      flowJson: stripSellerBoundFlowJson(campaign.flow_json),
-      nodes: stripSellerBoundSnapshotNodes(rawSnapshotNodes),
+      // Tệp đính kèm cấp khối: chỉ giữ tệp nằm trong không gian của người bán (danh sách chụp lúc đăng bán, như mẫu); khoá của chủ khác bị bỏ.
+      flowJson: keepOwnedBlockAttachmentsInFlowJson(stripSellerBoundFlowJson(campaign.flow_json), userId),
+      nodes: keepOwnedBlockAttachmentsInNodes(stripSellerBoundSnapshotNodes(rawSnapshotNodes), userId),
       connections: connections.map(c => ({
         id: c.id,
         sourceNodeId: c.source_node_id,
@@ -172,14 +182,7 @@ class MarketplaceListingService {
     const category = AUTO_CATEGORY_MAP.chatbot;
 
     // Validate visibility
-    if (visibility !== undefined) {
-      const VALID_VISIBILITIES = ['public', 'team'];
-      if (!VALID_VISIBILITIES.includes(visibility)) {
-        const error = new Error('Visibility không hợp lệ');
-        error.status = 400;
-        throw error;
-      }
-    }
+    if (visibility !== undefined) assertListingVisibility(visibility);
 
     // Validate priceCredits
     let sanitizedPrice = 0;
@@ -468,14 +471,7 @@ class MarketplaceListingService {
       }
     }
     // Validate visibility
-    if (data.visibility !== undefined) {
-      const VALID_VISIBILITIES = ['public', 'team'];
-      if (!VALID_VISIBILITIES.includes(data.visibility)) {
-        const error = new Error('Visibility không hợp lệ');
-        error.status = 400;
-        throw error;
-      }
-    }
+    if (data.visibility !== undefined) assertListingVisibility(data.visibility);
     // Validate price credits
     if (data.priceCredits !== undefined) {
       const price = Number(data.priceCredits);
@@ -604,14 +600,7 @@ class MarketplaceListingService {
     const category = AUTO_CATEGORY_MAP.landing_page;
 
     // Validate visibility
-    if (visibility !== undefined) {
-      const VALID_VISIBILITIES = ['public', 'team'];
-      if (!VALID_VISIBILITIES.includes(visibility)) {
-        const error = new Error('Visibility không hợp lệ');
-        error.status = 400;
-        throw error;
-      }
-    }
+    if (visibility !== undefined) assertListingVisibility(visibility);
 
     // Validate priceCredits
     let sanitizedPrice = 0;

@@ -3,7 +3,7 @@ import marketplacePurchaseRepository from '../../repositories/marketplace/market
 import aiCreditMeter from '../ai/aiCreditMeter.service.js';
 import marketplaceWalletService from './marketplaceWallet.service.js';
 import db from '../../config/database.js';
-import { checkUserResourceLimit } from '../../utils/userResourceLimit.util.js';
+import { checkUserResourceLimit, enforceResourceLimitTx } from '../../utils/userResourceLimit.util.js';
 import { getWalletBalance } from '../../repositories/payment/topup.repository.js';
 import chatbotCloneRepository from '../../repositories/ai/chatbotClone.repository.js';
 import { assertChatbotSlotAvailable } from '../ai/chatbotSlot.service.js';
@@ -22,7 +22,12 @@ import {
   remapTemplateIdsInConfig,
   remapTemplateIdsInFlowJson,
 } from '../../utils/campaignTemplateReference.util.js';
-import { replaceFormEmbedsWithSlots } from '../../utils/landingHtmlInjection.util.js';
+import { neutralizeAppFormLinks, replaceFormEmbedsWithSlots } from '../../utils/landingHtmlInjection.util.js';
+import {
+  remapBlockAttachments,
+  remapBlockAttachmentsInFlowJson,
+  collectBlockAttachments,
+} from '../../utils/marketplaceBlockAttachments.util.js';
 
 class MarketplacePurchaseService {
   /**
@@ -120,6 +125,9 @@ class MarketplacePurchaseService {
       let preparedContent = null;
       if (listing.resource_type === 'campaign') {
         preparedContent = await marketplaceCampaignContentService.prepareForPurchase({ client, listing, buyerId });
+        // 4d. Mua chiến dịch kèm mẫu TẠO bản sao mẫu email / Zalo cho người mua → phải nằm trong trần số mẫu của gói (trước đây không áp trần,
+        // mua là vượt). Kiểm TRƯỚC khi trừ credit, cùng khoá tư vấn với cổng tạo mẫu nên hai lượt song song không cùng lọt qua.
+        await this._assertTemplateCapacity(client, buyerId, preparedContent, roleCode);
       }
 
       // 5. Process credits if price > 0 (sau khi check limit)
@@ -196,12 +204,41 @@ class MarketplacePurchaseService {
   }
 
   /**
+   * Số mẫu email / Zalo sắp được tạo cho người mua (`prepared.sources`) cộng số đang có phải ≤ trần mẫu của gói (+ slot mua thêm).
+   * Không có mẫu nào cần tạo thì không kiểm. Vượt → 400 `TEMPLATE_LIMIT_EXCEEDED` (nêu cần bao nhiêu, còn chỗ bao nhiêu).
+   * @private
+   */
+  async _assertTemplateCapacity(client, buyerId, prepared, roleCode) {
+    const needs = [
+      ['emailTemplates', prepared?.sources?.email?.size || 0],
+      ['zaloTemplates', prepared?.sources?.zalo?.size || 0],
+    ];
+    for (const [resourceKey, adding] of needs) {
+      if (!(adding > 0)) continue;
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await enforceResourceLimitTx(client, { userId: buyerId, roleCode, resourceKey, adding });
+      } catch (limitError) {
+        if (limitError?.code !== 'RESOURCE_LIMIT_EXCEEDED') throw limitError;
+        const error = new Error(limitError.message);
+        error.status = 400;
+        error.code = 'TEMPLATE_LIMIT_EXCEEDED';
+        error.resource = resourceKey;
+        throw error;
+      }
+    }
+  }
+
+  /**
    * Cấu hình một khối của snapshot → cấu hình cho người mua: gỡ dữ liệu gắn người bán (tài khoản gửi, danh sách người nhận, nguồn dữ
    * liệu…) rồi đổi id mẫu của người bán sang id bản sao của người mua. Cùng một hàm cho `campaign_nodes.config` và `flow_json`.
    * @private
    */
-  _buyerNodeConfig(subtype, config, templateMaps) {
-    return remapTemplateIdsInConfig(subtype, stripSellerBoundNodeConfig(subtype, config), templateMaps);
+  _buyerNodeConfig(subtype, config, templateMaps, blockFileMap = null, sellerId = null) {
+    const remapped = remapTemplateIdsInConfig(subtype, stripSellerBoundNodeConfig(subtype, config), templateMaps);
+    // Tệp đính kèm cấp khối: đổi sang tệp đã chép cho người mua; tệp không chép được (không thuộc người bán) bị bỏ — để lại khoá người bán
+    // thì bộ chạy bỏ qua tệp mà người mua không hay.
+    return blockFileMap ? remapBlockAttachments(remapped, sellerId, blockFileMap) : remapped;
   }
 
   /**
@@ -224,10 +261,21 @@ class MarketplacePurchaseService {
       ? await marketplaceCampaignContentService.materializeTemplates(client, { buyerId: userId, prepared: preparedContent, copiedKeys })
       : { maps: createTemplateIdMaps() };
 
+    // Tệp đính kèm cấp khối (email `attachments`, Zalo nhóm `zaloGroupAttachments`, Telegram/WhatsApp `steps[].attachments`): chép sang kho người
+    // mua, bản đồ khoá người bán → tệp mới. Luôn có bản đồ (có thể rỗng) để tệp không thuộc người bán bị bỏ khỏi cấu hình.
+    const { keyMap: blockFileMap } = preparedContent?.blockFiles?.size > 0
+      ? await marketplaceCampaignContentService.materializeBlockAttachments(client, { buyerId: userId, prepared: preparedContent, copiedKeys })
+      : { keyMap: new Map() };
+    const sellerId = listing.id_user;
+
     // flow_json là NGUỒN HIỂN THỊ của trình dựng (config trong đó đè lên campaign_nodes) và được ghi ngược khi lưu, nên phải gỡ dữ liệu
     // người bán + đổi id mẫu ở đây giống hệt campaign_nodes. Id khối trong flow_json giữ nguyên (cùng không gian id với cạnh của nó).
     const flowJson = snapshot.flowJson
-      ? remapTemplateIdsInFlowJson(stripSellerBoundFlowJson(snapshot.flowJson), templateMaps)
+      ? remapBlockAttachmentsInFlowJson(
+        remapTemplateIdsInFlowJson(stripSellerBoundFlowJson(snapshot.flowJson), templateMaps),
+        sellerId,
+        blockFileMap
+      )
       : { nodes: [], connections: [] };
 
     // Tạo campaign mới. flow_json lưu trực tiếp để giữ nguyên trạng thái.
@@ -249,12 +297,13 @@ class MarketplacePurchaseService {
 
     // Clone nodes (bỏ qua node không hợp lệ)
     const nodeIdMap = new Map();
+    const blockFileLedgerLinked = new Set();
     const nodes = Array.isArray(snapshot.nodes) ? snapshot.nodes : [];
     const buyerConfigs = new Map();
     for (const node of nodes) {
       if (!node || node.id == null) continue;
       const buyerConfig = node.config
-        ? this._buyerNodeConfig(node.nodeSubtype, node.config, templateMaps)
+        ? this._buyerNodeConfig(node.nodeSubtype, node.config, templateMaps, blockFileMap, sellerId)
         : node.config;
       buyerConfigs.set(String(node.id), buyerConfig);
       const { rows } = await client.query(
@@ -275,6 +324,17 @@ class MarketplacePurchaseService {
         ]
       );
       nodeIdMap.set(String(node.id), rows[0].id);
+      // Sổ dung lượng của tệp cấp khối: gắn dòng sổ vào khối đầu tiên dùng tệp (chỉ là nhãn tham chiếu cho thư viện tệp; dòng sổ đã ghi lúc chép).
+      for (const attachment of collectBlockAttachments(buyerConfig)) {
+        if (!attachment?.key || blockFileLedgerLinked.has(attachment.key)) continue;
+        blockFileLedgerLinked.add(attachment.key);
+        // eslint-disable-next-line no-await-in-loop
+        await client.query(
+          `UPDATE storage_objects SET reference_id = $2, updated_at = NOW()
+            WHERE storage_key = $1 AND owner_user_id = $3 AND reference_type = 'campaign_node' AND reference_id IS NULL`,
+          [attachment.key, String(rows[0].id), userId]
+        );
+      }
     }
 
     // Lượt 2 — snapshot chứa config nguyên văn của khối gốc; tham chiếu giữa các khối (zaloGroupNodeId, recipientNodeId,
@@ -341,7 +401,10 @@ class MarketplacePurchaseService {
     // Khối nhúng biểu mẫu của người bán (`data-founderai-form="<publicKey>"`) trỏ tới biểu mẫu CÔNG KHAI của người bán: để nguyên thì
     // trang của người mua hiện biểu mẫu của người bán và bài nộp của khách người mua chảy về người bán. Đổi thành chỗ trống — lúc người
     // mua lưu trang, hệ thống tạo biểu mẫu thuộc về người mua (landingPageAdmin.service.js).
-    const htmlContent = replaceFormEmbedsWithSlots(snapshot.htmlContent || snapshot.html_content || '');
+    // Liên kết `<a href=".../f/<key>">` người bán tự đặt (mở biểu mẫu của người bán) → `href="#"`, giữ chữ; chỉ lúc clone, landing của chính chủ giữ nguyên.
+    const htmlContent = neutralizeAppFormLinks(
+      replaceFormEmbedsWithSlots(snapshot.htmlContent || snapshot.html_content || '')
+    );
 
     // Tạo landing page mới
     const { rows } = await client.query(

@@ -71,7 +71,7 @@ class MarketplaceListingRepository {
    * @returns {Promise<object[]>}
    */
   async findByUserId(userId, filters = {}) {
-    const { status, limit = 20, offset = 0 } = filters;
+    const { status, resourceType, limit = 20, offset = 0 } = filters;
     let query = `
       SELECT ml.*,
              COALESCE(u.full_name, u.username) as seller_name
@@ -84,6 +84,10 @@ class MarketplaceListingRepository {
     if (status) {
       params.push(status);
       query += ` AND ml.status = $${params.length}`;
+    }
+    if (resourceType) {
+      params.push(resourceType);
+      query += ` AND ml.resource_type = $${params.length}`;
     }
 
     query += ` ORDER BY ml.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
@@ -100,13 +104,17 @@ class MarketplaceListingRepository {
    * @returns {Promise<number>}
    */
   async countByUserId(userId, filters = {}) {
-    const { status } = filters;
+    const { status, resourceType } = filters;
     let query = 'SELECT COUNT(*) FROM marketplace_listings WHERE id_user = $1';
     const params = [userId];
 
     if (status) {
       params.push(status);
       query += ` AND status = $${params.length}`;
+    }
+    if (resourceType) {
+      params.push(resourceType);
+      query += ` AND resource_type = $${params.length}`;
     }
 
     const { rows } = await db.query(query, params);

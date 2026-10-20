@@ -1,5 +1,6 @@
 import { describe, it, expect } from '@jest/globals';
 import {
+  neutralizeAppFormLinks,
   replaceFormEmbedsWithSlots,
   buildFormEmbedSectionHtml,
   countFormSlots,
@@ -170,7 +171,7 @@ describe('replaceFormEmbedsWithSlots — iframe biểu mẫu của người bán
     expect(out).not.toContain('lead-form');
   });
 
-  it('thẻ <a href=".../f/..."> KHÔNG bị đụng (giới hạn còn lại đã biết: liên kết người bán tự đặt vẫn trỏ về biểu mẫu của người bán)', () => {
+  it('thẻ <a href=".../f/..."> KHÔNG bị đụng bởi hàm này (landing chủ tự lưu giữ link của chính họ; lúc CLONE dùng neutralizeAppFormLinks)', () => {
     const html = '<a href="https://founderai.biz/f/KEY99" class="btn">Đăng ký ngay</a><noscript><a href="/f/KEY99">Mở</a></noscript>';
     expect(replaceFormEmbedsWithSlots(html)).toBe(html);
   });
@@ -180,5 +181,68 @@ describe('replaceFormEmbedsWithSlots — iframe biểu mẫu của người bán
     const once = replaceFormEmbedsWithSlots(html);
     expect(once).toBe(`${SLOT}${SLOT}${YOUTUBE}`);
     expect(replaceFormEmbedsWithSlots(once)).toBe(once);
+  });
+});
+
+/**
+ * PLAN_GOM_MUC_NHE_2026-10-20 3e — landing MUA từ Marketplace: liên kết `<a href=".../f/<key>">` của người bán (tương đối hoặc host của ứng dụng)
+ * đổi thành `href="#"`, giữ chữ hiển thị; host ngoài giữ nguyên. Chỉ lúc clone — landing chủ tự lưu không đi qua hàm này.
+ */
+describe('neutralizeAppFormLinks', () => {
+  const APP = { appHosts: ['founderai.biz', 'app.test.local:5174'] };
+
+  it('đường dẫn tương đối /f/<key> và host của ứng dụng → href="#", giữ nguyên chữ và các thuộc tính khác', () => {
+    const html = [
+      '<a href="/f/KEY99" class="btn">Đăng ký ngay</a>',
+      '<a class="x" href=\'https://founderai.biz/f/KEY99?embed=1\' id="y">Mở biểu mẫu</a>',
+      '<a href=//app.test.local:5174/f/KEY99/>Cùng giao thức</a>',
+      '<A HREF="HTTPS://FOUNDERAI.BIZ/F/KEY99">Hoa</A>',
+    ].join('\n');
+    const out = neutralizeAppFormLinks(html, APP);
+    expect(out).toBe([
+      '<a href="#" class="btn">Đăng ký ngay</a>',
+      '<a class="x" href=\'#\' id="y">Mở biểu mẫu</a>',
+      '<a href="#">Cùng giao thức</a>',
+      '<A href="#">Hoa</A>',
+    ].join('\n'));
+    expect(out).not.toContain('KEY99');
+  });
+
+  it('host NGOÀI ứng dụng (kể cả tên miền riêng của người khác) giữ nguyên từng byte; liên kết khác không đụng', () => {
+    const html = [
+      '<a href="https://nguoi-khac.com/f/KEY99">Ngoài</a>',
+      '<a href="https://founderai.biz.evil.com/f/KEY99">Gần giống</a>',
+      '<a href="https://founderai.biz/gioi-thieu">Trang khác</a>',
+      '<a href="https://founderai.biz/ff/KEY99">Đường dẫn gần giống</a>',
+      '<a href="#dang-ky">Neo</a>',
+      '<a data-href="/f/KEY99" href="/lien-he">Thuộc tính data-href</a>',
+      '<abbr title="/f/KEY99">x</abbr>',
+    ].join('\n');
+    expect(neutralizeAppFormLinks(html, APP)).toBe(html);
+  });
+
+  it('không có <a> / không có /f/ → trả NGUYÊN chuỗi; không phải chuỗi → chuỗi rỗng', () => {
+    expect(neutralizeAppFormLinks('<p>Không link</p>', APP)).toBe('<p>Không link</p>');
+    expect(neutralizeAppFormLinks('<a href="/lien-he">x</a>', APP)).toBe('<a href="/lien-he">x</a>');
+    expect(neutralizeAppFormLinks(undefined, APP)).toBe('');
+  });
+
+  it('mặc định đọc host ứng dụng từ FRONTEND_URL / FRONTEND_URLS', () => {
+    const saved = { fe: process.env.FRONTEND_URL, many: process.env.FRONTEND_URLS };
+    process.env.FRONTEND_URL = 'https://app.founder.test';
+    process.env.FRONTEND_URLS = 'https://second.founder.test, https://third.founder.test:8443';
+    try {
+      const html = '<a href="https://app.founder.test/f/A1">1</a><a href="https://second.founder.test/f/A1">2</a><a href="https://third.founder.test:8443/f/A1">3</a><a href="https://other.test/f/A1">4</a>';
+      expect(neutralizeAppFormLinks(html)).toBe('<a href="#">1</a><a href="#">2</a><a href="#">3</a><a href="https://other.test/f/A1">4</a>');
+    } finally {
+      if (saved.fe === undefined) delete process.env.FRONTEND_URL; else process.env.FRONTEND_URL = saved.fe;
+      if (saved.many === undefined) delete process.env.FRONTEND_URLS; else process.env.FRONTEND_URLS = saved.many;
+    }
+  });
+
+  it('ghép với replaceFormEmbedsWithSlots: khối nhúng → chỗ trống, link người bán → "#"', () => {
+    const html = `${block('SELLERKEY1')}<a href="/f/SELLERKEY1">Bấm đây</a>`;
+    const out = neutralizeAppFormLinks(replaceFormEmbedsWithSlots(html), APP);
+    expect(out).toBe(`${SLOT}<a href="#">Bấm đây</a>`);
   });
 });

@@ -412,3 +412,133 @@ describe('discardCopiedFiles', () => {
     spy.mockRestore();
   });
 });
+
+/**
+ * PLAN_GOM_MUC_NHE_2026-10-20 3d — tệp đính kèm CẤP KHỐI (config.attachments, zaloGroupAttachments, steps[].attachments): gom + kiểm kho lúc
+ * mua (TRƯỚC khi trừ credit), chép + ghi sổ của người mua lúc `materializeBlockAttachments`. Hàm thuần nằm ở utils/marketplaceBlockAttachments.util.js.
+ */
+describe('tệp đính kèm cấp khối — prepareForPurchase', () => {
+  const listingWith = (snapshot) => ({ id: 1, id_user: SELLER, snapshot_data: snapshot });
+  const blockNode = (config, id = 10) => ({ id, nodeName: 'Gui kem tep', nodeSubtype: 'send_email', config });
+
+  it('gom mỗi khoá của người bán MỘT lần (nodes + flowJson), kiểm kho từng tệp, cộng dung lượng; tệp chủ khác bị bỏ, không kiểm', async () => {
+    mockGetObjectInfo.mockResolvedValueOnce({ size: 3000 }).mockResolvedValueOnce({ size: 4000 });
+    const shared = attachment(`uploads/${SELLER}/chung.pdf`);
+    const prepared = await content.prepareForPurchase({
+      client: {},
+      buyerId: BUYER,
+      listing: listingWith({
+        nodes: [
+          blockNode({ attachments: [shared, attachment('uploads/8888/la.pdf')] }),
+          { id: 11, nodeSubtype: 'send_telegram', config: { steps: [{ attachments: [shared, attachment(`uploads/${SELLER}/rieng.pdf`)] }] } },
+        ],
+        flowJson: { nodes: [{ id: 'n', data: { nodeType: 'send_email', config: { attachments: [shared] } } }], edges: [] },
+      }),
+    });
+    expect([...prepared.blockFiles.keys()].sort()).toEqual([`uploads/${SELLER}/chung.pdf`, `uploads/${SELLER}/rieng.pdf`]);
+    expect(prepared.blockBytes).toBe(7000);
+    expect(prepared.totalBytes).toBe(0); // totalBytes vẫn chỉ là phần của mẫu
+    expect(mockGetObjectInfo).toHaveBeenCalledTimes(2);
+    expect(mockAssertQuota).toHaveBeenCalledWith(expect.objectContaining({ requestedBytes: 7000 }));
+  });
+
+  it('tệp cấp khối của người bán đã mất khỏi kho → LISTING_CONTENT_UNAVAILABLE (không bán hàng hỏng)', async () => {
+    mockGetObjectInfo.mockResolvedValue(null);
+    await expect(content.prepareForPurchase({
+      client: {},
+      buyerId: BUYER,
+      listing: listingWith({ nodes: [blockNode({ zaloGroupAttachments: [attachment(`uploads/${SELLER}/mat.pdf`)] })] }),
+    })).rejects.toMatchObject({ status: 400, code: content.LISTING_CONTENT_UNAVAILABLE });
+  });
+
+  it('vượt chỗ trống của người mua → MARKETPLACE_STORAGE_QUOTA_EXCEEDED; tính cả phần của mẫu', async () => {
+    mockGetObjectInfo.mockResolvedValue({ size: 3000 });
+    mockAssertQuota.mockImplementation(({ requestedBytes }) => {
+      if (requestedBytes > 5000) throw new MockQuotaError({ remainingBytes: 5000 });
+    });
+    await expect(content.prepareForPurchase({
+      client: {},
+      buyerId: BUYER,
+      listing: listingWith({
+        nodes: [zaloGroupNode(31), blockNode({ attachments: [attachment(`uploads/${SELLER}/khoi.pdf`)] })],
+        templates: { email: {}, zalo: { 31: { name: 'M', bodyText: 'x', attachments: [attachment(`uploads/${SELLER}/mau.pdf`)] } } },
+      }),
+    })).rejects.toMatchObject({ code: content.MARKETPLACE_STORAGE_QUOTA_EXCEEDED });
+    expect(mockAssertQuota).toHaveBeenCalledWith(expect.objectContaining({ requestedBytes: 6000 }));
+  });
+
+  it('không có tệp cấp khối → blockFiles rỗng, không đụng kho', async () => {
+    const prepared = await content.prepareForPurchase({
+      client: {}, buyerId: BUYER, listing: listingWith({ nodes: [blockNode({ emailSubject: 'x', attachments: [] })] }),
+    });
+    expect(prepared.blockFiles.size).toBe(0);
+    expect(prepared.blockBytes).toBe(0);
+    expect(mockGetObjectInfo).not.toHaveBeenCalled();
+    expect(mockAssertQuota).not.toHaveBeenCalled();
+  });
+});
+
+describe('tệp đính kèm cấp khối — materializeBlockAttachments (mua, trong transaction)', () => {
+  const makePrepared = () => ({
+    totalBytes: 0,
+    blockBytes: 1500,
+    sources: { email: new Map(), zalo: new Map() },
+    blockFiles: new Map([
+      [`uploads/${SELLER}/1_abc_mau.pdf`, { ...attachment(`uploads/${SELLER}/1_abc_mau.pdf`), __size: 1000 }],
+      [`uploads/${SELLER}/2_def_anh.png`, { ...attachment(`uploads/${SELLER}/2_def_anh.png`, { originalName: 'anh.png', contentType: 'image/png' }), __size: 500 }],
+    ]),
+  });
+
+  it('khoá dung lượng người mua → chép từng tệp sang uploads/<người mua>/, ghi sổ (category campaign), trả bản đồ khoá cũ → tệp mới sạch dấu vết người bán', async () => {
+    const client = { tag: 'tx' };
+    const copiedKeys = [];
+    const { keyMap, fileCount } = await content.materializeBlockAttachments(client, { buyerId: BUYER, prepared: makePrepared(), copiedKeys });
+
+    expect(fileCount).toBe(2);
+    expect(mockAcquireLock).toHaveBeenCalledWith(client, BUYER);
+    expect(mockAcquireLock.mock.invocationCallOrder[0]).toBeLessThan(mockCopy.mock.invocationCallOrder[0]);
+    expect(mockCopy).toHaveBeenCalledTimes(2);
+    expect(copiedKeys).toHaveLength(2);
+    copiedKeys.forEach((key) => expect(key.startsWith(`uploads/${BUYER}/`)).toBe(true));
+
+    const first = keyMap.get(`uploads/${SELLER}/1_abc_mau.pdf`);
+    expect(first).toMatchObject({ key: copiedKeys[0], url: `https://files.test/${copiedKeys[0]}`, size: 1000, displayName: 'Bảng giá' });
+    expect(first.tempId).toBeUndefined();
+    expect(first.storageObjectId).toBeUndefined();
+    expect(first.__size).toBeUndefined();
+    expect(JSON.stringify([...keyMap.values()])).not.toContain(`uploads/${SELLER}/`);
+
+    expect(mockInsertStorageObject).toHaveBeenCalledTimes(2);
+    expect(mockInsertStorageObject).toHaveBeenCalledWith(expect.objectContaining({
+      poolType: 'workspace', ownerUserId: BUYER, actorUserId: BUYER, storageKey: copiedKeys[0], category: 'campaign', state: 'active', sizeBytes: 1000,
+      referenceType: 'campaign_node', referenceId: null,
+    }), client);
+  });
+
+  it('kiểm lại dung lượng KHI ĐÃ giữ khoá: vượt → 400, chưa chép tệp nào', async () => {
+    mockAssertQuota.mockImplementation(() => { throw new MockQuotaError({ remainingBytes: 0 }); });
+    const copiedKeys = [];
+    await expect(content.materializeBlockAttachments({}, { buyerId: BUYER, prepared: makePrepared(), copiedKeys }))
+      .rejects.toMatchObject({ status: 400, code: content.MARKETPLACE_STORAGE_QUOTA_EXCEEDED });
+    expect(mockCopy).not.toHaveBeenCalled();
+    expect(copiedKeys).toEqual([]);
+  });
+
+  it('chép tệp thứ hai lỗi → khoá tệp đã chép vẫn nằm trong copiedKeys để người gọi dọn khi rollback', async () => {
+    mockCopy.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('GCS 503'));
+    const copiedKeys = [];
+    await expect(content.materializeBlockAttachments({}, { buyerId: BUYER, prepared: makePrepared(), copiedKeys })).rejects.toThrow('GCS 503');
+    expect(copiedKeys).toHaveLength(1);
+    expect(copiedKeys[0].startsWith(`uploads/${BUYER}/`)).toBe(true);
+  });
+
+  it('không có tệp nào → không khoá, không chép', async () => {
+    const result = await content.materializeBlockAttachments({}, { buyerId: BUYER, prepared: { blockFiles: new Map(), blockBytes: 0 }, copiedKeys: [] });
+    expect(result.fileCount).toBe(0);
+    expect(result.keyMap.size).toBe(0);
+    expect(mockAcquireLock).not.toHaveBeenCalled();
+    expect(mockCopy).not.toHaveBeenCalled();
+    await content.materializeBlockAttachments({}, { buyerId: BUYER, prepared: {}, copiedKeys: [] });
+    expect(mockCopy).not.toHaveBeenCalled();
+  });
+});
