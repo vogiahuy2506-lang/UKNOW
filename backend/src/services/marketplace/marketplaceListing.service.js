@@ -4,6 +4,19 @@ import campaignCrudRepository from '../../repositories/campaign/campaignCrud.rep
 import chatbotRepository from '../../repositories/ai/chatbot.repository.js';
 import landingPageRepository from '../../repositories/landingPage.repository.js';
 import db from '../../config/database.js';
+import {
+  sanitizeLandingSnapshotForSharing,
+  stripSellerPrivateLandingConfig,
+} from '../../utils/marketplaceLandingSnapshot.util.js';
+import {
+  stripSellerBoundFlowJson,
+  stripSellerBoundSnapshotNodes,
+} from '../../utils/marketplaceCampaignSnapshot.util.js';
+import marketplaceCampaignContentService from './marketplaceCampaignContent.service.js';
+import {
+  keepOwnedBlockAttachmentsInFlowJson,
+  keepOwnedBlockAttachmentsInNodes,
+} from '../../utils/marketplaceBlockAttachments.util.js';
 
 // Mapping resource_type -> auto category (không cho user chọn category thủ công)
 const AUTO_CATEGORY_MAP = {
@@ -11,6 +24,18 @@ const AUTO_CATEGORY_MAP = {
   chatbot: 'chatbot',
   landing_page: 'landing',
 };
+
+// Phạm vi hiển thị của listing: chỉ 'public'. Giá trị 'team' từng có trong CSDL nhưng không có luật nào định nghĩa nó (browse / mua không xét
+// visibility, giao diện không gửi trường này; production 20/10/2026: 10/10 listing public) — nhận 'team' là hứa một giới hạn không tồn tại.
+export const ALLOWED_LISTING_VISIBILITIES = Object.freeze(['public']);
+
+function assertListingVisibility(visibility) {
+  if (!ALLOWED_LISTING_VISIBILITIES.includes(visibility)) {
+    const error = new Error('Visibility chỉ nhận giá trị "public"');
+    error.status = 400;
+    throw error;
+  }
+}
 
 class MarketplaceListingService {
   /**
@@ -33,14 +58,7 @@ class MarketplaceListingService {
     const category = AUTO_CATEGORY_MAP.campaign;
 
     // Validate visibility
-    if (visibility !== undefined) {
-      const VALID_VISIBILITIES = ['public', 'team'];
-      if (!VALID_VISIBILITIES.includes(visibility)) {
-        const error = new Error('Visibility không hợp lệ');
-        error.status = 400;
-        throw error;
-      }
-    }
+    if (visibility !== undefined) assertListingVisibility(visibility);
 
     // Validate priceCredits
     let sanitizedPrice = 0;
@@ -54,11 +72,13 @@ class MarketplaceListingService {
       sanitizedPrice = Math.floor(price);
     }
 
-    // Get campaign data
+    // Get campaign data. `allowShared: false` — chiến dịch người khác CHIA SẺ cho mình (xem/sửa được) không phải của mình:
+    // đăng bán là đưa cả sơ đồ node + cấu hình của nó cho bất kỳ ai mua, nên chỉ chủ workspace mới được đăng.
     const campaign = await campaignCrudRepository.findCampaignById({
       campaignId,
       isAdmin: false,
       userId,
+      allowShared: false,
     });
 
     if (!campaign) {
@@ -67,26 +87,46 @@ class MarketplaceListingService {
       throw error;
     }
 
+    // Chiến dịch mua từ Marketplace không được bán lại (cùng quy tắc với chatbot).
+    if (await marketplacePurchaseRepository.isClonedResourcePurchased('campaign', campaignId)) {
+      const error = new Error('Không thể bán chiến dịch đã mua từ marketplace');
+      error.status = 403;
+      throw error;
+    }
+
     // Get nodes and connections
     const nodes = await campaignCrudRepository.findNodesByCampaignId(campaignId);
     const connections = await campaignCrudRepository.findConnectionsByCampaignId(campaignId);
 
     // Create snapshot
+    const rawSnapshotNodes = nodes.map(n => ({
+      id: n.id,
+      nodeType: n.node_type,
+      nodeSubtype: n.node_subtype,
+      nodeName: n.node_name,
+      nodeDescription: n.node_description,
+      positionX: n.position_x,
+      positionY: n.position_y,
+      config: n.config,
+      executionOrder: n.execution_order,
+    }));
+
+    // Nội dung MẪU mà khối gửi thật sự dùng (email / Zalo) chụp vào snapshot: id mẫu trong config trỏ mẫu của NGƯỜI BÁN, mà đường gửi
+    // lọc mẫu theo chủ chiến dịch — người mua chỉ gửi được nhờ bản sao mẫu tạo lúc mua. Mẫu bị xoá / không thuộc người bán → 400
+    // (nêu tên khối), không đăng hàng hỏng.
+    const templates = await marketplaceCampaignContentService.buildListingTemplates({
+      sellerId: userId,
+      nodes: rawSnapshotNodes,
+    });
+
+    // Snapshot không mang dữ liệu gắn người bán (tài khoản gửi, người nhận nhúng, nguồn dữ liệu…) — gỡ cả ở `nodes` lẫn `flowJson`
+    // (trình dựng mở sơ đồ từ flow_json). Id mẫu giữ nguyên làm khoá tra `templates`; đổi sang id của người mua lúc mua.
     const snapshotData = {
       campaignName: campaign.campaign_name,
       campaignType: campaign.campaign_type,
-      flowJson: campaign.flow_json,
-      nodes: nodes.map(n => ({
-        id: n.id,
-        nodeType: n.node_type,
-        nodeSubtype: n.node_subtype,
-        nodeName: n.node_name,
-        nodeDescription: n.node_description,
-        positionX: n.position_x,
-        positionY: n.position_y,
-        config: n.config,
-        executionOrder: n.execution_order,
-      })),
+      // Tệp đính kèm cấp khối: chỉ giữ tệp nằm trong không gian của người bán (danh sách chụp lúc đăng bán, như mẫu); khoá của chủ khác bị bỏ.
+      flowJson: keepOwnedBlockAttachmentsInFlowJson(stripSellerBoundFlowJson(campaign.flow_json), userId),
+      nodes: keepOwnedBlockAttachmentsInNodes(stripSellerBoundSnapshotNodes(rawSnapshotNodes), userId),
       connections: connections.map(c => ({
         id: c.id,
         sourceNodeId: c.source_node_id,
@@ -95,6 +135,7 @@ class MarketplaceListingService {
         connectionLabel: c.connection_label,
         conditionConfig: c.condition_config,
       })),
+      templates,
     };
 
     // Ensure title is not empty
@@ -141,14 +182,7 @@ class MarketplaceListingService {
     const category = AUTO_CATEGORY_MAP.chatbot;
 
     // Validate visibility
-    if (visibility !== undefined) {
-      const VALID_VISIBILITIES = ['public', 'team'];
-      if (!VALID_VISIBILITIES.includes(visibility)) {
-        const error = new Error('Visibility không hợp lệ');
-        error.status = 400;
-        throw error;
-      }
-    }
+    if (visibility !== undefined) assertListingVisibility(visibility);
 
     // Validate priceCredits
     let sanitizedPrice = 0;
@@ -183,6 +217,14 @@ class MarketplaceListingService {
     const isPurchased = await marketplacePurchaseRepository.isChatbotPurchased(chatbotId);
     if (isPurchased) {
       const error = new Error('Không thể bán chatbot đã mua từ marketplace');
+      error.status = 403;
+      throw error;
+    }
+
+    // Chatbot người khác CHIA SẺ cho mình (origin = 'shared', chatbotClone.repository.js#cloneFromSource) là bản sao của bot
+    // của chủ khác — không phải sản phẩm của mình để bán.
+    if (chatbot.origin === 'shared') {
+      const error = new Error('Không thể bán chatbot được chia sẻ từ tài khoản khác');
       error.status = 403;
       throw error;
     }
@@ -277,7 +319,8 @@ class MarketplaceListingService {
         title: snapshotData.title || '',
         slug: snapshotData.slug || '',
         htmlContent: html,
-        customConfig: snapshotData.customConfig || {},
+        // Snapshot cũ đã lưu có thể còn khoá riêng của người bán (webhook Google Sheet...) — lọc lúc ĐỌC, không chỉ lúc tạo.
+        customConfig: stripSellerPrivateLandingConfig(snapshotData.customConfig) || {},
       };
     }
 
@@ -361,6 +404,9 @@ class MarketplaceListingService {
         listing.preview_data = this._buildSafePreview(listing.resource_type, listing.snapshot_data);
         delete listing.snapshot_data;
       }
+    } else if (!isOwner && listing.resource_type === 'landing_page' && listing.snapshot_data) {
+      // Người ĐÃ MUA nhận nội dung đầy đủ nhưng KHÔNG nhận cấu hình riêng của người bán (webhook + secret Google Sheet, id biểu mẫu).
+      listing.snapshot_data = sanitizeLandingSnapshotForSharing(listing.snapshot_data);
     }
 
     return listing;
@@ -425,14 +471,7 @@ class MarketplaceListingService {
       }
     }
     // Validate visibility
-    if (data.visibility !== undefined) {
-      const VALID_VISIBILITIES = ['public', 'team'];
-      if (!VALID_VISIBILITIES.includes(data.visibility)) {
-        const error = new Error('Visibility không hợp lệ');
-        error.status = 400;
-        throw error;
-      }
-    }
+    if (data.visibility !== undefined) assertListingVisibility(data.visibility);
     // Validate price credits
     if (data.priceCredits !== undefined) {
       const price = Number(data.priceCredits);
@@ -561,14 +600,7 @@ class MarketplaceListingService {
     const category = AUTO_CATEGORY_MAP.landing_page;
 
     // Validate visibility
-    if (visibility !== undefined) {
-      const VALID_VISIBILITIES = ['public', 'team'];
-      if (!VALID_VISIBILITIES.includes(visibility)) {
-        const error = new Error('Visibility không hợp lệ');
-        error.status = 400;
-        throw error;
-      }
-    }
+    if (visibility !== undefined) assertListingVisibility(visibility);
 
     // Validate priceCredits
     let sanitizedPrice = 0;
@@ -599,6 +631,13 @@ class MarketplaceListingService {
       throw error;
     }
 
+    // Landing page mua từ Marketplace không được bán lại (cùng quy tắc với chatbot).
+    if (await marketplacePurchaseRepository.isClonedResourcePurchased('landing_page', landingPageId)) {
+      const error = new Error('Không thể bán landing page đã mua từ marketplace');
+      error.status = 403;
+      throw error;
+    }
+
     // Check if landing page already has a listing
     const existingListing = await marketplaceListingRepository.findByLandingPageId(landingPageId);
     if (existingListing) {
@@ -612,7 +651,8 @@ class MarketplaceListingService {
       title: landingPage.title || landingPage.slug,
       slug: landingPage.slug,
       htmlContent: landingPage.htmlContent || landingPage.html_content,
-      customConfig: landingPage.customConfig || landingPage.custom_config,
+      // Không chép cấu hình riêng của người bán (webhook Google Sheet, id biểu mẫu) vào bản chia sẻ.
+      customConfig: stripSellerPrivateLandingConfig(landingPage.customConfig || landingPage.custom_config),
     };
 
     // Ensure title is not empty

@@ -122,13 +122,13 @@ export default function PublicChatbotPage() {
         }
       } catch (e) { /* ignore */ }
     }
-  }, [chatbotId, sessionId.current]);
+  }, [chatbotId]);
 
   useEffect(() => {
     if (messages.length > 0) {
       localStorage.setItem(`uknow_msgs_${chatbotId}_${sessionId.current}`, JSON.stringify(messages));
     }
-  }, [messages, chatbotId, sessionId.current]);
+  }, [messages, chatbotId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -158,7 +158,6 @@ export default function PublicChatbotPage() {
     if (!files.length || !allowAttachments) return;
     const validation = validateFilesBeforeUpload(files, null);
     if (!validation.ok) {
-      // eslint-disable-next-line no-alert
       alert(getUploadValidationErrorMessage(validation));
       return;
     }
@@ -177,7 +176,6 @@ export default function PublicChatbotPage() {
         else throw new Error(res.data?.message || 'Tải file thất bại');
       }
     } catch (err) {
-      // eslint-disable-next-line no-alert
       alert(err.response?.data?.message || err.message || 'Tải file thất bại');
     } finally {
       setUploading(false);

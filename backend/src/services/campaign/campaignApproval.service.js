@@ -67,13 +67,20 @@ export async function evaluateApprovalThreshold({ ownerId, campaignId }) {
  * Chuyển chiến dịch sang chờ chủ duyệt + ghi audit CAMPAIGN_APPROVAL_REQUESTED. KHÔNG tạo
  * campaign_runs — gọi trước khi bất kỳ nơi nào tạo run.
  *
- * @param {{ campaignId: number, auditContext: object, threshold: number, totalCustomers: number, actorUserId: number }} input
+ * Chỉ đổi chiến dịch THUỘC `ownerId` (workspace): `campaignId` ở đường chạy ngay đến từ URL, không được
+ * để nhân viên của tenant này đẩy chiến dịch của tenant khác sang "chờ duyệt". Không khớp dòng nào →
+ * trả `false`, KHÔNG ghi audit.
+ *
+ * @param {{ ownerId: number, campaignId: number, auditContext: object, threshold: number, totalCustomers: number, actorUserId: number }} input
+ * @returns {Promise<boolean>} true nếu đã chuyển trạng thái
  */
-export async function markPendingOwnerApproval({ campaignId, auditContext, threshold, totalCustomers, actorUserId }) {
-  await db.query(
-    `UPDATE campaigns SET status = 'pending_owner_approval', updated_at = NOW() WHERE id = $1`,
-    [campaignId]
+export async function markPendingOwnerApproval({ ownerId, campaignId, auditContext, threshold, totalCustomers, actorUserId }) {
+  const updated = await db.query(
+    `UPDATE campaigns SET status = 'pending_owner_approval', updated_at = NOW()
+     WHERE id = $1 AND COALESCE(workspace_owner_id, id_user) = $2`,
+    [campaignId, ownerId]
   );
+  if (!updated.rowCount) return false;
   try {
     await logWorkspace(
       auditContext,
@@ -85,4 +92,5 @@ export async function markPendingOwnerApproval({ campaignId, auditContext, thres
   } catch (auditErr) {
     console.warn('[Campaign] CAMPAIGN_APPROVAL_REQUESTED audit failed:', auditErr?.message);
   }
+  return true;
 }

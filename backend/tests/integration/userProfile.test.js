@@ -10,6 +10,9 @@
  * Route legacy admin (`/api/users/employees/*`) đã bị xoá 27/09/2026 (code chết,
  * thay bởi `/api/employees` module — đã có test riêng).
  */
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
 import bcrypt from 'bcryptjs';
 import request from 'supertest';
@@ -23,6 +26,8 @@ import {
   assignPlanToUser,
   createOrder,
 } from './helpers/db.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let app;
 
@@ -310,10 +315,10 @@ describe('GET /api/users/my-orders', () => {
     expect(res.body.data[0].plan).toMatchObject({ code: 'mix' });
   });
 
-  it('order chỉ có user_email (user_id NULL) vẫn được match', async () => {
+  it('order chỉ có user_email (user_id NULL) KHÔNG khớp theo email nữa; migration 309 gán user_id thì hiện (20/10/2026)', async () => {
     const plan = await createPlan({ code: 'em' });
     const user = await createUser({ username: 'em-user', email: 'em@test.local' });
-    // Order thiếu user_id nhưng user_email khớp
+    // Order thiếu user_id nhưng user_email khớp: email hồ sơ đổi được mà không xác minh nên không còn là căn cứ chủ đơn.
     await db.query(
       `INSERT INTO orders (order_code, plan_id, amount, user_email, user_id, status, created_at)
        VALUES ($1, $2, $3, $4, NULL, 'success', NOW())`,
@@ -326,6 +331,15 @@ describe('GET /api/users/my-orders', () => {
       .set('Authorization', `Bearer ${token}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.data).toHaveLength(1);
+    expect(res.body.data).toEqual([]);
+
+    // Migration 309 gán user_id cho đơn có email khớp đúng một tài khoản → chủ thật thấy lại đơn của mình.
+    await db.query(
+      fs.readFileSync(path.resolve(__dirname, '../../migrations/309_orders_gan_user_id_theo_email_duy_nhat.sql'), 'utf8')
+    );
+    const after = await request(app)
+      .get('/api/users/my-orders')
+      .set('Authorization', `Bearer ${token}`);
+    expect(after.body.data).toHaveLength(1);
   });
 });

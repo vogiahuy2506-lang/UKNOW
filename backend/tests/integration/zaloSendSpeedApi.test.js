@@ -1,8 +1,10 @@
 /**
- * Integration tests cho tính năng tốc độ gửi Zalo cá nhân (3 mức: safe, fast, very_fast).
+ * Integration tests cho tính năng tốc độ gửi Zalo cá nhân (2 mức: safe, fast; very_fast đã bỏ 20/10/2026).
  * Route: PATCH /api/zalo/accounts/:id/send-speed
  */
 import { describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
@@ -52,26 +54,35 @@ const auditRow = async (action, entityId) => {
 };
 
 describe('PATCH /api/zalo/accounts/:id/send-speed', () => {
-  it('đặt mức very_fast → 200, cập nhật 30.000/60.000ms trong DB, response có sendSpeed very_fast', async () => {
+  it('đặt mức very_fast (đã bỏ) → 400 rõ ràng, KHÔNG ghi DB, giữ nguyên mức cũ', async () => {
     const owner = await createUser({ role: 'user', username: 'zalo_speed_vf' });
     const token = await loginAs(owner);
-    const account = await createZaloAccount({ ownerId: owner.id });
+    const account = await createZaloAccount({
+      ownerId: owner.id,
+      delayMinMs: 50_000,
+      delayMaxMs: 100_000,
+    });
 
     const res = await request(app)
       .patch(`/api/zalo/accounts/${account.id}/send-speed`)
       .set('Authorization', `Bearer ${token}`)
       .send({ sendSpeed: 'very_fast' });
 
-    expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
-    expect(res.body.data.sendSpeed).toBe('very_fast');
+    expect(res.status).toBe(400);
+    const msgs = Array.isArray(res.body.errors)
+      ? res.body.errors.map((e) => e.msg)
+      : [res.body.message || ''];
+    expect(msgs.some((m) => m.includes('đã ngừng hỗ trợ'))).toBe(true);
 
     const { rows } = await db.query(
       'SELECT zalo_personal_outbound_delay_min_ms, zalo_personal_outbound_delay_max_ms FROM zalo_settings WHERE id = $1',
       [account.id]
     );
-    expect(rows[0].zalo_personal_outbound_delay_min_ms).toBe(30_000);
-    expect(rows[0].zalo_personal_outbound_delay_max_ms).toBe(60_000);
+    expect(rows[0].zalo_personal_outbound_delay_min_ms).toBe(50_000);
+    expect(rows[0].zalo_personal_outbound_delay_max_ms).toBe(100_000);
+
+    const log = await auditRow('ZALO_ACCOUNT_SEND_SPEED_UPDATED', account.id);
+    expect(log).toBeNull();
   });
 
   it('đặt mức fast → 200, cập nhật 50.000/100.000ms trong DB, response có sendSpeed fast', async () => {
@@ -172,7 +183,7 @@ describe('PATCH /api/zalo/accounts/:id/send-speed', () => {
     const res = await request(app)
       .patch(`/api/zalo/accounts/${accountA.id}/send-speed`)
       .set('Authorization', `Bearer ${tokenB}`)
-      .send({ sendSpeed: 'very_fast' });
+      .send({ sendSpeed: 'fast' });
 
     expect(res.status).toBe(404);
 
@@ -195,7 +206,7 @@ describe('PATCH /api/zalo/accounts/:id/send-speed', () => {
     const res = await request(app)
       .patch(`/api/zalo/accounts/${account.id}/send-speed`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ sendSpeed: 'very_fast' });
+      .send({ sendSpeed: 'safe' });
 
     expect(res.status).toBe(200);
 
@@ -203,7 +214,7 @@ describe('PATCH /api/zalo/accounts/:id/send-speed', () => {
     expect(log).not.toBeNull();
     expect(log.details).toMatchObject({
       previous: 'fast',
-      next: 'very_fast',
+      next: 'safe',
     });
   });
 
@@ -211,7 +222,7 @@ describe('PATCH /api/zalo/accounts/:id/send-speed', () => {
     const owner = await createUser({ role: 'user', username: 'zalo_speed_list' });
     const token = await loginAs(owner);
 
-    // Tạo 4 account: safe, fast, very_fast, custom (do SQL tay)
+    // Tạo 4 account: safe, fast, 30–60s cũ (mức "Rất nhanh" đã bỏ → custom), custom (do SQL tay)
     const accSafe = await createZaloAccount({ ownerId: owner.id, delayMinMs: null, delayMaxMs: null });
     const accFast = await createZaloAccount({ ownerId: owner.id, delayMinMs: 50_000, delayMaxMs: 100_000 });
     const accVf = await createZaloAccount({ ownerId: owner.id, delayMinMs: 30_000, delayMaxMs: 60_000 });
@@ -227,7 +238,43 @@ describe('PATCH /api/zalo/accounts/:id/send-speed', () => {
 
     expect(findInList(accSafe.id).sendSpeed).toBe('safe');
     expect(findInList(accFast.id).sendSpeed).toBe('fast');
-    expect(findInList(accVf.id).sendSpeed).toBe('very_fast');
+    expect(findInList(accVf.id).sendSpeed).toBe('custom');
     expect(findInList(accCustom.id).sendSpeed).toBe('custom');
+  });
+});
+
+describe('migration 308 — đưa ghi đè dưới 50 giây về mặc định', () => {
+  const migrationSql = readFileSync(
+    fileURLToPath(new URL('../../migrations/308_zalo_bo_muc_toc_do_rat_nhanh.sql', import.meta.url)),
+    'utf8'
+  );
+
+  const readDelay = async (id) => {
+    const { rows } = await db.query(
+      'SELECT zalo_personal_outbound_delay_min_ms AS mn, zalo_personal_outbound_delay_max_ms AS mx FROM zalo_settings WHERE id = $1',
+      [id]
+    );
+    return rows[0];
+  };
+
+  it('nick 30–60s (và 40–80s) → NULL/NULL; nick 50–100s, 200–300s và mặc định giữ nguyên; chạy lại không đổi gì', async () => {
+    const owner = await createUser({ role: 'user', username: 'zalo_speed_migration' });
+    const vf = await createZaloAccount({ ownerId: owner.id, delayMinMs: 30_000, delayMaxMs: 60_000 });
+    const custom = await createZaloAccount({ ownerId: owner.id, delayMinMs: 40_000, delayMaxMs: 80_000 });
+    const fast = await createZaloAccount({ ownerId: owner.id, delayMinMs: 50_000, delayMaxMs: 100_000 });
+    const slow = await createZaloAccount({ ownerId: owner.id, delayMinMs: 200_000, delayMaxMs: 300_000 });
+    const dflt = await createZaloAccount({ ownerId: owner.id });
+
+    await db.query(migrationSql);
+
+    expect(await readDelay(vf.id)).toEqual({ mn: null, mx: null });
+    expect(await readDelay(custom.id)).toEqual({ mn: null, mx: null });
+    expect(await readDelay(fast.id)).toEqual({ mn: 50_000, mx: 100_000 });
+    expect(await readDelay(slow.id)).toEqual({ mn: 200_000, mx: 300_000 });
+    expect(await readDelay(dflt.id)).toEqual({ mn: null, mx: null });
+
+    await db.query(migrationSql);
+    expect(await readDelay(fast.id)).toEqual({ mn: 50_000, mx: 100_000 });
+    expect(await readDelay(vf.id)).toEqual({ mn: null, mx: null });
   });
 });

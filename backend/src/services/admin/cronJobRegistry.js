@@ -74,6 +74,14 @@ export const CRON_JOBS = [
     tracked: true,
   },
   {
+    code: 'send_quota_reservation_sweep',
+    label: 'Dọn đặt chỗ hạn mức gửi tin',
+    schedule: 'Mỗi phút (giây 40)',
+    description: 'Giải phóng đặt chỗ hạn mức đã hết lease (gửi dở, tiến trình chết) để trả lại hạn mức và ví; đánh dấu "chưa rõ" các lượt gửi treo quá 30 phút để chờ đối soát (vẫn tính hạn mức, không tự trả lại). Không có việc thì ghi "không có gì".',
+    impact: 'Khi bật chặn hạn mức theo đặt chỗ, lượt gửi chết giữa chừng giữ hạn mức và ví vĩnh viễn: khách thấy hết hạn mức dù chưa gửi, gửi lại cùng khoá bị từ chối.',
+    tracked: true,
+  },
+  {
     code: 'scheduled_notifications',
     label: 'Gửi thông báo hẹn giờ',
     schedule: 'Mỗi phút',

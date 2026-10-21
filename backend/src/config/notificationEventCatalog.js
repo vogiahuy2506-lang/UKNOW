@@ -13,6 +13,7 @@
  * là 5 loại email cũ đưa vào chuông. Migration 294 seed 6 dòng — thêm khoá vào catalog mà quên migration thì spec catalog đỏ.
  * PR-4b biểu mẫu (12/10/2026): khoá `form_file_quota_exceeded` (khách tải tệp nhưng chủ hết dung lượng) — migration 300 seed dòng của nó.
  * PR-8c biểu mẫu (12/10/2026): khoá `form_submission_received` (có bài nộp mới, gộp theo biểu mẫu/10 phút) — migration 302 seed dòng của nó.
+ * PR-3 gửi chậm (19/10/2026): khoá `campaign_sending_slow` (Zalo giới hạn tra số / cấm nhắn người lạ làm chiến dịch gửi rất chậm) — migration 307 seed dòng của nó.
  * NGOẠI LỆ "chỉ chuông": `plan_expiring` / `plan_expired` MẶC ĐỊNH BẬT EMAIL (quyết định 10/10): khách không đăng nhập thì không thấy chuông,
  * mất nhắc gia hạn là mất doanh thu; super admin vẫn tắt được ở tab "Cấu hình kênh".
  */
@@ -179,6 +180,16 @@ export const NOTIFICATION_EVENTS = Object.freeze([
     label: 'Có bài nộp mới ở biểu mẫu',
     labelEn: 'New form submission',
     description: 'Báo khi có khách nộp biểu mẫu của bạn, bấm vào để mở thẳng trang bài nộp của biểu mẫu đó. Gộp để khỏi dồn thông báo: mỗi biểu mẫu tối đa một thông báo trong 10 phút, nêu người nộp đầu tiên của khoảng đó.',
+    audience: 'user',
+    defaults: { inApp: true, email: false },
+    userCanDisableEmail: true,
+  },
+  {
+    // PLAN_THAM_CHIEU_KHOI_VA_RUN_BO_CHAM PR-3 (19/10/2026), migration 307. Mặc định CHỈ chuông (mặc định chung).
+    key: 'campaign_sending_slow',
+    label: 'Chiến dịch gửi chậm bất thường',
+    labelEn: 'Campaign sending unusually slowly',
+    description: 'Báo khi chiến dịch nhiều ngày liền chỉ gửi được rất ít vì Zalo giới hạn tài khoản gửi (tra số điện thoại, nhắn người lạ).',
     audience: 'user',
     defaults: { inApp: true, email: false },
     userCanDisableEmail: true,

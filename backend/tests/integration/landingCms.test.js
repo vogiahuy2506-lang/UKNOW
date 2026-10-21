@@ -903,24 +903,32 @@ describe('GET /api/public/landing-track/go', () => {
 // Public: featured courses / testimonials
 // ═══════════════════════════════════════════════════════════════════════
 describe('GET /api/public/landing-featured-courses', () => {
-  it('không yêu cầu auth, chỉ trả active', async () => {
+  // PLAN_VA_CO_LAP_DU_LIEU_TENANT_DOT2 (D2): bắt buộc ?slug= landing đã xuất bản, chỉ trả dòng của chủ landing đó (test cô lập
+  // tenant đầy đủ ở landingCmsPublicCoLapChuTenantDot2.test.js).
+  it('không yêu cầu auth, chỉ trả active (của chủ landing đã xuất bản theo ?slug=)', async () => {
     const me = await createUser({ username: 'fc-pub' });
+    await insertLandingPage({ idUser: me.id, slug: 'fc-pub-landing', isPublished: true });
     await insertFeaturedCourse({ idUser: me.id, sortOrder: 1, titleVi: 'Active', isActive: true });
     await insertFeaturedCourse({ idUser: me.id, sortOrder: 2, titleVi: 'Inactive', isActive: false });
-    const res = await request(app).get('/api/public/landing-featured-courses');
+    const res = await request(app).get('/api/public/landing-featured-courses?slug=fc-pub-landing');
     expect(res.status).toBe(200);
     expect(res.body.data.map((r) => r.titleVi)).toEqual(['Active']);
+    const noSlug = await request(app).get('/api/public/landing-featured-courses');
+    expect(noSlug.body.data).toEqual([]);
   });
 });
 
 describe('GET /api/public/landing-testimonials', () => {
-  it('không yêu cầu auth, chỉ trả active', async () => {
+  it('không yêu cầu auth, chỉ trả active (của chủ landing đã xuất bản theo ?slug=)', async () => {
     const me = await createUser({ username: 'ts-pub' });
+    await insertLandingPage({ idUser: me.id, slug: 'ts-pub-landing', isPublished: true });
     await insertTestimonial({ idUser: me.id, sortOrder: 1, nameVi: 'Active', isActive: true });
     await insertTestimonial({ idUser: me.id, sortOrder: 2, nameVi: 'Inactive', isActive: false });
-    const res = await request(app).get('/api/public/landing-testimonials');
+    const res = await request(app).get('/api/public/landing-testimonials?slug=ts-pub-landing');
     expect(res.status).toBe(200);
     expect(res.body.data.map((r) => r.nameVi)).toEqual(['Active']);
+    const noSlug = await request(app).get('/api/public/landing-testimonials');
+    expect(noSlug.body.data).toEqual([]);
   });
 });
 

@@ -116,6 +116,30 @@ class EmailTemplateRepository {
     return result.rows[0] || null;
   }
 
+  /**
+   * Nội dung các mẫu email của MỘT chủ theo danh sách id (Marketplace: chụp nội dung lúc đăng bán, đọc lại mẫu sống của người bán cho
+   * listing cũ). Điều kiện `id_user = ownerUserId` là bắt buộc — id của chủ khác không bao giờ trả về.
+   *
+   * @param {Array<number|string>} ids
+   * @param {number|string} ownerUserId
+   * @param {object|null} [client]
+   * @returns {Promise<Array<object>>}
+   */
+  async findContentByIdsForOwner(ids, ownerUserId, client = null) {
+    const idList = (Array.isArray(ids) ? ids : [])
+      .map((id) => Number.parseInt(id, 10))
+      .filter((id) => Number.isSafeInteger(id) && id > 0);
+    if (idList.length === 0) return [];
+    const queryable = client || db;
+    const result = await queryable.query(
+      `SELECT id, template_name, template_code, subject, body_html, body_text, attachments, variables, category
+       FROM email_templates
+       WHERE id = ANY($1::bigint[]) AND id_user = $2`,
+      [idList, ownerUserId]
+    );
+    return result.rows;
+  }
+
   async create({ userId, templateName, templateCode, subject, bodyHtml, bodyText, attachments, variables, category }, client = null) {
     const queryable = client || db;
     const result = await queryable.query(

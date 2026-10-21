@@ -381,10 +381,8 @@ class ChatbotRepository {
   }
 
   async deleteWebChatConversation(conversationId, userId) {
-    await db.query(
-      `DELETE FROM webchat_messages WHERE id_conversation = $1`,
-      [conversationId]
-    );
+    // CHỈ xoá hội thoại (lọc chủ); tin nhắn đi theo `webchat_messages.id_conversation ... ON DELETE CASCADE` (migration 031).
+    // Trước đây câu xoá tin chạy TRƯỚC và không lọc chủ -> tài khoản khác xoá được tin của hội thoại không phải của mình.
     const result = await db.query(
       `DELETE FROM webchat_conversations WHERE id = $1 AND id_user = $2 RETURNING id`,
       [conversationId, userId]
@@ -499,6 +497,7 @@ class ChatbotRepository {
               temperature, max_tokens, ai_model, response_style, allow_attachments,
               COALESCE(origin, 'self_created') as origin, reply_limit_config,
               active_hours, replies_enabled, widget_auto_open, embed_show_header, embed_size,
+              allow_public_numeric_id,
               created_at, updated_at,
               -- Chỉ đếm tài liệu SẴN SÀNG: tài liệu lỗi/đang xử lý không dùng được để trả lời (S-17). Tài liệu lỗi đếm riêng
               -- để cột trái hiện "· 1 lỗi" thay vì để chủ tin là đã nạp đủ.
@@ -798,6 +797,69 @@ class ChatbotRepository {
 
     const { rows } = await db.query(query, params);
     return rows[0] || null;
+  }
+
+  /**
+   * Chủ bot bật/tắt link công khai theo id số (/chat/<id>) cho TỪNG bot (`allow_public_numeric_id`, migration 284).
+   * Chỉ chủ ghi được (lọc `id_user`), bot đã xoá mềm coi như không có → trả null.
+   *
+   * Tắt mà khoá đang dùng là dạng đoán được (`chatbot_<số>` — khoá dự phòng của bot cũ — hoặc còn trống) thì ĐỔI sang khoá ngẫu nhiên
+   * trong CÙNG transaction: `findChatbotByWidgetKey` chặn mọi khoá `chatbot_<số>` khi cờ tắt, nên giữ nguyên khoá thì link "mới theo khoá"
+   * mà giao diện hiện ra cũng chết. Dòng `web_widget_configs` của đúng chủ được đổi khoá theo để hội thoại web đang có không bị cắt.
+   * @returns {Promise<{ id: number, allow_public_numeric_id: boolean, widget_key: string|null }|null>}
+   */
+  async setAllowPublicNumericId(chatbotId, userId, allow) {
+    const client = await db.getClient();
+    try {
+      await client.query('BEGIN');
+      const { rows: cur } = await client.query(
+        `SELECT widget_key FROM custom_chatbots
+         WHERE id = $1 AND id_user = $2 AND is_active = true
+         FOR UPDATE`,
+        [chatbotId, userId]
+      );
+      if (!cur[0]) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      let widgetKey = String(cur[0].widget_key || '').trim() || null;
+      if (allow === false && (!widgetKey || /^chatbot_[0-9]+$/.test(widgetKey))) {
+        const previousKey = widgetKey || `chatbot_${chatbotId}`;
+        let freeKey = null;
+        for (let attempt = 0; attempt < 5 && !freeKey; attempt += 1) {
+          const candidate = randomUUID().split('-')[0];
+          const { rows: taken } = await client.query(
+            `SELECT 1 FROM custom_chatbots WHERE widget_key = $1
+             UNION ALL
+             SELECT 1 FROM web_widget_configs WHERE widget_key = $1
+             LIMIT 1`,
+            [candidate]
+          );
+          if (!taken[0]) freeKey = candidate;
+        }
+        if (!freeKey) throw new Error('Không sinh được khoá chatbot mới');
+        await client.query(
+          `UPDATE web_widget_configs SET widget_key = $3, updated_at = NOW()
+           WHERE widget_key = $1 AND id_user = $2`,
+          [previousKey, userId, freeKey]
+        );
+        widgetKey = freeKey;
+      }
+      const { rows } = await client.query(
+        `UPDATE custom_chatbots
+         SET allow_public_numeric_id = $3, widget_key = $4, updated_at = NOW()
+         WHERE id = $1 AND id_user = $2
+         RETURNING id, allow_public_numeric_id, widget_key`,
+        [chatbotId, userId, allow, widgetKey]
+      );
+      await client.query('COMMIT');
+      return rows[0] || null;
+    } catch (err) {
+      try { await client.query('ROLLBACK'); } catch { /* giữ lỗi gốc */ }
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
   async deleteChatbot(chatbotId, userId) {

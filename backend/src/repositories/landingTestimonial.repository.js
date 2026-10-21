@@ -33,36 +33,6 @@ class LandingTestimonialRepository {
   }
 
   /**
-   * Danh sách đang hiển thị (active), sắp xếp theo sort_order.
-   *
-   * @returns {Promise<object[]>}
-   */
-  async findActiveOrdered() {
-    const result = await db.query(
-      `SELECT
-         id,
-         sort_order,
-         quote_vi,
-         quote_en,
-         star_rating,
-         name_vi,
-         name_en,
-         role_vi,
-         role_en,
-         location_vi,
-         location_en,
-         image_url,
-         is_active,
-         created_at,
-         updated_at
-       FROM landing_testimonials
-       WHERE is_active = true
-       ORDER BY sort_order ASC, id ASC`
-    );
-    return result.rows.map((r) => this._mapRow(r));
-  }
-
-  /**
    * Tất cả bản ghi (admin).
    *
    * @param {number|string} userId

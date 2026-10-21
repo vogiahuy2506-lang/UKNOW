@@ -1,6 +1,12 @@
 import * as systemMonitorService from '../../services/admin/systemMonitor.service.js';
 import db from '../../config/database.js';
 import { getShadowMismatchMetrics } from '../../services/quota/sendQuotaReservation.service.js';
+import {
+  listUncertainReservations,
+  reconcileUncertainReservation,
+} from '../../services/quota/sendQuotaReservationReconcile.service.js';
+import { logSystem, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../../services/audit.service.js';
+import { getSystemAuditContext } from '../../utils/auditContext.util.js';
 
 const handleError = (res, err) => {
   res.status(err.status || 500).json({ success: false, message: err.message || 'Lỗi server' });
@@ -97,6 +103,65 @@ export async function sendQuotaShadow(_req, res) {
     });
   } catch (err) {
     handleError(res, err);
+  }
+}
+
+/**
+ * Danh sách đặt chỗ hạn mức `uncertain` chờ đối soát (kèm gợi ý bằng chứng `hasMessageEvidence`).
+ * Chỉ đọc; việc đối soát do người quyết định qua `reconcileSendQuotaReservation`.
+ */
+export async function uncertainSendQuotaReservations(req, res) {
+  try {
+    const data = await listUncertainReservations({ limit: req.query.limit, offset: req.query.offset });
+    res.json({ success: true, data });
+  } catch (err) {
+    handleError(res, err);
+  }
+}
+
+/**
+ * Đối soát MỘT đặt chỗ `uncertain`: body `{ outcome: 'sent' | 'not_sent', note? }`.
+ * Audit ghi SAU khi giao dịch đã commit (logSystem tự nuốt lỗi ghi nhật ký).
+ */
+export async function reconcileSendQuotaReservation(req, res) {
+  try {
+    const result = await reconcileUncertainReservation({
+      reservationId: req.params.id,
+      outcome: req.body?.outcome,
+      adminUserId: req.user?.id,
+      note: req.body?.note,
+    });
+
+    await logSystem(
+      getSystemAuditContext(req),
+      AUDIT_ACTIONS.SEND_QUOTA_RESERVATION_RECONCILED,
+      AUDIT_ENTITY_TYPES.SEND_QUOTA_RESERVATION,
+      result.reservationId,
+      {
+        reservationId: result.reservationId,
+        outcome: result.outcome,
+        billingUserId: result.billingUserId,
+        quantity: result.quantity,
+        walletQuantity: result.walletQuantity,
+        note: result.note,
+      }
+    );
+
+    res.json({
+      success: true,
+      data: {
+        id: result.reservationId,
+        status: result.reservation?.status,
+        outcome: result.outcome,
+        walletDebited: result.walletDebited,
+      },
+    });
+  } catch (err) {
+    res.status(err.status || 500).json({
+      success: false,
+      message: err.message || 'Lỗi server',
+      ...(err.code ? { code: err.code } : {}),
+    });
   }
 }
 

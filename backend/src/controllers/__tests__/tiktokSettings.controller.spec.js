@@ -498,3 +498,48 @@ describe('tiktokSettings.controller — cross-user isolation', () => {
     expect(sent.data[0].id_user).toBe(87);
   });
 });
+
+// ── Nhân viên thao tác theo CHỦ workspace (gom mục nhẹ 20/10/2026, 4c) ───────────────────────────────
+// Trước đây cả 5 method dùng `req.user.id` nên nhân viên (có quyền chatbot_channels_manage) không thấy / không thao tác được tài khoản
+// TikTok của chủ. Nay dùng chủ workspace như các controller kênh khác (WhatsApp, Facebook).
+describe('tiktokSettings.controller — nhân viên dùng tài khoản TikTok của chủ', () => {
+  const OWNER = 42;
+  const employeeUser = { id: 8, activeContext: { type: 'employee', ownerId: OWNER } };
+
+  test('connect: state ký theo id CHỦ, không phải id nhân viên', async () => {
+    mockSignState.mockReturnValue({ state: 'signed-state-emp', nonce: 'n', createdAt: Date.now() });
+    mockGetAuthorizeUrl.mockReturnValue('https://tiktok.com/v2/auth/authorize/?x');
+    const res = mockRes();
+    await controller.connect(mockReq({ user: employeeUser }), res);
+    expect(mockSignState).toHaveBeenCalledWith(OWNER);
+    expect(mockSignState).not.toHaveBeenCalledWith(8);
+  });
+
+  test('listAccounts: đọc tài khoản của chủ', async () => {
+    mockListByUser.mockResolvedValueOnce([]);
+    const res = mockRes();
+    await controller.listAccounts(mockReq({ user: employeeUser }), res);
+    expect(mockListByUser).toHaveBeenCalledWith(OWNER);
+    expect(mockListByUser).not.toHaveBeenCalledWith(8);
+  });
+
+  test.each([
+    ['refreshAccount', {}],
+    ['deleteAccount', {}],
+    ['testSend', { conversationId: 'c1', message: 'hi' }],
+  ])('%s: tra tài khoản theo chủ workspace (findById(id, chủ)); tài khoản không thuộc chủ → 404', async (method, body) => {
+    mockFindById.mockResolvedValueOnce(null);
+    const res = mockRes();
+    await controller[method](mockReq({ user: employeeUser, params: { id: '1' }, body }), res);
+    expect(mockFindById).toHaveBeenCalledWith(1, OWNER);
+    expect(mockFindById).not.toHaveBeenCalledWith(1, 8);
+    expect(res.status).toHaveBeenCalledWith(404);
+  });
+
+  test('chủ tự thao tác (không có activeContext) vẫn dùng id của chính mình', async () => {
+    mockListByUser.mockResolvedValueOnce([]);
+    const res = mockRes();
+    await controller.listAccounts(mockReq({ user: { id: 42 } }), res);
+    expect(mockListByUser).toHaveBeenCalledWith(42);
+  });
+});

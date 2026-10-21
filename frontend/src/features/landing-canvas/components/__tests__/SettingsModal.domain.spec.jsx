@@ -291,6 +291,47 @@ describe('SettingsModal — tên miền riêng: kiểm DNS rồi mới kết n�
     await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith('lp'));
   });
 
+  it('PLAN_TEN_MIEN_TXT: bảng DNS có dòng TXT xác minh chủ sở hữu → hiện cả CNAME lẫn TXT, câu giải thích TXT, chép đúng Tên/Giá trị của dòng TXT', async () => {
+    const txtValue = 'founderai-verify=0123456789abcdef0123456789abcdef';
+    domainApi.postLandingCustomDomainCheck.mockResolvedValue({
+      ...CHECK_WRONG,
+      reason: 'txt_missing',
+      dnsRecords: [
+        { type: 'CNAME', host: 'lp', value: 'founderai.biz', ttl: 3600 },
+        { type: 'TXT', host: '_founderai-verify.lp', value: txtValue, ttl: 3600 },
+      ],
+    });
+    const input = await openConnectForm();
+    fireEvent.change(input, { target: { value: 'lp.example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra' }));
+
+    const table = await screen.findByTestId('custom-domain-dns-table');
+    expect(within(table).getByText('CNAME')).toBeInTheDocument();
+    expect(within(table).getByText('TXT')).toBeInTheDocument();
+    expect(within(table).getByText('_founderai-verify.lp')).toBeInTheDocument();
+    expect(within(table).getByText(txtValue)).toBeInTheDocument();
+    expect(screen.getByText('Thêm các bản ghi sau tại nơi bạn quản lý tên miền:')).toBeInTheDocument();
+    expect(screen.getByTestId('custom-domain-txt-note')).toHaveTextContent('xác minh bạn là chủ tên miền');
+    // Chưa đủ bản ghi → chưa có nút Kết nối.
+    expect(screen.queryByRole('button', { name: 'Kết nối tên miền' })).toBeNull();
+
+    // Dòng thứ hai (TXT): chép Tên và Giá trị của chính nó.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Sao chép Giá trị (Value)' })[1]);
+    await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith(txtValue));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Sao chép Tên (Host)' })[1]);
+    await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith('_founderai-verify.lp'));
+  });
+
+  it('bảng DNS chỉ có CNAME (không có dòng TXT) → không hiện câu giải thích TXT', async () => {
+    domainApi.postLandingCustomDomainCheck.mockResolvedValue(CHECK_WRONG);
+    const input = await openConnectForm();
+    fireEvent.change(input, { target: { value: 'lp.example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra' }));
+
+    await screen.findByTestId('custom-domain-dns-table');
+    expect(screen.queryByTestId('custom-domain-txt-note')).toBeNull();
+  });
+
   it('chọn "Tên miền chính" → Kiểm tra gửi isApexDomain=true; đổi loại sau khi kiểm tra phải kiểm lại (mất nút Kết nối)', async () => {
     domainApi.postLandingCustomDomainCheck.mockResolvedValue({ ...CHECK_OK, isApexDomain: true, hostname: 'example.com' });
     const input = await openConnectForm();

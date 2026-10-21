@@ -686,18 +686,30 @@ class CampaignController {
 
       // Kiểm tra ngưỡng phê duyệt nếu là nhân viên chạy
       if (workspaceContext.contextType === 'employee') {
+        // Chiến dịch phải thuộc workspace TRƯỚC khi đánh giá ngưỡng: câu trả lời bên dưới nêu số người
+        // nhận của chiến dịch và markPendingOwnerApproval đổi trạng thái nó — không được chạy trên
+        // chiến dịch của tenant khác (cùng tiêu chí với findCampaignForRunTx → 404 như đường chạy thật).
+        await campaignRunService.assertCampaignInRunScope({
+          campaignId,
+          isAdmin: workspaceContext.isSuperAdmin,
+          workspaceOwnerId: workspaceContext.workspaceOwnerId,
+        });
         const { threshold, totalCustomers, requiresApproval } = await evaluateApprovalThreshold({
           ownerId: workspaceContext.workspaceOwnerId,
           campaignId,
         });
         if (requiresApproval) {
-          await markPendingOwnerApproval({
+          const marked = await markPendingOwnerApproval({
+            ownerId: workspaceContext.workspaceOwnerId,
             campaignId,
             auditContext: getWorkspaceAuditContext(req),
             threshold,
             totalCustomers,
             actorUserId: workspaceContext.actorUserId,
           });
+          if (!marked) {
+            return res.status(404).json({ success: false, message: 'Không tìm thấy chiến dịch' });
+          }
           return res.json({
             success: true,
             message: `Chiến dịch có ${totalCustomers} người nhận, vượt ngưỡng yêu cầu phê duyệt (${threshold}). Vui lòng chờ chủ tài khoản duyệt.`,
@@ -725,6 +737,13 @@ class CampaignController {
           },
         });
       } else {
+        // `scheduleId` trong body chỉ được nhận khi đúng là lịch của chiến dịch này, cùng workspace.
+        const verifiedScheduleId = await campaignRunService.resolveVerifiedScheduleId({
+          scheduleId,
+          campaignId,
+          isAdmin: workspaceContext.isSuperAdmin,
+          workspaceOwnerId: workspaceContext.workspaceOwnerId,
+        });
         runRecord = await this.createCampaignRunRecord({
           campaignId,
           workspaceOwnerId: workspaceContext.workspaceOwnerId,
@@ -732,7 +751,7 @@ class CampaignController {
           roleCode: workspaceContext.roleCode,
           isAdmin: workspaceContext.isSuperAdmin,
           source,
-          scheduleId,
+          scheduleId: verifiedScheduleId,
           runName,
           runOptions: {
             adjacentZaloNodeDelayMs,

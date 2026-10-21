@@ -39,7 +39,7 @@ export const POLICY_VERSIONS = {
     titleVi: 'Chính Sách Bảo Mật',
     titleEn: 'Privacy Policy',
     files: ['PrivacyPolicy.jsx', 'PrivacyPolicyControllerPanel.jsx', 'PrivacyPolicyProcessorPanel.jsx'],
-    currentHash: '39342dac26e364b0fc6e49bc0f07f103b02d88fc4e8a3127088af2f6a407fbb2',
+    currentHash: '9d9ceecd91bcc3458084feeb54b6ac85d54352a9f17e8718d4d74c73a4bf1c0f',
     versions: ['2026-09-29'],
   },
   dpa: {
@@ -47,7 +47,7 @@ export const POLICY_VERSIONS = {
     titleVi: 'Thỏa Thuận Xử Lý Dữ Liệu Cá Nhân',
     titleEn: 'Personal Data Processing Agreement',
     files: ['PublicDPA.jsx'],
-    currentHash: '03ef0da3326dc74d9ae84883094c013585a5c8c79b8c80c567680d4a857c5807',
+    currentHash: 'ce2f9d058276c96bfcaf69d57af686cc99014bb5dc3e0dc4e72205baa8189474',
     versions: ['2026-09-29'],
   },
   pricing: {
@@ -63,16 +63,16 @@ export const POLICY_VERSIONS = {
     titleVi: 'Chính sách về thanh toán',
     titleEn: 'Payment Policy',
     files: ['PaymentPolicy.jsx'],
-    currentHash: '4f0a022086b8888fb606c8e7aefe145dec6e213ab9b2430c3e0dee482aa14460',
-    versions: ['2026-09-29'],
+    currentHash: 'c13ae842fa542ce1c2edc9cbddb01558b0c2519a3967cbd1353901d6b5b33056',
+    versions: ['2026-10-19', '2026-09-29'],
   },
   complaint: {
     path: '/complaint-policy',
     titleVi: 'Phương thức tiếp nhận và giải quyết phản ánh, yêu cầu, khiếu nại',
     titleEn: 'Procedure for Receiving and Resolving Feedback, Requests and Complaints',
     files: ['ComplaintPolicy.jsx'],
-    currentHash: 'a6aede37f4e3adef9b4cc3637e4b03c1ac4cc5edaee97bbb327145cb4ebb9e67',
-    versions: ['2026-09-29'],
+    currentHash: '645d347a37b63fa437ad1086c8ff86f406232de98079996072d0d94b7eb7dd0e',
+    versions: ['2026-10-19', '2026-09-29'],
   },
   serviceTerms: {
     path: '/service-terms',
@@ -111,7 +111,7 @@ export const POLICY_VERSIONS = {
     titleVi: 'Hình thức hỗ trợ trực tuyến',
     titleEn: 'Online Support',
     files: ['Support.jsx'],
-    currentHash: '4060c328da9bc5a8458bfc962039987fe9cfe5c0004db7c6fda6a5b08a9b702a',
-    versions: ['2026-09-29'],
+    currentHash: '779ba7ab6cb2304ddfe8af554b75d993d52467dd988fc2ff5a67a978d86864ae',
+    versions: ['2026-10-19', '2026-09-29'],
   },
 };

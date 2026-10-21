@@ -16,6 +16,7 @@ import {
   isTriggerNodeType,
 } from '../../features/campaigns/utils/campaignBuilderFlow';
 import { buildFlowFromCampaign } from '../../features/campaigns/utils/campaignBuilderFlowSerialization';
+import { removeNodeClearingReferences } from '../../features/campaigns/settings/settingsGraph';
 import {
   applyMappingsForRow,
   buildSchemaFromRows,
@@ -684,8 +685,9 @@ const CampaignBuilder = () => {
 
   const confirmDeleteNode = () => {
     if (selectedNode) {
-      setNodes((nds) => nds.filter((n) => n.id !== selectedNode.id));
-      setEdges((eds) => eds.filter((e) => e.source !== selectedNode.id && e.target !== selectedNode.id));
+      // Gỡ khối + cạnh dính nó VÀ xoá tham chiếu tới khối ở các khối còn lại (ô nguồn hiện "Chưa chọn", không giữ id chết).
+      setNodes((nds) => removeNodeClearingReferences({ nodes: nds, edges: [], nodeId: selectedNode.id }).nodes);
+      setEdges((eds) => removeNodeClearingReferences({ nodes: [], edges: eds, nodeId: selectedNode.id }).edges);
       setSelectedNode(null);
       setSelectedEdgeId(null);
       setShowDeleteModal(false);

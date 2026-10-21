@@ -98,19 +98,27 @@ export function findUnmappedVariables(text, mappings) {
   return Array.from(new Set(unmapped));
 }
 
+export const MISSING_SOURCE_NODE_MESSAGE = 'Khối dữ liệu đã chọn không còn tồn tại — hãy chọn lại';
+
 /**
  * Validate node configuration before preview execution.
  *
  * @param {object} node current node in execution order
+ * @param {{ nodeIds?: Set<string>|Array<string> }} [options] `nodeIds`: id mọi khối đang có trên sơ đồ — có thì khối nguồn
+ *   được chọn mà không thuộc tập này (đã bị xoá / sót từ bản gốc khi nhân bản) bị báo "không còn tồn tại" thay vì để chạy ra 0 người.
  * @returns {{status: 'success'|'failed', message: string, warning?: string}}
  */
-export const validateNodeForRun = (node) => {
+export const validateNodeForRun = (node, { nodeIds = null } = {}) => {
   const nodeType = node.data?.nodeType || node.type;
   const config = node.data?.config || {};
   let nodeWarning = null;
+  const knownNodeIds = nodeIds ? new Set(Array.from(nodeIds, (id) => String(id ?? ''))) : null;
+  // Chỉ kiểm khi người gọi truyền tập id khối (không truyền → giữ hành vi cũ, chỉ đòi "khác rỗng").
+  const isMissingSourceNode = (nodeId) => Boolean(knownNodeIds) && !knownNodeIds.has(String(nodeId ?? '').trim());
   const requireSourceNodeAndField = (source, nodeId, field, fieldLabel = 'cột dữ liệu') => {
     if (source !== 'node') return null;
     if (!String(nodeId || '').trim()) return 'Chưa chọn node dữ liệu';
+    if (isMissingSourceNode(nodeId)) return MISSING_SOURCE_NODE_MESSAGE;
     if (!String(field || '').trim()) return `Chưa chọn ${fieldLabel}`;
     return null;
   };
@@ -130,6 +138,9 @@ export const validateNodeForRun = (node) => {
     if (recipientSource === 'node') {
       if (!String(config.recipientNodeId || '').trim()) {
         return { status: 'failed', message: 'Chưa chọn node dữ liệu' };
+      }
+      if (isMissingSourceNode(config.recipientNodeId)) {
+        return { status: 'failed', message: MISSING_SOURCE_NODE_MESSAGE };
       }
       if (!String(config.recipientField || '').trim()) {
         return { status: 'failed', message: 'Chưa chọn cột email' };

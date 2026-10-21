@@ -591,6 +591,43 @@ class EmailSettingsSmtpService {
     };
   }
 
+  /**
+   * Giữ lại trong các id tham chiếu do CLIENT gửi (chiến dịch, khách, mẫu, lượt chạy) chỉ những id thuộc
+   * workspace; id lạ → null. Gọi ở ĐIỂM VÀO của gửi email thử/trực tiếp, KHÔNG ở logEmailSentWithClient:
+   * hàm ghi log đó chạy cho từng email của mọi chiến dịch với id server tự lấy, thêm truy vấn kiểm ở đó
+   * sẽ nhân theo số email. Không báo lỗi — email thử vẫn gửi được, chỉ không gắn vào dữ liệu người khác.
+   *
+   * @param {number} workspaceOwnerId
+   * @param {{ campaignId?: unknown, customerId?: unknown, emailTemplateId?: unknown, runId?: unknown }} requested
+   * @returns {Promise<{ campaignId: number|null, customerId: number|null, emailTemplateId: number|null, runId: number|null }>}
+   */
+  async keepWorkspaceOwnedReferences(workspaceOwnerId, requested = {}) {
+    // Chặt: chỉ số nguyên dương thật (số hoặc chuỗi toàn chữ số). parseInt lỏng sẽ đọc `1e30` thành 1 và `12abc` thành 12.
+    const toId = (value) => {
+      const parsed = typeof value === 'number'
+        ? value
+        : (typeof value === 'string' && /^\d{1,15}$/.test(value.trim()) ? Number(value.trim()) : NaN);
+      return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+    };
+    const ids = {
+      campaignId: toId(requested.campaignId),
+      customerId: toId(requested.customerId),
+      templateId: toId(requested.emailTemplateId),
+      runId: toId(requested.runId),
+    };
+    if (Object.values(ids).every((id) => id === null)) {
+      return { campaignId: null, customerId: null, emailTemplateId: null, runId: null };
+    }
+    const owned = await emailSettingsRepository.findWorkspaceOwnedReferenceIds(workspaceOwnerId, ids);
+    const toNumberOrNull = (value) => (value == null ? null : Number(value));
+    return {
+      campaignId: toNumberOrNull(owned.campaign_id),
+      customerId: toNumberOrNull(owned.customer_id),
+      emailTemplateId: toNumberOrNull(owned.template_id),
+      runId: toNumberOrNull(owned.run_id),
+    };
+  }
+
   async sendCustomEmail({ userId, roleCode, ownerContextId, payload, trackingConfig, options = {} }, deps) {
     const workspaceOwnerId = ownerContextId || userId;
     const isPreviewMode = this.normalizePreviewMode(payload);
@@ -604,12 +641,21 @@ class EmailSettingsSmtpService {
       content,
       htmlContent,
       attachments,
-      campaignId,
-      emailTemplateId,
       saveMessageLog,
-      customerId,
-      runId = null,
     } = payload;
+    // Các id tham chiếu do client gửi chỉ có giá trị khi thuộc workspace (xem keepWorkspaceOwnedReferences):
+    // chúng đi thẳng vào tracking link, email_messages, campaign_customers và customer_journey.
+    const {
+      campaignId,
+      customerId,
+      emailTemplateId,
+      runId,
+    } = await this.keepWorkspaceOwnedReferences(workspaceOwnerId, {
+      campaignId: payload.campaignId,
+      customerId: payload.customerId,
+      emailTemplateId: payload.emailTemplateId,
+      runId: payload.runId,
+    });
     const normalizedRunId = Number.isFinite(parseInt(runId, 10))
       ? parseInt(runId, 10)
       : null;

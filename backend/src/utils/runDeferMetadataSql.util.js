@@ -7,6 +7,10 @@
  * (repositories/user/userDeliveryMonitor.repository.js): thêm một khoá defer mới thì sửa MỘT chỗ này, hai màn không
  * lệch nhau.
  *
+ * Khoá Zalo ưu tiên `zaloOutboundResumeEffectiveAt` (mốc chạy tiếp THẬT đã gộp giờ yên lặng, vd khoá tra số hết 00:00 nhưng
+ * 23–06 là giờ yên lặng → 06:00) rồi mới tới `zaloOutboundDeferredUntil` (run cũ chưa có khoá mới). Scheduler vẫn thức theo
+ * `zaloOutboundDeferredUntil` (utils/scheduler.js) — KHÔNG đổi ở đây.
+ *
  * Kết quả là chuỗi (ISO với mốc, mã ngắn với lý do) hoặc NULL. Mốc KHÔNG được parse ở SQL — một giá trị hỏng trong
  * JSON sẽ làm hỏng cả truy vấn — nên nơi dùng tự kiểm mốc còn ở tương lai.
  */
@@ -16,7 +20,7 @@ import { safeMetadataTimestampSql } from './metadataTimestampSql.util.js';
  * @param {string} alias bí danh của bảng/CTE có cột `run_metadata`
  * @returns {string} biểu thức trả mốc chờ (chuỗi ISO) hoặc NULL
  */
-export const runDeferredUntilSql = (alias) => `COALESCE(${alias}.run_metadata->>'quotaDeferredUntil', ${alias}.run_metadata->>'nonContinuousDeferredUntil', ${alias}.run_metadata->>'zaloOutboundDeferredUntil', ${alias}.run_metadata->>'channelDeferredUntil')`;
+export const runDeferredUntilSql = (alias) => `COALESCE(${alias}.run_metadata->>'quotaDeferredUntil', ${alias}.run_metadata->>'nonContinuousDeferredUntil', COALESCE(${alias}.run_metadata->>'zaloOutboundResumeEffectiveAt', ${alias}.run_metadata->>'zaloOutboundDeferredUntil'), ${alias}.run_metadata->>'channelDeferredUntil')`;
 
 /**
  * Cặp của {@link runDeferredUntilSql}.
@@ -38,6 +42,7 @@ export const runDeferredReasonSql = (alias) => `COALESCE(${alias}.run_metadata->
 export const runDeferredUntilLatestSql = (alias) => `GREATEST(
   ${safeMetadataTimestampSql(`${alias}.run_metadata->>'quotaDeferredUntil'`)},
   ${safeMetadataTimestampSql(`${alias}.run_metadata->>'zaloOutboundDeferredUntil'`)},
+  ${safeMetadataTimestampSql(`${alias}.run_metadata->>'zaloOutboundResumeEffectiveAt'`)},
   ${safeMetadataTimestampSql(`${alias}.run_metadata->>'nonContinuousDeferredUntil'`)},
   ${safeMetadataTimestampSql(`${alias}.run_metadata->>'channelDeferredUntil'`)}
 )`;

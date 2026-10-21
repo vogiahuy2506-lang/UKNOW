@@ -2,8 +2,12 @@
  * Số "đã dùng" hiển thị trên hồ sơ và trang Thanh toán (GET /users/profile).
  *
  * PLAN_SO_LIEU_DUNG_GON_KHOP_2026-09-30, PR-3 — MỌI đồng hồ ở đây gọi ĐÚNG hàm mà cổng chặn dùng, cùng kỳ:
- *   - tin gửi   : userSendLimit.util.js (countEmailSentInCycle / countZaloSentInCycle / countCombinedSentInCycle,
- *                 countEmailSentToday / countZaloSentToday) với kỳ của getBillingCycle;
+ *   - tin gửi   : sendQuota.repository.js bản `*WithLedger` (countEmailSentInCycleWithLedger / countZaloSentInCycleWithLedger /
+ *                 countAdapterSentInCycleWithLedger / countCombinedSentInCycleWithLedger, countEmailSentTodayWithLedger /
+ *                 countZaloSentTodayWithLedger) — CÙNG hàm luật đặt chỗ dùng để chặn — với kỳ của getBillingCycle và mốc
+ *                 ngày VN của getVnDayBoundaries. Bản cũ (userSendLimit.util.js) loại tin đã gắn `quota_reservation_id`
+ *                 nên ở enforce màn thấp hơn số cổng chặn (PLAN_SAN_SANG_BAT_ENFORCE_HAN_MUC, PR-E3). Ở shadow/off sổ cái
+ *                 rỗng nên số y như bản cũ;
  *   - tài nguyên: userResourceLimit.util.js getResourceUsageSnapshot (landing page, tài khoản Zalo / Email /
  *                 WhatsApp / Telegram). Chatbot và nhân viên có cổng riêng nên gọi hàm của chính cổng đó.
  * KHÔNG viết SQL đếm riêng ở đây. Trước đây findProfileUsageCounts / findStructuralUsageCounts tự đếm từ
@@ -13,15 +17,17 @@
  * Lỗi từng phần: đồng hồ nào hỏng thì console.error kèm TÊN đồng hồ và trả null cho đúng đồng hồ đó (FE hiện "—"),
  * các đồng hồ khác vẫn có số. TUYỆT ĐỐI không trả 0 giả. Hai hàm xuất khẩu không bao giờ ném lỗi.
  */
+import db from '../../config/database.js';
 import { getBillingCycle } from '../../utils/billingCycle.util.js';
 import {
-  countEmailSentInCycle,
-  countZaloSentInCycle,
-  countCombinedSentInCycle,
-  countAdapterSentInCycle,
-  countEmailSentToday,
-  countZaloSentToday,
-} from '../../utils/userSendLimit.util.js';
+  countEmailSentInCycleWithLedger,
+  countZaloSentInCycleWithLedger,
+  countCombinedSentInCycleWithLedger,
+  countAdapterSentInCycleWithLedger,
+  countEmailSentTodayWithLedger,
+  countZaloSentTodayWithLedger,
+} from '../../repositories/sendQuota.repository.js';
+import { getVnDayBoundaries } from '../quota/sendQuotaReservation.service.js';
 import { getResourceUsageSnapshot } from '../../utils/userResourceLimit.util.js';
 import chatbotRepository from '../../repositories/ai/chatbot.repository.js';
 import { resolveEffectiveCeiling } from '../payment/topupLock.service.js';
@@ -50,12 +56,12 @@ async function readMeter(meter, billingUserId, read) {
 /**
  * Tin đã gửi trong KỲ của gói (30 ngày từ ngày kích hoạt) — đúng số cổng gửi tin so với hạn mức.
  *
- * - Email : countEmailSentInCycle (7 trạng thái thư đã gửi + gửi nhanh) so với `monthly_email_limit`.
- * - Zalo (`messagingSentCycle`, so với `monthly_zalo_limit`): countZaloSentInCycle. P10: hàm này CHỈ còn đếm Zalo —
+ * - Email : countEmailSentInCycleWithLedger (7 trạng thái thư đã gửi + gửi nhanh + đặt chỗ) so với `monthly_email_limit`.
+ * - Zalo (`messagingSentCycle`, so với `monthly_zalo_limit`): countZaloSentInCycleWithLedger. P10: hàm này CHỈ còn đếm Zalo —
  *   Telegram/WhatsApp có hạn mức tin/tháng RIÊNG (cột `monthly_telegram_limit`/`monthly_whatsapp_limit`), đếm bằng
- *   countAdapterSentInCycle (campaign_channel_messages loại xem thử + gửi nhanh) — đúng hàm cổng chặn dùng.
- * - Tổng kỳ : countCombinedSentInCycle so với `messages_per_period`, CHỈ khi gói đặt trần tổng.
- * - Hôm nay : CHỈ khi gói có trần ngày tương ứng (countEmailSentToday / countZaloSentToday — cấp chủ tài khoản,
+ *   countAdapterSentInCycleWithLedger (campaign_channel_messages loại xem thử + gửi nhanh + đặt chỗ) — đúng hàm cổng chặn dùng.
+ * - Tổng kỳ : countCombinedSentInCycleWithLedger so với `messages_per_period`, CHỈ khi gói đặt trần tổng.
+ * - Hôm nay : CHỈ khi gói có trần ngày tương ứng (countEmailSentTodayWithLedger / countZaloSentTodayWithLedger — cấp chủ tài khoản,
  *   không phải bản `countEmployee*` cấp nhân viên).
  *
  * @param {number|string} billingUserId chủ tài khoản đã resolve (owner khi nhân viên ở ngữ cảnh chủ)
@@ -79,6 +85,8 @@ export async function getProfileSendUsage(billingUserId, planRow) {
   const dailyEmailLimit = toIntOrNull(planRow?.daily_email_limit);
   const dailyZaloLimit = toIntOrNull(planRow?.daily_zalo_limit);
   const messagesPerPeriod = toIntOrNull(planRow?.messages_per_period);
+  // Mốc ngày VN: cùng helper luật đặt chỗ dùng để chặn (bản *WithLedger so khớp `vn_day_start/vn_day_end` của dòng sổ cái).
+  const { vnDayStart, vnDayEnd } = getVnDayBoundaries(new Date());
 
   const [
     emailSentCycle,
@@ -90,25 +98,25 @@ export async function getProfileSendUsage(billingUserId, planRow) {
     messagingSentToday,
   ] = await Promise.all([
     hasCycle
-      ? readMeter('emailSentCycle', billingUserId, () => countEmailSentInCycle(billingUserId, cycle.cycleStart, cycle.cycleEnd))
+      ? readMeter('emailSentCycle', billingUserId, () => countEmailSentInCycleWithLedger(db, billingUserId, cycle.cycleStart, cycle.cycleEnd))
       : null,
     hasCycle
-      ? readMeter('messagingSentCycle', billingUserId, () => countZaloSentInCycle(billingUserId, cycle.cycleStart, cycle.cycleEnd))
+      ? readMeter('messagingSentCycle', billingUserId, () => countZaloSentInCycleWithLedger(db, billingUserId, cycle.cycleStart, cycle.cycleEnd))
       : null,
     hasCycle && messagesPerPeriod !== null
-      ? readMeter('combinedSentCycle', billingUserId, () => countCombinedSentInCycle(billingUserId, cycle.cycleStart, cycle.cycleEnd))
+      ? readMeter('combinedSentCycle', billingUserId, () => countCombinedSentInCycleWithLedger(db, billingUserId, cycle.cycleStart, cycle.cycleEnd))
       : null,
     hasCycle
-      ? readMeter('telegramSentCycle', billingUserId, () => countAdapterSentInCycle(billingUserId, 'telegram', cycle.cycleStart, cycle.cycleEnd))
+      ? readMeter('telegramSentCycle', billingUserId, () => countAdapterSentInCycleWithLedger(db, billingUserId, 'telegram', cycle.cycleStart, cycle.cycleEnd))
       : null,
     hasCycle
-      ? readMeter('whatsappSentCycle', billingUserId, () => countAdapterSentInCycle(billingUserId, 'whatsapp', cycle.cycleStart, cycle.cycleEnd))
+      ? readMeter('whatsappSentCycle', billingUserId, () => countAdapterSentInCycleWithLedger(db, billingUserId, 'whatsapp', cycle.cycleStart, cycle.cycleEnd))
       : null,
     dailyEmailLimit !== null
-      ? readMeter('emailSentToday', billingUserId, () => countEmailSentToday(billingUserId))
+      ? readMeter('emailSentToday', billingUserId, () => countEmailSentTodayWithLedger(db, billingUserId, vnDayStart, vnDayEnd))
       : null,
     dailyZaloLimit !== null
-      ? readMeter('messagingSentToday', billingUserId, () => countZaloSentToday(billingUserId))
+      ? readMeter('messagingSentToday', billingUserId, () => countZaloSentTodayWithLedger(db, billingUserId, vnDayStart, vnDayEnd))
       : null,
   ]);
 

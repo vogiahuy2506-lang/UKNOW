@@ -6,8 +6,9 @@ import {
 } from '../zaloSendSpeed.util.js';
 
 describe('zaloSendSpeed.util', () => {
-  it('VALID_SEND_SPEED_KEYS chứa đúng 3 mức', () => {
-    expect(VALID_SEND_SPEED_KEYS).toEqual(['safe', 'fast', 'very_fast']);
+  it('VALID_SEND_SPEED_KEYS chứa đúng 2 mức (very_fast đã bỏ 20/10/2026)', () => {
+    expect(VALID_SEND_SPEED_KEYS).toEqual(['safe', 'fast']);
+    expect(VALID_SEND_SPEED_KEYS).not.toContain('very_fast');
   });
 
   describe('resolveSendSpeedFromRow', () => {
@@ -21,9 +22,9 @@ describe('zaloSendSpeed.util', () => {
       expect(resolveSendSpeedFromRow('50000', '100000')).toBe('fast');
     });
 
-    it('30.000 / 60.000 → very_fast', () => {
-      expect(resolveSendSpeedFromRow(30_000, 60_000)).toBe('very_fast');
-      expect(resolveSendSpeedFromRow('30000', '60000')).toBe('very_fast');
+    it('30.000 / 60.000 (mức "Rất nhanh" cũ còn sót) → custom, KHÔNG phải fast hay very_fast', () => {
+      expect(resolveSendSpeedFromRow(30_000, 60_000)).toBe('custom');
+      expect(resolveSendSpeedFromRow('30000', '60000')).toBe('custom');
     });
 
     it('Giá trị bất kỳ khác (SQL tay) → custom', () => {
@@ -36,15 +37,15 @@ describe('zaloSendSpeed.util', () => {
   });
 
   describe('ZALO_SEND_SPEED_PRESETS', () => {
-    it('khớp định nghĩa 3 mức', () => {
+    it('khớp định nghĩa 2 mức, không còn very_fast', () => {
       expect(ZALO_SEND_SPEED_PRESETS.safe.delayMinMs).toBeNull();
       expect(ZALO_SEND_SPEED_PRESETS.safe.delayMaxMs).toBeNull();
 
       expect(ZALO_SEND_SPEED_PRESETS.fast.delayMinMs).toBe(50_000);
       expect(ZALO_SEND_SPEED_PRESETS.fast.delayMaxMs).toBe(100_000);
 
-      expect(ZALO_SEND_SPEED_PRESETS.very_fast.delayMinMs).toBe(30_000);
-      expect(ZALO_SEND_SPEED_PRESETS.very_fast.delayMaxMs).toBe(60_000);
+      expect(Object.keys(ZALO_SEND_SPEED_PRESETS)).toEqual(['safe', 'fast']);
+      expect(ZALO_SEND_SPEED_PRESETS.very_fast).toBeUndefined();
     });
   });
 });

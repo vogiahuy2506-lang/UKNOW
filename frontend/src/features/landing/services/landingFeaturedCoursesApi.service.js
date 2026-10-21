@@ -1,12 +1,18 @@
 import api from '../../../services/api.js';
 
 /**
- * Lấy danh sách khóa học nổi bật từ API công khai (landing `/l`).
+ * Lấy danh sách khóa học nổi bật từ API công khai.
  *
+ * Dữ liệu là CỦA TỪNG tài khoản: server chỉ trả dòng của chủ landing ĐÃ XUẤT BẢN có `slug` này
+ * (thiếu slug / chưa xuất bản → rỗng), không còn gộp mọi tài khoản.
+ *
+ * @param {string} slug slug landing đã xuất bản
  * @returns {Promise<object[]>}
  */
-export async function fetchPublicLandingFeaturedCourses() {
-  const { data } = await api.get('/public/landing-featured-courses');
+export async function fetchPublicLandingFeaturedCourses(slug) {
+  const normalizedSlug = String(slug ?? '').trim();
+  if (!normalizedSlug) return [];
+  const { data } = await api.get('/public/landing-featured-courses', { params: { slug: normalizedSlug } });
   if (!data?.success || !Array.isArray(data.data)) return [];
   return data.data;
 }

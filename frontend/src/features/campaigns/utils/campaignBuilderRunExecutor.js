@@ -272,7 +272,7 @@ export const executeCampaignRun = async (params) => {
       throw error;
     }
     if (runTokenRef.current !== runToken) break;
-    let validation = validateNodeForRun(node);
+    let validation = validateNodeForRun(node, { nodeIds: nodeIdSet });
     const nodeType = node.data?.nodeType || node.type;
     let result = null;
     const nodeLogId = `node-${node.id}-${runToken}`;

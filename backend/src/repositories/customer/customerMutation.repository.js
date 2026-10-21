@@ -366,6 +366,36 @@ class CustomerMutationRepository {
     return String(result.rows[0]?.zalo_id ?? '').trim();
   }
 
+  /**
+   * Tra uid hàng loạt (PR-4): trong danh sách số điện thoại, số nào đã có khách `zalo_id` khác rỗng trong workspace.
+   * Cùng điều kiện với `findKnownZaloUidByPhone` (khớp `phone` HOẶC `zalo_phone`, cùng workspace) nhưng MỘT truy vấn
+   * cho cả danh sách — dùng để biết ai gửi được mà không cần tra số (không tốn hạn mức tra số của Zalo).
+   *
+   * @param {number|string} userId chủ workspace
+   * @param {Array<string>} phones
+   * @returns {Promise<Set<string>>} tập các số (đúng chuỗi đã truyền vào) đã biết uid
+   */
+  async findPhonesWithKnownZaloUid(userId, phones) {
+    const safePhones = [...new Set(
+      (Array.isArray(phones) ? phones : [])
+        .map((phone) => String(phone || '').trim())
+        .filter(Boolean)
+    )];
+    if (safePhones.length === 0) return new Set();
+    const result = await db.query(
+      `SELECT DISTINCT matched.phone_key
+       FROM customers c
+       CROSS JOIN LATERAL (VALUES (c.phone), (c.zalo_phone)) AS matched(phone_key)
+       WHERE COALESCE(c.workspace_owner_id, c.id_user) = $1
+         AND (c.phone = ANY($2::text[]) OR c.zalo_phone = ANY($2::text[]))
+         AND c.zalo_id IS NOT NULL
+         AND c.zalo_id <> ''
+         AND matched.phone_key = ANY($2::text[])`,
+      [userId, safePhones]
+    );
+    return new Set(result.rows.map((row) => String(row.phone_key ?? '').trim()).filter(Boolean));
+  }
+
   async findZaloPersonalCustomerByIdentifiers(userId, uid, phone, email) {
     const result = await db.query(
       `SELECT id

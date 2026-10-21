@@ -203,7 +203,7 @@ router.patch(
   zaloSettingsController.updateSendLimit.bind(zaloSettingsController)
 );
 
-// Tốc độ gửi Zalo cá nhân (3 mức: safe, fast, very_fast) — cần quyền zalo_settings
+// Tốc độ gửi Zalo cá nhân (2 mức: safe, fast; mức very_fast đã bỏ 20/10/2026) — cần quyền zalo_settings
 router.patch(
   '/accounts/:id/send-speed',
   requirePermission('zalo_settings'),
@@ -211,9 +211,12 @@ router.patch(
     param('id').isInt({ min: 1 }).withMessage('ID tài khoản không hợp lệ'),
     body('sendSpeed')
       .exists({ checkFalsy: false })
-      .withMessage('Thiếu sendSpeed — bắt buộc chọn một trong safe, fast, very_fast')
-      .isIn(['safe', 'fast', 'very_fast'])
-      .withMessage('Mức tốc độ gửi không hợp lệ (safe, fast, very_fast)'),
+      .withMessage('Thiếu sendSpeed — bắt buộc chọn một trong safe, fast')
+      .custom((value) => value !== 'very_fast')
+      .withMessage("Mức 'Rất nhanh' đã ngừng hỗ trợ — chọn 'safe' hoặc 'fast'")
+      .bail()
+      .isIn(['safe', 'fast'])
+      .withMessage('Mức tốc độ gửi không hợp lệ (safe, fast)'),
   ],
   handleValidationErrors,
   zaloSettingsController.updateSendSpeed.bind(zaloSettingsController)

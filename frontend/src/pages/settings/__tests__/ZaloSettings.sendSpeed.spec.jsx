@@ -1,10 +1,11 @@
 /**
- * Tests cho tính năng người dùng tự chọn tốc độ gửi Zalo cá nhân (3 mức: safe, fast, very_fast).
+ * Tests cho tính năng người dùng tự chọn tốc độ gửi Zalo cá nhân (2 mức: safe, fast; mức very_fast
+ * "Rất nhanh" 30–60 giây đã bỏ 20/10/2026).
  * Yêu cầu:
  * - Hiện đúng mức hiện tại.
- * - Chọn very_fast → hiện cảnh báo đỏ.
+ * - Ô chọn chỉ có 2 lựa chọn (safe, fast), không còn very_fast.
  * - Bấm Lưu → gọi updateSendSpeed(accountId, sendSpeed) với TÊN mức.
- * - Nick đang ở custom → hiện dòng chỉ đọc "Tuỳ chỉnh (do quản trị đặt)", vẫn cho chọn lại 1 trong 3 mức.
+ * - Nick đang ở custom (gồm cặp 30–60s cũ còn sót) → hiện dòng chỉ đọc "Tuỳ chỉnh (do quản trị đặt)", vẫn cho chọn lại 1 trong 2 mức.
  * - Hiện dòng nhỏ "Áp dụng cho các lượt gửi tiếp theo."
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -69,7 +70,6 @@ describe('ZaloSettings — Tốc độ gửi Zalo cá nhân (PR-2)', () => {
     const select = screen.getByLabelText('zaloSettings.sendSpeed:');
     expect(select.value).toBe('safe');
     expect(screen.queryByText('zaloSettings.sendSpeedFastWarning')).not.toBeInTheDocument();
-    expect(screen.queryByText('zaloSettings.sendSpeedVeryFastWarning')).not.toBeInTheDocument();
     expect(screen.getByText('zaloSettings.sendSpeedAppliedNextRunHint')).toBeInTheDocument();
   });
 
@@ -81,21 +81,21 @@ describe('ZaloSettings — Tốc độ gửi Zalo cá nhân (PR-2)', () => {
     expect(screen.getByText('zaloSettings.sendSpeedFastWarning')).toBeInTheDocument();
   });
 
-  it('chọn very_fast → hiện cảnh báo đỏ', async () => {
+  it('ô Tốc độ gửi chỉ có đúng 2 lựa chọn safe và fast, không còn very_fast', async () => {
     await renderWithAccount(makeAccount({ sendSpeed: 'safe' }));
 
     const select = screen.getByLabelText('zaloSettings.sendSpeed:');
-    fireEvent.change(select, { target: { value: 'very_fast' } });
-
-    expect(screen.getByText('zaloSettings.sendSpeedVeryFastWarning')).toBeInTheDocument();
+    const values = Array.from(select.querySelectorAll('option')).map((o) => o.value);
+    expect(values).toEqual(['safe', 'fast']);
+    expect(screen.queryByText('zaloSettings.sendSpeedVeryFast')).not.toBeInTheDocument();
   });
 
-  it('chọn very_fast rồi bấm Lưu → gọi updateSendSpeed với TÊN mức very_fast', async () => {
+  it('chọn fast rồi bấm Lưu → gọi updateSendSpeed với TÊN mức fast', async () => {
     zaloSettingsApiService.updateSendSpeed.mockResolvedValueOnce({ data: { success: true } });
     await renderWithAccount(makeAccount({ sendSpeed: 'safe' }));
 
     const select = screen.getByLabelText('zaloSettings.sendSpeed:');
-    fireEvent.change(select, { target: { value: 'very_fast' } });
+    fireEvent.change(select, { target: { value: 'fast' } });
 
     // Tìm nút Lưu tương ứng với sendSpeed
     const saveButtons = screen.getAllByText('common.save');
@@ -104,11 +104,11 @@ describe('ZaloSettings — Tốc độ gửi Zalo cá nhân (PR-2)', () => {
     fireEvent.click(saveSpeedBtn);
 
     await waitFor(() => {
-      expect(zaloSettingsApiService.updateSendSpeed).toHaveBeenCalledWith('7', 'very_fast');
+      expect(zaloSettingsApiService.updateSendSpeed).toHaveBeenCalledWith('7', 'fast');
     });
   });
 
-  it('nick ở mức custom → hiện dòng chỉ đọc "Tuỳ chỉnh (do quản trị đặt)", vẫn cho chọn lại 1 trong 3 mức', async () => {
+  it('nick ở mức custom → hiện dòng chỉ đọc "Tuỳ chỉnh (do quản trị đặt)", vẫn cho chọn lại 1 trong 2 mức', async () => {
     await renderWithAccount(makeAccount({ sendSpeed: 'custom' }));
 
     // Hiện text chỉ đọc "Tuỳ chỉnh (do quản trị đặt)" — ghim riêng dòng <p>, vì <option> custom
@@ -124,7 +124,7 @@ describe('ZaloSettings — Tốc độ gửi Zalo cá nhân (PR-2)', () => {
     const saveSpeedBtn = saveButtons[saveButtons.length - 1];
     expect(saveSpeedBtn).toBeDisabled();
 
-    // Vẫn cho chọn lại 1 trong 3 mức (vd chọn fast)
+    // Vẫn cho chọn lại 1 trong 2 mức (vd chọn fast)
     fireEvent.change(select, { target: { value: 'fast' } });
     expect(select.value).toBe('fast');
     expect(saveSpeedBtn).not.toBeDisabled();

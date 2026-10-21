@@ -229,6 +229,9 @@ export const AUDIT_ACTIONS = {
   // System — AI models
   AI_SYSTEM_MODEL_UPDATED: 'AI_SYSTEM_MODEL_UPDATED',
   AI_FALLBACK_MODEL_UPDATED: 'AI_FALLBACK_MODEL_UPDATED',
+
+  // System — đối soát đặt chỗ hạn mức uncertain (R2, quản trị). details gồm reservationId, outcome, billingUserId, quantity, walletQuantity, note.
+  SEND_QUOTA_RESERVATION_RECONCILED: 'SEND_QUOTA_RESERVATION_RECONCILED',
 };
 
 export const AUDIT_ENTITY_TYPES = {
@@ -260,6 +263,7 @@ export const AUDIT_ENTITY_TYPES = {
   LEAD: 'lead',
   AI_MODEL: 'ai_model',
   ORDER: 'order',
+  SEND_QUOTA_RESERVATION: 'send_quota_reservation',
 };
 
 /**

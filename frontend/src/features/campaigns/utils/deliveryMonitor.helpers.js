@@ -62,6 +62,7 @@ const EXACT_WAIT_REASON_KEYS = {
   phone_lookup_cooldown: 'quickSend.deferredReasonPhoneLookupCooldown',
   phone_lookup_cooldown_api_error: 'quickSend.deferredReasonPhoneLookupCooldown',
   all_accounts_phone_lookup_cooldown: 'quickSend.deferredReasonPhoneLookupCooldown',
+  stranger_messaging_banned: 'quickSend.deferredReasonStrangerBan',
   quiet_hours: 'quickSend.deferredReasonQuietHours',
   channel_quiet_hours: 'quickSend.deferredReasonQuietHours',
   rate_limited: 'quickSend.deferredReasonRateLimited',

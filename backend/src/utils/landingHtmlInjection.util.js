@@ -478,3 +478,139 @@ export function buildFormEmbedSectionHtml({ publicKey, origin, fallbackText = 'M
   <script src="${org}/form-embed.js" defer></script>
 </section>`;
 }
+
+/** Khối nhúng biểu mẫu CỐ ĐỊNH: cả `<section …data-founderai-form-section…>…</section>` (xem buildFormEmbedSectionHtml). */
+const FORM_EMBED_SECTION_RE = /<section\b[^>]*\bdata-founderai-form-section\b[^>]*>[\s\S]*?<\/section\s*>/gi;
+/** Thuộc tính khoá biểu mẫu `data-founderai-form="KEY"` — CÙNG mẫu với `listFormEmbedKeys` (landingEditGuard.util.js): nháy đơn/đôi, khoảng trắng quanh `=`; thêm cờ `i` (HTML không phân biệt hoa/thường tên thuộc tính). */
+const FORM_EMBED_KEY_ATTR_RE = /\bdata-founderai-form\s*=\s*(["'])[A-Za-z0-9_-]+\1/i;
+/** Phần tử RỖNG mang khoá biểu mẫu (`<div data-founderai-form="KEY"></div>` đứng riêng, không bọc trong section). */
+const FORM_EMBED_EMPTY_ELEMENT_RE = /<([a-z][a-z0-9-]*)\b[^<>]*\bdata-founderai-form\s*=\s*(["'])[A-Za-z0-9_-]+\2[^<>]*>\s*<\/\1\s*>/gi;
+/** Thẻ mở bất kỳ còn mang khoá biểu mẫu — chỉ tìm TRONG thẻ (không đụng bộ chọn CSS `[data-founderai-form="x"]` trong <style>). */
+const FORM_EMBED_TAG_WITH_KEY_RE = /<[a-z][^<>]*\bdata-founderai-form\s*=\s*(["'])[A-Za-z0-9_-]+\1[^<>]*>/gi;
+const FORM_EMBED_KEY_ATTR_GLOBAL_RE = /\s*\bdata-founderai-form\s*=\s*(["'])[A-Za-z0-9_-]+\1/gi;
+/**
+ * `<iframe …>` cùng nội dung tới `</iframe>` gần nhất (nếu có). Nội dung KHÔNG được chứa một `<iframe` khác: iframe không đóng /
+ * tự đóng `<iframe … />` (HTML không có iframe tự đóng thật) chỉ ăn đúng thẻ mở, không nuốt phần trang sau nó tới iframe kế.
+ */
+const IFRAME_ELEMENT_RE = /<iframe\b[^<>]*>(?:(?:(?!<iframe\b)[\s\S])*?<\/iframe\s*>)?/gi;
+/** Thuộc tính `src` của thẻ mở (không nhầm `data-src`): nháy đôi / nháy đơn / không nháy. */
+const IFRAME_SRC_ATTR_RE = /(?<![\w-])src\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/i;
+/**
+ * `src` trỏ vào biểu mẫu của nền tảng: ĐƯỜNG DẪN (không tính query) là `/f/<publicKey>` — màn "Chia sẻ biểu mẫu" cho copy
+ * `<iframe src="${origin}/f/${publicKey}?embed=1">` (ShareModal.jsx) — hoặc `/embed/lead-form` (lớp tương thích landing cũ,
+ * `/embed/lead-form?slug=…`). Tuyệt đối (`https://host/…`), cùng giao thức (`//host/…`) hay tương đối (`/f/…`) đều tính.
+ */
+const SELLER_FORM_IFRAME_SRC_RE = /^(?:[a-z][a-z0-9+.-]*:)?(?:\/\/[^/?#]*)?\/(?:f\/[A-Za-z0-9_-]+|embed\/lead-form)(?:[/?#]|$)/i;
+
+/** iframe này nhúng biểu mẫu / form lead của nền tảng (theo `src` của thẻ mở)? iframe khác (YouTube, bản đồ…) → false. */
+function isFormIframe(iframeHtml) {
+  const openTag = String(iframeHtml).match(/^<iframe\b[^<>]*>/i)?.[0] || '';
+  const src = openTag.match(IFRAME_SRC_ATTR_RE);
+  const value = (src ? (src[1] ?? src[2] ?? src[3] ?? '') : '').trim();
+  return Boolean(value) && SELLER_FORM_IFRAME_SRC_RE.test(value);
+}
+
+/**
+ * Landing MUA từ Marketplace: đổi MỌI khối nhúng biểu mẫu của người bán thành CHỖ TRỐNG biểu mẫu
+ * `<div data-founderai-form-slot></div>`. Khối nhúng trỏ tới biểu mẫu công khai theo `publicKey` của NGƯỜI BÁN — để nguyên thì
+ * trang của người mua hiển thị biểu mẫu của người bán và bài nộp của khách người mua chảy về người bán. Chỗ trống thì khác: lúc
+ * người mua lưu landing, hệ thống tự tạo biểu mẫu thuộc về CHỦ TRANG (landingPageAdmin.service.js — createFormsForSlots).
+ *
+ *  - Mỗi `<section data-founderai-form-section>…</section>` có khoá biểu mẫu → đúng MỘT chỗ trống (tổng chỗ trống + khối nhúng
+ *    không tăng, nên không vượt MAX_FORMS_PER_LANDING).
+ *  - Phần tử rỗng đứng riêng mang `data-founderai-form="KEY"` (không bọc section) → một chỗ trống.
+ *  - Còn sót thuộc tính khoá trên thẻ khác (có nội dung con, định dạng lạ) → GỠ thuộc tính (không để khoá người bán lại trong HTML).
+ *  - `<iframe …>…</iframe>` có `src` là `/f/<key>` (kiểu `?embed=1` của màn Chia sẻ biểu mẫu) hoặc `/embed/lead-form` → một chỗ trống.
+ *    iframe khác (YouTube, bản đồ…) giữ nguyên từng byte. KHÔNG đụng thẻ `<a href=".../f/...">` — hàm này cố ý bỏ qua liên kết: khi landing
+ *    CHỦ tự lưu thì link của chính chủ là hợp lệ. Lúc CLONE cho người mua, liên kết người bán tự đặt được gỡ riêng bởi `neutralizeAppFormLinks`.
+ *  - Không có khối nào → trả về chuỗi NGUYÊN VẸN (từng byte).
+ *
+ * Hàm thuần, không đụng DB. Một lượt, không quét lại phần vừa chèn.
+ *
+ * @param {string} html
+ * @returns {string}
+ */
+export function replaceFormEmbedsWithSlots(html) {
+  const source = String(html ?? '');
+  const hasKeyAttr = FORM_EMBED_KEY_ATTR_RE.test(source);
+  const hasIframe = /<iframe\b/i.test(source);
+  if (!hasKeyAttr && !hasIframe) return source;
+  const slot = '<div data-founderai-form-slot></div>';
+  let out = source;
+  if (hasKeyAttr) {
+    out = out.replace(FORM_EMBED_SECTION_RE, (block) => (FORM_EMBED_KEY_ATTR_RE.test(block) ? slot : block));
+    out = out.replace(FORM_EMBED_EMPTY_ELEMENT_RE, slot);
+    out = out.replace(FORM_EMBED_TAG_WITH_KEY_RE, (tag) => tag.replace(FORM_EMBED_KEY_ATTR_GLOBAL_RE, ''));
+  }
+  if (hasIframe) {
+    out = out.replace(IFRAME_ELEMENT_RE, (iframe) => (isFormIframe(iframe) ? slot : iframe));
+  }
+  return out;
+}
+
+/** Thẻ mở `<a …>` (không nhầm `<abbr>`, `<article>`…: sau `a` phải là khoảng trắng / `>` / `/`). */
+const ANCHOR_OPEN_TAG_RE = /<a(?=[\s/>])[^<>]*>/gi;
+/** Thuộc tính `href` của thẻ mở (không nhầm `data-href`): nháy đôi / nháy đơn / không nháy. */
+const ANCHOR_HREF_ATTR_RE = /(?<![\w-])href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/i;
+/**
+ * `href` trỏ trang biểu mẫu công khai của nền tảng: đường dẫn `/f/<publicKey>` — tương đối (`/f/abc`), cùng giao thức (`//host/f/abc`) hay
+ * tuyệt đối (`https://host/f/abc`). Nhóm 1 = host (rỗng nếu tương đối).
+ */
+const APP_FORM_HREF_RE = /^(?:(?:[a-z][a-z0-9+.-]*:)?\/\/([^/?#]*))?\/f\/[A-Za-z0-9_-]+(?:[/?#]|$)/i;
+
+/**
+ * Các host mà ứng dụng tự phục vụ trang `/f/<key>`: `FRONTEND_URL` + từng phần tử `FRONTEND_URLS` (cùng nguồn với
+ * `resolveFrontendOriginFromEnv` — chính origin mà khối nhúng biểu mẫu `buildFormEmbedSectionHtml` dùng).
+ *
+ * @returns {Set<string>} host chữ thường (kèm cổng nếu có)
+ */
+export function resolveAppHostsFromEnv() {
+  const hosts = new Set();
+  const candidates = [
+    resolveFrontendOriginFromEnv(),
+    process.env.FRONTEND_URL,
+    ...String(process.env.FRONTEND_URLS || '').split(','),
+  ];
+  for (const raw of candidates) {
+    const text = String(raw || '').trim();
+    if (!text) continue;
+    try {
+      hosts.add(new URL(text).host.toLowerCase());
+    } catch {
+      // bỏ qua giá trị cấu hình không phải URL
+    }
+  }
+  return hosts;
+}
+
+/**
+ * Landing MUA từ Marketplace: liên kết `<a href=".../f/<key>">` của NGƯỜI BÁN trỏ tới biểu mẫu công khai của người bán — để nguyên thì nút/link
+ * trên trang của người mua mở biểu mẫu của người bán và bài nộp của khách người mua chảy về người bán. Đổi `href` thành `#`, GIỮ NGUYÊN chữ
+ * hiển thị và mọi thuộc tính khác.
+ *
+ *  - Chỉ đổi khi `href` là đường dẫn tương đối `/f/<key>` hoặc có host thuộc ứng dụng (`appHosts`: `FRONTEND_URL`/`FRONTEND_URLS`).
+ *  - Host ngoài (vd `https://nguoi-khac.com/f/abc`) và mọi liên kết khác giữ nguyên từng byte.
+ *  - CHỈ gọi lúc clone: landing của chính chủ giữ link của họ (hàm này không nằm trong đường lưu landing).
+ *
+ * Hàm thuần, không đụng DB. Không có `<a>` nào bị đổi → trả chuỗi NGUYÊN VẸN.
+ *
+ * @param {string} html
+ * @param {{ appHosts?: Iterable<string> }} [options] mặc định đọc từ biến môi trường
+ * @returns {string}
+ */
+export function neutralizeAppFormLinks(html, { appHosts } = {}) {
+  const source = String(html ?? '');
+  if (!/<a(?=[\s/>])/i.test(source) || !/\/f\//i.test(source)) return source;
+  const hosts = new Set([...(appHosts ?? resolveAppHostsFromEnv())].map((host) => String(host).toLowerCase()));
+  return source.replace(ANCHOR_OPEN_TAG_RE, (tag) => {
+    const href = tag.match(ANCHOR_HREF_ATTR_RE);
+    if (!href) return tag;
+    const value = (href[1] ?? href[2] ?? href[3] ?? '').trim();
+    const target = value.match(APP_FORM_HREF_RE);
+    if (!target) return tag;
+    const host = (target[1] || '').toLowerCase();
+    if (host && !hosts.has(host)) return tag;
+    const quote = href[2] !== undefined ? "'" : '"';
+    return tag.replace(ANCHOR_HREF_ATTR_RE, () => `href=${quote}#${quote}`);
+  });
+}

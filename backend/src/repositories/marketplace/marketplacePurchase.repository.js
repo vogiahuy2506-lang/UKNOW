@@ -109,11 +109,23 @@ class MarketplacePurchaseRepository {
    * @returns {Promise<boolean>}
    */
   async isChatbotPurchased(chatbotId) {
+    return this.isClonedResourcePurchased('chatbot', chatbotId);
+  }
+
+  /**
+   * Tài nguyên này là BẢN SAO sinh ra từ một lần mua Marketplace (chiến dịch / chatbot / landing page)? Bản mua về
+   * không được đăng bán lại. `resourceType` khớp `marketplace_listings.resource_type` (campaign | chatbot | landing_page),
+   * cũng là giá trị `cloned_resource_type` lúc clone (marketplacePurchase.service.js).
+   * @param {'campaign'|'chatbot'|'landing_page'} resourceType
+   * @param {number} resourceId
+   * @returns {Promise<boolean>}
+   */
+  async isClonedResourcePurchased(resourceType, resourceId) {
     const { rows } = await db.query(
       `SELECT 1 FROM marketplace_purchases
-       WHERE cloned_resource_type = 'chatbot' AND cloned_resource_id = $1
+       WHERE cloned_resource_type = $1 AND cloned_resource_id = $2
        LIMIT 1`,
-      [chatbotId]
+      [resourceType, resourceId]
     );
     return rows.length > 0;
   }

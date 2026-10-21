@@ -120,6 +120,22 @@ export function isZaloSenderBlockedError(error) {
   return probe.includes('không thể nhận tin nhắn từ bạn');
 }
 
+/**
+ * Lỗi của CẢ TÀI KHOẢN gửi: Zalo tạm cấm tài khoản nhắn tin cho người chưa kết bạn
+ * (câu thật ở production: "Bạn đang bị cấm nhắn tin cho người lạ.").
+ * Khác `isZaloSenderBlockedError` ("không thể nhận tin nhắn từ bạn" = MỘT người nhận chặn mình) và khác lỗi quyền riêng tư của
+ * người nhận ("chặn không nhận tin nhắn từ người lạ"). Chỉ khớp cụm "bị cấm nhắn tin" — đủ hẹp để một câu lỗi tương lai
+ * về MỘT người nhận ("đã chặn bạn", "bị hạn chế") không làm hoãn cả lượt chạy.
+ *
+ * @param {unknown} error
+ * @returns {boolean}
+ */
+export function isZaloAccountStrangerBanError(error) {
+  const probe = buildZaloRecipientErrorProbe(error);
+  if (!probe) return false;
+  return probe.includes('bị cấm nhắn tin');
+}
+
 export function isZaloGroupUnreachableError(error) {
   const probe = buildZaloRecipientErrorProbe(error);
   if (!probe) return false;

@@ -148,13 +148,37 @@ router.post('/landing-analytics/click', publicLandingAnalyticsLimiter, async (re
 // — kiểm và ghi click ở landingPagePublic.service.buildRedirectUrlForClick.
 router.get('/landing-track/go', (req, res) => landingPagePublicController.getTrackGo(req, res));
 
+/**
+ * Chủ (workspace) của một landing ĐÃ XUẤT BẢN theo slug — khoá để API công khai CMS chỉ trả dữ liệu của đúng chủ trang đó.
+ * Khóa học nổi bật / đánh giá là dữ liệu CỦA TỪNG tài khoản (màn quản lý /app/settings/landing-*, sửa/xoá kiểm chủ); trước đây hai API
+ * công khai gộp dòng active của MỌI tài khoản. Slug thiếu / sai dạng / chưa xuất bản → null (caller trả `data: []`).
+ *
+ * @param {unknown} rawSlug
+ * @returns {Promise<number|string|null>}
+ */
+async function resolvePublishedLandingOwnerId(rawSlug) {
+  const slug = typeof rawSlug === 'string' ? rawSlug.trim().toLowerCase() : '';
+  if (!slug || !/^[a-z0-9-]+$/.test(slug)) return null;
+  const { rows } = await db.query(
+    `SELECT COALESCE(workspace_owner_id, id_user) AS "ownerId"
+     FROM landing_pages
+     WHERE slug = $1 AND is_published = true
+     LIMIT 1`,
+    [slug]
+  );
+  return rows[0]?.ownerId ?? null;
+}
+
 router.get('/landing-featured-courses', async (req, res) => {
   try {
+    const ownerId = await resolvePublishedLandingOwnerId(req.query.slug);
+    if (ownerId == null) return res.json({ success: true, data: [] });
     const { rows } = await db.query(
       `SELECT id, title_vi as "titleVi", title_en as "titleEn", link_url as "linkUrl", sort_order as "sortOrder"
        FROM landing_featured_courses
-       WHERE is_active = true
-       ORDER BY sort_order ASC`
+       WHERE is_active = true AND id_user = $1
+       ORDER BY sort_order ASC`,
+      [ownerId]
     );
     return res.json({ success: true, data: rows });
   } catch (error) {
@@ -165,11 +189,14 @@ router.get('/landing-featured-courses', async (req, res) => {
 
 router.get('/landing-testimonials', async (req, res) => {
   try {
+    const ownerId = await resolvePublishedLandingOwnerId(req.query.slug);
+    if (ownerId == null) return res.json({ success: true, data: [] });
     const { rows } = await db.query(
       `SELECT id, name_vi as "nameVi", name_en as "nameEn", quote_vi as "quoteVi", quote_en as "quoteEn", star_rating as "starRating", sort_order as "sortOrder"
        FROM landing_testimonials
-       WHERE is_active = true
-       ORDER BY sort_order ASC`
+       WHERE is_active = true AND id_user = $1
+       ORDER BY sort_order ASC`,
+      [ownerId]
     );
     return res.json({ success: true, data: rows });
   } catch (error) {

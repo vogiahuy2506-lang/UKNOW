@@ -107,7 +107,7 @@ const getBenefits = (t) => [
 ];
 
 export default function HeroPage() {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const { getOverride } = usePublicLandingOverrides('hero');
   const features = getFeatures(t);
   const steps = getSteps(t);

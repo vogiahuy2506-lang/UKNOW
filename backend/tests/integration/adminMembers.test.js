@@ -17,6 +17,8 @@ import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
 import { truncateAll, createUser, createPlan, assignPlanToUser, createOrder, createVerificationCode } from './helpers/db.js';
+import { reserveSendQuota } from '../../src/services/quota/sendQuotaReservation.service.js';
+import { buildDirectReservationKey } from '../../src/services/quota/sendQuotaKey.service.js';
 
 let app;
 
@@ -889,5 +891,87 @@ describe('DELETE /api/admin/members/:id/purge — Mức 2 (P1-6)', () => {
       .set('Authorization', `Bearer ${callerToken}`)
       .send({ confirmEmail: 't2@test.local' });
     expect(res.status).toBe(403);
+  });
+
+  // PLAN_SAN_SANG_BAT_ENFORCE_HAN_MUC PR-E2 — send_quota_reservations.billing_user_id là ON DELETE RESTRICT:
+  // trước PR này xoá cứng thành viên có đặt chỗ rơi vào lưới an toàn 23503 (câu chung chung); giờ findPurgeBlockers
+  // nói đúng lý do và chặn TRƯỚC khi chạm DELETE.
+  describe('PR-E2: thành viên có dòng đặt chỗ hạn mức (send_quota_reservations)', () => {
+    const SQR_REASON = 'lịch sử gửi tin có đặt chỗ hạn mức (send_quota_reservations)';
+
+    async function reserveOneEmail(userId) {
+      const payload = { channel: 'email', recipient: 'customer@example.com', subject: 'S', content: 'C', quantity: 1, sourceType: 'direct' };
+      const reservationKey = buildDirectReservationKey({
+        channel: 'email', billingUserId: userId, clientKey: `pre2_${userId}_${Date.now()}`, recipient: payload.recipient,
+      });
+      return reserveSendQuota(
+        { userId, channel: 'email', quantity: 1, reservationKey, requestPayload: payload },
+        { modeOverride: 'test_enforce' }
+      );
+    }
+
+    it('billing_user có 1 dòng reservation (đặt chỗ thật) → 409 kèm lý do cụ thể, KHÔNG xoá user, KHÔNG xoá dòng sổ cái', async () => {
+      const admin = await createUser({ role: 'admin', username: 'sa' });
+      const plan = await createPlan({ code: 'pe2', monthlyEmailLimit: 1000, dailyEmailLimit: 100 });
+      const target = await createUser({ role: 'user', username: 'has_ledger', email: 'ledger@test.local', planId: plan.id });
+      const reserved = await reserveOneEmail(target.id);
+      expect(reserved.id).toBeDefined();
+
+      const token = await loginAs(admin);
+      const res = await request(app)
+        .delete(`/api/admin/members/${target.id}/purge`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ confirmEmail: 'ledger@test.local' });
+
+      expect(res.status).toBe(409);
+      expect(res.body.message).toContain(SQR_REASON);
+      expect(res.body.message).toContain('Gỡ email');
+      // Phải là lý do cụ thể từ findPurgeBlockers, không phải câu chung của lưới an toàn 23503.
+      expect(res.body.message).not.toContain('dữ liệu liên quan ở bảng khác');
+
+      expect((await db.query('SELECT id FROM users WHERE id = $1', [target.id])).rows).toHaveLength(1);
+      expect((await db.query('SELECT id FROM send_quota_reservations WHERE billing_user_id = $1', [target.id])).rows).toHaveLength(1);
+    });
+
+    it('chỉ là actor (nhân viên gửi hộ chủ) của một dòng reservation → cũng bị chặn, giữ bằng chứng', async () => {
+      const admin = await createUser({ role: 'admin', username: 'sa' });
+      const owner = await createUser({ role: 'user', username: 'sqr_owner', email: 'sqr_owner@test.local' });
+      const actor = await createUser({ role: 'user', username: 'sqr_actor', email: 'sqr_actor@test.local', withPlan: false });
+      await db.query(
+        `INSERT INTO send_quota_reservations (
+           reservation_key, request_fingerprint, billing_user_id, actor_user_id, channel, quantity,
+           source_type, status, vn_day_start, vn_day_end
+         ) VALUES ($1, $2, $3, $4, 'email', 1, 'direct', 'consumed', NOW(), NOW() + INTERVAL '1 day')`,
+        [`pe2_actor_${Date.now()}`, 'b'.repeat(64), owner.id, actor.id]
+      );
+
+      const token = await loginAs(admin);
+      const res = await request(app)
+        .delete(`/api/admin/members/${actor.id}/purge`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ confirmEmail: 'sqr_actor@test.local' });
+
+      expect(res.status).toBe(409);
+      expect(res.body.message).toContain(SQR_REASON);
+      expect((await db.query('SELECT id FROM users WHERE id = $1', [actor.id])).rows).toHaveLength(1);
+    });
+
+    it('thành viên KHÔNG liên quan dòng nào → vẫn xoá cứng được như cũ dù người khác có đặt chỗ', async () => {
+      const admin = await createUser({ role: 'admin', username: 'sa' });
+      const plan = await createPlan({ code: 'pe2b', monthlyEmailLimit: 1000, dailyEmailLimit: 100 });
+      const busy = await createUser({ role: 'user', username: 'busy_user', email: 'busy@test.local', planId: plan.id });
+      await reserveOneEmail(busy.id);
+      const clean = await createUser({ role: 'user', username: 'idle_user', email: 'idle@test.local', withPlan: false });
+
+      const token = await loginAs(admin);
+      const res = await request(app)
+        .delete(`/api/admin/members/${clean.id}/purge`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ confirmEmail: 'idle@test.local' });
+
+      expect(res.status).toBe(200);
+      expect((await db.query('SELECT id FROM users WHERE id = $1', [clean.id])).rows).toHaveLength(0);
+      expect((await db.query('SELECT id FROM send_quota_reservations WHERE billing_user_id = $1', [busy.id])).rows).toHaveLength(1);
+    });
   });
 });

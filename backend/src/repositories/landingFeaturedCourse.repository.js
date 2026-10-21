@@ -29,31 +29,6 @@ class LandingFeaturedCourseRepository {
   }
 
   /**
-   * Danh sách bản ghi đang hiển thị trên landing (active), sắp xếp theo sort_order.
-   *
-   * @returns {Promise<object[]>}
-   */
-  async findActiveOrdered() {
-    const result = await db.query(
-      `SELECT
-         id,
-         sort_order,
-         title_vi,
-         title_en,
-         tag_vi,
-         tag_en,
-         image_url,
-         link_url,
-         is_active,
-         created_at,
-         updated_at
-       FROM landing_featured_courses
-       WHERE is_active = true
-       ORDER BY sort_order ASC, id ASC`
-    );
-    return result.rows.map((r) => this._mapRow(r));
-  }
-  /**
    * Tất cả bản ghi (admin).
    *
    * @param {number|string} userId

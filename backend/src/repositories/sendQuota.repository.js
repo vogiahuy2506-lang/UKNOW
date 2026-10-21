@@ -1319,9 +1319,12 @@ export async function countCombinedSentInCycleWithLedger(queryable, billingUserI
  * Dùng FOR UPDATE SKIP LOCKED để sweeper worker chạy đồng thời an toàn.
  * @param {import('pg').Pool|import('pg').PoolClient} queryable
  * @param {number} [limit=50]
+ * @param {{ forUpdate?: boolean }} [options] `forUpdate: false` = quét KHÔNG khoá (bộ dọn sendQuotaReservationSweeper:
+ *   khoá dòng trước khoá workspace/ví sẽ đảo thứ tự khoá của luồng gửi → nguy cơ deadlock; bộ dọn quét trần rồi
+ *   khoá từng dòng đúng thứ tự, xem lockReservationIfExpired)
  * @returns {Promise<Array<object>>}
  */
-export async function findExpiredReservations(queryable, limit = 50) {
+export async function findExpiredReservations(queryable, limit = 50, { forUpdate = true } = {}) {
   const { rows } = await queryable.query(
     `SELECT * FROM send_quota_reservations
      WHERE status = 'reserved'
@@ -1329,10 +1332,81 @@ export async function findExpiredReservations(queryable, limit = 50) {
        AND expires_at < NOW()
      ORDER BY expires_at ASC
      LIMIT $1
-     FOR UPDATE SKIP LOCKED`,
+     ${forUpdate ? 'FOR UPDATE SKIP LOCKED' : ''}`,
     [limit]
   );
   return rows;
+}
+
+/**
+ * Khoá dòng (FOR UPDATE) CHỈ NẾU nó vẫn là 'reserved' và đã quá lease tại thời điểm giành được khoá. Postgres
+ * (READ COMMITTED) đánh giá lại WHERE sau khi chờ khoá, nên dòng vừa được luồng gửi chuyển sang sending / released /
+ * re-reserve với lease mới sẽ trả null. Gọi SAU khi đã giữ khoá workspace (+ ví).
+ * @param {import('pg').PoolClient} client
+ * @param {number|string} id
+ * @returns {Promise<object|null>}
+ */
+export async function lockReservationIfExpired(client, id) {
+  const { rows } = await client.query(
+    `SELECT * FROM send_quota_reservations
+     WHERE id = $1
+       AND status = 'reserved'
+       AND expires_at IS NOT NULL
+       AND expires_at < NOW()
+     FOR UPDATE`,
+    [id]
+  );
+  return rows[0] || null;
+}
+
+/**
+ * Như lockReservationIfExpired nhưng cho dòng 'sending' treo quá `staleSeconds` (cùng điều kiện với
+ * findStaleSendingReservations).
+ * @param {import('pg').PoolClient} client
+ * @param {number|string} id
+ * @param {number} staleSeconds
+ * @returns {Promise<object|null>}
+ */
+export async function lockReservationIfStaleSending(client, id, staleSeconds) {
+  const { rows } = await client.query(
+    `SELECT * FROM send_quota_reservations
+     WHERE id = $1
+       AND status = 'sending'
+       AND (
+         (sending_at IS NOT NULL AND sending_at < NOW() - make_interval(secs => $2))
+         OR
+         (sending_at IS NULL AND created_at < NOW() - make_interval(secs => $2))
+       )
+     FOR UPDATE`,
+    [id, staleSeconds]
+  );
+  return rows[0] || null;
+}
+
+/**
+ * Xoá theo lô các dòng 'released' đã quá `olderThanDays` ngày (kể từ released_at). CHỈ 'released': 'uncertain' /
+ * 'consumed' là sổ cái, tuyệt đối không xoá ở đây. Trả số dòng đã xoá.
+ * @param {import('pg').Pool|import('pg').PoolClient} queryable
+ * @param {{ olderThanDays?: number, limit?: number }} [options]
+ * @returns {Promise<number>}
+ */
+export async function deleteReleasedReservationsOlderThan(queryable, { olderThanDays = 30, limit = 1000 } = {}) {
+  const days = Math.max(1, Math.floor(Number(olderThanDays)) || 30);
+  const batch = Math.max(1, Math.min(10000, Math.floor(Number(limit)) || 1000));
+  const { rowCount } = await queryable.query(
+    `DELETE FROM send_quota_reservations
+     WHERE id IN (
+       SELECT id FROM send_quota_reservations
+       WHERE status = 'released'
+         AND released_at IS NOT NULL
+         AND released_at < NOW() - make_interval(days => $1::int)
+       ORDER BY released_at ASC
+       LIMIT $2
+     )
+     AND status = 'released'`,
+    [days, batch]
+  );
+  return rowCount || 0;
 }
 
 /**
@@ -1341,9 +1415,10 @@ export async function findExpiredReservations(queryable, limit = 50) {
  * @param {import('pg').Pool|import('pg').PoolClient} queryable
  * @param {number} [staleSeconds=120]
  * @param {number} [limit=50]
+ * @param {{ forUpdate?: boolean }} [options] xem findExpiredReservations
  * @returns {Promise<Array<object>>}
  */
-export async function findStaleSendingReservations(queryable, staleSeconds = 120, limit = 50) {
+export async function findStaleSendingReservations(queryable, staleSeconds = 120, limit = 50, { forUpdate = true } = {}) {
   const { rows } = await queryable.query(
     `SELECT * FROM send_quota_reservations
      WHERE status = 'sending'
@@ -1354,10 +1429,59 @@ export async function findStaleSendingReservations(queryable, staleSeconds = 120
        )
      ORDER BY COALESCE(sending_at, created_at) ASC
      LIMIT $2
-     FOR UPDATE SKIP LOCKED`,
+     ${forUpdate ? 'FOR UPDATE SKIP LOCKED' : ''}`,
     [staleSeconds, limit]
   );
   return rows;
+}
+
+/**
+ * Danh sách đặt chỗ 'uncertain' cho màn đối soát của quản trị (chỉ đọc, KHÔNG khoá).
+ *
+ * `evidence_tables` = các bảng tin nhắn đang có dòng gắn `quota_reservation_id = id` (mọi bảng có cột này:
+ * migration 178 email_messages / zalo_messages / zalo_personal_messages / usage_logs, 255 campaign_channel_messages,
+ * 272 channel_messages). Đây chỉ là GỢI Ý để người đối soát quyết định — có dòng tin gắn không đồng nghĩa nhà cung cấp
+ * đã nhận, và không có dòng tin cũng không chứng minh chưa gửi.
+ *
+ * @param {import('pg').Pool|import('pg').PoolClient} queryable
+ * @param {{ limit?: number, offset?: number }} [options]
+ * @returns {Promise<Array<object>>}
+ */
+export async function listUncertainReservationsForAdmin(queryable, { limit = 50, offset = 0 } = {}) {
+  const { rows } = await queryable.query(
+    `SELECT r.id, r.billing_user_id, r.actor_user_id, r.channel, r.quantity, r.wallet_quantity, r.wallet_item_key,
+            r.source_type, r.created_at, r.sending_at, r.uncertain_at, r.failure_code, r.provider_reference,
+            b.email AS billing_email, b.full_name AS billing_full_name, b.username AS billing_username,
+            a.email AS actor_email, a.full_name AS actor_full_name,
+            ARRAY_REMOVE(ARRAY[
+              CASE WHEN EXISTS (SELECT 1 FROM email_messages x WHERE x.quota_reservation_id = r.id) THEN 'email_messages' END,
+              CASE WHEN EXISTS (SELECT 1 FROM zalo_messages x WHERE x.quota_reservation_id = r.id) THEN 'zalo_messages' END,
+              CASE WHEN EXISTS (SELECT 1 FROM zalo_personal_messages x WHERE x.quota_reservation_id = r.id) THEN 'zalo_personal_messages' END,
+              CASE WHEN EXISTS (SELECT 1 FROM usage_logs x WHERE x.quota_reservation_id = r.id) THEN 'usage_logs' END,
+              CASE WHEN EXISTS (SELECT 1 FROM campaign_channel_messages x WHERE x.quota_reservation_id = r.id) THEN 'campaign_channel_messages' END,
+              CASE WHEN EXISTS (SELECT 1 FROM channel_messages x WHERE x.quota_reservation_id = r.id) THEN 'channel_messages' END
+            ], NULL) AS evidence_tables
+     FROM send_quota_reservations r
+     LEFT JOIN users b ON b.id = r.billing_user_id
+     LEFT JOIN users a ON a.id = r.actor_user_id
+     WHERE r.status = 'uncertain'
+     ORDER BY COALESCE(r.uncertain_at, r.created_at) ASC, r.id ASC
+     LIMIT $1 OFFSET $2`,
+    [limit, offset]
+  );
+  return rows;
+}
+
+/**
+ * Tổng số đặt chỗ 'uncertain' (cho phân trang màn đối soát).
+ * @param {import('pg').Pool|import('pg').PoolClient} queryable
+ * @returns {Promise<number>}
+ */
+export async function countUncertainReservations(queryable) {
+  const { rows } = await queryable.query(
+    "SELECT COUNT(*)::int AS total FROM send_quota_reservations WHERE status = 'uncertain'"
+  );
+  return Number(rows[0]?.total || 0);
 }
 
 /**

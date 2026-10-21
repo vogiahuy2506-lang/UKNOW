@@ -9,7 +9,10 @@ import { paginate } from '../helpers.js';
 import { resolveWorkspaceOwnerId } from '../utils/workspaceContext.util.js';
 
 const VALID_RESOURCE_TYPES = ['campaign', 'chatbot', 'landing_page'];
-const VALID_VISIBILITIES = ['public', 'team'];
+// Trường visibility: thiếu/rỗng → 'public'; giá trị khác 'public' đi nguyên xuống service để trả 400 (trước đây bị âm thầm đổi thành 'public').
+const resolveVisibilityInput = (visibility) => (
+  visibility === undefined || visibility === null || visibility === '' ? 'public' : visibility
+);
 const VALID_CATEGORIES = ['marketing', 'chatbot', 'landing'];
 
 class MarketplaceController {
@@ -21,14 +24,19 @@ class MarketplaceController {
     try {
       const userId = resolveWorkspaceOwnerId(req.user);
       const { status, page = 1, limit = 20 } = req.query;
+      // Bộ lọc loại: `type` hoặc `resource_type` (tab "Của tôi" ở frontend gửi `resource_type`, cùng tên với browse). Trước đây hàm này chỉ đọc
+      // `status` nên các nút lọc Chiến dịch / Chatbot / Landing ở tab "Của tôi" không có tác dụng.
+      const type = req.query.type ?? req.query.resource_type;
 
       // Sanitize pagination params
       const sanitizedLimit = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
       const sanitizedPage = Math.max(parseInt(page, 10) || 1, 1);
       const sanitizedStatus = ['draft', 'published', 'paused'].includes(status) ? status : undefined;
+      const sanitizedType = VALID_RESOURCE_TYPES.includes(type) ? type : undefined;
 
       const { listings, total } = await marketplaceListingService.getUserListings(userId, {
         status: sanitizedStatus,
+        resourceType: sanitizedType,
         limit: sanitizedLimit,
         offset: paginate({ page: sanitizedPage, limit: sanitizedLimit }).offset,
       });
@@ -73,7 +81,7 @@ class MarketplaceController {
       const sanitizedCategory = VALID_CATEGORIES.includes(category) ? category : undefined;
       const sanitizedTags = Array.isArray(tags) ? tags.slice(0, 10).map(t => String(t).substring(0, 50)) : undefined;
       const sanitizedPriceCredits = Math.max(parseInt(priceCredits, 10) || 0, 0);
-      const sanitizedVisibility = VALID_VISIBILITIES.includes(visibility) ? visibility : 'public';
+      const sanitizedVisibility = resolveVisibilityInput(visibility);
 
       const listing = await marketplaceListingService.createFromCampaign(userId, {
         campaignId: sanitizedCampaignId,
@@ -248,7 +256,10 @@ class MarketplaceController {
    */
   async browse(req, res, next) {
     try {
-      const { type, category, sort, page = 1, limit = 20, search } = req.query;
+      const { category, sort, page = 1, limit = 20, search } = req.query;
+      // Bộ lọc loại: `type` (khoá gốc) hoặc `resource_type` — trang Marketplace ở frontend gửi `resource_type`, nên trước đây các nút
+      // lọc Chiến dịch / Chatbot không có tác dụng gì (backend chỉ đọc `type`).
+      const type = req.query.type ?? req.query.resource_type;
 
       // Sanitize params
       const sanitizedLimit = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
@@ -329,12 +340,22 @@ class MarketplaceController {
         data: result,
       });
     } catch (error) {
-      if (error.code === 'CAMPAIGN_LIMIT_EXCEEDED' || error.code === 'CHATBOT_LIMIT_EXCEEDED') {
+      if (error.code === 'CAMPAIGN_LIMIT_EXCEEDED' || error.code === 'CHATBOT_LIMIT_EXCEEDED' || error.code === 'TEMPLATE_LIMIT_EXCEEDED') {
         return res.status(400).json({
           success: false,
           code: error.code,
           message: error.message,
           limitReached: true,
+        });
+      }
+      // Hai lỗi 400 của chiến dịch kèm mẫu — giữ `code` để giao diện chỉ đúng chỗ (bộ xử lý lỗi chung chỉ trả `message` cho lỗi 4xx):
+      //  - LISTING_CONTENT_UNAVAILABLE: listing thiếu nội dung (mẫu của người bán đã xoá / tệp đính kèm mất) → báo người bán cập nhật;
+      //  - MARKETPLACE_STORAGE_QUOTA_EXCEEDED: người mua hết dung lượng để nhận bản sao tệp (xoá bớt tệp / nâng dung lượng).
+      if (error.code === 'LISTING_CONTENT_UNAVAILABLE' || error.code === 'MARKETPLACE_STORAGE_QUOTA_EXCEEDED') {
+        return res.status(error.status || 400).json({
+          success: false,
+          code: error.code,
+          message: error.message,
         });
       }
       next(error);
@@ -499,7 +520,7 @@ class MarketplaceController {
       const sanitizedDescription = description?.trim().substring(0, 2000) || undefined;
       const sanitizedTags = Array.isArray(tags) ? tags.slice(0, 10).map(t => String(t).substring(0, 50)) : undefined;
       const sanitizedPriceCredits = Math.max(parseInt(priceCredits, 10) || 0, 0);
-      const sanitizedVisibility = VALID_VISIBILITIES.includes(visibility) ? visibility : 'public';
+      const sanitizedVisibility = resolveVisibilityInput(visibility);
 
       const listing = await marketplaceListingService.createFromChatbot(userId, {
         chatbotId: sanitizedChatbotId,
@@ -603,7 +624,7 @@ class MarketplaceController {
       const sanitizedDescription = description?.trim().substring(0, 2000) || undefined;
       const sanitizedTags = Array.isArray(tags) ? tags.slice(0, 10).map(t => String(t).substring(0, 50)) : undefined;
       const sanitizedPriceCredits = Math.max(parseInt(priceCredits, 10) || 0, 0);
-      const sanitizedVisibility = VALID_VISIBILITIES.includes(visibility) ? visibility : 'public';
+      const sanitizedVisibility = resolveVisibilityInput(visibility);
 
       const listing = await marketplaceListingService.createFromLandingPage(userId, {
         landingPageId: sanitizedLandingPageId,

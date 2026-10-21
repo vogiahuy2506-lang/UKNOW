@@ -32,6 +32,7 @@ import {
 import { buildCampaignReservationKey, computeRequestFingerprint } from '../quota/sendQuotaKey.service.js';
 import { checkAccountDailyLimit } from '../quota/accountDailyLimit.service.js';
 import { buildEmailUnsubscribeUrl, buildListUnsubscribeHeaders } from '../../utils/emailListUnsubscribe.util.js';
+import { parseEmailTemplateId } from '../../utils/emailTemplateReference.util.js';
 
 // PR-1 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26), Việc 2 — lỗi ghi log email_messages trước đây
 // chỉ console.error, vô hình với chủ chiến dịch/vận hành. Ghi vào run_metadata để lộ ra trang
@@ -324,16 +325,23 @@ class CampaignEmailSenderService {
    * @param {string|number} input.runId id run hiện tại
    * @param {string|number} input.nodeId id node hiện tại
    * @param {string|number} input.templateId id template cần lấy
+   * @param {string|number} input.ownerId chủ workspace của chiến dịch — chỉ mẫu của chủ này được dùng; mẫu của tenant khác
+   *   (hoặc thiếu chủ) coi như không tồn tại
    * @returns {Promise<object|null>}
    */
-  async getTemplateByRunNodeCache({ runId, nodeId, templateId }) {
+  async getTemplateByRunNodeCache({ runId, nodeId, templateId, ownerId }) {
     if (!templateId) return null;
     const bucket = this.getOrCreateRunNodeCache(runId, nodeId);
     const templateKey = String(templateId).trim();
     if (bucket.templates.has(templateKey)) {
       return bucket.templates.get(templateKey);
     }
-    const template = await campaignEmailSenderRepository.findEmailTemplateById(templateId);
+    // Id rác (không phải số) hoặc thiếu chủ: không chạm DB (bigint sẽ ném lỗi cú pháp), coi như không có mẫu.
+    const parsedTemplateId = parseEmailTemplateId(templateId);
+    const parsedOwnerId = Number.parseInt(ownerId, 10);
+    const template = parsedTemplateId != null && Number.isFinite(parsedOwnerId) && parsedOwnerId > 0
+      ? await campaignEmailSenderRepository.findEmailTemplateById(parsedTemplateId, parsedOwnerId)
+      : null;
     bucket.templates.set(templateKey, template);
     return template;
   }
@@ -600,7 +608,24 @@ class CampaignEmailSenderService {
       runId,
       nodeId,
       templateId,
+      ownerId: campaign.workspace_owner_id || campaign.id_user,
     });
+    // Lưới an toàn: node CÓ tham chiếu mẫu mà mẫu không còn / không thuộc chủ (bị xoá giữa lượt chạy, sau preflight) → KHÔNG gửi.
+    // Trước đây rơi xuống nhánh nội dung mặc định ("Thông báo từ Founder AI" / "Email từ Founder AI") và gửi thẳng ra khách. Trả kết quả
+    // `failed` thường của một người nhận (log thất bại + lý do rõ); lỗi này là VĨNH VIỄN nên KHÔNG đặt `retryScheduledAt` / errorType
+    // `*_retry_scheduled` — campaignRun đánh dấu người nhận xong (nextDueAt = null) chứ không xếp lịch thử lại. Chưa giữ quota,
+    // chưa chạm SMTP. Node không có templateId (soạn thẳng trong config) giữ nguyên hành vi.
+    if (templateId && !template) {
+      console.warn(
+        `[CampaignRun][Email] skip_send run=${runId} campaign=${campaign.id} node=${nodeId} template=${templateId} reason=email_template_unavailable`
+      );
+      return {
+        to: customer?.email || '',
+        status: 'failed',
+        errorType: 'email_template_unavailable',
+        error: `Mẫu email #${templateId} đã bị xoá hoặc không thuộc tài khoản này nên không gửi email (không dùng nội dung mặc định). Hãy chọn lại mẫu trong node gửi email.`,
+      };
+    }
     const settings = await this.getEmailSettingsByRunNodeCache({
       runId,
       nodeId,

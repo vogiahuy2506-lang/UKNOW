@@ -28,7 +28,8 @@ class MarketplaceSellerController {
   async getMyListings(req, res, next) {
     try {
       const userId = resolveWorkspaceOwnerId(req.user);
-      const { status, type, page = 1, limit = 20 } = req.query;
+      const { status, page = 1, limit = 20 } = req.query;
+      const type = req.query.type ?? req.query.resource_type;
 
       const sanitizedLimit = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
       const sanitizedPage = Math.max(parseInt(page, 10) || 1, 1);

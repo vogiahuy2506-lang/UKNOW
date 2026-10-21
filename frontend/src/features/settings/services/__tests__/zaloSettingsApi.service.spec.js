@@ -192,9 +192,9 @@ describe('zaloSettingsApiService', () => {
     it('gửi PATCH /zalo/accounts/:id/send-speed với đúng body { sendSpeed }', async () => {
       api.patch.mockResolvedValue({ data: { success: true } });
 
-      await zaloSettingsApiService.updateSendSpeed('7', 'very_fast');
+      await zaloSettingsApiService.updateSendSpeed('7', 'fast');
 
-      expect(api.patch).toHaveBeenCalledWith('/zalo/accounts/7/send-speed', { sendSpeed: 'very_fast' });
+      expect(api.patch).toHaveBeenCalledWith('/zalo/accounts/7/send-speed', { sendSpeed: 'fast' });
     });
   });
 

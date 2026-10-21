@@ -1,7 +1,9 @@
 import db from '../../config/database.js';
 import campaignRunRepository from '../../repositories/campaign/campaignRun.repository.js';
+import campaignScheduleRepository from '../../repositories/campaign/campaignSchedule.repository.js';
 import recipientLedgerRepository from '../../repositories/campaign/recipientLedger.repository.js';
 import campaignFlowService from './campaignFlow.service.js';
+import campaignNodeReferences from './campaignNodeReferences.service.js';
 import campaignNodeDataService from './campaignNodeData.service.js';
 import campaignTagStepService from './campaignTagStep.service.js';
 import campaignEmailSenderService from './campaignEmailSender.service.js';
@@ -13,12 +15,14 @@ import campaignZaloSenderService from './campaignZaloSender.service.js';
 import zaloCampaignRecipientService from './zaloCampaignRecipient.service.js';
 import { getSharedZaloRateLimiter } from './zaloOutboundRateLimiterSingleton.js';
 import {
+  isZaloAccountStrangerBanError,
   isZaloGroupUnreachableError,
   isZaloSenderBlockedError,
   isZaloUnreachableRecipientError,
 } from '../../utils/zaloPhoneCampaign.util.js';
 import { normalizeVietnamesePhone } from '../../utils/vietnamesePhone.util.js';
 import { isPhoneHeader } from '../../utils/columnHeaderMatch.util.js';
+import { applyIdSelection, isSelectionFiltered, resolveSelectionMode } from '../../utils/selectionMode.util.js';
 import { formatUtcAndVietnamForLog } from '../../utils/vnTimeFormat.util.js';
 import { executeWithTimeoutRetry, isNetworkTimeoutError } from '../../utils/zaloTimeoutRetry.util.js';
 import { classifyZaloSendError, mapZaloErrorCategoryToLedgerReason } from '../../utils/zaloSendErrorClassifier.util.js';
@@ -53,6 +57,13 @@ import {
   shouldNotifyRunCompleted,
   notifyCampaignRunCompleted,
 } from '../../utils/campaignRunCompletedNotify.util.js';
+import {
+  isPhoneLookupCooldownReason,
+  isStrangerBanReason,
+  STRANGER_BAN_DEFER_REASON,
+  recordPhoneLookupDeferDay,
+  notifyCampaignSendingSlow,
+} from '../../utils/campaignSlowSendNotify.util.js';
 import { validateCampaignPreflight } from './campaignPreflight.service.js';
 import {
   assertRunZaloAccountsAssigned,
@@ -82,6 +93,14 @@ export const CAMPAIGN_EMAIL_SKIP_LABELS = {
   consent_withdrawn: 'Khách từ chối hoặc đã rút lại đồng ý nhận tin',
 };
 export const ZALO_GROUP_TEMPLATE_DELAY_MAX_MS = 1250;
+
+/** Khoá xoá khỏi run_metadata khi lượt Zalo hết hoãn và chạy tiếp (mốc hoãn cũ + mốc chạy tiếp thật). */
+export const ZALO_DEFER_CLEAR_KEYS = [
+  'zaloOutboundDeferredUntil',
+  'zaloDeferredReason',
+  'zaloDeferredAt',
+  'zaloOutboundResumeEffectiveAt',
+];
 
 class CampaignRunService {
   constructor() {
@@ -335,7 +354,9 @@ class CampaignRunService {
         reasonKey: 'zaloDeferredReason',
         atKey: 'zaloDeferredAt',
         label: 'zalo',
-        clearKeys: null,
+        // 3 khoá cũ + mốc chạy tiếp THẬT (gộp giờ yên lặng) — nếu không dọn, dòng trạng thái hiển thị mốc của lần hoãn trước.
+        // `phoneLookupDeferVnDays` / `sendingSlowNotifiedAt` CỐ Ý không nằm đây: phải sống qua các lượt resume.
+        clearKeys: ZALO_DEFER_CLEAR_KEYS,
       },
       {
         untilKey: 'nonContinuousDeferredUntil',
@@ -576,6 +597,8 @@ class CampaignRunService {
    * @param {string} input.atKey khóa metadata lưu thời điểm defer
    * @param {string} input.label nhãn phục vụ log
    * @param {object} [input.extra] metadata bổ sung (ví dụ account id, account name)
+   * @param {((resumeAtMs: number) => object)|null} [input.deriveExtra] tính thêm khoá metadata từ CHÍNH mốc resume vừa dùng cho `untilKey`
+   *   (để khoá phái sinh không lệch vài ms so với `untilKey`)
    * @returns {Promise<never>}
    */
   async persistRunDeferYieldSlot({
@@ -588,6 +611,7 @@ class CampaignRunService {
     atKey,
     label,
     extra = {},
+    deriveExtra = null,
   }) {
     const w = Math.max(0, Number.parseInt(waitMs, 10) || 0);
     const resumeAt = new Date(Date.now() + w);
@@ -597,6 +621,7 @@ class CampaignRunService {
       [reasonKey]: String(reason || 'wait'),
       [atKey]: new Date().toISOString(),
       ...extra,
+      ...(typeof deriveExtra === 'function' ? deriveExtra(resumeAt.getTime()) : {}),
     };
     await campaignRunRepository.patchRunMetadata(runId, patch);
     const quietNote = String(reason) === 'quiet_hours' ? ` — ${this._explainZaloQuietHoursPolicyForLog()}` : '';
@@ -637,16 +662,74 @@ class CampaignRunService {
     if (accountId != null) extra.zaloDeferredAccountId = accountId;
     if (accountName != null) extra.zaloDeferredAccountName = accountName;
 
-    await this.persistRunDeferYieldSlot({
-      runId,
-      campaignId,
-      waitMs,
-      reason: String(reason || 'zalo_outbound_wait'),
-      untilKey: 'zaloOutboundDeferredUntil',
-      reasonKey: 'zaloDeferredReason',
-      atKey: 'zaloDeferredAt',
-      label: 'Zalo outbound',
-      extra,
+    // Khoá tra số (cả 3 reason) → ghi ngày VN vào `phoneLookupDeferVnDays` (sống qua các lượt resume, KHÔNG nằm trong
+    // ZALO_DEFER_CLEAR_KEYS). Khoá 2 ngày VN liền kề → báo chủ chiến dịch sau khi patch.
+    const reasonStr = String(reason || 'zalo_outbound_wait');
+    let notifySlow = false;
+    let notifyCause = 'phone_lookup';
+    if (isStrangerBanReason(reasonStr)) {
+      // PR-4 Việc 4.4 — cả tài khoản bị cấm nhắn người lạ: báo ngay (chống lặp bằng cờ 7 ngày trong util), không cần tích ngày.
+      notifySlow = true;
+      notifyCause = 'stranger_ban';
+    } else if (isPhoneLookupCooldownReason(reasonStr)) {
+      try {
+        const meta = (await campaignRunRepository.getRunMetadata(runId)) || {};
+        const tracked = recordPhoneLookupDeferDay(meta.phoneLookupDeferVnDays, new Date());
+        extra.phoneLookupDeferVnDays = tracked.days;
+        notifySlow = tracked.shouldNotify;
+      } catch (error) {
+        // Đếm ngày chỉ phục vụ thông báo — lỗi đọc metadata không được chặn việc hoãn run.
+        console.warn(
+          `[CampaignRun] run=${runId} không đọc được phoneLookupDeferVnDays: ${error?.message || error}`
+        );
+      }
+    }
+
+    try {
+      await this.persistRunDeferYieldSlot({
+        runId,
+        campaignId,
+        waitMs,
+        reason: reasonStr,
+        untilKey: 'zaloOutboundDeferredUntil',
+        reasonKey: 'zaloDeferredReason',
+        atKey: 'zaloDeferredAt',
+        label: 'Zalo outbound',
+        extra,
+        // Mốc chạy tiếp THẬT: `zaloOutboundDeferredUntil` (vd 00:00 khi khoá tra số) vẫn là mốc scheduler/SQL đọc, còn nếu mốc
+        // rơi vào giờ yên lặng thì lượt chạy sẽ chỉ gửi được khi hết giờ yên lặng (06:00) — dòng trạng thái phải hiện mốc đó.
+        deriveExtra: (resumeAtMs) => ({
+          zaloOutboundResumeEffectiveAt: new Date(
+            this.zaloRateLimiter.computeNextAllowedSendAtByQuietHours(resumeAtMs) || resumeAtMs
+          ).toISOString(),
+        }),
+      });
+    } catch (err) {
+      // Patch metadata đã xong trước khi ném RUN_YIELD_SLOT → báo sau patch, không await (khuôn persistQuotaDeferYieldSlot).
+      if (err?.code === 'RUN_YIELD_SLOT' && notifySlow) {
+        this._notifySendingSlowFireAndForget({
+          runId,
+          campaignId,
+          cause: notifyCause,
+          accountName: accountId != null ? accountName : null,
+        });
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Fire-and-forget chuông "chiến dịch gửi chậm bất thường" (không chặn worker, lỗi chỉ log).
+   *
+   * @param {{ runId: number, campaignId: number, cause: 'phone_lookup'|'stranger_ban', accountName?: string|null }} input
+   * @returns {void}
+   */
+  _notifySendingSlowFireAndForget(input) {
+    notifyCampaignSendingSlow(input).catch((err) => {
+      console.warn(
+        `[CampaignSlowSendNotify] notify failed run=${input?.runId}:`,
+        err?.message || err
+      );
     });
   }
 
@@ -817,6 +900,45 @@ class CampaignRunService {
     const randomStep = Math.floor(Math.random() * (totalSteps + 1));
     const selectedMinutes = minMinutes + (randomStep * stepMinutes);
     return selectedMinutes * 60 * 1000;
+  }
+
+  /**
+   * Chặn sớm chiến dịch không thuộc phạm vi chạy của người gọi (404, cùng thông điệp với
+   * createCampaignRunRecord). Gọi TRƯỚC mọi bước đọc/ghi theo `campaignId` do client gửi — nhất là
+   * đánh giá ngưỡng duyệt của nhân viên, vốn nêu số người nhận và đổi trạng thái chiến dịch.
+   *
+   * @param {{ campaignId: number, isAdmin?: boolean, workspaceOwnerId: number }} input
+   * @returns {Promise<void>}
+   */
+  async assertCampaignInRunScope({ campaignId, isAdmin = false, workspaceOwnerId }) {
+    const inScope = Number.isInteger(campaignId) && campaignId > 0
+      ? await campaignRunRepository.existsInRunScope({ campaignId, isAdmin, workspaceOwnerId })
+      : false;
+    if (!inScope) {
+      const error = new Error('Không tìm thấy chiến dịch');
+      error.statusCode = 404;
+      throw error;
+    }
+  }
+
+  /**
+   * `scheduleId` do client gửi chỉ được gắn vào lượt chạy khi đúng là lịch CỦA chiến dịch đang chạy và
+   * cùng workspace. Không khớp thì bỏ về null (không báo lỗi): qua HTTP không có người dùng hợp lệ
+   * nào gửi tham số này — lượt chạy theo lịch do scheduler tạo, không đi đường này.
+   *
+   * @param {{ scheduleId: number|null, campaignId: number, isAdmin?: boolean, workspaceOwnerId: number }} input
+   * @returns {Promise<number|null>}
+   */
+  async resolveVerifiedScheduleId({ scheduleId, campaignId, isAdmin = false, workspaceOwnerId }) {
+    if (!Number.isInteger(scheduleId) || scheduleId <= 0) return null;
+    const schedule = await campaignScheduleRepository.findById({
+      id: scheduleId,
+      userId: workspaceOwnerId,
+      workspaceOwnerId,
+      isAdmin,
+    });
+    if (!schedule || Number(schedule.id_campaign) !== Number(campaignId)) return null;
+    return Number(schedule.id);
   }
 
   /**
@@ -1374,6 +1496,40 @@ class CampaignRunService {
     let successfulSends = 0;
     let failedSends = 0;
     let skippedSends = 0;
+    // Chỉ true SAU KHI bộ đếm trong RAM đã được nạp lại từ DB (getRunForExecution). Trước mốc đó
+    // RAM = 0 ≠ DB, ghi ở catch sẽ ĐÈ số cộng dồn của các lượt trước về 0.
+    let runCountersLoaded = false;
+    // Người-bước đã CỘNG vào totalRecipients (lần đầu thấy, chưa có dòng sổ cái) nhưng chưa được ghi
+    // sổ cái. Nếu lượt nhả slot/dừng giữa chừng, người này vẫn `updatedAt === null` ở lượt resume và sẽ
+    // được cộng LẦN NỮA — nên phần đã cộng của họ phải trừ đi khi lưu bộ đếm lúc thoát sớm.
+    // Khoá = buildRecipientLedgerKey(); giá trị = tổng số người-bước đã cộng cho khoá đó.
+    const pendingFirstSightTotals = new Map();
+    /**
+     * Lưu bộ đếm khi lượt gọi kết thúc sớm (nhả slot / dừng). Trước đây updateRunProgress chỉ chạy ở
+     * cuối khối gửi nên người-bước đã xử lý trong khối dở dang bị mất khỏi campaign_runs. Best-effort:
+     * lỗi ghi chỉ cảnh báo, không che lỗi gốc.
+     */
+    const pendingFirstSightTotal = () => {
+      let sum = 0;
+      for (const n of pendingFirstSightTotals.values()) sum += n;
+      return sum;
+    };
+    const persistRunCountersOnEarlyExit = async () => {
+      if (!runCountersLoaded) return;
+      try {
+        await campaignRunRepository.updateRunProgress(runId, {
+          totalRecipients: Math.max(0, totalRecipients - pendingFirstSightTotal()),
+          successfulSends,
+          failedSends,
+          skippedSends,
+        });
+      } catch (persistError) {
+        console.warn(
+          `[Campaign ${campaignId}] Run ${runId} không lưu được bộ đếm khi thoát sớm: `
+          + String(persistError?.message || persistError)
+        );
+      }
+    };
     try {
       // Reconciliation hook: quan sát reservation quá hạn lease ngay đầu run nếu có tín hiệu resume
       // Chạy trước early-return defer để không bỏ sót reservation đọng khi resume thủ công trước mốc defer.
@@ -1824,6 +1980,16 @@ class CampaignRunService {
       let isRecipientLedgerTableAvailable = true;
       const buildRecipientLedgerKey = ({ nodeId, channel, recipientKey }) =>
         `${String(nodeId)}::${String(channel)}::${String(recipientKey || '').trim().toLowerCase()}`;
+      /**
+       * Cộng total cho người-bước thấy lần đầu VÀ ghi nhớ phần đã cộng cho tới khi họ có dòng sổ cái
+       * (upsertRecipientProgress xoá khỏi pendingFirstSightTotals). Khoá chuẩn hoá y hệt sổ cái.
+       */
+      const countFirstSight = ({ nodeId, channel, recipientKey, n }) => {
+        const count = Math.max(0, Number(n) || 0);
+        totalRecipients += count;
+        const key = buildRecipientLedgerKey({ nodeId, channel, recipientKey });
+        pendingFirstSightTotals.set(key, (pendingFirstSightTotals.get(key) || 0) + count);
+      };
       const createEmptyRecipientProgress = () => ({
         lastCompletedStep: 0,
         isFullyCompleted: false,
@@ -2075,6 +2241,8 @@ class CampaignRunService {
               updatedAtEpochUs: persistedRow.updated_at_epoch_us ?? null,
             }
             : memRow);
+          // Đã có dòng sổ cái thật → lượt resume sẽ thấy updatedAt !== null, không còn "chờ cộng".
+          pendingFirstSightTotals.delete(localKey);
         } catch (error) {
           if (String(error?.code || '') === '42P01' || String(error?.code || '') === '42703') {
             isRecipientLedgerTableAvailable = false;
@@ -2473,6 +2641,7 @@ class CampaignRunService {
       successfulSends = Number(runRow?.successful_sends || 0);
       failedSends = Number(runRow?.failed_sends || 0);
       skippedSends = Number(runRow?.skipped_sends || 0);
+      runCountersLoaded = true;
       const runSource = String(runRow?.run_metadata?.source || 'campaign_run').trim() || 'campaign_run';
       const rawAdjacentDelay = Number.parseInt(runRow?.run_metadata?.adjacentZaloNodeDelayMs, 10);
       const adjacentZaloNodeDelayMs = Number.isFinite(rawAdjacentDelay) && rawAdjacentDelay > 0
@@ -3172,6 +3341,24 @@ class CampaignRunService {
         return flowNodeIdMap.get(key) || key;
       };
 
+      // Lưới thứ hai cho tham chiếu khối hụt (preflight là lưới thứ nhất): khối gửi lấy người nhận / nhóm / khách từ một khối
+      // không còn tồn tại thì nhận danh sách rỗng và lượt chạy kết thúc "completed" 0/0 trong im lặng. Dừng TRƯỚC khi chạy
+      // khối nào: đóng sổ 'failed' + báo chủ (cùng khuôn `zaloAccessBlocked` ở trên — nhánh RUN_STOPPED ở catch tổng chỉ log
+      // rồi return, không tự đóng sổ). Kiểm trên dữ liệu thô, trước vòng chuẩn hoá bên dưới (vòng đó ghi đè config/thứ tự).
+      const danglingReferences = campaignNodeReferences.findDanglingNodeReferences({
+        flowJson: campaign?.flow_json,
+        nodes,
+        connections,
+      });
+      if (danglingReferences.length > 0) {
+        const danglingMessage = campaignNodeReferences.buildDanglingReferenceMessage(danglingReferences);
+        await this._failRunAndNotify(runId, campaignId, danglingMessage, 'dangling_node_reference');
+        const stopError = new Error(danglingMessage);
+        stopError.code = 'RUN_STOPPED';
+        stopError.danglingReference = true;
+        throw stopError;
+      }
+
       for (let idx = 0; idx < orderedNodes.length; idx += 1) {
         const node = orderedNodes[idx];
         const nextOrder = idx + 1;
@@ -3386,13 +3573,6 @@ class CampaignRunService {
         const normalized = String(nodeSubtype || '').trim().toLowerCase();
         if (!normalized) return false;
         return normalized.includes('zalo') || normalized === 'get_all_friends' || normalized === 'get_all_groups';
-      };
-      const resolveSelectionMode = (mode, selectedIds = []) => {
-        const normalized = String(mode || '').trim().toLowerCase();
-        if (normalized === 'fixed' || normalized === 'all_exclude') {
-          return normalized;
-        }
-        return Array.isArray(selectedIds) && selectedIds.length > 0 ? 'fixed' : 'all';
       };
       const refreshSourceNodeOutput = async (sourceNodeId) => {
         const safeSourceNodeId = String(sourceNodeId || '').trim();
@@ -4611,7 +4791,7 @@ class CampaignRunService {
                   // dòng ledger nào, updatedAt===null); cộng đủ số bước MỘT LẦN, không cộng lại
                   // mỗi chu kỳ continuous đến hạn cho cùng một khách đang ở bước đã biết.
                   if (progress.updatedAt === null) {
-                    totalRecipients += loopEmailSteps.length;
+                    countFirstSight({ nodeId: node.id, channel: 'email', recipientKey: customerKey, n: loopEmailSteps.length });
                   }
                   const sendOutcome = await sendEmailWithLogging({
                     customer,
@@ -4733,7 +4913,7 @@ class CampaignRunService {
                 // dedupedRecipients.length × emailSteps.length TRƯỚC vòng lặp step nên mỗi lượt
                 // executeCampaign gọi lại (resume) cộng lại từ đầu cho MỌI khách kể cả đã xong.
                 if (progress.updatedAt === null) {
-                  totalRecipients += emailSteps.length;
+                  countFirstSight({ nodeId: node.id, channel: 'email', recipientKey: customerKey, n: emailSteps.length });
                 }
                 if (!shouldProcessRecipientStep({
                   progress,
@@ -4844,7 +5024,7 @@ class CampaignRunService {
               });
               // PR-2 — xem chú thích ở nhánh multi-step phía trên.
               if (progress.updatedAt === null) {
-                totalRecipients += 1;
+                countFirstSight({ nodeId: node.id, channel: 'email', recipientKey: customerKey, n: 1 });
               }
               if (!shouldProcessRecipientStep({
                 progress,
@@ -4967,36 +5147,6 @@ class CampaignRunService {
           }
           const config = campaignFlowService.normalizeNodeReferenceConfig(node.config || {}, resolveNodeId);
           const accountSourceNodeId = String(config.zaloFriendAccountNodeId || '').trim();
-          const sourceNodeItems = accountSourceNodeId ? pickNodeItems(accountSourceNodeId) : [];
-          const sourceNodeAccount = sourceNodeItems[0] || null;
-          const accountFromSourceNode = sourceNodeAccount?.id
-            ? await getZaloAccountForRun({
-              userId,
-              accountId: sourceNodeAccount.id,
-              roleCode,
-            })
-            : null;
-          const account = accountFromSourceNode
-            || selectedZaloAccount
-            || await getZaloAccountForRun({
-              userId,
-              accountId: config.zaloAccountId,
-              roleCode,
-            });
-          selectedZaloAccount = account;
-          const api = await campaignZaloSenderService.getConnectedApiOrSyncStatus({
-            accountId: account.id,
-            userId: account.userId || userId,
-          });
-          const count = Number.isFinite(parseInt(config.zaloFriendsCount, 10))
-            ? parseInt(config.zaloFriendsCount, 10)
-            : undefined;
-          const page = Number.isFinite(parseInt(config.zaloFriendsPage, 10))
-            ? parseInt(config.zaloFriendsPage, 10)
-            : undefined;
-          await waitRandomApiDelay('zalo_get_all_friends');
-          const friendItems = await campaignZaloSenderService.getAllFriendsWithRetry(api, count, page);
-          const allItems = await campaignZaloSenderService.normalizeFriendsWithProfileLookup(api, friendItems);
           const selectedFriendIds = (Array.isArray(config.zaloSelectedFriendIds) ? config.zaloSelectedFriendIds : [])
             .map((value) => String(value || '').trim())
             .filter((value, idx, arr) => value && arr.indexOf(value) === idx);
@@ -5004,19 +5154,53 @@ class CampaignRunService {
             .map((value) => String(value || '').trim())
             .filter((value, idx, arr) => value && arr.indexOf(value) === idx);
           const selectionMode = resolveSelectionMode(config.zaloFriendSelectionMode, selectedFriendIds);
-          const selectedSet = new Set(selectedFriendIds);
-          const excludedSet = new Set(excludedFriendIds);
           const extractFriendId = (item) => String(
             item?.uid
             || item?.id
             || item?.userId
             || ''
           ).trim();
-          let items = allItems;
-          if (selectionMode === 'fixed' && selectedSet.size > 0) {
-            items = allItems.filter((item) => selectedSet.has(extractFriendId(item)));
-          } else if (selectionMode === 'all_exclude' && excludedSet.size > 0) {
-            items = allItems.filter((item) => !excludedSet.has(extractFriendId(item)));
+          // `fixed` mà chưa chọn ai → 0 bạn (không rơi xuống "tất cả bạn bè"): xem utils/selectionMode.util.js. Trả rỗng NGAY, không
+          // kết nối Zalo / không tải toàn bộ bạn bè (rồi tra hồ sơ từng người) chỉ để lọc bỏ hết — tốn quota gọi API và gây sự chú ý vô ích.
+          const selectsNobody = selectionMode === 'fixed' && selectedFriendIds.length === 0;
+          let items = [];
+          if (!selectsNobody) {
+            const sourceNodeItems = accountSourceNodeId ? pickNodeItems(accountSourceNodeId) : [];
+            const sourceNodeAccount = sourceNodeItems[0] || null;
+            const accountFromSourceNode = sourceNodeAccount?.id
+              ? await getZaloAccountForRun({
+                userId,
+                accountId: sourceNodeAccount.id,
+                roleCode,
+              })
+              : null;
+            const account = accountFromSourceNode
+              || selectedZaloAccount
+              || await getZaloAccountForRun({
+                userId,
+                accountId: config.zaloAccountId,
+                roleCode,
+              });
+            selectedZaloAccount = account;
+            const api = await campaignZaloSenderService.getConnectedApiOrSyncStatus({
+              accountId: account.id,
+              userId: account.userId || userId,
+            });
+            const count = Number.isFinite(parseInt(config.zaloFriendsCount, 10))
+              ? parseInt(config.zaloFriendsCount, 10)
+              : undefined;
+            const page = Number.isFinite(parseInt(config.zaloFriendsPage, 10))
+              ? parseInt(config.zaloFriendsPage, 10)
+              : undefined;
+            await waitRandomApiDelay('zalo_get_all_friends');
+            const friendItems = await campaignZaloSenderService.getAllFriendsWithRetry(api, count, page);
+            const allItems = await campaignZaloSenderService.normalizeFriendsWithProfileLookup(api, friendItems);
+            items = applyIdSelection(allItems, {
+              mode: selectionMode,
+              selectedIds: selectedFriendIds,
+              excludedIds: excludedFriendIds,
+              getId: extractFriendId,
+            });
           }
           const mergedFriendData = isContinuousMode
             ? mergeContinuousNodeItems({
@@ -5045,8 +5229,7 @@ class CampaignRunService {
               schema: campaignFlowService.buildSchemaFromRows(outputFriendItems),
               meta: {
                 totalItems: mergedFriendData.allItems.length,
-                filtered: (selectionMode === 'fixed' && selectedSet.size > 0)
-                  || (selectionMode === 'all_exclude' && excludedSet.size > 0),
+                filtered: isSelectionFiltered({ mode: selectionMode, excludedIds: excludedFriendIds }),
                 selectionMode,
                 accountSourceNodeId: accountSourceNodeId || null,
                 ...(isContinuousMode
@@ -6184,6 +6367,34 @@ class CampaignRunService {
                     executionData: buildSendZaloPersonalExecutionData(senderBlockedPayload),
                   });
                 }
+                if (!multiEnabled) {
+                  // PR-4 Việc 4.3 — MỘT tài khoản gửi: người nhận chặn tin từ người lạ thì bước sau cũng chặn y vậy, mà mỗi
+                  // lần thử lại là tốn thêm một lượt tra số. Đóng người đó (xong hết bước, không hẹn lại) theo khuôn nhánh
+                  // bỏ cuộc `max_zalo_send_failures`. BẪY: trả `success: false` (không phải `true`) — vòng gọi
+                  // `markRecipientStepCompleted` khi `shouldAdvanceZaloOneShotLedger`/`...ContinuousLedger` (success===true),
+                  // sẽ ghi đè tiến độ "xong hết" về `stepIndex + 1` rồi bước sau lại tra số lần nữa. Nhiều tài khoản: giữ
+                  // nguyên (tài khoản khác trong pool có thể vẫn nhắn được người này).
+                  const blockedProgress = await getRecipientProgress({
+                    nodeId: node.id,
+                    channel: 'zalo_personal',
+                    recipientKey: recipient,
+                  });
+                  const blockedTotalSteps = templateSteps.length > 0 ? templateSteps.length : 1;
+                  await upsertRecipientProgress({
+                    nodeId: node.id,
+                    channel: 'zalo_personal',
+                    recipientKey: recipient,
+                    completedStep: blockedTotalSteps,
+                    totalSteps: blockedTotalSteps,
+                    firstSentAt: blockedProgress.firstSentAt || sentAt,
+                    lastCompletedAt: sentAt,
+                    nextDueAt: null,
+                    zaloAbandonReason: 'recipient_blocks_strangers',
+                    lastFailureReason: mapZaloErrorCategoryToLedgerReason(observation.errorCategory),
+                    lastFailureAt: sentAt,
+                  });
+                  return { success: false, skippedSenderBlocked: true };
+                }
                 return { success: true, skippedSenderBlocked: true };
               }
               if (
@@ -6245,6 +6456,37 @@ class CampaignRunService {
                   });
                 }
                 return { success: true, skippedUnreachable: true };
+              }
+              // PR-4 Việc 4.4 — Zalo tạm CẤM CẢ TÀI KHOẢN nhắn người chưa kết bạn ("Bạn đang bị cấm nhắn tin cho người lạ").
+              // Đây là lỗi của TÀI KHOẢN (mọi người lạ đều dính), khác `isZaloSenderBlockedError` ("không thể nhận tin nhắn từ
+              // bạn" = một người nhận chặn mình) — đếm nó như lỗi từng người thì mỗi người bị "đốt" 3–5 lần rồi bỏ vĩnh viễn
+              // (run 476: 195 người). Nhận diện bằng `isZaloAccountStrangerBanError` (cụm "bị cấm nhắn tin") — KHÔNG dùng
+              // category NOT_FRIEND_OR_BLOCKED vì nhóm đó rộng ("chặn", "hạn chế"...: một câu lỗi tương lai về MỘT người nhận sẽ làm
+              // hoãn cả lượt mỗi ngày); category là phép "người lạ" nên cụm hẹp này đã nằm trong nó, giữ category chỉ thừa. Vẫn loại
+              // lỗi quyền riêng tư CỦA NGƯỜI NHẬN (`isZaloUnreachableRecipientError`). Chỉ MỘT tài khoản: nhiều tài khoản thì tài khoản khác
+              // trong pool có thể vẫn nhắn được → giữ nguyên hành vi cũ. KHÔNG tăng zaloSendFailureCount, KHÔNG ghi failed:
+              // hoãn cả lượt tới sáng 06:00 VN kế tiếp (thời hạn cấm của Zalo không ai biết — mỗi sáng thử lại một tin là đủ rẻ).
+              if (
+                !multiEnabled
+                && !isZaloUnreachableRecipientError(error)
+                && isZaloAccountStrangerBanError(error)
+              ) {
+                const banWaitMs = Math.max(
+                  1,
+                  this.zaloRateLimiter.computeNextMorningSendAtMs(Date.now()) - Date.now()
+                );
+                console.warn(
+                  `[CampaignRun][ZaloPersonal] run=${runId} account=${workingAccount.id} bị Zalo cấm nhắn người lạ `
+                  + `→ hoãn cả lượt ${(banWaitMs / 3600000).toFixed(1)}h (không tính lỗi người nhận ${String(recipient || '').trim()}).`
+                );
+                await this.persistZaloDeferYieldSlot({
+                  runId,
+                  campaignId,
+                  waitMs: banWaitMs,
+                  reason: STRANGER_BAN_DEFER_REASON,
+                  accountId: workingAccount.id,
+                  accountName: workingAccount.displayName || null,
+                });
               }
               /**
                * Continuous: đếm lỗi gửi liên tiếp; đạt ngưỡng → chốt recipient (không thử lại vô hạn).
@@ -6678,7 +6920,7 @@ class CampaignRunService {
                     // PR-2 — cộng đủ số bước MỘT LẦN khi lần đầu thấy người nhận, không cộng lại
                     // mỗi chu kỳ continuous đến hạn cho cùng người nhận đang ở bước đã biết.
                     if (progress.updatedAt === null) {
-                      totalRecipients += stepsWithMessage.length;
+                      countFirstSight({ nodeId: node.id, channel: 'zalo_personal', recipientKey: normalizedRecipient, n: stepsWithMessage.length });
                     }
                     const sendOutcome = await sendSingleRecipient({
                       recipient: normalizedRecipient,
@@ -6745,7 +6987,7 @@ class CampaignRunService {
                   }
                   // PR-2 — xem chú thích ở nhánh multi-step phía trên.
                   if (progress.updatedAt === null) {
-                    totalRecipients += 1;
+                    countFirstSight({ nodeId: node.id, channel: 'zalo_personal', recipientKey: normalizedRecipient, n: 1 });
                   }
                   const sendOutcome = await sendSingleRecipient({
                     recipient: normalizedRecipient,
@@ -6811,9 +7053,12 @@ class CampaignRunService {
              * @param {object} step
              * @param {number} stepIndex chỉ số 0-based
              * @param {string} recipient
+             * @param {{ priorityPass?: boolean }} [options] `priorityPass` (PR-4 Việc 4.2): lượt ưu tiên bước sau — chỉ gửi bước
+             *   `stepIndex` ≥ 1 cho người ĐÃ có dòng sổ cái và đang đúng bước đó; KHÔNG chạm bộ đếm (không cộng total lần đầu thấy,
+             *   không cộng skippedCompletedCount) vì vòng chính ngay sau đó vẫn duyệt lại đủ mọi người × mọi bước.
              * @returns {Promise<void>}
              */
-            const processOneZaloPersonalTemplateRecipient = async (step, stepIndex, recipient) => {
+            const processOneZaloPersonalTemplateRecipient = async (step, stepIndex, recipient, { priorityPass = false } = {}) => {
               const normalizedRecipient = String(recipient || '').trim();
               if (!normalizedRecipient) return;
               const progress = await getRecipientProgress({
@@ -6821,19 +7066,29 @@ class CampaignRunService {
                 channel: 'zalo_personal',
                 recipientKey: normalizedRecipient,
               });
-              // PR-2 — cộng total đúng MỘT LẦN cho toàn bộ số bước của người nhận này, ngay lúc
-              // lần đầu thấy (chưa có dòng ledger). Trước đây cộng blanket TRƯỚC vòng lặp step
-              // nên mỗi lượt gọi lại (resume) cộng lại từ đầu cho MỌI người nhận.
-              if (progress.updatedAt === null) {
-                totalRecipients += stepsWithMessage.length;
-              }
-              if (!shouldProcessRecipientStep({
-                progress,
-                stepIndex,
-                totalSteps: stepsWithMessage.length,
-              })) {
-                skippedCompletedCount += 1;
-                return;
+              if (priorityPass) {
+                if (progress.updatedAt === null || !shouldProcessRecipientStep({
+                  progress,
+                  stepIndex,
+                  totalSteps: stepsWithMessage.length,
+                })) {
+                  return;
+                }
+              } else {
+                // PR-2 — cộng total đúng MỘT LẦN cho toàn bộ số bước của người nhận này, ngay lúc
+                // lần đầu thấy (chưa có dòng ledger). Trước đây cộng blanket TRƯỚC vòng lặp step
+                // nên mỗi lượt gọi lại (resume) cộng lại từ đầu cho MỌI người nhận.
+                if (progress.updatedAt === null) {
+                  countFirstSight({ nodeId: node.id, channel: 'zalo_personal', recipientKey: normalizedRecipient, n: stepsWithMessage.length });
+                }
+                if (!shouldProcessRecipientStep({
+                  progress,
+                  stepIndex,
+                  totalSteps: stepsWithMessage.length,
+                })) {
+                  skippedCompletedCount += 1;
+                  return;
+                }
               }
               const entry = recipientEntryMap.get(normalizedRecipient) || null;
               const mappings = Array.isArray(step?.templateMappings) ? step.templateMappings : [];
@@ -6973,6 +7228,65 @@ class CampaignRunService {
                 }
               }
             } else {
+              // PR-4 Việc 4.2 — lượt ưu tiên bước sau. Vòng chính bên dưới duyệt "bước 1 cho TẤT CẢ rồi mới bước 2": danh sách
+              // dài thì bước 1 không bao giờ hết trong ngày (mỗi ngày chỉ tra được ít số) nên bước 2 chưa từng chạy, dù
+              // hàng trăm người đã nhận bước 1 quá hạn. Người ĐÃ BIẾT uid gửi được mà không tốn lượt tra số (và không bị cổng
+              // khoá tra số chặn), nên cho họ nhận bước sau TRƯỚC khi vòng chính đi tra số người mới. Duyệt bước cuối → bước 2.
+              // Chuỗi độ trễ 0 của người mới vẫn chạy như cũ ở vòng chính (lượt này chỉ đụng người đã có sổ cái).
+              if (stepsWithMessage.length > 1) {
+                const priorityRecipients = [];
+                const needKnownUidLookup = [];
+                for (const recipient of dedupedRecipients) {
+                  const key = String(recipient || '').trim();
+                  if (!key) continue;
+                  if (
+                    recipientType === 'uid'
+                    || extractZaloUidFromRow(recipientEntryMap.get(key)?.row || null)
+                  ) {
+                    priorityRecipients.push(recipient);
+                  } else {
+                    needKnownUidLookup.push(recipient);
+                  }
+                }
+                if (needKnownUidLookup.length > 0) {
+                  try {
+                    const phonesWithKnownUid = await customerMutationRepository.findPhonesWithKnownZaloUid(
+                      userId,
+                      needKnownUidLookup
+                    );
+                    for (const recipient of needKnownUidLookup) {
+                      if (phonesWithKnownUid.has(String(recipient || '').trim())) priorityRecipients.push(recipient);
+                    }
+                  } catch (lookupError) {
+                    // Lượt ưu tiên chỉ là tối ưu thứ tự — lỗi tra uid hàng loạt không được làm hỏng lượt chạy.
+                    console.warn(
+                      `[CampaignRun][ZaloPersonal] run=${runId} bỏ lượt ưu tiên bước sau, không tra được uid hàng loạt: `
+                      + `${lookupError?.message || lookupError}`
+                    );
+                  }
+                }
+                if (priorityRecipients.length > 0) {
+                  for (let stepIndex = stepsWithMessage.length - 1; stepIndex >= 1; stepIndex -= 1) {
+                    const step = stepsWithMessage[stepIndex];
+                    if (multiEnabled) {
+                      // eslint-disable-next-line no-await-in-loop
+                      await runTasksWithConcurrency({
+                        items: priorityRecipients,
+                        concurrency: zaloPersonalPoolConcurrency,
+                        handler: async (recipient) => {
+                          await processOneZaloPersonalTemplateRecipient(step, stepIndex, recipient, { priorityPass: true });
+                        },
+                      });
+                    } else {
+                      // eslint-disable-next-line no-restricted-syntax
+                      for (const recipient of priorityRecipients) {
+                        // eslint-disable-next-line no-await-in-loop
+                        await processOneZaloPersonalTemplateRecipient(step, stepIndex, recipient, { priorityPass: true });
+                      }
+                    }
+                  }
+                }
+              }
               for (let stepIndex = 0; stepIndex < stepsWithMessage.length; stepIndex += 1) {
                 const step = stepsWithMessage[stepIndex];
                 if (multiEnabled) {
@@ -7013,7 +7327,7 @@ class CampaignRunService {
               });
               // PR-2 — xem chú thích ở nhánh multi-step phía trên.
               if (progress.updatedAt === null) {
-                totalRecipients += 1;
+                countFirstSight({ nodeId: node.id, channel: 'zalo_personal', recipientKey: normalizedRecipient, n: 1 });
               }
               if (!shouldProcessRecipientStep({
                 progress,
@@ -7327,7 +7641,7 @@ class CampaignRunService {
               // PR-2 — cộng đúng MỘT LẦN khi lần đầu thấy số này (chưa có dòng ledger), không cộng
               // lại mỗi chu kỳ continuous đến hạn cho cùng số đang chờ.
               if (progress.updatedAt === null) {
-                totalRecipients += 1;
+                countFirstSight({ nodeId: node.id, channel: 'zalo_friend_request', recipientKey: phone, n: 1 });
               }
             }
             let message = String(config.zaloFriendRequestMessage || '').trim();
@@ -8686,7 +9000,7 @@ class CampaignRunService {
                     // PR-2 — cộng đủ số bước MỘT LẦN khi lần đầu thấy nhóm này, không cộng lại mỗi
                     // chu kỳ continuous đến hạn cho cùng nhóm đang ở bước đã biết.
                     if (progress.updatedAt === null) {
-                      totalRecipients += stepsWithMessage.length;
+                      countFirstSight({ nodeId: node.id, channel: 'zalo_group', recipientKey: normalizedGroupId, n: stepsWithMessage.length });
                     }
                     const sendOutcome = await sendSingleGroup({
                       groupId: normalizedGroupId,
@@ -8748,7 +9062,7 @@ class CampaignRunService {
                   if (dedupedZaloGroupSingle) return;
                   // PR-2 — xem chú thích ở nhánh multi-step phía trên.
                   if (progress.updatedAt === null) {
-                    totalRecipients += 1;
+                    countFirstSight({ nodeId: node.id, channel: 'zalo_group', recipientKey: normalizedGroupId, n: 1 });
                   }
                   const sendOutcome = await sendSingleGroup({
                     groupId: normalizedGroupId,
@@ -8833,7 +9147,7 @@ class CampaignRunService {
                 // đầu thấy (chưa có dòng ledger). Trước đây cộng blanket TRƯỚC vòng lặp step nên
                 // mỗi lượt gọi lại (resume) cộng lại từ đầu cho MỌI nhóm.
                 if (progress.updatedAt === null) {
-                  totalRecipients += stepsWithMessage.length;
+                  countFirstSight({ nodeId: node.id, channel: 'zalo_group', recipientKey: normalizedGroupId, n: stepsWithMessage.length });
                 }
                 if (!shouldProcessRecipientStep({
                   progress,
@@ -8943,7 +9257,7 @@ class CampaignRunService {
               });
               // PR-2 — xem chú thích ở nhánh multi-step phía trên.
               if (progress.updatedAt === null) {
-                totalRecipients += 1;
+                countFirstSight({ nodeId: node.id, channel: 'zalo_group', recipientKey: normalizedGroupId, n: 1 });
               }
               if (!shouldProcessRecipientStep({
                 progress,
@@ -9399,9 +9713,12 @@ class CampaignRunService {
       if (error?.code === 'RUN_STOPPED') {
         console.log(error?.quotaBlocked
           ? `[Campaign ${campaignId}] Run ${runId} dừng do hết hạn mức gói: ${error.message}`
+          : error?.danglingReference
+            ? `[Campaign ${campaignId}] Run ${runId} dừng vì khối đang trỏ tới khối nguồn không còn tồn tại: ${error.message}`
           : (error?.zaloAccessBlocked || error?.channelAccessBlocked)
             ? `[Campaign ${campaignId}] Run ${runId} dừng vì tài khoản ${error.channelAccessBlocked ? 'Telegram/WhatsApp' : 'Zalo'} chưa được giao: ${error.message}`
             : `[Campaign ${campaignId}] Lượt chạy ${runId} đã được dừng bởi người dùng`);
+        await persistRunCountersOnEarlyExit();
         return;
       }
       if (error?.code === 'RUN_YIELD_SLOT') {
@@ -9409,6 +9726,7 @@ class CampaignRunService {
           `[Campaign ${campaignId}] Run ${runId} nhả slot chờ resume: `
           + String(error?.message || 'RUN_YIELD_SLOT')
         );
+        await persistRunCountersOnEarlyExit();
         return;
       }
       if (isNetworkTimeoutError(error)) {

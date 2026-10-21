@@ -130,7 +130,7 @@ export default function Footer() {
               {idx === COLUMNS(t).length - 1 && (
                 <div className="mt-4">
                   <a
-                    href="http://online.gov.vn"
+                    href="https://online.gov.vn/nen-tang/145bbf19-7882-4268-8ec1-3af7e73ae5b5"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-block hover:opacity-90 transition-opacity"

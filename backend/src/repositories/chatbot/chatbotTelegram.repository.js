@@ -20,6 +20,7 @@
  * `session_string` column itself was dropped by migration 218.
  */
 import db from '../../config/database.js';
+import chatbotOwnershipRepository from './chatbotOwnership.repository.js';
 import {
   decryptChannelSessionBlob as decryptBaileysBlob,
   encryptChannelSessionBlob as encryptBaileysBlob,
@@ -43,6 +44,15 @@ class ChatbotTelegramRepository {
       err.status = 404;
       throw err;
     }
+  }
+
+  /**
+   * Tài khoản Telegram VÀ chatbot (nếu có) đều thuộc `userId` — 404 nếu không. `requireActiveChatbot=true` khi BẬT
+   * (tắt thì chỉ cần đúng chủ). Trước đây chỉ kiểm tài khoản nên A gắn được chatbot của B (và chụp `system_instruction` của B).
+   */
+  async assertOwnedConfiguration(userId, telegramAccountId, chatbotId, { requireActiveChatbot = false } = {}) {
+    await this.assertOwned(userId, telegramAccountId);
+    await chatbotOwnershipRepository.assertOwnedChatbot(userId, chatbotId, { requireActive: requireActiveChatbot });
   }
 
   // ── Account CRUD ───────────────────────────────────────────────────
@@ -584,7 +594,8 @@ class ChatbotTelegramRepository {
   }
 
   async setEnabled(userId, telegramAccountId, chatbotId, enabled) {
-    await this.assertOwned(userId, telegramAccountId);
+    // Chặn cả khi enabled=false: tắt cũng ghi dòng (ON CONFLICT ... DO UPDATE) và cũng chụp `system_instruction`.
+    await this.assertOwnedConfiguration(userId, telegramAccountId, chatbotId, { requireActiveChatbot: Boolean(enabled) });
     // Khi enabled=true, mặc định BẬT cả DM và group (giống UX các kênh
     // khác: Zalo Personal, WhatsApp Baileys). Khi enabled=false → tắt
     // tất cả.
@@ -613,7 +624,7 @@ class ChatbotTelegramRepository {
        VALUES ($1::int, $2::int, $3::bool, $4::bool, $5::bool,
                (SELECT NULLIF(BTRIM(cb.system_instruction), '')
                   FROM custom_chatbots cb
-                 WHERE cb.id = $2::bigint AND cb.is_active = true))
+                 WHERE cb.id = $2::bigint AND cb.id_user = $6::bigint AND cb.is_active = true))
        ON CONFLICT (id_telegram_account, id_chatbot) DO UPDATE SET
          is_enabled      = EXCLUDED.is_enabled,
          is_enabled_dm   = EXCLUDED.is_enabled_dm,
@@ -624,7 +635,7 @@ class ChatbotTelegramRepository {
          ),
          updated_at = NOW()
        RETURNING *`,
-      [telegramAccountId, chatbotId, enabled, dm, grp]
+      [telegramAccountId, chatbotId, enabled, dm, grp, userId]
     );
     return rows[0];
   }
@@ -649,7 +660,8 @@ class ChatbotTelegramRepository {
               cb.response_style    AS chatbot_response_style,
               cb.welcome_message   AS chatbot_welcome_message
          FROM telegram_chatbot_settings tcs
-         JOIN custom_chatbots cb ON cb.id = tcs.id_chatbot
+         JOIN telegram_accounts ta ON ta.id = tcs.id_telegram_account
+         JOIN custom_chatbots cb ON cb.id = tcs.id_chatbot AND cb.id_user = ta.id_user
         WHERE tcs.id_telegram_account = $1
           AND tcs.id_chatbot = $2
         LIMIT 1`,
@@ -709,7 +721,7 @@ class ChatbotTelegramRepository {
        FROM telegram_chatbot_settings tcs
        JOIN telegram_accounts ta ON ta.id = tcs.id_telegram_account
        JOIN custom_chatbots cb
-         ON cb.id = tcs.id_chatbot AND cb.is_active = true
+         ON cb.id = tcs.id_chatbot AND cb.id_user = ta.id_user AND cb.is_active = true
        WHERE ${conditions.join(' AND ')}
        ORDER BY cb.id ASC`,
       params

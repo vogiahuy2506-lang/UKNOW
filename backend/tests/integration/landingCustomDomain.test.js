@@ -6,7 +6,11 @@
  * `POST /:id/custom-domain/check` xem trước không ghi gì; `DELETE /:id/custom-domain` trả trang về link miễn phí.
  *
  * KHÔNG gọi Cloudflare / DNS thật: spy trên singleton cloudflareService (isConfigured/setupLandingPageDNS/
- * deleteDnsRecord/purge*) và trên `dns/promises` (resolve/resolve4) — beforeEach đặt mặc định "DNS chưa có bản ghi".
+ * deleteDnsRecord/purge*) và trên `dns/promises` (resolve/resolve4/resolveTxt) — beforeEach đặt mặc định "DNS chưa có bản ghi".
+ *
+ * PLAN_TEN_MIEN_TXT (20/10/2026): ngoài CNAME/A, khách phải thêm bản ghi TXT `_founderai-verify.<hostname>` chứng minh
+ * chủ sở hữu (token gắn workspace + hostname). Test lấy giá trị TXT từ chính API kiểm tra (đúng thứ khách nhìn thấy) rồi
+ * "thêm" vào DNS giả (`addOwnershipTxt`).
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, jest } from '@jest/globals';
 import request from 'supertest';
@@ -34,9 +38,34 @@ function dnsNotFound() {
   return Object.assign(new Error('queryCname ENOTFOUND'), { code: 'ENOTFOUND' });
 }
 
+function dnsNoData() {
+  return Object.assign(new Error('queryTxt ENODATA'), { code: 'ENODATA' });
+}
+
 /** DNS của khách đã trỏ đúng: subdomain → CNAME founderai.biz (LP_CNAME_TARGET mặc định). */
 function dnsPointsToUs() {
   dns.resolve.mockResolvedValue(['founderai.biz']);
+}
+
+/** DNS giả có đúng một bản ghi TXT `value` tại `_founderai-verify.<hostname>`; tên khác → không có bản ghi. */
+function dnsHasOwnershipTxt(hostname, value) {
+  dns.resolveTxt.mockImplementation(async (name) => {
+    if (name === `_founderai-verify.${hostname}`) return [[value]];
+    throw dnsNoData();
+  });
+}
+
+/** Lấy giá trị TXT như khách thấy trong bảng bản ghi (qua API kiểm tra) rồi "thêm" nó vào DNS giả. */
+async function addOwnershipTxt(headers, landingId, hostname, isApex = false) {
+  const res = await request(app)
+    .post(`/api/admin/landing-pages/${landingId}/custom-domain/check`)
+    .set(headers)
+    .send({ hostname, isApexDomain: isApex });
+  expect(res.status).toBe(200);
+  const row = res.body.data.dnsRecords.find((r) => r.type === 'TXT');
+  expect(row).toBeTruthy();
+  dnsHasOwnershipTxt(hostname, row.value);
+  return row.value;
 }
 
 beforeEach(async () => {
@@ -58,6 +87,7 @@ beforeEach(async () => {
   // Mặc định: chưa có bản ghi DNS nào. Ca nào cần DNS đúng gọi dnsPointsToUs() / đặt resolve4 riêng.
   jest.spyOn(dns, 'resolve').mockRejectedValue(dnsNotFound());
   jest.spyOn(dns, 'resolve4').mockRejectedValue(dnsNotFound());
+  jest.spyOn(dns, 'resolveTxt').mockRejectedValue(dnsNoData());
 });
 
 afterEach(() => {
@@ -156,7 +186,10 @@ describe('PUT /api/admin/landing-pages/:id/custom-domain — chỉ kết nối k
       hostname: 'lp.example.com',
       isApexDomain: false,
       cnameTarget: 'founderai.biz',
-      dnsRecords: [expect.objectContaining({ type: 'CNAME', host: 'lp', value: 'founderai.biz' })],
+      dnsRecords: [
+        expect.objectContaining({ type: 'CNAME', host: 'lp', value: 'founderai.biz' }),
+        expect.objectContaining({ type: 'TXT', host: '_founderai-verify.lp', value: expect.stringMatching(/^founderai-verify=[0-9a-f]{32}$/) }),
+      ],
     });
     await expectFreeLinkIntact(id, 'cd-free');
     expect(cfDeleteSpy).not.toHaveBeenCalled();
@@ -179,6 +212,7 @@ describe('PUT /api/admin/landing-pages/:id/custom-domain — chỉ kết nối k
     const { token } = await setup('cd-2');
     const id = await createLanding(token, 'cd-ok');
     dnsPointsToUs();
+    await addOwnershipTxt(auth(token), id, 'lp.example.com');
 
     const res = await putDomain(token, id, { hostname: 'LP.Example.com', isApexDomain: false });
 
@@ -201,6 +235,7 @@ describe('PUT /api/admin/landing-pages/:id/custom-domain — chỉ kết nối k
     const { token } = await setup('cd-2b');
     const id = await createLanding(token, 'cd-apex');
     dns.resolve4.mockResolvedValue([APEX_IP]);
+    await addOwnershipTxt(auth(token), id, 'example.com', true);
 
     const res = await putDomain(token, id, { hostname: 'example.com', isApexDomain: true });
 
@@ -223,7 +258,10 @@ describe('PUT /api/admin/landing-pages/:id/custom-domain — chỉ kết nối k
       verified: false,
       isApexDomain: true,
       currentIp: '198.51.100.7',
-      dnsRecords: [{ type: 'A', host: '@', value: APEX_IP, ttl: 3600 }],
+      dnsRecords: [
+        { type: 'A', host: '@', value: APEX_IP, ttl: 3600 },
+        expect.objectContaining({ type: 'TXT', host: '_founderai-verify' }),
+      ],
     });
     await expectFreeLinkIntact(id, 'cd-apex-wrong');
   });
@@ -233,6 +271,7 @@ describe('PUT /api/admin/landing-pages/:id/custom-domain — chỉ kết nối k
     const idA = await createLanding(token, 'cd-a');
     const idB = await createLanding(token, 'cd-b');
     dnsPointsToUs();
+    await addOwnershipTxt(auth(token), idA, 'lp.example.com');
     expect((await putDomain(token, idA, { hostname: 'lp.example.com' })).status).toBe(200);
 
     const res = await putDomain(token, idB, { hostname: 'lp.example.com' });
@@ -276,7 +315,10 @@ describe('POST /api/admin/landing-pages/:id/custom-domain/check — xem trước
       verified: false,
       reason: 'not_found',
       hostname: 'lp.example.com',
-      dnsRecords: [expect.objectContaining({ type: 'CNAME', host: 'lp', value: 'founderai.biz' })],
+      dnsRecords: [
+        expect.objectContaining({ type: 'CNAME', host: 'lp', value: 'founderai.biz' }),
+        expect.objectContaining({ type: 'TXT', host: '_founderai-verify.lp', value: expect.stringMatching(/^founderai-verify=[0-9a-f]{32}$/) }),
+      ],
     });
     expect(typeof res.body.data.message).toBe('string');
     await expectFreeLinkIntact(id, 'chk-free');
@@ -288,6 +330,7 @@ describe('POST /api/admin/landing-pages/:id/custom-domain/check — xem trước
     const { token } = await setup('chk-2');
     const id = await createLanding(token, 'chk-ok');
     dnsPointsToUs();
+    await addOwnershipTxt(auth(token), id, 'lp.example.com');
 
     const res = await checkDomain(token, id, { hostname: 'lp.example.com', isApexDomain: false });
 
@@ -302,6 +345,7 @@ describe('POST /api/admin/landing-pages/:id/custom-domain/check — xem trước
     const idA = await createLanding(token, 'chk-a');
     const idB = await createLanding(token, 'chk-b');
     dnsPointsToUs();
+    await addOwnershipTxt(auth(token), idA, 'lp.example.com');
     expect((await putDomain(token, idA, { hostname: 'lp.example.com' })).status).toBe(200);
 
     const res = await checkDomain(token, idB, { hostname: 'lp.example.com' });
@@ -320,11 +364,102 @@ describe('POST /api/admin/landing-pages/:id/custom-domain/check — xem trước
   });
 });
 
+/**
+ * PLAN_TEN_MIEN_TXT (20/10/2026): CNAME/A đúng CHƯA đủ — phải có TXT `_founderai-verify.<hostname>` khớp token của
+ * workspace. Ca gốc: khách cũ gỡ tên miền khỏi hệ thống mà quên xoá DNS (CNAME vẫn trỏ về ta) → workspace khác nhập
+ * đúng hostname đó là gắn được. Nay workspace khác không có TXT của chủ thật nên bị 422.
+ */
+describe('tên miền riêng — xác minh chủ sở hữu bằng TXT', () => {
+  it('CNAME đúng nhưng CHƯA có TXT → PUT 422 reason txt_missing kèm bảng có dòng TXT; hàng miễn phí còn nguyên, không đụng Cloudflare', async () => {
+    const { token } = await setup('txt-1');
+    const id = await createLanding(token, 'txt-missing');
+    dnsPointsToUs();
+    cfSetupSpy.mockClear();
+
+    const res = await putDomain(token, id, { hostname: 'lp.example.com', isApexDomain: false });
+
+    expect(res.status).toBe(422);
+    expect(res.body.data).toMatchObject({ verified: false, reason: 'txt_missing', hostname: 'lp.example.com' });
+    expect(res.body.data.dnsRecords.map((r) => r.type)).toEqual(['CNAME', 'TXT']);
+    expect(res.body.message).toMatch(/TXT/);
+    expect(res.body.message).toContain(res.body.data.dnsRecords[1].value);
+    await expectFreeLinkIntact(id, 'txt-missing');
+    expect(cfDeleteSpy).not.toHaveBeenCalled();
+    expect(cfSetupSpy).not.toHaveBeenCalled();
+  });
+
+  it('check: CNAME đúng + chưa TXT → verified=false; thêm TXT đúng → verified=true; vẫn không ghi gì', async () => {
+    const { token } = await setup('txt-2');
+    const id = await createLanding(token, 'txt-check');
+    dnsPointsToUs();
+
+    const before = await checkDomain(token, id, { hostname: 'lp.example.com', isApexDomain: false });
+    expect(before.status).toBe(200);
+    expect(before.body.data).toMatchObject({ verified: false, reason: 'txt_missing' });
+
+    await addOwnershipTxt(auth(token), id, 'lp.example.com');
+    const after = await checkDomain(token, id, { hostname: 'lp.example.com', isApexDomain: false });
+    expect(after.status).toBe(200);
+    expect(after.body.data.verified).toBe(true);
+    await expectFreeLinkIntact(id, 'txt-check');
+  });
+
+  it('workspace B nhập đúng hostname mà A từng dùng (CNAME vẫn trỏ về ta, TXT là của A) → 422, B giữ link miễn phí; A có TXT thì kết nối được', async () => {
+    const a = await setup('txt-3a');
+    const b = await setup('txt-3b');
+    const idA = await createLanding(a.token, 'txt-a');
+    const idB = await createLanding(b.token, 'txt-b');
+    dnsPointsToUs();
+    // DNS của lp.example.com: CNAME → ta, TXT = token CỦA A (chủ thật của tên miền).
+    const valueOfA = await addOwnershipTxt(auth(a.token), idA, 'lp.example.com');
+
+    const res = await putDomain(b.token, idB, { hostname: 'lp.example.com', isApexDomain: false });
+
+    expect(res.status).toBe(422);
+    expect(res.body.data).toMatchObject({ verified: false, reason: 'txt_wrong' });
+    const txtOfB = res.body.data.dnsRecords.find((r) => r.type === 'TXT');
+    expect(txtOfB.value).not.toBe(valueOfA);
+    await expectFreeLinkIntact(idB, 'txt-b');
+
+    // Chủ thật (A) với cùng trạng thái DNS thì kết nối được.
+    const ok = await putDomain(a.token, idA, { hostname: 'lp.example.com', isApexDomain: false });
+    expect(ok.status).toBe(200);
+    expect(await domainRows(idA)).toEqual([expect.objectContaining({ hostname: 'lp.example.com', cfManaged: false, status: 'active' })]);
+  });
+
+  it('landing ĐANG active với đúng hostname này, TXT đã bị xoá khỏi DNS, bấm kết nối lại → vẫn 200 (không bắt tên miền đang chạy làm lại)', async () => {
+    const { token } = await setup('txt-4');
+    const id = await createLanding(token, 'txt-reconnect');
+    await convertToCustomDomain(id, { hostname: 'lp.example.com' });
+    dnsPointsToUs();
+
+    const res = await putDomain(token, id, { hostname: 'lp.example.com', isApexDomain: false });
+
+    expect(res.status).toBe(200);
+    expect(dns.resolveTxt).not.toHaveBeenCalled();
+    expect(await domainRows(id)).toEqual([expect.objectContaining({ hostname: 'lp.example.com', cfManaged: false, status: 'active' })]);
+  });
+
+  it('hàng pending_verification cũ qua POST /verify → hành vi cũ: CNAME đúng là chuyển active, KHÔNG tra TXT', async () => {
+    const { token } = await setup('txt-5');
+    const id = await createLanding(token, 'txt-pending');
+    await convertToCustomDomain(id, { hostname: 'cu.example.com', status: 'pending_verification' });
+    dnsPointsToUs();
+
+    const res = await request(app).post(`/api/admin/landing-pages/${id}/custom-domain/verify`).set(auth(token));
+
+    expect(res.status).toBe(200);
+    expect(dns.resolveTxt).not.toHaveBeenCalled();
+    expect(await domainRows(id)).toEqual([expect.objectContaining({ hostname: 'cu.example.com', status: 'active' })]);
+  });
+});
+
 describe('DELETE /api/admin/landing-pages/:id/custom-domain — gỡ tên miền riêng, trang quay về link miễn phí', () => {
   it('(3) sau khi kết nối rồi gỡ → hàng miễn phí được cấp lại theo slug, domain_type=system', async () => {
     const { token } = await setup('del-3');
     const id = await createLanding(token, 'del-ok');
     dnsPointsToUs();
+    await addOwnershipTxt(auth(token), id, 'lp.example.com');
     expect((await putDomain(token, id, { hostname: 'lp.example.com' })).status).toBe(200);
     expect(await landingRow(id)).toMatchObject({ domainType: 'custom' });
     cfSetupSpy.mockClear();
@@ -458,6 +593,7 @@ describe('quyền: nhân viên không có quyền landing_pages → 403', () => 
     const { ownerToken, employeeHeaders } = await employeeWithPermission(true, 'allow');
     const id = await createLanding(ownerToken, 'perm-ok-lp');
     dnsPointsToUs();
+    await addOwnershipTxt(employeeHeaders, id, 'lp.example.com');
 
     const res = await request(app)
       .put(`/api/admin/landing-pages/${id}/custom-domain`)

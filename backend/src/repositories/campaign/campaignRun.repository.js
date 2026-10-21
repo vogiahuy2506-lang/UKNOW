@@ -556,6 +556,26 @@ class CampaignRunRepository {
     );
   }
 
+  /**
+   * Chiến dịch có thuộc phạm vi chạy của người gọi không — CÙNG tiêu chí với findCampaignForRunTx
+   * (super admin thấy mọi chiến dịch; còn lại chỉ chiến dịch của workspace), nhưng chỉ đọc, không khoá.
+   * Dùng để chặn sớm trước khi đánh giá ngưỡng duyệt: câu trả lời của ngưỡng duyệt nêu số người nhận
+   * của chiến dịch, nên không được chạy trên chiến dịch của tenant khác.
+   *
+   * @param {{ campaignId: number, isAdmin?: boolean, workspaceOwnerId: number }} input
+   * @returns {Promise<boolean>}
+   */
+  async existsInRunScope({ campaignId, isAdmin = false, workspaceOwnerId }) {
+    const params = [campaignId];
+    let query = 'SELECT 1 FROM campaigns WHERE id = $1';
+    if (!isAdmin) {
+      params.push(workspaceOwnerId);
+      query += ' AND COALESCE(workspace_owner_id, id_user) = $2';
+    }
+    const result = await db.query(query, params);
+    return result.rows.length > 0;
+  }
+
   async findCampaignForRunTx(client, {
     campaignId,
     isAdmin,

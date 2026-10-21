@@ -102,12 +102,13 @@ function requireGatewaySecret(req, res, next) {
  * chatbotZaloAccountRepository.pickEnabledChatbotForZalo so that successive
  * new conversations spread across chatbots fairly.
  */
-async function pickEnabledChatbotForTelegram(userId, telegramAccountId, seed = 0) {
+export async function pickEnabledChatbotForTelegram(userId, telegramAccountId, seed = 0) {
   const { rows } = await db.query(
     `SELECT tcs.id_chatbot
        FROM telegram_chatbot_settings tcs
+       JOIN telegram_accounts ta ON ta.id = tcs.id_telegram_account
        JOIN custom_chatbots cb
-         ON cb.id = tcs.id_chatbot AND cb.is_active = true
+         ON cb.id = tcs.id_chatbot AND cb.id_user = ta.id_user AND cb.is_active = true
       WHERE tcs.id_telegram_account = $1
         AND tcs.id_chatbot IS NOT NULL
         AND tcs.is_enabled = true
@@ -125,13 +126,14 @@ async function pickEnabledChatbotForTelegram(userId, telegramAccountId, seed = 0
  * enabled cho account (chưa bị user gỡ qua DeployTab, custom_chatbots
  * vẫn active). Bug #1 dùng để quyết định có re-pick hay không.
  */
-async function isChatbotStillEnabledForAccount(telegramAccountId, idChatbot) {
+export async function isChatbotStillEnabledForAccount(telegramAccountId, idChatbot) {
   if (!idChatbot) return false;
   const { rows } = await db.query(
     `SELECT 1
        FROM telegram_chatbot_settings tcs
+       JOIN telegram_accounts ta ON ta.id = tcs.id_telegram_account
        JOIN custom_chatbots cb
-         ON cb.id = tcs.id_chatbot AND cb.is_active = true
+         ON cb.id = tcs.id_chatbot AND cb.id_user = ta.id_user AND cb.is_active = true
       WHERE tcs.id_telegram_account = $1
         AND tcs.id_chatbot = $2
         AND tcs.is_enabled = true

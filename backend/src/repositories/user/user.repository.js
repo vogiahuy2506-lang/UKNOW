@@ -429,7 +429,14 @@ export async function deleteExpiredRefreshTokens(retentionDays = 30, batchSize =
   return rowCount || 0;
 }
 
-export async function findSuccessfulOrdersForUser({ userId, userEmail }) {
+/**
+ * Đơn của MỘT tài khoản, CHỈ theo `orders.user_id`.
+ *
+ * Từng khớp thêm `user_id IS NULL AND LOWER(user_email) = email đăng nhập` để bắt đơn tạo trước khi có cột user_id. Bỏ từ 20/10/2026
+ * (PLAN_GOM_MUC_NHE PR-2): email hồ sơ đổi được mà không xác minh, nên đặt email của người khác là xem được đơn cũ của họ. Đơn cũ đã được
+ * migration 309 gán user_id khi email khớp đúng một tài khoản.
+ */
+export async function findSuccessfulOrdersForUser({ userId }) {
   const { rows } = await db.query(
     `SELECT o.id, o.order_code, o.amount, o.status, o.created_at, o.updated_at,
             o.billing_period, o.payment_method, o.original_amount, o.discount_amount,
@@ -443,14 +450,13 @@ export async function findSuccessfulOrdersForUser({ userId, userEmail }) {
      FROM orders o
      LEFT JOIN plans p ON o.plan_id = p.id
      LEFT JOIN einvoices e ON e.order_id = o.id
-     WHERE (o.user_id = $1
-        OR (o.user_id IS NULL AND LOWER(o.user_email) = LOWER($2)))
+     WHERE o.user_id = $1
        -- PLAN_HOAN_TIEN_DON_HANG PR-3: khách vẫn thấy đơn đã hoàn trong lịch sử (nhãn "Đã hoàn tiền").
        -- Hàm này CHỈ phục vụ hiển thị (user.controller.js getMyOrders), không dùng cho quyền lợi gói.
        AND o.status IN ('success', 'refunded')
      ORDER BY o.created_at DESC
      LIMIT 20`,
-    [userId, userEmail]
+    [userId]
   );
   return rows;
 }

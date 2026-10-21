@@ -3,10 +3,31 @@ import marketplacePurchaseRepository from '../../repositories/marketplace/market
 import aiCreditMeter from '../ai/aiCreditMeter.service.js';
 import marketplaceWalletService from './marketplaceWallet.service.js';
 import db from '../../config/database.js';
-import { checkUserResourceLimit } from '../../utils/userResourceLimit.util.js';
+import { checkUserResourceLimit, enforceResourceLimitTx } from '../../utils/userResourceLimit.util.js';
 import { getWalletBalance } from '../../repositories/payment/topup.repository.js';
 import chatbotCloneRepository from '../../repositories/ai/chatbotClone.repository.js';
 import { assertChatbotSlotAvailable } from '../ai/chatbotSlot.service.js';
+import campaignNodeReferences from '../campaign/campaignNodeReferences.service.js';
+import marketplaceCampaignContentService from './marketplaceCampaignContent.service.js';
+import {
+  sanitizeLandingSnapshotForSharing,
+  stripSellerPrivateLandingConfig,
+} from '../../utils/marketplaceLandingSnapshot.util.js';
+import {
+  stripSellerBoundFlowJson,
+  stripSellerBoundNodeConfig,
+} from '../../utils/marketplaceCampaignSnapshot.util.js';
+import {
+  createTemplateIdMaps,
+  remapTemplateIdsInConfig,
+  remapTemplateIdsInFlowJson,
+} from '../../utils/campaignTemplateReference.util.js';
+import { neutralizeAppFormLinks, replaceFormEmbedsWithSlots } from '../../utils/landingHtmlInjection.util.js';
+import {
+  remapBlockAttachments,
+  remapBlockAttachmentsInFlowJson,
+  collectBlockAttachments,
+} from '../../utils/marketplaceBlockAttachments.util.js';
 
 class MarketplacePurchaseService {
   /**
@@ -46,6 +67,8 @@ class MarketplacePurchaseService {
    */
   async purchase(listingId, buyerId, { roleCode } = {}) {
     const client = await db.getClient();
+    // Tệp đã chép sang kho của người mua (chiến dịch kèm mẫu có tệp đính kèm): nằm NGOÀI transaction DB nên phải tự dọn khi rollback.
+    const copiedKeys = [];
 
     try {
       await client.query('BEGIN');
@@ -96,6 +119,17 @@ class MarketplacePurchaseService {
         await assertChatbotSlotAvailable(buyerId, { client, roleCode });
       }
 
+      // 4c. Chiến dịch: gom nội dung mẫu đi kèm (snapshot, hoặc mẫu sống của người bán với listing cũ) và chặn bán hàng hỏng — thiếu
+      // mẫu / mất tệp đính kèm → LISTING_CONTENT_UNAVAILABLE; không đủ dung lượng cho tệp → MARKETPLACE_STORAGE_QUOTA_EXCEEDED —
+      // TRƯỚC khi trừ credit. Bước này không ghi gì, không chép tệp.
+      let preparedContent = null;
+      if (listing.resource_type === 'campaign') {
+        preparedContent = await marketplaceCampaignContentService.prepareForPurchase({ client, listing, buyerId });
+        // 4d. Mua chiến dịch kèm mẫu TẠO bản sao mẫu email / Zalo cho người mua → phải nằm trong trần số mẫu của gói (trước đây không áp trần,
+        // mua là vượt). Kiểm TRƯỚC khi trừ credit, cùng khoá tư vấn với cổng tạo mẫu nên hai lượt song song không cùng lọt qua.
+        await this._assertTemplateCapacity(client, buyerId, preparedContent, roleCode);
+      }
+
       // 5. Process credits if price > 0 (sau khi check limit)
       if (listing.price_credits > 0) {
         const amount = listing.price_credits;
@@ -129,7 +163,7 @@ class MarketplacePurchaseService {
       // 6. Clone resource
       let clonedResource;
       if (listing.resource_type === 'campaign') {
-        clonedResource = await this._cloneCampaign(client, buyerId, listing);
+        clonedResource = await this._cloneCampaign(client, buyerId, listing, preparedContent, copiedKeys);
       } else if (listing.resource_type === 'chatbot') {
         clonedResource = await this._cloneChatbot(client, buyerId, listing);
       } else {
@@ -162,6 +196,7 @@ class MarketplacePurchaseService {
       return { success: true, clonedResource };
     } catch (error) {
       await client.query('ROLLBACK');
+      await marketplaceCampaignContentService.discardCopiedFiles(copiedKeys);
       throw error;
     } finally {
       client.release();
@@ -169,13 +204,79 @@ class MarketplacePurchaseService {
   }
 
   /**
+   * Số mẫu email / Zalo sắp được tạo cho người mua (`prepared.sources`) cộng số đang có phải ≤ trần mẫu của gói (+ slot mua thêm).
+   * Không có mẫu nào cần tạo thì không kiểm. Vượt → 400 `TEMPLATE_LIMIT_EXCEEDED` (nêu cần bao nhiêu, còn chỗ bao nhiêu).
+   * @private
+   */
+  async _assertTemplateCapacity(client, buyerId, prepared, roleCode) {
+    const needs = [
+      ['emailTemplates', prepared?.sources?.email?.size || 0],
+      ['zaloTemplates', prepared?.sources?.zalo?.size || 0],
+    ];
+    for (const [resourceKey, adding] of needs) {
+      if (!(adding > 0)) continue;
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await enforceResourceLimitTx(client, { userId: buyerId, roleCode, resourceKey, adding });
+      } catch (limitError) {
+        if (limitError?.code !== 'RESOURCE_LIMIT_EXCEEDED') throw limitError;
+        const error = new Error(limitError.message);
+        error.status = 400;
+        error.code = 'TEMPLATE_LIMIT_EXCEEDED';
+        error.resource = resourceKey;
+        throw error;
+      }
+    }
+  }
+
+  /**
+   * Cấu hình một khối của snapshot → cấu hình cho người mua: gỡ dữ liệu gắn người bán (tài khoản gửi, danh sách người nhận, nguồn dữ
+   * liệu…) rồi đổi id mẫu của người bán sang id bản sao của người mua. Cùng một hàm cho `campaign_nodes.config` và `flow_json`.
+   * @private
+   */
+  _buyerNodeConfig(subtype, config, templateMaps, blockFileMap = null, sellerId = null) {
+    const remapped = remapTemplateIdsInConfig(subtype, stripSellerBoundNodeConfig(subtype, config), templateMaps);
+    // Tệp đính kèm cấp khối: đổi sang tệp đã chép cho người mua; tệp không chép được (không thuộc người bán) bị bỏ — để lại khoá người bán
+    // thì bộ chạy bỏ qua tệp mà người mua không hay.
+    return blockFileMap ? remapBlockAttachments(remapped, sellerId, blockFileMap) : remapped;
+  }
+
+  /**
    * Clone campaign from listing snapshot.
    * Snapshot phải chứa nodes (với id) và connections (với sourceNodeId/targetNodeId).
    * Bỏ qua connections nếu thiếu node tương ứng (defensive — bản cũ có thể đã lỡ).
+   *
+   * @param {object} client client của transaction mua
+   * @param {number|string} userId người mua (chủ workspace)
+   * @param {object} listing
+   * @param {object|null} [preparedContent] kết quả `marketplaceCampaignContentService.prepareForPurchase` (null = không kèm mẫu)
+   * @param {string[]} [copiedKeys] nhận các khoá tệp đã chép sang kho người mua để người gọi dọn khi rollback
    * @private
    */
-  async _cloneCampaign(client, userId, listing) {
+  async _cloneCampaign(client, userId, listing, preparedContent = null, copiedKeys = []) {
     const snapshot = listing.snapshot_data || {};
+
+    // Bản sao mẫu của người mua (+ tệp đính kèm) → bản đồ id mẫu cũ → mới. Không có mẫu nào cần chép thì bản đồ rỗng.
+    const { maps: templateMaps } = preparedContent
+      ? await marketplaceCampaignContentService.materializeTemplates(client, { buyerId: userId, prepared: preparedContent, copiedKeys })
+      : { maps: createTemplateIdMaps() };
+
+    // Tệp đính kèm cấp khối (email `attachments`, Zalo nhóm `zaloGroupAttachments`, Telegram/WhatsApp `steps[].attachments`): chép sang kho người
+    // mua, bản đồ khoá người bán → tệp mới. Luôn có bản đồ (có thể rỗng) để tệp không thuộc người bán bị bỏ khỏi cấu hình.
+    const { keyMap: blockFileMap } = preparedContent?.blockFiles?.size > 0
+      ? await marketplaceCampaignContentService.materializeBlockAttachments(client, { buyerId: userId, prepared: preparedContent, copiedKeys })
+      : { keyMap: new Map() };
+    const sellerId = listing.id_user;
+
+    // flow_json là NGUỒN HIỂN THỊ của trình dựng (config trong đó đè lên campaign_nodes) và được ghi ngược khi lưu, nên phải gỡ dữ liệu
+    // người bán + đổi id mẫu ở đây giống hệt campaign_nodes. Id khối trong flow_json giữ nguyên (cùng không gian id với cạnh của nó).
+    const flowJson = snapshot.flowJson
+      ? remapBlockAttachmentsInFlowJson(
+        remapTemplateIdsInFlowJson(stripSellerBoundFlowJson(snapshot.flowJson), templateMaps),
+        sellerId,
+        blockFileMap
+      )
+      : { nodes: [], connections: [] };
 
     // Tạo campaign mới. flow_json lưu trực tiếp để giữ nguyên trạng thái.
     // marketplace_purchase_id sẽ được SET bởi trigger sau khi INSERT
@@ -188,7 +289,7 @@ class MarketplacePurchaseService {
         snapshot.campaignName || 'Imported Campaign',
         listing.description || null,
         snapshot.campaignType || 'email',
-        JSON.stringify(snapshot.flowJson || { nodes: [], connections: [] }),
+        JSON.stringify(flowJson),
       ]
     );
 
@@ -196,9 +297,15 @@ class MarketplacePurchaseService {
 
     // Clone nodes (bỏ qua node không hợp lệ)
     const nodeIdMap = new Map();
+    const blockFileLedgerLinked = new Set();
     const nodes = Array.isArray(snapshot.nodes) ? snapshot.nodes : [];
+    const buyerConfigs = new Map();
     for (const node of nodes) {
       if (!node || node.id == null) continue;
+      const buyerConfig = node.config
+        ? this._buyerNodeConfig(node.nodeSubtype, node.config, templateMaps, blockFileMap, sellerId)
+        : node.config;
+      buyerConfigs.set(String(node.id), buyerConfig);
       const { rows } = await client.query(
         `INSERT INTO campaign_nodes
          (id_campaign, node_type, node_subtype, node_name, node_description, position_x, position_y, config, execution_order)
@@ -212,19 +319,47 @@ class MarketplacePurchaseService {
           node.nodeDescription || null,
           node.positionX ?? 0,
           node.positionY ?? 0,
-          node.config ? JSON.stringify(node.config) : null,
+          buyerConfig ? JSON.stringify(buyerConfig) : null,
           Number.isFinite(node.executionOrder) ? node.executionOrder : null,
         ]
       );
-      nodeIdMap.set(node.id, rows[0].id);
+      nodeIdMap.set(String(node.id), rows[0].id);
+      // Sổ dung lượng của tệp cấp khối: gắn dòng sổ vào khối đầu tiên dùng tệp (chỉ là nhãn tham chiếu cho thư viện tệp; dòng sổ đã ghi lúc chép).
+      for (const attachment of collectBlockAttachments(buyerConfig)) {
+        if (!attachment?.key || blockFileLedgerLinked.has(attachment.key)) continue;
+        blockFileLedgerLinked.add(attachment.key);
+        // eslint-disable-next-line no-await-in-loop
+        await client.query(
+          `UPDATE storage_objects SET reference_id = $2, updated_at = NOW()
+            WHERE storage_key = $1 AND owner_user_id = $3 AND reference_type = 'campaign_node' AND reference_id IS NULL`,
+          [attachment.key, String(rows[0].id), userId]
+        );
+      }
+    }
+
+    // Lượt 2 — snapshot chứa config nguyên văn của khối gốc; tham chiếu giữa các khối (zaloGroupNodeId, recipientNodeId,
+    // templateMappings[].nodeId…) trỏ id khối của chiến dịch người bán → đổi sang id khối vừa tạo, không thì mỗi lượt mua
+    // sinh thêm một chiến dịch hụt nguồn. Khoá/giá trị đều là chuỗi (BIGSERIAL pg trả chuỗi, snapshot có thể lưu số).
+    const referenceIdMap = new Map(
+      [...nodeIdMap.entries()].map(([oldId, newId]) => [String(oldId), String(newId)])
+    );
+    for (const node of nodes) {
+      if (!node || node.id == null || !node.config) continue;
+      const buyerConfig = buyerConfigs.get(String(node.id));
+      const nextConfig = campaignNodeReferences.remapNodeReferencesDeep(buyerConfig, referenceIdMap);
+      if (nextConfig === buyerConfig) continue;
+      await client.query(
+        'UPDATE campaign_nodes SET config = $1 WHERE id = $2',
+        [JSON.stringify(nextConfig), nodeIdMap.get(String(node.id))]
+      );
     }
 
     // Clone connections — bỏ qua nếu source/target không có trong node map
     const connections = Array.isArray(snapshot.connections) ? snapshot.connections : [];
     for (const conn of connections) {
       if (!conn) continue;
-      const newSourceId = nodeIdMap.get(conn.sourceNodeId);
-      const newTargetId = nodeIdMap.get(conn.targetNodeId);
+      const newSourceId = nodeIdMap.get(String(conn.sourceNodeId));
+      const newTargetId = nodeIdMap.get(String(conn.targetNodeId));
       if (!newSourceId || !newTargetId) continue; // defensive skip
       await client.query(
         `INSERT INTO campaign_connections
@@ -260,6 +395,16 @@ class MarketplacePurchaseService {
    */
   async _cloneLandingPage(client, userId, listing) {
     const snapshot = listing.snapshot_data || {};
+    // Snapshot đã lưu trước đây có thể còn khoá riêng của người bán (webhook Google Sheet — lead của NGƯỜI MUA sẽ bị đẩy về Sheet
+    // của người bán — và id biểu mẫu của người bán): lọc ngay lúc clone.
+    const customConfig = stripSellerPrivateLandingConfig(snapshot.customConfig || snapshot.custom_config);
+    // Khối nhúng biểu mẫu của người bán (`data-founderai-form="<publicKey>"`) trỏ tới biểu mẫu CÔNG KHAI của người bán: để nguyên thì
+    // trang của người mua hiện biểu mẫu của người bán và bài nộp của khách người mua chảy về người bán. Đổi thành chỗ trống — lúc người
+    // mua lưu trang, hệ thống tạo biểu mẫu thuộc về người mua (landingPageAdmin.service.js).
+    // Liên kết `<a href=".../f/<key>">` người bán tự đặt (mở biểu mẫu của người bán) → `href="#"`, giữ chữ; chỉ lúc clone, landing của chính chủ giữ nguyên.
+    const htmlContent = neutralizeAppFormLinks(
+      replaceFormEmbedsWithSlots(snapshot.htmlContent || snapshot.html_content || '')
+    );
 
     // Tạo landing page mới
     const { rows } = await client.query(
@@ -270,8 +415,8 @@ class MarketplacePurchaseService {
         userId,
         snapshot.title || 'Imported Landing Page',
         `${snapshot.slug || 'landing'}-${Date.now()}`,
-        snapshot.htmlContent || snapshot.html_content || '',
-        snapshot.customConfig || snapshot.custom_config ? JSON.stringify(snapshot.customConfig || snapshot.custom_config) : '{}',
+        htmlContent,
+        customConfig ? JSON.stringify(customConfig) : '{}',
       ]
     );
 
@@ -289,7 +434,13 @@ class MarketplacePurchaseService {
       marketplacePurchaseRepository.findByUserId(userId, options),
       marketplacePurchaseRepository.countByUserId(userId, { resourceType: options.resourceType }),
     ]);
-    return { purchases, total };
+    // Danh sách đã mua kèm `snapshot_data` đầy đủ: với landing, bỏ cấu hình riêng của người bán (snapshot cũ có thể còn khoá đó).
+    const sanitized = purchases.map((purchase) => (
+      purchase.resource_type === 'landing_page' && purchase.snapshot_data
+        ? { ...purchase, snapshot_data: sanitizeLandingSnapshotForSharing(purchase.snapshot_data) }
+        : purchase
+    ));
+    return { purchases: sanitized, total };
   }
 }
 

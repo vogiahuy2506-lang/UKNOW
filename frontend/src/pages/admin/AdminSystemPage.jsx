@@ -11,6 +11,7 @@ import {
 import adminSystemApiService from '../../features/admin/services/adminSystemApi.service';
 import PageHeader from '../../components/common/PageHeader';
 import { useI18n } from '../../i18n';
+import SendQuotaReconcilePanel from './SendQuotaReconcilePanel';
 
 const fmtBytes = (value) => {
   const n = Number(value || 0);
@@ -457,6 +458,8 @@ export default function AdminSystemPage() {
       </div>
 
       <DockerPanel docker={overview.docker} t={t} />
+
+      <SendQuotaReconcilePanel />
 
       <LogsPanel
         activeLogService={activeLogService}

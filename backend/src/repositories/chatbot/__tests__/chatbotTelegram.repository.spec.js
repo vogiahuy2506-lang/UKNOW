@@ -264,11 +264,13 @@ describe('ChatbotTelegramRepository session methods', () => {
   });
 
   describe('setEnabled (Telegram chatbot toggle)', () => {
-    // assertOwned gọi `SELECT 1 FROM telegram_accounts` đầu tiên.
-    // Mock trả về 1 row để vượt qua ownership check, sau đó mới
+    // assertOwned gọi `SELECT 1 FROM telegram_accounts` đầu tiên; khi có chatbotId thì câu thứ hai kiểm
+    // `custom_chatbots` (đúng chủ). Mock trả về 1 row cho mỗi câu để vượt ownership check, sau đó mới
     // đến câu INSERT chính.
-    const mockAssertOwned = () =>
+    const mockAssertOwned = ({ withChatbot = true } = {}) => {
       dbMock.query.mockResolvedValueOnce({ rows: [{ '?column?': 1 }] });
+      if (withChatbot) dbMock.query.mockResolvedValueOnce({ rows: [{ '?column?': 1 }] });
+    };
 
     it('enabled=true also turns on is_enabled_dm and is_enabled_group', async () => {
       // Bug production (14/09/2026): setEnabled insert values `true, false`
@@ -280,14 +282,16 @@ describe('ChatbotTelegramRepository session methods', () => {
         rows: [{ id: 1, is_enabled: true, is_enabled_dm: true, is_enabled_group: true }],
       });
       await repo.setEnabled(/* userId */ 7, /* telegramAccountId */ 42, /* chatbotId */ 99, /* enabled */ true);
-      // Bỏ qua câu SELECT đầu của assertOwned → xét câu INSERT.
-      const [sql, params] = dbMock.query.mock.calls[1];
+      // Bỏ qua 2 câu SELECT kiểm chủ (tài khoản + chatbot) → xét câu INSERT.
+      const [sql, params] = dbMock.query.mock.calls[2];
       expect(sql).toMatch(/INSERT INTO telegram_chatbot_settings/);
       expect(sql).toMatch(/ON CONFLICT \(id_telegram_account, id_chatbot\) DO UPDATE/);
       // Critical: phải UPDATE cả 3 cờ khi conflict, không chỉ is_enabled.
       expect(sql).toMatch(/is_enabled_dm\s*=\s*EXCLUDED\.is_enabled_dm/);
       expect(sql).toMatch(/is_enabled_group\s*=\s*EXCLUDED\.is_enabled_group/);
-      expect(params).toEqual([42, 99, true, true, true]);
+      // Phòng thủ hai lớp: bản chụp system_instruction chỉ lấy từ chatbot ĐÚNG CHỦ ($6 = userId).
+      expect(sql).toMatch(/cb\.id = \$2::bigint AND cb\.id_user = \$6::bigint AND cb\.is_active = true/);
+      expect(params).toEqual([42, 99, true, true, true, 7]);
     });
 
     it('enabled=false turns off all flags', async () => {
@@ -296,16 +300,50 @@ describe('ChatbotTelegramRepository session methods', () => {
         rows: [{ id: 1, is_enabled: false, is_enabled_dm: false, is_enabled_group: false }],
       });
       await repo.setEnabled(7, 42, 99, false);
-      const [, params] = dbMock.query.mock.calls[1];
-      expect(params).toEqual([42, 99, false, false, false]);
+      const [, params] = dbMock.query.mock.calls[2];
+      expect(params).toEqual([42, 99, false, false, false, 7]);
     });
 
     it('supports null chatbotId (account-level setting)', async () => {
-      mockAssertOwned();
+      mockAssertOwned({ withChatbot: false });
       dbMock.query.mockResolvedValueOnce({ rows: [{ id: 1 }] });
       await repo.setEnabled(7, 42, null, true);
+      // Không có chatbot → chỉ kiểm tài khoản (1 câu), câu INSERT là câu thứ hai.
       const [, params] = dbMock.query.mock.calls[1];
-      expect(params).toEqual([42, null, true, true, true]);
+      expect(params).toEqual([42, null, true, true, true, 7]);
+    });
+
+    it('chatbot không thuộc chủ → 404 và KHÔNG chạy câu INSERT (cả khi enabled=true lẫn enabled=false)', async () => {
+      for (const enabled of [true, false]) {
+        dbMock.query.mockReset();
+        dbMock.query.mockResolvedValueOnce({ rows: [{ '?column?': 1 }] }); // tài khoản đúng chủ
+        dbMock.query.mockResolvedValueOnce({ rows: [] }); // chatbot của người khác → không khớp
+        await expect(repo.setEnabled(7, 42, 555, enabled)).rejects.toMatchObject({ status: 404 });
+        expect(dbMock.query).toHaveBeenCalledTimes(2);
+        const [ownershipSql, ownershipParams] = dbMock.query.mock.calls[1];
+        expect(ownershipSql).toMatch(/FROM custom_chatbots/);
+        expect(ownershipSql).toMatch(/id_user = \$2::bigint/);
+        // BẬT bắt buộc chatbot còn hoạt động; TẮT thì chỉ cần đúng chủ.
+        expect(ownershipParams).toEqual([555, 7, enabled]);
+        expect(dbMock.query.mock.calls.some(([sql]) => /INSERT INTO telegram_chatbot_settings/.test(sql))).toBe(false);
+      }
+    });
+  });
+
+  describe('đọc lúc chạy chỉ dùng chatbot cùng chủ với tài khoản (phòng thủ hai lớp)', () => {
+    it('getEnabledChatbots JOIN custom_chatbots kèm cb.id_user = ta.id_user', async () => {
+      dbMock.query.mockResolvedValueOnce({ rows: [] });
+      await repo.getEnabledChatbots(42, { isDm: true });
+      const [sql] = dbMock.query.mock.calls[0];
+      expect(sql).toMatch(/JOIN custom_chatbots cb\s+ON cb\.id = tcs\.id_chatbot AND cb\.id_user = ta\.id_user/);
+    });
+
+    it('getSettingsForAccount JOIN telegram_accounts + cb.id_user = ta.id_user', async () => {
+      dbMock.query.mockResolvedValueOnce({ rows: [] });
+      await repo.getSettingsForAccount(42, 99);
+      const [sql] = dbMock.query.mock.calls[0];
+      expect(sql).toMatch(/JOIN telegram_accounts ta ON ta\.id = tcs\.id_telegram_account/);
+      expect(sql).toMatch(/JOIN custom_chatbots cb ON cb\.id = tcs\.id_chatbot AND cb\.id_user = ta\.id_user/);
     });
   });
 

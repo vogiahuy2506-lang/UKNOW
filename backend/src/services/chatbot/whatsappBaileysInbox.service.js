@@ -251,8 +251,8 @@ export async function findEnabledChatbots(sessionKey) {
   const { rows } = await db.query(
     `SELECT ${CHATBOT_SETTINGS_COLUMNS}
      FROM chatbot_whatsapp_baileys_settings s
-     JOIN custom_chatbots cb ON cb.id = s.id_chatbot
-     LEFT JOIN sub_assistants sa ON sa.id = s.id_sub_assistant
+     JOIN custom_chatbots cb ON cb.id = s.id_chatbot AND cb.id_user = s.id_user
+     LEFT JOIN sub_assistants sa ON sa.id = s.id_sub_assistant AND sa.id_user = s.id_user
      WHERE s.session_key = $1 AND s.is_enabled = true AND cb.is_active = true`,
     [sessionKey]
   );
@@ -602,8 +602,8 @@ export async function resolveChatbotSettingsForBatch({ ownerUserId, sessionKey, 
   const { rows } = await db.query(
     `SELECT ${CHATBOT_SETTINGS_COLUMNS}
      FROM chatbot_whatsapp_baileys_settings s
-     JOIN custom_chatbots cb ON cb.id = s.id_chatbot
-     LEFT JOIN sub_assistants sa ON sa.id = s.id_sub_assistant
+     JOIN custom_chatbots cb ON cb.id = s.id_chatbot AND cb.id_user = s.id_user
+     LEFT JOIN sub_assistants sa ON sa.id = s.id_sub_assistant AND sa.id_user = s.id_user
      WHERE s.session_key = $1 AND s.id_chatbot = $2 AND s.is_enabled = true AND cb.is_active = true`,
     [sessionKey, chatbotId]
   );

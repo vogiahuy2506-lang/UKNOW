@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { fetchPublishedLandingByHost } from '../../features/landing-pages/services/landingPagePublicApi.service.js';
 import { useRecordLandingView } from '../../features/landing-pages/hooks/useRecordLandingView.js';
-import { ensureTailwindCdnAndViewport } from './LpRendererPage.jsx';
+import { ensureTailwindCdnAndViewport } from './lpRendererHtml.js';
 
 /**
  * Khi mở SPA trên hostname custom (www.*) — tải HTML theo `Host`, không dùng route `/lp/:slug`.

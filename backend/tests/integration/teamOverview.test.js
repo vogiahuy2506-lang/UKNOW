@@ -396,7 +396,7 @@ describe('Hoạt động nhóm — kịch bản chính (chủ A, nhân viên N1 
 // ===========================================================================
 // 2. "Chờ tới giờ": đủ bốn khoá hoãn của run_metadata
 // ===========================================================================
-describe('Hoạt động nhóm — lượt đang chờ tới giờ (bốn khoá hoãn)', () => {
+describe('Hoạt động nhóm — lượt đang chờ tới giờ (các khoá hoãn)', () => {
   beforeEach(async () => {
     await truncateAll();
   });
@@ -404,6 +404,7 @@ describe('Hoạt động nhóm — lượt đang chờ tới giờ (bốn khoá 
   it.each([
     ['quotaDeferredUntil'],
     ['zaloOutboundDeferredUntil'],
+    ['zaloOutboundResumeEffectiveAt'],
     ['nonContinuousDeferredUntil'],
     ['channelDeferredUntil'],
   ])('mốc %s còn ở tương lai → đang chạy + đang chờ', async (key) => {

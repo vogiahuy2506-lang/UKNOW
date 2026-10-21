@@ -1319,10 +1319,13 @@ export async function consumeSendQuota(
       return existing;
     }
 
-    // Enforce valid source state (must be 'sending' to consume)
-    if (existing.status !== 'sending') {
+    // Enforce valid source state: 'sending', hoặc 'uncertain' (bộ dọn sendQuotaReservationSweeper đánh dấu sớm một
+    // lượt gửi còn đang chạy; nhà cung cấp trả thành công chính là bằng chứng đã gửi nên chốt `uncertain → consumed`
+    // — bảng VALID_RESERVATION_TRANSITIONS cho phép, thiết kế gốc §5.3). Mọi bước dưới (trừ ví, persistSource, khoá)
+    // giữ nguyên. 'released' vẫn bị từ chối: đã trả hạn mức, không được consume lại.
+    if (existing.status !== 'sending' && existing.status !== 'uncertain') {
       const err = new Error(
-        `Cannot consume reservation #${reservationId}: current status is '${existing.status}', expected 'sending'`
+        `Cannot consume reservation #${reservationId}: current status is '${existing.status}', expected 'sending' or 'uncertain'`
       );
       err.status = 409;
       err.code = 'INVALID_RESERVATION_TRANSITION';

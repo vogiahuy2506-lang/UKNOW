@@ -489,8 +489,9 @@ TIKTOK_APP_CLIENT_SECRET=
 TIKTOK_OAUTH_TOKEN_BASE=https://open.tiktokapis.com/v2/oauth
 TIKTOK_MESSAGE_API_BASE=https://business-api.tiktok.com/open_api/v1.3
 TIKTOK_OAUTH_REDIRECT_URI=https://uknow.example.com/api/settings/tiktok-business/callback
-TIKTOK_WEBHOOK_CALLBACK_URL=https://uknow.example.com/api/webhooks/tiktok-business
-TIKTOK_APP_CLIENT_KEYS=                                # whitelist client_key của webhook (nhiều key, dấu phẩy)
+TIKTOK_WEBHOOK_CALLBACK_URL=https://uknow.example.com/api/webhooks/tiktok-business/<TIKTOK_WEBHOOK_PATH_SECRET>   # bí mật nằm TRONG đường dẫn (19/10/2026)
+TIKTOK_WEBHOOK_PATH_SECRET=                            # bắt buộc: thiếu/sai → webhook vẫn trả 200 nhưng KHÔNG xử lý gì (mẫu webhook Mắt Bão)
+TIKTOK_APP_CLIENT_KEYS=                                # lớp phụ: whitelist client_key của webhook (nhiều key, dấu phẩy) — client_key KHÔNG phải bí mật
 TIKTOK_STATE_SECRET=                                   # HMAC key cho OAuth state (KHÁC JWT_SECRET)
 TIKTOK_TOKEN_REFRESH_ENABLED=true                      # cron refresh (default true)
 ```

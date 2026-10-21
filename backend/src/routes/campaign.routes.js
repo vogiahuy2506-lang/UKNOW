@@ -8,6 +8,7 @@ import founderaiController from '../controllers/founderai.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 import handleValidationErrors from '../middleware/validate.middleware.js';
 import { channelEntitlementContext } from '../middleware/channelEntitlement.middleware.js';
+import { requirePlatformStoreOwner } from '../middleware/platformStoreOwner.middleware.js';
 import {
   requirePermission,
   requireActivePlan,
@@ -133,7 +134,9 @@ router.post('/:id/duplicate',
 );
 
 // Đồng bộ trạng thái khách hàng từ Founder AI cho chiến dịch cụ thể
-router.post('/:id/sync-founderai', requirePermission('campaigns_view'), founderaiController.syncCampaignUknow.bind(founderaiController));
+// Dùng khoá WooCommerce của NỀN TẢNG và hỏi đơn founderai.biz theo email khách trong chiến dịch (dò được email nào đã mua khoá học):
+// cùng cổng với các route customers/orders của founderai — chỉ workspace của super admin.
+router.post('/:id/sync-founderai', requirePermission('campaigns_view'), requirePlatformStoreOwner, founderaiController.syncCampaignUknow.bind(founderaiController));
 
 // ============ Campaign Sharing ============
 

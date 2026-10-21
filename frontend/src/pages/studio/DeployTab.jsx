@@ -146,6 +146,8 @@ export default function DeployTab({
   const canManageChannels = hasPermission('chatbot_channels_manage');
   const canSendCopy = !isEmployee;
   const canSell = hasPermission('marketplace_manage');
+  // Công tắc link theo số thứ tự ghi vào chính chatbot → cùng quyền sửa chatbot (PUT /custom-chatbots/:id/public-numeric-id).
+  const canManageBots = hasPermission('chatbots_manage');
 
   // Sau khi đóng hộp kênh / đăng bán: lấy lại số tài khoản đang bật + trạng thái listing để chữ dưới ô và dòng
   // "Đang chạy: …" ở đầu khung chat đúng ngay, không phải F5. Lỗi thì giữ nguyên số cũ.
@@ -293,6 +295,8 @@ export default function DeployTab({
         <EmbedModal
           kind={embedModal}
           chatbot={chatbot}
+          canToggleNumericLink={canManageBots}
+          onChatbotChange={onUpdate}
           onClose={() => setEmbedModal(null)}
           onOpenWidgetSettings={() => {
             const k = embedModal;
@@ -356,9 +360,14 @@ export default function DeployTab({
 // Chiều cao mã nhúng iFrame theo embed_size (Giao diện Widget). Khớp SIZES trong WidgetSettingsModal.
 const EMBED_HEIGHTS = { small: 480, medium: 600, large: 760 };
 
-function EmbedModal({ kind, chatbot, onClose, onOpenWidgetSettings }) {
+function EmbedModal({ kind, chatbot, onClose, onOpenWidgetSettings, canToggleNumericLink = false, onChatbotChange }) {
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
+  // Công tắc "link theo số thứ tự" chỉ dành cho chatbot cũ còn cờ allow_public_numeric_id = true (migration 284); chatbot mới
+  // không có lựa chọn này. Chốt lúc mở hộp: tắt xong cờ thành false nhưng công tắc vẫn hiện để chủ bật lại nếu lỡ tay.
+  const [numericLinkAvailable] = useState(() => chatbot.allow_public_numeric_id === true);
+  const [numericLinkBusy, setNumericLinkBusy] = useState(false);
+  const numericLinkOn = chatbot.allow_public_numeric_id === true;
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
   const widgetKey = chatbot.widget_key || chatbot.id;
   // Link công khai và iFrame cùng dùng origin hiện tại + widget_key (S-24). Bản cũ: link ghi cứng https://founderai.biz, iFrame
@@ -412,6 +421,23 @@ function EmbedModal({ kind, chatbot, onClose, onOpenWidgetSettings }) {
   const handleOpen = () => {
     if (kind === 'public_link') {
       window.open(publicUrl, '_blank', 'noopener');
+    }
+  };
+
+  const handleToggleNumericLink = async () => {
+    if (numericLinkBusy) return;
+    const next = !numericLinkOn;
+    setNumericLinkBusy(true);
+    try {
+      const res = await chatbotApi.setPublicNumericId(chatbot.id, next);
+      if (!res?.success || !res.data) throw new Error('numeric link toggle failed');
+      // Server có thể đổi khoá (chatbot_<số> → khoá ngẫu nhiên): cập nhật chatbot để link/mã nhúng hiện đúng khoá mới ngay.
+      onChatbotChange?.({ ...chatbot, ...res.data });
+      toast.success(t(next ? 'chatbot.studio.numericLinkOnDone' : 'chatbot.studio.numericLinkOffDone'));
+    } catch {
+      toast.error(t('chatbot.studio.numericLinkFailed'));
+    } finally {
+      setNumericLinkBusy(false);
     }
   };
 
@@ -480,6 +506,34 @@ function EmbedModal({ kind, chatbot, onClose, onOpenWidgetSettings }) {
               >
                 {copied ? <HiOutlineCheckCircle className="w-4 h-4" /> : <HiOutlineClipboardCopy className="w-4 h-4" />}
                 {copied ? t('chatbot.studio.fbCopied') : t('chatbot.studio.copyCode')}
+              </button>
+            </div>
+          )}
+
+          {/* Link/mã nhúng cũ theo số thứ tự: chỉ chatbot cũ, chỉ người sửa được chatbot */}
+          {numericLinkAvailable && canToggleNumericLink && (
+            <div className="flex items-start gap-3 px-3 py-2.5 bg-amber-50/60 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800/60">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-slate-800 dark:text-dk-text">{t('chatbot.studio.numericLinkLabel')}</p>
+                <p className="text-[11px] text-slate-600 dark:text-dk-text2 mt-0.5">{t('chatbot.studio.numericLinkDesc')}</p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={numericLinkOn}
+                aria-label={t('chatbot.studio.numericLinkLabel')}
+                data-testid="numeric-link-switch"
+                disabled={numericLinkBusy}
+                onClick={handleToggleNumericLink}
+                className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors disabled:opacity-60 ${
+                  numericLinkOn ? 'bg-primary-500' : 'bg-slate-300 dark:bg-dk-strong'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    numericLinkOn ? 'translate-x-4' : 'translate-x-0.5'
+                  }`}
+                />
               </button>
             </div>
           )}

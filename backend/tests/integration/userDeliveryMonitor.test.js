@@ -360,6 +360,41 @@ describe('GET /api/delivery-monitor/overview — lượt đang chờ, đang gử
     expect(expired).toMatchObject({ status: 'running', waitingUntil: null, waitingReason: null });
   });
 
+  it('Zalo khoá tra số hết 00:00 nhưng giờ yên lặng tới 06:00: màn hiện mốc 06:00 (zaloOutboundResumeEffectiveAt); run chỉ có khoá cũ / run quota giữ như cũ', async () => {
+    const owner = await createUser({ username: 'uEff' });
+    const midnight = minutes(60); // zaloOutboundDeferredUntil (vd 00:00 VN)
+    const sixAm = minutes(420); // zaloOutboundResumeEffectiveAt (vd 06:00 VN, sau giờ yên lặng)
+    const legacyUntil = minutes(90);
+    const quotaUntil = minutes(30);
+    const eff = await createContext(owner.id, {
+      campaign: { name: 'Khoá tra số', type: 'zalo' },
+      run: {
+        startedAt: "NOW() - interval '50 minutes'",
+        metadata: { zaloOutboundDeferredUntil: midnight, zaloOutboundResumeEffectiveAt: sixAm, zaloDeferredReason: 'phone_lookup_cooldown' },
+      },
+    });
+    const legacy = await createContext(owner.id, {
+      campaign: { name: 'Run cũ', type: 'zalo' },
+      run: { startedAt: "NOW() - interval '40 minutes'", metadata: { zaloOutboundDeferredUntil: legacyUntil, zaloDeferredReason: 'quiet_hours' } },
+    });
+    const quota = await createContext(owner.id, {
+      campaign: { name: 'Quota' },
+      run: {
+        startedAt: "NOW() - interval '30 minutes'",
+        // Có cả khoá Zalo effective sót lại: quota vẫn đứng đầu thứ tự ưu tiên như cũ.
+        metadata: { quotaDeferredUntil: quotaUntil, quotaDeferredReason: 'plan_quota_daily', zaloOutboundResumeEffectiveAt: sixAm },
+      },
+    });
+
+    const { data } = (await getOverview(owner)).body;
+    const byRun = Object.fromEntries(data.runs.map((run) => [run.runId, run]));
+    expect(byRun[eff.runId]).toMatchObject({ waitingUntil: sixAm, waitingReason: 'phone_lookup_cooldown' });
+    expect(byRun[legacy.runId]).toMatchObject({ waitingUntil: legacyUntil, waitingReason: 'quiet_hours' });
+    expect(byRun[quota.runId]).toMatchObject({ waitingUntil: quotaUntil, waitingReason: 'plan_quota_daily' });
+    expect(data.waiting.count).toBe(3);
+    expect(data.waiting.first).toEqual({ campaignName: 'Quota', waitingReason: 'plan_quota_daily', waitingUntil: quotaUntil });
+  });
+
   it('lượt running ngoài 10 lượt mới nhất (vd. chiến dịch liên tục sống lâu) vẫn được đếm vào "đang chờ" / "đang gửi"', async () => {
     const owner = await createUser({ username: 'uL' });
     const until = minutes(90);

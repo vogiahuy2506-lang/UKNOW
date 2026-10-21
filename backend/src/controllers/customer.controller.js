@@ -9,6 +9,7 @@ import customerCampaignJourneyDetailService from '../services/customer/customerC
 import customerEmailTrackingService from '../services/customer/customerEmailTracking.service.js';
 import customerZaloTrackingService from '../services/customer/customerZaloTracking.service.js';
 import customerMutationService from '../services/customer/customerMutation.service.js';
+import { PLATFORM_STORE_ADMIN_ONLY } from '../services/founderai/platformStoreAccess.service.js';
 import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
 import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
 import { logWorkspace, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
@@ -222,6 +223,9 @@ class CustomerController {
         data,
       });
     } catch (error) {
+      if (error.code === PLATFORM_STORE_ADMIN_ONLY) {
+        return res.status(403).json({ success: false, message: error.message, code: error.code });
+      }
       console.error('Get interested customers from Founder AI API error:', error.response?.data || error.message);
       res.status(500).json({
         success: false,

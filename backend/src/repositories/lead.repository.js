@@ -49,6 +49,9 @@ export function buildLeadWhere(filters) {
     conditions.push(`COALESCE(workspace_owner_id, id_user) = $${idx}`);
     params.push(filters.workspaceOwnerId);
     idx += 1;
+  } else {
+    // Fail-closed: thiếu phạm vi workspace thì KHÔNG trả dòng nào (trước đây bỏ điều kiện -> trả lead của MỌI tenant).
+    conditions.push('FALSE');
   }
 
   if (filters.excludeConsentFalse) {

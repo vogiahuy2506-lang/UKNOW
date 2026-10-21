@@ -7,6 +7,7 @@ import customerInterestedService from '../customer/customerInterested.service.js
 import customerHelperService from '../customer/customerHelper.service.js';
 import { normalizeIdList, CUSTOMER_TAG_MAX_TAGS_PER_CALL } from '../customer/customerTag.service.js';
 import { ALL_CUSTOMERS_LIMIT_CAP, INTERESTED_LIMIT_CAP } from '../../utils/interestedLimits.util.js';
+import { applyIdSelection, resolveSelectionMode } from '../../utils/selectionMode.util.js';
 import outboundMessageQueueService, {
   OUTBOUND_MESSAGE_JOB_TYPES,
 } from '../queue/outboundMessageQueue.service.js';
@@ -26,27 +27,13 @@ import {
   findExistingCustomerByContact,
 } from '../../utils/customerContactMatch.util.js';
 import { extractSpreadsheetId, fetchWorksheetNames } from '../../utils/googleSheetWorksheets.util.js';
+import { PLATFORM_STORE_ADMIN_ONLY } from '../founderai/platformStoreAccess.service.js';
 
 /**
  * Số khách tối đa mỗi transaction khi lưu batch (BEGIN…COMMIT).
  * Giảm thời gian giữ lock và áp lực WAL trên VPS nhỏ; không dùng biến môi trường.
  */
 const SAVE_CUSTOMERS_DB_CHUNK_SIZE = 500;
-
-/**
- * Resolve selection mode with backward compatibility from legacy selected IDs.
- *
- * @param {string|undefined|null} mode
- * @param {Array<any>} selectedIds
- * @returns {'all'|'fixed'|'all_exclude'}
- */
-const resolveSelectionMode = (mode, selectedIds = []) => {
-  const normalized = String(mode || '').trim().toLowerCase();
-  if (normalized === 'fixed' || normalized === 'all_exclude') {
-    return normalized;
-  }
-  return Array.isArray(selectedIds) && selectedIds.length > 0 ? 'fixed' : 'all';
-};
 
 /**
  * Ghi log ngắn gọn để theo dõi API đang được gọi trong campaign run.
@@ -125,14 +112,20 @@ class CampaignNodeDataService {
           interestedData = { items: [] };
         } else if (dataSource === 'api') {
           logApiCall('uknow_api', 'customerInterestedService.getInterestedCustomersFromUknowApi');
-          interestedData = await customerInterestedService.getInterestedCustomersFromUknowApi({
-            userId,
-            limit,
-            courseIds: selectedCourseIds.join(','),
-            courseStatuses: selectedCourseStatuses.join(','),
-            courseQuery,
-            customerType,
-          });
+          try {
+            interestedData = await customerInterestedService.getInterestedCustomersFromUknowApi({
+              userId,
+              limit,
+              courseIds: selectedCourseIds.join(','),
+              courseStatuses: selectedCourseStatuses.join(','),
+              courseQuery,
+              customerType,
+            });
+          } catch (error) {
+            // Nguồn API là đơn hàng WooCommerce của NỀN TẢNG: chủ chiến dịch không phải super admin -> fail-closed (0 người), run không lỗi.
+            if (error?.code !== PLATFORM_STORE_ADMIN_ONLY) throw error;
+            interestedData = { items: [] };
+          }
         } else {
           const purchaseOrderStatusExpr = await customerHelperService.resolvePurchaseOrderStatusExpr('cp');
           const notPurchasedCourseIds = (Array.isArray(config.notPurchasedCourseIds) ? config.notPurchasedCourseIds : [])
@@ -157,13 +150,14 @@ class CampaignNodeDataService {
           });
         }
 
-        let items = Array.isArray(interestedData?.items) ? interestedData.items : [];
-        if (selectionMode === 'fixed' && selectedCustomerIds.length > 0) {
-          items = items.filter((row) => selectedCustomerIds.includes(parseInt(row.customerId, 10)));
-        } else if (selectionMode === 'all_exclude' && excludedCustomerIds.length > 0) {
-          const excludedSet = new Set(excludedCustomerIds);
-          items = items.filter((row) => !excludedSet.has(parseInt(row.customerId, 10)));
-        }
+        // `fixed` mà chưa chọn ai → 0 khách (không rơi xuống "tất cả"): xem utils/selectionMode.util.js. Chạy thật, ước tính và xem trước
+        // đều đi qua hàm này nên cùng một kết quả.
+        const items = applyIdSelection(Array.isArray(interestedData?.items) ? interestedData.items : [], {
+          mode: selectionMode,
+          selectedIds: selectedCustomerIds,
+          excludedIds: excludedCustomerIds,
+          getId: (row) => parseInt(row.customerId, 10),
+        });
         return applyDataColumnSelectionToItems(items, config.dataSelectedColumns, 'interested');
       }
 
@@ -218,9 +212,14 @@ class CampaignNodeDataService {
       }
 
       case 'read_landing_leads': {
+        // Phạm vi (chủ workspace) do SERVER quyết định = chủ chiến dịch. `config` do client ghi trong `flow_json` nên KHÔNG được tin
+        // các khoá phạm vi trong đó: ghi đè SAU khi spread (đặt trước thì `config` thắng và đọc được lead của tenant khác).
         const { items: landingItems } = await leadService.getLeadsForCampaignConfig({
           ...config,
+          workspaceOwnerId: userId,
           idUser: userId,
+          userId,
+          isSuperAdmin: false,
         });
         return applyDataColumnSelectionToItems(landingItems, config.dataSelectedColumns, 'landing');
       }

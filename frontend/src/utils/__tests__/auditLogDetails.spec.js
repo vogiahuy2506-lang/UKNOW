@@ -136,6 +136,13 @@ const REAL_ROWS = [
   ['ORDER_REFUNDED', { orderCode: '123', userId: 4, reason: 'Khách yêu cầu', amount: 500000, statusBefore: 'paid' }, 'Đơn 123 · Hoàn 500.000 đ · Lý do: Khách yêu cầu'],
   ['EINVOICE_RETRIED', { ok: false, skipped: false, reason: null, errorCode: 'E01', status: 'failed' }, 'Không thành công · Mã lỗi: E01'],
   ['FORM_DISABLED', { publicKey: 'k-1', title: 'Đăng ký' }, '"Đăng ký"'],
+  // R2 (20/10/2026): hình dạng thật từ adminSystem.controller.js (reconcileSendQuotaReservation)
+  [
+    'SEND_QUOTA_RESERVATION_RECONCILED',
+    { reservationId: '12', outcome: 'sent', billingUserId: 5, quantity: 1, walletQuantity: 1, note: 'Đã đối chiếu SMTP' },
+    'Đặt chỗ #12 · Xác nhận đã gửi (tính hạn mức) · Ví 1 lượt · Ghi chú: Đã đối chiếu SMTP',
+  ],
+  ['SEND_QUOTA_RESERVATION_RECONCILED', { reservationId: '13', outcome: 'not_sent', billingUserId: 5, quantity: 1, walletQuantity: 0, note: null }, 'Đặt chỗ #13 · Xác nhận chưa gửi (trả lại hạn mức)'],
   // PR-8c: xuất CSV / Excel dữ liệu khách — hình dạng thật từ formSubmissionExport.controller.js / leadExport.controller.js
   [
     'FORM_SUBMISSIONS_EXPORTED',

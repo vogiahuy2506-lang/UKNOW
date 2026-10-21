@@ -2,29 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { fetchPublishedLandingHtml } from '../../features/landing-pages/services/landingPagePublicApi.service.js';
 import { useRecordLandingView } from '../../features/landing-pages/hooks/useRecordLandingView.js';
-
-export function ensureTailwindCdnAndViewport(html) {
-  if (!html) return html;
-  let result = html;
-
-  // Ensure viewport meta tag (critical for responsive layout on mobile)
-  if (!result.includes('name="viewport"')) {
-    result = result.replace(
-      /<head([^>]*)>/i,
-      `<head$1>\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">`,
-    );
-  }
-
-  // Inject Tailwind CDN if not present
-  if (!result.includes('cdn.tailwindcss.com')) {
-    result = result.replace(
-      /<head([^>]*)>/i,
-      `<head$1>\n  <script src="https://cdn.tailwindcss.com"></script>`,
-    );
-  }
-
-  return result;
-}
+import { ensureTailwindCdnAndViewport } from './lpRendererHtml.js';
 
 /**
  * Render HTML do admin upload — iframe sandbox opaque origin (allow-scripts, không allow-same-origin).

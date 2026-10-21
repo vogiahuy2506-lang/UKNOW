@@ -31,7 +31,7 @@ jest.unstable_mockModule('axios', () => ({
 const request = (await import('supertest')).default;
 const { createApp } = await import('../../src/app.js');
 const db = (await import('../../src/config/database.js')).default;
-const { truncateAll, createUser } = await import('./helpers/db.js');
+const { truncateAll, createUser, createPlan, assignPlanToUser } = await import('./helpers/db.js');
 
 let app;
 
@@ -99,7 +99,7 @@ describe('GET /api/founderai/customers', () => {
   });
 
   it('happy path → map đúng + auth header Basic', async () => {
-    const user = await createUser({ username: 'fa-c-1' });
+    const user = await createUser({ username: 'fa-c-1', role: 'admin' });
     const token = await loginAs(user);
     mockAxiosGet.mockImplementation(async (url, opts) => {
       expect(url).toContain('/wc/v3/customers');
@@ -141,7 +141,7 @@ describe('GET /api/founderai/customers', () => {
   });
 
   it('axios throw → 500', async () => {
-    const user = await createUser({ username: 'fa-c-2' });
+    const user = await createUser({ username: 'fa-c-2', role: 'admin' });
     const token = await loginAs(user);
     mockAxiosGet.mockRejectedValueOnce(new Error('network down'));
     const res = await request(app)
@@ -153,7 +153,7 @@ describe('GET /api/founderai/customers', () => {
 
 describe('GET /api/founderai/orders/:orderId', () => {
   it('orderId không phải số → 400', async () => {
-    const user = await createUser({ username: 'fa-o-1' });
+    const user = await createUser({ username: 'fa-o-1', role: 'admin' });
     const token = await loginAs(user);
     const res = await request(app)
       .get('/api/founderai/orders/abc')
@@ -162,7 +162,7 @@ describe('GET /api/founderai/orders/:orderId', () => {
   });
 
   it('Woo trả 404 → 404 "Không tìm thấy đơn hàng"', async () => {
-    const user = await createUser({ username: 'fa-o-2' });
+    const user = await createUser({ username: 'fa-o-2', role: 'admin' });
     const token = await loginAs(user);
     const err = new Error('Not Found');
     err.response = { status: 404 };
@@ -174,7 +174,7 @@ describe('GET /api/founderai/orders/:orderId', () => {
   });
 
   it('status=onhold → normalize on-hold + statusLabel="Quan tâm"', async () => {
-    const user = await createUser({ username: 'fa-o-3' });
+    const user = await createUser({ username: 'fa-o-3', role: 'admin' });
     const token = await loginAs(user);
     mockAxiosGet.mockResolvedValueOnce({
       status: 200,
@@ -207,7 +207,9 @@ describe('POST /api/founderai/sync/customers', () => {
   });
 
   it('employee sync customer vào owner workspace và lưu actor', async () => {
-    const owner = await createUser({ username: 'fa-sync-customer-owner' });
+    // Chủ là super admin (cổng PLATFORM_STORE_ADMIN_ONLY xét role CHỦ workspace); nhân viên cần gói của chủ để qua requireActivePlan.
+    const owner = await createUser({ username: 'fa-sync-customer-owner', role: 'admin' });
+    await assignPlanToUser(owner.id, (await createPlan()).id);
     const employee = await createUser({ username: 'fa-sync-customer-employee' });
     await addFounderAiMembership(owner.id, employee.id, { customers: true });
     const token = await loginAs(employee);
@@ -233,7 +235,7 @@ describe('POST /api/founderai/sync/customers', () => {
   });
 
   it('1 trang, 2 customer mới → inserted=2 + lưu source=founderai', async () => {
-    const user = await createUser({ username: 'fa-sc-1' });
+    const user = await createUser({ username: 'fa-sc-1', role: 'admin' });
     const token = await loginAs(user);
     mockAxiosGet.mockImplementation(async (url, opts) => {
       if (opts.params.page === 1) {
@@ -271,7 +273,7 @@ describe('POST /api/founderai/sync/customers', () => {
   });
 
   it('Rerun với customer cùng email (case insensitive) → UPDATE path', async () => {
-    const user = await createUser({ username: 'fa-sc-2' });
+    const user = await createUser({ username: 'fa-sc-2', role: 'admin' });
     await createCustomer({ userId: user.id, email: 'EXISTING@u.local' });
     const token = await loginAs(user);
     mockAxiosGet.mockImplementation(async () => ({
@@ -376,7 +378,7 @@ describe('POST /api/founderai/sync/courses', () => {
 // ═══════════════════════════════════════════════════════════════════════
 describe('POST /api/founderai/sync/orders/:orderId', () => {
   it('orderId không hợp lệ → 400', async () => {
-    const user = await createUser({ username: 'fa-so-1' });
+    const user = await createUser({ username: 'fa-so-1', role: 'admin' });
     const token = await loginAs(user);
     const res = await request(app)
       .post('/api/founderai/sync/orders/abc')
@@ -385,7 +387,7 @@ describe('POST /api/founderai/sync/orders/:orderId', () => {
   });
 
   it('Woo trả status=processing (không hỗ trợ) → 422', async () => {
-    const user = await createUser({ username: 'fa-so-2' });
+    const user = await createUser({ username: 'fa-so-2', role: 'admin' });
     const token = await loginAs(user);
     mockAxiosGet.mockResolvedValueOnce({
       status: 200,
@@ -403,7 +405,7 @@ describe('POST /api/founderai/sync/orders/:orderId', () => {
   });
 
   it('Đơn completed → INSERT customer_purchases + journey order_completed + refresh stats', async () => {
-    const user = await createUser({ username: 'fa-so-3' });
+    const user = await createUser({ username: 'fa-so-3', role: 'admin' });
     const token = await loginAs(user);
 
     mockAxiosGet.mockImplementation(async (url) => {
@@ -480,7 +482,7 @@ describe('POST /api/founderai/sync/orders/:orderId', () => {
   });
 
   it('Đơn on-hold → product_type=interested + journey order_pending', async () => {
-    const user = await createUser({ username: 'fa-so-4' });
+    const user = await createUser({ username: 'fa-so-4', role: 'admin' });
     const token = await loginAs(user);
     mockAxiosGet.mockImplementation(async (url) => {
       if (url.endsWith('/wc/v3/orders/800')) {
@@ -527,7 +529,7 @@ describe('POST /api/founderai/sync/orders/:orderId', () => {
   });
 
   it('Order không có email + phone → 422', async () => {
-    const user = await createUser({ username: 'fa-so-5' });
+    const user = await createUser({ username: 'fa-so-5', role: 'admin' });
     const token = await loginAs(user);
     mockAxiosGet.mockResolvedValueOnce({
       status: 200,
@@ -550,7 +552,7 @@ describe('POST /api/founderai/sync/orders/:orderId', () => {
 // ═══════════════════════════════════════════════════════════════════════
 describe('POST /api/founderai/sync/orders', () => {
   it('bulk: 1 đơn completed + 1 đơn on-hold → INSERT 2 customer + 2 purchase', async () => {
-    const user = await createUser({ username: 'fa-bulk-1' });
+    const user = await createUser({ username: 'fa-bulk-1', role: 'admin' });
     const token = await loginAs(user);
     mockAxiosGet.mockImplementation(async (url, opts) => {
       if (url.endsWith('/wc/v3/orders')) {
@@ -605,7 +607,7 @@ describe('POST /api/founderai/sync/orders', () => {
   });
 
   it('UTM source=email_campaign + sources=email → đi qua filter, journey.event_channel=email', async () => {
-    const user = await createUser({ username: 'fa-bulk-2' });
+    const user = await createUser({ username: 'fa-bulk-2', role: 'admin' });
     const token = await loginAs(user);
     mockAxiosGet.mockImplementation(async (url, opts) => {
       if (url.endsWith('/wc/v3/orders') && opts.params.page === 1) {
@@ -648,7 +650,7 @@ describe('POST /api/founderai/sync/orders', () => {
   });
 
   it('UTM source=zalo nhưng filter sources=email → skippedBySource=1', async () => {
-    const user = await createUser({ username: 'fa-bulk-3' });
+    const user = await createUser({ username: 'fa-bulk-3', role: 'admin' });
     const token = await loginAs(user);
     mockAxiosGet.mockImplementation(async (url, opts) => {
       if (url.endsWith('/wc/v3/orders') && opts.params.page === 1) {
@@ -686,9 +688,11 @@ describe('POST /api/founderai/sync/orders', () => {
 // ═══════════════════════════════════════════════════════════════════════
 // POST /api/campaigns/:id/sync-founderai
 // ═══════════════════════════════════════════════════════════════════════
+// Route dùng khoá WooCommerce của NỀN TẢNG -> chỉ workspace super admin (xem describe cổng PLATFORM_STORE_ADMIN_ONLY bên dưới);
+// các ca nghiệp vụ dưới đây dùng chủ super admin.
 describe('POST /api/campaigns/:id/sync-founderai', () => {
   it('campaignId không hợp lệ → 400', async () => {
-    const user = await createUser({ username: 'fa-cmp-1' });
+    const user = await createUser({ username: 'fa-cmp-1', role: 'admin' });
     const token = await loginAs(user);
     const res = await request(app)
       .post('/api/campaigns/abc/sync-founderai')
@@ -698,7 +702,7 @@ describe('POST /api/campaigns/:id/sync-founderai', () => {
 
   it('Không phải owner → 404', async () => {
     const owner = await createUser({ username: 'fa-cmp-owner' });
-    const other = await createUser({ username: 'fa-cmp-other' });
+    const other = await createUser({ username: 'fa-cmp-other', role: 'admin' });
     const camp = await createCampaign({ userId: owner.id });
     const token = await loginAs(other);
     const res = await request(app)
@@ -708,7 +712,7 @@ describe('POST /api/campaigns/:id/sync-founderai', () => {
   });
 
   it('Customer có completed order → uknow_status=purchased', async () => {
-    const user = await createUser({ username: 'fa-cmp-2' });
+    const user = await createUser({ username: 'fa-cmp-2', role: 'admin' });
     const camp = await createCampaign({ userId: user.id });
     const cust = await createCustomer({ userId: user.id, email: 'sub@u.local' });
     await db.query(
@@ -738,7 +742,7 @@ describe('POST /api/campaigns/:id/sync-founderai', () => {
   });
 
   it('Customer chỉ có on-hold order → uknow_status=lead', async () => {
-    const user = await createUser({ username: 'fa-cmp-3' });
+    const user = await createUser({ username: 'fa-cmp-3', role: 'admin' });
     const camp = await createCampaign({ userId: user.id });
     const cust = await createCustomer({ userId: user.id, email: 'hold@u.local' });
     await db.query(
@@ -760,7 +764,7 @@ describe('POST /api/campaigns/:id/sync-founderai', () => {
   });
 
   it('Customer không có order Woo → unchanged++, không update uknow_status', async () => {
-    const user = await createUser({ username: 'fa-cmp-4' });
+    const user = await createUser({ username: 'fa-cmp-4', role: 'admin' });
     const camp = await createCampaign({ userId: user.id });
     const cust = await createCustomer({ userId: user.id, email: 'none@u.local' });
     await db.query(
@@ -776,5 +780,211 @@ describe('POST /api/campaigns/:id/sync-founderai', () => {
     expect(res.body.data).toMatchObject({ synced: 0, unchanged: 1, total: 1 });
     const cc = await db.query(`SELECT uknow_status FROM campaign_customers WHERE id_customer = $1`, [cust.id]);
     expect(cc.rows[0].uknow_status).toBeNull();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// Cổng cửa hàng NỀN TẢNG (founderai.biz) — chỉ workspace của super admin (PLAN_VA_CO_LAP_DU_LIEU_TENANT PR-1)
+// ═══════════════════════════════════════════════════════════════════════
+describe('cổng PLATFORM_STORE_ADMIN_ONLY — chủ tài khoản thường không đọc/đồng bộ khách + đơn founderai.biz', () => {
+  async function createRegularOwner(username) {
+    const owner = await createUser({ username }); // role 'user' + gói (createUser mặc định)
+    return { owner, token: await loginAs(owner) };
+  }
+
+  const blockedRoutes = [
+    ['get', '/api/founderai/customers'],
+    ['get', '/api/founderai/orders'],
+    ['get', '/api/founderai/orders/123'],
+    ['post', '/api/founderai/sync/customers'],
+    ['post', '/api/founderai/sync/orders'],
+    ['post', '/api/founderai/sync/orders/123'],
+  ];
+
+  it.each(blockedRoutes)('chủ role user %s %s → 403 PLATFORM_STORE_ADMIN_ONLY, KHÔNG gọi Founder AI', async (method, path) => {
+    const { token } = await createRegularOwner(`fa-gate-${method}-${path.replace(/\W+/g, '-')}`);
+    mockAxiosGet.mockResolvedValue({ status: 200, headers: { 'x-wp-totalpages': '1' }, data: [] });
+
+    const res = await request(app)[method](path).set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('PLATFORM_STORE_ADMIN_ONLY');
+    expect(mockAxiosGet).not.toHaveBeenCalled();
+  });
+
+  it('chủ role user POST /sync/customers → 403, bảng customers không thêm dòng', async () => {
+    const { owner, token } = await createRegularOwner('fa-gate-sync-cust');
+    mockAxiosGet.mockResolvedValue({
+      status: 200,
+      headers: { 'x-wp-totalpages': '1' },
+      data: [{ email: 'leak@u.local', first_name: 'Leak', orders_count: 1 }],
+    });
+
+    const res = await request(app)
+      .post('/api/founderai/sync/customers')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(403);
+    const { rows } = await db.query('SELECT COUNT(*)::int AS n FROM customers WHERE id_user = $1', [owner.id]);
+    expect(rows[0].n).toBe(0);
+  });
+
+  it('nhân viên có quyền customers của workspace role user → vẫn 403 (xét role CHỦ, không xét role người gọi)', async () => {
+    const owner = await createUser({ username: 'fa-gate-emp-owner' });
+    const employee = await createUser({ username: 'fa-gate-emp-employee' });
+    await addFounderAiMembership(owner.id, employee.id, { customers: true });
+    const token = await loginAs(employee);
+
+    const res = await request(app)
+      .get('/api/founderai/customers')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Owner-Context', String(owner.id));
+
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('PLATFORM_STORE_ADMIN_ONLY');
+    expect(mockAxiosGet).not.toHaveBeenCalled();
+  });
+
+  it('super admin vẫn đọc được khách (200)', async () => {
+    const admin = await createUser({ username: 'fa-gate-admin', role: 'admin' });
+    const token = await loginAs(admin);
+    mockAxiosGet.mockResolvedValue({ status: 200, headers: { 'x-wp-totalpages': '1' }, data: [] });
+
+    const res = await request(app).get('/api/founderai/customers').set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(mockAxiosGet).toHaveBeenCalled();
+  });
+
+  it('chủ role user vẫn đồng bộ KHOÁ HỌC được (danh mục công khai, không bị chặn)', async () => {
+    const { token } = await createRegularOwner('fa-gate-courses');
+    mockAxiosGet.mockResolvedValue({
+      status: 200,
+      headers: { 'x-wp-totalpages': '1' },
+      data: [{ id: 901, name: 'Khoá công khai', price: '1000', status: 'publish' }],
+    });
+
+    const res = await request(app).post('/api/founderai/sync/courses').set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(mockAxiosGet).toHaveBeenCalled();
+  });
+
+  describe('POST /api/campaigns/:id/sync-founderai', () => {
+    async function seedCampaignWithCustomer(owner, email) {
+      const camp = await createCampaign({ userId: owner.id });
+      const cust = await createCustomer({ userId: owner.id, email });
+      await db.query(
+        `INSERT INTO campaign_customers (id_campaign, id_customer, joined_at) VALUES ($1, $2, NOW())`,
+        [camp.id, cust.id]
+      );
+      return { camp, cust };
+    }
+
+    it('chủ role user có chiến dịch của mình -> 403 PLATFORM_STORE_ADMIN_ONLY, KHÔNG gọi Founder AI, uknow_status không đổi', async () => {
+      const { owner, token } = await createRegularOwner('fa-gate-cmp-user');
+      const { camp, cust } = await seedCampaignWithCustomer(owner, 'probe@u.local');
+      mockAxiosGet.mockResolvedValue({ status: 200, data: [{ id: 1, status: 'completed' }] });
+
+      const res = await request(app)
+        .post(`/api/campaigns/${camp.id}/sync-founderai`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('PLATFORM_STORE_ADMIN_ONLY');
+      expect(mockAxiosGet).not.toHaveBeenCalled();
+      const cc = await db.query('SELECT uknow_status FROM campaign_customers WHERE id_customer = $1', [cust.id]);
+      expect(cc.rows[0].uknow_status).toBeNull();
+    });
+
+    it('chủ super admin -> không bị cổng chặn (200, có gọi Founder AI)', async () => {
+      const admin = await createUser({ username: 'fa-gate-cmp-admin', role: 'admin' });
+      const token = await loginAs(admin);
+      const { camp } = await seedCampaignWithCustomer(admin, 'buyer-probe@u.local');
+      mockAxiosGet.mockResolvedValue({ status: 200, data: [{ id: 1, status: 'completed' }] });
+
+      const res = await request(app)
+        .post(`/api/campaigns/${camp.id}/sync-founderai`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.code).not.toBe('PLATFORM_STORE_ADMIN_ONLY');
+      expect(mockAxiosGet).toHaveBeenCalled();
+    });
+  });
+
+  describe('GET /api/customers/interested-courses-from-api', () => {
+    it('chủ role user → 403 PLATFORM_STORE_ADMIN_ONLY, KHÔNG gọi Founder AI', async () => {
+      const { token } = await createRegularOwner('fa-gate-interested-user');
+      mockAxiosGet.mockResolvedValue({ status: 200, headers: { 'x-wp-totalpages': '1' }, data: [] });
+
+      const res = await request(app)
+        .get('/api/customers/interested-courses-from-api')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('PLATFORM_STORE_ADMIN_ONLY');
+      expect(mockAxiosGet).not.toHaveBeenCalled();
+    });
+
+    it('super admin → 200 và trả khách từ đơn on-hold', async () => {
+      const admin = await createUser({ username: 'fa-gate-interested-admin', role: 'admin' });
+      const token = await loginAs(admin);
+      mockAxiosGet.mockResolvedValue({
+        status: 200,
+        headers: { 'x-wp-totalpages': '1' },
+        data: [{
+          id: 1,
+          status: 'on-hold',
+          customer_id: 5,
+          billing: { email: 'buyer@u.local', phone: '0901', first_name: 'Buyer', last_name: 'One' },
+          line_items: [{ product_id: 11, name: 'Khoá A' }],
+        }],
+      });
+
+      const res = await request(app)
+        .get('/api/customers/interested-courses-from-api')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.items).toHaveLength(1);
+      expect(res.body.data.items[0].email).toBe('buyer@u.local');
+    });
+  });
+
+  describe('node chiến dịch read_interested_customers nguồn api', () => {
+    const apiNode = { node_subtype: 'read_interested_customers', config: { interestedDataSource: 'api', interestedCustomerType: 'interested' } };
+
+    it('chủ chiến dịch role user → 0 người, KHÔNG gọi Founder AI, không ném lỗi', async () => {
+      const owner = await createUser({ username: 'fa-gate-node-user' });
+      const campaignNodeDataService = (await import('../../src/services/campaign/campaignNodeData.service.js')).default;
+      mockAxiosGet.mockResolvedValue({ status: 200, headers: { 'x-wp-totalpages': '1' }, data: [] });
+
+      const result = await campaignNodeDataService.getCustomersFromDataNode(apiNode, owner.id, [apiNode]);
+
+      expect(result.items).toEqual([]);
+      expect(mockAxiosGet).not.toHaveBeenCalled();
+    });
+
+    it('chủ chiến dịch là super admin → vẫn đọc đơn từ Founder AI như cũ', async () => {
+      const admin = await createUser({ username: 'fa-gate-node-admin', role: 'admin' });
+      const campaignNodeDataService = (await import('../../src/services/campaign/campaignNodeData.service.js')).default;
+      mockAxiosGet.mockResolvedValue({
+        status: 200,
+        headers: { 'x-wp-totalpages': '1' },
+        data: [{
+          id: 2,
+          status: 'on-hold',
+          customer_id: 6,
+          billing: { email: 'node-buyer@u.local', phone: '0902', first_name: 'Node', last_name: 'Buyer' },
+          line_items: [{ product_id: 12, name: 'Khoá B' }],
+        }],
+      });
+
+      const result = await campaignNodeDataService.getCustomersFromDataNode(apiNode, admin.id, [apiNode]);
+
+      expect(mockAxiosGet).toHaveBeenCalled();
+      expect(result.items.map((i) => i.email)).toEqual(['node-buyer@u.local']);
+    });
   });
 });

@@ -5,6 +5,9 @@ const mockLogWorkspace = jest.fn();
 const mockGetWorkspaceAuditContext = jest.fn(() => ({ userId: 2, ownerId: 1 }));
 const mockCreateCampaignRunRecord = jest.fn();
 const mockExecuteCampaign = jest.fn();
+// Chặn sớm chiến dịch ngoài workspace (PLAN_VA_CO_LAP_DU_LIEU_TENANT_DOT2 PR-A) — mặc định: thuộc workspace.
+const mockAssertCampaignInRunScope = jest.fn(async () => {});
+const mockResolveVerifiedScheduleId = jest.fn(async () => null);
 
 jest.unstable_mockModule('../../config/database.js', () => ({
   default: { query: mockDbQuery },
@@ -29,6 +32,8 @@ jest.unstable_mockModule('../../services/campaign/campaignRun.service.js', () =>
   default: {
     createCampaignRunRecord: mockCreateCampaignRunRecord,
     executeCampaign: mockExecuteCampaign,
+    assertCampaignInRunScope: mockAssertCampaignInRunScope,
+    resolveVerifiedScheduleId: mockResolveVerifiedScheduleId,
   },
   EMAIL_API_DELAY_MIN_MS: 50,
   EMAIL_API_DELAY_MAX_MS: 250,
@@ -153,6 +158,86 @@ describe('Campaign Approval Threshold in campaign.controller.js', () => {
       expect.objectContaining({ threshold: 100, totalCustomers: 150, actorUserId: 2 })
     );
     expect(mockExecuteCampaign).not.toHaveBeenCalled();
+  });
+
+  it('nhân viên chạy chiến dịch NGOÀI workspace → 404 TRƯỚC khi đánh giá ngưỡng: không truy vấn ngưỡng/đếm người nhận, không UPDATE, không audit', async () => {
+    const req = {
+      params: { id: '10' },
+      body: { source: 'campaign_run' },
+      user: { id: 2, role: 'user', activeContext: { type: 'employee', ownerId: 1 } },
+    };
+    const res = createRes();
+    mockAssertCampaignInRunScope.mockRejectedValueOnce(
+      Object.assign(new Error('Không tìm thấy chiến dịch'), { statusCode: 404 })
+    );
+
+    await campaignController.run(req, res);
+
+    expect(mockAssertCampaignInRunScope).toHaveBeenCalledWith(
+      expect.objectContaining({ campaignId: 10, workspaceOwnerId: 1, isAdmin: false })
+    );
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(mockDbQuery).not.toHaveBeenCalled();
+    expect(mockLogWorkspace).not.toHaveBeenCalled();
+    expect(mockCreateCampaignRunRecord).not.toHaveBeenCalled();
+    expect(mockExecuteCampaign).not.toHaveBeenCalled();
+  });
+
+  it('UPDATE sang pending_owner_approval bị chặn theo chủ workspace (id = $1 AND COALESCE(workspace_owner_id, id_user) = $2)', async () => {
+    const req = {
+      params: { id: '10' },
+      body: { source: 'campaign_run' },
+      user: { id: 2, role: 'user', activeContext: { type: 'employee', ownerId: 1 } },
+    };
+    const res = createRes();
+    mockDbQuery.mockResolvedValueOnce({ rows: [{ employee_campaign_approval_threshold: 100 }] });
+    mockDbQuery.mockResolvedValueOnce({ rows: [{ count: 150 }] });
+    mockDbQuery.mockResolvedValueOnce({ rowCount: 1 });
+
+    await campaignController.run(req, res);
+
+    const updateCall = mockDbQuery.mock.calls.find((c) => /UPDATE campaigns/i.test(c[0]));
+    expect(updateCall[0]).toMatch(/COALESCE\(workspace_owner_id, id_user\) = \$2/);
+    expect(updateCall[1]).toEqual([10, 1]);
+  });
+
+  it('UPDATE không khớp dòng nào (rowCount 0) → 404, KHÔNG audit, KHÔNG báo "chờ duyệt"', async () => {
+    const req = {
+      params: { id: '10' },
+      body: { source: 'campaign_run' },
+      user: { id: 2, role: 'user', activeContext: { type: 'employee', ownerId: 1 } },
+    };
+    const res = createRes();
+    mockDbQuery.mockResolvedValueOnce({ rows: [{ employee_campaign_approval_threshold: 100 }] });
+    mockDbQuery.mockResolvedValueOnce({ rows: [{ count: 150 }] });
+    mockDbQuery.mockResolvedValueOnce({ rowCount: 0 });
+
+    await campaignController.run(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(mockLogWorkspace).not.toHaveBeenCalled();
+    expect(res.json).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ requiresApproval: true }) })
+    );
+  });
+
+  it('scheduleId trong body đi qua resolveVerifiedScheduleId; lượt chạy nhận đúng giá trị đã xác minh (không phải giá trị thô)', async () => {
+    const req = {
+      params: { id: '10' },
+      body: { source: 'campaign_run', scheduleId: '5' },
+      user: { id: 1, role: 'user', activeContext: { type: 'self' } },
+    };
+    const res = createRes();
+    mockResolveVerifiedScheduleId.mockResolvedValueOnce(null);
+    mockCreateCampaignRunRecord.mockResolvedValueOnce({ id: 55 });
+    mockExecuteCampaign.mockResolvedValueOnce({});
+
+    await campaignController.run(req, res);
+
+    expect(mockResolveVerifiedScheduleId).toHaveBeenCalledWith(
+      expect.objectContaining({ scheduleId: 5, campaignId: 10, workspaceOwnerId: 1, isAdmin: false })
+    );
+    expect(mockCreateCampaignRunRecord).toHaveBeenCalledWith(expect.objectContaining({ scheduleId: null }));
   });
 
   // Ràng buộc quan trọng nhất của tính năng: chủ workspace CHƯA bật ngưỡng thì mọi thứ

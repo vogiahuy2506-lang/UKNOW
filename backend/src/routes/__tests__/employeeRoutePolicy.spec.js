@@ -109,6 +109,19 @@ jest.unstable_mockModule('../../controllers/founderai.controller.js', () => ({
   default: makeMockController('founderai'),
 }));
 
+// Cổng cửa hàng nền tảng (founderai.biz) tra role CHỦ workspace trong CSDL — spec này không có DB, nên mock repo.
+// Mặc định chủ là super admin (luồng nhân viên của workspace super admin); ca riêng đổi sang 'user'.
+let mockPlatformOwnerRole = 'admin';
+const mockPlatformOwnerLookups = [];
+jest.unstable_mockModule('../../repositories/founderai/platformStoreAccess.repository.js', () => ({
+  default: {
+    findRoleByUserId: async (userId) => {
+      mockPlatformOwnerLookups.push(userId);
+      return mockPlatformOwnerRole;
+    },
+  },
+}));
+
 jest.unstable_mockModule('../../controllers/chatbot.controller.js', () => ({
   default: makeMockController('chatbot'),
 }));
@@ -426,6 +439,33 @@ describe('Employee Route Policy & RBAC Enforcement Matrix', () => {
       expect(customerAllowed.status).toBe(200);
       const courseBlocked = await request(app).post('/api/founderai/sync/courses');
       expect(courseBlocked.status).toBe(403);
+    });
+
+    it('FounderAI customers/orders: xét role CHỦ workspace (không phải role người gọi) — chủ thường bị chặn, khoá học thì không', async () => {
+      mockPlatformOwnerRole = 'user';
+      mockPlatformOwnerLookups.length = 0;
+      try {
+        currentTestUser = createEmployee({ customers: true, courses: true });
+        const customersBlocked = await request(app).get('/api/founderai/customers');
+        const syncBlocked = await request(app).post('/api/founderai/sync/customers');
+        const ordersBlocked = await request(app).post('/api/founderai/sync/orders/5');
+        expect(customersBlocked.status).toBe(403);
+        expect(customersBlocked.body.code).toBe('PLATFORM_STORE_ADMIN_ONLY');
+        expect(syncBlocked.status).toBe(403);
+        expect(ordersBlocked.status).toBe(403);
+        // tra role của CHỦ (ownerId=1), không phải của nhân viên (id=2)
+        expect(new Set(mockPlatformOwnerLookups)).toEqual(new Set([1]));
+
+        const courseAllowed = await request(app).post('/api/founderai/sync/courses');
+        expect(courseAllowed.status).toBe(200);
+
+        // chủ tự dùng (self context, role user) cũng bị chặn
+        currentTestUser = selfUser;
+        const selfBlocked = await request(app).get('/api/founderai/orders');
+        expect(selfBlocked.status).toBe(403);
+      } finally {
+        mockPlatformOwnerRole = 'admin';
+      }
     });
   });
 

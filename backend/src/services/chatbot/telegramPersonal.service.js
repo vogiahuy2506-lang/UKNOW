@@ -255,9 +255,13 @@ class TelegramPersonalService {
   }
 
   async toggleAccountChatbot(userId, accountId, chatbotId, enabled) {
+    // Tài khoản VÀ chatbot phải thuộc chủ — kiểm TRƯỚC câu 409 (chatbot lạ phải ra 404, không phải 409 nêu tên bot đang giữ tài khoản).
+    // Cả khi enabled=false: tắt cũng ghi dòng và chụp `system_instruction`.
+    await chatbotTelegramRepository.assertOwnedConfiguration(userId, accountId, chatbotId, {
+      requireActiveChatbot: Boolean(enabled),
+    });
     // 1 tài khoản = 1 chatbot: bật bot thứ hai khi bot khác đang bật thì chặn (tắt luôn được).
     if (enabled && chatbotId != null) {
-      await chatbotTelegramRepository.assertOwned(userId, accountId);
       const holder = await chatbotTelegramRepository.findOtherEnabledChatbot(userId, accountId, chatbotId);
       if (holder) {
         const err = new Error(

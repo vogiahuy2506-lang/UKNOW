@@ -130,10 +130,8 @@ export const getPaymentStatus = async (req, res) => {
 
         // When logged in, only the buyer may read status (reduces probing of others' codes).
         if (req.user) {
-            const isOwner =
-                Number(order.user_id) === Number(req.user.id) ||
-                (order.user_email &&
-                    String(order.user_email).toLowerCase() === String(req.user.email || '').toLowerCase());
+            // Chỉ theo user_id: khớp theo email bị bỏ (20/10/2026) vì email hồ sơ đổi được mà không xác minh.
+            const isOwner = order.user_id != null && Number(order.user_id) === Number(req.user.id);
             if (!isOwner) {
                 return res.status(404).json({ error: 'Đơn hàng không tồn tại' });
             }

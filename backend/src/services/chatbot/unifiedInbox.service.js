@@ -1366,8 +1366,12 @@ class UnifiedInboxService {
         if (!deleted) throw new Error('Conversation not found');
         return deleted;
       }
-      case 'webchat':
-        return chatbotRepository.deleteWebChatConversation(conversationId, userId);
+      case 'webchat': {
+        // Không khớp chủ (hoặc không tồn tại) -> 404 như các nhánh khác; trước đây trả `false` và controller vẫn báo thành công.
+        const deleted = await chatbotRepository.deleteWebChatConversation(conversationId, userId);
+        if (!deleted) throw new Error('Conversation not found');
+        return deleted;
+      }
       case 'channel': {
         // Covers Zalo OA, Facebook, WhatsApp (whatsapp_baileys) — all use
         // channel_conversations table via channel_connections join.

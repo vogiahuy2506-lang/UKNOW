@@ -35,11 +35,24 @@ export function getActiveRunPause(runMetadata) {
   if (!runMetadata || typeof runMetadata !== 'object') return null;
 
   for (const fam of DEFER_FAMILIES) {
-    const rawUntil = runMetadata[fam.untilKey];
+    let rawUntil = runMetadata[fam.untilKey];
     if (!rawUntil) continue;
 
-    const untilMs = Date.parse(String(rawUntil));
-    if (!Number.isFinite(untilMs) || untilMs <= Date.now()) continue;
+    let untilMs = Date.parse(String(rawUntil));
+    if (!Number.isFinite(untilMs)) continue;
+
+    // Zalo: mốc chạy tiếp THẬT (đã gộp giờ yên lặng 23–06h) — vd khoá tra số hết lúc 00:00 nhưng chỉ gửi lại được từ 06:00.
+    // Chỉ dùng khi hợp lệ và không sớm hơn mốc hoãn; ngược lại giữ `zaloOutboundDeferredUntil`.
+    if (fam.kind === 'zalo') {
+      const effectiveRaw = runMetadata.zaloOutboundResumeEffectiveAt;
+      const effectiveMs = effectiveRaw ? Date.parse(String(effectiveRaw)) : NaN;
+      if (Number.isFinite(effectiveMs) && effectiveMs >= untilMs) {
+        rawUntil = effectiveRaw;
+        untilMs = effectiveMs;
+      }
+    }
+
+    if (untilMs <= Date.now()) continue;
 
     const reason = String(runMetadata[fam.reasonKey] || '');
     if (fam.validate && !fam.validate(reason)) continue;
@@ -103,6 +116,10 @@ export function getRunPauseI18nKey(pauseOrKind, maybeReason) {
       || reason === 'all_accounts_phone_lookup_cooldown'
     ) {
       return 'campaignRun.zaloPhoneLookupPausedUntil';
+    }
+    // PR-4 — tài khoản bị Zalo tạm cấm nhắn người chưa kết bạn: run hoãn tới sáng hôm sau.
+    if (reason === 'stranger_messaging_banned') {
+      return 'campaignRun.zaloStrangerBanPausedUntil';
     }
     if (reason === 'quiet_hours') {
       return 'campaignRun.zaloQuietHoursUntil';

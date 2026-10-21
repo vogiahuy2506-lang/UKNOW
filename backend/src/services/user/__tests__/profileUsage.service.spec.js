@@ -7,25 +7,33 @@
 import { beforeEach, afterEach, describe, expect, it, jest } from '@jest/globals';
 
 const getBillingCycle = jest.fn();
-const countEmailSentInCycle = jest.fn();
-const countZaloSentInCycle = jest.fn();
-const countCombinedSentInCycle = jest.fn();
-const countEmailSentToday = jest.fn();
-const countZaloSentToday = jest.fn();
-const countAdapterSentInCycle = jest.fn();
+const countEmailSentInCycleWithLedger = jest.fn();
+const countZaloSentInCycleWithLedger = jest.fn();
+const countCombinedSentInCycleWithLedger = jest.fn();
+const countEmailSentTodayWithLedger = jest.fn();
+const countZaloSentTodayWithLedger = jest.fn();
+const countAdapterSentInCycleWithLedger = jest.fn();
 const getResourceUsageSnapshot = jest.fn();
 const countActiveChatbotsByUser = jest.fn();
 const resolveEffectiveCeiling = jest.fn();
 const computeEmployeeLimitInfo = jest.fn();
 
 jest.unstable_mockModule('../../../utils/billingCycle.util.js', () => ({ getBillingCycle }));
-jest.unstable_mockModule('../../../utils/userSendLimit.util.js', () => ({
-  countEmailSentInCycle,
-  countZaloSentInCycle,
-  countCombinedSentInCycle,
-  countEmailSentToday,
-  countZaloSentToday,
-  countAdapterSentInCycle,
+// DB giả: các hàm *WithLedger nhận `queryable` làm tham số ĐẦU (đúng chữ ký thật ở sendQuota.repository.js).
+const DB = { __db: true };
+const DAY_START = new Date('2026-10-18T17:00:00.000Z');
+const DAY_END = new Date('2026-10-19T17:00:00.000Z');
+const getVnDayBoundaries = jest.fn(() => ({ vnDayStart: DAY_START, vnDayEnd: DAY_END }));
+
+jest.unstable_mockModule('../../../config/database.js', () => ({ default: DB }));
+jest.unstable_mockModule('../../quota/sendQuotaReservation.service.js', () => ({ getVnDayBoundaries }));
+jest.unstable_mockModule('../../../repositories/sendQuota.repository.js', () => ({
+  countEmailSentInCycleWithLedger,
+  countZaloSentInCycleWithLedger,
+  countCombinedSentInCycleWithLedger,
+  countEmailSentTodayWithLedger,
+  countZaloSentTodayWithLedger,
+  countAdapterSentInCycleWithLedger,
 }));
 jest.unstable_mockModule('../../../utils/userResourceLimit.util.js', () => ({ getResourceUsageSnapshot }));
 jest.unstable_mockModule('../../../repositories/ai/chatbot.repository.js', () => ({
@@ -44,17 +52,17 @@ let errorSpy;
 
 beforeEach(() => {
   [
-    getBillingCycle, countEmailSentInCycle, countZaloSentInCycle, countCombinedSentInCycle,
-    countEmailSentToday, countZaloSentToday, countAdapterSentInCycle, getResourceUsageSnapshot, countActiveChatbotsByUser,
+    getBillingCycle, countEmailSentInCycleWithLedger, countZaloSentInCycleWithLedger, countCombinedSentInCycleWithLedger,
+    countEmailSentTodayWithLedger, countZaloSentTodayWithLedger, countAdapterSentInCycleWithLedger, getResourceUsageSnapshot, countActiveChatbotsByUser,
     resolveEffectiveCeiling, computeEmployeeLimitInfo,
   ].forEach((fn) => fn.mockReset());
   getBillingCycle.mockResolvedValue(CYCLE);
-  countEmailSentInCycle.mockResolvedValue(3400);
-  countZaloSentInCycle.mockResolvedValue(120);
-  countCombinedSentInCycle.mockResolvedValue(3520);
-  countEmailSentToday.mockResolvedValue(12);
-  countZaloSentToday.mockResolvedValue(5);
-  countAdapterSentInCycle.mockImplementation(async (_uid, channel) => (channel === 'telegram' ? 7 : 9));
+  countEmailSentInCycleWithLedger.mockResolvedValue(3400);
+  countZaloSentInCycleWithLedger.mockResolvedValue(120);
+  countCombinedSentInCycleWithLedger.mockResolvedValue(3520);
+  countEmailSentTodayWithLedger.mockResolvedValue(12);
+  countZaloSentTodayWithLedger.mockResolvedValue(5);
+  countAdapterSentInCycleWithLedger.mockImplementation(async (_db, _uid, channel) => (channel === 'telegram' ? 7 : 9));
   errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 });
 
@@ -67,8 +75,8 @@ describe('getProfileSendUsage — tin gửi theo kỳ, đúng hàm của cổng 
     const out = await getProfileSendUsage(42, {});
 
     expect(getBillingCycle).toHaveBeenCalledWith(42);
-    expect(countEmailSentInCycle).toHaveBeenCalledWith(42, CYCLE_START, CYCLE_END);
-    expect(countZaloSentInCycle).toHaveBeenCalledWith(42, CYCLE_START, CYCLE_END);
+    expect(countEmailSentInCycleWithLedger).toHaveBeenCalledWith(DB, 42, CYCLE_START, CYCLE_END);
+    expect(countZaloSentInCycleWithLedger).toHaveBeenCalledWith(DB, 42, CYCLE_START, CYCLE_END);
     expect(out).toMatchObject({
       cycleStart: CYCLE_START,
       cycleEnd: CYCLE_END,
@@ -77,15 +85,15 @@ describe('getProfileSendUsage — tin gửi theo kỳ, đúng hàm của cổng 
     });
   });
 
-  // P10 — Telegram/WhatsApp có hạn mức tin/tháng RIÊNG: đếm bằng countAdapterSentInCycle (hàm của cổng chặn), cùng kỳ; Zalo
+  // P10 — Telegram/WhatsApp có hạn mức tin/tháng RIÊNG: đếm bằng countAdapterSentInCycleWithLedger (hàm của cổng chặn), cùng kỳ; Zalo
   // (messagingSentCycle) chỉ còn Zalo.
-  it('P10: telegramSentCycle/whatsappSentCycle qua countAdapterSentInCycle đúng kênh + đúng kỳ; lỗi một kênh chỉ null kênh đó', async () => {
+  it('P10: telegramSentCycle/whatsappSentCycle qua countAdapterSentInCycleWithLedger đúng kênh + đúng kỳ; lỗi một kênh chỉ null kênh đó', async () => {
     const out = await getProfileSendUsage(42, {});
-    expect(countAdapterSentInCycle).toHaveBeenCalledWith(42, 'telegram', CYCLE_START, CYCLE_END);
-    expect(countAdapterSentInCycle).toHaveBeenCalledWith(42, 'whatsapp', CYCLE_START, CYCLE_END);
+    expect(countAdapterSentInCycleWithLedger).toHaveBeenCalledWith(DB, 42, 'telegram', CYCLE_START, CYCLE_END);
+    expect(countAdapterSentInCycleWithLedger).toHaveBeenCalledWith(DB, 42, 'whatsapp', CYCLE_START, CYCLE_END);
     expect(out).toMatchObject({ telegramSentCycle: 7, whatsappSentCycle: 9, messagingSentCycle: 120 });
 
-    countAdapterSentInCycle.mockImplementation(async (_uid, channel) => {
+    countAdapterSentInCycleWithLedger.mockImplementation(async (_db, _uid, channel) => {
       if (channel === 'telegram') throw new Error('tg down');
       return 9;
     });
@@ -101,7 +109,7 @@ describe('getProfileSendUsage — tin gửi theo kỳ, đúng hàm của cổng 
   it('P10: chưa có kỳ (hasPlan=false) → telegramSentCycle/whatsappSentCycle null, không gọi hàm đếm', async () => {
     getBillingCycle.mockResolvedValue({ hasPlan: false, billingUserId: 42, cycleStart: null, cycleEnd: null });
     const out = await getProfileSendUsage(42, {});
-    expect(countAdapterSentInCycle).not.toHaveBeenCalled();
+    expect(countAdapterSentInCycleWithLedger).not.toHaveBeenCalled();
     expect(out).toMatchObject({ telegramSentCycle: null, whatsappSentCycle: null });
   });
 
@@ -112,33 +120,33 @@ describe('getProfileSendUsage — tin gửi theo kỳ, đúng hàm của cổng 
       messages_per_period: null,
     });
 
-    expect(countCombinedSentInCycle).not.toHaveBeenCalled();
-    expect(countEmailSentToday).not.toHaveBeenCalled();
-    expect(countZaloSentToday).not.toHaveBeenCalled();
+    expect(countCombinedSentInCycleWithLedger).not.toHaveBeenCalled();
+    expect(countEmailSentTodayWithLedger).not.toHaveBeenCalled();
+    expect(countZaloSentTodayWithLedger).not.toHaveBeenCalled();
     expect(out.combinedSentCycle).toBeNull();
     expect(out.emailSentToday).toBeNull();
     expect(out.messagingSentToday).toBeNull();
   });
 
-  it('gói CÓ trần tổng kỳ và trần ngày → gọi countCombinedSentInCycle (cùng kỳ) và hai hàm đếm hôm nay của cổng', async () => {
+  it('gói CÓ trần tổng kỳ và trần ngày → gọi countCombinedSentInCycleWithLedger (cùng kỳ) và hai hàm đếm hôm nay của cổng', async () => {
     const out = await getProfileSendUsage(42, {
       daily_email_limit: 500,
       daily_zalo_limit: '100', // pg có thể trả chuỗi cho một số kiểu số — vẫn là "có trần"
       messages_per_period: 100,
     });
 
-    expect(countCombinedSentInCycle).toHaveBeenCalledWith(42, CYCLE_START, CYCLE_END);
-    expect(countEmailSentToday).toHaveBeenCalledWith(42);
-    expect(countZaloSentToday).toHaveBeenCalledWith(42);
+    expect(countCombinedSentInCycleWithLedger).toHaveBeenCalledWith(DB, 42, CYCLE_START, CYCLE_END);
+    expect(countEmailSentTodayWithLedger).toHaveBeenCalledWith(DB, 42, DAY_START, DAY_END);
+    expect(countZaloSentTodayWithLedger).toHaveBeenCalledWith(DB, 42, DAY_START, DAY_END);
     expect(out).toMatchObject({ combinedSentCycle: 3520, emailSentToday: 12, messagingSentToday: 5 });
   });
 
   it('trần ngày = 0 vẫn là "gói có trần" (cổng coi là không hỗ trợ) → vẫn đếm, không nhầm thành không đặt', async () => {
     await getProfileSendUsage(42, { daily_email_limit: 0, daily_zalo_limit: 0, messages_per_period: 0 });
 
-    expect(countEmailSentToday).toHaveBeenCalledTimes(1);
-    expect(countZaloSentToday).toHaveBeenCalledTimes(1);
-    expect(countCombinedSentInCycle).toHaveBeenCalledTimes(1);
+    expect(countEmailSentTodayWithLedger).toHaveBeenCalledTimes(1);
+    expect(countZaloSentTodayWithLedger).toHaveBeenCalledTimes(1);
+    expect(countCombinedSentInCycleWithLedger).toHaveBeenCalledTimes(1);
   });
 
   it('chưa có gói (hasPlan=false) → không có kỳ để đếm: mọi số theo kỳ null, kỳ null, không gọi hàm đếm kỳ', async () => {
@@ -146,9 +154,9 @@ describe('getProfileSendUsage — tin gửi theo kỳ, đúng hàm của cổng 
 
     const out = await getProfileSendUsage(42, { messages_per_period: 100 });
 
-    expect(countEmailSentInCycle).not.toHaveBeenCalled();
-    expect(countZaloSentInCycle).not.toHaveBeenCalled();
-    expect(countCombinedSentInCycle).not.toHaveBeenCalled();
+    expect(countEmailSentInCycleWithLedger).not.toHaveBeenCalled();
+    expect(countZaloSentInCycleWithLedger).not.toHaveBeenCalled();
+    expect(countCombinedSentInCycleWithLedger).not.toHaveBeenCalled();
     expect(out).toMatchObject({
       cycleStart: null,
       cycleEnd: null,
@@ -165,11 +173,11 @@ describe('getProfileSendUsage — tin gửi theo kỳ, đúng hàm của cổng 
     expect(out.messagingSentCycle).toBe(120);
     expect(out.combinedSentCycle).toBeNull();
     expect(out.emailSentToday).toBeNull();
-    expect(countEmailSentToday).not.toHaveBeenCalled();
+    expect(countEmailSentTodayWithLedger).not.toHaveBeenCalled();
   });
 
   it('một đồng hồ lỗi → null cho ĐÚNG đồng hồ đó, log tên, các đồng hồ khác vẫn có số (không 0 giả)', async () => {
-    countZaloSentInCycle.mockRejectedValue(new Error('boom'));
+    countZaloSentInCycleWithLedger.mockRejectedValue(new Error('boom'));
 
     const out = await getProfileSendUsage(42, { daily_email_limit: 500, messages_per_period: 100 });
 

@@ -557,6 +557,36 @@ describe('GET /api/admin/delivery-monitor/overview — lượt chạy', () => {
     expect(w1.runId).toBe(byName.W1.runId);
   });
 
+  it('Zalo khoá tra số hết 00:00 nhưng giờ yên lặng tới 06:00: màn hiện mốc 06:00 (zaloOutboundResumeEffectiveAt); run chỉ có khoá cũ giữ như cũ; mốc hoãn đã qua mà mốc chạy tiếp còn tương lai vẫn là "đang chờ"', async () => {
+    const owner = await createUser({ username: 'uEff' });
+    const midnight = minutes(60); // zaloOutboundDeferredUntil (vd 00:00 VN)
+    const sixAm = minutes(420); // zaloOutboundResumeEffectiveAt (vd 06:00 VN, sau giờ yên lặng)
+    const legacyUntil = minutes(90);
+    await createContext(owner.id, {
+      campaign: { name: 'Khoá tra số', type: 'zalo' },
+      run: { metadata: { zaloOutboundDeferredUntil: midnight, zaloOutboundResumeEffectiveAt: sixAm, zaloDeferredReason: 'phone_lookup_cooldown' } },
+    });
+    await createContext(owner.id, {
+      campaign: { name: 'Run cũ', type: 'zalo' },
+      run: { metadata: { zaloOutboundDeferredUntil: legacyUntil, zaloDeferredReason: 'quiet_hours' } },
+    });
+    await createContext(owner.id, {
+      campaign: { name: 'Hoãn đã qua', type: 'zalo' },
+      run: { metadata: { zaloOutboundDeferredUntil: minutes(-10), zaloOutboundResumeEffectiveAt: sixAm, zaloDeferredReason: 'phone_lookup_cooldown' } },
+    });
+    const data = await getData();
+    const byName = Object.fromEntries(data.recentRuns.map((run) => [run.campaignName, run]));
+    expect(byName['Khoá tra số']).toMatchObject({ waitingUntil: sixAm, waitingReason: 'phone_lookup_cooldown' });
+    expect(byName['Run cũ']).toMatchObject({ waitingUntil: legacyUntil, waitingReason: 'quiet_hours' });
+    expect(byName['Hoãn đã qua']).toMatchObject({ waitingUntil: sixAm });
+    expect(data.runs.waiting.count).toBe(3);
+    expect(data.runs.waiting.first).toEqual({ campaignName: 'Run cũ', waitingReason: 'quiet_hours', waitingUntil: legacyUntil });
+    // Cùng lượt, trang của chủ thấy cùng mốc 06:00.
+    const user = await getUserOverview(owner);
+    const userMap = Object.fromEntries(user.runs.map((run) => [run.campaignName, run.waitingUntil]));
+    expect(userMap['Khoá tra số']).toBe(sixAm);
+  });
+
   it('SMTP chặn: cùng mã "chờ bước kế" nhưng emailRateLimitAt trong khung 13 giờ → smtp_rate_limited; mốc cũ giữ mã gốc', async () => {
     const owner = await createUser({ username: 'uSmtp' });
     await createContext(owner.id, {

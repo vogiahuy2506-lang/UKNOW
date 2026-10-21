@@ -11,11 +11,14 @@ import { checkSheetForChannel } from '../ai/sheetRecipientCheck.service.js';
 import { MAX_SHEET_RECIPIENTS } from '../../utils/manualRecipients.util.js';
 import { resourceIsLocked } from '../../utils/topupLockGate.util.js';
 import campaignChannelRegistry from './campaignChannelRegistry.service.js';
+import campaignNodeReferences from './campaignNodeReferences.service.js';
 import { validateChannelSteps } from '../../utils/channelSteps.util.js';
 import { assertChannelEntitled } from './channelEntitlement.service.js';
 import { resolveZaloAccountEntries } from '../../utils/campaignZaloAccountResolve.util.js';
 import { assertRunZaloAccountsAssigned } from './campaignZaloAccess.service.js';
 import { assertRunChannelAccountsAssigned } from './campaignChannelAccess.service.js';
+import campaignEmailSenderRepository from '../../repositories/campaign/campaignEmailSender.repository.js';
+import { collectEmailTemplateReferences } from '../../utils/emailTemplateReference.util.js';
 
 // PR-1 (tách tầng kênh gửi) — nguồn kênh gửi đọc từ registry thay vì ghi cứng. `send_zalo` (chuỗi
 // cũ) đã BỎ: 0 node trên production, engine không còn xử lý (xem fallback bên dưới ~dòng 177 và
@@ -36,6 +39,8 @@ export const SEND_NODE_SUBTYPES = new Set(campaignChannelRegistry.getSendNodeSub
  *   ném 403 ZALO_ACCOUNT_NOT_ASSIGNED (PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3). Chủ tạo + chủ chạy → không lọc.
  *   Engine kiểm lại ở đầu mỗi chu kỳ chạy nên bỏ trống ở đây không mở lối gửi — chỉ mất lời báo sớm.
  * @param {Function} [params.assertZaloAccountsAssignedFn] - Optional override for unit tests
+ * @param {Function} [params.findAvailableEmailTemplateIdsFn] - Optional override for unit tests: `(templateIds, campaignId) => Set<number>`
+ *   các mẫu email còn tồn tại VÀ thuộc chủ chiến dịch (EMAIL_TEMPLATE_UNAVAILABLE).
  * @param {Function} [params.assertChannelAccountsAssignedFn] - Optional override for unit tests. PLAN_GIAO_TK_TG_WA PR-H2: cùng
  *   khuôn `actorUserIds` ở trên cho node Telegram / WhatsApp — nhân viên có trong đó mà chưa được giao tài khoản của node →
  *   ném 403 CHANNEL_ACCOUNT_NOT_ASSIGNED TRƯỚC kiểm kết nối (lời báo đúng là "chưa được giao", không phải "mất kết nối").
@@ -50,6 +55,7 @@ export async function validateCampaignPreflight({
   assertChannelEntitledFn = assertChannelEntitled,
   assertZaloAccountsAssignedFn = assertRunZaloAccountsAssigned,
   assertChannelAccountsAssignedFn = assertRunChannelAccountsAssigned,
+  findAvailableEmailTemplateIdsFn = (templateIds, id) => campaignEmailSenderRepository.findAvailableEmailTemplateIdsForCampaign(templateIds, id),
 }) {
   const parsedCampaignId = parseInt(campaignId, 10);
   if (!Number.isFinite(parsedCampaignId)) {
@@ -60,7 +66,7 @@ export async function validateCampaignPreflight({
   }
 
   const { rows: nodes } = await db.query(
-    `SELECT id, node_type, node_subtype, config FROM campaign_nodes WHERE id_campaign = $1`,
+    `SELECT id, node_type, node_subtype, node_name, execution_order, config FROM campaign_nodes WHERE id_campaign = $1`,
     [parsedCampaignId]
   );
 
@@ -90,6 +96,71 @@ export async function validateCampaignPreflight({
     error.code = 'UNSUPPORTED_SEND_NODE';
     error.statusCode = 400;
     throw error;
+  }
+
+  // 1b'. Tham chiếu khối hụt (thường sinh ra do nhân bản chiến dịch cũ): khối gửi đang ở chế độ "lấy từ khối" mà khối
+  // nguồn không còn / không đi tới được → engine nhận danh sách rỗng và lượt chạy "completed" 0/0 mà không ai biết.
+  // Chặn cứng tại đây (chạy tay, chạy tiếp, bật lịch, lịch nổ đều đi qua preflight). Chỉ trường runtime thật sự đọc —
+  // luật nằm ở campaignNodeReferences.collectBlockingNodeReferences. Chỉ đọc thêm DB khi có khối thuộc diện kiểm.
+  const hasReferenceCandidates = nodes.some(
+    (node) => campaignNodeReferences.collectBlockingNodeReferences(node.node_subtype, node.config).length > 0
+  );
+  if (hasReferenceCandidates) {
+    const [{ rows: connectionRows }, { rows: campaignRows }] = await Promise.all([
+      db.query(
+        `SELECT source_node_id, target_node_id FROM campaign_connections WHERE id_campaign = $1`,
+        [parsedCampaignId]
+      ),
+      db.query(`SELECT flow_json FROM campaigns WHERE id = $1`, [parsedCampaignId]),
+    ]);
+    const danglingReferences = campaignNodeReferences.findDanglingNodeReferences({
+      flowJson: campaignRows?.[0]?.flow_json ?? null,
+      nodes,
+      connections: connectionRows,
+    });
+    if (danglingReferences.length > 0) {
+      const error = new Error(campaignNodeReferences.buildDanglingReferenceMessage(danglingReferences));
+      error.code = 'DANGLING_NODE_REFERENCE';
+      error.statusCode = 400;
+      error.details = danglingReferences;
+      throw error;
+    }
+  }
+
+  // 1b''. Mẫu email của node gửi email phải TỒN TẠI và THUỘC chủ chiến dịch. Trước đây node trỏ mẫu đã xoá (hoặc của tenant khác)
+  // vẫn chạy được: engine không tìm thấy mẫu thì rơi về tiêu đề/nội dung mặc định ("Thông báo từ Founder AI" / "Email từ Founder AI")
+  // và gửi thẳng ra khách. Chặn cứng ở đây (chạy tay, chạy tiếp, bật lịch, lịch nổ đều đi qua preflight) bằng MỘT truy vấn cho mọi
+  // id; lưới an toàn cho mẫu bị xoá GIỮA lượt chạy nằm ở campaignEmailSender.service.js. Node không có tham chiếu mẫu (nội dung
+  // soạn thẳng trong config) không bị đụng. Chủ lấy từ chính chiến dịch (không tin tham số người gọi) — cùng quy tắc với đường gửi.
+  const emailTemplateRefsByNode = nodes
+    .filter((node) => String(node.node_subtype || '').trim() === 'send_email')
+    .map((node) => ({ node, refs: collectEmailTemplateReferences(node.config) }))
+    .filter(({ refs }) => refs.length > 0);
+  if (emailTemplateRefsByNode.length > 0) {
+    const wantedIds = [...new Set(
+      emailTemplateRefsByNode.flatMap(({ refs }) => refs.map((ref) => ref.id).filter((id) => id != null))
+    )];
+    const availableIds = wantedIds.length > 0
+      ? await findAvailableEmailTemplateIdsFn(wantedIds, parsedCampaignId)
+      : new Set();
+    const brokenNodes = emailTemplateRefsByNode
+      .map(({ node, refs }) => ({
+        nodeId: node.id,
+        nodeName: String(node.node_name || '').trim() || `node ${node.id}`,
+        templateIds: refs.filter((ref) => ref.id == null || !availableIds.has(ref.id)).map((ref) => ref.raw),
+      }))
+      .filter((entry) => entry.templateIds.length > 0);
+    if (brokenNodes.length > 0) {
+      const names = brokenNodes.map((entry) => `"${entry.nodeName}" (node ${entry.nodeId})`).join(', ');
+      const error = new Error(
+        `Node gửi email ${names} đang dùng mẫu email đã bị xoá hoặc không thuộc tài khoản này. `
+        + 'Vui lòng chọn lại mẫu email trong node trước khi chạy.'
+      );
+      error.code = 'EMAIL_TEMPLATE_UNAVAILABLE';
+      error.statusCode = 400;
+      error.details = brokenNodes;
+      throw error;
+    }
   }
 
   // 1c. PR-3 (tách tầng kênh gửi) — node kênh 'adapter' (Telegram/WhatsApp từ PR-6+, mock ở test)
