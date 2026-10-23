@@ -1056,6 +1056,13 @@ const CampaignBuilder = () => {
 
   const canUseServerRunActions = !isNewCampaign && Boolean(id);
 
+  // Vào chi tiết một chiến dịch đã lưu là nạp sẵn nhật ký lượt chạy thật (hiện ở tab Thiết lập); có lượt chạy mới thì nạp lại theo lượt đó.
+  useEffect(() => {
+    if (isNewCampaign || !id) return;
+    runController.openCampaignLogs?.({ id, campaignName });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- openCampaignLogs đổi mỗi lần vẽ; chỉ nạp lại khi đổi chiến dịch / có lượt chạy mới
+  }, [id, isNewCampaign, latestRun?.id]);
+
   const checkZaloPhoneLookupCooldown = async () => {
     if (runController.isZaloGroupCampaign(campaignForServerActions)) return true;
     const normalizedType = String(campaignType || '').trim().toLowerCase();
@@ -1307,9 +1314,7 @@ const CampaignBuilder = () => {
           runningRunId={latestRun?.status === 'running' ? latestRun.id : null}
           latestRunKey={latestRun ? `${latestRun.id}:${latestRun.status}` : 'none'}
           onOpenDeliveryMonitor={() => navigate('/app/delivery-monitor')}
-          onToggleRunLogs={isNewCampaign ? undefined : () => runController.toggleCampaignLogs(campaignForServerActions)}
-          runLogsOpen={Number(runController.selectedCampaignForLogs?.id) === Number(id)}
-          runLogsPanel={(
+          runLogsPanel={isNewCampaign ? null : (
             <CampaignRunLogsPanel
               selectedCampaignForLogs={runController.selectedCampaignForLogs}
               isLoadingRunDetail={runController.isLoadingRunDetail}

@@ -18,6 +18,7 @@ import CampaignBuilder from './CampaignBuilder';
 const {
   mockOpenRunConfirmModal,
   mockOpenScheduleModal,
+  mockOpenCampaignLogs,
   mockExecuteCampaignRun,
   mockUpdateCampaign,
   mockGetCampaignRuns,
@@ -25,6 +26,7 @@ const {
 } = vi.hoisted(() => ({
   mockOpenRunConfirmModal: vi.fn(),
   mockOpenScheduleModal: vi.fn(),
+  mockOpenCampaignLogs: vi.fn(),
   mockExecuteCampaignRun: vi.fn().mockResolvedValue(undefined),
   mockUpdateCampaign: vi.fn().mockResolvedValue({ data: { data: { id: 391 } } }),
   mockGetCampaignRuns: vi.fn().mockResolvedValue({ data: { data: [] } }),
@@ -104,6 +106,7 @@ vi.mock('../../features/campaigns/hooks/useCampaignRunController', () => ({
   default: () => ({
     openRunConfirmModal: mockOpenRunConfirmModal,
     openScheduleModal: mockOpenScheduleModal,
+    openCampaignLogs: mockOpenCampaignLogs,
     isZaloGroupCampaign: () => false,
     schedules: [],
     weeklyDayOptions: [],
@@ -180,6 +183,17 @@ describe('CampaignBuilder — nút gửi thật trong sơ đồ (PR-1)', () => {
     vi.clearAllMocks();
     mockGetCampaignRuns.mockResolvedValue({ data: { data: [] } });
     mockUpdateCampaign.mockResolvedValue({ data: { data: { id: 391 } } });
+  });
+
+  it('vào chi tiết chiến dịch đã lưu → tự nạp nhật ký lượt chạy thật; chiến dịch mới chưa lưu thì không', async () => {
+    const saved = renderBuilder();
+    await waitFor(() => expect(mockOpenCampaignLogs).toHaveBeenCalledWith(expect.objectContaining({ id: '391' })));
+    saved.unmount();
+
+    mockOpenCampaignLogs.mockClear();
+    renderBuilder('/app/campaigns/new');
+    await waitFor(() => expect(screen.getByTestId('can-use-server-actions')).toHaveTextContent('false'));
+    expect(mockOpenCampaignLogs).not.toHaveBeenCalled();
   });
 
   it('sơ đồ đã lưu → "Chạy ngay" mở thẳng hộp xác nhận chạy', async () => {

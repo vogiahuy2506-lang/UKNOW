@@ -83,7 +83,7 @@ const KNOWN_RUN_STATUSES = ['running', 'completed', 'stopped', 'failed'];
  * Mục "Lần chạy gần nhất": trạng thái, lúc bắt đầu, đã gửi / chưa gửi được / dự kiến. Số lấy từ
  * `GET /delivery-monitor/campaigns/:id/latest-run` (backend đếm qua sendStats) — KHÔNG đọc campaign_runs.successful_sends/failed_sends.
  */
-const LatestRun = ({ campaignId, refreshKey, onOpenDeliveryMonitor, onToggleRunLogs, runLogsOpen, t }) => {
+const LatestRun = ({ campaignId, refreshKey, onOpenDeliveryMonitor, onGoToRunLogs, t }) => {
   const { status, run } = useCampaignLatestRun(campaignId, refreshKey);
   if (status === 'idle' || status === 'loading') {
     return <p className={`text-sm ${MUTED}`} data-testid="settings-latest-run-loading">{t('campaignSettings.latestRun.loading')}</p>;
@@ -123,15 +123,14 @@ const LatestRun = ({ campaignId, refreshKey, onOpenDeliveryMonitor, onToggleRunL
       >
         {t('campaignSettings.latestRun.viewDetail')}
       </a>
-      {onToggleRunLogs && (
+      {onGoToRunLogs && (
         <button
           type="button"
-          onClick={onToggleRunLogs}
-          aria-expanded={Boolean(runLogsOpen)}
-          data-testid="settings-latest-run-logs-toggle"
+          onClick={onGoToRunLogs}
+          data-testid="settings-latest-run-logs-link"
           className="mt-1 block text-sm font-medium text-primary-600 hover:underline dark:text-primary-400"
         >
-          {runLogsOpen ? t('campaignSettings.latestRun.hideLogs') : t('campaignSettings.latestRun.viewLogs')}
+          {t('campaignSettings.latestRun.viewLogs')}
         </button>
       )}
     </div>
@@ -170,8 +169,7 @@ const OverviewCard = ({
   runningRunId,
   latestRunKey,
   onOpenDeliveryMonitor,
-  onToggleRunLogs,
-  runLogsOpen,
+  onGoToRunLogs,
   schedules,
   describeSchedule,
   onOpenSchedule,
@@ -261,7 +259,7 @@ const OverviewCard = ({
           <>
             <dt className={MUTED}>{t('campaignSettings.label.latestRun')}</dt>
             <dd className="min-w-0" data-testid="settings-overview-latest-run">
-              <LatestRun campaignId={campaignId} refreshKey={latestRunKey} onOpenDeliveryMonitor={onOpenDeliveryMonitor} onToggleRunLogs={onToggleRunLogs} runLogsOpen={runLogsOpen} t={t} />
+              <LatestRun campaignId={campaignId} refreshKey={latestRunKey} onOpenDeliveryMonitor={onOpenDeliveryMonitor} onGoToRunLogs={onGoToRunLogs} t={t} />
             </dd>
           </>
         )}
@@ -485,9 +483,7 @@ const describeStartSender = ({ channel, sender, emailSettings, t }) => {
  * @param {Function} [props.onCheckSheetConnection] kiểm tra kết nối Google Sheet của hộp cài đặt nâng cao
  * @param {string|number|null} [props.latestRunKey] đổi giá trị (vd id + trạng thái lượt mới nhất) → mục "Lần chạy gần nhất" tải lại
  * @param {() => void} props.onOpenDeliveryMonitor mở trang Giám sát gửi tin
- * @param {() => void} [props.onToggleRunLogs] bấm "Xem nhật ký gửi" ở mục Lần chạy gần nhất (không truyền = không có nút)
- * @param {boolean} [props.runLogsOpen] nhật ký gửi đang mở
- * @param {import('react').ReactNode} [props.runLogsPanel] khung nhật ký gửi, vẽ dưới hai cột khi đang mở
+ * @param {import('react').ReactNode} [props.runLogsPanel] khung nhật ký lượt chạy thật — luôn vẽ dưới hai cột (chiến dịch đã lưu); mục Lần chạy gần nhất có liên kết cuộn tới đó
  * @param {() => void} props.onGoFlow chuyển sang tab Sơ đồ khối
  * @param {boolean} [props.canEdit=true] false (chỉ có quyền xem) → ẩn nút Sửa / Lên lịch
  */
@@ -507,8 +503,6 @@ export default function CampaignSettingsPanel({
   runningRunId = null,
   latestRunKey = null,
   onOpenDeliveryMonitor = () => {},
-  onToggleRunLogs = undefined,
-  runLogsOpen = false,
   runLogsPanel = null,
   schedules = [],
   describeSchedule = () => ({ pattern: '', nextRun: null, statusLabel: '' }),
@@ -988,6 +982,9 @@ export default function CampaignSettingsPanel({
     </div>
   );
 
+  const runLogsRef = useRef(null);
+  const scrollToRunLogs = () => runLogsRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+
   return (
     <div className="min-h-0 w-full min-w-0 flex-1 overflow-y-auto bg-gray-50 dark:bg-dk-inset" data-testid="campaign-settings-panel">
       <div className="mx-auto grid w-full max-w-[1800px] grid-cols-1 items-start gap-4 px-4 py-4 sm:px-6 sm:py-6 lg:grid-cols-[minmax(22rem,28rem)_minmax(0,1fr)] lg:gap-6 lg:px-8">
@@ -1003,8 +1000,7 @@ export default function CampaignSettingsPanel({
           runningRunId={runningRunId}
           latestRunKey={latestRunKey}
           onOpenDeliveryMonitor={onOpenDeliveryMonitor}
-          onToggleRunLogs={onToggleRunLogs}
-          runLogsOpen={runLogsOpen}
+          onGoToRunLogs={runLogsPanel ? scrollToRunLogs : undefined}
           schedules={schedules}
           describeSchedule={describeSchedule}
           onOpenSchedule={onOpenSchedule}
@@ -1034,8 +1030,8 @@ export default function CampaignSettingsPanel({
           )}
         </div>
 
-        {runLogsOpen && runLogsPanel && (
-          <div className="order-3 min-w-0 lg:order-none lg:col-span-2" data-testid="settings-run-logs">
+        {runLogsPanel && (
+          <div ref={runLogsRef} className="order-3 min-w-0 lg:order-none lg:col-span-2" data-testid="settings-run-logs">
             {runLogsPanel}
           </div>
         )}

@@ -830,22 +830,19 @@ describe('CampaignSettingsPanel — Lần chạy gần nhất', () => {
     expect(onOpenDeliveryMonitor).toHaveBeenCalledTimes(1);
   });
 
-  it('nút "Xem nhật ký gửi" gọi onToggleRunLogs; đang mở thì đổi nhãn + vẽ khung nhật ký; không truyền handler thì không có nút', () => {
+  it('có runLogsPanel → luôn vẽ khung nhật ký lượt chạy thật, liên kết "Xem nhật ký gửi" cuộn tới đó; không có thì không có cả hai', () => {
     mockLatestRun.mockReturnValue({ status: 'ready', run: RUN });
-    const onToggleRunLogs = vi.fn();
-    const { unmount } = renderPanel({ onToggleRunLogs, runLogsPanel: <div data-testid="fake-run-logs-panel" /> });
-    expect(screen.queryByTestId('settings-run-logs')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Xem nhật ký gửi' }));
-    expect(onToggleRunLogs).toHaveBeenCalledTimes(1);
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    const { unmount } = renderPanel({ runLogsPanel: <div data-testid="fake-run-logs-panel" /> });
+    expect(screen.getByTestId('settings-run-logs')).toContainElement(screen.getByTestId('fake-run-logs-panel'));
+    fireEvent.click(screen.getByRole('button', { name: 'Xem nhật ký gửi ở bên dưới' }));
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
     unmount();
 
-    const opened = renderPanel({ onToggleRunLogs, runLogsOpen: true, runLogsPanel: <div data-testid="fake-run-logs-panel" /> });
-    expect(screen.getByRole('button', { name: 'Ẩn nhật ký gửi' })).toBeInTheDocument();
-    expect(screen.getByTestId('fake-run-logs-panel')).toBeInTheDocument();
-    opened.unmount();
-
     renderPanel();
-    expect(screen.queryByTestId('settings-latest-run-logs-toggle')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('settings-run-logs')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('settings-latest-run-logs-link')).not.toBeInTheDocument();
   });
 
   it('lỗi tải → nói chưa tải được, không bịa số', () => {
