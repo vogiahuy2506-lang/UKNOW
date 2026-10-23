@@ -9043,6 +9043,8 @@ export default {
     json: 'JSON',
     totalSent: 'Tổng đã gửi',
     sentFailed: 'Gửi lỗi',
+    notDelivered: 'Không tới nơi',
+    notDeliveredHint: 'Số tin đã xử lý nhưng KHÔNG tới nơi: gửi lỗi, người nhận không tìm thấy trên Zalo, người nhận chặn tin, hoặc Zalo không xác nhận phát tin.',
     noSchema: 'Không có schema.',
     noData: 'Không có dữ liệu.',
     pageSize: 'Page Size',

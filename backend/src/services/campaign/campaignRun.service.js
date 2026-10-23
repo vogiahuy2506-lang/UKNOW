@@ -34,6 +34,16 @@ import {
   shouldAdvanceZaloContinuousLedger,
   shouldAdvanceZaloOneShotLedger,
 } from '../../utils/zaloDispatchDelivery.util.js';
+import {
+  buildZaloPersonalProgressMessage as formatZaloPersonalProgressMessage,
+  buildZaloProgressForLog as formatZaloProgressForLog,
+  resolveZaloProgressCounters,
+} from '../../utils/zaloProgressCounters.util.js';
+import {
+  evaluateZaloSilentDropGuard,
+  ZALO_SILENT_DROP_GUARD_DEFER_REASON,
+} from '../../utils/zaloSilentDropGuard.util.js';
+import { ZALO_SILENT_DROP_CATEGORY } from '../../utils/zaloDispatchDelivery.util.js';
 import { isAdminRole } from '../../utils/roleScope.util.js';
 import { resourceIsLocked } from '../../utils/topupLockGate.util.js';
 import { checkSendQuota } from '../../utils/userSendLimit.util.js';
@@ -5475,6 +5485,15 @@ class CampaignRunService {
           let lastZaloPersonalTemplateStepIndex = null;
           let zaloPersonalStepProgressStart = 0;
           /**
+           * Đếm silent-drop trong lượt chạy này (Zalo trả msgId = 0 → không xác nhận phát tin).
+           * Đây là tín hiệu MẠNH (Zalo đã từ chối phát tin) — dùng để tự dừng lượt chạy khi tỉ lệ
+           * quá cao, tránh đốt slot và rủi ro khoá nick (sự cố production 23/10/2026).
+           * Lưu ý: tín hiệu silent-drop ở tầng "msgId > 0 nhưng Zalo âm thầm bỏ" KHÔNG quan sát
+           * được từ phía backend — xem zaloSilentDropGuard.util.js.
+           */
+          let zaloPersonalSilentDropCount = 0;
+          let zaloPersonalConsecutiveSilentDrops = 0;
+          /**
            * Chuẩn hóa payload execution cho node gửi Zalo cá nhân để UI log luôn tích lũy đúng.
            *
            * @param {object} payload kết quả gửi hiện tại
@@ -5482,16 +5501,24 @@ class CampaignRunService {
            */
           const buildSendZaloPersonalExecutionData = (payload = {}) => {
             const item = { ...payload };
-            const attempted = successfulSends + failedSends + skippedSends;
+            // Meta tách 3 con số để UI hiện được: attempted = đã xử lý, sent = gửi thật,
+            // notDelivered = không tới nơi. Trước đây chỉ có attempted (đếm cả lần hỏng) →
+            // UI tưởng mọi người trong danh sách đều đã nhận tin.
+            const progressCounters = resolveZaloProgressCounters({
+              successfulSends,
+              failedSends,
+              skippedSends,
+            });
             return {
               message: String(payload?.messageText || payload?.message || ''),
               items: [item],
               schema: campaignFlowService.buildSchemaFromRows([item]),
               meta: {
-                attempted,
-                sent: successfulSends,
-                skipped: skippedSends,
-                failed: failedSends,
+                attempted: progressCounters.processed,
+                sent: progressCounters.sent,
+                skipped: progressCounters.skipped,
+                failed: progressCounters.failed,
+                notDelivered: progressCounters.notDelivered,
                 totalItems: sendResults.length,
               },
             };
@@ -5531,6 +5558,57 @@ class CampaignRunService {
             sendMs: observation?.sendMs ?? null,
             attempts: observation?.attempts ?? null,
           });
+          /**
+           * TỰ DỪNG khi Zalo nuốt tin quá nhiều (silent drop) — sự cố production 23/10/2026:
+           * UI hiện "Đã gửi 19/200" nhưng Zalo chỉ nhận ~5 tin, và phần mềm vẫn bắn tiếp 20–25 tin.
+           * Tín hiệu ở đây là TẦNG PHÁT HIỆN ĐƯỢC: Zalo trả msgId = 0 (không xác nhận phát tin)
+           * → category ZALO_SILENT_DROP. Khi tỉ lệ vượt ngưỡng: dừng lượt chạy + tạm dừng
+           * chiến dịch + báo chủ, thay vì đốt slot tiếp và rủi ro khoá nick.
+           *
+           * Lưu ý: tin Zalo nhận msgId > 0 rồi âm thầm bỏ (anti-spam) KHÔNG quan sát được từ phía
+           * backend — số "đã gửi" phía ta chỉ là TRẦN trên thực tế (xem zaloProgressCounters.util.js).
+           *
+           * @param {object} error lỗi gửi vừa bắt
+           * @param {object} account tài khoản Zalo đang gửi (để báo chủ)
+           * @returns {Promise<void>}
+           */
+          const enforceZaloSilentDropGuard = async (error, account) => {
+            const observation = buildZaloPersonalErrorObservation(error);
+            if (observation.errorCategory !== ZALO_SILENT_DROP_CATEGORY) {
+              zaloPersonalConsecutiveSilentDrops = 0;
+              return;
+            }
+            zaloPersonalSilentDropCount += 1;
+            zaloPersonalConsecutiveSilentDrops += 1;
+            const guard = evaluateZaloSilentDropGuard({
+              // +1: lỗi đang xử lý CHƯA được cộng vào failedSends/skippedSends (guard gọi trước các
+              // nhánh đếm), nhưng nó đã là 1 lần đã thử gửi — tính vào mẫu số cho đúng.
+              attempts: successfulSends + failedSends + skippedSends + 1,
+              silentDrops: zaloPersonalSilentDropCount,
+              consecutive: zaloPersonalConsecutiveSilentDrops,
+            });
+            if (!guard.shouldStop) return;
+            console.warn(
+              `[CampaignRun][ZaloPersonal] run=${runId} account=${account?.id} `
+              + `Zalo nuốt tin quá nhiều (${guard.reason}) → dừng lượt chạy + tạm dừng chiến dịch. `
+              + `Đã gửi ${successfulSends}, không tới nơi ${failedSends + skippedSends}.`
+            );
+            await campaignCrudRepository.pauseCampaignIfActive(campaignId);
+            // Báo chủ chiến dịch (chuông + email) — cùng khuôn "gửi chậm bất thường".
+            this._notifySendingSlowFireAndForget({
+              runId,
+              campaignId,
+              cause: 'silent_drop',
+              accountName: account?.displayName || null,
+            });
+            const stopNote = new Error(
+              `Zalo không xác nhận phát tin với nhiều người nhận (${guard.reason}). `
+              + 'Chiến dịch đã được tạm dừng để tránh gửi thêm và rủi ro khoá tài khoản Zalo. '
+              + 'Vui lòng kiểm tra lại danh sách người nhận hoặc thử tài khoản Zalo khác rồi kích hoạt lại chiến dịch.'
+            );
+            stopNote.code = 'CAMPAIGN_PAUSED_BY_ZALO_SILENT_DROP';
+            throw stopNote;
+          };
 
           /**
            * Xáo trộn mảng (Fisher–Yates) để chọn tài khoản gửi ngẫu nhiên trong pool.
@@ -5745,20 +5823,27 @@ class CampaignRunService {
             };
             const buildZaloPersonalProgressMessage = () => {
               const si = stepMeta?.stepIndex;
+              const counters = { successfulSends, failedSends, skippedSends };
               if (si != null && dedupedRecipients.length > 0) {
-                return `Đã gửi ${successfulSends + failedSends + skippedSends - zaloPersonalStepProgressStart}/${dedupedRecipients.length}`;
+                return formatZaloPersonalProgressMessage(
+                  counters,
+                  dedupedRecipients.length,
+                  zaloPersonalStepProgressStart
+                );
               }
-              return `Đã gửi ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
+              return formatZaloPersonalProgressMessage(counters, totalRecipients, 0);
             };
             const getZaloPersonalProgressForLog = () => {
               const si = stepMeta?.stepIndex;
+              const counters = { successfulSends, failedSends, skippedSends };
               if (si != null && dedupedRecipients.length > 0) {
-                return {
-                  current: successfulSends + failedSends + skippedSends - zaloPersonalStepProgressStart,
-                  total: dedupedRecipients.length,
-                };
+                return formatZaloProgressForLog(
+                  counters,
+                  dedupedRecipients.length,
+                  zaloPersonalStepProgressStart
+                );
               }
-              return { current: successfulSends + failedSends + skippedSends, total: totalRecipients };
+              return formatZaloProgressForLog(counters, totalRecipients, 0);
             };
             let zaloMessageId = null;
             let customerId = extractCustomerIdFromRow(entryRow);
@@ -6282,6 +6367,9 @@ class CampaignRunService {
               if (error?.code === 'RUN_YIELD_SLOT') {
                 throw error;
               }
+              // Tự dừng khi Zalo nuốt tin quá nhiều (msgId = 0) — đặt TRƯỚC các nhánh lỗi
+              // "bỏ qua / chặn" để không bỏ sót lần drop nào (xem enforceZaloSilentDropGuard).
+              await enforceZaloSilentDropGuard(error, workingAccount);
               if (!multiEnabled && this.isZaloAccountUnavailableError(error)) {
                 await campaignCrudRepository.pauseCampaignIfActive(campaignId);
                 const pauseNote = new Error(
@@ -8499,7 +8587,7 @@ class CampaignRunService {
               if (isZaloPartialDeliveryResult(sendResult)) {
                 failedSends += 1;
                 const mapped = mapZaloPartialDelivery(sendResult);
-                const progressMessage = `Đã gửi ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
+                const progressMessage = formatZaloPersonalProgressMessage({ successfulSends, failedSends, skippedSends }, totalRecipients, 0);
                 const sentAt = toHoChiMinhIso();
                 const senderName = resolveZaloSenderName(account);
                 const failedPayload = {
@@ -8553,7 +8641,7 @@ class CampaignRunService {
               successfulSends += 1;
               void this._clearQuotaPauseStateAfterProgress(runId);
               markZaloOutboundSuccess({ accountId: account.id, channel: 'zalo_group' });
-              const progressMessage = `Đã gửi ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
+              const progressMessage = formatZaloPersonalProgressMessage({ successfulSends, failedSends, skippedSends }, totalRecipients, 0);
               const sentAt = toHoChiMinhIso();
               const senderName = resolveZaloSenderName(account);
               const zaloName = senderName;
@@ -8617,7 +8705,7 @@ class CampaignRunService {
                 : 1;
               if (isZaloGroupUnreachableError(error)) {
                 skippedSends += 1;
-                const progressMessage = `Đã gửi ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
+                const progressMessage = formatZaloPersonalProgressMessage({ successfulSends, failedSends, skippedSends }, totalRecipients, 0);
                 const sentAt = toHoChiMinhIso();
                 const senderName = resolveZaloSenderName(account);
                 const skipPayload = {
@@ -8699,7 +8787,7 @@ class CampaignRunService {
                   const abandonNote = (
                     ` — đã dừng thử sau ${nextFail} lần gửi thất bại (${modeLabel}, max=${maxFailures}).`
                   );
-                  const progressMessage = `Đã gửi ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
+                  const progressMessage = formatZaloPersonalProgressMessage({ successfulSends, failedSends, skippedSends }, totalRecipients, 0);
                   const sentAt = toHoChiMinhIso();
                   const senderName = resolveZaloSenderName(account);
                   const zaloName = senderName;
@@ -8817,7 +8905,7 @@ class CampaignRunService {
               // errorLabel + giờ hẹn thử lại cho người xem log/payload; tracking_metadata (đo đạc)
               // vẫn giữ nguyên cleanMessage như cũ, không đổi.
               const displayError = retryDisplayMessage || (observation.cleanMessage || error.message);
-              const progressMessage = `Đã gửi ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
+              const progressMessage = formatZaloPersonalProgressMessage({ successfulSends, failedSends, skippedSends }, totalRecipients, 0);
               const sentAt = toHoChiMinhIso();
               const senderName = resolveZaloSenderName(account);
               const zaloName = senderName;
@@ -9700,6 +9788,17 @@ class CampaignRunService {
         const poolMessage = String(error?.message || 'Chiến dịch đã tạm dừng do toàn bộ tài khoản Zalo không sẵn sàng');
         await this._failRunAndNotify(runId, campaignId, poolMessage, 'zalo_pool_unavailable');
         console.warn(`[Campaign ${campaignId}] ${poolMessage}`);
+        return;
+      }
+      if (error?.code === 'CAMPAIGN_PAUSED_BY_ZALO_SILENT_DROP') {
+        // Tự dừng vì Zalo nuốt tin quá nhiều (msgId = 0) — chiến dịch đã tạm dừng ở
+        // enforceZaloSilentDropGuard; đóng sổ run 'failed' + báo chủ (cùng khuôn nhánh pool Zalo).
+        const silentDropMessage = String(
+          error?.message || 'Chiến dịch đã tạm dừng do Zalo không xác nhận phát tin với nhiều người nhận'
+        );
+        await this._failRunAndNotify(runId, campaignId, silentDropMessage, 'zalo_silent_drop');
+        console.warn(`[Campaign ${campaignId}] ${silentDropMessage}`);
+        await persistRunCountersOnEarlyExit();
         return;
       }
       if (error?.code === 'CAMPAIGN_PAUSED_BY_CHANNEL_ACCOUNT_UNAVAILABLE') {

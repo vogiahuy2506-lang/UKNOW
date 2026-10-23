@@ -104,6 +104,18 @@ async function loadOwnerContact(campaignId) {
 export function buildSendingSlowCopy(cause, campaignName, accountName) {
   const account = accountName ? `«${accountName}»` : '';
   const accountEn = accountName ? `"${accountName}"` : '';
+  if (cause === 'silent_drop') {
+    return {
+      title: `Chiến dịch «${campaignName}» đã tạm dừng: Zalo không nhận tin`,
+      titleEn: `Campaign "${campaignName}" paused: Zalo did not accept the messages`,
+      message: `Tài khoản Zalo ${account ? `${account} ` : ''}không xác nhận phát tin với nhiều người nhận `
+        + '(Zalo có thể đang chặn tin nhắn tới người lạ). Chiến dịch đã được tạm dừng để tránh gửi thêm và rủi ro khoá tài khoản. '
+        + 'Bạn có thể kiểm tra lại danh sách người nhận, thử tài khoản Zalo khác, hoặc kích hoạt lại chiến dịch sau.',
+      messageEn: `The Zalo account ${accountEn ? `${accountEn} ` : ''}did not confirm delivery to many recipients `
+        + '(Zalo may be blocking messages to strangers). The campaign has been paused to avoid sending more and risking an account ban. '
+        + 'Check your recipient list, try another Zalo account, or reactivate the campaign later.',
+    };
+  }
   if (cause === 'stranger_ban') {
     return {
       title: `Chiến dịch «${campaignName}» đang tạm dừng gửi`,
@@ -131,7 +143,7 @@ export function buildSendingSlowCopy(cause, campaignName, accountName) {
  * Khuôn `notifyCampaignQuotaPaused`: đọc meta → claim cờ TRƯỚC khi gửi → nạp chủ → `notifyUsers` (chuông; email mặc định tắt,
  * người dùng/super admin bật thì `notifyUsers` tự dựng email chung từ tiêu đề + nội dung — không cần mẫu riêng).
  *
- * @param {{ runId: number, campaignId: number, cause: 'phone_lookup'|'stranger_ban', accountName?: string|null, now?: Date }} input
+ * @param {{ runId: number, campaignId: number, cause: 'phone_lookup'|'stranger_ban'|'silent_drop', accountName?: string|null, now?: Date }} input
  * @returns {Promise<{ sent?: boolean, skipped?: boolean, reason?: string }>}
  */
 export async function notifyCampaignSendingSlow({
@@ -141,7 +153,7 @@ export async function notifyCampaignSendingSlow({
   accountName = null,
   now = new Date(),
 }) {
-  if (cause !== 'phone_lookup' && cause !== 'stranger_ban') {
+  if (cause !== 'phone_lookup' && cause !== 'stranger_ban' && cause !== 'silent_drop') {
     return { skipped: true, reason: 'unknown_cause' };
   }
 

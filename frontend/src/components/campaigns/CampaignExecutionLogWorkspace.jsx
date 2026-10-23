@@ -189,12 +189,16 @@ const CampaignExecutionLogWorkspace = ({
     const meta = outputData?.meta;
     const sentCount = Number(meta?.sentCount);
     const failedCount = Number(meta?.failedCount);
+    // `notDeliveredCount` = số tin KHÔNG tới nơi (lỗi gửi + bỏ qua). Sự cố 23/10/2026: UI
+    // báo "Đã gửi 19" trong khi thực tế chỉ 5 tin tới nơi — vì bỏ qua bị tính nhầm là đã gửi.
+    const notDeliveredCount = Number(meta?.notDeliveredCount);
     if (!Number.isFinite(sentCount) && !Number.isFinite(failedCount)) {
       return null;
     }
     return {
       sentCount: Number.isFinite(sentCount) ? sentCount : 0,
       failedCount: Number.isFinite(failedCount) ? failedCount : 0,
+      notDeliveredCount: Number.isFinite(notDeliveredCount) ? notDeliveredCount : 0,
     };
   }, [outputData]);
 
@@ -395,6 +399,14 @@ const CampaignExecutionLogWorkspace = ({
                           <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
                             {t('campaignExecutionLog.totalSent')}: {sendSummary.sentCount}
                           </span>
+                          {sendSummary.notDeliveredCount > 0 && (
+                            <span
+                              className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300"
+                              title={t('campaignExecutionLog.notDeliveredHint')}
+                            >
+                              {t('campaignExecutionLog.notDelivered')}: {sendSummary.notDeliveredCount}
+                            </span>
+                          )}
                           <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-300">
                             {t('campaignExecutionLog.sentFailed')}: {sendSummary.failedCount}
                           </span>

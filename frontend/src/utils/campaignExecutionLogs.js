@@ -160,6 +160,19 @@ const SEND_NODE_SUBTYPES = new Set([
 const isSendNodeSubtype = (nodeSubtype = '') => SEND_NODE_SUBTYPES.has(String(nodeSubtype || '').trim().toLowerCase());
 
 const normalizeExecutionStatus = (value) => String(value || '').trim().toLowerCase();
+
+/**
+ * Trạng thái item = BỎ QUA (không phải lỗi, không phải tin đã tới nơi). Backend ghi các
+ * trạng thái này cho: người nhận không tìm thấy trên Zalo, người nhận chặn tin, tin Zalo không
+ * xác nhận phát tin, lượt bị dừng giữa chừng (aborted).
+ */
+const SKIPPED_ITEM_STATUSES = new Set([
+  'skipped',
+  'abort',
+  'aborted',
+  'deferred',
+  'not_delivered',
+]);
 /**
  * Chuẩn hóa bộ đếm progress từ log execution về số hợp lệ.
  *
@@ -329,23 +342,42 @@ const mergeAggregatedItems = (aggregated = [], incoming = []) => {
  * Tính thống kê gửi cho các node gửi (email/zalo) từ danh sách item đã tổng hợp.
  *
  * Luồng hoạt động:
- * 1. Chuẩn hóa trạng thái từng item về lowercase để đếm nhất quán giữa nhiều nguồn log.
- * 2. Xem `failed/error` là lỗi gửi; các trạng thái còn lại được tính là đã gửi thành công.
+ * 1. Chuẩn hóa trạng thái từng item về lowercase để đếm nhất quét giữa nhiều nguồn log.
+ * 2. Tách 3 nhóm: `failed/error` = lỗi gửi; `skipped/aborted/deferred` = BỎ QUA (không gửi được,
+ *    không phải lỗi); còn lại = đã gửi thành công.
  * 3. Trả về bộ đếm dùng cho UI hiển thị nhanh ở phần log node.
  *
+ * QUAN TRỌNG (sự cố 23/10/2026): trước đây `sentCount = tổng số item - số lỗi`, nên item
+ * `skipped` (người nhận không tìm thấy trên Zalo, người nhận chặn tin, tin không được Zalo xác
+ * nhận) bị TÍNH NHƯ ĐÃ GỬI — UI báo "Đã gửi 19" trong khi thực tế chỉ 5 tin tới nơi. Nay
+ * `skipped` nằm riêng ở `notDeliveredCount`.
+ *
  * @param {Array<object>} items danh sách item output của node gửi
- * @returns {{sentCount: number, failedCount: number}} bộ đếm gửi thành công và gửi lỗi
+ * @returns {{sentCount: number, failedCount: number, notDeliveredCount: number, skippedCount: number}}
  */
 const buildSendNodeMetaStats = (items = []) => {
   const sourceItems = Array.isArray(items) ? items : [];
-  const failedCount = sourceItems.reduce((count, item) => {
+  let failedCount = 0;
+  let skippedCount = 0;
+  sourceItems.forEach((item) => {
     const status = normalizeExecutionStatus(item?.status);
-    return status === 'failed' || status === 'error' ? count + 1 : count;
-  }, 0);
+    // `partial` = tin gửi được MỘT PHẦN (Zalo nhận nhưng thiếu phần đính kèm) — backend ghi
+    // tracking status='failed' cho trường hợp này, nên ở UI cũng phải tính là chưa tới nơi trọn vẹn.
+    if (status === 'failed' || status === 'error' || status === 'partial') {
+      failedCount += 1;
+      return;
+    }
+    // Bỏ qua / hoãn / huỷ — KHÔNG phải tin đã tới nơi.
+    if (SKIPPED_ITEM_STATUSES.has(status)) {
+      skippedCount += 1;
+    }
+  });
 
   return {
-    sentCount: Math.max(0, sourceItems.length - failedCount),
+    sentCount: Math.max(0, sourceItems.length - failedCount - skippedCount),
     failedCount,
+    notDeliveredCount: failedCount + skippedCount,
+    skippedCount,
   };
 };
 

@@ -9032,6 +9032,8 @@ export default {
     json: 'JSON',
     totalSent: 'Sent total',
     sentFailed: 'Failed',
+    notDelivered: 'Not delivered',
+    notDeliveredHint: 'Messages processed but NOT delivered: send errors, recipient not found on Zalo, recipient blocked the message, or Zalo did not confirm delivery.',
     noSchema: 'No schema.',
     noData: 'No data.',
     pageSize: 'Page Size',
