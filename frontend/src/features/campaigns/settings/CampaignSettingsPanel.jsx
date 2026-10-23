@@ -83,7 +83,7 @@ const KNOWN_RUN_STATUSES = ['running', 'completed', 'stopped', 'failed'];
  * Mục "Lần chạy gần nhất": trạng thái, lúc bắt đầu, đã gửi / chưa gửi được / dự kiến. Số lấy từ
  * `GET /delivery-monitor/campaigns/:id/latest-run` (backend đếm qua sendStats) — KHÔNG đọc campaign_runs.successful_sends/failed_sends.
  */
-const LatestRun = ({ campaignId, refreshKey, onOpenDeliveryMonitor, t }) => {
+const LatestRun = ({ campaignId, refreshKey, onOpenDeliveryMonitor, onToggleRunLogs, runLogsOpen, t }) => {
   const { status, run } = useCampaignLatestRun(campaignId, refreshKey);
   if (status === 'idle' || status === 'loading') {
     return <p className={`text-sm ${MUTED}`} data-testid="settings-latest-run-loading">{t('campaignSettings.latestRun.loading')}</p>;
@@ -123,6 +123,17 @@ const LatestRun = ({ campaignId, refreshKey, onOpenDeliveryMonitor, t }) => {
       >
         {t('campaignSettings.latestRun.viewDetail')}
       </a>
+      {onToggleRunLogs && (
+        <button
+          type="button"
+          onClick={onToggleRunLogs}
+          aria-expanded={Boolean(runLogsOpen)}
+          data-testid="settings-latest-run-logs-toggle"
+          className="mt-1 block text-sm font-medium text-primary-600 hover:underline dark:text-primary-400"
+        >
+          {runLogsOpen ? t('campaignSettings.latestRun.hideLogs') : t('campaignSettings.latestRun.viewLogs')}
+        </button>
+      )}
     </div>
   );
 };
@@ -159,6 +170,8 @@ const OverviewCard = ({
   runningRunId,
   latestRunKey,
   onOpenDeliveryMonitor,
+  onToggleRunLogs,
+  runLogsOpen,
   schedules,
   describeSchedule,
   onOpenSchedule,
@@ -248,7 +261,7 @@ const OverviewCard = ({
           <>
             <dt className={MUTED}>{t('campaignSettings.label.latestRun')}</dt>
             <dd className="min-w-0" data-testid="settings-overview-latest-run">
-              <LatestRun campaignId={campaignId} refreshKey={latestRunKey} onOpenDeliveryMonitor={onOpenDeliveryMonitor} t={t} />
+              <LatestRun campaignId={campaignId} refreshKey={latestRunKey} onOpenDeliveryMonitor={onOpenDeliveryMonitor} onToggleRunLogs={onToggleRunLogs} runLogsOpen={runLogsOpen} t={t} />
             </dd>
           </>
         )}
@@ -472,6 +485,9 @@ const describeStartSender = ({ channel, sender, emailSettings, t }) => {
  * @param {Function} [props.onCheckSheetConnection] kiểm tra kết nối Google Sheet của hộp cài đặt nâng cao
  * @param {string|number|null} [props.latestRunKey] đổi giá trị (vd id + trạng thái lượt mới nhất) → mục "Lần chạy gần nhất" tải lại
  * @param {() => void} props.onOpenDeliveryMonitor mở trang Giám sát gửi tin
+ * @param {() => void} [props.onToggleRunLogs] bấm "Xem nhật ký gửi" ở mục Lần chạy gần nhất (không truyền = không có nút)
+ * @param {boolean} [props.runLogsOpen] nhật ký gửi đang mở
+ * @param {import('react').ReactNode} [props.runLogsPanel] khung nhật ký gửi, vẽ dưới hai cột khi đang mở
  * @param {() => void} props.onGoFlow chuyển sang tab Sơ đồ khối
  * @param {boolean} [props.canEdit=true] false (chỉ có quyền xem) → ẩn nút Sửa / Lên lịch
  */
@@ -491,6 +507,9 @@ export default function CampaignSettingsPanel({
   runningRunId = null,
   latestRunKey = null,
   onOpenDeliveryMonitor = () => {},
+  onToggleRunLogs = undefined,
+  runLogsOpen = false,
+  runLogsPanel = null,
   schedules = [],
   describeSchedule = () => ({ pattern: '', nextRun: null, statusLabel: '' }),
   onOpenSchedule = () => {},
@@ -984,6 +1003,8 @@ export default function CampaignSettingsPanel({
           runningRunId={runningRunId}
           latestRunKey={latestRunKey}
           onOpenDeliveryMonitor={onOpenDeliveryMonitor}
+          onToggleRunLogs={onToggleRunLogs}
+          runLogsOpen={runLogsOpen}
           schedules={schedules}
           describeSchedule={describeSchedule}
           onOpenSchedule={onOpenSchedule}
@@ -1012,6 +1033,12 @@ export default function CampaignSettingsPanel({
             </>
           )}
         </div>
+
+        {runLogsOpen && runLogsPanel && (
+          <div className="order-3 min-w-0 lg:order-none lg:col-span-2" data-testid="settings-run-logs">
+            {runLogsPanel}
+          </div>
+        )}
 
         <ConfirmModal
           isOpen={Boolean(rebuildTarget)}

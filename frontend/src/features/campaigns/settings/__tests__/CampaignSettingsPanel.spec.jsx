@@ -830,6 +830,24 @@ describe('CampaignSettingsPanel — Lần chạy gần nhất', () => {
     expect(onOpenDeliveryMonitor).toHaveBeenCalledTimes(1);
   });
 
+  it('nút "Xem nhật ký gửi" gọi onToggleRunLogs; đang mở thì đổi nhãn + vẽ khung nhật ký; không truyền handler thì không có nút', () => {
+    mockLatestRun.mockReturnValue({ status: 'ready', run: RUN });
+    const onToggleRunLogs = vi.fn();
+    const { unmount } = renderPanel({ onToggleRunLogs, runLogsPanel: <div data-testid="fake-run-logs-panel" /> });
+    expect(screen.queryByTestId('settings-run-logs')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Xem nhật ký gửi' }));
+    expect(onToggleRunLogs).toHaveBeenCalledTimes(1);
+    unmount();
+
+    const opened = renderPanel({ onToggleRunLogs, runLogsOpen: true, runLogsPanel: <div data-testid="fake-run-logs-panel" /> });
+    expect(screen.getByRole('button', { name: 'Ẩn nhật ký gửi' })).toBeInTheDocument();
+    expect(screen.getByTestId('fake-run-logs-panel')).toBeInTheDocument();
+    opened.unmount();
+
+    renderPanel();
+    expect(screen.queryByTestId('settings-latest-run-logs-toggle')).not.toBeInTheDocument();
+  });
+
   it('lỗi tải → nói chưa tải được, không bịa số', () => {
     mockLatestRun.mockReturnValue({ status: 'error', run: null });
     renderPanel();

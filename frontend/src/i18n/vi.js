@@ -2030,6 +2030,8 @@ export default {
       sentOnly: 'Đã gửi {sent}',
       failed: 'Chưa gửi được {failed}',
       viewDetail: 'Xem chi tiết ở Giám sát gửi tin',
+      viewLogs: 'Xem nhật ký gửi',
+      hideLogs: 'Ẩn nhật ký gửi',
     },
     goFlow: 'Sang Sơ đồ khối để dựng bước gửi',
     editBusy: 'Lưu hoặc huỷ mục đang sửa trước',

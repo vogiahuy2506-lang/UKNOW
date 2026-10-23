@@ -2025,6 +2025,8 @@ export default {
       sentOnly: 'Sent {sent}',
       failed: 'Not delivered {failed}',
       viewDetail: 'See details in Delivery Monitor',
+      viewLogs: 'View send log',
+      hideLogs: 'Hide send log',
     },
     goFlow: 'Go to the Flow diagram to build the sending step',
     editBusy: 'Save or cancel the item you are editing first',

@@ -47,6 +47,8 @@ import { ConfirmModal } from '../../features/campaigns/components/CampaignBuilde
 import useCampaignRunController from '../../features/campaigns/hooks/useCampaignRunController';
 import useCampaignBuilderLayoutState from '../../features/campaigns/hooks/useCampaignBuilderLayoutState';
 import useLatestRunPause from '../../features/campaigns/hooks/useLatestRunPause';
+import useCampaignRunDerivedData from '../../features/campaigns/hooks/useCampaignRunDerivedData';
+import CampaignRunLogsPanel from '../../features/campaigns/components/CampaignRunLogsPanel';
 import { fetchZaloAccountOptions } from '../../features/campaigns/utils/nodeConfigModal.helpers';
 import { isNodeConfigFormUnchanged } from '../../features/campaigns/utils/nodeConfigUnchanged';
 import { applyNodeConfigToGraph } from '../../features/campaigns/utils/applyNodeConfigToGraph';
@@ -1038,6 +1040,13 @@ const CampaignBuilder = () => {
     },
   });
 
+  // Nhật ký gửi của lượt chạy thật (cùng khung với trang danh sách): mở từ "Xem nhật ký gửi" ở mục Lần chạy gần nhất của tab Thiết lập.
+  // `runLogs` ở trên là nhật ký CHẠY THỬ trong trình duyệt — khác hẳn.
+  const { workspaceLogs: serverRunWorkspaceLogs } = useCampaignRunDerivedData({
+    selectedRunDetail: runController.selectedRunDetail,
+    flowOrderByNodeId: runController.flowOrderByNodeId,
+  });
+
   const campaignForServerActions = useMemo(() => ({
     id,
     campaignName,
@@ -1298,6 +1307,20 @@ const CampaignBuilder = () => {
           runningRunId={latestRun?.status === 'running' ? latestRun.id : null}
           latestRunKey={latestRun ? `${latestRun.id}:${latestRun.status}` : 'none'}
           onOpenDeliveryMonitor={() => navigate('/app/delivery-monitor')}
+          onToggleRunLogs={isNewCampaign ? undefined : () => runController.toggleCampaignLogs(campaignForServerActions)}
+          runLogsOpen={Number(runController.selectedCampaignForLogs?.id) === Number(id)}
+          runLogsPanel={(
+            <CampaignRunLogsPanel
+              selectedCampaignForLogs={runController.selectedCampaignForLogs}
+              isLoadingRunDetail={runController.isLoadingRunDetail}
+              selectedRunDetail={runController.selectedRunDetail}
+              workspaceLogs={serverRunWorkspaceLogs}
+              selectedExecutionLogId={runController.selectedExecutionLogId}
+              onSelectExecutionLogId={runController.setSelectedExecutionLogId}
+              campaignRunHistory={runController.campaignRunHistory}
+              onViewRunDetail={runController.handleViewRunDetail}
+            />
+          )}
           schedules={campaignSchedules}
           describeSchedule={describeScheduleForSettings}
           onOpenSchedule={() => requestServerAction('schedule')}
