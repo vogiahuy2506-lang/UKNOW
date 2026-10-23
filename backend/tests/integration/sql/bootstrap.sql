@@ -4374,6 +4374,42 @@ CREATE INDEX IF NOT EXISTS idx_tiktok_outbound_log_business_user_recent
 CREATE INDEX IF NOT EXISTS idx_tiktok_outbound_log_sent_at
   ON tiktok_outbound_log (sent_at);
 
+-- --- Migration 310: tiktok_scheduled_posts (bo lich dang bai TikTok video/anh cho tai khoan Business da lien ket) ---
+CREATE TABLE IF NOT EXISTS tiktok_scheduled_posts (
+  id BIGSERIAL PRIMARY KEY,
+  id_user BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  account_id BIGINT NOT NULL REFERENCES tiktok_business_accounts(id) ON DELETE CASCADE,
+  post_type TEXT NOT NULL CHECK (post_type IN ('video', 'photo')),
+  caption TEXT NOT NULL DEFAULT '',
+  video_url TEXT,                                   -- HTTPS công khai, domain đã verify trên TikTok
+  photo_urls JSONB NOT NULL DEFAULT '[]'::jsonb,    -- tối đa 35 URL HTTPS
+  privacy_level TEXT NOT NULL DEFAULT 'PUBLIC_TO_EVERYONE',
+  scheduled_at TIMESTAMPTZ NOT NULL,
+  status TEXT NOT NULL DEFAULT 'scheduled'
+    CHECK (status IN ('scheduled', 'publishing', 'processing', 'published', 'failed', 'cancelled')),
+  share_id TEXT,                                    -- publish_id khi poll trạng thái
+  tiktok_post_ids JSONB,                            -- post_ids khi PUBLISH_COMPLETE
+  poll_count INTEGER NOT NULL DEFAULT 0,
+  next_poll_at TIMESTAMPTZ,
+  processing_started_at TIMESTAMPTZ,
+  published_at TIMESTAMPTZ,
+  error_code TEXT,
+  error_message TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_tiktok_scheduled_posts_due
+  ON tiktok_scheduled_posts (scheduled_at)
+  WHERE status = 'scheduled';
+
+CREATE INDEX IF NOT EXISTS idx_tiktok_scheduled_posts_polling
+  ON tiktok_scheduled_posts (next_poll_at)
+  WHERE status = 'processing';
+
+CREATE INDEX IF NOT EXISTS idx_tiktok_scheduled_posts_user_time
+  ON tiktok_scheduled_posts (id_user, scheduled_at DESC);
+
 -- --- Migration 307: su kien chuong campaign_sending_slow (PLAN_THAM_CHIEU_KHOI_VA_RUN_BO_CHAM PR-3: chien dich gui cham vi Zalo gioi han tra so / cam nhan nguoi la) ---
 INSERT INTO notification_event_settings (event_type, in_app_enabled, email_enabled, user_can_disable_email)
 VALUES ('campaign_sending_slow', true, false, true)
