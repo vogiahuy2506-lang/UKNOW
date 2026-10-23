@@ -1057,11 +1057,19 @@ const CampaignBuilder = () => {
   const canUseServerRunActions = !isNewCampaign && Boolean(id);
 
   // Vào chi tiết một chiến dịch đã lưu là nạp sẵn nhật ký lượt chạy thật (hiện ở tab Thiết lập); có lượt chạy mới thì nạp lại theo lượt đó.
+  // Hai điều bắt buộc, vì `api.js` HUỶ request GET đang bay nếu có request GET cùng URL + tham số tới sau:
+  //  1. Chỉ nạp SAU KHI trang tải xong chiến dịch (`lastSavedTime` được đặt lúc đó). `openCampaignLogs` cũng gọi GET /campaigns/:id;
+  //     gọi chung lúc đó thì lượt tải của chính trang bị huỷ → báo "Không thể tải thông tin chiến dịch" và đá về danh sách.
+  //  2. Các lần nạp xếp hàng nối đuôi nhau (không chạy chồng): chồng thì lượt trước bị huỷ → toast "Không thể tải log".
+  const campaignLoaded = Boolean(lastSavedTime);
+  const runLogsLoadChainRef = useRef(Promise.resolve());
   useEffect(() => {
-    if (isNewCampaign || !id) return;
-    runController.openCampaignLogs?.({ id, campaignName });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- openCampaignLogs đổi mỗi lần vẽ; chỉ nạp lại khi đổi chiến dịch / có lượt chạy mới
-  }, [id, isNewCampaign, latestRun?.id]);
+    if (isNewCampaign || !id || !campaignLoaded) return;
+    runLogsLoadChainRef.current = runLogsLoadChainRef.current
+      .then(() => runController.openCampaignLogs?.({ id, campaignName }))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- openCampaignLogs đổi mỗi lần vẽ; chỉ nạp lại khi đổi chiến dịch / trang tải xong / có lượt chạy mới
+  }, [id, isNewCampaign, campaignLoaded, latestRun?.id]);
 
   const checkZaloPhoneLookupCooldown = async () => {
     if (runController.isZaloGroupCampaign(campaignForServerActions)) return true;

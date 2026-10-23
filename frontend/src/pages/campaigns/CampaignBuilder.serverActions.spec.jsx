@@ -196,6 +196,19 @@ describe('CampaignBuilder — nút gửi thật trong sơ đồ (PR-1)', () => {
     expect(mockOpenCampaignLogs).not.toHaveBeenCalled();
   });
 
+  it('nhật ký chỉ nạp SAU khi trang tải xong chiến dịch (api.js huỷ GET trùng URL → nạp chung lúc đó là huỷ mất lượt tải của chính trang)', async () => {
+    const api = (await import('../../features/campaigns/services/campaignBuilderApi.service')).default;
+    let finishLoad;
+    api.getCampaignById.mockImplementationOnce(() => new Promise((resolve) => { finishLoad = resolve; }));
+    renderBuilder();
+    await waitFor(() => expect(api.getCampaignById).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 30));
+    expect(mockOpenCampaignLogs).not.toHaveBeenCalled();
+
+    finishLoad({ data: { data: { id: 391, campaignName: 'Chiến dịch thư cảm ơn', campaignType: 'email', status: 'draft', nodes: [], connections: [] } } });
+    await waitFor(() => expect(mockOpenCampaignLogs).toHaveBeenCalledTimes(1));
+  });
+
   it('sơ đồ đã lưu → "Chạy ngay" mở thẳng hộp xác nhận chạy', async () => {
     renderBuilder();
     await waitFor(() => expect(screen.getByTestId('campaign-name')).toHaveTextContent('Chiến dịch thư cảm ơn'));
