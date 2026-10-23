@@ -30,7 +30,13 @@ import crypto from 'crypto';
 import chatbotChannelRepository from '../repositories/ai/chatbotChannel.repository.js';
 import tiktokBusinessAccountRepository from
   '../repositories/ai/tiktokBusinessAccount.repository.js';
+import chatbotRepository from '../repositories/ai/chatbot.repository.js';
+import unifiedInboxRepository from '../repositories/ai/unifiedInbox.repository.js';
 import chatRouterService from '../services/chatbot/chatRouter.service.js';
+import chatbotRateLimitService from '../services/chatbot/chatbotRateLimit.service.js';
+import inboundReplyDebounceService from '../services/chatbot/inboundReplyDebounce.service.js';
+import { formatBatchedContent } from '../utils/chatbotReplyBatch.util.js';
+import { unavailableMetadata } from '../utils/aiUnavailable.util.js';
 import tiktokBusinessAdapter from '../services/chatbot/channelAdapters/tiktokBusiness.adapter.js';
 import tiktokRateLimitService from '../services/chatbot/tiktokRateLimit.service.js';
 
@@ -190,6 +196,9 @@ class TiktokBusinessWebhookController {
     // 8. Branch theo event
     switch (event) {
       case 'im_send_msg':
+        // Tin do CHÍNH tài khoản gửi đi (kể cả bot vừa trả lời) — KHÔNG trả lời, tránh vòng lặp tự trả lời.
+        return;
+
       case 'im_receive_msg':
       case 'im_receive_high_intent_comment':
         await this._handleInboundMessage({ accountRow, ev, content, event });
@@ -229,9 +238,9 @@ class TiktokBusinessWebhookController {
   }
 
   /**
-   * Handle inbound message (im_send_msg / im_receive_msg / im_referral_msg /
-   * im_receive_high_intent_comment). Gọi chatRouter để generate reply,
-   * check rate limit, gửi qua adapter.
+   * Handle inbound message (im_receive_msg / im_referral_msg / im_receive_high_intent_comment).
+   * Lưu tin của khách rồi đưa vào hàng gom (debounce); việc kiểm tra + gọi AI + gửi trả lời nằm ở
+   * `_processTiktokBatch`. `im_send_msg` (tin do chính tài khoản gửi) KHÔNG đi vào đây.
    */
   async _handleInboundMessage({ accountRow, ev, content, event, isReferral = false }) {
     // 1. Lấy conversation_id + user_openid
@@ -262,53 +271,221 @@ class TiktokBusinessWebhookController {
       return;
     }
 
-    // 4. Rate limit check (Bẫy 3)
-    const rateCheck = await tiktokRateLimitService.checkAndLog({
+    // 4. Chatbot được gắn phải còn tồn tại và đang bật
+    const chatbotId = channel.id_chatbot;
+    const chatbot = chatbotId ? await chatbotRepository.findChatbotById(chatbotId) : null;
+    if (!chatbot || !chatbot.is_active) {
+      console.warn(`[TikTokWebhook] Chatbot ${chatbotId} không tồn tại hoặc đang tắt — bỏ qua`);
+      return;
+    }
+
+    // 5. Hội thoại + lưu tin của khách (dedupe theo message_id để TikTok gửi lại không trả lời 2 lần)
+    const conv = await chatbotChannelRepository.getOrCreateConversation({
+      chatbotId,
+      channelId: channel.id,
+      externalId: uniqueIdentifier,
+      source: 'tiktok_business',
+    });
+    const messageId = content?.message_id || content?.text?.message_id || null;
+    const savedMessage = await chatbotChannelRepository.addMessage(conv.id, {
+      role: 'visitor',
+      content: text,
+      message_type: 'text',
+      external_id: messageId ? String(messageId) : undefined,
+    });
+    if (savedMessage?.isDuplicate) return;
+    await chatbotChannelRepository.updateLastActivity(channel.id);
+
+    // 6. Gom các tin nhắn dồn dập của cùng 1 khách thành 1 lượt trả lời
+    inboundReplyDebounceService.enqueue({
+      key: `tiktok_business:${channel.id}:${conv.id}`,
+      message: {
+        eventId: messageId,
+        persistedMessageId: savedMessage?.id || null,
+        receivedAt: Date.now(),
+        content: text,
+      },
+      flushCallback: async (batch) => {
+        await this._processTiktokBatch({
+          accountRow,
+          channel,
+          chatbotId,
+          conv,
+          conversationId,
+          uniqueIdentifier,
+          batch,
+        });
+      },
+    });
+  }
+
+  /**
+   * Gửi 1 tin tĩnh (ngoài giờ / hết hạn mức AI) qua TikTok, có tính vào giới hạn 10 tin tự động / 48h.
+   * @returns {Promise<boolean>} true nếu đã gửi và lưu
+   */
+  async _sendStaticNotice({ accountRow, conv, conversationId, uniqueIdentifier, message }) {
+    const limit = await tiktokRateLimitService.checkAndLog({
       businessId: accountRow.business_id,
       uniqueIdentifier,
       conversationId,
     });
-    if (!rateCheck.allowed) {
-      console.warn(
-        `[TikTokWebhook] Rate limit: ${rateCheck.currentCount}/${rateCheck.limit} `
-          + `cho user ${uniqueIdentifier}, bỏ qua reply.`
-      );
-      return;
-    }
-
-    // 5. Gọi chatRouter để generate reply
-    let replyText;
-    try {
-      const routerResp = await chatRouterService.routeChatbotMessage?.({
-        channel: 'tiktok_business',
-        userId: accountRow.id_user,
-        chatbotId: channel.id_chatbot,
-        message: text,
-        externalId: uniqueIdentifier,
-        channelId: channel.id,
-      });
-      replyText = routerResp?.reply || routerResp?.text || '';
-    } catch (routerErr) {
-      console.error('[TikTokWebhook] chatRouter error:', routerErr.message);
-      return;
-    }
-    if (!replyText) {
-      console.log('[TikTokWebhook] chatRouter trả về rỗng, bỏ qua');
-      return;
-    }
-
-    // 6. Send reply
-    const sendResult = await tiktokBusinessAdapter.sendReply({
+    if (!limit.allowed) return false;
+    const sent = await tiktokBusinessAdapter.sendReply({
       accountId: accountRow.id,
       conversationId,
-      message: replyText,
+      message,
     });
-    if (!sendResult.success) {
-      console.error(
-        '[TikTokWebhook] sendReply fail:',
-        sendResult.error,
-        sendResult.httpStatus
-      );
+    if (!sent?.success) return false;
+    await chatbotChannelRepository.addMessage(conv.id, {
+      role: 'bot',
+      content: message,
+      message_type: 'text',
+    });
+    return true;
+  }
+
+  /**
+   * Xử lý 1 lượt tin nhắn đã gom của 1 hội thoại TikTok. Cùng chuỗi kiểm tra với Facebook/WhatsApp:
+   * kênh+chatbot còn bật, khoá topup, tạm dừng AI (nhân viên tiếp quản), giờ hoạt động, hạn mức AI,
+   * rồi giới hạn TikTok (10 tin tự động / 48h), gọi AI và gửi trả lời.
+   */
+  async _processTiktokBatch({
+    accountRow, channel, chatbotId, conv, conversationId, uniqueIdentifier, batch,
+  }) {
+    const prompt = formatBatchedContent(batch.messages);
+    if (!prompt) return;
+    const logTag = `[ChatbotDebounce] channel=tiktok_business account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason}`;
+
+    try {
+      // 1. Kênh + chatbot vẫn đang bật và vẫn gắn đúng chatbot này
+      const activeChannel = await chatbotChannelRepository.findActiveChannelById(channel.id);
+      if (!activeChannel || Number(activeChannel.id_chatbot) !== Number(chatbotId)) {
+        console.log(`${logTag} result=disabled`);
+        return;
+      }
+      const chatbot = await chatbotRepository.findChatbotById(chatbotId);
+      if (!chatbot || !chatbot.is_active) {
+        console.log(`${logTag} result=disabled`);
+        return;
+      }
+
+      // 2. Khoá tài nguyên (topup)
+      const { resourceIsLocked } = await import('../utils/topupLockGate.util.js');
+      if (await resourceIsLocked('chatbots', chatbotId)) {
+        console.log(`${logTag} result=locked`);
+        return;
+      }
+
+      // 3. Nhân viên đã tiếp quản hội thoại → AI im lặng
+      if (await unifiedInboxRepository.isAiPaused(conv.id, 'channel')) {
+        console.log(`${logTag} result=paused`);
+        return;
+      }
+
+      // 4. Giờ hoạt động
+      const { default: chatbotActiveHoursService } = await import('../services/chatbot/chatbotActiveHours.service.js');
+      const activeCheck = await chatbotActiveHoursService.checkBeforeAi({
+        activeHours: chatbot.active_hours,
+        repliesEnabled: chatbot.replies_enabled,
+        channel: 'tiktok_business',
+        chatbotId,
+        senderKey: uniqueIdentifier,
+      });
+      if (!activeCheck.allowed) {
+        if (activeCheck.shouldNotify) {
+          const ok = await this._sendStaticNotice({
+            accountRow, conv, conversationId, uniqueIdentifier, message: activeCheck.staticReply,
+          });
+          if (ok) {
+            await chatbotActiveHoursService.markNotified({
+              channel: 'tiktok_business',
+              chatbotId,
+              senderKey: uniqueIdentifier,
+              activeHours: chatbot.active_hours,
+            });
+          }
+        }
+        console.log(`${logTag} result=outside_hours`);
+        return;
+      }
+
+      // 5. Hạn mức AI
+      const rate = await chatbotRateLimitService.checkBeforeAi({
+        channel: 'tiktok_business',
+        ownerUserId: chatbot.id_user,
+        chatbotId,
+        senderKey: uniqueIdentifier,
+      });
+      if (!rate.allowed) {
+        if (rate.shouldNotify) {
+          const ok = await this._sendStaticNotice({
+            accountRow, conv, conversationId, uniqueIdentifier, message: rate.staticReply,
+          });
+          if (ok) {
+            await chatbotRateLimitService.markRateLimitNotified({
+              channel: 'tiktok_business',
+              ownerUserId: chatbot.id_user,
+              chatbotId,
+              senderKey: uniqueIdentifier,
+              reason: rate.reason,
+            });
+          }
+        }
+        console.log(`${logTag} result=rate_limited`);
+        return;
+      }
+
+      // 6. Giới hạn của TikTok: tối đa 10 tin tự động / 48h cho mỗi khách (Bẫy 3)
+      const tiktokLimit = await tiktokRateLimitService.checkAndLog({
+        businessId: accountRow.business_id,
+        uniqueIdentifier,
+        conversationId,
+      });
+      if (!tiktokLimit.allowed) {
+        console.warn(
+          `[TikTokWebhook] Rate limit: ${tiktokLimit.currentCount}/${tiktokLimit.limit} cho user ${uniqueIdentifier}, bỏ qua reply.`
+        );
+        console.log(`${logTag} result=tiktok_rate_limited`);
+        return;
+      }
+
+      // 7. Gọi AI (lịch sử loại trừ các tin của lượt này vì đã nằm trong prompt)
+      const historyThroughMessageId = await chatbotChannelRepository.getLatestMessageId(conv.id);
+      const result = await chatRouterService.routeChatbotMessage({
+        chatbotId,
+        message: prompt,
+        conversationId: conv.id,
+        throughMessageId: historyThroughMessageId,
+        excludeMessageIds: batch.messages
+          .map((item) => item.persistedMessageId)
+          .filter((id) => id != null),
+      });
+      if (!result?.content) {
+        console.log(`${logTag} result=failed`);
+        return;
+      }
+
+      // 8. Gửi trả lời cho khách
+      const sent = await tiktokBusinessAdapter.sendReply({
+        accountId: accountRow.id,
+        conversationId,
+        message: result.content,
+      });
+      if (!sent?.success) {
+        console.error('[TikTokWebhook] sendReply fail:', sent?.error, sent?.httpStatus);
+        console.log(`${logTag} result=failed`);
+        return;
+      }
+
+      await chatbotChannelRepository.addMessage(conv.id, {
+        role: 'bot',
+        content: result.content,
+        message_type: 'text',
+        metadata: unavailableMetadata(result),
+      });
+      console.log(`${logTag} result=sent`);
+    } catch (err) {
+      console.error(`[ChatbotDebounce] Error processing TikTok batch for conv ${conv.id}:`, err.stack || err.message);
     }
   }
 }

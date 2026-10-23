@@ -17,6 +17,9 @@
 import { encryptSmtpSecret, decryptSmtpSecret } from '../utils/smtpSecretCrypto.js';
 import tiktokBusinessAccountRepository from '../repositories/ai/tiktokBusinessAccount.repository.js';
 import tiktokOAuthService from '../services/tiktok/tiktokOAuth.service.js';
+import chatbotChannelRepository from '../repositories/ai/chatbotChannel.repository.js';
+import chatbotRepository from '../repositories/ai/chatbot.repository.js';
+import inboundReplyDebounceService from '../services/chatbot/inboundReplyDebounce.service.js';
 import { resolveWorkspaceOwnerId } from '../utils/workspaceContext.util.js';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5174';
@@ -54,6 +57,42 @@ function buildErrorRedirect(errorCode, reason) {
 }
 
 class TiktokSettingsController {
+  /**
+   * Gắn tài khoản TikTok vừa liên kết vào chatbot đang bật của chủ workspace
+   * (`chatbot_channel_connections`, channel_type 'tiktok_business'). Webhook tra kênh theo bảng này
+   * (`findActiveByExternalChannelId`), không có dòng → tin nhắn đến bị bỏ qua, không ai trả lời.
+   *
+   * - Đã có kết nối đang bật trỏ tới chatbot đang bật của CHÍNH chủ này → giữ nguyên (không đổi lựa chọn cũ).
+   * - Chưa có → gắn vào chatbot đang bật mới nhất của chủ.
+   *
+   * @returns {Promise<object|null>} dòng kết nối, hoặc null nếu chưa có chatbot đang bật / gặp lỗi
+   */
+  async _bindChatbotToAccount({ userId, account }) {
+    try {
+      const existing = await chatbotChannelRepository.findActiveByExternalChannelId(
+        'tiktok_business',
+        account.business_id
+      );
+      if (existing) {
+        const ownBot = await chatbotRepository.findChatbotById(existing.id_chatbot, userId);
+        if (ownBot?.is_active) return existing;
+      }
+
+      const chatbot = await chatbotRepository.findFirstActiveByUser(userId);
+      if (!chatbot) {
+        console.warn(`[TikTokSettings] user ${userId} chưa có chatbot đang bật — chưa tự trả lời được`);
+        return null;
+      }
+      return await chatbotChannelRepository.upsertTiktokBusinessChannel(chatbot.id, {
+        externalChannelId: account.business_id,
+        displayName: account.display_name || null,
+      });
+    } catch (bindErr) {
+      console.error('[TikTokSettings] gắn chatbot vào tài khoản TikTok lỗi:', bindErr.message);
+      return null;
+    }
+  }
+
   /**
    * GET /api/settings/tiktok-business/connect
    * Bước 1: sinh state HMAC (chứa userId) rồi trả về `auth_url` để FE redirect.
@@ -177,6 +216,10 @@ class TiktokSettingsController {
         role: userInfo.role,
       });
 
+      // 9b. Gắn tài khoản vào chatbot của chủ workspace để webhook tự trả lời tin nhắn đến.
+      // Best-effort: lỗi gắn KHÔNG làm hỏng việc liên kết (tài khoản đã lưu), chỉ ghi log.
+      const autoReply = await this._bindChatbotToAccount({ userId, account });
+
       // 10. Redirect về FE với success
       const successUrl = new URL(`${frontendUrl}/app/settings/channels`);
       successUrl.searchParams.set('tab', 'tiktok');
@@ -184,6 +227,8 @@ class TiktokSettingsController {
       successUrl.searchParams.set('account_id', String(account.id));
       // Bẫy 15: nhắc user set DM = Everyone (chỉ thông báo, không block)
       successUrl.searchParams.set('hint', 'check_dm_privacy');
+      // Chưa có chatbot đang bật → FE nhắc người dùng tạo/bật chatbot để bot trả lời được.
+      if (!autoReply) successUrl.searchParams.set('auto_reply', 'no_chatbot');
       return res.redirect(successUrl.toString());
     } catch (err) {
       console.error('[TikTokSettings] callback error:', err);
@@ -282,6 +327,24 @@ class TiktokSettingsController {
       const ok = await tiktokBusinessAccountRepository.deactivate(id, userId);
       if (!ok) {
         return res.status(500).json({ success: false, message: 'Không thể ngắt kết nối.' });
+      }
+      // Tắt kết nối chatbot để bot ngừng trả lời tài khoản này (best-effort).
+      try {
+        await chatbotChannelRepository.deactivateByExternalChannelId('tiktok_business', account.business_id);
+      } catch (unbindErr) {
+        console.warn('[TikTokSettings] tắt kết nối chatbot (best-effort) lỗi:', unbindErr.message);
+      }
+      // Huỷ tin đang chờ gom: nếu không, lượt đã enqueue có thể vẫn trả lời
+      // sau khi người dùng đã ngắt kết nối (giống zalo_oa / zalo_personal).
+      try {
+        const channelIds = await chatbotChannelRepository.listIdsByExternalChannelId(
+          'tiktok_business', account.business_id
+        );
+        for (const channelId of channelIds) {
+          inboundReplyDebounceService.cancelByPrefix(`tiktok_business:${channelId}:`);
+        }
+      } catch (cancelErr) {
+        console.warn('[TikTokSettings] huỷ lượt trả lời đang chờ (best-effort):', cancelErr.message);
       }
       return res.json({ success: true });
     } catch (err) {

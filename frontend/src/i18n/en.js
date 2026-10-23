@@ -14069,6 +14069,10 @@ Feel free to ask me anything!`,
         title: 'Connected! Check DM Privacy',
         hint: 'To allow users to message you: TikTok app > Settings > Privacy > Direct Messages > select "Everyone". If you keep "Friends", the API will not receive messages.',
       },
+      noChatbot: {
+        title: 'Connected, but no active chatbot yet',
+        hint: 'Create or enable a chatbot (Studio → Chatbots) and reconnect TikTok. Visitor messages will then be answered automatically.',
+      },
     },
   },
   // PR-5 của plan tiktok-business-messaging-integration.md: English translations

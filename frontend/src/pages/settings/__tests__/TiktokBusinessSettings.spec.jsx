@@ -127,6 +127,23 @@ describe('TiktokBusinessSettings — 3 bẫy OAuth', () => {
     expect(await screen.findByText(/Kiểm tra DM Privacy/)).toBeInTheDocument();
     expect(screen.getByText(/Everyone/)).toBeInTheDocument();
   });
+
+  // BE chỉ gắn được tài khoản vào chatbot khi chủ workspace có chatbot đang bật.
+  // Không có → redirect kèm auto_reply=no_chatbot; nếu không cảnh báo, người dùng
+  // thấy "đã kết nối" nhưng tin nhắn đến không ai trả lời.
+  it('auto_reply=no_chatbot → cảnh báo chưa có chatbot để bot trả lời', async () => {
+    window.history.replaceState({}, '', '/?success=connected&auto_reply=no_chatbot');
+    await renderSettings();
+    expect(await screen.findByText(/chưa có chatbot đang bật/i)).toBeInTheDocument();
+    expect(window.location.search).toBe('');
+  });
+
+  it('auto_reply=no_chatbot ưu tiên hơn hint DM privacy (thứ chặn bot trả lời)', async () => {
+    window.history.replaceState({}, '', '/?hint=check_dm_privacy&auto_reply=no_chatbot');
+    await renderSettings();
+    expect(await screen.findByText(/chưa có chatbot đang bật/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Kiểm tra DM Privacy/)).not.toBeInTheDocument();
+  });
 });
 
 describe('TiktokBusinessSettings — actions', () => {

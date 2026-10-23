@@ -34,6 +34,32 @@ jest.unstable_mockModule('../../repositories/ai/tiktokBusinessAccount.repository
   },
 }));
 
+const mockFindActiveByExternal = jest.fn();
+const mockUpsertTiktokChannel = jest.fn();
+const mockDeactivateByExternal = jest.fn();
+const mockListIdsByExternal = jest.fn();
+const mockCancelByPrefix = jest.fn();
+jest.unstable_mockModule('../../repositories/ai/chatbotChannel.repository.js', () => ({
+  default: {
+    findActiveByExternalChannelId: mockFindActiveByExternal,
+    upsertTiktokBusinessChannel: mockUpsertTiktokChannel,
+    deactivateByExternalChannelId: mockDeactivateByExternal,
+    listIdsByExternalChannelId: mockListIdsByExternal,
+  },
+}));
+jest.unstable_mockModule('../../services/chatbot/inboundReplyDebounce.service.js', () => ({
+  default: { cancelByPrefix: mockCancelByPrefix },
+}));
+
+const mockFindFirstActiveByUser = jest.fn();
+const mockFindChatbotById = jest.fn();
+jest.unstable_mockModule('../../repositories/ai/chatbot.repository.js', () => ({
+  default: {
+    findFirstActiveByUser: mockFindFirstActiveByUser,
+    findChatbotById: mockFindChatbotById,
+  },
+}));
+
 const mockExchange = jest.fn();
 const mockGetUserInfo = jest.fn();
 const mockRefresh = jest.fn();
@@ -176,8 +202,12 @@ describe('tiktokSettings.controller — callback (3 bẫy)', () => {
       refreshExpiresIn: 31536000,
     });
     mockVerifyState.mockReturnValue({ userId: 7, nonce: 'n', createdAt: Date.now() });
-    mockUpsert.mockResolvedValue({ id: 1, business_id: 'biz_xyz' });
+    mockUpsert.mockResolvedValue({ id: 1, business_id: 'biz_xyz', display_name: 'VN Shop' });
     mockIsRegionSupported.mockReturnValue(true);
+    mockFindActiveByExternal.mockReset().mockResolvedValue(null);
+    mockFindChatbotById.mockReset();
+    mockFindFirstActiveByUser.mockReset().mockResolvedValue({ id: 55 });
+    mockUpsertTiktokChannel.mockReset().mockResolvedValue({ id: 900, id_chatbot: 55 });
   });
 
   test('User deny ở TikTok → redirect về FE với error=tiktok_denied', async () => {
@@ -284,6 +314,52 @@ describe('tiktokSettings.controller — callback (3 bẫy)', () => {
       expect.stringMatching(/hint=check_dm_privacy/)
     );
   });
+
+  const businessInfo = {
+    openId: 'biz_xyz', displayName: 'VN Shop', region: 'APAC', role: 'business_account',
+  };
+
+  test('Liên kết xong → tự gắn vào chatbot đang bật của chủ để bot trả lời tin nhắn', async () => {
+    mockGetUserInfo.mockResolvedValueOnce(businessInfo);
+    const res = mockRes();
+    await controller.callback(mockReq({ query: { code: 'code', state: 'good' } }), res);
+    expect(mockFindFirstActiveByUser).toHaveBeenCalledWith(7);
+    expect(mockUpsertTiktokChannel).toHaveBeenCalledWith(55, {
+      externalChannelId: 'biz_xyz',
+      displayName: 'VN Shop',
+    });
+    expect(res.redirect).not.toHaveBeenCalledWith(expect.stringContaining('auto_reply=no_chatbot'));
+  });
+
+  test('Chưa có chatbot đang bật → vẫn liên kết thành công, kèm auto_reply=no_chatbot', async () => {
+    mockGetUserInfo.mockResolvedValueOnce(businessInfo);
+    mockFindFirstActiveByUser.mockResolvedValueOnce(null);
+    const res = mockRes();
+    await controller.callback(mockReq({ query: { code: 'code', state: 'good' } }), res);
+    expect(mockUpsertTiktokChannel).not.toHaveBeenCalled();
+    expect(res.redirect).toHaveBeenCalledWith(expect.stringContaining('success=connected'));
+    expect(res.redirect).toHaveBeenCalledWith(expect.stringContaining('auto_reply=no_chatbot'));
+  });
+
+  test('Đã gắn vào chatbot đang bật của chính chủ → giữ nguyên, không gắn lại', async () => {
+    mockGetUserInfo.mockResolvedValueOnce(businessInfo);
+    mockFindActiveByExternal.mockResolvedValueOnce({ id: 3, id_chatbot: 66 });
+    mockFindChatbotById.mockResolvedValueOnce({ id: 66, is_active: true });
+    const res = mockRes();
+    await controller.callback(mockReq({ query: { code: 'code', state: 'good' } }), res);
+    expect(mockFindChatbotById).toHaveBeenCalledWith(66, 7);
+    expect(mockUpsertTiktokChannel).not.toHaveBeenCalled();
+    expect(res.redirect).toHaveBeenCalledWith(expect.stringContaining('success=connected'));
+  });
+
+  test('Gắn chatbot lỗi (DB) → không làm hỏng việc liên kết', async () => {
+    mockGetUserInfo.mockResolvedValueOnce(businessInfo);
+    mockUpsertTiktokChannel.mockRejectedValueOnce(new Error('db down'));
+    const res = mockRes();
+    await controller.callback(mockReq({ query: { code: 'code', state: 'good' } }), res);
+    expect(res.redirect).toHaveBeenCalledWith(expect.stringContaining('success=connected'));
+    expect(res.redirect).toHaveBeenCalledWith(expect.stringContaining('auto_reply=no_chatbot'));
+  });
 });
 
 describe('tiktokSettings.controller — listAccounts', () => {
@@ -359,6 +435,9 @@ describe('tiktokSettings.controller — deleteAccount', () => {
       access_token: encryptSmtpSecret('plain-access-for-revoke'),
     });
     mockDeactivate.mockResolvedValue(true);
+    mockDeactivateByExternal.mockReset().mockResolvedValue(1);
+    mockListIdsByExternal.mockReset().mockResolvedValue([]);
+    mockCancelByPrefix.mockReset();
   });
 
   test('Happy path: revoke (best-effort) → deactivate', async () => {
@@ -366,6 +445,46 @@ describe('tiktokSettings.controller — deleteAccount', () => {
     await controller.deleteAccount(mockReq({ params: { id: '1' } }), res);
     expect(mockRevoke).toHaveBeenCalled();
     expect(mockDeactivate).toHaveBeenCalledWith(1, 7);
+    expect(res.json).toHaveBeenCalledWith({ success: true });
+  });
+
+  test('Ngắt kết nối → tắt luôn kết nối chatbot của tài khoản', async () => {
+    mockFindById.mockResolvedValueOnce({
+      id: 1,
+      business_id: 'biz_gone',
+      access_token: encryptSmtpSecret('plain-access-for-revoke'),
+    });
+    mockListIdsByExternal.mockResolvedValueOnce([21, 22]);
+    const res = mockRes();
+    await controller.deleteAccount(mockReq({ params: { id: '1' } }), res);
+    expect(mockDeactivateByExternal).toHaveBeenCalledWith('tiktok_business', 'biz_gone');
+    expect(res.json).toHaveBeenCalledWith({ success: true });
+  });
+
+  // Lượt tin đã enqueue có thể còn trong hàng gom khi user bấm "Ngắt" — nếu không huỷ,
+  // bot vẫn trả lời tin của tài khoản đã ngắt trong vài giây tới.
+  test('Ngắt kết nối → huỷ lượt trả lời đang chờ gom của các kênh của tài khoản', async () => {
+    mockFindById.mockResolvedValueOnce({
+      id: 1,
+      business_id: 'biz_gone',
+      access_token: encryptSmtpSecret('plain-access-for-revoke'),
+    });
+    mockListIdsByExternal.mockResolvedValueOnce([21, 22]);
+    const res = mockRes();
+    await controller.deleteAccount(mockReq({ params: { id: '1' } }), res);
+    expect(mockCancelByPrefix).toHaveBeenCalledWith('tiktok_business:21:');
+    expect(mockCancelByPrefix).toHaveBeenCalledWith('tiktok_business:22:');
+  });
+
+  test('Huỷ lượt chờ lỗi (best-effort) → vẫn ngắt kết nối thành công', async () => {
+    mockFindById.mockResolvedValueOnce({
+      id: 1,
+      business_id: 'biz_gone',
+      access_token: encryptSmtpSecret('plain-access-for-revoke'),
+    });
+    mockListIdsByExternal.mockRejectedValueOnce(new Error('db down'));
+    const res = mockRes();
+    await controller.deleteAccount(mockReq({ params: { id: '1' } }), res);
     expect(res.json).toHaveBeenCalledWith({ success: true });
   });
 

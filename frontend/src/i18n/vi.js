@@ -14090,6 +14090,10 @@ export default {
         title: 'Đã kết nối! Kiểm tra DM Privacy',
         hint: 'Để user có thể nhắn cho bạn: TikTok app > Settings > Privacy > Direct Messages > chọn "Everyone". Nếu để "Friends", API sẽ không nhận được tin.',
       },
+      noChatbot: {
+        title: 'Đã kết nối, nhưng chưa có chatbot đang bật',
+        hint: 'Tạo hoặc bật một chatbot (Studio → Chatbots) rồi kết nối lại TikTok. Tin nhắn khách đến sẽ được chatbot trả lời tự động.',
+      },
     },
   },
   // PR-5 của plan tiktok-business-messaging-integration.md: i18n cho inbox

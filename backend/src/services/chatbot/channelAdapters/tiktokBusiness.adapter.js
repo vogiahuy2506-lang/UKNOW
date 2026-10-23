@@ -153,7 +153,7 @@ class TiktokBusinessAdapter {
    */
   async _tryRefreshAndRetry({ account, body }) {
     try {
-      const { refreshAccessToken } = await import('./tiktokOAuth.service.js');
+      const { refreshAccessToken } = await import('../../tiktok/tiktokOAuth.service.js');
       const plainRefresh = decryptSmtpSecret(account.refresh_token);
       const newTokens = await refreshAccessToken(plainRefresh);
       const now = Date.now();

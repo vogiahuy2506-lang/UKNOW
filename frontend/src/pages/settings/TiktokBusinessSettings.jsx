@@ -119,6 +119,22 @@ function OAuthErrorNotice({ errorCode, reason }) {
     );
   }
 
+  if (errorCode === 'no_chatbot') {
+    // BE báo không có chatbot đang bật để gắn → chưa ai trả lời tin nhắn đến.
+    return (
+      <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <p className="flex items-center gap-2 font-semibold">
+          <HiOutlineExclamation className="h-4 w-4 shrink-0" aria-hidden="true" />
+          {t('tiktokBusiness.hints.noChatbot.title', 'Đã kết nối, nhưng chưa có chatbot đang bật')}
+        </p>
+        <p className="mt-1 text-xs leading-relaxed text-amber-800">
+          {t('tiktokBusiness.hints.noChatbot.hint',
+            'Tạo hoặc bật một chatbot (Studio → Chatbots) rồi kết nối lại TikTok. Tin nhắn khách đến sẽ được chatbot trả lời tự động.')}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
       <p className="flex items-center gap-2 font-semibold">
@@ -167,17 +183,25 @@ export default function TiktokBusinessSettings() {
     const hint = params.get('hint');
     const success = params.get('success');
     const reason = params.get('reason');
+    const autoReply = params.get('auto_reply');
     if (error) setOauthError({ code: error, reason });
     if (hint === 'check_dm_privacy') setOauthHint('check_dm_privacy');
     if (success === 'connected') setOauthSuccess(true);
+    // Liên kết xong nhưng không có chatbot đang bật để gắn → cảnh báo luồng tự trả lời.
+    // Ưu tiên hơn `hint` DM privacy vì đây là thứ chặn bot trả lời.
+    if (autoReply === 'no_chatbot') {
+      setOauthHint('no_chatbot');
+      setOauthSuccess(false);
+    }
     // Clear URL params sau khi đọc
-    if (error || hint || success) {
+    if (error || hint || success || autoReply) {
       const url = new URL(window.location.href);
       url.searchParams.delete('error');
       url.searchParams.delete('reason');
       url.searchParams.delete('hint');
       url.searchParams.delete('success');
       url.searchParams.delete('account_id');
+      url.searchParams.delete('auto_reply');
       window.history.replaceState({}, '', url.toString());
     }
     loadAccounts();
@@ -277,6 +301,9 @@ export default function TiktokBusinessSettings() {
         {oauthError && <OAuthErrorNotice errorCode={oauthError.code} reason={oauthError.reason} />}
         {!oauthError && oauthHint === 'check_dm_privacy' && (
           <OAuthErrorNotice errorCode="check_dm_privacy" />
+        )}
+        {!oauthError && oauthHint === 'no_chatbot' && (
+          <OAuthErrorNotice errorCode="no_chatbot" />
         )}
 
         {/* Region notice (Bẫy 14) */}

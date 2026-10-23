@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import db from '../../config/database.js';
 import { pushChannelAccessFilter } from '../../utils/channelAccessScope.util.js';
 
@@ -71,6 +72,85 @@ class ChatbotChannelRepository {
   }
 
   /**
+   * Gắn 1 tài khoản TikTok Business vào chatbot (idempotent). Khoá = (id_chatbot, 'tiktok_business',
+   * external_channel_id): migration 305 KHÔNG có UNIQUE trên bộ ba này nên không dùng ON CONFLICT mà
+   * UPDATE trước, không có dòng nào mới INSERT. `webhook_token` là cột NOT NULL UNIQUE (varchar 64) nhưng
+   * TikTok không dùng token trong URL → sinh 64 ký tự hex ngẫu nhiên chỉ để thoả schema.
+   *
+   * Cùng 1 business_id chỉ được trả lời bởi 1 chatbot (webhook tra theo external_channel_id, LIMIT 1) nên
+   * các dòng của chatbot KHÁC cùng business_id bị tắt.
+   *
+   * @param {number} chatbotId
+   * @param {{ externalChannelId: string, displayName?: string|null }} data
+   * @returns {Promise<object>}
+   */
+  async upsertTiktokBusinessChannel(chatbotId, { externalChannelId, displayName = null }) {
+    const externalId = String(externalChannelId);
+
+    await db.query(
+      `UPDATE chatbot_channel_connections
+       SET is_active = false, updated_at = NOW()
+       WHERE channel_type = 'tiktok_business'
+         AND external_channel_id = $1
+         AND id_chatbot <> $2
+         AND is_active = true`,
+      [externalId, chatbotId]
+    );
+
+    const updated = await db.query(
+      `UPDATE chatbot_channel_connections
+       SET is_active = true,
+           display_name = COALESCE($3, display_name),
+           connected_at = NOW(),
+           updated_at = NOW()
+       WHERE id_chatbot = $1
+         AND channel_type = 'tiktok_business'
+         AND external_channel_id = $2
+       RETURNING *`,
+      [chatbotId, externalId, displayName]
+    );
+    if (updated.rows[0]) return updated.rows[0];
+
+    const { rows } = await db.query(
+      `INSERT INTO chatbot_channel_connections
+         (id_chatbot, channel_type, credentials, webhook_token, display_name,
+          external_channel_id, settings, is_active)
+       VALUES ($1, 'tiktok_business', '{}'::jsonb, $2, $3, $4, '{}'::jsonb, true)
+       RETURNING *`,
+      [chatbotId, crypto.randomBytes(32).toString('hex'), displayName, externalId]
+    );
+    return rows[0];
+  }
+
+  /**
+   * Tắt mọi kết nối (mọi chatbot) của 1 tài khoản bên ngoài — dùng khi người dùng ngắt TikTok.
+   * @returns {Promise<number>} số kết nối vừa bị tắt
+   */
+  async deactivateByExternalChannelId(channelType, externalChannelId) {
+    const { rowCount } = await db.query(
+      `UPDATE chatbot_channel_connections
+       SET is_active = false, updated_at = NOW()
+       WHERE channel_type = $1 AND external_channel_id = $2 AND is_active = true`,
+      [channelType, String(externalChannelId)]
+    );
+    return rowCount || 0;
+  }
+
+  /**
+   * Danh sách id kết nối (kể cả đã tắt) của 1 tài khoản bên ngoài. Controller dùng để huỷ
+   * các lượt trả lời đang chờ gom theo prefix `<channel_type>:<id>:` trước khi ngắt kết nối.
+   * @returns {Promise<number[]>}
+   */
+  async listIdsByExternalChannelId(channelType, externalChannelId) {
+    const { rows } = await db.query(
+      `SELECT id FROM chatbot_channel_connections
+       WHERE channel_type = $1 AND external_channel_id = $2`,
+      [channelType, String(externalChannelId)]
+    );
+    return rows.map((r) => r.id);
+  }
+
+  /**
    * Create or update channel connection for chatbot
    */
   async upsertChannel(chatbotId, channelType, data) {
@@ -138,6 +218,18 @@ class ChatbotChannelRepository {
     );
   }
 
+  /**
+   * Lấy (hoặc tạo) hội thoại cho 1 khách trên 1 kênh.
+   *
+   * Vì sao cần ON CONFLICT: webhook TikTok xử lý event trong background KHÔNG await
+   * (`handle()` fire-and-forget từng event), và khách mới hay nhắn nhiều tin gần như cùng
+   * lúc. SELECT-then-INSERT thuần sẽ để 3 request cùng tạo 3 hội thoại → tin bị lạc
+   * sang hội thoại rỗng, mất lịch sử. UNIQUE(id_channel, external_id) của migration 044
+   * nên `ON CONFLICT ... DO UPDATE` gom về đúng 1 hội thoại và trả về nó.
+   *
+   * Lưu ý: index là UNIQUE(id_channel, external_id) — KHÔNG có phần `status`, nên câu
+   * ON CONFLICT phải chỉ đích danh 2 cột đó, không thêm điều kiện lọc.
+   */
   async getOrCreateConversation({ chatbotId, channelId, externalId, source }) {
     const existing = await db.query(
       `SELECT * FROM chatbot_conversations
@@ -150,15 +242,27 @@ class ChatbotChannelRepository {
       return existing.rows[0];
     }
 
-    const created = await db.query(
-      `INSERT INTO chatbot_conversations
-         (id_chatbot, id_channel, channel_type, external_id, source)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING *`,
-      [chatbotId, channelId, source.replace('_oa', ''), externalId, source]
-    );
-
-    return created.rows[0];
+    let created;
+    try {
+      created = await db.query(
+        `INSERT INTO chatbot_conversations
+           (id_chatbot, id_channel, channel_type, external_id, source)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING *`,
+        [chatbotId, channelId, source.replace('_oa', ''), externalId, source]
+      );
+      return created.rows[0];
+    } catch (err) {
+      // 23505 = unique_violation: request song song vừa tạo hội thoại này → đọc lại.
+      if (err?.code !== '23505') throw err;
+      const { rows } = await db.query(
+        `SELECT * FROM chatbot_conversations
+         WHERE id_channel = $1 AND external_id = $2
+         ORDER BY created_at DESC LIMIT 1`,
+        [channelId, externalId]
+      );
+      return rows[0] || null;
+    }
   }
 
   async addMessage(conversationId, { role, content, message_type, external_id, metadata }) {
