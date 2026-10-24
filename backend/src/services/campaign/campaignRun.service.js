@@ -957,7 +957,8 @@ class CampaignRunService {
    *
    * `enforceCampaignSlot`: true CHỈ khi NGƯỜI DÙNG bấm chạy (Chạy ngay / duyệt chiến dịch chờ duyệt) — kiểm suất chiến
    * dịch của gói trong CÙNG transaction với việc tạo run (xem enforceCampaignSlotOnActivationTx). Scheduler KHÔNG bao giờ
-   * truyền cờ này: nó tắt lịch `once` trước khi tạo run, nên cổng ở đây sẽ chặn oan lượt hẹn giờ khách đã đặt.
+   * truyền cờ này: lượt hẹn giờ đã qua cổng lúc tạo/bật lịch; lúc cron bắn, lịch có thể đã tắt trong DB (cron trong bộ
+   * nhớ chỉ nạp lại theo chu kỳ) nên chiến dịch trông như không chiếm suất — chặn ở đây là chặn oan lịch khách đã đặt.
    *
    * @param {object} input
    * @returns {Promise<object>}

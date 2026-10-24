@@ -312,8 +312,9 @@ async function readCampaignOccupancy(queryable, campaignId) {
  * - Phải gọi sau BEGIN trên cùng client và việc tạo run / ghi lịch phải nằm trong CÙNG transaction: advisory lock
  *   (cùng khoá với `enforceResourceLimitTx`, lấy theo thứ tự campaigns → khoá loại, giống cổng tạo) giữ tới COMMIT nên
  *   hai thao tác song song không cùng lọt qua trần.
- * - CHỈ đặt ở thao tác người dùng. KHÔNG gọi từ scheduler / worker liên tục / khởi động lại sau deploy: scheduler tắt
- *   lịch `once` TRƯỚC khi tạo run, nên chặn ở đó là chặn oan lượt hẹn giờ khách đã đặt hợp lệ.
+ * - CHỈ đặt ở thao tác người dùng. KHÔNG gọi từ scheduler / worker liên tục / khởi động lại sau deploy: lượt hẹn giờ đã qua
+ *   cổng lúc tạo/bật lịch; lúc cron bắn, lịch có thể đã tắt trong DB (cron trong bộ nhớ chỉ nạp lại theo chu kỳ) nên chiến
+ *   dịch trông như không chiếm suất — chặn ở đó là chặn oan lịch khách đã đặt hợp lệ.
  * - Admin bỏ qua như cổng cũ.
  *
  * @param {import('pg').PoolClient} client
