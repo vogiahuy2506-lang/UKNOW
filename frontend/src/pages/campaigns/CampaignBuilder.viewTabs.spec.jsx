@@ -40,7 +40,6 @@ vi.mock('../../features/campaigns/services/campaignBuilderApi.service', () => ({
 vi.mock('../../features/campaigns/services/campaignRunApi.service', () => ({
   default: { getCampaignRuns: mockGetCampaignRuns, getCampaignSchedules: vi.fn().mockResolvedValue({ data: { data: [] } }), runCampaign: vi.fn() },
 }));
-vi.mock('../../features/campaigns/utils/campaignBuilderRunExecutor', () => ({ executeCampaignRun: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('../../features/campaigns/hooks/useBrowserRouterBlocker', () => ({
   default: () => ({ state: 'unblocked', proceed: vi.fn(), reset: vi.fn(), allowNext: mockAllowNext }),
 }));

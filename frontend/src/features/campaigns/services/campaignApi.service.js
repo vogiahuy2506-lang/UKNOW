@@ -1,5 +1,4 @@
 import api from '../../../services/api';
-import { generateIdempotencyKey } from '../../../utils/idempotency.util';
 
 /**
  * Campaign feature API wrappers.
@@ -78,48 +77,6 @@ export const campaignApiService = {
 
   revokeShare(campaignId) {
     return api.delete(`/campaigns/${campaignId}/share`);
-  },
-
-  // Quick send estimate & test send
-  getQuickSendEstimate(params = {}) {
-    return api.get('/campaigns/quick-send/estimate', { params });
-  },
-
-  testSendQuickCampaign(payload, options = {}) {
-    const key = options.idempotencyKey || payload?.idempotencyKey || generateIdempotencyKey();
-    return api.post('/campaigns/quick-send/test-send', payload, {
-      ...options,
-      headers: {
-        'Idempotency-Key': key,
-        ...(options.headers || {}),
-      },
-    });
-  },
-
-  // W7a — người ĐÃ NHẮN TỚI tài khoản (Telegram: accountId, WhatsApp: sessionKey) -> [{ recipientKey, name }].
-  getQuickSendAdapterConversations(channel, accountRef, options = {}) {
-    return api.get(
-      `/campaigns/channels/${encodeURIComponent(channel)}/accounts/${encodeURIComponent(accountRef)}/conversations`,
-      options
-    );
-  },
-
-  // W7a — gửi nhanh MỘT tin cho MỘT người qua kênh adapter (telegram | whatsapp).
-  // Body: { accountId | sessionKey, recipientKey, message }. 200 luôn có data.item.status = success|failed|deferred.
-  sendQuickAdapterMessage(channel, payload, options = {}) {
-    const { idempotencyKey, ...rest } = options;
-    return api.post(`/campaigns/quick-send/${encodeURIComponent(channel)}`, payload, {
-      ...rest,
-      headers: {
-        'Idempotency-Key': idempotencyKey || generateIdempotencyKey(),
-        ...(rest.headers || {}),
-      },
-    });
-  },
-
-  // Chuyển tệp tạm (đã tải qua /uploads/temp) sang storage lâu dài cho Gửi nhanh.
-  uploadQuickSendAttachment(payload) {
-    return api.post('/campaigns/quick-send/attachments', payload);
   },
 
   /**

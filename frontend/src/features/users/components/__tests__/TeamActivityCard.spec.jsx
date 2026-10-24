@@ -46,7 +46,7 @@ describe('TeamActivityCard', () => {
       'Nhân viên', 'Chiến dịch đang chạy', 'Tin đã gửi tháng này', 'Lượt AI kỳ này', 'Hoạt động gần nhất',
     ]);
     expect(screen.getByText('Tháng này · lượt AI tính theo kỳ gói (làm mới ngày 10/10)')).toBeTruthy();
-    expect(screen.getByText('Không gồm lời mời kết bạn Zalo và tin gửi nhanh.')).toBeTruthy();
+    expect(screen.getByText('Không gồm lời mời kết bạn Zalo.')).toBeTruthy();
   });
 
   it('thứ tự dòng: "Bạn" → nhân viên → "Cả công ty" (dòng "Khác" chỉ có khi backend trả)', () => {

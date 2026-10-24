@@ -53,7 +53,6 @@ import {
   getLastLandingPageMessageIndex,
   isRecentLandingPageContext,
 } from './utils/landingEditContext.js';
-import { extractQuickSendDraftAttachments } from './utils/quickSendHandoff.js';
 import { useLandingLayoutAutoFix } from './hooks/useLandingLayoutAutoFix.js';
 import { buildFullLandingHtml, runLayoutAudit } from './utils/layoutAudit.js';
 import {
@@ -2755,106 +2754,6 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     return saved;
   };
 
-  const handleQuickSendDraft = () => {
-    const confirmationView = campaignConfirmation?.confirmationView;
-    const singleStep = confirmationView?.steps?.[0] || null;
-    const channel = singleStep?.channel || 'email';
-    const nodes = Array.isArray(currentScript?.nodes) ? currentScript.nodes : [];
-
-    const sendNode = nodes.find((n) => {
-      const type = String(n.nodeSubtype || n.node_subtype || n.subtype || '').trim().toLowerCase();
-      if (channel === 'zalo_group') {
-        return type === 'send_zalo_group' || type === 'zalo_group';
-      }
-      if (channel === 'zalo' || channel === 'zalo_personal') {
-        return type === 'send_zalo_personal' || type === 'zalo_personal' || type === 'zalo';
-      }
-      return type === 'send_email' || type === 'email';
-    }) || nodes.find((n) => {
-      const type = String(n.node_type || n.nodeType || n.type || '').toLowerCase();
-      return type === 'action';
-    }) || nodes[0] || null;
-
-    const config = sendNode?.config || sendNode?.data || {};
-
-    let recipients = [];
-    if (channel === 'zalo_group') {
-      // Id nhóm, không phải người — trang Gửi nhanh tự đối chiếu sang tên nhóm thật (Bẫy 4).
-      recipients = Array.isArray(config.zaloGroupIds)
-        ? config.zaloGroupIds.map((id) => String(id || '').trim()).filter(Boolean)
-        : [];
-    } else if (channel === 'zalo' || channel === 'zalo_personal') {
-      const rawPhones = config.zaloRecipientPhones || config.recipientPhones || '';
-      if (Array.isArray(rawPhones)) {
-        recipients = rawPhones;
-      } else if (typeof rawPhones === 'string') {
-        recipients = rawPhones.split(/[\n,;]/).map((s) => s.trim()).filter(Boolean);
-      }
-    } else {
-      const rawEmails = config.recipientEmails || config.recipientList || config.manualEmails || '';
-      if (Array.isArray(rawEmails)) {
-        recipients = rawEmails;
-      } else if (typeof rawEmails === 'string') {
-        recipients = rawEmails.split(/[\n,;]/).map((s) => s.trim()).filter(Boolean);
-      }
-    }
-
-    let subject = '';
-    let body = '';
-    let accountId = null;
-
-    if (channel === 'zalo_group') {
-      subject = '';
-      body = singleStep?.content?.bodyText ||
-             config.zaloGroupMessage ||
-             config.zaloGroupTemplateSteps?.[0]?.message ||
-             '';
-      accountId = config.zaloAccountId ||
-                  config.zalo_account_id ||
-                  singleStep?.sender?.id ||
-                  null;
-    } else if (channel === 'zalo' || channel === 'zalo_personal') {
-      subject = '';
-      body = singleStep?.content?.bodyText ||
-             config.message ||
-             config.zaloPersonalTemplateSteps?.[0]?.message ||
-             '';
-      accountId = config.zaloAccountId ||
-                  config.zalo_account_id ||
-                  singleStep?.sender?.id ||
-                  null;
-    } else {
-      subject = singleStep?.content?.subject || config.emailSubject || config.subject || '';
-      body = config.emailBody || config.htmlContent || config.bodyText || singleStep?.content?.bodyText || '';
-      accountId = config.fromEmailId || config.emailSettingId || singleStep?.sender?.id || null;
-    }
-
-    const attachments = extractQuickSendDraftAttachments(config, singleStep);
-
-    // recipientType chỉ có ý nghĩa cho Zalo cá nhân (config.zaloRecipientType 'phone'|'uid').
-    // Zalo nhóm không có khái niệm này (recipients đã là id nhóm, không phải người) — để
-    // undefined như email. Không có nhãn bạn bè/nhóm để mang theo (config chưa từng lưu
-    // nhãn) — trang Gửi nhanh tự đối chiếu lại với dữ liệu thật, đây chỉ đưa đúng UID/số/id
-    // để trang đích xử lý (Bẫy 4).
-    const recipientType = (channel === 'zalo' || channel === 'zalo_personal')
-      ? (config.zaloRecipientType || 'phone')
-      : undefined;
-
-    const draft = {
-      channel: channel === 'zalo_personal' ? 'zalo' : channel,
-      recipients,
-      recipientType,
-      subject,
-      body,
-      accountId: accountId ? Number(accountId) : null,
-      attachments,
-      startStep: 'preview',
-    };
-
-    navigate('/app/quick-send', { state: { quickSendDraft: draft } });
-    onToggle?.();
-  };
-
   /**
    * Xử lý khi user submit câu trả lời từ AskCampaignDetailsCard
    * summaryText: chuỗi mô tả lựa chọn, answers: { channel, productCount, sendingStyle, audienceCount }
@@ -4055,7 +3954,6 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   onConfirm={handleConfirmCreate}
                   onConfirmAndRun={handleConfirmCreateAndRun}
                   showCreateAndRun={idx === latestInteractiveIndex && Boolean(campaignConfirmation?.runAfterCreate)}
-                  onQuickSend={handleQuickSendDraft}
                   onEdit={() => setIsEditingDraft(true)}
                   onCancel={handleCancelCreate}
                   onRetry={() => prepareAndShowCampaignConfirmation(currentScript, { sessionId: currentSessionIdRef.current, appendMessage: false })}

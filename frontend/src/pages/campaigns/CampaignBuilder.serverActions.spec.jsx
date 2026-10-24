@@ -19,7 +19,6 @@ const {
   mockOpenRunConfirmModal,
   mockOpenScheduleModal,
   mockOpenCampaignLogs,
-  mockExecuteCampaignRun,
   mockUpdateCampaign,
   mockGetCampaignRuns,
   mockFetchZaloAccountOptions,
@@ -27,7 +26,6 @@ const {
   mockOpenRunConfirmModal: vi.fn(),
   mockOpenScheduleModal: vi.fn(),
   mockOpenCampaignLogs: vi.fn(),
-  mockExecuteCampaignRun: vi.fn().mockResolvedValue(undefined),
   mockUpdateCampaign: vi.fn().mockResolvedValue({ data: { data: { id: 391 } } }),
   mockGetCampaignRuns: vi.fn().mockResolvedValue({ data: { data: [] } }),
   mockFetchZaloAccountOptions: vi.fn().mockResolvedValue([]),
@@ -79,9 +77,6 @@ vi.mock('../../features/campaigns/services/campaignRunApi.service', () => ({
   },
 }));
 
-vi.mock('../../features/campaigns/utils/campaignBuilderRunExecutor', () => ({
-  executeCampaignRun: mockExecuteCampaignRun,
-}));
 
 vi.mock('../../features/campaigns/hooks/useBrowserRouterBlocker', () => ({
   default: () => ({ state: 'unblocked', proceed: vi.fn(), reset: vi.fn() }),
@@ -137,6 +132,7 @@ vi.mock('../../features/campaigns/components/CampaignBuilderPageLayout', () => (
     onRunNow,
     onOpenSchedule,
     onRunCampaign,
+    isRunning,
     canUseServerRunActions,
     serverRunActionsDisabledHint,
     campaignName,
@@ -148,7 +144,7 @@ vi.mock('../../features/campaigns/components/CampaignBuilderPageLayout', () => (
       <span data-testid="disabled-hint">{serverRunActionsDisabledHint}</span>
       <button type="button" onClick={onRunNow} disabled={!canUseServerRunActions}>Chạy ngay</button>
       <button type="button" onClick={onOpenSchedule} disabled={!canUseServerRunActions}>Lên lịch</button>
-      <button type="button" onClick={onRunCampaign}>Chạy thử</button>
+      <span data-testid="has-browser-test-run">{String(onRunCampaign !== undefined || isRunning !== undefined)}</span>
       <button
         type="button"
         onClick={() => setNodes((prev) => [...prev, {
@@ -279,15 +275,12 @@ describe('CampaignBuilder — nút gửi thật trong sơ đồ (PR-1)', () => {
     expect(mockOpenScheduleModal).toHaveBeenCalledTimes(1);
   });
 
-  it('"Chạy thử" vẫn chạy trong trình duyệt, KHÔNG đụng đường gửi thật', async () => {
+  it('trang KHÔNG còn truyền hàm "Chạy thử" trong trình duyệt xuống layout — chỉ còn Chạy ngay / Lên lịch (máy chủ)', async () => {
     renderBuilder();
     await waitFor(() => expect(screen.getByTestId('campaign-name')).toHaveTextContent('Chiến dịch thư cảm ơn'));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Chạy thử' }));
-
-    await waitFor(() => expect(mockExecuteCampaignRun).toHaveBeenCalledTimes(1));
-    expect(mockOpenRunConfirmModal).not.toHaveBeenCalled();
-    expect(mockOpenScheduleModal).not.toHaveBeenCalled();
+    expect(screen.getByTestId('has-browser-test-run')).toHaveTextContent('false');
+    expect(screen.queryByRole('button', { name: 'Chạy thử' })).not.toBeInTheDocument();
   });
 
   it('chiến dịch mới chưa lưu lần nào → 2 nút gửi thật bị vô hiệu kèm gợi ý', async () => {

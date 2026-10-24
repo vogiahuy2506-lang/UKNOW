@@ -479,7 +479,6 @@ const describeStartSender = ({ channel, sender, emailSettings, t }) => {
  *   vào sơ đồ VÀ lưu chiến dịch — một đường lưu duy nhất, cùng đường với `onSaveNode`
  * @param {Set<string>|null} [props.allowedSendNodeTypes] khối gửi dùng được theo gói (kênh khoá → thẻ nguồn mờ + ổ khoá); null = không giới hạn
  * @param {(isDirty: boolean) => void} [props.onInlineDirtyChange] báo trang biết biểu mẫu đang mở có thay đổi chưa lưu (để hỏi khi đổi tab)
- * @param {Array<object>} [props.runLogs] log lần chạy thử (hộp cài đặt nâng cao dùng để gợi ý cột)
  * @param {Function} [props.onCheckSheetConnection] kiểm tra kết nối Google Sheet của hộp cài đặt nâng cao
  * @param {string|number|null} [props.latestRunKey] đổi giá trị (vd id + trạng thái lượt mới nhất) → mục "Lần chạy gần nhất" tải lại
  * @param {() => void} props.onOpenDeliveryMonitor mở trang Giám sát gửi tin
@@ -512,7 +511,6 @@ export default function CampaignSettingsPanel({
   onApplyGraph = () => {},
   allowedSendNodeTypes = null,
   onInlineDirtyChange = () => {},
-  runLogs = [],
   onCheckSheetConnection = undefined,
   onGoFlow = () => {},
   canEdit = true,
@@ -1071,7 +1069,6 @@ export default function CampaignSettingsPanel({
             emailTemplates={emailTemplates}
             zaloTemplates={zaloTemplates}
             emailSettings={emailSettings}
-            runLogs={runLogs}
             onCheckSheetConnection={onCheckSheetConnection}
             onSave={handleAdvancedSave}
             onClose={() => setAdvanced(null)}

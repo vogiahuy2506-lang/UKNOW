@@ -65,9 +65,6 @@ vi.mock('../../features/campaigns/services/campaignRunApi.service', () => ({
   },
 }));
 
-vi.mock('../../features/campaigns/utils/campaignBuilderRunExecutor', () => ({
-  executeCampaignRun: vi.fn(),
-}));
 
 vi.mock('../../features/campaigns/hooks/useBrowserRouterBlocker', () => ({
   default: () => ({ state: 'unblocked', proceed: vi.fn(), reset: vi.fn() }),

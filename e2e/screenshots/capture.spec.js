@@ -28,8 +28,7 @@ const SHEETS = [
   'bieu-mau', 'dat-lich-giu-cho', 'tai-khoan-dieu-khoan-sdt', 'goi-sap-het-han',
   'nhat-ky-hoat-dong', 'doi-tac', 'marketplace', 'lien-he-khach-de-lai', 'dung-luong-luu-tru',
   'chatbot-khung-gio', 'tro-ly-ai-landing', 'chatbot-telegram-whatsapp', 'dong-y-nhan-tin',
-  // Lô vá 28/09/2026 — ô bước "Nội dung" (giao diện đổi, ảnh chèn tay cũ đã bỏ).
-  'quick-send',
+  // Lô vá 28/09/2026 'quick-send' đã bỏ 23/10/2026: trang Gửi nhanh không còn (bài chuyển sang Tạo chiến dịch → Từng bước).
   // Lô 10/10/2026 — đợt 2 ảnh hướng dẫn (trợ lý AI chiến dịch, hạn mức email).
   'email-account', 'tro-ly-ai-chien-dich',
   // Lô 17/10/2026 — trang Tạo chiến dịch từng bước (PLAN_TAO_CHIEN_DICH_TUNG_BUOC PR-4).

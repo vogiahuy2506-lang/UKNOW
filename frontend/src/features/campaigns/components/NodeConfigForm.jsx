@@ -20,7 +20,6 @@ import {
   normalizeTemplateVariables,
 } from '../utils/nodeConfigModal.helpers';
 import {
-  buildRunLogMap,
   getSchemaForNodeId as getNodeSchemaById,
   getUpstreamNodes,
 } from '../utils/nodeConfigModalSchema';
@@ -78,7 +77,6 @@ const NodeConfigForm = ({
   emailSettings = [],
   nodes = [],
   edges = [],
-  runLogs = [],
   campaignId = null,
   campaignType = '',
 }) => {
@@ -594,11 +592,9 @@ const NodeConfigForm = ({
     nodes,
     edges,
   });
-  const runLogMap = buildRunLogMap(runLogs);
   const getSchemaForNodeId = (nodeId) =>
     getNodeSchemaById({
       nodeId,
-      runLogMap,
       nodes,
       buildSchemaFromRows,
     });

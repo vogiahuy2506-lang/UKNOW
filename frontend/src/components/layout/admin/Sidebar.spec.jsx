@@ -144,7 +144,7 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
     const expected = {
       'AI Chatbot': ['Chatbot của tôi', 'Hộp thư'],
       'Chiến dịch': [
-        'Gửi nhanh', 'Quản lý kênh gửi', 'Thư viện nội dung', 'Quản lý chiến dịch',
+        'Quản lý kênh gửi', 'Thư viện nội dung', 'Quản lý chiến dịch',
         'Giám sát gửi tin', 'Khách hàng từ chiến dịch',
       ],
       'Landing page': ['Khách để lại thông tin', 'Tạo Landing page', 'Biểu mẫu'],

@@ -323,8 +323,8 @@ export const createNodeConfigFormData = ({
   /** Danh sách tên cột giữ lại khi chạy node (rỗng = giữ tất cả) */
   dataSelectedColumns: Array.isArray(config.dataSelectedColumns) ? config.dataSelectedColumns : [],
   /**
-   * Giới hạn dòng khi chạy thử read_sheet trên Builder (preview API).
-   * Rỗng = mặc định 100 dòng; `all` = tối đa theo server.
+   * Trường CŨ của "Chạy thử" (đã bỏ 23/10/2026, không còn ô nhập). Giữ dòng này để cấu hình đã lưu đi qua hộp thoại
+   * mà không bị rơi mất; chiến dịch chạy thật không đọc trường này.
    */
   builderSheetPreviewRowLimit: config.builderSheetPreviewRowLimit ?? '',
   interestedLimit: config.interestedLimit || 1000,
@@ -367,6 +367,7 @@ export const createNodeConfigFormData = ({
   emailTemplateId: config.emailTemplateId || '',
   emailSubject: config.emailSubject || '',
   fromEmailId: config.fromEmailId || '',
+  // Hai trường CŨ của "Chạy thử" (đã bỏ ô nhập 23/10/2026): giữ nguyên giá trị đã lưu, chiến dịch thật không đọc.
   maxSendEnabled: config.maxSendEnabled || false,
   maxSendCount: config.maxSendCount || 100,
   recipientMode: 'multiple',

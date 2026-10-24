@@ -27,7 +27,6 @@ const AiHomePage = lazyWithRetry(() => import('./pages/AiHomePage'));
 const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'));
 const Campaigns = lazyWithRetry(() => import('./pages/campaigns/Campaigns'));
 const CampaignBuilder = lazyWithRetry(() => import('./pages/campaigns/CampaignBuilder'));
-const QuickSend = lazyWithRetry(() => import('./pages/campaigns/QuickSend'));
 const SimpleCampaign = lazyWithRetry(() => import('./pages/campaigns/SimpleCampaign'));
 const Customers = lazyWithRetry(() => import('./pages/customers/Customers'));
 const CampaignCustomers = lazyWithRetry(() => import('./pages/customers/CampaignCustomers'));
@@ -404,7 +403,8 @@ function AppContent() {
             <Route path="campaigns/:id/builder" element={<PermissionRoute permission="campaigns_create"><CampaignBuilder /></PermissionRoute>} />
             <Route path="campaigns/new" element={<PermissionRoute permission="campaigns_create"><CampaignBuilder /></PermissionRoute>} />
             <Route path="campaign-run" element={<Navigate to="/app/campaigns?tab=schedules" replace />} />
-            <Route path="quick-send" element={<PermissionRoute permission="campaigns_create"><QuickSend /></PermissionRoute>} />
+            {/* Gửi nhanh đã bỏ (23/10/2026): mọi lần gửi đi qua chiến dịch. Link/đánh dấu cũ về trình tạo từng bước. */}
+            <Route path="quick-send" element={<Navigate to="/app/campaigns/simple" replace />} />
             <Route path="delivery-monitor" element={<PermissionRoute permission="campaigns_view"><UserDeliveryMonitorPage /></PermissionRoute>} />
 
             {/* Customers */}

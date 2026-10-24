@@ -24,12 +24,6 @@ export const getUpstreamNodes = ({ currentNodeId, nodes = [], edges = [] }) => {
   return nodes.filter((node) => visited.has(node.id));
 };
 
-export const buildRunLogMap = (runLogs = []) =>
-  runLogs.reduce((acc, log) => {
-    if (log?.nodeId && log?.result?.output) acc[log.nodeId] = log;
-    return acc;
-  }, {});
-
 export const getSchemaForNodeId = ({ nodeId, runLogMap = {}, nodes = [], buildSchemaFromRows }) => {
   if (!nodeId) return [];
 

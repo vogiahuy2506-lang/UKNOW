@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
   HiOutlineDocument,
-  HiOutlineExclamationCircle,
   HiOutlineLightningBolt,
   HiOutlineMail,
   HiOutlinePlus,
@@ -11,7 +10,6 @@ import {
 import NodeConfigTemplatePreviewModal from './NodeConfigTemplatePreviewModal';
 import TemplateSearchSelect from './TemplateSearchSelect';
 import { useI18n } from '../../../i18n';
-import NumberInput from '../../../components/common/NumberInput';
 
 /**
  * Section UI for send-email node configuration.
@@ -150,7 +148,6 @@ export const NodeConfigSendEmailSection = ({
     { id: 'bcc', name: t('campaignNodeConfig.emailSend.bcc'), icon: HiOutlineMail, badge: formData.bccEnabled },
     { id: 'sendMode', name: t('campaignNodeConfig.emailSend.sendMode'), icon: HiOutlineLightningBolt },
     { id: 'templates', name: t('campaignNodeConfig.emailSend.emailList'), icon: HiOutlineDocument },
-    { id: 'maxSend', name: t('campaignNodeConfig.emailSend.sendLimit'), icon: HiOutlineExclamationCircle, badge: formData.maxSendEnabled },
   ];
 
   const renderEmailSection = () => {
@@ -759,45 +756,6 @@ export const NodeConfigSendEmailSection = ({
               subjectLabel={t('campaignNodeConfig.emailSend.subjectLabel')}
               onOpenAttachment={onOpenTemplateAttachment}
             />
-          </div>
-        );
-
-      case 'maxSend':
-        return (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h4 className="font-medium text-gray-900 dark:text-dk-text">{t('campaignNodeConfig.emailSend.maxSendLimit')}</h4>
-              <button
-                type="button"
-                onClick={() => setFormData((prev) => ({
-                  ...prev,
-                  maxSendEnabled: !prev.maxSendEnabled,
-                  maxSendCount: prev.maxSendCount || 100,
-                }))}
-                className={`px-3 py-1.5 text-xs rounded-lg ${formData.maxSendEnabled ? 'bg-primary-50 text-primary-700 dark:bg-primary-950/40 dark:text-primary-300' : 'bg-gray-100 text-gray-600 dark:bg-dk-raised dark:text-dk-text2'}`}
-              >
-                {formData.maxSendEnabled ? t('campaignNodeConfig.emailSend.ccEnabled') : t('campaignNodeConfig.emailSend.ccDisabled')}
-              </button>
-            </div>
-
-            {formData.maxSendEnabled ? (
-              <div>
-                <label className="block text-xs text-gray-500 mb-1 dark:text-dk-text2">{t('campaignNodeConfig.emailSend.maxMessagesPerRun')}</label>
-                <NumberInput
-                  min={1}
-                  value={formData.maxSendCount}
-                  onChange={(v) => setFormData((prev) => ({ ...prev, maxSendCount: parseInt(v, 10) || 1 }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 dark:border-dk-border-strong dark:bg-dk-inset dark:text-dk-text dark:placeholder-dk-muted"
-                />
-                <p className="text-xs text-gray-500 mt-2 dark:text-dk-text2">
-                  {t('campaignNodeConfig.emailSend.maxSendNote')}
-                </p>
-              </div>
-            ) : (
-              <div className="text-xs text-gray-500 dark:text-dk-text2">
-                {t('campaignNodeConfig.emailSend.unlimitedByDefault')}
-              </div>
-            )}
           </div>
         );
 

@@ -174,7 +174,7 @@ export const EmailSetupGuideCard = ({ data, onSelectAccount, onAccountsFound, on
     const platformPrefix = String(quickForm.platformPrefix || '').trim().toLowerCase();
 
     if (!name || !replyTo || !platformPrefix) {
-      toast.error(t('aiChatbot.wizardQuickEmailMissing') || 'Bạn nhập đủ 3 ô để tạo email gửi nhanh nhé.');
+      toast.error(t('aiChatbot.wizardQuickEmailMissing') || 'Bạn nhập đủ 3 ô để tạo email gửi nhé.');
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyTo)) {

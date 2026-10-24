@@ -125,14 +125,15 @@ describe('PlanSection — khối Tin nhắn trong kỳ', () => {
     expect(messagesCard()).not.toHaveTextContent('(đến');
   });
 
-  it('hai dòng: Email và "Zalo", đã dùng / trần; có ghi chú gồm cả gửi nhanh (Telegram/WhatsApp có hạn mức riêng)', () => {
+  it('hai dòng: Email và "Zalo", đã dùng / trần; có ghi chú Telegram/WhatsApp có hạn mức riêng, không còn nhắc gửi nhanh', () => {
     renderPlan();
     const card = messagesCard();
     expect(within(card).getByText('Email')).toBeInTheDocument();
     expect(within(card).getByText('3.400 / 10.000')).toBeInTheDocument();
     expect(within(card).getByText('Zalo')).toBeInTheDocument();
     expect(within(card).getByText('120 / 5.000')).toBeInTheDocument();
-    expect(card).toHaveTextContent('Đã gồm cả tin gửi nhanh.');
+    expect(card).toHaveTextContent('Telegram và WhatsApp có hạn mức tin riêng, tách khỏi Zalo.');
+    expect(card).not.toHaveTextContent('gửi nhanh');
   });
 
   it('gói không có trần ngày → không có chữ "hôm nay" ở khối tin nhắn', () => {

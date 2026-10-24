@@ -4,7 +4,7 @@ import {
   HiOutlineSparkles, HiOutlineX, HiOutlinePlay,
   HiOutlineTerminal, HiOutlinePencilAlt, HiOutlineCheck, HiOutlineQuestionMarkCircle,
   HiOutlineMail, HiOutlineChat, HiOutlineFolderOpen, HiOutlineGlobeAlt, HiOutlinePaperClip,
-  HiOutlineDocumentText, HiOutlineSearch, HiOutlineExclamationCircle, HiOutlineLightningBolt,
+  HiOutlineDocumentText, HiOutlineSearch, HiOutlineExclamationCircle,
 } from 'react-icons/hi';
 import api from '../../../services/api';
 import aiApi from '../../../services/aiApi';
@@ -1969,7 +1969,7 @@ const previewChannelLabel = (channel, locale) => {
 };
 
 // The server supplies this semantic view. Model-provided summary.steps is intentionally never rendered here.
-export const ConfirmCreateCard = ({ confirmationView, onConfirm, onConfirmAndRun, showCreateAndRun = false, onQuickSend, onEdit, onCancel, onRetry, isPreparing, prepareError, isActive = true, canCreateCampaign = true, canRunCampaign = true, t, locale = 'vi' }) => {
+export const ConfirmCreateCard = ({ confirmationView, onConfirm, onConfirmAndRun, showCreateAndRun = false, onEdit, onCancel, onRetry, isPreparing, prepareError, isActive = true, canCreateCampaign = true, canRunCampaign = true, t, locale = 'vi' }) => {
   const [expandedSteps, setExpandedSteps] = useState(new Set());
   const steps = confirmationView?.steps || [];
   const blockingIssues = confirmationView?.blockingIssues || [];
@@ -1981,17 +1981,12 @@ export const ConfirmCreateCard = ({ confirmationView, onConfirm, onConfirmAndRun
     return next;
   });
 
-  // Điều kiện hiển thị nút Gửi nhanh:
-  // - Đúng 1 bước gửi
-  // - Kênh email, zalo_personal hoặc zalo_group (PR-2). zalo_personal chấp nhận cả phone lẫn
-  //   uid — trang đích Gửi nhanh tự đối chiếu UID sang tên qua danh bạ thật, không hiển thị
-  //   UID trần; mọi type lạ khác giữ fail-closed. zalo_group không có khái niệm
-  //   recipients.type (luôn null — campaignConfirmation.service.js:246) nên
-  //   isAllowedRecipientType tự đúng true qua nhánh channel !== 'zalo_personal' bên dưới,
-  //   không cần thêm điều kiện riêng.
-  // - Người nhận thủ công (recipients.mode === 'manual')
-  // - Gửi 1 lần / gửi ngay (timing anchor 'start' và value 0)
-  // - Có callback onQuickSend và canCreate
+  // Bản nháp "gửi một lần": đúng 1 bước gửi, người nhận nhập tay, gửi ngay. Trước 23/10/2026 loại bản nháp này có nút
+  // "Gửi nhanh (1 lần)" riêng (đã bỏ — mọi lần gửi đi qua chiến dịch). Backend LUÔN hạ `create_and_run` về `confirm_create`
+  // khi người nhận nhập tay (`_guardManualRecipientsNoAutoRun`), nên cờ `showCreateAndRun` không bao giờ bật cho đúng ca này —
+  // thẻ tự bật nút "Tạo và chạy" ở đây để người dùng vẫn gửi được bằng một cú bấm (vẫn qua thẻ xem trước, vẫn tạo chiến dịch
+  // có lịch sử lượt chạy). Giữ NGUYÊN các điều kiện cũ của nút Gửi nhanh (kênh email/zalo_personal/zalo_group; zalo_personal
+  // chỉ nhận phone/uid; mọi type lạ fail-closed). zalo_group không có recipients.type (luôn null) nên tự đúng.
   const ALLOWED_ZALO_PERSONAL_RECIPIENT_TYPES = new Set(['phone', 'uid']);
   const singleStep = steps.length === 1 ? steps[0] : null;
   const isOnceTiming = singleStep?.timing
@@ -2001,14 +1996,17 @@ export const ConfirmCreateCard = ({ confirmationView, onConfirm, onConfirmAndRun
   const isAllowedChannel = singleStep && ['email', 'zalo_personal', 'zalo_group'].includes(singleStep.channel);
   const isAllowedRecipientType = singleStep?.channel !== 'zalo_personal'
     || ALLOWED_ZALO_PERSONAL_RECIPIENT_TYPES.has(singleStep?.recipients?.type || 'phone');
-  const canQuickSend = Boolean(
-    canCreate &&
-    canRunCampaign &&
-    onQuickSend &&
+  const isOneTimeManualDraft = Boolean(
     isAllowedChannel &&
     isAllowedRecipientType &&
     isManualRecipient &&
     isOnceTiming
+  );
+  const showCreateAndRunButton = Boolean(
+    (showCreateAndRun || isOneTimeManualDraft) &&
+    canCreateCampaign &&
+    canRunCampaign &&
+    onConfirmAndRun
   );
 
   return (
@@ -2062,8 +2060,8 @@ export const ConfirmCreateCard = ({ confirmationView, onConfirm, onConfirmAndRun
 
       <div className="p-4 bg-white/50 dark:bg-dk-surface/50 border-t border-emerald-100 dark:border-emerald-800">
         {isActive && <div className="space-y-2">
-          {/* "Tạo và chạy": chỉ hiện khi người dùng ĐÃ nói rõ muốn chạy ngay (cổng BE) và có quyền chạy. Chiến dịch chỉ chạy khi bấm nút này. */}
-          {showCreateAndRun && canCreateCampaign && canRunCampaign && onConfirmAndRun && (
+          {/* "Tạo và chạy": hiện khi người dùng ĐÃ nói rõ muốn chạy ngay (cổng BE) hoặc là bản nháp gửi một lần (xem trên), và có quyền chạy. Chiến dịch chỉ chạy khi bấm nút này. */}
+          {showCreateAndRunButton && (
             <>
               <button
                 type="button"
@@ -2090,16 +2088,6 @@ export const ConfirmCreateCard = ({ confirmationView, onConfirm, onConfirmAndRun
             <p className="text-xs text-slate-500 dark:text-dk-text2 bg-slate-50 dark:bg-dk-raised border border-slate-200 dark:border-dk-border rounded-xl px-3 py-2.5">
               {t('aiChatbot.noPermissionCreateCampaign')}
             </p>
-          )}
-          {canQuickSend && (
-            <button
-              type="button"
-              onClick={onQuickSend}
-              className="w-full py-2.5 bg-gradient-to-r from-teal-500 to-emerald-600 text-white font-black text-xs uppercase tracking-widest rounded-xl hover:from-teal-600 hover:to-emerald-700 flex items-center justify-center gap-2 shadow-md shadow-emerald-500/20 transition"
-            >
-              <HiOutlineLightningBolt className="w-4 h-4" />
-              {t('aiChatbot.quickSendBtn')}
-            </button>
           )}
           <div className="grid grid-cols-2 gap-2">
             <button

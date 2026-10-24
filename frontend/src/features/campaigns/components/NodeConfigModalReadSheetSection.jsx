@@ -154,39 +154,6 @@ export const NodeConfigReadSheetSection = ({
                 <strong>{t('tip') || 'Tip'}:</strong> {t('tipHeaderRow')}
               </p>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-dk-text">
-                {t('builderPreviewLimit')}
-              </label>
-              <select
-                value={
-                  formData.builderSheetPreviewRowLimit === undefined || formData.builderSheetPreviewRowLimit === null
-                    ? ''
-                    : String(formData.builderSheetPreviewRowLimit)
-                }
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    builderSheetPreviewRowLimit: e.target.value,
-                  }))
-                }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm bg-white dark:bg-dk-inset dark:border-dk-border-strong dark:text-dk-text"
-              >
-                <option value="">
-                  {t('builderPreviewNote')}
-                </option>
-                <option value="100">{t('rows100')}</option>
-                <option value="500">{t('rows500')}</option>
-                <option value="2000">{t('rows2000')}</option>
-                <option value="5000">{t('rows5000')}</option>
-                <option value="10000">{t('rows10000')}</option>
-                <option value="all">{t('allRows')}</option>
-              </select>
-              <p className="text-xs text-gray-500 mt-1 dark:text-dk-text2">
-                {t('builderPreviewHint')}
-              </p>
-            </div>
           </div>
         );
 

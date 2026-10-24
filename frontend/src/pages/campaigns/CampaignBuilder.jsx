@@ -17,21 +17,7 @@ import {
 } from '../../features/campaigns/utils/campaignBuilderFlow';
 import { buildFlowFromCampaign } from '../../features/campaigns/utils/campaignBuilderFlowSerialization';
 import { removeNodeClearingReferences } from '../../features/campaigns/settings/settingsGraph';
-import {
-  applyMappingsForRow,
-  buildSchemaFromRows,
-  normalizeKey,
-  parseEmailList,
-  renderTemplateString,
-  resolveColumnKey,
-} from '../../features/campaigns/utils/campaignBuilderRuntime';
-import {
-  buildExecutionOrder,
-  validateNodeForRun,
-} from '../../features/campaigns/utils/campaignBuilderRunValidation';
 import { edgeTypes, nodeTypes } from '../../features/campaigns/components/CampaignBuilderFlowNodes';
-import { createCampaignNodeRunner } from '../../features/campaigns/utils/campaignBuilderNodeRunner';
-import { executeCampaignRun } from '../../features/campaigns/utils/campaignBuilderRunExecutor';
 import {
   createCampaignNodeSnapshot,
   createPastedCampaignNode,
@@ -63,35 +49,12 @@ import {
   resolveScheduleNextRunAt,
 } from '../../features/campaigns/utils/campaignRunSchedule.helpers';
 import { readCampaignDraft, writeCampaignDraft, clearCampaignDraft } from '../../utils/campaignDraftStorage';
-const LOG_LIST_MIN_WIDTH = 200;
-const LOG_DETAIL_MIN_WIDTH = 220;
 const NODE_DROP_OFFSET_X = 76;
 const NODE_DROP_OFFSET_Y = 50;
-const ADJACENT_ZALO_NODE_DELAY_MS = 2500;
 const RUNNING_CAMPAIGN_SAVE_BLOCK_MESSAGE = (t) => t('campaigns.runningCampaignBlock');
-const ZALO_NODE_TYPES = new Set([
-  'select_zalo_account',
-  'get_all_friends',
-  'get_all_groups',
-  'send_zalo_personal',
-  'send_zalo_friend_request',
-  'send_zalo_group',
-]);
-
 // Initial nodes - empty
 const initialNodes = [];
 const initialEdges = [];
-
-/**
- * Check whether a flow node belongs to Zalo execution pipeline.
- *
- * @param {object} node flow node
- * @returns {boolean}
- */
-const isZaloExecutionNode = (node) => {
-  const normalizedType = String(node?.data?.nodeType || node?.type || '').trim().toLowerCase();
-  return normalizedType.includes('zalo') || ZALO_NODE_TYPES.has(normalizedType);
-};
 
 const CampaignBuilder = () => {
   const { t } = useI18n();
@@ -113,14 +76,6 @@ const CampaignBuilder = () => {
   const [campaignOrigin, setCampaignOrigin] = useState(null);
   const [lastSavedTime, setLastSavedTime] = useState(null);
   const [isDirty, setIsDirty] = useState(false);
-  const [runLogs, setRunLogs] = useState([]);
-  const [isRunning, setIsRunning] = useState(false);
-  const [showRunLogs, setShowRunLogs] = useLocalStorageState('founder_ai_builder_showRunLogs', false);
-  /** Chế độ cắt log/preview trên Builder: luôn `100` (node Sheet có thể ghi đè trong cấu hình). */
-  const builderLogItemsMode = '100';
-  const [selectedRunLogId, setSelectedRunLogId] = useState(null);
-  const runTokenRef = useRef(0);
-  const runAbortControllerRef = useRef(null);
   const pendingLeaveActionRef = useRef(null);
   const copiedNodeRef = useRef(null);
   const pasteSequenceRef = useRef(0);
@@ -133,12 +88,10 @@ const CampaignBuilder = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [showLeaveConfirmModal, setShowLeaveConfirmModal] = useState(false);
-  const [leaveConfirmContext, setLeaveConfirmContext] = useState('dirty');
   const [nodeToConfig, setNodeToConfig] = useState(null);
   const [emailTemplates, setEmailTemplates] = useState([]);
   const [zaloTemplates, setZaloTemplates] = useState([]);
   const [emailSettings, setEmailSettings] = useState([]);
-  const previewSessionKey = `founder_ai_builder_preview_data_${id || 'new'}`;
   const deleteNodeName =
     selectedNode?.data?.label?.trim() ||
     selectedNode?.data?.nodeType ||
@@ -169,59 +122,13 @@ const CampaignBuilder = () => {
   // Thẻ khối đang sửa ở tab Thiết lập có thay đổi chưa Lưu (chưa nằm trong nodes/isDirty) — cũng phải chặn rời trang / đổi tab.
   const [inlineDirty, setInlineDirty] = useState(false);
   const [pendingTab, setPendingTab] = useState(null);
-  const shouldBlockNavigation = isRunning || isDirty || inlineDirty;
+  const shouldBlockNavigation = isDirty || inlineDirty;
   const navigationBlocker = useBrowserRouterBlocker(shouldBlockNavigation);
   const {
-    runLogHeight,
-    isResizingLog,
-    logListWidth,
-    isResizingLogSplit,
     builderSidebarWidth,
     isResizingBuilderSidebar,
-    logPanelRef,
-    handleLogResizeStart,
-    handleLogSplitResizeStart,
     handleBuilderSidebarResizeStart,
-  } = useCampaignBuilderLayoutState({
-    showRunLogs,
-    logListMinWidth: LOG_LIST_MIN_WIDTH,
-    logDetailMinWidth: LOG_DETAIL_MIN_WIDTH,
-  });
-
-  const readPreviewSessionData = useCallback(() => {
-    try {
-      const raw = sessionStorage.getItem(previewSessionKey);
-      return raw ? JSON.parse(raw) : { customers: [], emails: [] };
-    } catch {
-      return { customers: [], emails: [] };
-    }
-  }, [previewSessionKey]);
-
-  const writePreviewSessionData = useCallback((data) => {
-    try {
-      sessionStorage.setItem(previewSessionKey, JSON.stringify(data || { customers: [], emails: [] }));
-    } catch {
-      // Ignore session storage errors (private mode / quota exceeded)
-    }
-  }, [previewSessionKey]);
-  /**
-   * Stop current preview run and abort in-flight requests.
-   *
-   * @param {object} options stop options
-   * @param {boolean} options.updateRunningState control `isRunning` state update
-   * @returns {void}
-   */
-  const cancelCurrentRun = useCallback((options = {}) => {
-    const { updateRunningState = true } = options;
-    runTokenRef.current = 0;
-    if (runAbortControllerRef.current) {
-      runAbortControllerRef.current.abort();
-      runAbortControllerRef.current = null;
-    }
-    if (updateRunningState) {
-      setIsRunning(false);
-    }
-  }, []);
+  } = useCampaignBuilderLayoutState();
 
   useEffect(() => {
     const fetchZaloTemplates = async () => {
@@ -272,16 +179,6 @@ const CampaignBuilder = () => {
   }, []);
 
   useEffect(() => {
-    return () => {
-      try {
-        sessionStorage.removeItem(previewSessionKey);
-      } catch {
-        // noop
-      }
-    };
-  }, [previewSessionKey]);
-
-  useEffect(() => {
     if (!shouldBlockNavigation) return undefined;
 
     const handleBeforeUnload = (event) => {
@@ -298,9 +195,8 @@ const CampaignBuilder = () => {
   useEffect(() => {
     if (navigationBlocker.state !== 'blocked') return;
     pendingLeaveActionRef.current = null;
-    setLeaveConfirmContext(isRunning ? 'running' : 'dirty');
     setShowLeaveConfirmModal(true);
-  }, [isRunning, navigationBlocker.state]);
+  }, [navigationBlocker.state]);
 
   const handleCloseLeaveConfirmModal = useCallback(() => {
     setShowLeaveConfirmModal(false);
@@ -312,15 +208,12 @@ const CampaignBuilder = () => {
     setShowLeaveConfirmModal(false);
     const pendingLeaveAction = pendingLeaveActionRef.current;
     pendingLeaveActionRef.current = null;
-    if (isRunning) {
-      cancelCurrentRun();
-    }
     if (typeof pendingLeaveAction === 'function') {
       pendingLeaveAction();
       return;
     }
     navigationBlocker.proceed();
-  }, [cancelCurrentRun, isRunning, navigationBlocker]);
+  }, [navigationBlocker]);
 
   // Fetch email templates for send_email node config
   useEffect(() => {
@@ -405,10 +298,8 @@ const CampaignBuilder = () => {
         setNodes(draftNodes.length ? draftNodes : initialNodes);
         setEdges(draftEdges.length ? draftEdges : initialEdges);
         setIsDirty(false);
-        setRunLogs([]);
         setSelectedNode(null);
         setSelectedEdgeId(null);
-        setSelectedRunLogId(null);
         lastSavedSnapshotRef.current = '';
         hasBaselineRef.current = false;
         pendingBaselineRef.current = false;
@@ -909,123 +800,22 @@ const CampaignBuilder = () => {
     [nodes]
   );
 
-  const addRunLog = (entry) => {
-    setRunLogs((prev) => [...prev, entry]);
-  };
-
-  /**
-   * Detect whether a request failed because current run was canceled.
-   *
-   * @param {any} error request error
-   * @returns {boolean}
-   */
-  const isRunCancelledError = useCallback((error) => {
-    const code = String(error?.code || '').toUpperCase();
-    const name = String(error?.name || '').toLowerCase();
-    const message = String(error?.message || '').toLowerCase();
-    return (
-      code === 'ERR_CANCELED' ||
-      name === 'cancelederror' ||
-      name === 'aborterror' ||
-      message.includes('canceled') ||
-      message.includes('cancelled') ||
-      message.includes('aborted')
-    );
-  }, []);
-
-  /**
-   * Add new log or update existing log by id.
-   *
-   * @param {object} entry log payload to persist
-   * @returns {void}
-   */
-  const upsertRunLog = useCallback((entry) => {
-    setRunLogs((prev) => {
-      const index = prev.findIndex((log) => log.id === entry.id);
-      if (index < 0) return [...prev, entry];
-      const next = [...prev];
-      next[index] = {
-        ...next[index],
-        ...entry,
-      };
-      return next;
+  // Kiểm tra kết nối Google Sheet cho hộp cấu hình khối đọc sheet (giữ lại sau khi bỏ "Chạy thử").
+  const checkSheetConnection = useCallback(async (config = {}) => {
+    const parsedHeaderRow = Number.parseInt(config.headerRow, 10);
+    const response = await campaignBuilderApiService.checkGoogleSheet({
+      sheetUrl: config.sheetUrl,
+      sheetName: String(config.sheetName || '').trim(),
+      headerRow: Number.isFinite(parsedHeaderRow) ? Math.max(1, parsedHeaderRow) : 1,
     });
+    return response.data?.data;
   }, []);
-
-  /**
-   * Build normalized realtime log entry for one node.
-   *
-   * @param {object} params node log data
-   * @returns {object}
-   */
-  const buildNodeRealtimeLog = useCallback((params) => ({
-    id: params.id,
-    status: params.status || 'info',
-    nodeId: params.nodeId,
-    nodeType: params.nodeType,
-    nodeName: params.nodeName,
-    message: params.message || t('campaignBuilderExtra.executingNode'),
-    timestamp: new Date(),
-    result: params.result ?? null,
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), []);
-
-  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-  const { checkSheetConnection, buildRunResultForNode } = createCampaignNodeRunner({
-    campaignId: id,
-    apiService: campaignBuilderApiService,
-    buildSchemaFromRows,
-    applyMappingsForRow,
-    normalizeKey,
-    parseEmailList,
-    renderTemplateString,
-    resolveColumnKey,
-    readPreviewSessionData,
-    writePreviewSessionData,
-    toastNotifier: toast,
-    isRunCancelledError,
-    sleep,
-    logItemsMode: builderLogItemsMode,
-  });
-
-  const handleRunCampaign = async () => {
-    await executeCampaignRun({
-      isRunning,
-      nodes,
-      edges,
-      toastNotifier: toast,
-      setShowRunLogs,
-      setRunLogs,
-      setIsRunning,
-      setSelectedRunLogId,
-      runTokenRef,
-      runAbortControllerRef,
-      buildExecutionOrder,
-      validateNodeForRun,
-      buildRunResultForNode,
-      isRunCancelledError,
-      upsertRunLog,
-      buildNodeRealtimeLog,
-      addRunLog,
-      sleep,
-      interZaloNodeDelayMs: ADJACENT_ZALO_NODE_DELAY_MS,
-      isZaloNode: isZaloExecutionNode,
-      logItemsMode: builderLogItemsMode,
-    });
-  };
-
-  const handleStopRun = () => {
-    if (!isRunning) return;
-    cancelCurrentRun();
-  };
 
   // ------------------------------------------------------------------
   // Gửi THẬT từ trong trình dựng: "Chạy ngay" + "Lên lịch"
   // (PLAN_NUT_HANH_DONG_TRONG_SO_DO_CHIEN_DICH_2026-09-16.md, PR-1)
   //
-  // Khác `handleRunCampaign` phía trên — nút đó chạy THỬ ngay trong trình duyệt. Hai nút này gọi
-  // máy chủ, và máy chủ đọc `flow_json` TRONG DB: sơ đồ sửa mà chưa lưu thì lượt gửi thật sẽ chạy
+  // Hai nút này gọi máy chủ, và máy chủ đọc `flow_json` TRONG DB: sơ đồ sửa mà chưa lưu thì lượt gửi thật sẽ chạy
   // BẢN CŨ trong im lặng, tin đã đi rồi mới biết. Nên `isDirty` là chặn cứng, hỏi "Lưu rồi chạy".
   // ------------------------------------------------------------------
   const [pendingServerAction, setPendingServerAction] = useState(null); // 'run' | 'schedule' | null
@@ -1041,7 +831,6 @@ const CampaignBuilder = () => {
   });
 
   // Nhật ký gửi của lượt chạy thật (cùng khung với trang danh sách): mở từ "Xem nhật ký gửi" ở mục Lần chạy gần nhất của tab Thiết lập.
-  // `runLogs` ở trên là nhật ký CHẠY THỬ trong trình duyệt — khác hẳn.
   const { workspaceLogs: serverRunWorkspaceLogs } = useCampaignRunDerivedData({
     selectedRunDetail: runController.selectedRunDetail,
     flowOrderByNodeId: runController.flowOrderByNodeId,
@@ -1193,7 +982,6 @@ const CampaignBuilder = () => {
   const handleBackToCampaigns = () => {
     if (shouldBlockNavigation) {
       pendingLeaveActionRef.current = () => navigate('/app/campaigns');
-      setLeaveConfirmContext(isRunning ? 'running' : 'dirty');
       setShowLeaveConfirmModal(true);
       return;
     }
@@ -1280,12 +1068,8 @@ const CampaignBuilder = () => {
     handleSave();
   };
 
-  const leaveModalTitle = leaveConfirmContext === 'running'
-    ? t('campaignBuilderExtra.confirmExitRunning')
-    : t('campaignBuilderExtra.unsavedChanges');
-  const leaveModalMessage = leaveConfirmContext === 'running'
-    ? t('campaignBuilderExtra.campaignRunningWarning')
-    : t('campaignBuilderExtra.unsavedChangesWarning');
+  const leaveModalTitle = t('campaignBuilderExtra.unsavedChanges');
+  const leaveModalMessage = t('campaignBuilderExtra.unsavedChangesWarning');
 
   return (
     <>
@@ -1295,9 +1079,6 @@ const CampaignBuilder = () => {
       isDirty={isDirty}
       lastSavedTime={lastSavedTime}
       onBackToCampaigns={handleBackToCampaigns}
-      onRunCampaign={handleRunCampaign}
-      isRunning={isRunning}
-      onStopRun={handleStopRun}
       onOpenNameModal={() => setShowNameModal(true)}
       onRunNow={() => requestServerAction('run')}
       onOpenSchedule={() => requestServerAction('schedule')}
@@ -1342,7 +1123,6 @@ const CampaignBuilder = () => {
           onApplyGraph={handleApplyGraphFromSettings}
           allowedSendNodeTypes={getAllowedActionNodeTypesForDrop(campaignType)}
           onInlineDirtyChange={handleInlineDirtyChange}
-          runLogs={runLogs}
           onCheckSheetConnection={checkSheetConnection}
           onGoFlow={() => handleSelectViewTab('flow')}
           canEdit={canEditCampaign}
@@ -1395,21 +1175,6 @@ const CampaignBuilder = () => {
       setNodeToConfig={setNodeToConfig}
       setShowConfigModal={setShowConfigModal}
       activePause={activePause}
-      showRunLogs={showRunLogs}
-      isResizingLog={isResizingLog}
-      onLogResizeStart={handleLogResizeStart}
-      runLogHeight={runLogHeight}
-      logPanelRef={logPanelRef}
-      runLogs={runLogs}
-      selectedRunLogId={selectedRunLogId}
-      setSelectedRunLogId={setSelectedRunLogId}
-      logListWidth={logListWidth}
-      logListMinWidth={LOG_LIST_MIN_WIDTH}
-      logDetailMinWidth={LOG_DETAIL_MIN_WIDTH}
-      isResizingLogSplit={isResizingLogSplit}
-      onLogSplitResizeStart={handleLogSplitResizeStart}
-      setRunLogs={setRunLogs}
-      setShowRunLogs={setShowRunLogs}
       showNameModal={showNameModal}
       setShowNameModal={setShowNameModal}
       onNameModalPrimary={handleNameModalPrimary}

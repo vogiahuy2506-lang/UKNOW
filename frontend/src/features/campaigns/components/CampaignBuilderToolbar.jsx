@@ -5,9 +5,7 @@ import {
   HiOutlineDuplicate,
   HiOutlineLightningBolt,
   HiOutlineMail,
-  HiOutlinePlay,
   HiOutlineSave,
-  HiOutlineStop,
 } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 
@@ -117,7 +115,7 @@ const OverflowMenu = ({ items, label }) => {
 
 /**
  * Nhóm nút của trình dựng chiến dịch (thanh trên, dùng chung hai tab): Lưu · Lên lịch · Chạy ngay · ⋯ (Chia sẻ, Nhân bản).
- * "Chạy thử" / "Dừng" KHÔNG ở đây nữa — xem `FlowRunControls` (chỉ tab Sơ đồ khối).
+ * Chỉ còn MỘT lối gửi: "Chạy ngay" (chạy trên máy chủ, có lịch sử) — nút "Chạy thử" trong trình duyệt đã bỏ 23/10/2026.
  *
  * Tách khỏi CampaignBuilderPageLayout để test được TỪNG nút gọi đúng hàm nào. Đúng chỗ nguy hiểm nhất: "Chạy ngay"
  * gửi thật cho khách — nối nhầm là tin đã đi rồi mới biết.
@@ -199,40 +197,6 @@ const CampaignBuilderToolbar = ({
         {t('campaignBuilder.runNow')}
       </button>
       <OverflowMenu items={menuItems} label={t('campaignBuilder.moreActions')} />
-    </div>
-  );
-};
-
-/**
- * "Chạy thử" / "Dừng" — chỉ trong trình duyệt để xem trước, KHÔNG gửi thật. Nằm ở thanh của tab Sơ đồ khối (không ở thanh
- * trên) để không ai nhầm với "Chạy ngay". "Dừng" thay chỗ "Chạy thử" khi đang chạy thử.
- *
- * @param {object} props
- * @param {() => void} props.onRunCampaign chạy THỬ trong trình duyệt
- * @param {boolean} props.isRunning đang chạy thử
- * @param {() => void} props.onStopRun dừng chạy thử
- */
-export const FlowRunControls = ({ onRunCampaign, isRunning, onStopRun }) => {
-  const { t } = useI18n();
-  return (
-    <div className="flex items-center gap-2" data-testid="flow-run-controls">
-      {isRunning ? (
-        <button
-          onClick={onStopRun}
-          className={`${BASE_BUTTON_CLASS} bg-red-500 text-white hover:bg-red-600 !py-1.5 !text-sm`}
-        >
-          <HiOutlineStop className="w-4 h-4" />
-          {t('campaignBuilder.stop')}
-        </button>
-      ) : (
-        <button
-          onClick={onRunCampaign}
-          className={`${BASE_BUTTON_CLASS} bg-green-500 text-white hover:bg-green-600 !py-1.5 !text-sm`}
-        >
-          <HiOutlinePlay className="w-4 h-4" />
-          {t('campaignBuilder.testRun')}
-        </button>
-      )}
     </div>
   );
 };

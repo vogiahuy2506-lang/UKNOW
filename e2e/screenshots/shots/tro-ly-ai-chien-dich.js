@@ -123,7 +123,7 @@ export default {
         await page.waitForTimeout(800);
         await hideVolatileChrome(page);
         const card = heading.locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]');
-        // Khối nút ở đáy thẻ (nền trắng mờ, viền trên): chứa mọi nút Tạo và chạy / Tạo chiến dịch / Gửi nhanh / Chỉnh sửa / Huỷ.
+        // Khối nút ở đáy thẻ (nền trắng mờ, viền trên): chứa mọi nút Tạo và chạy / Tạo chiến dịch / Chỉnh sửa / Huỷ.
         const footer = card.locator('xpath=./div[contains(@class,"border-t")]');
         const viewport = page.viewportSize();
         await page.setViewportSize({ width: viewport.width, height: 1500 });

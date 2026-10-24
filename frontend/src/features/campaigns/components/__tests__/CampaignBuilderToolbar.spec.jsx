@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../../../../i18n';
-import CampaignBuilderToolbar, { FlowRunControls } from '../CampaignBuilderToolbar';
+import CampaignBuilderToolbar from '../CampaignBuilderToolbar';
 
 /**
  * PLAN_NUT_HANH_DONG_TRONG_SO_DO_CHIEN_DICH_2026-09-16.md — PR-1, cập nhật theo PLAN_THANH_NUT_VA_LOG_2026-10-17.
@@ -10,7 +10,7 @@ import CampaignBuilderToolbar, { FlowRunControls } from '../CampaignBuilderToolb
  * chỗ sai thì đắt nhất: "Chạy thử" chỉ chạy trong trình duyệt để xem trước, "Chạy ngay" gửi thật cho
  * khách. Nối nhầm hai cái này là tin đã gửi đi rồi mới biết, test kia vẫn xanh.
  *
- * Thanh trên giờ chỉ còn: Lưu · Lên lịch · Chạy ngay · ⋯ (Chia sẻ, Nhân bản). Chạy thử / Dừng sang FlowRunControls.
+ * Thanh trên giờ chỉ còn: Lưu · Lên lịch · Chạy ngay · ⋯ (Chia sẻ, Nhân bản). Chạy thử / Dừng đã bỏ 23/10/2026 (chỉ còn một lối gửi).
  */
 function renderToolbar(overrides = {}) {
   const props = {
@@ -184,34 +184,5 @@ describe('CampaignBuilderToolbar', () => {
     fireEvent.click(runNow);
     expect(props.onRunNow).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Lưu' })).toBeEnabled();
-  });
-});
-
-describe('FlowRunControls — Chạy thử / Dừng (chỉ ở tab Sơ đồ khối)', () => {
-  function renderControls(overrides = {}) {
-    const props = { onRunCampaign: vi.fn(), onStopRun: vi.fn(), isRunning: false, ...overrides };
-    render(
-      <I18nProvider>
-        <FlowRunControls {...props} />
-      </I18nProvider>
-    );
-    return props;
-  }
-
-  it('không chạy → chỉ có "Chạy thử" (gọi onRunCampaign), KHÔNG có "Dừng" và không có "Chạy ngay"', () => {
-    const props = renderControls();
-    expect(screen.queryByRole('button', { name: 'Dừng' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Chạy ngay' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Chạy thử' }));
-    expect(props.onRunCampaign).toHaveBeenCalledTimes(1);
-    expect(props.onStopRun).not.toHaveBeenCalled();
-  });
-
-  it('đang chạy thử → "Dừng" thay chỗ "Chạy thử" và gọi onStopRun', () => {
-    const props = renderControls({ isRunning: true });
-    expect(screen.queryByRole('button', { name: 'Chạy thử' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Dừng' }));
-    expect(props.onStopRun).toHaveBeenCalledTimes(1);
-    expect(props.onRunCampaign).not.toHaveBeenCalled();
   });
 });

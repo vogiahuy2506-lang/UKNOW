@@ -93,24 +93,24 @@ describe('AdminMenuCategoriesPage', () => {
     fireEvent.click(appTab);
 
     await waitFor(() => expect(mockGetAppLayout).toHaveBeenCalledTimes(1));
-    expect(await screen.findByRole('combobox', { name: 'Chuyên mục của Gửi nhanh' })).toBeInTheDocument();
+    expect(await screen.findByRole('combobox', { name: 'Chuyên mục của Giám sát gửi tin' })).toBeInTheDocument();
 
     fireEvent.change(screen.getByPlaceholderText('Tên chuyên mục tiếng Việt'), {
       target: { value: 'Marketing Tự Động' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Tạo mới' }));
 
-    const quickSendSelect = screen.getByRole('combobox', { name: 'Chuyên mục của Gửi nhanh' });
-    const mktOption = Array.from(quickSendSelect.options)
+    const deliverySelect = screen.getByRole('combobox', { name: 'Chuyên mục của Giám sát gửi tin' });
+    const mktOption = Array.from(deliverySelect.options)
       .find((option) => option.textContent === 'Marketing Tự Động');
-    fireEvent.change(quickSendSelect, { target: { value: mktOption.value } });
+    fireEvent.change(deliverySelect, { target: { value: mktOption.value } });
 
     fireEvent.click(screen.getByRole('button', { name: 'Lưu' }));
 
     await waitFor(() => expect(mockUpdateAppLayout).toHaveBeenCalledTimes(1));
     const savedCategories = mockUpdateAppLayout.mock.calls[0][0];
     expect(savedCategories.find((c) => c.nameVi === 'Marketing Tự Động')).toMatchObject({
-      itemKeys: ['quick_send'],
+      itemKeys: ['delivery_monitor'],
     });
 
     // Không phát sự kiện live cho scope app_user
