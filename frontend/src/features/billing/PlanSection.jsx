@@ -8,6 +8,7 @@ import {
   HiOutlineExclamation,
   HiOutlineSparkles,
   HiOutlineChevronRight,
+  HiOutlineSpeakerphone,
 } from 'react-icons/hi';
 import { useI18n } from '../../i18n';
 import Modal from '../../components/Modal';
@@ -59,7 +60,16 @@ const RESOURCE_ROWS = [
   { key: 'whatsappAccounts', icon: HiOutlineChatAlt2, labelKey: 'accountProfileModal.whatsappAccounts', optional: true },
   { key: 'telegramAccounts', icon: HiOutlineChatAlt2, labelKey: 'accountProfileModal.telegramAccounts', optional: true },
   { key: 'employees', icon: HiOutlineUsers, labelKey: 'topup.items.employees' },
+  // Suất chiến dịch (PLAN_HANG_CHIEN_DICH_MUC_DUNG_2026-10-24): `campaigns` luôn hiện; ba hàng theo loại chỉ hiện khi có trần
+  // hoặc đã dùng. Đặt CUỐI để thứ tự các hàng cũ không đổi và dòng chú thích nằm ngay dưới nhóm này. Nhãn dùng lại
+  // customPlan.items.* (đúng tên các trần này ở trang Gói tuỳ chỉnh).
+  { key: 'campaigns', icon: HiOutlineSpeakerphone, labelKey: 'customPlan.items.campaigns' },
+  { key: 'zaloCampaigns', icon: HiOutlineSpeakerphone, labelKey: 'customPlan.items.zaloCampaigns', optional: true },
+  { key: 'zaloGroupCampaigns', icon: HiOutlineSpeakerphone, labelKey: 'customPlan.items.zaloGroupCampaigns', optional: true },
+  { key: 'emailCampaigns', icon: HiOutlineSpeakerphone, labelKey: 'customPlan.items.emailCampaigns', optional: true },
 ];
+
+const CAMPAIGN_RESOURCE_KEYS = ['campaigns', 'zaloCampaigns', 'zaloGroupCampaigns', 'emailCampaigns'];
 
 function unwrapFeature(feat, locale) {
   if (typeof feat === 'object' && feat !== null) {
@@ -422,6 +432,15 @@ export default function PlanSection({ data, t }) {
             />
           );
         })}
+        {/* Chú thích suất chiến dịch: chỉ khi ít nhất một hàng chiến dịch đang có trần (Pro/Enterprise không trần thì ẩn) */}
+        {CAMPAIGN_RESOURCE_KEYS.some((key) => {
+          const entry = data.resourceUsage?.[key] ?? null;
+          return entry && !isUnlimitedPlanLimit(entry.limit);
+        }) && (
+          <p className="text-[11px] text-gray-400 dark:text-dk-text2" data-testid="campaign-slot-note">
+            {t('accountProfileModal.campaignSlotNote')}
+          </p>
+        )}
       </div>
 
       {/* Storage quota usage */}

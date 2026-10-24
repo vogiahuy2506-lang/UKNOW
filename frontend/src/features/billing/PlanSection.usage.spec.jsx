@@ -40,6 +40,10 @@ const baseData = {
     whatsappAccounts: { used: 0, limit: null },
     telegramAccounts: { used: 0, limit: null },
     employees: { used: 1, limit: 3 },
+    campaigns: { used: 2, limit: 5 },
+    zaloCampaigns: { used: 0, limit: null },
+    zaloGroupCampaigns: { used: 0, limit: null },
+    emailCampaigns: { used: 0, limit: null },
   },
 };
 
@@ -193,6 +197,74 @@ describe('PlanSection — khối Tài nguyên', () => {
     renderPlan({ resourceUsage: { ...baseData.resourceUsage, chatbots: null } });
     const card = resourcesCard();
     expect(within(card).getAllByText('—')).toHaveLength(1);
+  });
+});
+
+// PLAN_HANG_CHIEN_DICH_MUC_DUNG_2026-10-24 — hàng "Chiến dịch" ở khối Tài nguyên (UsageBar + từ điển THẬT).
+describe('PlanSection — hàng Chiến dịch ở khối Tài nguyên', () => {
+  const NO_CAMPAIGN = {
+    campaigns: { used: 0, limit: null },
+    zaloCampaigns: { used: 0, limit: null },
+    zaloGroupCampaigns: { used: 0, limit: null },
+    emailCampaigns: { used: 0, limit: null },
+  };
+
+  it('gói dùng thử (có trần cả bốn): hiện "Chiến dịch" + ba hàng theo loại + câu chú thích "chạy xong không tính"', () => {
+    renderPlan({
+      resourceUsage: {
+        ...baseData.resourceUsage,
+        campaigns: { used: 2, limit: 6 },
+        zaloCampaigns: { used: 1, limit: 2 },
+        zaloGroupCampaigns: { used: 0, limit: 2 },
+        emailCampaigns: { used: 1, limit: 2 },
+      },
+    });
+    const card = resourcesCard();
+    expect(within(card).getByText('Chiến dịch')).toBeInTheDocument();
+    expect(within(card).getByText('Chiến dịch Zalo')).toBeInTheDocument();
+    expect(within(card).getByText('Chiến dịch Zalo nhóm')).toBeInTheDocument();
+    expect(within(card).getByText('Chiến dịch Email')).toBeInTheDocument();
+    expect(within(card).getByText('2 / 6')).toBeInTheDocument();
+    expect(within(card).getByText('0 / 2')).toBeInTheDocument();
+    expect(within(card).getAllByText('1 / 2')).toHaveLength(3); // Zalo cá nhân, Email, + tài khoản Zalo của baseData
+    expect(within(card).getByTestId('campaign-slot-note')).toHaveTextContent('Chiến dịch đã chạy xong không tính vào suất.');
+  });
+
+  it('gói Pro (cả bốn không trần, chưa dùng): chỉ còn hàng "Chiến dịch" = Không giới hạn; ẩn ba hàng theo loại; không có chú thích', () => {
+    renderPlan({ resourceUsage: { ...baseData.resourceUsage, landingPages: { used: 3, limit: null }, ...NO_CAMPAIGN } });
+    const card = resourcesCard();
+    expect(within(card).getByText('Chiến dịch')).toBeInTheDocument();
+    expect(within(card).getByText('Không giới hạn')).toBeInTheDocument();
+    expect(within(card).queryByText('Chiến dịch Zalo')).not.toBeInTheDocument();
+    expect(within(card).queryByText('Chiến dịch Zalo nhóm')).not.toBeInTheDocument();
+    expect(within(card).queryByText('Chiến dịch Email')).not.toBeInTheDocument();
+    expect(within(card).queryByTestId('campaign-slot-note')).not.toBeInTheDocument();
+  });
+
+  it('gói không trần nhưng đã có chiến dịch theo loại → hàng đó hiện "N · Không giới hạn"', () => {
+    renderPlan({
+      resourceUsage: { ...baseData.resourceUsage, ...NO_CAMPAIGN, emailCampaigns: { used: 4, limit: null } },
+    });
+    const card = resourcesCard();
+    expect(within(card).getByText('Chiến dịch Email')).toBeInTheDocument();
+    expect(within(card).getByText('4 · Không giới hạn')).toBeInTheDocument();
+  });
+
+  it('đồng hồ chiến dịch lỗi (null) → hàng "Chiến dịch" hiện "—", không phải "0 / N", và không có chú thích', () => {
+    renderPlan({
+      resourceUsage: {
+        ...baseData.resourceUsage,
+        campaigns: null,
+        zaloCampaigns: null,
+        zaloGroupCampaigns: null,
+        emailCampaigns: null,
+      },
+    });
+    const card = resourcesCard();
+    expect(within(card).getByText('Chiến dịch')).toBeInTheDocument();
+    expect(within(card).getAllByText('—')).toHaveLength(1);
+    expect(within(card).queryByText('Chiến dịch Zalo')).not.toBeInTheDocument();
+    expect(within(card).queryByTestId('campaign-slot-note')).not.toBeInTheDocument();
   });
 });
 

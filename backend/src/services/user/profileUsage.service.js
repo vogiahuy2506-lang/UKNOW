@@ -33,8 +33,14 @@ import chatbotRepository from '../../repositories/ai/chatbot.repository.js';
 import { resolveEffectiveCeiling } from '../payment/topupLock.service.js';
 import { computeEmployeeLimitInfo } from './employee.service.js';
 
-/** Các tài nguyên cổng tạo mới đọc qua RESOURCE_LIMIT_MAP (userResourceLimit.util.js). */
-const MAP_RESOURCE_KEYS = ['landingPages', 'zaloAccounts', 'emailAccounts', 'whatsappAccounts', 'telegramAccounts'];
+/**
+ * Các tài nguyên cổng tạo mới đọc qua RESOURCE_LIMIT_MAP (userResourceLimit.util.js). Bốn khoá chiến dịch đếm theo
+ * định nghĩa "chiếm suất" (chiến dịch đã chạy xong không tính) — cùng phép đếm với cổng tạo và cổng kích hoạt lại.
+ */
+const MAP_RESOURCE_KEYS = [
+  'landingPages', 'zaloAccounts', 'emailAccounts', 'whatsappAccounts', 'telegramAccounts',
+  'campaigns', 'zaloCampaigns', 'zaloGroupCampaigns', 'emailCampaigns',
+];
 
 /** Cùng phép ép số nguyên với `toInt` của cổng gửi tin (userSendLimit.util.js). */
 const toIntOrNull = (value) => {
@@ -165,7 +171,8 @@ async function readEmployeeUsage(billingUserId) {
  * (limit null = không giới hạn) hoặc null khi đồng hồ đó lỗi.
  *
  * @param {number|string} billingUserId
- * @returns {Promise<Record<'chatbots'|'landingPages'|'zaloAccounts'|'emailAccounts'|'whatsappAccounts'|'telegramAccounts'|'employees',
+ * @returns {Promise<Record<'chatbots'|'landingPages'|'zaloAccounts'|'emailAccounts'|'whatsappAccounts'|'telegramAccounts'|'employees'
+ *   |'campaigns'|'zaloCampaigns'|'zaloGroupCampaigns'|'emailCampaigns',
  *   {used: number, limit: number|null}|null>>}
  */
 export async function getProfileResourceUsage(billingUserId) {
@@ -186,5 +193,9 @@ export async function getProfileResourceUsage(billingUserId) {
     whatsappAccounts: mapped.whatsappAccounts ?? null,
     telegramAccounts: mapped.telegramAccounts ?? null,
     employees,
+    campaigns: mapped.campaigns ?? null,
+    zaloCampaigns: mapped.zaloCampaigns ?? null,
+    zaloGroupCampaigns: mapped.zaloGroupCampaigns ?? null,
+    emailCampaigns: mapped.emailCampaigns ?? null,
   };
 }

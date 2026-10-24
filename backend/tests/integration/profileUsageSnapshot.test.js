@@ -534,11 +534,63 @@ describe('GET /api/users/profile — tài nguyên, bằng số cổng tạo mớ
     }
   });
 
+  // PLAN_HANG_CHIEN_DICH_MUC_DUNG_2026-10-24 — hàng "Chiến dịch" ở màn mức dùng: cùng phép đếm "chiếm suất" với cổng tạo.
+  it('chiến dịch: chỉ đếm chiến dịch ĐANG CHIẾM SUẤT (nháp / đang chạy / lịch bật), đã chạy xong thì không tính', async () => {
+    const { user } = await customerOnPlan('camp_owner', PLAN_CO_TRAN);
+    const stranger = await createUser({ username: 'camp_stranger' });
+    await db.query(
+      `UPDATE users SET max_campaigns = 6, max_zalo_campaigns = 2, max_zalo_group_campaigns = 2, max_email_campaigns = 2
+       WHERE id = $1`,
+      [user.id]
+    );
+    const makeCampaign = async (ownerId, type, runStatuses = []) => {
+      const { rows } = await db.query(
+        `INSERT INTO campaigns (id_user, workspace_owner_id, campaign_name, campaign_type, status)
+         VALUES ($1, $1, $2, $3, 'active') RETURNING id`,
+        [ownerId, uniq('camp'), type]
+      );
+      for (const runStatus of runStatuses) {
+        await db.query(
+          `INSERT INTO campaign_runs (id_campaign, workspace_owner_id, run_type, status, completed_at)
+           VALUES ($1, $2, 'manual', $3::varchar, CASE WHEN $3::varchar = 'running' THEN NULL ELSE NOW() END)`,
+          [rows[0].id, ownerId, runStatus]
+        );
+      }
+    };
+    await makeCampaign(user.id, 'zalo'); // nháp chưa chạy → chiếm
+    await makeCampaign(user.id, 'zalo', ['completed']); // đã chạy xong → trả suất
+    await makeCampaign(user.id, 'email', ['running']); // đang chạy → chiếm
+    await makeCampaign(stranger.id, 'email'); // của người lạ → không tính
+
+    const data = await getProfile(await loginAs(user));
+
+    expect(data.resourceUsage.zaloCampaigns).toEqual({ used: 1, limit: 2 });
+    expect(data.resourceUsage.emailCampaigns).toEqual({ used: 1, limit: 2 });
+    expect(data.resourceUsage.zaloGroupCampaigns).toEqual({ used: 0, limit: 2 });
+    expect(data.resourceUsage.campaigns).toEqual({ used: 2, limit: 6 });
+  });
+
+  it('chiến dịch: gói không trần (cột NULL) → limit null cho cả 4 khoá', async () => {
+    const { user } = await customerOnPlan('camp_unlimited', PLAN_CO_TRAN);
+    await db.query(
+      `UPDATE users SET max_campaigns = NULL, max_zalo_campaigns = NULL, max_zalo_group_campaigns = NULL,
+                        max_email_campaigns = NULL WHERE id = $1`,
+      [user.id]
+    );
+
+    const data = await getProfile(await loginAs(user));
+
+    for (const key of ['campaigns', 'zaloCampaigns', 'zaloGroupCampaigns', 'emailCampaigns']) {
+      expect(data.resourceUsage[key]).toEqual({ used: 0, limit: null });
+    }
+  });
+
   it('mọi khoá tài nguyên đều có mặt (không khoá nào bị bỏ sót)', async () => {
     const { user } = await customerOnPlan('all_keys', PLAN_CO_TRAN);
     const data = await getProfile(await loginAs(user));
     expect(Object.keys(data.resourceUsage).sort()).toEqual([
-      'chatbots', 'emailAccounts', 'employees', 'landingPages', 'telegramAccounts', 'whatsappAccounts', 'zaloAccounts',
+      'campaigns', 'chatbots', 'emailAccounts', 'emailCampaigns', 'employees', 'landingPages', 'telegramAccounts',
+      'whatsappAccounts', 'zaloAccounts', 'zaloCampaigns', 'zaloGroupCampaigns',
     ]);
     for (const value of Object.values(data.resourceUsage)) {
       expect(Number.isFinite(value.used)).toBe(true);

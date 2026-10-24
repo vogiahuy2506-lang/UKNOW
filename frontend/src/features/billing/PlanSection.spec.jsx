@@ -167,6 +167,32 @@ describe('PlanSection — tài nguyên lấy từ resourceUsage của backend', 
   });
 });
 
+// PLAN_HANG_CHIEN_DICH_MUC_DUNG_2026-10-24 — bốn hàng suất chiến dịch: truyền nguyên { used, limit } của backend xuống UsageBar.
+describe('PlanSection — hàng suất chiến dịch lấy từ resourceUsage', () => {
+  it('truyền nguyên used/limit của bốn khoá; limit null giữ là null, không bị ép thành 0', () => {
+    renderPlan({
+      resourceUsage: {
+        campaigns: { used: 2, limit: 6 },
+        zaloCampaigns: { used: 1, limit: 2 },
+        zaloGroupCampaigns: { used: 0, limit: 0 },
+        emailCampaigns: { used: 3, limit: null },
+      },
+    });
+    expect([usedOf('customPlan.items.campaigns'), limitOf('customPlan.items.campaigns')]).toEqual(['2', '6']);
+    expect([usedOf('customPlan.items.zaloCampaigns'), limitOf('customPlan.items.zaloCampaigns')]).toEqual(['1', '2']);
+    expect([usedOf('customPlan.items.zaloGroupCampaigns'), limitOf('customPlan.items.zaloGroupCampaigns')]).toEqual(['0', '0']);
+    expect([usedOf('customPlan.items.emailCampaigns'), limitOf('customPlan.items.emailCampaigns')]).toEqual(['3', 'null']);
+  });
+
+  it('backend cũ chưa trả khoá chiến dịch: hàng "Chiến dịch" hiện used null ("—"), ba hàng theo loại ẩn', () => {
+    renderPlan({ resourceUsage: {} });
+    expect(usedOf('customPlan.items.campaigns')).toBe('null');
+    expect(barIfAny('customPlan.items.zaloCampaigns')).not.toBeInTheDocument();
+    expect(barIfAny('customPlan.items.zaloGroupCampaigns')).not.toBeInTheDocument();
+    expect(barIfAny('customPlan.items.emailCampaigns')).not.toBeInTheDocument();
+  });
+});
+
 // W5 — hạn mức số tài khoản WhatsApp/Telegram: chỉ hiện dòng khi gói có trần (NULL = không giới hạn thì ẩn,
 // trừ khi đã có tài khoản); trần 0 hiện "x / 0".
 describe('PlanSection — W5 hạn mức tài khoản WhatsApp/Telegram', () => {

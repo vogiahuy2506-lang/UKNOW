@@ -218,6 +218,10 @@ describe('getProfileResourceUsage — tài nguyên, đúng hàm của từng c�
       emailAccounts: { used: 0, limit: 2 },
       whatsappAccounts: { used: 0, limit: 0 },
       telegramAccounts: { used: 3, limit: 3 },
+      campaigns: { used: 2, limit: 6 },
+      zaloCampaigns: { used: 1, limit: 2 },
+      zaloGroupCampaigns: { used: 0, limit: null },
+      emailCampaigns: { used: 1, limit: 2 },
     });
     countActiveChatbotsByUser.mockResolvedValue(2);
     resolveEffectiveCeiling.mockResolvedValue(3);
@@ -226,12 +230,15 @@ describe('getProfileResourceUsage — tài nguyên, đúng hàm của từng c�
     });
   });
 
-  it('5 tài nguyên trong RESOURCE_LIMIT_MAP đi qua getResourceUsageSnapshot; chatbot & nhân viên qua cổng riêng', async () => {
+  it('9 tài nguyên trong RESOURCE_LIMIT_MAP (gồm 4 khoá chiến dịch) đi qua getResourceUsageSnapshot; chatbot & nhân viên qua cổng riêng', async () => {
     const out = await getProfileResourceUsage(42);
 
     expect(getResourceUsageSnapshot).toHaveBeenCalledWith(
       42,
-      ['landingPages', 'zaloAccounts', 'emailAccounts', 'whatsappAccounts', 'telegramAccounts']
+      [
+        'landingPages', 'zaloAccounts', 'emailAccounts', 'whatsappAccounts', 'telegramAccounts',
+        'campaigns', 'zaloCampaigns', 'zaloGroupCampaigns', 'emailCampaigns',
+      ]
     );
     // chatbot: đếm is_active (countActiveChatbotsByUser) + trần plans.max_chatbots + slot mua thêm (resolveEffectiveCeiling)
     expect(countActiveChatbotsByUser).toHaveBeenCalledWith(42);
@@ -244,7 +251,25 @@ describe('getProfileResourceUsage — tài nguyên, đúng hàm của từng c�
       whatsappAccounts: { used: 0, limit: 0 },
       telegramAccounts: { used: 3, limit: 3 },
       employees: { used: 2, limit: 4 },
+      campaigns: { used: 2, limit: 6 },
+      zaloCampaigns: { used: 1, limit: 2 },
+      zaloGroupCampaigns: { used: 0, limit: null },
+      emailCampaigns: { used: 1, limit: 2 },
     });
+  });
+
+  it('bốn khoá chiến dịch: gói không trần → limit null; đồng hồ chiến dịch lỗi/thiếu → null (không 0 giả)', async () => {
+    getResourceUsageSnapshot.mockResolvedValue({
+      campaigns: { used: 0, limit: null },
+      zaloCampaigns: { used: 0, limit: null },
+      zaloGroupCampaigns: { used: 0, limit: null },
+      emailCampaigns: null,
+    });
+    const out = await getProfileResourceUsage(42);
+    expect(out.campaigns).toEqual({ used: 0, limit: null });
+    expect(out.zaloCampaigns).toEqual({ used: 0, limit: null });
+    expect(out.zaloGroupCampaigns).toEqual({ used: 0, limit: null });
+    expect(out.emailCampaigns).toBeNull();
   });
 
   it('chatbot không giới hạn (Infinity) → limit null, không phải Infinity/0', async () => {
@@ -285,7 +310,7 @@ describe('getProfileResourceUsage — tài nguyên, đúng hàm của từng c�
     );
   });
 
-  it('getResourceUsageSnapshot ném lỗi (lỗi lập trình) → 5 mục đó null, chatbot & nhân viên vẫn có số; không ném ra ngoài', async () => {
+  it('getResourceUsageSnapshot ném lỗi (lỗi lập trình) → 9 mục đó null, chatbot & nhân viên vẫn có số; không ném ra ngoài', async () => {
     getResourceUsageSnapshot.mockRejectedValue(new Error('Resource key không hợp lệ: x'));
 
     const out = await getProfileResourceUsage(42);
@@ -295,6 +320,10 @@ describe('getProfileResourceUsage — tài nguyên, đúng hàm của từng c�
     expect(out.emailAccounts).toBeNull();
     expect(out.whatsappAccounts).toBeNull();
     expect(out.telegramAccounts).toBeNull();
+    expect(out.campaigns).toBeNull();
+    expect(out.zaloCampaigns).toBeNull();
+    expect(out.zaloGroupCampaigns).toBeNull();
+    expect(out.emailCampaigns).toBeNull();
     expect(out.chatbots).toEqual({ used: 2, limit: 3 });
     expect(out.employees).toEqual({ used: 2, limit: 4 });
   });

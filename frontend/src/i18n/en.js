@@ -9759,6 +9759,7 @@ export default {
     // "Resources" block
     resourcesTitle: 'Resources',
     meterUnavailable: 'This figure could not be loaded — try reloading the page.',
+    campaignSlotNote: 'Campaigns that have finished running do not count toward the quota.',
     // "Bought extra" block
     addonsTitle: 'Bought extra',
     addonsRemaining: '{n} left',

@@ -9768,6 +9768,7 @@ export default {
     // Khối "Tài nguyên"
     resourcesTitle: 'Tài nguyên',
     meterUnavailable: 'Chưa đọc được số liệu này — thử tải lại trang.',
+    campaignSlotNote: 'Chiến dịch đã chạy xong không tính vào suất.',
     // Khối "Đã mua thêm"
     addonsTitle: 'Đã mua thêm',
     addonsRemaining: 'Còn lại {n}',

@@ -77,6 +77,10 @@ const RESOURCE_USAGE_EMPTY = {
   whatsappAccounts: null,
   telegramAccounts: null,
   employees: null,
+  campaigns: null,
+  zaloCampaigns: null,
+  zaloGroupCampaigns: null,
+  emailCampaigns: null,
 };
 
 jest.unstable_mockModule('../../services/payment/usageTracking.service.js', () => ({
