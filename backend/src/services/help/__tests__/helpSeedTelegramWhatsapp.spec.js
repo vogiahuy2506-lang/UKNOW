@@ -56,11 +56,14 @@ describe('bài hướng dẫn Telegram/WhatsApp (W7c)', () => {
     expect(a.summary).toContain('Telegram');
   });
 
-  it('quick-send: Telegram/WhatsApp có trong Gửi nhanh, không còn câu "Telegram chưa có"', () => {
+  // 23/10/2026 (PLAN_MOT_NUT_GUI): trang Gửi nhanh đã bỏ — bài `quick-send` giữ slug, thành "Gửi tin một lần" qua trình
+  // Từng bước; Telegram/WhatsApp đi qua chiến dịch, giới hạn của hai kênh nằm ở bài gui-telegram-whatsapp.
+  it('quick-send: Telegram/WhatsApp gửi qua trình Từng bước, không còn hứa "có trong Gửi nhanh"', () => {
     const md = bySlug('quick-send').body_md;
     expect(md).not.toContain('Telegram chưa có trong Gửi nhanh');
-    expect(md).toContain('**Telegram** và **WhatsApp** cũng có trong Gửi nhanh');
-    expect(md).toContain('Giới hạn gửi/ngày');
+    expect(md).not.toContain('cũng có trong Gửi nhanh');
+    expect(md).toContain('**Telegram và WhatsApp** ở trình Từng bước');
+    expect(md).toContain('[Gửi chiến dịch qua Telegram, WhatsApp](gui-telegram-whatsapp)');
   });
 
   it('campaign-create: trợ lý AI dựng hộ Telegram/WhatsApp + giới hạn/ngày, tốc độ, mẫu tin, đính kèm', () => {
