@@ -45,6 +45,7 @@ import {
 } from '../../utils/zaloSilentDropGuard.util.js';
 import { ZALO_SILENT_DROP_CATEGORY } from '../../utils/zaloDispatchDelivery.util.js';
 import { isAdminRole } from '../../utils/roleScope.util.js';
+import { enforceCampaignSlotOnActivationTx } from '../../utils/userResourceLimit.util.js';
 import { resourceIsLocked } from '../../utils/topupLockGate.util.js';
 import { checkSendQuota } from '../../utils/userSendLimit.util.js';
 import { EFFECTIVE_PLAN_ID_SQL, resolveBillingUserId } from '../../utils/billingCycle.util.js';
@@ -954,6 +955,10 @@ class CampaignRunService {
   /**
    * Create a campaign run row with lock and conflict checks.
    *
+   * `enforceCampaignSlot`: true CHỈ khi NGƯỜI DÙNG bấm chạy (Chạy ngay / duyệt chiến dịch chờ duyệt) — kiểm suất chiến
+   * dịch của gói trong CÙNG transaction với việc tạo run (xem enforceCampaignSlotOnActivationTx). Scheduler KHÔNG bao giờ
+   * truyền cờ này: nó tắt lịch `once` trước khi tạo run, nên cổng ở đây sẽ chặn oan lượt hẹn giờ khách đã đặt.
+   *
    * @param {object} input
    * @returns {Promise<object>}
    */
@@ -970,6 +975,7 @@ class CampaignRunService {
     runOptions = {},
     activatePendingApproval = false,
     autoActivate = false,
+    enforceCampaignSlot = false,
   }) {
     const client = await db.getClient();
     let runRecord;
@@ -1092,6 +1098,16 @@ class CampaignRunService {
         ...(continuousMode && resumeFromRunId !== null ? { resumeFromRunId } : {}),
       };
 
+      // Chiến dịch đã chạy xong không chiếm suất → bấm chạy lại là chiếm suất trở lại, phải còn chỗ. Đặt SÁT trước
+      // INSERT run (cùng transaction, giữ advisory lock tới COMMIT) để hai lần bấm song song không cùng lọt qua trần.
+      if (enforceCampaignSlot) {
+        await enforceCampaignSlotOnActivationTx(client, {
+          userId: campaignData.workspace_owner_id || workspaceOwnerId,
+          roleCode,
+          campaignId,
+        });
+      }
+
       const runResult = await campaignRunRepository.insertRunTx(client, {
         campaignId,
         scheduleId,
@@ -1190,6 +1206,7 @@ class CampaignRunService {
     isAdmin = isAdminRole(roleCode),
     runId,
     runOptions = {},
+    enforceCampaignSlot = false,
   }) {
     const client = await db.getClient();
     try {
@@ -1257,6 +1274,15 @@ class CampaignRunService {
       }
       // Resume chính run cũ nên không cần fallback sang run khác.
       delete mergedMetadata.resumeFromRunId;
+
+      // Chạy tiếp một lượt continuous đã xong = chiến dịch chiếm suất trở lại (xem createCampaignRunRecord).
+      if (enforceCampaignSlot) {
+        await enforceCampaignSlotOnActivationTx(client, {
+          userId: currentRun.effective_workspace_owner_id || workspaceOwnerId,
+          roleCode,
+          campaignId,
+        });
+      }
 
       const updatedRun = await campaignRunRepository.resumeContinuousRunTx(client, {
         runId,

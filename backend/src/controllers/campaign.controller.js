@@ -735,6 +735,8 @@ class CampaignController {
             adjacentZaloNodeDelayMs,
             pollIntervalMs,
           },
+          // Thao tác của NGƯỜI DÙNG: chạy tiếp lượt đã xong = chiếm suất chiến dịch trở lại → phải còn chỗ.
+          enforceCampaignSlot: true,
         });
       } else {
         // `scheduleId` trong body chỉ được nhận khi đúng là lịch của chiến dịch này, cùng workspace.
@@ -760,6 +762,9 @@ class CampaignController {
             resumeFromRunId,
           },
           autoActivate,
+          // Thao tác của NGƯỜI DÙNG (kể cả khi body ghi source='schedule'; lượt hẹn giờ thật do scheduler gọi thẳng
+          // createCampaignRunRecord, không qua đây): chiến dịch đã chạy xong bấm chạy lại phải còn suất.
+          enforceCampaignSlot: true,
         });
       }
 
@@ -810,6 +815,7 @@ class CampaignController {
       res.status(statusCode).json({
         success: false,
         ...(error.code ? { code: error.code } : {}),
+        ...(error.limitReached ? { limitReached: true, resource: error.resource } : {}),
         message: error.message || 'Lỗi server khi chạy chiến dịch'
       });
     }
@@ -828,6 +834,7 @@ class CampaignController {
     runOptions = {},
     activatePendingApproval = false,
     autoActivate = false,
+    enforceCampaignSlot = false,
   }) {
     return campaignRunService.createCampaignRunRecord({
       campaignId,
@@ -841,6 +848,7 @@ class CampaignController {
       runOptions,
       activatePendingApproval,
       autoActivate,
+      enforceCampaignSlot,
     });
   }
 
@@ -1515,6 +1523,8 @@ class CampaignController {
         source: 'manual',
         runName: `${campaign.campaign_name} (Approved)`,
         activatePendingApproval: true,
+        // Chủ bấm duyệt = người dùng kích hoạt: cùng cổng suất với Chạy ngay.
+        enforceCampaignSlot: true,
       });
 
       this.executeCampaign(campaignId, runRecord.id, workspaceContext.workspaceOwnerId, workspaceContext.roleCode).catch(err => {
@@ -1547,6 +1557,7 @@ class CampaignController {
       return res.status(error.statusCode || 500).json({
         success: false,
         ...(error.code ? { code: error.code } : {}),
+        ...(error.limitReached ? { limitReached: true, resource: error.resource } : {}),
         message: error.message || 'Lỗi server khi phê duyệt chiến dịch',
       });
     }

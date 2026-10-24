@@ -5,6 +5,7 @@ import campaignScheduleRepository from '../repositories/campaign/campaignSchedul
 import campaignCrudService from '../services/campaign/campaignCrud.service.js';
 import { validateCampaignPreflight } from '../services/campaign/campaignPreflight.service.js';
 import { assertOnceCronNotYearRolled } from '../utils/onceScheduleValidation.util.js';
+import { enforceCampaignSlotOnActivationTx } from '../utils/userResourceLimit.util.js';
 // Cột `next_run_at` không có chỗ ghi (production 12/09/2026: 29/29 lịch bật đều NULL) → tính lúc
 // đọc, cùng luật nổ với scheduler.
 import { computeScheduleNextRunAt } from '../utils/campaignScheduleCron.util.js';
@@ -139,10 +140,12 @@ async function respondPreflightFailure(res, campaignId, workspaceOwnerId, actorU
  * @param {(client: object) => Promise<object>} writeScheduleTx nhận client transaction, trả về row lịch
  * @returns {Promise<{row: object, activatedCampaign: object}|{conflict: true}|{thrown: Error}>}
  */
-async function activateCampaignAndWriteScheduleTx(req, campaignId, writeScheduleTx) {
+async function activateCampaignAndWriteScheduleTx(req, campaignId, writeScheduleTx, { slotGate = null } = {}) {
   const client = await db.getClient();
   try {
     await client.query('BEGIN');
+    // Cổng suất chiến dịch (PLAN_MOT_NUT_GUI PR-1): bật lịch làm chiến dịch đã chạy xong chiếm suất trở lại.
+    if (slotGate) await enforceCampaignSlotOnActivationTx(client, slotGate);
     const activatedCampaign = await campaignCrudService.publishCampaignTx(client, {
       authUser: req.user,
       campaignId,
@@ -165,6 +168,21 @@ async function activateCampaignAndWriteScheduleTx(req, campaignId, writeSchedule
 }
 
 /**
+ * Hết suất chiến dịch (cổng ở lúc tạo/bật lịch) → 400 RESOURCE_LIMIT_EXCEEDED, cùng hợp đồng với cổng tạo / Chạy ngay.
+ * Lỗi khác → null (gọi tiếp xử lý/ném tiếp).
+ */
+function respondSlotLimitFailure(res, error) {
+  if (error?.code !== 'RESOURCE_LIMIT_EXCEEDED') return null;
+  return res.status(error.statusCode || 400).json({
+    success: false,
+    code: error.code,
+    resource: error.resource,
+    limitReached: true,
+    message: error.message,
+  });
+}
+
+/**
  * Map một lỗi từ `activateCampaignAndWriteScheduleTx` thành response — dùng chung cho create/update.
  * Trả về response đã gửi nếu xử lý được, hoặc `null` nếu lỗi lạ (gọi tiếp phải throw ra ngoài).
  */
@@ -178,6 +196,8 @@ function respondActivateFailure(res, result, campaignStatus) {
     });
   }
   const error = result.thrown;
+  const slotFailure = respondSlotLimitFailure(res, error);
+  if (slotFailure) return slotFailure;
   if (error?.code === 'CANNOT_ACTIVATE_EMPTY_CAMPAIGN') {
     return res.status(error.statusCode || 409).json({
       success: false,
@@ -385,6 +405,10 @@ class CampaignScheduleController {
         overlapWarnings = overlapCheck.warnings;
       }
 
+      // Lịch bật làm chiến dịch chiếm suất (chạy xong thì trả suất) → kiểm suất cùng transaction với việc ghi lịch.
+      const slotGate = isEnabling
+        ? { userId: campaign.workspace_owner_id ?? context.workspaceOwnerId, roleCode: context.roleCode, campaignId }
+        : null;
       let row;
       if (needsActivation) {
         const result = await activateCampaignAndWriteScheduleTx(req, campaignId, (client) =>
@@ -396,7 +420,7 @@ class CampaignScheduleController {
             enabled,
             workspaceOwnerId: campaign.workspace_owner_id,
             createdBy: context.actorUserId,
-          })
+          }), { slotGate }
         );
         const failureResponse = (result.conflict || result.thrown)
           && respondActivateFailure(res, result, campaign.status);
@@ -412,6 +436,7 @@ class CampaignScheduleController {
           enabled,
           workspaceOwnerId: campaign.workspace_owner_id,
           createdBy: context.actorUserId,
+          ...(slotGate ? { slotGate } : {}),
         });
       }
       const schedule = {
@@ -455,6 +480,8 @@ class CampaignScheduleController {
       });
     } catch (error) {
       if (isScheduleDuplicateViolation(error)) return respondScheduleDuplicate(res);
+      const slotFailure = respondSlotLimitFailure(res, error);
+      if (slotFailure) return slotFailure;
       return serverError(res, 'CampaignScheduleController.create', error);
     } finally {
       requestCampaignScheduleRefresh();
@@ -588,6 +615,14 @@ class CampaignScheduleController {
         overlapWarnings = overlapCheck.warnings;
       }
 
+      // Chỉ lúc BẬT một lịch đang tắt mới làm chiến dịch chiếm thêm suất (sửa tên/giờ lịch đã bật thì không đổi gì).
+      const slotGate = willEnableFromOff
+        ? {
+          userId: scheduleData.workspace_owner_id ?? context.workspaceOwnerId,
+          roleCode: context.roleCode,
+          campaignId: scheduleData.id_campaign,
+        }
+        : null;
       let row;
       if (needsActivation) {
         const result = await activateCampaignAndWriteScheduleTx(req, scheduleData.id_campaign, (client) =>
@@ -599,7 +634,7 @@ class CampaignScheduleController {
             enabled,
             workspaceOwnerId: context.workspaceOwnerId,
             isAdmin: context.isSuperAdmin,
-          })
+          }), { slotGate }
         );
         const failureResponse = (result.conflict || result.thrown)
           && respondActivateFailure(res, result, scheduleData.campaign_status);
@@ -615,6 +650,7 @@ class CampaignScheduleController {
           enabled,
           workspaceOwnerId: context.workspaceOwnerId,
           isAdmin: context.isSuperAdmin,
+          ...(slotGate ? { slotGate } : {}),
         });
       }
       const schedule = {
@@ -671,6 +707,8 @@ class CampaignScheduleController {
       });
     } catch (error) {
       if (isScheduleDuplicateViolation(error)) return respondScheduleDuplicate(res);
+      const slotFailure = respondSlotLimitFailure(res, error);
+      if (slotFailure) return slotFailure;
       return serverError(res, 'CampaignScheduleController.update', error);
     } finally {
       requestCampaignScheduleRefresh();

@@ -1,4 +1,29 @@
 import db from '../../config/database.js';
+import { enforceCampaignSlotOnActivationTx } from '../../utils/userResourceLimit.util.js';
+
+/**
+ * Chạy `writeTx` trong MỘT transaction có cổng suất chiến dịch đứng trước (PLAN_MOT_NUT_GUI PR-1): bật lịch làm chiến dịch
+ * đã chạy xong chiếm suất trở lại, nên cổng và việc ghi lịch phải cùng transaction (advisory lock giữ tới COMMIT).
+ * Chỉ thao tác người dùng truyền `slotGate`; scheduler tắt lịch `once` bằng UPDATE riêng, không đi đường này.
+ *
+ * @param {{ userId: number|string, roleCode?: string, campaignId: number|string }} slotGate
+ * @param {(client: object) => Promise<object>} writeTx
+ */
+async function withCampaignSlotGateTx(slotGate, writeTx) {
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    await enforceCampaignSlotOnActivationTx(client, slotGate);
+    const row = await writeTx(client);
+    await client.query('COMMIT');
+    return row;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
 
 class CampaignScheduleRepository {
   async findAll({ userId, workspaceOwnerId = userId, isAdmin }) {
@@ -177,7 +202,19 @@ class CampaignScheduleRepository {
     enabled,
     workspaceOwnerId,
     createdBy,
+    slotGate = null,
   }) {
+    if (slotGate) {
+      return withCampaignSlotGateTx(slotGate, (client) => this.createTx(client, {
+        campaignId,
+        scheduleName,
+        scheduleType,
+        cronExpression,
+        enabled,
+        workspaceOwnerId,
+        createdBy,
+      }));
+    }
     const result = await db.query(
       `INSERT INTO campaign_schedules
        (id_campaign, schedule_name, schedule_type, cron_expression, enabled,
@@ -249,7 +286,19 @@ class CampaignScheduleRepository {
     enabled,
     workspaceOwnerId,
     isAdmin,
+    slotGate = null,
   }) {
+    if (slotGate) {
+      return withCampaignSlotGateTx(slotGate, (client) => this.updateTx(client, {
+        id,
+        scheduleName,
+        scheduleType,
+        cronExpression,
+        enabled,
+        workspaceOwnerId,
+        isAdmin,
+      }));
+    }
     const result = await db.query(
       `UPDATE campaign_schedules SET
        schedule_name = COALESCE($1, schedule_name),

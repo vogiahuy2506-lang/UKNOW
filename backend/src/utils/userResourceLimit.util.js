@@ -2,11 +2,33 @@ import db from '../config/database.js';
 import { isAdminRole } from './roleScope.util.js';
 import { sumActiveTopupGrants } from '../repositories/payment/topup.repository.js';
 import { TOPUP_GRANT_KEY_BY_RESOURCE } from './topupPricing.util.js';
+import { resolveCampaignTypeLimitKey } from './campaignTypeInference.util.js';
+
+/**
+ * ĐỊNH NGHĨA "CHIẾM SUẤT CHIẾN DỊCH" (23/10/2026, PLAN_MOT_NUT_GUI) — MỘT chỗ, dùng chung cho bốn khoá chiến dịch
+ * (`campaigns`, `zaloCampaigns`, `zaloGroupCampaigns`, `emailCampaigns`) ở cổng tạo, cổng kích hoạt lại, và màn mức dùng.
+ *
+ * Một chiến dịch chiếm suất khi (a) chưa có lượt chạy nào, HOẶC (b) đang có lượt `status = 'running'`, HOẶC
+ * (c) có lịch `enabled = TRUE`. Chiến dịch đã chạy xong (completed/failed/stopped, không lịch bật) thì TRẢ suất.
+ *
+ * Về (b): `campaign_runs.status` chỉ nhận running/completed/failed/stopped (CHECK ở schema) — không có trạng thái
+ * "đang chờ/xếp hàng/tạm dừng" nào khác chưa kết thúc. Lượt continuous còn người đến hạn gửi giữ `running`
+ * (`finalizeRun` đặt lại `running`), nên đã nằm trong (b).
+ * Chỉ mục có sẵn: idx_campaign_runs_campaign, idx_campaign_schedules_campaign.
+ *
+ * `c` là bí danh bảng `campaigns` của câu truy vấn gọi.
+ */
+const CAMPAIGN_OCCUPIES_SLOT_SQL = `(
+  NOT EXISTS (SELECT 1 FROM campaign_runs cr_any WHERE cr_any.id_campaign = c.id)
+  OR EXISTS (SELECT 1 FROM campaign_runs cr_run WHERE cr_run.id_campaign = c.id AND cr_run.status = 'running')
+  OR EXISTS (SELECT 1 FROM campaign_schedules cs_on WHERE cs_on.id_campaign = c.id AND cs_on.enabled = TRUE)
+)`;
 
 const RESOURCE_LIMIT_MAP = {
   campaigns: {
     column: 'max_campaigns',
     table: 'campaigns',
+    occupiesSlot: true,
     ownerExpression: 'COALESCE(workspace_owner_id, id_user)',
     label: 'số chiến dịch',
   },
@@ -14,6 +36,7 @@ const RESOURCE_LIMIT_MAP = {
     column: 'max_zalo_campaigns',
     table: null,
     label: 'số chiến dịch Zalo cá nhân',
+    occupiesSlot: true,
     campaignType: 'zalo',
     ownerExpression: 'COALESCE(workspace_owner_id, id_user)',
   },
@@ -21,6 +44,7 @@ const RESOURCE_LIMIT_MAP = {
     column: 'max_zalo_group_campaigns',
     table: null,
     label: 'số chiến dịch Zalo nhóm',
+    occupiesSlot: true,
     campaignType: 'zalo_group',
     ownerExpression: 'COALESCE(workspace_owner_id, id_user)',
   },
@@ -28,6 +52,7 @@ const RESOURCE_LIMIT_MAP = {
     column: 'max_email_campaigns',
     table: null,
     label: 'số chiến dịch Email',
+    occupiesSlot: true,
     campaignType: 'email',
     ownerExpression: 'COALESCE(workspace_owner_id, id_user)',
   },
@@ -109,6 +134,11 @@ function buildLimitExceededMessage(resourceConfig, normalizedLimit, { adding = 1
     const remaining = Math.max(0, normalizedLimit - currentCount);
     return `Thao tác này cần tạo thêm ${adding} ${resourceConfig.label} nhưng gói chỉ còn chỗ cho ${remaining} (giới hạn ${normalizedLimit}, đang có ${currentCount}). Vui lòng xoá bớt hoặc liên hệ admin để nâng giới hạn.`;
   }
+  if (resourceConfig.occupiesSlot) {
+    // Suất chiến dịch "chạy xong thì trả": nói rõ cách giải phóng thay vì chỉ bảo liên hệ admin.
+    const used = Number.isFinite(currentCount) ? `, đang dùng ${currentCount}` : '';
+    return `Tài khoản đã đạt giới hạn ${resourceConfig.label} (${normalizedLimit}${used}). Chiến dịch đã chạy xong không tính vào suất. Chờ một chiến dịch chạy xong, tắt lịch hẹn, xoá bản nháp chưa dùng, hoặc nâng gói.`;
+  }
   return `Tài khoản đã đạt giới hạn ${resourceConfig.label} (${normalizedLimit}). Vui lòng liên hệ admin để nâng giới hạn.`;
 }
 
@@ -162,13 +192,38 @@ async function getUserLimitRow(queryable, userId) {
 }
 
 /**
+ * Đếm tài nguyên của chủ. Bốn khoá chiến dịch (`occupiesSlot`) chỉ đếm chiến dịch ĐANG CHIẾM SUẤT — xem
+ * CAMPAIGN_OCCUPIES_SLOT_SQL: chưa chạy lần nào, hoặc đang có lượt `running`, hoặc có lịch bật. Chiến dịch đã chạy
+ * xong không tính. Các tài nguyên khác đếm mọi dòng như cũ.
+ *
  * @param {import('pg').Pool|import('pg').PoolClient} queryable
  * @param {number|string} userId
  * @param {object} resourceConfig
+ * @param {{ excludeCampaignId?: number|string|null }} [options] bỏ một chiến dịch khỏi phép đếm (cổng kích hoạt lại)
  */
-async function countResourceForUser(queryable, userId, resourceConfig) {
+async function countResourceForUser(queryable, userId, resourceConfig, { excludeCampaignId = null } = {}) {
   let countResult;
-  if (resourceConfig.campaignType) {
+  if (resourceConfig.occupiesSlot) {
+    const ownerExpression = (resourceConfig.ownerExpression || 'id_user')
+      .replace(/\bworkspace_owner_id\b/g, 'c.workspace_owner_id')
+      .replace(/\bid_user\b/g, 'c.id_user');
+    const params = [userId];
+    let where = `${ownerExpression} = $1 AND ${CAMPAIGN_OCCUPIES_SLOT_SQL}`;
+    if (resourceConfig.campaignType) {
+      params.push(resourceConfig.campaignType);
+      where += ` AND c.campaign_type = $${params.length}`;
+    }
+    if (excludeCampaignId !== null && excludeCampaignId !== undefined) {
+      params.push(excludeCampaignId);
+      where += ` AND c.id <> $${params.length}`;
+    }
+    countResult = await queryable.query(
+      `SELECT COUNT(*)::int AS total
+       FROM campaigns c
+       WHERE ${where}`,
+      params
+    );
+  } else if (resourceConfig.campaignType) {
     countResult = await queryable.query(
       `SELECT COUNT(*)::int AS total
        FROM campaigns
@@ -229,6 +284,69 @@ export async function enforceResourceLimitTx(client, input) {
       buildLimitExceededMessage(resourceConfig, normalizedLimit, { adding, currentCount }),
       resourceKey
     );
+  }
+}
+
+/**
+ * Chiến dịch này đang chiếm suất không (cùng định nghĩa CAMPAIGN_OCCUPIES_SLOT_SQL).
+ * @returns {Promise<{ found: boolean, occupies: boolean, campaignType: string|null }>}
+ */
+async function readCampaignOccupancy(queryable, campaignId) {
+  const result = await queryable.query(
+    `SELECT c.campaign_type, ${CAMPAIGN_OCCUPIES_SLOT_SQL} AS occupies
+     FROM campaigns c
+     WHERE c.id = $1`,
+    [campaignId]
+  );
+  const row = result.rows[0];
+  if (!row) return { found: false, occupies: false, campaignType: null };
+  return { found: true, occupies: row.occupies === true, campaignType: row.campaign_type ?? null };
+}
+
+/**
+ * CỔNG KÍCH HOẠT LẠI suất chiến dịch (PLAN_MOT_NUT_GUI PR-1). Chiến dịch đã chạy xong KHÔNG chiếm suất; khi NGƯỜI DÙNG
+ * làm nó chiếm suất trở lại (Chạy ngay, chạy tiếp lượt continuous, duyệt chiến dịch chờ duyệt, tạo/bật lại lịch) thì
+ * phải còn chỗ: `số đang chiếm (không tính chính nó) + 1 ≤ trần`, cho cả khoá chung `campaigns` lẫn khoá theo loại.
+ *
+ * - Chiến dịch ĐANG chiếm suất (chưa chạy lần nào, đang chạy, hoặc có lịch bật) → không chặn: đã được tính rồi.
+ * - Phải gọi sau BEGIN trên cùng client và việc tạo run / ghi lịch phải nằm trong CÙNG transaction: advisory lock
+ *   (cùng khoá với `enforceResourceLimitTx`, lấy theo thứ tự campaigns → khoá loại, giống cổng tạo) giữ tới COMMIT nên
+ *   hai thao tác song song không cùng lọt qua trần.
+ * - CHỈ đặt ở thao tác người dùng. KHÔNG gọi từ scheduler / worker liên tục / khởi động lại sau deploy: scheduler tắt
+ *   lịch `once` TRƯỚC khi tạo run, nên chặn ở đó là chặn oan lượt hẹn giờ khách đã đặt hợp lệ.
+ * - Admin bỏ qua như cổng cũ.
+ *
+ * @param {import('pg').PoolClient} client
+ * @param {{ userId: number|string, roleCode?: string, campaignId: number|string }} input `userId` = chủ workspace (billing)
+ * @throws {Error} RESOURCE_LIMIT_EXCEEDED (400, limitReached) khi hết suất
+ */
+export async function enforceCampaignSlotOnActivationTx(client, input) {
+  const { userId, roleCode, campaignId } = input || {};
+  if (isAdminRole(roleCode)) return;
+
+  // Khoá trước, đọc sau: hai request song song kích hoạt hai chiến dịch khác nhau phải xếp hàng ở đây.
+  await acquireResourceLimitLock(client, userId, 'campaigns');
+  const occupancy = await readCampaignOccupancy(client, campaignId);
+  if (!occupancy.found || occupancy.occupies) return;
+  const typeResourceKey = resolveCampaignTypeLimitKey(occupancy.campaignType);
+  if (typeResourceKey) await acquireResourceLimitLock(client, userId, typeResourceKey);
+
+  const userLimitRow = await getUserLimitRow(client, userId);
+  for (const resourceKey of ['campaigns', typeResourceKey].filter(Boolean)) {
+    const resourceConfig = resolveResourceConfig(resourceKey);
+    const baseLimit = normalizeLimitValue(userLimitRow?.[resourceConfig.column] ?? null);
+    const normalizedLimit = await resolveEffectiveLimit(client, userId, resourceKey, baseLimit);
+    if (!Number.isFinite(normalizedLimit) || normalizedLimit === null) continue;
+    if (normalizedLimit === 0) {
+      throw createResourceLimitExceededError(buildLimitExceededMessage(resourceConfig, 0), resourceKey);
+    }
+    const currentCount = await countResourceForUser(client, userId, resourceConfig, { excludeCampaignId: campaignId });
+    if (currentCount + 1 > normalizedLimit) {
+      throw createResourceLimitExceededError(
+        buildLimitExceededMessage(resourceConfig, normalizedLimit, { adding: 1, currentCount }),
+        resourceKey
+      );
+    }
   }
 }
 
@@ -295,6 +413,9 @@ export async function checkUserResourceLimit(input) {
  *
  * - `limit` = trần hiệu lực (gốc + mua thêm); `null` = không giới hạn (cột NULL: cổng cho tạo không trần);
  *   `0` = gói không hỗ trợ tài nguyên này.
+ * - `used` của bốn khoá chiến dịch (`campaigns`, `zaloCampaigns`, `zaloGroupCampaigns`, `emailCampaigns`) = số chiến
+ *   dịch ĐANG CHIẾM SUẤT (chưa chạy lần nào, hoặc đang có lượt `running`, hoặc có lịch bật) — "chạy xong thì trả suất",
+ *   định nghĩa ở CAMPAIGN_OCCUPIES_SLOT_SQL, cùng một phép đếm với cổng tạo và cổng kích hoạt lại.
  * - Một tài nguyên lỗi → `null` cho ĐÚNG tài nguyên đó (kèm console.error ghi tên), các tài nguyên khác vẫn có
  *   số. KHÔNG trả 0 giả: trang hiện "—" thay vì "0 / N".
  * - Khoá không có trong RESOURCE_LIMIT_MAP là lỗi lập trình → ném ngay, không nuốt.
