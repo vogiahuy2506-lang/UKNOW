@@ -25,7 +25,6 @@ import { CHANNEL_ATTACHMENT_LIMITS } from '../../../../../frontend/src/features/
 const REAL_MENU = {
   'AI Chatbot': ['Chatbot của tôi', 'Hộp thư'],
   'Chiến dịch': [
-    'Gửi nhanh',
     'Quản lý kênh gửi',
     'Thư viện nội dung',
     'Quản lý chiến dịch',
@@ -44,13 +43,6 @@ const REAL_MENU = {
  * Khi so, bỏ dấu chấm cuối câu và đuôi ": {count}" của từ điển (số liệu chèn vào lúc chạy).
  */
 const UI_LABELS_IN_ARTICLES = [
-  ['quick-send', 'quickSendAdapter.modeConversations', 'Người đã nhắn tới tài khoản'],
-  ['quick-send', 'quickSendAdapter.modeManualTelegram', 'Nhập chat id'],
-  ['quick-send', 'quickSendAdapter.modeManualWhatsApp', 'Nhập số điện thoại'],
-  ['quick-send', 'quickSendAdapter.modeGroups', 'Nhóm'],
-  ['quick-send', 'quickSendAdapter.groupsLoad', 'Tải danh sách nhóm'],
-  ['quick-send', 'quickSend.zaloRecipientTypeLabel', 'Loại người nhận'],
-  ['quick-send', 'quickSend.zaloRecipientTypeGroup', 'Nhóm'],
   ['campaign-theo-doi', 'userDeliveryMonitor.title', 'Giám sát gửi tin'],
   ['campaign-theo-doi', 'userDeliveryMonitor.refresh', 'Làm mới'],
   ['campaign-theo-doi', 'userDeliveryMonitor.cards.sent', 'Đã gửi hôm nay'],
@@ -159,7 +151,6 @@ const UI_LABELS_IN_ARTICLES = [
   ['tro-ly-ai-chien-dich', 'aiChatbot.confirmCreateCampaign', 'Xác nhận tạo chiến dịch'],
   ['tro-ly-ai-chien-dich', 'aiChatbot.createCampaignBtn', 'Tạo chiến dịch'],
   ['tro-ly-ai-chien-dich', 'aiChatbot.createAndRunBtn', 'Tạo và chạy'],
-  ['tro-ly-ai-chien-dich', 'aiChatbot.quickSendBtn', 'Gửi nhanh (1 lần)'],
   ['tro-ly-ai-chien-dich', 'aiChatbot.editCampaign', 'Chỉnh sửa'],
   ['tro-ly-ai-chien-dich', 'aiChatbot.cancelAction', 'Huỷ bỏ'],
   ['tro-ly-ai-chien-dich', 'aiChatbot.planReviseButton', 'Chỉnh lại kế hoạch'],
@@ -562,8 +553,6 @@ const UI_LABELS_IN_ARTICLES = [
   ['khoa-tai-nguyen-sau-ha-goi', 'channelAccountLock.manage', 'Chọn tài khoản giữ lại'],
   ['khoa-tai-nguyen-sau-ha-goi', 'chatbot.studio.statusLocked', 'Tạm khoá (vượt gói)'],
   ['khoa-tai-nguyen-sau-ha-goi', 'nav.channelManagement', 'Quản lý kênh gửi'],
-  ['gui-telegram-whatsapp', 'quickSendAdapter.modeManualTelegram', 'Nhập chat id'],
-  ['gui-telegram-whatsapp', 'quickSendAdapter.modeManualWhatsApp', 'Nhập số điện thoại'],
   ['gui-telegram-whatsapp', 'channelSendSettings.title', 'Giới hạn & tốc độ gửi chiến dịch'],
   ['gui-telegram-whatsapp', 'channelSendSettings.dailyLimit', 'Giới hạn gửi/ngày'],
   ['gui-telegram-whatsapp', 'channelSendSettings.speed', 'Tốc độ gửi'],
@@ -857,6 +846,33 @@ describe('chất lượng bài trợ giúp seed', () => {
 
     expect(warning).toContain('5 ảnh, 3 tài liệu, tổng 20 MB');
     expect(body).toContain(`*${warning}*`);
+  });
+
+  // PLAN_MOT_NUT_GUI (23/10/2026): trang Gửi nhanh và nút Chạy thử đã bỏ — không bài nào được chỉ người đọc tới chúng nữa.
+  it('không bài nào còn hướng dẫn bấm Gửi nhanh / Chạy thử (hai lối gửi đã bỏ)', () => {
+    const offenders = [];
+    for (const article of HELP_SEED_ARTICLES) {
+      const body = article.body_md || '';
+      if (/mục \*\*Gửi nhanh\*\*|trang \*\*Gửi nhanh\*\*|\*\*Gửi nhanh \(1 lần\)\*\*|\[ẢNH:[^\]]*Gửi nhanh/.test(body)) offenders.push(`${article.slug}: còn chỉ tới mục Gửi nhanh`);
+      if (/\*\*Chạy thử\*\*|bấm Chạy thử|nút chạy thử|Số dòng tối đa khi chạy thử/i.test(body)) offenders.push(`${article.slug}: còn nhắc nút Chạy thử`);
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('bài quick-send giữ slug cũ nhưng nay hướng dẫn "Gửi tin một lần" qua Tạo chiến dịch từng bước → Gửi ngay', () => {
+    const article = HELP_SEED_ARTICLES.find((a) => a.slug === 'quick-send');
+    expect(article.title).toBe('Gửi tin một lần');
+    expect(article.primary_route).toBe('/app/campaigns/simple');
+    expect(article.body_md).toContain('**Từng bước**');
+    expect(article.body_md).toContain('**Gửi ngay**');
+    expect(article.body_md).toContain('[Tạo chiến dịch từng bước](chien-dich-tung-buoc)');
+  });
+
+  it('các bài về gói / suất nói rõ "chiến dịch đã chạy xong không tính vào suất"', () => {
+    for (const slug of ['plan-and-billing', 'chien-dich-tung-buoc', 'quick-send', 'campaign-create']) {
+      const body = HELP_SEED_ARTICLES.find((a) => a.slug === slug)?.body_md || '';
+      expect(body).toMatch(/đã chạy xong không tính vào suất/);
+    }
   });
 
   it('bài nào cũng chừa ít nhất 3 chỗ chèn ảnh', () => {

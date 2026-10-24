@@ -289,6 +289,15 @@ describe('cờ CAMPAIGN_CHANNEL_TELEGRAM_ENABLED (PR-B)', () => {
       expect(formatAssistantCapabilities('en')).not.toContain('does not build it for you yet');
     });
 
+    it('không còn bảo người dùng tới trang Gửi nhanh (đã bỏ): gửi một lần = tạo chiến dịch rồi Tạo và chạy', () => {
+      const vi = formatAssistantCapabilities('vi');
+      const en = formatAssistantCapabilities('en');
+      expect(vi).not.toContain('ở trang Gửi nhanh');
+      expect(vi).toContain('Tạo và chạy');
+      expect(en).not.toContain('Quick Send page');
+      expect(en).toContain('Create and run');
+    });
+
     it('gửi tin whatsapp cho khách hàng → vẫn unsupported_channel (chỉ cờ Telegram bật, WhatsApp còn tắt)', () => {
       delete process.env.CAMPAIGN_CHANNEL_WHATSAPP_ENABLED;
       expect(classifyUnsupportedSendRequest('gửi tin whatsapp cho khách hàng', 'vi'))

@@ -1625,7 +1625,8 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
 - dataSource="manual" hoặc "zalo_contacts": KHÔNG chép email/SĐT/UID cụ thể vào nodes; FE nhập người nhận riêng (overlay). Giữ recipientSource/zaloRecipientSource = "manual" với list rỗng.
 - TUYỆT ĐỐI KHÔNG sinh {{full_name}} (hay bất kỳ biến cá nhân hoá họ tên nào) vào nội dung tin nhắn hoặc templateMappings khi dataSource="manual", vì nguồn nhập tay chỉ có SĐT/email thuần, không có thông tin họ tên. Dùng câu chào chung tự nhiên như "Chào bạn!", "Xin chào!", KHÔNG viết "Chào {{full_name}}!" hay "Xin chào {{full_name}}!".
 - Multi-day ("5 email trong 5 ngày") KHÔNG phải quick-send — dùng drip + content_plan như bình thường.
-- Khi ra confirm_create cho yêu cầu gửi 1 lần, câu phản hồi giải thích rõ: Bấm "Tạo chiến dịch" nếu muốn lưu lại để theo dõi sau, hoặc "Gửi nhanh" nếu chỉ cần gửi một lần (Gửi nhanh không chiếm suất chiến dịch trong gói).`;
+- KHÔNG còn trang "Gửi nhanh" riêng (đã bỏ): mọi lần gửi đều đi qua chiến dịch. Người dùng vẫn có thể gõ "gửi nhanh" — hiểu đó là ý GỬI MỘT LẦN, nhưng KHÔNG hướng họ tới trang/nút "Gửi nhanh".
+- Khi ra confirm_create cho yêu cầu gửi 1 lần, câu phản hồi giải thích rõ: Bấm "Tạo và chạy" (khi thẻ có nút này — người nhận nhập tay, một bước gửi ngay) để gửi một lần ngay (hệ thống tạo chiến dịch rồi chạy luôn, có lịch sử ở Giám sát gửi tin), hoặc "Tạo chiến dịch" để lưu lại rồi bấm Chạy ngay hoặc hẹn giờ ở Quản lý chiến dịch. Chiến dịch đã chạy xong không tính vào suất chiến dịch của gói (chỉ chiến dịch chưa chạy lần nào, đang chạy hoặc có lịch hẹn đang bật mới tính).`;
 
     // C P1-6 — chỉ tệp/URL của tin hiện tại đi vào Gemini. Hai ngoại lệ, đều dựa vào dữ liệu đã lưu:
     //  - URL Google Sheet ĐÃ chốt làm nguồn người nhận (state đã lưu `persistedState.gates.sheetUrl`, hoặc `sheetUrl` trong bất kỳ
