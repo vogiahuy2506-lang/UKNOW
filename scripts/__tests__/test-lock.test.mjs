@@ -128,3 +128,37 @@ test('g) nha khoa chi khi owner.pid la chinh minh: khoa bi nguoi khac thay thi g
   assert.equal(fs.existsSync(ownerPath), true, 'khong duoc xoa khoa cua nguoi khac');
   assert.equal(JSON.parse(fs.readFileSync(ownerPath, 'utf8')).command, 'other');
 });
+
+test('h) gianh duoc khoa thi don worker test mo coi (ppid 1, ten "node (vitest N)"); tien trinh mo coi khac thi khong dong', async (t) => {
+  const { base, lockDir } = makeLockDir();
+  const pidsFile = path.join(base, 'pids.json');
+  // Tien trinh trung gian sinh hai con roi thoat ngay → hai con thanh mo coi (cha moi la launchd, ppid 1).
+  const childScript = (title) => `process.title = ${JSON.stringify(title)}; setInterval(() => {}, 1000);`;
+  const launcher = `
+    const { spawn } = require('child_process');
+    const opts = { detached: true, stdio: 'ignore' };
+    const worker = spawn(process.execPath, ['-e', ${JSON.stringify(childScript('node (vitest 97)'))}, '${'x'.repeat(40)}'], opts);
+    const other = spawn(process.execPath, ['-e', ${JSON.stringify(childScript('khong-phai-test'))}, '${'x'.repeat(40)}'], opts);
+    worker.unref(); other.unref();
+    require('fs').writeFileSync(${JSON.stringify(pidsFile)}, JSON.stringify({ worker: worker.pid, other: other.pid }));
+  `;
+  await new Promise((resolve) => spawn(process.execPath, ['-e', launcher], { stdio: 'ignore' }).on('close', resolve));
+  const { worker, other } = JSON.parse(fs.readFileSync(pidsFile, 'utf8'));
+  const alive = (pid) => {
+    try { process.kill(pid, 0); return true; } catch { return false; }
+  };
+  t.after(() => {
+    for (const pid of [worker, other]) {
+      try { process.kill(pid, 'SIGKILL'); } catch { /* da thoat */ }
+    }
+  });
+  // Cho tien trinh con doi ten xong (process.title) truoc khi wrapper quet.
+  await new Promise((resolve) => setTimeout(resolve, 500));
+
+  const r = await runWrapper(lockDir, nodeCmd('process.exit(0)'));
+  assert.equal(r.code, 0);
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  assert.equal(alive(worker), false, 'worker vitest mo coi phai bi don');
+  assert.equal(alive(other), true, 'tien trinh mo coi khong phai test thi khong dong toi');
+  assert.match(r.stderr, /Đã dọn 1 tiến trình test mồ côi/);
+});

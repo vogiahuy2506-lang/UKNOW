@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 
 const SIGNALS = { SIGHUP: 1, SIGINT: 2, SIGTERM: 15 };
 const RETRY_MS = 2000;
@@ -101,6 +101,38 @@ function release() {
   if (owner && owner.pid === process.pid) removeLockDir();
 }
 
+// Tien trinh con test mo coi: tien trinh cha (vitest chinh / jest) da chet — bi kill giua chung, het gio cua cong cu —
+// nen con bi giao cho launchd (ppid 1). Chung khong con ai doc ket qua nhung van giu RAM; mot con dang ket vong lap thi
+// con phinh tiep (24/10/2026: may 16 GB thay tien trinh "node (vitest 3)" 7,7 GB, swap 17 GB). Chi don con mo coi
+// (ppid 1) cua dung hai loai: worker vitest "node (vitest N)" va worker jest processChild.js. Khong dong toi tien trinh
+// vitest/jest chinh hay bat cu gi dang co cha.
+const ORPHAN_TEST_WORKER = /^node \(vitest \d+\)|jest-worker\/build\/workers\/processChild\.js/;
+
+function sweepOrphanTestWorkers() {
+  let listing = '';
+  try {
+    listing = execFileSync('ps', ['-xo', 'pid=,ppid=,command='], { encoding: 'utf8' });
+  } catch {
+    return; // khong co ps (Windows) — bo qua
+  }
+  const orphans = [];
+  for (const line of listing.split('\n')) {
+    const match = line.match(/^\s*(\d+)\s+(\d+)\s+(.*)$/);
+    if (!match || Number(match[2]) !== 1 || !ORPHAN_TEST_WORKER.test(match[3])) continue;
+    orphans.push(Number(match[1]));
+  }
+  let killed = 0;
+  for (const pid of orphans) {
+    try {
+      process.kill(pid, 'SIGKILL');
+      killed += 1;
+    } catch {
+      /* da thoat */
+    }
+  }
+  if (killed > 0) console.error(`[test-lock] Đã dọn ${killed} tiến trình test mồ côi (cha đã chết, còn giữ RAM).`);
+}
+
 function describeOwner() {
   const owner = readOwner();
   if (!owner) return '(chưa rõ người giữ)';
@@ -170,6 +202,7 @@ if (bypass) {
 }
 
 if (!(await acquire())) process.exit(75);
+sweepOrphanTestWorkers();
 let code = 1;
 try {
   code = await run();

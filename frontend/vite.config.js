@@ -53,6 +53,16 @@ export default defineConfig(({ mode }) => ({
     // vitest bỏ quên chạy 9,5 giờ ở ~150% CPU mỗi cái, dù 141 test xong trong 3s.
     // 'forks' dùng tiến trình con, thoát sạch. Vitest 1.6.1 + Node 20.19.
     pool: 'forks',
+    poolOptions: {
+      forks: {
+        // Trần heap mỗi tiến trình con. Đo 24/10/2026 cả bộ 595 file: file nặng nhất dùng 188 MB heap, mỗi tiến trình
+        // ~250 MB RSS, cả lượt ~1,5 GB. Thế mà đã thấy tiến trình con phình tới 7,7 GB / 4,5 GB (máy 16 GB, swap 17 GB,
+        // đứng máy): kill tiến trình vitest chính thì con thành mồ côi; con nào kẹt vòng lặp đồng bộ thì testTimeout không
+        // cắt được và nó phình mãi. Có trần: con đó chết "heap out of memory", file đó báo đỏ, máy không bị nuốt RAM.
+        // Con mồ côi còn sót do scripts/test-lock.mjs dọn khi lượt test sau giành khoá.
+        execArgv: ['--max-old-space-size=1024'],
+      },
+    },
     exclude: [
       ...configDefaults.exclude,
     ],
