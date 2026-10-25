@@ -303,7 +303,7 @@ jobs:
       issues: write
     steps:
       - name: Mở hoặc cập nhật issue cảnh báo
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const marker = '<!-- deploy-frontend-failure-tracker -->';
