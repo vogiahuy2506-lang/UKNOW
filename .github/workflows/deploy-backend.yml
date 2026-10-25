@@ -184,7 +184,7 @@ jobs:
           echo "A newer main commit exists but backend deploy inputs are unchanged; continuing safely."
 
       - name: Upload SSL scripts to VPS
-        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634 # v0.1.7
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1.0.0
         timeout-minutes: 5
         with:
           host: ${{ secrets.VPS_HOST }}
