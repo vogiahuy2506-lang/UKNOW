@@ -10,7 +10,10 @@
  *   ZALO_AUTO_ACCEPT_PER_HOUR       mặc định 20     trần số LẦN THỬ đồng ý / giờ / nick (cửa sổ trượt 60 phút)
  *   ZALO_AUTO_ACCEPT_DELAY_MIN_MS   mặc định 15000  chờ tối thiểu giữa hai lần đồng ý
  *   ZALO_AUTO_ACCEPT_DELAY_MAX_MS   mặc định 45000  chờ tối đa
- * và KHÔNG chạy trong giờ yên lặng của Zalo (ZALO_OUTBOUND_QUIET_HOURS_START/END, mặc định 23 -> 6 giờ VN).
+ * và cron/bật công tắc KHÔNG chạy trong giờ yên lặng của Zalo (ZALO_OUTBOUND_QUIET_HOURS_START/END, mặc định 23 -> 6 giờ VN).
+ * Riêng lượt do SỰ KIỆN (có lời mời vừa tới) chạy cả trong giờ yên lặng (26/10/2026): Zalo chỉ trả lời mời CHƯA XEM qua
+ * `getFriendRecommendations` — lời mời tới lúc 23h–6h mà chủ nick mở xem trên điện thoại trước 6h thì biến khỏi danh sách,
+ * cron sáng không còn thấy để đồng ý (nick 34, lời mời 22/10). Trần giờ và khoảng chờ vẫn áp như thường.
  * Lần thử thất bại cũng tính vào trần: lỗi kéo dài (phiên chết, Zalo từ chối) không được thành bão gọi API.
  *
  * Hạn chế đã chấp nhận: bộ đếm giờ và tập "đang chạy" nằm trong RAM (đúng mô hình một tiến trình — CLAUDE.md
@@ -164,7 +167,9 @@ class ZaloFriendAutoAcceptService {
     if (!(await zaloSettingRepository.isAutoAcceptEnabled(accountId))) return { skipped: 'disabled' };
 
     const config = readConfig();
-    if (isWithinQuietHours(now(), config.quietHours)) return { skipped: 'quiet_hours' };
+    // Lượt do sự kiện bỏ qua giờ yên lặng (xem đầu tệp): đồng ý ngay lời mời vừa tới, trước khi chủ nick mở xem.
+    const respectQuietHours = reason !== 'event';
+    if (respectQuietHours && isWithinQuietHours(now(), config.quietHours)) return { skipped: 'quiet_hours' };
 
     const api = zaloAccountSessionService.getAccountApi(accountId);
     if (!api || typeof api.getFriendRecommendations !== 'function' || typeof api.acceptFriendRequest !== 'function') {
@@ -198,7 +203,7 @@ class ZaloFriendAutoAcceptService {
       if (attempts > 0) {
         await sleep(randomDelayMs(config));
         // Lượt dài (tới ~15 phút): chờ xong phải xét lại — trôi qua 23:00 hoặc chủ vừa tắt công tắc thì dừng ngay.
-        if (isWithinQuietHours(now(), config.quietHours)) {
+        if (respectQuietHours && isWithinQuietHours(now(), config.quietHours)) {
           stoppedBy = 'quiet_hours';
           break;
         }

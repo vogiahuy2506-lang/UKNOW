@@ -178,6 +178,43 @@ describe('sweepAccount — điều kiện chạy', () => {
     }
   });
 
+  // 26/10/2026: lời mời tới ban đêm phải được đồng ý ngay — Zalo chỉ trả lời mời CHƯA XEM, chờ tới 6h là có thể mất.
+  it.each([
+    ['23:30', vnTime(23, 30)],
+    ['05:59', vnTime(5, 59)],
+  ])('lượt do SỰ KIỆN lúc %s (giờ yên lặng) vẫn đồng ý lời mời vừa tới', async (_label, nowMs) => {
+    const api = makeApi([recommItem(101, 2)]);
+    mockGetAccountApi.mockReturnValue(api);
+
+    const result = await service.sweepAccount(7, { reason: 'event', sleep: instantSleep(), now: () => nowMs });
+
+    expect(result.skipped).toBeUndefined();
+    expect(api.acceptFriendRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('lượt CRON lúc 23:30 vẫn bỏ qua giờ yên lặng (chỉ sự kiện được chạy đêm)', async () => {
+    const api = makeApi([recommItem(101, 2)]);
+    mockGetAccountApi.mockReturnValue(api);
+
+    const result = await service.sweepAccount(7, { reason: 'cron', sleep: instantSleep(), now: () => vnTime(23, 30) });
+
+    expect(result).toEqual({ skipped: 'quiet_hours' });
+    expect(api.acceptFriendRequest).not.toHaveBeenCalled();
+  });
+
+  it('lượt do SỰ KIỆN dài trôi qua 23:00 không dừng vì giờ yên lặng (vẫn chịu khoảng chờ giữa các lần)', async () => {
+    const api = makeApi([recommItem(101, 2), recommItem(102, 2), recommItem(103, 2)]);
+    mockGetAccountApi.mockReturnValue(api);
+    let current = vnTime(22, 59, 40);
+    const sleep = jest.fn().mockImplementation(async () => { current += 30_000; });
+
+    const result = await service.sweepAccount(7, { reason: 'event', sleep, now: () => current });
+
+    expect(api.acceptFriendRequest).toHaveBeenCalledTimes(3);
+    expect(sleep).toHaveBeenCalledTimes(2);
+    expect(result.stoppedBy).toBeNull();
+  });
+
   it('khung giờ yên lặng đọc từ ZALO_OUTBOUND_QUIET_HOURS_START/END (ghi đè mặc định 23–6)', async () => {
     process.env.ZALO_OUTBOUND_QUIET_HOURS_START = '12';
     process.env.ZALO_OUTBOUND_QUIET_HOURS_END = '13';
