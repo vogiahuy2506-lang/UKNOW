@@ -26,7 +26,7 @@ jest.unstable_mockModule('../../chatbot/zaloPersonalSync.service.js', () => ({
   default: { persistFriends: mockPersistFriends },
 }));
 
-const { default: service } = await import('../zaloFriendAutoAccept.service.js');
+const { default: service, summarizeRecommItems } = await import('../zaloFriendAutoAccept.service.js');
 
 const ENV_KEYS = [
   'ZALO_AUTO_ACCEPT_PER_HOUR',
@@ -595,5 +595,24 @@ describe('attachToListener — gắn friend_event idempotent theo đối tượn
     handler(ev);
 
     expect(spy).toHaveBeenCalledWith(42, ev);
+  });
+});
+
+// 26/10/2026 — chẩn đoán "lời mời cũ không được đồng ý": dòng log in hình dạng danh sách, chỉ số đếm.
+describe('summarizeRecommItems', () => {
+  const NOW = Date.UTC(2026, 9, 26, 3, 0, 0);
+  const DAY = 86_400_000;
+  it('đếm recommType (tách số 2 với chuỗi "2"), itemType, nguồn, đã xem, có lời nhắn và tuổi lời nhắn', () => {
+    const items = [
+      { recommItemType: 1, dataInfo: { recommType: 1, recommSrc: 5, recommInfo: { suggestWay: 3, message: '' } } },
+      { recommItemType: 2, dataInfo: { recommType: 2, recommSrc: 1, isSeenFriendReq: true, recommTime: NOW - 4 * DAY, recommInfo: { message: 'Chào bạn' } } },
+      { recommItemType: 2, dataInfo: { recommType: '2', recommSrc: 1, recommTime: NOW - DAY, recommInfo: { message: 'Xin kết bạn' } } },
+    ];
+    expect(summarizeRecommItems(items, NOW)).toBe(
+      'types={1:1,2:1,"2":1} itemTypes={1:1,2:2} src={5:1,1:2} way={3:1,undefined:2} seen=1 msg=2 msgTypes={2:1,"2":1} msgAgeDays=1-4'
+    );
+  });
+  it('danh sách rỗng không ném lỗi', () => {
+    expect(summarizeRecommItems([], NOW)).toBe('types={} itemTypes={} src={} way={} seen=0 msg=0 msgTypes={} msgAgeDays=-');
   });
 });

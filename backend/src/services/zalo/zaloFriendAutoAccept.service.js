@@ -77,6 +77,42 @@ function randomDelayMs(config) {
   return config.delayMinMs + Math.floor(Math.random() * (span + 1));
 }
 
+const SHAPE_LOG_INTERVAL_MS = 60 * 60 * 1000;
+
+/** Đếm theo giá trị, dạng `{1:52,2:1}`; giá trị dạng CHUỖI in kèm ngoặc kép (`"2":1`) để tách khỏi số 2. */
+function countBy(values) {
+  const counts = new Map();
+  for (const value of values) {
+    const k = typeof value === 'string' ? `"${value}"` : String(value);
+    counts.set(k, (counts.get(k) || 0) + 1);
+  }
+  return `{${[...counts.entries()].map(([k, n]) => `${k}:${n}`).join(',')}}`;
+}
+
+/**
+ * Thống kê HÌNH DẠNG danh sách `getFriendRecommendations` để chẩn đoán (26/10/2026: lời mời cũ không được đồng ý —
+ * nghi Zalo trả lời mời cũ dưới recommType khác 2). CHỈ số đếm: không tên, không SĐT, không userId.
+ *
+ * @param {Array<{recommItemType?: number, dataInfo?: object}>} items
+ * @param {number} nowMs
+ * @returns {string} vd `types={1:52,2:1} itemTypes={1:52,2:1} src={...} way={...} seen=3 msg=40 msgTypes={...} msgAgeDays=0-6`
+ */
+export function summarizeRecommItems(items, nowMs) {
+  const infos = items.map((item) => item?.dataInfo || {});
+  const withMsg = infos.filter((info) => String(info?.recommInfo?.message ?? '').trim() !== '');
+  const ages = withMsg
+    .map((info) => Number(info?.recommTime))
+    .filter((t) => Number.isFinite(t) && t > 0)
+    .map((t) => Math.floor((nowMs - t) / 86_400_000));
+  const age = ages.length ? `${Math.min(...ages)}-${Math.max(...ages)}` : '-';
+  return `types=${countBy(infos.map((info) => info?.recommType))}`
+    + ` itemTypes=${countBy(items.map((item) => item?.recommItemType))}`
+    + ` src=${countBy(infos.map((info) => info?.recommSrc))}`
+    + ` way=${countBy(infos.map((info) => info?.recommInfo?.suggestWay))}`
+    + ` seen=${infos.filter((info) => info?.isSeenFriendReq === true).length}`
+    + ` msg=${withMsg.length} msgTypes=${countBy(withMsg.map((info) => info?.recommType))} msgAgeDays=${age}`;
+}
+
 class ZaloFriendAutoAcceptService {
   constructor() {
     /** @type {Set<string>} nick đang có sweep chạy. */
@@ -87,6 +123,8 @@ class ZaloFriendAutoAcceptService {
     this.debounceTimers = new Map();
     /** @type {WeakSet<object>} listener đã gắn `friend_event` — theo ĐỐI TƯỢNG listener, listener chết thì GC dọn. */
     this.attachedListeners = new WeakSet();
+    /** @type {Map<string, number>} lần cuối in thống kê hình dạng danh sách ở lượt cron, theo nick (tối đa 1 lần/giờ). */
+    this.lastShapeLogAt = new Map();
   }
 
   /** Số lần thử còn nằm trong cửa sổ trượt 60 phút (đồng thời dọn mốc cũ). */
@@ -191,10 +229,13 @@ class ZaloFriendAutoAcceptService {
     }
 
     const remaining = pending.length - attempts;
-    if (pending.length > 0 || reason !== 'cron') {
+    const shapeDue = now() - (this.lastShapeLogAt.get(key) || 0) >= SHAPE_LOG_INTERVAL_MS;
+    if (pending.length > 0 || reason !== 'cron' || shapeDue) {
+      this.lastShapeLogAt.set(key, now());
       console.log(
         `[ZaloAutoAccept] account=${accountId} reason=${reason} accepted=${accepted} failed=${failed}`
         + ` pending=${pending.length} listed=${items.length}${stoppedBy ? ` stoppedBy=${stoppedBy}` : ''}`
+        + ` | ${summarizeRecommItems(items, now())}`
       );
     }
     return { accepted, failed, pending: pending.length, remaining, stoppedBy };
@@ -276,6 +317,7 @@ class ZaloFriendAutoAcceptService {
     this.running.clear();
     this.attemptsByAccount.clear();
     this.attachedListeners = new WeakSet();
+    this.lastShapeLogAt.clear();
   }
 }
 
