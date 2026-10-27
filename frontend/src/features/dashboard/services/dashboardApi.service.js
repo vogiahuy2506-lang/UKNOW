@@ -39,6 +39,16 @@ export const dashboardApiService = {
   },
 
   /**
+   * Thẻ "3 bước bắt đầu" ở trang chủ: `{ channelConnected, hasCustomers, hasSentMessage }` (ba boolean).
+   * Route chỉ cho chủ tài khoản (nhân viên nhận 403 OWNER_ONLY) — nơi gọi không gọi cho nhân viên.
+   *
+   * @returns {Promise<{ data: { success: boolean, data: { channelConnected: boolean, hasCustomers: boolean, hasSentMessage: boolean } } }>}
+   */
+  getGettingStarted() {
+    return api.get('/dashboard/getting-started');
+  },
+
+  /**
    * Sinh nhận xét AI (Gemini, backend gọi bằng API key server-side). Chỉ gửi BỘ LỌC — số liệu do server tự tính bằng
    * đúng các hàm của trang Báo cáo, nên lời phân tích luôn khớp các thẻ.
    *

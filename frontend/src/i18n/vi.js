@@ -3597,6 +3597,10 @@ export default {
     restoring: 'Đang khôi phục...',
     noAccounts: 'Chưa có tài khoản nào',
     addFirstAccount: 'Thêm tài khoản Zalo đầu tiên',
+    firstConnectStep1: 'Cầm sẵn điện thoại có app Zalo — mã QR chỉ dùng được trong thời gian ngắn.',
+    firstConnectStep2: 'Bấm nút bên dưới, mở Zalo trên điện thoại, quét mã rồi xác nhận.',
+    firstConnectStep3: 'Hệ thống giữ đăng nhập trên máy chủ để gửi tin thay bạn, kể cả khi bạn tắt máy tính.',
+    firstConnectStep4: 'Thỉnh thoảng Zalo tự đăng xuất phiên này — khi đó trạng thái chuyển "Cần kết nối lại", bạn chỉ cần quét lại.',
     accounts: 'Tài khoản',
     connected: 'Đã kết nối',
     disconnected: 'Mất kết nối',
@@ -10983,6 +10987,17 @@ export default {
     title: 'Trợ lý AI chưa được bật cho bạn',
     intro: 'Bạn đang làm việc trong không gian của {ownerName}. Các mục bạn được dùng nằm ở menu bên trái.',
     steps: 'Muốn dùng Trợ lý AI, nhờ chủ tài khoản mở Cài đặt → Nhân viên, bấm vào tên bạn, chọn tab Phân quyền, tick "Sử dụng Trợ lý AI" rồi lưu. Sau đó bấm nút bên dưới.',
+  },
+  // Thẻ "3 bước bắt đầu" ở trang chủ (chỉ chủ tài khoản, ẩn khi đã xong cả ba bước hoặc khi bấm Ẩn).
+  gettingStarted: {
+    title: 'Bắt đầu với Founder AI',
+    progress: '{done}/{total} bước',
+    step1: 'Kết nối kênh gửi (Zalo hoặc email)',
+    step2: 'Thêm khách hàng',
+    step3: 'Gửi chiến dịch đầu tiên',
+    done: 'Đã xong',
+    dismiss: 'Ẩn',
+    dismissLabel: 'Ẩn thẻ bắt đầu',
   },
 
   // Renewal Screen

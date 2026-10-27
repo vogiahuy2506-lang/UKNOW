@@ -24,6 +24,9 @@ router.get('/analytics', requirePermission('reports_view'), dashboardController.
 // Get orders list
 router.get('/orders', requireSelfContext, dashboardController.getOrdersList.bind(dashboardController));
 
+// Thẻ "3 bước bắt đầu" ở trang chủ — chỉ chủ tài khoản (nhân viên nhận 403 OWNER_ONLY; web cũng không vẽ thẻ cho nhân viên)
+router.get('/getting-started', requireSelfContext, dashboardController.getGettingStarted.bind(dashboardController));
+
 // Bảng "Chiến dịch trong kỳ" (đã gửi / chưa gửi được / mở / nhấp / đã mua theo chiến dịch)
 router.get('/campaigns', requirePermission('reports_view'), dashboardController.getCampaigns.bind(dashboardController));
 

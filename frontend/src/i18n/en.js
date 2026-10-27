@@ -3592,6 +3592,10 @@ export default {
     restoring: 'Restoring...',
     noAccounts: 'No accounts yet',
     addFirstAccount: 'Add your first Zalo account',
+    firstConnectStep1: 'Have your phone with the Zalo app ready — the QR code only works for a short time.',
+    firstConnectStep2: 'Press the button below, open Zalo on your phone, scan the code and confirm.',
+    firstConnectStep3: 'The system keeps the login on the server to send messages for you, even when your computer is off.',
+    firstConnectStep4: 'Zalo sometimes logs this session out by itself — the status then changes to "Needs reconnect" and you only need to scan again.',
     accounts: 'Accounts',
     connected: 'Connected',
     disconnected: 'Disconnected',
@@ -10969,6 +10973,17 @@ Feel free to ask me anything!`,
     title: 'The AI Assistant is not enabled for you',
     intro: "You are working in {ownerName}'s workspace. The sections you can use are in the left menu.",
     steps: 'To use the AI Assistant, ask the account owner to open Settings → Employees, click your name, choose the Permissions tab, tick "Use AI Assistant" and save. Then click the button below.',
+  },
+  // "3 steps to get started" card on the home page (account owners only; hidden once all three steps are done or on Hide).
+  gettingStarted: {
+    title: 'Get started with Founder AI',
+    progress: '{done}/{total} steps',
+    step1: 'Connect a sending channel (Zalo or email)',
+    step2: 'Add customers',
+    step3: 'Send your first campaign',
+    done: 'Done',
+    dismiss: 'Hide',
+    dismissLabel: 'Hide the getting-started card',
   },
 
   // Renewal Screen

@@ -602,6 +602,18 @@ describe('Employee Route Policy & RBAC Enforcement Matrix', () => {
       const ownerRes = await request(app).get('/api/dashboard/orders');
       expect(ownerRes.status).toBe(200);
     });
+
+    it('keeps /getting-started owner-only (thẻ "3 bước bắt đầu"): nhân viên 403 OWNER_ONLY dù có đủ quyền', async () => {
+      currentTestUser = createEmployee({ reports_view: true, customers: true, campaigns_view: true });
+      const res = await request(app).get('/api/dashboard/getting-started');
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('OWNER_ONLY');
+
+      currentTestUser = selfUser;
+      const ownerRes = await request(app).get('/api/dashboard/getting-started');
+      expect(ownerRes.status).toBe(200);
+      expect(ownerRes.body.method).toBe('getGettingStarted');
+    });
   });
 
   describe('10. AI Assistant & Sessions (/api/ai)', () => {

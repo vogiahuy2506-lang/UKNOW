@@ -578,11 +578,48 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
         {isLoading ? (
           <AccountListSkeleton count={2} />
         ) : sortedAccounts.length === 0 ? (
-          <div className="text-center py-12 text-slate-400 dark:text-dk-muted">
-            <HiOutlineChatAlt2 className="w-12 h-12 mx-auto mb-3 text-slate-300 dark:text-dk-muted" />
-            <p className="text-sm font-medium">{t('zaloSettings.noAccounts')}</p>
-            {!readOnly && <p className="text-xs mt-1 text-slate-400 dark:text-dk-muted">{t('zaloSettings.addFirstAccount')}</p>}
-          </div>
+          readOnly ? (
+            <div className="text-center py-12 text-slate-400 dark:text-dk-muted">
+              <HiOutlineChatAlt2 className="w-12 h-12 mx-auto mb-3 text-slate-300 dark:text-dk-muted" />
+              <p className="text-sm font-medium">{t('zaloSettings.noAccounts')}</p>
+            </div>
+          ) : (
+            // Lần đầu nối Zalo (27/10/2026): người mới rơi nhiều nhất ở bước này — 7/39 người đăng nhập thêm được nick.
+            // Nút dưới đây là nút "Thêm tài khoản Zalo đầu tiên" mà bài hướng dẫn `zalo-account` đã tả; nó gọi ĐÚNG
+            // `handleConnectByQr` như nút "Tạo QR đăng nhập" ở thẻ trên (không đổi hành vi nút đó).
+            <div className="py-8 sm:py-10 max-w-xl mx-auto" data-testid="zalo-first-connect">
+              <div className="text-center text-slate-400 dark:text-dk-muted">
+                <HiOutlineChatAlt2 className="w-12 h-12 mx-auto mb-3 text-slate-300 dark:text-dk-muted" />
+                <p className="text-sm font-semibold text-slate-700 dark:text-dk-text">{t('zaloSettings.noAccounts')}</p>
+              </div>
+              <ol className="mt-5 space-y-2.5">
+                {[
+                  t('zaloSettings.firstConnectStep1'),
+                  t('zaloSettings.firstConnectStep2'),
+                  t('zaloSettings.firstConnectStep3'),
+                  t('zaloSettings.firstConnectStep4'),
+                ].map((text, index) => (
+                  <li key={index} className="flex items-start gap-3 text-sm text-slate-600 dark:text-dk-text2">
+                    <span className="mt-0.5 inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-orange-50 dark:bg-orange-950/40 text-xs font-bold text-orange-600 dark:text-orange-300 border border-orange-200/80 dark:border-orange-800">
+                      {index + 1}
+                    </span>
+                    <span>{text}</span>
+                  </li>
+                ))}
+              </ol>
+              <div className="mt-6 flex justify-center">
+                <button
+                  type="button"
+                  onClick={handleConnectByQr}
+                  className="inline-flex items-center gap-1.5 px-5 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-sm font-bold shadow-sm hover:shadow transition-all duration-150 disabled:opacity-50"
+                  disabled={isCreatingQr}
+                >
+                  <HiOutlineQrcode className="w-5 h-5" />
+                  {isCreatingQr ? t('zaloSettings.creatingQr') : t('zaloSettings.addFirstAccount')}
+                </button>
+              </div>
+            </div>
+          )
         ) : (
           <div className="space-y-3">
             {sortedAccounts.map((account) => (

@@ -1,5 +1,6 @@
 import dashboardAnalyticsService from '../services/dashboard/dashboardAnalytics.service.js';
 import dashboardInsightsService from '../services/dashboard/dashboardInsights.service.js';
+import gettingStartedService from '../services/dashboard/gettingStarted.service.js';
 import { chargeAiCredit } from '../middleware/aiCredit.middleware.js';
 import { resolveWorkspaceOwnerId } from '../utils/workspaceContext.util.js';
 import { buildAiErrorPayload } from '../utils/aiErrorPayload.util.js';
@@ -156,6 +157,26 @@ class DashboardController {
         success: false,
         message: 'Lỗi server'
       });
+    }
+  }
+
+  /**
+   * GET /api/dashboard/getting-started — thẻ "3 bước bắt đầu" ở trang chủ (chỉ chủ tài khoản: route có requireSelfContext).
+   *
+   * Response: `{ success: true, data: { channelConnected, hasCustomers, hasSentMessage } }` (ba boolean).
+   *
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
+   */
+  async getGettingStarted(req, res) {
+    try {
+      const ownerId = resolveWorkspaceOwnerId(req.user);
+      const data = await gettingStartedService.getGettingStarted(ownerId);
+      this.setNoCacheHeaders(res);
+      res.json({ success: true, data });
+    } catch (error) {
+      console.error('Get getting-started status error:', error);
+      res.status(500).json({ success: false, message: 'Lỗi server' });
     }
   }
 
