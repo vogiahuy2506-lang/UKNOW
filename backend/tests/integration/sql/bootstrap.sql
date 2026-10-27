@@ -33,7 +33,6 @@ CREATE TABLE users (
   locked_until            TIMESTAMPTZ,
   last_login_at           TIMESTAMPTZ,
   last_login_ip           VARCHAR(45),
-  last_active_at          TIMESTAMPTZ,
   role_id                 INTEGER,
   active_plan_id          INTEGER,
   storage_quota_override_bytes BIGINT CHECK (
