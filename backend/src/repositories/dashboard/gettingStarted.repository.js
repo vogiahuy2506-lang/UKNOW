@@ -1,4 +1,5 @@
 import db from '../../config/database.js';
+import { firstSentAtSql } from '../stats/sendStats.repository.js';
 
 /**
  * SQL cho thẻ "3 bước bắt đầu" ở trang chủ (PLAN_ONBOARDING_ZALO_VA_THE_3_BUOC_2026-10-27).
@@ -31,6 +32,20 @@ class GettingStartedRepository {
       [ownerId]
     );
     return rows[0]?.connected === true;
+  }
+
+  /**
+   * Chủ đã từng gửi được ít nhất một tin chưa — dùng `firstSentAtSql` của sendStats (cùng định nghĩa "đã gửi" với mọi
+   * số gửi tin: email ∈ EMAIL_SENT_STATUSES, Zalo hiệu lực 'sent', Telegram/WhatsApp 'sent', loại is_preview).
+   * Không dùng `getChannelTotals` cửa sổ 3660 ngày: đo production 27/10/2026 chủ 1 (225.778 tin) mất 3,2 giây, chủ 39
+   * 1,5 giây — chạy mỗi lần mở trang chủ; bản MIN theo index (workspace_owner_id, sent_at) này 0,7 / 0,2 giây.
+   *
+   * @param {number|string} ownerId chủ workspace
+   * @returns {Promise<boolean>}
+   */
+  async hasSentMessage(ownerId) {
+    const { rows } = await db.query(`SELECT ${firstSentAtSql('$1::bigint')} AS first_sent_at`, [ownerId]);
+    return rows[0]?.first_sent_at != null;
   }
 }
 
