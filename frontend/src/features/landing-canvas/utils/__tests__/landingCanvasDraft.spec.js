@@ -147,24 +147,40 @@ describe('landingCanvasDraft — ghi / đọc', () => {
 
   it('hết dung lượng: ghi lại bản không HTML lịch sử', () => {
     const key = buildDraftKey({ userId: 1, ownerId: 1 }, null);
-    const real = window.localStorage.setItem.bind(window.localStorage);
-    vi.spyOn(window.localStorage, 'setItem').mockImplementation(function (k, v) {
+    // CI (Linux) + local (Windows) khác nhau ở chỗ spyOn instance có chặn được
+    // setItem hay không — thay hẳn object localStorage bằng stub để chắc chắn.
+    const orig = window.localStorage;
+    const realSet = orig.setItem.bind(orig);
+    const stub = Object.create(orig);
+    stub.setItem = function (k, v) {
       if (String(v).includes('prev-a')) throw new DOMException('full', 'QuotaExceededError');
-      return real(k, v);
-    });
-    const r = writeDraft(key, { form: null, messages: [applied('a')] });
-    expect(r.ok).toBe(true);
-    const d = readDraft(key);
-    expect(d.messages[0].previousHtml).toBeUndefined();
-    expect(d.messages[0].content).toBe('a');
+      return realSet(k, v);
+    };
+    Object.defineProperty(window, 'localStorage', { configurable: true, enumerable: true, writable: true, value: stub });
+    try {
+      const r = writeDraft(key, { form: null, messages: [applied('a')] });
+      expect(r.ok).toBe(true);
+      const d = readDraft(key);
+      expect(d.messages[0].previousHtml).toBeUndefined();
+      expect(d.messages[0].content).toBe('a');
+    } finally {
+      Object.defineProperty(window, 'localStorage', { configurable: true, enumerable: true, writable: true, value: orig });
+    }
   });
 
   it('vẫn hết dung lượng sau khi bỏ HTML lịch sử → ok:false, không ném', () => {
     const key = buildDraftKey({ userId: 1, ownerId: 1 }, null);
-    vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => {
+    const orig = window.localStorage;
+    const stub = Object.create(orig);
+    stub.setItem = () => {
       throw new DOMException('full', 'QuotaExceededError');
-    });
-    expect(writeDraft(key, { form: { title: 'x' }, messages: [] })).toEqual({ ok: false });
+    };
+    Object.defineProperty(window, 'localStorage', { configurable: true, enumerable: true, writable: true, value: stub });
+    try {
+      expect(writeDraft(key, { form: { title: 'x' }, messages: [] })).toEqual({ ok: false });
+    } finally {
+      Object.defineProperty(window, 'localStorage', { configurable: true, enumerable: true, writable: true, value: orig });
+    }
   });
 
   it('storage ném khi đọc → null, không ném', () => {

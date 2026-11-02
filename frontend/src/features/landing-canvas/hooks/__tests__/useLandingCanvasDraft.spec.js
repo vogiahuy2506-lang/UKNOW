@@ -100,15 +100,21 @@ describe('useLandingCanvasDraft', () => {
   });
 
   it('ghi thất bại → writeFailed=true', () => {
-    const spy = vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => {
+    const orig = window.localStorage;
+    const stub = Object.create(orig);
+    stub.setItem = () => {
       throw new Error('full');
-    });
-    const { result } = setup({ form: form('<p>5</p>'), messages: msgs, dirty: true });
-    act(() => {
-      window.dispatchEvent(new Event('pagehide'));
-    });
-    expect(result.current.writeFailed).toBe(true);
-    spy.mockRestore();
+    };
+    Object.defineProperty(window, 'localStorage', { configurable: true, enumerable: true, writable: true, value: stub });
+    try {
+      const { result } = setup({ form: form('<p>5</p>'), messages: msgs, dirty: true });
+      act(() => {
+        window.dispatchEvent(new Event('pagehide'));
+      });
+      expect(result.current.writeFailed).toBe(true);
+    } finally {
+      Object.defineProperty(window, 'localStorage', { configurable: true, enumerable: true, writable: true, value: orig });
+    }
   });
 
   it('commitSaved (trang mới) chuyển hội thoại sang khoá của id và dừng ghi khoá new', () => {
