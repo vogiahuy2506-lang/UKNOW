@@ -413,6 +413,58 @@ class LeadService {
   }
 
   /**
+   * Nhóm lead theo landing cho giao diện thẻ: slug + tiêu đề CMS + tổng + mới nhất + khóa custom.
+   *
+   * @param {object} config bộ lọc chung (ngày/nghề/lĩnh vực/custom, KHÔNG theo slug)
+   * @returns {Promise<{ groups: object[], customDefs: object[] }>}
+   */
+  async listAdminGroups(config = {}) {
+    // Thẻ phải hiện ĐỦ landing → ép bỏ lọc slug (drawer slug đã ẩn ở FE).
+    const groupConfig = { ...config, landingLeadsSlugs: [] };
+    const shared = await this.resolveSharedLeadFilters(groupConfig);
+    const scope = {
+      userId: config.workspaceOwnerId,
+      workspaceOwnerId: config.workspaceOwnerId,
+      isSuperAdmin: config.isSuperAdmin,
+    };
+    const [groups, keysBySlug] = await Promise.all([
+      leadRepository.aggregateGroupsBySlug(shared),
+      leadRepository.aggregateCustomKeysBySlug(shared),
+    ]);
+    // Tiêu đề CMS cho mọi slug có lead (trừ unknown) — 1 query, không N+1.
+    let titleMap = new Map();
+    try {
+      const slugs = groups.map((g) => g.slug).filter((s) => s && s !== '__unknown__');
+      if (slugs.length > 0) {
+        titleMap = await landingPageRepository.findTitlesBySlugs(slugs, scope);
+      }
+    } catch {
+      // Thiếu tiêu đề vẫn hiện thẻ (fallback /slug) — không vỡ trang.
+    }
+    const defs = await this.listCustomFieldDefinitions({
+      workspaceOwnerId: config.workspaceOwnerId || config.idUser,
+      isSuperAdmin: config.isSuperAdmin,
+    });
+    const defByKey = new Map(defs.map((d) => [d.key, d]));
+    const out = groups.map((g) => {
+      const keys = keysBySlug.get(g.slug) || [];
+      return {
+        slug: g.slug,
+        title: g.slug === '__unknown__' ? '' : (titleMap.get(g.slug) || ''),
+        total: g.total,
+        latestAt: g.latestAt || null,
+        customKeys: keys.map((k) => ({
+          key: k.key,
+          labelVi: defByKey.get(k.key)?.labelVi || k.labelVi || k.key,
+          labelEn: defByKey.get(k.key)?.labelEn || null,
+          type: defByKey.get(k.key)?.type || 'text',
+        })),
+      };
+    });
+    return { groups: out, customDefs: defs };
+  }
+
+  /**
    * Xuất toàn bộ lead khớp bộ lọc admin ra buffer Excel (tối đa `MAX_LANDING_LEADS_LIMIT` dòng).
    *
    * @param {object} config

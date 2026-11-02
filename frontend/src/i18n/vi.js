@@ -7478,7 +7478,21 @@ export default {
     viewDetail: 'Xem chi tiết',
     detailTitle: 'Chi tiết khách hàng',
     copy: 'Sao chép',
+    copiedToast: 'Đã copy {label}',
+    copyFailed: 'Không thể copy',
     moreFieldsTitle: 'Còn {count} trường nữa — mở chi tiết để xem đầy đủ',
+    // Gom theo từng Landing (thẻ + bảng cột động)
+    groupsEmpty: 'Chưa có landing nào có khách.',
+    unknownGroup: 'Không rõ / đã xóa',
+    unknownGroupHint: 'Lead mất slug (trang đã xóa)',
+    latestShort: 'mới nhất {time}',
+    customersUnit: 'khách',
+    customKeysSummary: '{count} trường riêng: {preview}',
+    basicOnly: 'Chỉ có trường cơ bản',
+    filteringLabel: 'Đang lọc:',
+    clearAll: 'Xoá tất cả',
+    clearFiltersToSeeAll: 'Xoá bộ lọc để thấy tất cả',
+    groupsLoadError: 'Không tải được nhóm theo landing',
     // Tab "Từ biểu mẫu": bài nộp của mọi biểu mẫu trong tài khoản (GET /api/forms/submissions).
     formsTab: {
       filterForm: 'Biểu mẫu',

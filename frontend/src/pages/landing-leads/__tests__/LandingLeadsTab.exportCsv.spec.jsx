@@ -35,6 +35,7 @@ function mockList(overrides = {}) {
     draftFilters: {},
     setDraftFilters: vi.fn(),
     appliedFilters: APPLIED,
+    effectiveFilters: { ...APPLIED, landingLeadsSlugs: ['khoa-hoc-1'] },
     applyFilters: vi.fn(),
     resetFilters: vi.fn(),
     exportExcel: vi.fn(),
@@ -46,6 +47,13 @@ function mockList(overrides = {}) {
     isLoading: false,
     errorMessage: null,
     reload: vi.fn(),
+    groups: [{ slug: 'khoa-hoc-1', title: 'Khoá học 1', total: 0, latestAt: null, customKeys: [] }],
+    groupDefs: [],
+    groupsLoading: false,
+    groupsError: '',
+    selectedSlug: 'khoa-hoc-1',
+    selectSlug: vi.fn(),
+    reloadGroups: vi.fn(),
     ...overrides,
   });
 }
@@ -74,15 +82,18 @@ describe('LandingLeadsTab — nút "Xuất CSV" (PR-8c)', () => {
     expect(screen.getByTestId('landing-leads-export-csv')).toHaveTextContent('Xuất CSV');
   });
 
-  it('bấm → xuất THEO BỘ LỌC ĐANG ÁP (appliedFilters), lang theo giao diện, rồi tải file', async () => {
+  it('bấm → xuất THEO THẺ ĐANG CHỌN (effectiveFilters), lang theo giao diện, rồi tải file', async () => {
     renderTab();
 
     fireEvent.click(screen.getByTestId('landing-leads-export-csv'));
 
     await waitFor(() => expect(downloadCsvFromRequest).toHaveBeenCalledTimes(1));
     expect(exportLandingLeadsAdminCsv).toHaveBeenCalledTimes(1);
-    expect(exportLandingLeadsAdminCsv).toHaveBeenCalledWith(APPLIED, 'vi');
-    expect(downloadCsvFromRequest).toHaveBeenCalledWith(EXPORT_REQUEST, 'khach-de-lai-thong-tin-landing-page.csv');
+    expect(exportLandingLeadsAdminCsv).toHaveBeenCalledWith(
+      expect.objectContaining({ landingLeadsSlugs: ['khoa-hoc-1'] }),
+      'vi'
+    );
+    expect(downloadCsvFromRequest).toHaveBeenCalledWith(EXPORT_REQUEST, 'khach-khoa-hoc-1.csv');
   });
 
   it('nút Excel sẵn có vẫn chạy đường cũ (không bị nút CSV chiếm)', async () => {

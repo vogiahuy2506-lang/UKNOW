@@ -4,7 +4,6 @@ import {
   HiOutlineRefresh,
   HiOutlineMail,
   HiOutlinePhone,
-  HiOutlineExternalLink,
   HiOutlineSearch,
   HiOutlineClipboard,
   HiOutlineCalendar,
@@ -13,42 +12,30 @@ import {
   HiOutlineChevronRight,
   HiOutlineEye,
   HiOutlineDownload,
+  HiOutlineCollection,
 } from 'react-icons/hi';
 import { PageHeaderActions } from '../../components/common/PageContainer';
 import useLandingLeadsList from '../../features/landing/hooks/useLandingLeadsList.js';
 import { LandingLeadsAdminFilters } from '../../features/landing/components/LandingLeadsAdminFilters.jsx';
 import {
   exportLandingLeadsAdminCsv,
-  fetchLandingLeadsCustomFieldDefinitions,
 } from '../../features/landing/services/landingLeadsAdminApi.service.js';
 import LandingLeadConsentBadge from '../../features/landing/components/LandingLeadConsentBadge.jsx';
 import LandingLeadDetailModal from '../../features/landing/components/LandingLeadDetailModal.jsx';
 import {
-  formatLeadExtraEntries,
-  getLeadExtraEntries,
+  getCustomFieldEntries,
   getLeadFullName,
   getLeadInitials,
 } from '../../features/landing/utils/leadFields.js';
 import { useI18n } from '../../i18n';
 import useCsvExport from '../../hooks/useCsvExport.js';
 
-// eslint-disable-next-line no-unused-vars
-const PAGE_SIZE = 20;
-
-// Ô "Thông tin thêm" của bảng chỉ có một dòng: hiện tối đa ngần này trường, phần còn lại gom vào "+N"
-// (đọc đủ trong modal chi tiết khách).
-const EXTRA_INLINE_FIELD_LIMIT = 2;
+const UNKNOWN_SLUG = '__unknown__';
 
 /**
- * Tab "Từ landing page" của màn "Khách để lại thông tin" (`LandingLeadsListPage`): Lead đổ về từ form
- * landing (/embed/lead-form, snippet HTML, form trong landing page) — bảng `leads`.
- *
- * Đây là nội dung nguyên vẹn của trang `/app/landing-leads` trước khi gộp 2 tab (PLAN_BIEU_MAU_TUY_BIEN_AI_LANDING
- * PR-1); tiêu đề trang do khung bên ngoài giữ, ô tìm nhanh + làm mới nằm cùng hàng với nút Bộ lọc.
- *
- * Đồng bộ với:
- *  - Lead Form (LeadFormConfigPanel / useFounderLandingForm) — payload POST /api/public/leads.
- *  - Custom field definitions endpoint `/leads/custom-field-definitions` — để hiển thị label + options.
+ * Tab "Từ landing page" — GOM THEO TỪNG LANDING (thẻ + bảng cột động).
+ * Mỗi thẻ = 1 landing (slug + tiêu đề + tổng + mới nhất). Bấm thẻ → bảng chỉ hiện
+ * khách của landing đó, cột động = toàn bộ trường riêng của landing đó.
  */
 export default function LandingLeadsTab() {
   const { t, locale } = useI18n();
@@ -57,6 +44,7 @@ export default function LandingLeadsTab() {
     draftFilters,
     setDraftFilters,
     appliedFilters,
+    effectiveFilters,
     applyFilters,
     resetFilters,
     exportExcel,
@@ -68,15 +56,18 @@ export default function LandingLeadsTab() {
     isLoading,
     errorMessage,
     reload,
+    groups = [],
+    groupDefs = [],
+    groupsLoading = false,
+    groupsError = '',
+    selectedSlug = null,
+    selectSlug = () => {},
   } = useLandingLeadsList();
 
-  const [customDefs, setCustomDefs] = useState([]);
-  // Dòng đang xem trong modal chi tiết (null = đóng).
+  const customDefs = groupDefs;
   const [selectedLead, setSelectedLead] = useState(null);
   const closeLeadDetail = useCallback(() => setSelectedLead(null), []);
 
-  // Quick search trong trang hiện tại (FE-only, không gọi lại API).
-  // Backend chưa hỗ trợ filter theo text nên search chỉ áp dụng cho items đã load.
   const [quickSearch, setQuickSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
@@ -85,35 +76,39 @@ export default function LandingLeadsTab() {
     return () => clearTimeout(id);
   }, [quickSearch]);
 
-  // Đếm số bộ lọc đang áp dụng (dùng cho badge trên trigger button).
+  // Reset trang khi đổi thẻ.
+  useEffect(() => {
+    setQuickSearch('');
+    setDebouncedSearch('');
+  }, [selectedSlug]);
+
   const appliedCount = useMemo(() => {
     let n = 0;
     if (appliedFilters.landingLeadsUseDateRange) n += 1;
-    if (Array.isArray(appliedFilters.landingLeadsSlugs) && appliedFilters.landingLeadsSlugs.length > 0) n += 1;
     if (Array.isArray(appliedFilters.landingLeadsCustomFilters) && appliedFilters.landingLeadsCustomFilters.length > 0) {
       n += appliedFilters.landingLeadsCustomFilters.length;
     }
     return n;
   }, [appliedFilters]);
 
-  // Lấy definitions để render label + options cho customFields trong từng dòng.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const items = await fetchLandingLeadsCustomFieldDefinitions();
-        if (!cancelled) setCustomDefs(Array.isArray(items) ? items : []);
-      } catch {
-        if (!cancelled) setCustomDefs([]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const selectedGroup = useMemo(
+    () => (groups || []).find((g) => g.slug === selectedSlug) || null,
+    [groups, selectedSlug]
+  );
+  const dynamicColumns = useMemo(
+    () => (Array.isArray(selectedGroup?.customKeys) ? selectedGroup.customKeys : []),
+    [selectedGroup]
+  );
 
   const totalPages = pagination.totalPages || 1;
   const total = pagination.total ?? 0;
+
+  const rowCustomMap = useCallback((row) => {
+    const entries = getCustomFieldEntries(row?.customFields, customDefs, locale);
+    const m = new Map();
+    for (const e of entries) m.set(e.key, e.value);
+    return m;
+  }, [customDefs, locale]);
 
   const visibleItems = useMemo(() => {
     if (!debouncedSearch) return items;
@@ -122,9 +117,16 @@ export default function LandingLeadsTab() {
       const fullName = String(getLeadFullName(row) || '').toLowerCase();
       const email = String(row.email || '').toLowerCase();
       const phone = String(row.phone || '').toLowerCase();
-      return fullName.includes(q) || email.includes(q) || phone.includes(q);
+      if (fullName.includes(q) || email.includes(q) || phone.includes(q)) return true;
+      const cmap = rowCustomMap(row);
+      for (const v of cmap.values()) {
+        if (String(v || '').toLowerCase().includes(q)) return true;
+      }
+      const occ = String(row.occupation || '').toLowerCase();
+      const interest = String(row.interestArea || '').toLowerCase();
+      return occ.includes(q) || interest.includes(q);
     });
-  }, [items, debouncedSearch]);
+  }, [items, debouncedSearch, rowCustomMap]);
 
   const handleExport = useCallback(async () => {
     try {
@@ -139,22 +141,21 @@ export default function LandingLeadsTab() {
     }
   }, [exportExcel, t]);
 
-  // Xuất CSV (PR-8c): CÙNG bộ lọc đang áp với danh sách; backend ghi nhật ký hoạt động mỗi lần xuất.
   const handleExportCsv = useCallback(
-    () => exportCsv(() => exportLandingLeadsAdminCsv(appliedFilters, locale), 'khach-de-lai-thong-tin-landing-page.csv'),
-    [exportCsv, appliedFilters, locale]
+    () => exportCsv(() => exportLandingLeadsAdminCsv(effectiveFilters, locale), `khach-${selectedSlug || 'landing'}.csv`),
+    [exportCsv, effectiveFilters, locale, selectedSlug]
   );
 
   const handleCopy = useCallback(
     async (text, label) => {
       try {
         await navigator.clipboard.writeText(text);
-        toast.success(`Đã copy ${label}`);
+        toast.success(t('landingLeads.copiedToast', { label }));
       } catch {
-        toast.error('Không thể copy');
+        toast.error(t('landingLeads.copyFailed'));
       }
     },
-    []
+    [t]
   );
 
   const dateRangeText = useMemo(() => {
@@ -165,7 +166,10 @@ export default function LandingLeadsTab() {
     return `${from || '...'} → ${to || '...'}`;
   }, [appliedFilters.landingLeadsUseDateRange, appliedFilters.landingLeadsDateFrom, appliedFilters.landingLeadsDateTo]);
 
-  const appliedChips = useMemo(() => buildAppliedChips(appliedFilters, customDefs, t), [appliedFilters, customDefs, t]);
+  const appliedChips = useMemo(() => buildAppliedChips(appliedFilters, customDefs, t, locale), [appliedFilters, customDefs, t, locale]);
+
+  const fixedColCount = 7; // Họ tên, Email, SĐT, Nghề, Lĩnh vực, Đồng ý, Ngày ĐK
+  const colSpan = fixedColCount + dynamicColumns.length + 1;
 
   return (
     <div className="space-y-6">
@@ -174,7 +178,7 @@ export default function LandingLeadsTab() {
           <button
             type="button"
             onClick={handleExport}
-            disabled={isExporting}
+            disabled={isExporting || !selectedSlug}
             className="btn btn-secondary"
           >
             <HiOutlineDownload className="w-4 h-4 mr-1.5" aria-hidden="true" />
@@ -183,7 +187,7 @@ export default function LandingLeadsTab() {
           <button
             type="button"
             onClick={handleExportCsv}
-            disabled={isExportingCsv}
+            disabled={isExportingCsv || !selectedSlug}
             title={t('csvExport.buttonHint')}
             data-testid="landing-leads-export-csv"
             className="btn btn-secondary"
@@ -194,7 +198,77 @@ export default function LandingLeadsTab() {
         </div>
       </PageHeaderActions>
 
-      {/* Filter trigger (drawer) · tìm nhanh + làm mới */}
+      {/* Thẻ từng Landing */}
+      <section aria-label="Landing">
+        {groupsError ? (
+          <div className="rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-800 dark:text-red-300">
+            {groupsError}
+          </div>
+        ) : null}
+        {groupsLoading && groups.length === 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="rounded-2xl border border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface p-4 animate-pulse">
+                <div className="h-4 w-2/3 rounded bg-slate-200 dark:bg-dk-raised" />
+                <div className="mt-2 h-3 w-1/3 rounded bg-slate-100 dark:bg-dk-raised" />
+              </div>
+            ))}
+          </div>
+        ) : null}
+        {!groupsLoading && groups.length === 0 && !groupsError ? (
+          <div className="rounded-2xl border border-dashed border-slate-300 dark:border-dk-border bg-white dark:bg-dk-surface px-6 py-10 text-center">
+            <HiOutlineCollection className="w-10 h-10 text-slate-300 dark:text-dk-muted mx-auto mb-2" />
+            <p className="text-sm text-slate-500 dark:text-dk-text2">{t('landingLeads.groupsEmpty')}</p>
+          </div>
+        ) : null}
+        {groups.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3" role="listbox" aria-label={t('landingLeads.slugSourceLabel')}>
+            {groups.map((g) => {
+              const active = g.slug === selectedSlug;
+              const isUnknown = g.slug === UNKNOWN_SLUG;
+              const label = isUnknown ? t('landingLeads.unknownGroup') : (g.title || `/${g.slug}`);
+              return (
+                <button
+                  key={g.slug}
+                  type="button"
+                  role="option"
+                  aria-selected={active}
+                  onClick={() => selectSlug(g.slug)}
+                  className={`text-left rounded-2xl border p-4 transition-all shadow-2xs ${
+                    active
+                      ? 'border-orange-500 ring-2 ring-orange-500/20 bg-orange-50/60 dark:bg-orange-950/20'
+                      : 'border-slate-200 dark:border-dk-border bg-white dark:bg-dk-surface hover:border-orange-300 hover:bg-orange-50/40 dark:hover:bg-dk-raised'
+                  }`}
+                >
+                  <p className="text-sm font-bold text-slate-900 dark:text-dk-text truncate" title={label}>{label}</p>
+                  {!isUnknown ? (
+                    <p className="text-[11px] text-slate-400 dark:text-dk-muted truncate">/{g.slug}</p>
+                  ) : (
+                    <p className="text-[11px] text-slate-400 dark:text-dk-muted truncate">{t('landingLeads.unknownGroupHint')}</p>
+                  )}
+                  <div className="mt-2 flex items-center gap-2 text-xs text-slate-600 dark:text-dk-text2">
+                    <span className="inline-flex items-center rounded-full bg-slate-100 dark:bg-dk-raised px-2 py-0.5 font-bold text-slate-800 dark:text-dk-text">
+                      {Number(g.total || 0).toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN')} {t('landingLeads.customersUnit')}
+                    </span>
+                    {g.latestAt ? (
+                      <span className="truncate">{t('landingLeads.latestShort', { time: formatRelativeTime(g.latestAt, locale) })}</span>
+                    ) : null}
+                  </div>
+                  {Array.isArray(g.customKeys) && g.customKeys.length > 0 ? (
+                    <p className="mt-1.5 text-[11px] text-slate-500 dark:text-dk-text2 truncate" title={g.customKeys.map((k) => cardFieldLabel(k, locale)).join(' · ')}>
+                      {t('landingLeads.customKeysSummary', { count: g.customKeys.length, preview: g.customKeys.slice(0, 3).map((k) => cardFieldLabel(k, locale)).join(' · ') })}{g.customKeys.length > 3 ? ' …' : ''}
+                    </p>
+                  ) : (
+                    <p className="mt-1.5 text-[11px] italic text-slate-400">{t('landingLeads.basicOnly')}</p>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+      </section>
+
+      {/* Filter + tìm nhanh + làm mới (phạm vi thẻ đang chọn) */}
       <div className="flex flex-wrap items-center gap-2">
         <LandingLeadsAdminFilters
           draftFilters={draftFilters}
@@ -202,6 +276,7 @@ export default function LandingLeadsTab() {
           onApply={applyFilters}
           onReset={resetFilters}
           appliedCount={appliedCount}
+          hideSlugSource
         />
         <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
           <div className="relative min-w-0 flex-1 sm:flex-none">
@@ -236,10 +311,14 @@ export default function LandingLeadsTab() {
         </div>
       </div>
 
-      {/* Applied filters summary */}
       {appliedChips.length > 0 || dateRangeText ? (
         <div className="flex flex-wrap items-center gap-2 -mt-2">
-          <span className="text-xs font-medium text-gray-500 dark:text-dk-text2 uppercase tracking-wide">Đang lọc:</span>
+          <span className="text-xs font-medium text-gray-500 dark:text-dk-text2 uppercase tracking-wide">{t('landingLeads.filteringLabel')}</span>
+          {selectedGroup ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-orange-300 bg-orange-100 px-2.5 py-1 text-xs font-bold text-orange-800">
+              {selectedGroup.slug === UNKNOWN_SLUG ? t('landingLeads.unknownGroup') : `/${selectedGroup.slug}`}
+            </span>
+          ) : null}
           {appliedChips.map((chip) => (
             <span
               key={chip.id}
@@ -260,23 +339,25 @@ export default function LandingLeadsTab() {
             onClick={resetFilters}
             className="text-xs text-gray-500 dark:text-dk-text2 hover:text-red-600 dark:hover:text-red-400 underline-offset-2 hover:underline"
           >
-            Xoá tất cả
+            {t('landingLeads.clearAll')}
           </button>
         </div>
       ) : null}
 
-      {/* Error banner */}
       {errorMessage ? (
         <div className="rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-800 dark:text-red-300">
           {errorMessage}
         </div>
       ) : null}
 
-      {/* Table card */}
+      {/* Bảng chi tiết của thẻ đang chọn — cột động theo form */}
       <div className="rounded-2xl border border-slate-200/90 dark:border-dk-border bg-white dark:bg-dk-surface shadow-2xs overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 dark:border-dk-border flex items-center justify-between gap-3 bg-slate-50/50 dark:bg-dk-raised/30">
           <p className="text-xs sm:text-sm text-slate-600 dark:text-dk-text2">
-            <span className="font-bold text-slate-900 dark:text-dk-text">{total.toLocaleString('vi-VN')}</span> {t('landingLeads.records')}
+            <span className="font-bold text-slate-900 dark:text-dk-text">{total.toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN')}</span> {t('landingLeads.records')}
+            {selectedGroup ? (
+              <span className="ml-2">· {selectedGroup.slug === UNKNOWN_SLUG ? t('landingLeads.unknownGroup') : `/${selectedGroup.slug}`}</span>
+            ) : null}
             {debouncedSearch && visibleItems.length !== items.length ? (
               <span className="ml-2 text-xs text-slate-500 dark:text-dk-text2">
                 · {t('landingLeads.showingOf', { shown: visibleItems.length, total: items.length })}
@@ -301,33 +382,41 @@ export default function LandingLeadsTab() {
                 <th className="px-3 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">
                   {t('landingLeads.phone')}
                 </th>
-                <th className="px-3 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">
-                  {t('landingLeads.landingSlug')}
+                <th className="px-3 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap">
+                  {t('landingLeads.occupation')}
+                </th>
+                <th className="px-3 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap">
+                  {t('landingLeads.interestArea')}
                 </th>
                 <th className="px-3 py-3.5 text-center text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap">
                   {t('forms.submissionsPage.colConsent', { defaultValue: 'Đồng ý tiếp thị' })}
                 </th>
-                <th className="px-3 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider">
-                  {t('landingLeads.extraInfo')}
+                <th className="px-3 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap">
+                  {t('landingLeads.registrationTime')}
                 </th>
+                {dynamicColumns.map((col) => (
+                  <th key={col.key} className="px-3 py-3.5 text-left text-[11px] font-bold text-slate-500 dark:text-dk-text2 uppercase tracking-wider whitespace-nowrap max-w-[220px] truncate" title={`${cardFieldLabel(col, locale)} (${col.key})`}>
+                    {cardFieldLabel(col, locale)}
+                  </th>
+                ))}
                 <th className="w-px pl-1 pr-5 py-3.5">
                   <span className="sr-only">{t('landingLeads.viewDetail')}</span>
                 </th>
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-dk-surface divide-y divide-slate-100 dark:divide-dk-border">
-              {isLoading && items.length === 0 ? (
+              {(isLoading || groupsLoading) && items.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-sm text-slate-500 dark:text-dk-text2">
+                  <td colSpan={colSpan} className="px-6 py-12 text-center text-sm text-slate-500 dark:text-dk-text2">
                     <span className="inline-block w-4 h-4 mr-2 align-[-2px] border-2 border-slate-300 dark:border-dk-border-strong border-t-orange-500 rounded-full animate-spin" />
                     {t('landingLeads.loading')}
                   </td>
                 </tr>
               ) : null}
 
-              {!isLoading && visibleItems.length === 0 ? (
+              {!isLoading && !groupsLoading && visibleItems.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-16 text-center">
+                  <td colSpan={colSpan} className="px-6 py-16 text-center">
                     <HiOutlineSearch className="w-10 h-10 text-slate-300 dark:text-dk-muted mx-auto mb-2" />
                     {debouncedSearch ? (
                       <>
@@ -351,7 +440,7 @@ export default function LandingLeadsTab() {
                             onClick={resetFilters}
                             className="mt-3 text-xs font-semibold text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 hover:underline"
                           >
-                            Xoá bộ lọc để thấy tất cả
+                            {t('landingLeads.clearFiltersToSeeAll')}
                           </button>
                         ) : null}
                       </>
@@ -363,19 +452,12 @@ export default function LandingLeadsTab() {
               {visibleItems.map((row) => {
                 const fullName = getLeadFullName(row);
                 const initials = getLeadInitials(row);
-                const extraEntries = getLeadExtraEntries(row, customDefs, 'vi');
-                const extraSummary = formatLeadExtraEntries(extraEntries);
-                const extraInlineSummary = formatLeadExtraEntries(extraEntries.slice(0, EXTRA_INLINE_FIELD_LIMIT));
-                const extraHiddenCount = Math.max(0, extraEntries.length - EXTRA_INLINE_FIELD_LIMIT);
-                const publicUrl = row.landingPageSlug
-                  ? `${window.location.origin}/${row.landingPageSlug}`
-                  : null;
+                const cmap = rowCustomMap(row);
                 return (
                   <tr
                     key={row.id ?? row.leadId}
                     tabIndex={0}
                     onClick={(event) => {
-                      // Bấm vào link/nút trong dòng (trang nguồn, sao chép, xem) thì để chúng tự xử lý.
                       if (event.target.closest('a, button')) return;
                       setSelectedLead(row);
                     }}
@@ -395,11 +477,6 @@ export default function LandingLeadsTab() {
                         </span>
                         <div className="min-w-0">
                           <p className="text-slate-900 dark:text-dk-text font-semibold truncate">{fullName || '—'}</p>
-                          {row.registrationTime || row.createdAt ? (
-                            <p className="text-[11px] text-slate-400 dark:text-dk-muted truncate">
-                              {formatRelativeTime(row.registrationTime || row.createdAt)}
-                            </p>
-                          ) : null}
                         </div>
                       </div>
                     </td>
@@ -410,9 +487,9 @@ export default function LandingLeadsTab() {
                           <span className="truncate font-medium text-slate-800 dark:text-dk-text" title={row.email}>{row.email}</span>
                           <button
                             type="button"
-                            onClick={() => handleCopy(row.email, 'email')}
+                            onClick={() => handleCopy(row.email, t('landingLeads.email'))}
                             className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-slate-400 hover:text-orange-600 dark:hover:text-orange-400"
-                            title="Copy email"
+                            title={`${t('landingLeads.copy')} ${t('landingLeads.email')}`}
                           >
                             <HiOutlineClipboard className="w-3 h-3" />
                           </button>
@@ -428,9 +505,9 @@ export default function LandingLeadsTab() {
                           <span className="font-medium text-slate-800 dark:text-dk-text">{row.phone}</span>
                           <button
                             type="button"
-                            onClick={() => handleCopy(row.phone, 'SĐT')}
+                            onClick={() => handleCopy(row.phone, t('landingLeads.phone'))}
                             className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-slate-400 hover:text-orange-600 dark:hover:text-orange-400"
-                            title="Copy SĐT"
+                            title={`${t('landingLeads.copy')} ${t('landingLeads.phone')}`}
                           >
                             <HiOutlineClipboard className="w-3 h-3" />
                           </button>
@@ -439,42 +516,27 @@ export default function LandingLeadsTab() {
                         '—'
                       )}
                     </td>
-                    <td className="px-3 py-4 text-xs sm:text-sm text-slate-700 dark:text-dk-text whitespace-nowrap max-w-[180px]">
-                      {row.landingPageSlug ? (
-                        <a
-                          href={publicUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex max-w-full items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-dk-raised hover:bg-orange-50 dark:hover:bg-orange-950/30 hover:text-orange-700 dark:hover:text-orange-400 border border-slate-200/60 dark:border-dk-border transition-colors font-medium text-xs text-slate-700 dark:text-dk-text"
-                          title={publicUrl}
-                        >
-                          <span className="min-w-0 truncate">/{row.landingPageSlug}</span>
-                          <HiOutlineExternalLink className="w-3 h-3 shrink-0 opacity-60" />
-                        </a>
-                      ) : (
-                        <span className="text-slate-400 dark:text-dk-muted">—</span>
-                      )}
+                    <td className="px-3 py-4 text-xs sm:text-sm text-slate-700 dark:text-dk-text whitespace-nowrap max-w-[150px]">
+                      <span className="block truncate" title={row.occupation || ''}>{row.occupation || '—'}</span>
+                    </td>
+                    <td className="px-3 py-4 text-xs sm:text-sm text-slate-700 dark:text-dk-text whitespace-nowrap max-w-[150px]">
+                      <span className="block truncate" title={row.interestArea || ''}>{row.interestArea || '—'}</span>
                     </td>
                     <td className="px-3 py-4 text-xs sm:text-sm text-center whitespace-nowrap">
                       <LandingLeadConsentBadge row={row} />
                     </td>
-                    <td className="px-3 py-4 text-xs sm:text-sm text-slate-600 dark:text-dk-text max-w-[210px]">
-                      {extraEntries.length > 0 ? (
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <p className="truncate min-w-0" title={extraSummary}>{extraInlineSummary}</p>
-                          {extraHiddenCount > 0 ? (
-                            <span
-                              className="shrink-0 rounded-full bg-slate-100 dark:bg-dk-raised px-1.5 py-0.5 text-[10px] font-semibold text-slate-500 dark:text-dk-text2"
-                              title={t('landingLeads.moreFieldsTitle', { count: extraHiddenCount })}
-                            >
-                              +{extraHiddenCount}
-                            </span>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <span className="text-slate-400 dark:text-dk-muted italic text-xs">{t('landingLeads.extraEmpty')}</span>
-                      )}
+                    <td className="px-3 py-4 text-xs sm:text-sm text-slate-600 dark:text-dk-text whitespace-nowrap">
+                      {formatSubmittedAt(row.registrationTime || row.createdAt, locale)}
                     </td>
+                    {dynamicColumns.map((col) => {
+                      const v = cmap.get(col.key);
+                      const text = v == null || v === '' ? '—' : String(v);
+                      return (
+                        <td key={col.key} className="px-3 py-4 text-xs sm:text-sm text-slate-700 dark:text-dk-text max-w-[220px]">
+                          <span className="block truncate" title={text}>{text}</span>
+                        </td>
+                      );
+                    })}
                     <td className="w-px pl-1 pr-5 py-4 whitespace-nowrap text-right">
                       <button
                         type="button"
@@ -532,43 +594,62 @@ export default function LandingLeadsTab() {
 
 /* ───────── helpers ───────── */
 
-function formatRelativeTime(raw) {
+function cardFieldLabel(col, locale = 'vi') {
+  if (!col) return '';
+  if (locale === 'en') return col.labelEn || col.labelVi || col.key;
+  return col.labelVi || col.labelEn || col.key;
+}
+
+function formatSubmittedAt(raw, locale = 'vi') {
+  try {
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleString(locale === 'en' ? 'en-US' : 'vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hourCycle: 'h23' });
+  } catch {
+    return '—';
+  }
+}
+
+function formatRelativeTime(raw, locale = 'vi') {
+  const isEn = locale === 'en';
   try {
     const d = new Date(raw);
     if (Number.isNaN(d.getTime())) return '';
     const now = Date.now();
     const diff = Math.floor((now - d.getTime()) / 1000);
-    if (diff < 60) return 'vừa xong';
-    if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
-    if (diff < 86400 * 7) return `${Math.floor(diff / 86400)} ngày trước`;
-    return d.toLocaleDateString('vi-VN');
+    if (diff < 60) return isEn ? 'just now' : 'vừa xong';
+    if (diff < 3600) {
+      const n = Math.floor(diff / 60);
+      return isEn ? `${n}m ago` : `${n} phút trước`;
+    }
+    if (diff < 86400) {
+      const n = Math.floor(diff / 3600);
+      return isEn ? `${n}h ago` : `${n} giờ trước`;
+    }
+    if (diff < 86400 * 7) {
+      const n = Math.floor(diff / 86400);
+      return isEn ? `${n}d ago` : `${n} ngày trước`;
+    }
+    return d.toLocaleDateString(isEn ? 'en-US' : 'vi-VN');
   } catch {
     return '';
   }
 }
 
 /**
- * Tạo chip tóm tắt bộ lọc đang áp dụng (hiển thị pill trên header để dễ kiểm tra).
+ * Chip bộ lọc đang áp (BỎ slug — slug giờ là thẻ đang chọn, không còn trong drawer).
  */
-function buildAppliedChips(filters, customDefs, t) {
+function buildAppliedChips(filters, customDefs, t, locale = 'vi') {
+  const isEn = locale === 'en';
   const chips = [];
-  const slugs = Array.isArray(filters.landingLeadsSlugs) ? filters.landingLeadsSlugs : [];
-  if (slugs.length > 0) {
-    chips.push({
-      id: 'slugs',
-      label: t('landingLeads.slugSourceLabel'),
-      value: slugs.map((s) => `/${s}`).join(', '),
-    });
-  }
   const cfs = Array.isArray(filters.landingLeadsCustomFilters) ? filters.landingLeadsCustomFilters : [];
   for (const cf of cfs) {
     const def = customDefs.find((d) => d.key === cf.key);
-    const label = def?.labelVi || cf.key;
+    const label = isEn ? (def?.labelEn || def?.labelVi || cf.key) : (def?.labelVi || cf.key);
     let display = String(cf.value ?? '');
     if (def && (def.type === 'select' || def.type === 'radio') && Array.isArray(def.options)) {
       const opt = def.options.find((o) => o.value === cf.value);
-      if (opt) display = opt.labelVi || opt.value;
+      if (opt) display = (isEn ? (opt.labelEn || opt.labelVi) : opt.labelVi) || opt.value;
     } else if (cf.value === 'true') {
       display = t('landingLeads.yes');
     } else if (cf.value === 'false') {

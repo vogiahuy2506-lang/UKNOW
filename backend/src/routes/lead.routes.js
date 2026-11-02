@@ -18,6 +18,7 @@ router.use(requirePhone);
 router.use(requireActivePlan);
 
 router.get('/preview', requirePermission('leads'), leadController.preview.bind(leadController));
+router.get('/groups', requirePermission('leads'), leadController.listGroups.bind(leadController));
 router.get(
   '/custom-field-definitions',
   requirePermission('leads'),

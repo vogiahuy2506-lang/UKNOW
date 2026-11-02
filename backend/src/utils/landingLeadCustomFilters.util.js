@@ -134,9 +134,10 @@ export function normalizeLandingLeadsCustomFilters(raw, opts = {}) {
  * @param {{ key: string, operator: string, values: string[] }[]} filters
  * @returns {{ conditions: string[], params: unknown[], idx: number }}
  */
-export function appendCustomFieldFilterSql(ctx, filters) {
+export function appendCustomFieldFilterSql(ctx, filters, tableAlias = '') {
   const conditions = ctx.conditions;
   const params = ctx.params;
+  const p = tableAlias ? `${tableAlias}.` : '';
   let idx = ctx.idx;
   const list = Array.isArray(filters) ? filters : [];
 
@@ -144,7 +145,7 @@ export function appendCustomFieldFilterSql(ctx, filters) {
     const pathParam = idx;
     params.push(filter.key);
     idx += 1;
-    const pathExpr = `custom_fields -> $${pathParam} ->> 'value'`;
+    const pathExpr = `${p}custom_fields -> $${pathParam} ->> 'value'`;
 
     if (filter.operator === 'eq') {
       conditions.push(`${pathExpr} = $${idx}`);

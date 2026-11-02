@@ -231,6 +231,7 @@ export function LandingLeadsAdminFilters({
   onExportCsv,
   isExportingCsv = false,
   appliedCount = 0,
+  hideSlugSource = false,
 }) {
   const { t } = useI18n();
   const slugs = Array.isArray(draftFilters.landingLeadsSlugs) ? draftFilters.landingLeadsSlugs : [];
@@ -506,7 +507,8 @@ export function LandingLeadsAdminFilters({
                 ) : null}
               </section>
 
-              {/* Slug filter */}
+              {/* Slug filter — ẩn khi trang đã gom theo thẻ Landing (slug = thẻ đang chọn) */}
+              {!hideSlugSource ? (
               <section>
                 <MultiFilterBlock
                   title={t('landingLeads.slugSourceLabel')}
@@ -518,6 +520,7 @@ export function LandingLeadsAdminFilters({
                   searchable
                 />
               </section>
+              ) : null}
 
               {/* Custom fields */}
               {customDefs.length > 0 || customDefsLoading ? (

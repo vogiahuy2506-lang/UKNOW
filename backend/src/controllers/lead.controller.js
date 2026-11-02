@@ -121,6 +121,31 @@ class LeadController {
   }
 
   /**
+   * GET /api/leads/groups
+   * Nhóm lead theo landing cho giao diện thẻ: slug + tiêu đề + tổng + mới nhất + khóa custom.
+   * Dùng cùng bộ lọc ngày/nghề/lĩnh vực/custom như list (BỎ QUA landingLeadsSlugs để thẻ hiện đủ).
+   */
+  async listGroups(req, res) {
+    try {
+      const base = parseLandingLeadFilters(req.query || {});
+      const workspaceContext = getWorkspaceContext(req.user);
+      const { groups, customDefs } = await leadService.listAdminGroups({
+        ...base,
+        workspaceOwnerId: workspaceContext.workspaceOwnerId,
+        isSuperAdmin: workspaceContext.isSuperAdmin,
+      });
+      return res.json({ success: true, data: { groups, customDefs } });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[LeadController.listGroups]', error);
+      return res.status(status).json({
+        success: false,
+        message: error.message || 'Không thể tải nhóm theo landing',
+      });
+    }
+  }
+
+  /**
    * GET /api/leads
    * Danh sách lead form landing cho màn hình quản trị (có phân trang).
    *

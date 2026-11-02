@@ -52,6 +52,7 @@ function mockHook(items) {
     draftFilters: {},
     setDraftFilters: vi.fn(),
     appliedFilters: {},
+    effectiveFilters: {},
     applyFilters: vi.fn(),
     resetFilters: vi.fn(),
     exportExcel: vi.fn(),
@@ -63,6 +64,18 @@ function mockHook(items) {
     isLoading: false,
     errorMessage: null,
     reload: vi.fn(),
+    groups: [
+      { slug: 'khoa-hoc-1', title: 'Khoá học 1', total: items.length, latestAt: '2026-09-29T04:16:03Z', customKeys: [
+        { key: 'cf_company', labelVi: 'Công ty', labelEn: 'Company', type: 'text' },
+        { key: 'cf_note', labelVi: 'Ghi chú', labelEn: 'Note', type: 'textarea' },
+      ] },
+    ],
+    groupDefs: [],
+    groupsLoading: false,
+    groupsError: '',
+    selectedSlug: 'khoa-hoc-1',
+    selectSlug: vi.fn(),
+    reloadGroups: vi.fn(),
   });
 }
 
@@ -86,16 +99,18 @@ describe('LandingLeadsListPage — modal chi tiết khách (10/10/2026)', () => 
     mockHook([leadWithExtras, leadWithoutExtras]);
   });
 
-  it('ô "Thông tin thêm" chỉ hiện 2 trường đầu + hậu tố "+N" cho phần bị ẩn; dòng không có trường thêm thì "Không có"', () => {
+  it('bảng cột động: nghề / lĩnh vực / toàn bộ trường riêng của thẻ hiện thành cột riêng (không còn ô "Thông tin thêm")', () => {
     renderPage();
     const row = rowOf('Nguyen Van A');
-    expect(within(row).getByText('Nghề nghiệp: Kế toán · Lĩnh vực: AI cho Giáo dục')).toBeInTheDocument();
-    expect(within(row).getByText('+2')).toBeInTheDocument();
-    // chuỗi đầy đủ nằm ở title để rê chuột đọc
-    expect(within(row).getByTitle(/Ghi chú: Muốn học buổi tối/)).toBeInTheDocument();
-    // không có trường nào bị ẩn thì không có hậu tố
-    expect(within(rowOf('Tran Van B')).queryByText(/^\+\d+$/)).toBeNull();
-    expect(within(rowOf('Tran Van B')).getByText('Không có')).toBeInTheDocument();
+    // Cột cố định nghề + lĩnh vực
+    expect(within(row).getByText('Kế toán')).toBeInTheDocument();
+    expect(within(row).getByText('AI cho Giáo dục')).toBeInTheDocument();
+    // Cột động của thẻ: Công ty + Ghi chú hiện đủ giá trị (title giữ nguyên văn cho ô bị cắt)
+    expect(within(row).getByText('ACME')).toBeInTheDocument();
+    expect(within(row).getByTitle(LONG_NOTE)).toBeInTheDocument();
+    // Dòng không có trường thêm hiện "—" ở các cột động
+    const rowB = rowOf('Tran Van B');
+    expect(within(rowB).getAllByText('—').length).toBeGreaterThanOrEqual(2);
   });
 
   it('bấm vào dòng mở modal có đủ họ tên, email, SĐT, trang nguồn, đồng ý tiếp thị, thời điểm gửi và TOÀN BỘ trường thêm', () => {
@@ -178,11 +193,11 @@ describe('LandingLeadsListPage — modal chi tiết khách (10/10/2026)', () => 
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('bấm nút sao chép / link trang nguồn TRONG DÒNG không mở modal (chúng tự xử lý)', () => {
+  it('bấm nút sao chép TRONG DÒNG không mở modal (chúng tự xử lý)', () => {
     renderPage();
     const row = rowOf('Nguyen Van A');
-    fireEvent.click(within(row).getByTitle('Copy email'));
-    fireEvent.click(within(row).getByRole('link', { name: /khoa-hoc-1/ }));
+    fireEvent.click(within(row).getByTitle('Sao chép Email'));
+    fireEvent.click(within(row).getByTitle('Sao chép Điện thoại'));
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 

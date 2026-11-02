@@ -96,6 +96,23 @@ export async function fetchLandingLeadsAdminList(params = {}, options = {}) {
 }
 
 /**
+ * Nhóm lead theo landing cho giao diện thẻ (GET /api/leads/groups).
+ * Dùng cùng bộ lọc ngày/nghề/lĩnh vực/custom như list (BỎ QUA slug).
+ *
+ * @param {object} params Chỉ các trường lọc (không cần page)
+ * @returns {Promise<{ groups: object[], customDefs: object[] }>}
+ */
+export async function fetchLandingLeadsAdminGroups(params = {}, options = {}) {
+  const q = buildLandingLeadsFilterQuery(params, { includePaging: false });
+  delete q.landingLeadsSlugs;
+  const { data } = await api.get('/leads/groups', { params: q, ...options });
+  if (!data?.success) {
+    throw new Error(data?.message || 'Không tải được nhóm theo landing');
+  }
+  return data.data || { groups: [], customDefs: [] };
+}
+
+/**
  * Tải GET /api/leads/export — file Excel theo cùng bộ lọc (đã áp dụng trên UI).
  *
  * Luồng hoạt động:

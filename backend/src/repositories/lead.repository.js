@@ -4,7 +4,8 @@ import { expandLandingSlugsForSqlFilter } from '../utils/landingPageSlugCanonica
 import { appendCustomFieldFilterSql } from '../utils/landingLeadCustomFilters.util.js';
 
 /** Dùng chung với leadExport.repository.js (xuất CSV) để file xuất lọc ĐÚNG như danh sách. */
-export function buildLeadWhere(filters) {
+export function buildLeadWhere(filters, tableAlias = '') {
+  const p = tableAlias ? `${tableAlias}.` : '';
   const useDateRange = Boolean(filters.useDateRange);
   const dateFrom = String(filters.dateFrom || '').trim();
   const dateTo = String(filters.dateTo || '').trim();
@@ -19,34 +20,47 @@ export function buildLeadWhere(filters) {
   let idx = 1;
 
   if (useDateRange && dateFrom) {
-    conditions.push(`created_at >= $${idx}::timestamptz`);
+    conditions.push(`${p}created_at >= $${idx}::timestamptz`);
     params.push(`${dateFrom}T00:00:00.000+07:00`); // ngày VN, không UTC (C2-04)
     idx += 1;
   }
   if (useDateRange && dateTo) {
-    conditions.push(`created_at <= $${idx}::timestamptz`);
+    conditions.push(`${p}created_at <= $${idx}::timestamptz`);
     params.push(`${dateTo}T23:59:59.999+07:00`); // ngày VN, không UTC (C2-04)
     idx += 1;
   }
   if (occupations.length > 0) {
-    conditions.push(`occupation = ANY($${idx}::text[])`);
+    conditions.push(`${p}occupation = ANY($${idx}::text[])`);
     params.push(occupations);
     idx += 1;
   }
   if (interests.length > 0) {
-    conditions.push(`interest_area = ANY($${idx}::text[])`);
+    conditions.push(`${p}interest_area = ANY($${idx}::text[])`);
     params.push(interests);
     idx += 1;
   }
   if (landingSlugs.length > 0) {
-    const slugVariants = expandLandingSlugsForSqlFilter(landingSlugs);
-    conditions.push(`landing_page_slug = ANY($${idx}::text[])`);
-    params.push(slugVariants);
-    idx += 1;
+    const UNKNOWN_SENTINEL = '__unknown__';
+    const wantUnknown = landingSlugs.some((s) => s === UNKNOWN_SENTINEL || s === '');
+    const normalSlugs = landingSlugs.filter((s) => s && s !== UNKNOWN_SENTINEL);
+    const unknownCond = `(${p}landing_page_slug IS NULL OR TRIM(${p}landing_page_slug) = '')`;
+    if (wantUnknown && normalSlugs.length === 0) {
+      conditions.push(unknownCond);
+    } else if (wantUnknown) {
+      const slugVariants = expandLandingSlugsForSqlFilter(normalSlugs);
+      conditions.push(`(${unknownCond} OR ${p}landing_page_slug = ANY($${idx}::text[]))`);
+      params.push(slugVariants);
+      idx += 1;
+    } else {
+      const slugVariants = expandLandingSlugsForSqlFilter(normalSlugs);
+      conditions.push(`${p}landing_page_slug = ANY($${idx}::text[])`);
+      params.push(slugVariants);
+      idx += 1;
+    }
   }
 
   if (filters.workspaceOwnerId) {
-    conditions.push(`COALESCE(workspace_owner_id, id_user) = $${idx}`);
+    conditions.push(`COALESCE(${p}workspace_owner_id, ${p}id_user) = $${idx}`);
     params.push(filters.workspaceOwnerId);
     idx += 1;
   } else {
@@ -55,12 +69,13 @@ export function buildLeadWhere(filters) {
   }
 
   if (filters.excludeConsentFalse) {
-    conditions.push('marketing_consent IS NOT FALSE');
+    conditions.push(`${p}marketing_consent IS NOT FALSE`);
   }
 
   const next = appendCustomFieldFilterSql(
     { conditions, params, idx },
-    filters.customFilters || []
+    filters.customFilters || [],
+    tableAlias
   );
 
   const whereClause = next.conditions.length ? `WHERE ${next.conditions.join(' AND ')}` : '';
@@ -245,6 +260,67 @@ class LeadRepository {
       [id]
     );
     return result.rows[0] || null;
+  }
+
+  /**
+   * Nhóm lead theo landing_page_slug cho giao diện thẻ (màn "Khách để lại thông tin").
+   * Gom cả slug rỗng/null thành '__unknown__'. Không lọc theo slug (để thẻ hiện đủ).
+   *
+   * @param {object} filters cùng shape buildLeadWhere (bỏ landingSlugs)
+   * @returns {Promise<Array<{ slug: string, total: number, latestAt: string|null }>>}
+   */
+  async aggregateGroupsBySlug(filters = {}) {
+    const clone = { ...filters, landingSlugs: [] };
+    const { whereClause, params } = buildLeadWhere(clone);
+    // Nếu fail-closed (thiếu workspace) thì where đã có FALSE — trả rỗng tự nhiên.
+    const result = await db.query(
+      `SELECT
+         COALESCE(NULLIF(TRIM(landing_page_slug), ''), '__unknown__') AS slug,
+         COUNT(*)::bigint AS "total",
+         MAX(created_at) AS "latestAt"
+       FROM leads
+       ${whereClause}
+       GROUP BY COALESCE(NULLIF(TRIM(landing_page_slug), ''), '__unknown__')
+       ORDER BY COUNT(*) DESC`,
+      params
+    );
+    return result.rows.map((r) => ({
+      slug: String(r.slug || '__unknown__'),
+      total: Number(r.total || 0),
+      latestAt: r.latestAt || null,
+    }));
+  }
+
+  /**
+   * Liệt kê khóa custom (kèm nhãn mới nhất) theo từng slug — để dựng cột động cho thẻ đã chọn.
+   *
+   * @param {object} filters cùng shape buildLeadWhere (bỏ landingSlugs)
+   * @returns {Promise<Map<string, Array<{ key: string, labelVi: string|null }>>>}
+   */
+  async aggregateCustomKeysBySlug(filters = {}) {
+    const clone = { ...filters, landingSlugs: [] };
+    const { whereClause, params } = buildLeadWhere(clone, 'l');
+    const { rows } = await db.query(
+      `SELECT
+         COALESCE(NULLIF(TRIM(l.landing_page_slug), ''), '__unknown__') AS slug,
+         e.key AS "key",
+         (array_agg(e.value->>'labelVi' ORDER BY l.created_at DESC, l.id DESC))[1] AS "labelVi"
+       FROM leads l
+       CROSS JOIN LATERAL jsonb_each(
+         CASE WHEN jsonb_typeof(l.custom_fields) = 'object' THEN l.custom_fields ELSE '{}'::jsonb END
+       ) AS e
+       ${whereClause}
+       GROUP BY 1, 2
+       ORDER BY 1 ASC, 2 ASC`,
+      params
+    );
+    const m = new Map();
+    for (const r of rows) {
+      const slug = String(r.slug || '__unknown__');
+      if (!m.has(slug)) m.set(slug, []);
+      m.get(slug).push({ key: r.key, labelVi: r.labelVi || null });
+    }
+    return m;
   }
 
   /**

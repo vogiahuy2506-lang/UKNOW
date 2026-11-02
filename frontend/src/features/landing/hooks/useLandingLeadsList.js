@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   downloadLandingLeadsAdminExportXlsx,
+  fetchLandingLeadsAdminGroups,
   fetchLandingLeadsAdminList,
 } from '../services/landingLeadsAdminApi.service.js';
 
@@ -29,13 +30,23 @@ function cloneFilters(src = EMPTY_FILTERS) {
 }
 
 /**
- * Hook danh sách khách landing: lọc thật (ngày/slug/nghề/lĩnh vực/custom) + phân trang + export Excel.
+ * Hook danh sách khách landing theo THẺ TỪNG LANDING:
+ * - Nhóm (cards) tải theo bộ lọc chung (ngày/nghề/lĩnh vực/custom), BỎ QUA slug.
+ * - Danh sách chi tiết tải theo landing đang chọn (ép landingLeadsSlugs = [selectedSlug]).
+ * - Export Excel/CSV cũng ép theo landing đang chọn (phạm vi từng Landing).
  */
 export default function useLandingLeadsList() {
   const [draftFilters, setDraftFilters] = useState(() => cloneFilters());
   const [appliedFilters, setAppliedFilters] = useState(() => cloneFilters());
   const [page, setPage] = useState(1);
   const pageSize = 20;
+
+  const [selectedSlug, setSelectedSlug] = useState(null);
+
+  const [groups, setGroups] = useState([]);
+  const [groupDefs, setGroupDefs] = useState([]);
+  const [groupsLoading, setGroupsLoading] = useState(true);
+  const [groupsError, setGroupsError] = useState('');
 
   const [items, setItems] = useState([]);
   const [pagination, setPagination] = useState({
@@ -48,12 +59,51 @@ export default function useLandingLeadsList() {
   const [isExporting, setIsExporting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
+  // Bộ lọc ép theo thẻ đang chọn (ghi đè slug drawer cũ).
+  const effectiveFilters = useMemo(() => {
+    const base = cloneFilters(appliedFilters);
+    base.landingLeadsSlugs = selectedSlug ? [selectedSlug] : [];
+    return base;
+  }, [appliedFilters, selectedSlug]);
+
+  const loadGroups = useCallback(async () => {
+    setGroupsLoading(true);
+    setGroupsError('');
+    try {
+      const data = await fetchLandingLeadsAdminGroups(appliedFilters);
+      const list = Array.isArray(data.groups) ? data.groups : [];
+      setGroups(list);
+      setGroupDefs(Array.isArray(data.customDefs) ? data.customDefs : []);
+      // Tự chọn thẻ đầu tiên nếu chưa chọn hoặc thẻ đã chọn không còn tồn tại.
+      setSelectedSlug((prev) => {
+        if (prev && list.some((g) => g.slug === prev)) return prev;
+        return list.length > 0 ? list[0].slug : null;
+      });
+    } catch (e) {
+      setGroupsError(e?.response?.data?.message || e?.message || 'Không tải được nhóm');
+      setGroups([]);
+    } finally {
+      setGroupsLoading(false);
+    }
+  }, [appliedFilters]);
+
+  useEffect(() => {
+    loadGroups();
+  }, [loadGroups]);
+
   const load = useCallback(async () => {
+    // Chưa có nhóm nào thì không gọi list (tránh bảng "tất cả" sai phạm vi từng Landing).
+    if (selectedSlug == null) {
+      setItems([]);
+      setPagination({ total: 0, page: 1, pageSize, totalPages: 1 });
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     setErrorMessage('');
     try {
       const data = await fetchLandingLeadsAdminList({
-        ...appliedFilters,
+        ...effectiveFilters,
         page,
         pageSize,
       });
@@ -66,11 +116,16 @@ export default function useLandingLeadsList() {
     } finally {
       setIsLoading(false);
     }
-  }, [appliedFilters, page, pageSize]);
+  }, [effectiveFilters, page, pageSize, selectedSlug]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  const selectSlug = useCallback((slug) => {
+    setSelectedSlug(slug);
+    setPage(1);
+  }, []);
 
   const applyFilters = useCallback(() => {
     setAppliedFilters(cloneFilters(draftFilters));
@@ -85,22 +140,24 @@ export default function useLandingLeadsList() {
   }, []);
 
   const reload = useCallback(() => {
+    loadGroups();
     load();
-  }, [load]);
+  }, [load, loadGroups]);
 
   const exportExcel = useCallback(async () => {
     setIsExporting(true);
     try {
-      return await downloadLandingLeadsAdminExportXlsx(appliedFilters);
+      return await downloadLandingLeadsAdminExportXlsx(effectiveFilters);
     } finally {
       setIsExporting(false);
     }
-  }, [appliedFilters]);
+  }, [effectiveFilters]);
 
   return {
     draftFilters,
     setDraftFilters,
     appliedFilters,
+    effectiveFilters,
     applyFilters,
     resetFilters,
     exportExcel,
@@ -113,5 +170,12 @@ export default function useLandingLeadsList() {
     isLoading,
     errorMessage,
     reload,
+    groups,
+    groupDefs,
+    groupsLoading,
+    groupsError,
+    selectedSlug,
+    selectSlug,
+    reloadGroups: loadGroups,
   };
 }

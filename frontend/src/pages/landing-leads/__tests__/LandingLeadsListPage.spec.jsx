@@ -56,6 +56,7 @@ describe('LandingLeadsListPage (PR-1)', () => {
       draftFilters: {},
       setDraftFilters: vi.fn(),
       appliedFilters: {},
+      effectiveFilters: {},
       applyFilters: vi.fn(),
       resetFilters: vi.fn(),
       exportExcel: vi.fn(),
@@ -67,6 +68,13 @@ describe('LandingLeadsListPage (PR-1)', () => {
       isLoading: false,
       errorMessage: null,
       reload: vi.fn(),
+      groups: [{ slug: 'khoa-hoc-1', title: 'Khoá học 1', total: 4, latestAt: null, customKeys: [] }],
+      groupDefs: [],
+      groupsLoading: false,
+      groupsError: '',
+      selectedSlug: 'khoa-hoc-1',
+      selectSlug: vi.fn(),
+      reloadGroups: vi.fn(),
     });
 
     render(
@@ -80,10 +88,10 @@ describe('LandingLeadsListPage (PR-1)', () => {
     // Tiêu đề cột
     expect(screen.getByText('Đồng ý tiếp thị')).toBeInTheDocument();
 
-    // 4 trạng thái
+    // 4 trạng thái (bảng cột động có nhiều ô "—" ở nghề/lĩnh vực/custom → dùng getAllByText)
     expect(screen.getByText('Có')).toBeInTheDocument();
     expect(screen.getByText('Không')).toBeInTheDocument();
-    expect(screen.getByText('—')).toBeInTheDocument();
+    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/Đã rút/)).toBeInTheDocument();
   });
 });
