@@ -72,19 +72,21 @@ export const BLOCK_TYPES = {
         <div style="max-width: 560px; margin: 0 auto;">
           <h2 style="font-size: 2rem; font-weight: bold; text-align: center; margin-bottom: 12px; color: #1f2937;">{{form_title}}</h2>
           <p style="text-align: center; color: #6b7280; margin-bottom: 32px;">{{form_subtitle}}</p>
-          <form style="background: white; border-radius: 24px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.15); padding: 40px; display: flex; flex-direction: column; gap: 20px;">
+          <form data-founderai-capture style="background: white; border-radius: 24px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.15); padding: 40px; display: flex; flex-direction: column; gap: 20px;">
             <div>
-              <input type="text" placeholder="{{form_full_name_placeholder}}" style="width: 100%; padding: 16px 20px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 1rem; outline: none; transition: border-color 0.2s; box-sizing: border-box;" />
+              <input type="text" name="name" placeholder="{{form_full_name_placeholder}}" required style="width: 100%; padding: 16px 20px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 1rem; outline: none; transition: border-color 0.2s; box-sizing: border-box;" />
             </div>
             <div>
-              <input type="email" placeholder="{{form_email_placeholder}}" style="width: 100%; padding: 16px 20px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 1rem; outline: none; transition: border-color 0.2s; box-sizing: border-box;" />
+              <input type="email" name="email" placeholder="{{form_email_placeholder}}" required style="width: 100%; padding: 16px 20px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 1rem; outline: none; transition: border-color 0.2s; box-sizing: border-box;" />
             </div>
             <div>
-              <input type="tel" placeholder="{{form_phone_placeholder}}" style="width: 100%; padding: 16px 20px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 1rem; outline: none; transition: border-color 0.2s; box-sizing: border-box;" />
+              <input type="tel" name="phone" placeholder="{{form_phone_placeholder}}" style="width: 100%; padding: 16px 20px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 1rem; outline: none; transition: border-color 0.2s; box-sizing: border-box;" />
             </div>
             <button type="submit" style="width: 100%; background: {{accent_color}}; color: white; padding: 18px; border-radius: 12px; font-weight: 600; font-size: 1.125rem; border: none; cursor: pointer; transition: transform 0.2s;">{{submit_text}}</button>
             <p style="text-align: center; font-size: 0.875rem; color: #9ca3af;">{{privacy_text}}</p>
           </form>
+          <div class="founderai-capture-success" style="display:none">✓ Đăng ký thành công!</div>
+          <div class="founderai-capture-error" style="display:none;color:red"></div>
         </div>
       </section>
     `,

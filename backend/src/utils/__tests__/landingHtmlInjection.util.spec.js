@@ -6,6 +6,7 @@ import {
   normalizeLandingLpTrackApiBase,
   prepareLandingHtmlOnSave,
   injectLandingEnhancements,
+  normalizePastedCaptureForms,
   autoInjectLeadFormIfMissing,
   resolveFrontendOriginFromEnv,
   resolvePublicApiBaseFromEnv,
@@ -676,6 +677,37 @@ describe('landingHtmlInjection.util', () => {
       const out = replaceFormSlotWithEmbed(withSlot, embed);
       expect(countFormSlots(out)).toBe(0);
       expect(extractFormEmbedKeys(out).has('k1')).toBe(true);
+    });
+  });
+
+  describe('normalizePastedCaptureForms (code dán Gemini/ChatGPT thiếu name)', () => {
+    it('form happyjobs: bổ sung đủ name name/phone/email, giữ roleType + onsubmit', () => {
+      const html = '<form id="leadForm" onsubmit="handleFormSubmit(event)"><input type="radio" name="roleType" value="A"><input type="text" id="fullname" placeholder="Ho va ten"><input type="tel" id="phone"><input type="email" id="email"><button type="submit">Go</button></form>';
+      const out = normalizePastedCaptureForms(html);
+      expect(out).toContain('name="name"');
+      expect(out).toContain('name="phone"');
+      expect(out).toContain('name="email"');
+      expect(out).toContain('name="roleType"');
+      expect(out).toContain('onsubmit');
+    });
+
+    it('form lilynhantuong: cả 2 form đều được bổ sung name', () => {
+      const html = '<form id="modalBookingForm"><input type="text" id="modalBookName" placeholder="Nhap ho ten..."><input type="tel" id="modalBookPhone"><input type="email" id="modalBookEmail"></form><form id="leadForm"><input type="text" id="fullName"><input type="tel" id="phone"><input type="email" id="email"></form>';
+      const out = normalizePastedCaptureForms(html);
+      expect((out.match(/name="(name|phone|email)"/g) || []).length).toBe(6);
+    });
+
+    it('không đè name người dùng đặt sẵn', () => {
+      const html = '<form><input type="text" name="ten_khach" id="fullname"></form>';
+      expect(normalizePastedCaptureForms(html)).toContain('name="ten_khach"');
+    });
+
+    it('prepareLandingHtmlOnSave vẫn giữ handler Sheet/Zalo riêng + chèn capture script', () => {
+      const html = '<html><body><form id="leadForm" onsubmit="handleFormSubmit(event)"><input type="text" id="fullname"><input type="tel" id="phone"><input type="email" id="email"></form></body></html>';
+      const out = prepareLandingHtmlOnSave(html, { slug: 'happyjobs', frontendOrigin: 'https://founderai.biz', apiBase: 'https://founderai.biz/api' });
+      expect(out).toContain('name="email"');
+      expect(out).toContain('onsubmit');
+      expect(out).toContain('founderai-capture.js');
     });
   });
 });

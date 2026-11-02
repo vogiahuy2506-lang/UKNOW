@@ -110,6 +110,70 @@ export function restoreOriginalHttpAnchors(html) {
 }
 
 /**
+ * Chuẩn hoá form dán ngoài (Gemini/ChatGPT) lúc lưu:
+ * - Nhiều code dán chỉ có `id` + `type` mà quên `name` (vd `<input type="tel" id="phone">`).
+ *   Không có `name` thì `FormData` rỗng → `founderai-capture.js` không dựng được payload
+ *   name/email/phone. Hàm này chèn `name` còn thiếu suy từ `type`/`id`/`placeholder`
+ *   (chỉ chèn khi chưa có `name` — không đè name người dùng đặt sẵn).
+ *
+ * CỐ Ý KHÔNG tự gắn `data-founderai-capture`: form dán ngoài thường có thêm ô riêng
+ * cho Sheet/Zalo (vd `roleType`) mà hệ thống không lưu — gắn cờ tường minh sẽ khiến
+ * `auditLandingCaptureFields` (chỉ soi form tường minh) báo "ô chưa khai báo" gây hoang
+ * mang. Chỉ bổ sung `name` rồi để capture script ở auto mode tự bắt (đã sửa để bắt
+ * TẤT CẢ form có ô email/tel + tự map name trước khi pick).
+ * Giữ nguyên mọi handler riêng (Google Sheet/Zalo) của khách — đúng yêu cầu
+ * "vừa lưu lead hệ thống vừa giữ gửi Sheet".
+ *
+ * @param {string} html
+ * @returns {string}
+ */
+export function normalizePastedCaptureForms(html) {
+  let out = String(html ?? '');
+  if (!/<form[\s>]/i.test(out)) return out;
+
+  const inferNameForTag = (tagStr) => {
+    if (/\bname\s*=/i.test(tagStr)) return null;
+    const typeMatch = tagStr.match(/\btype\s*=\s*(["'])([^"']*)\1/i);
+    const type = (typeMatch ? typeMatch[2] : '').trim().toLowerCase();
+    if (type === 'email') return 'email';
+    if (type === 'tel') return 'phone';
+    const getAttrVal = (attr) => {
+      const m = tagStr.match(new RegExp(`\\b${attr}\\s*=\\s*(["'])([^"']*)\\1`, 'i'));
+      return m ? m[2] : '';
+    };
+    const norm = (s) => String(s || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/[^a-z0-9]/g, '');
+    const id = norm(getAttrVal('id'));
+    const placeholder = norm(getAttrVal('placeholder'));
+    const hay = `${id} ${placeholder}`;
+    const has = (...aliases) => aliases.some((a) => a.length <= 3
+      ? id === a || id.indexOf(a) === 0 || placeholder === a || placeholder.indexOf(a) === 0
+      : hay.indexOf(a) !== -1);
+    if (has('email', 'mail', 'gmail')) return 'email';
+    if (has('phone', 'tel', 'mobile', 'sdt', 'dienthoai', 'zalo', 'sodienthoai')) return 'phone';
+    if (has('fullname', 'hovaten', 'yourname', 'username', 'name', 'ho', 'ten')) return 'name';
+    return null;
+  };
+
+  // Bổ sung name còn thiếu cho input/select/textarea trong TỪNG form.
+  out = out.replace(/<form\b[^>]*>([\s\S]*?)<\/form\s*>/gi, (full) => full.replace(/<(input|select|textarea)\b[^>]*>/gi, (tag) => {
+    if (/\bname\s*=/i.test(tag)) return tag;
+    if (/^<input\b/i.test(tag) && /\btype\s*=\s*(["'])\s*(submit|button|reset|hidden|file|image)\s*\1/i.test(tag)) {
+      return tag;
+    }
+    const guessed = inferNameForTag(tag);
+    if (!guessed) return tag;
+    return tag.replace(/>$/, ` name="${guessed}">`);
+  }));
+
+  return out;
+}
+
+/**
  * Chuẩn hóa HTML trước khi lưu DB:
  *   1. Gỡ khối script cũ (idempotent giữa các lần save).
  *   2. Khôi phục các link gốc nếu HTML từng bị rewrite sang tracking domain trước đây.
@@ -126,6 +190,7 @@ export function prepareLandingHtmlOnSave(html, { slug, frontendOrigin, apiBase }
   if (!s) return String(html ?? '');
   let out = stripFounderLandingAutoBlocks(html);
   out = restoreOriginalHttpAnchors(out);
+  out = normalizePastedCaptureForms(out);
   out = injectLandingEnhancements(out, { slug: s, frontendOrigin, apiBase });
   return out;
 }

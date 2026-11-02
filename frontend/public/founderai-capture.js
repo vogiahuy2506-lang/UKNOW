@@ -75,6 +75,9 @@ var FOUNDERAI_AUTO_NAME_KEYS = {
 function normalizeAutoNameKey(raw) {
   return String(raw || '')
     .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
     .replace(/[^a-z0-9]/g, '');
 }
 
@@ -96,6 +99,11 @@ function aliasMatchesAutoName(norm, alias) {
 
 function inferAutoName(el, form) {
   if (!el || el.name) return null;
+  // Tín hiệu mạnh nhất: type chuẩn của HTML (code dán từ Gemini/ChatGPT thường
+  // chỉ có type + id/placeholder, quên mất name). Ưu tiên trước id/label.
+  var earlyType = String((el.type || '')).toLowerCase();
+  if (earlyType === 'email') return 'email';
+  if (earlyType === 'tel') return 'phone';
   var id = String(el.id || '').trim();
   var placeholder = String(el.placeholder || '').trim();
   var labelText = '';
@@ -289,27 +297,49 @@ var FOUNDERAI_AUTO_CAPTURE_NAME_KEYS = ['email', 'phone', 'tel', 'phoneNumber'];
 
 /**
  * Hàm thuần: trong danh sách form ứng viên (auto mode — trang không có thẻ
- * data-founderai-capture tường minh), chọn form ĐẦU TIÊN có ít nhất một input mang
- * name thuộc FOUNDERAI_AUTO_CAPTURE_NAME_KEYS. Form không có trường nào trong số này
+ * data-founderai-capture tường minh), chọn TẤT CẢ form có ít nhất một input mang
+ * name thuộc FOUNDERAI_AUTO_CAPTURE_NAME_KEYS (HOẶC type=email/tel — code dán từ
+ * Gemini/ChatGPT thường chỉ có type + id/placeholder mà quên name, lúc soi
+ * pick chưa kịp auto-map). Trả về MẢNG (có thể nhiều form: trang lilynhantuong có
+ * cả modalBookingForm + leadForm đều là form thu lead — chỉ bắt form đầu tiên sẽ
+ * bỏ sót form còn lại). Form không có trường nào trong số này
  * (form tìm kiếm, form khảo sát, form đăng ký workshop dùng tên khác…) không phải form
  * thu lead — auto mode trước đây bắt LUÔN form đầu tiên bất kể là gì, chiếm submit và
  * chặn khách với lỗi "Vui lòng nhập email hợp lệ" nếu form đó đứng trước form đăng ký thật.
  *
+ * Giữ hàm cũ `pickAutoCaptureForm` (trả về phần tử đầu tiên) để tương thích test cũ —
+ * logic mới `pickAllAutoCaptureForms` dùng chung bộ lọc.
+ *
  * @param {HTMLFormElement[]|NodeList} forms
- * @returns {HTMLFormElement|null}
+ * @returns {HTMLFormElement[]}
  */
-function pickAutoCaptureForm(forms) {
+function pickAllAutoCaptureForms(forms) {
   var list = Array.prototype.slice.call(forms || []);
   var selector = FOUNDERAI_AUTO_CAPTURE_NAME_KEYS.map(function (key) {
     return '[name="' + key + '"]';
   }).join(', ');
+  var matched = [];
   for (var i = 0; i < list.length; i++) {
     var form = list[i];
     if (form && typeof form.querySelector === 'function' && form.querySelector(selector)) {
-      return form;
+      matched.push(form);
     }
   }
-  return null;
+  if (matched.length > 0) return matched;
+  // Fallback cho code dán ngoài (chưa có name): mọi form có ô type=email/tel là
+  // form thu lead — khớp với earlyType của inferAutoName.
+  for (var k = 0; k < list.length; k++) {
+    var fb = list[k];
+    if (fb && typeof fb.querySelector === 'function' && fb.querySelector('input[type="email"], input[type="tel"]')) {
+      matched.push(fb);
+    }
+  }
+  return matched;
+}
+
+function pickAutoCaptureForm(forms) {
+  var all = pickAllAutoCaptureForms(forms);
+  return all.length > 0 ? all[0] : null;
 }
 
 // Hook test-only: cho phép Vitest/jsdom import file này và gọi thẳng hàm thuần, không
@@ -321,6 +351,7 @@ if (typeof window !== 'undefined') {
     readFounderaiMarketingConsent: readFounderaiMarketingConsent,
     autoMapFormInputsByIdOrLabel: autoMapFormInputsByIdOrLabel,
     pickAutoCaptureForm: pickAutoCaptureForm,
+    pickAllAutoCaptureForms: pickAllAutoCaptureForms,
     inferAutoName: inferAutoName,
   };
 }
@@ -369,8 +400,16 @@ if (typeof window !== 'undefined') {
     var explicit = document.querySelectorAll('form[data-founderai-capture]');
     if (explicit.length > 0) return Array.prototype.slice.call(explicit);
     if (autoMode) {
-      var picked = pickAutoCaptureForm(document.querySelectorAll('form'));
-      return picked ? [picked] : [];
+      // Code dán từ Gemini/ChatGPT thường thiếu name (chỉ có id/placeholder/type)
+      // → auto-map TRƯỚC khi pick, nếu không pick (soi theo name)
+      // sẽ bỏ qua form thu lead thật và bind() không gắn handler nào.
+      // Trang lilynhantuong có 2 form thu lead (modalBookingForm + leadForm) nên phải
+      // bắt TẤT CẢ form khớp, không chỉ form đầu tiên.
+      try {
+        var all = document.querySelectorAll('form');
+        for (var ai = 0; ai < all.length; ai++) autoMapFormInputsByIdOrLabel(all[ai]);
+      } catch (e) { /* ignore */ }
+      return pickAllAutoCaptureForms(document.querySelectorAll('form'));
     }
     return [];
   }
