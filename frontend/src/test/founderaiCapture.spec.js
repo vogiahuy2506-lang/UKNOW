@@ -144,9 +144,9 @@ describe('founderai-capture.js — pickAutoCaptureForm (auto mode chỉ bắt fo
     expect(picked).toBe(registrationForm);
   });
 
-  it('không form nào có email/phone/tel/phoneNumber → trả về null (findForms() rỗng → bind() không gắn submit handler → submit native của trang không bị preventDefault)', () => {
+  it('không form nào có email/phone/tel/phoneNumber VÀ ít ô điền (tìm kiếm 1 ô) → trả về null (findForms() rỗng → bind() không gắn submit handler → submit native của trang không bị preventDefault)', () => {
     const searchForm = makeForm('<input type="text" name="q" />');
-    const surveyForm = makeForm('<input type="text" name="rating" /><input type="text" name="comment" />');
+    const surveyForm = makeForm('<input type="text" name="rating" />');
 
     const picked = pickAutoCaptureForm([searchForm, surveyForm]);
     expect(picked).toBeNull();

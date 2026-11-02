@@ -96,15 +96,24 @@ describe('lazyWithRetry', () => {
 
   it('sessionStorage bi chan (nem loi) thi khong reload de tranh lap vo han', async () => {
     const reload = vi.fn();
-    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
-      throw new Error('blocked');
-    });
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-      throw new Error('blocked');
-    });
-    const Comp = lazyWithRetry(() => Promise.reject(new Error(CHUNK_MSG)), { reload });
-    renderLazy(Comp);
-    expect(await screen.findByText(`boundary:${CHUNK_MSG}`)).toBeTruthy();
-    expect(reload).not.toHaveBeenCalled();
+    // jsdom mới: sessionStorage không còn dùng chung Storage.prototype, spyOn instance
+    // cũng không ăn — thay hẳn object sessionStorage bằng stub ném lỗi rồi khôi phục.
+    const stub = {
+      getItem() { throw new Error('blocked'); },
+      setItem() { throw new Error('blocked'); },
+      removeItem() { throw new Error('blocked'); },
+      clear() { throw new Error('blocked'); },
+      key() { return null; },
+      length: 0,
+    };
+    Object.defineProperty(window, 'sessionStorage', { configurable: true, enumerable: true, writable: true, value: stub });
+    try {
+      const Comp = lazyWithRetry(() => Promise.reject(new Error(CHUNK_MSG)), { reload });
+      renderLazy(Comp);
+      expect(await screen.findByText(`boundary:${CHUNK_MSG}`)).toBeTruthy();
+      expect(reload).not.toHaveBeenCalled();
+    } finally {
+      delete window.sessionStorage;
+    }
   });
 });

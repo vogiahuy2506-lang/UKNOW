@@ -73,13 +73,24 @@ describe('widget.js — tự động mở chat', () => {
   });
 
   it('không có sessionStorage (landing sandbox ném SecurityError) → không tự mở', async () => {
-    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(function getItem() {
-      if (this === window.sessionStorage) throw new DOMException('denied', 'SecurityError');
-      return null;
-    });
-    await mountWidget();
-    vi.advanceTimersByTime(5000);
-    expect(isOpenNow()).toBe(false);
+    // jsdom mới: spyOn instance không ăn — thay hẳn object sessionStorage bằng stub ném lỗi.
+    const orig = window.sessionStorage;
+    const stub = {
+      getItem() { throw new DOMException('denied', 'SecurityError'); },
+      setItem() { throw new DOMException('denied', 'SecurityError'); },
+      removeItem() { throw new DOMException('denied', 'SecurityError'); },
+      clear() { throw new DOMException('denied', 'SecurityError'); },
+      key() { return null; },
+      length: 0,
+    };
+    Object.defineProperty(window, 'sessionStorage', { configurable: true, enumerable: true, writable: true, value: stub });
+    try {
+      await mountWidget();
+      vi.advanceTimersByTime(5000);
+      expect(isOpenNow()).toBe(false);
+    } finally {
+      Object.defineProperty(window, 'sessionStorage', { configurable: true, enumerable: true, writable: true, value: orig });
+    }
   });
 
   it('màn hẹp < 640px → không tự mở', async () => {

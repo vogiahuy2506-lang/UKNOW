@@ -147,10 +147,10 @@ describe('landingCanvasDraft — ghi / đọc', () => {
 
   it('hết dung lượng: ghi lại bản không HTML lịch sử', () => {
     const key = buildDraftKey({ userId: 1, ownerId: 1 }, null);
-    const real = Storage.prototype.setItem;
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (k, v) {
-      if (v.includes('prev-a')) throw new DOMException('full', 'QuotaExceededError');
-      return real.call(this, k, v);
+    const real = window.localStorage.setItem.bind(window.localStorage);
+    vi.spyOn(window.localStorage, 'setItem').mockImplementation(function (k, v) {
+      if (String(v).includes('prev-a')) throw new DOMException('full', 'QuotaExceededError');
+      return real(k, v);
     });
     const r = writeDraft(key, { form: null, messages: [applied('a')] });
     expect(r.ok).toBe(true);
@@ -161,14 +161,14 @@ describe('landingCanvasDraft — ghi / đọc', () => {
 
   it('vẫn hết dung lượng sau khi bỏ HTML lịch sử → ok:false, không ném', () => {
     const key = buildDraftKey({ userId: 1, ownerId: 1 }, null);
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => {
       throw new DOMException('full', 'QuotaExceededError');
     });
     expect(writeDraft(key, { form: { title: 'x' }, messages: [] })).toEqual({ ok: false });
   });
 
   it('storage ném khi đọc → null, không ném', () => {
-    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+    vi.spyOn(window.localStorage, 'getItem').mockImplementation(() => {
       throw new Error('denied');
     });
     expect(readDraft('k')).toBeNull();

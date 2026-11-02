@@ -100,7 +100,7 @@ describe('useLandingCanvasDraft', () => {
   });
 
   it('ghi thất bại → writeFailed=true', () => {
-    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    const spy = vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => {
       throw new Error('full');
     });
     const { result } = setup({ form: form('<p>5</p>'), messages: msgs, dirty: true });
