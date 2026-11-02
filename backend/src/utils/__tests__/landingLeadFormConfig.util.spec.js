@@ -191,12 +191,11 @@ describe('landingLeadFormConfig.util', () => {
   });
 
   /**
-   * Review 08/09 tối, PLAN_FORM_LANDING_AI_GIU_FORM_2026-09-06.md PR-2b: whitelist cf_* hiện
-   * KHÔNG ai khai báo được nữa (LandingCanvasEditor.jsx dùng schema tối giản, customFields
-   * luôn bị ghi [] ở mọi lần lưu) — 400 cho khoá lạ trước đây làm MẤT CẢ LEAD (tên/email/phone)
-   * chỉ vì 1 khoá cf_* đi kèm không thuộc form. Đổi sang bỏ qua khoá lạ + log, không throw.
+   * Quyết định 11/2026 ("bao nhiêu trường thì thành bấy nhiêu cột", vd trang senna):
+   * khoá lạ ngoài schema KHÔNG còn bị bỏ qua — giữ lại dạng catchall text để không
+   * mất dữ liệu khách điền, không throw để không mất cả lead.
    */
-  it('customField lạ không thuộc form → bỏ qua (không throw, không vào snapshot), field hợp lệ khác vẫn xử lý bình thường', () => {
+  it('customField lạ không thuộc form → giữ lại dạng catchall (không throw), field hợp lệ khác vẫn xử lý bình thường', () => {
     const config = {
       version: 1,
       fixedFields: { occupation: { visible: false }, interestArea: { visible: false } },
@@ -209,27 +208,25 @@ describe('landingLeadFormConfig.util', () => {
         options: [{ value: 'small', labelVi: '1-10', labelEn: '1-10' }],
       }],
     };
-    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
     const snap = buildTrustedCustomFieldsSnapshot(config, {
       cf_unknown_zzzz: 'x',
       cf_company_size_ab12: 'small',
-    });
+    },
+    { labels: { cf_unknown_zzzz: 'Trường lạ' } });
 
-    expect(snap).not.toHaveProperty('cf_unknown_zzzz');
+    expect(snap.cf_unknown_zzzz).toMatchObject({ value: 'x', labelVi: 'Trường lạ' });
     expect(snap.cf_company_size_ab12).toMatchObject({ value: 'small' });
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('cf_unknown_zzzz'));
-
-    warnSpy.mockRestore();
   });
 
-  it('customField lạ mà form KHÔNG khai báo field nào → không throw, snapshot rỗng', () => {
+  it('customField lạ mà form KHÔNG khai báo field nào → giữ lại catchall, không throw', () => {
     const config = {
       version: 1,
       fixedFields: { occupation: { visible: false }, interestArea: { visible: false } },
       customFields: [],
     };
-    expect(buildTrustedCustomFieldsSnapshot(config, { cf_random_abcd: 'nice' })).toEqual({});
+    const snap = buildTrustedCustomFieldsSnapshot(config, { cf_random_abcd: 'nice' });
+    expect(snap.cf_random_abcd).toMatchObject({ value: 'nice', labelVi: 'Random abcd' });
   });
 
   it('AI draft basic/extended/custom', () => {
