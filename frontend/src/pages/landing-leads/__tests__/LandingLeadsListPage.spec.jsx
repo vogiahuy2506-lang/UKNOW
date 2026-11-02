@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi } from 'vitest';
 import { I18nProvider } from '../../../i18n';
@@ -84,6 +84,10 @@ describe('LandingLeadsListPage (PR-1)', () => {
         </I18nProvider>
       </MemoryRouter>
     );
+
+    // Quy định 11/2026: bấm vào thẻ landing mới mở modal chứa bảng.
+    // Tiêu đề cột nằm trong modal, không còn ở ngoài trang.
+    fireEvent.click(screen.getByRole('option', { name: /Khoá học 1/ }));
 
     // Tiêu đề cột
     expect(screen.getByText('Đồng ý tiếp thị')).toBeInTheDocument();

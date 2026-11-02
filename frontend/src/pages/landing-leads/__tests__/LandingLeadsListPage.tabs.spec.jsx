@@ -74,6 +74,7 @@ beforeEach(() => {
     draftFilters: {},
     setDraftFilters: vi.fn(),
     appliedFilters: {},
+    effectiveFilters: {},
     applyFilters: vi.fn(),
     resetFilters: vi.fn(),
     exportExcel: vi.fn(),
@@ -85,6 +86,13 @@ beforeEach(() => {
     isLoading: false,
     errorMessage: null,
     reload: vi.fn(),
+    groups: [{ slug: 'khoa-hoc-1', title: 'Khoa hoc 1', total: 1, latestAt: null, customKeys: [] }],
+    groupDefs: [],
+    groupsLoading: false,
+    groupsError: '',
+    selectedSlug: 'khoa-hoc-1',
+    selectSlug: vi.fn(),
+    reloadGroups: vi.fn(),
   });
   fetchForms.mockResolvedValue([{ id: 7, title: 'Biểu mẫu tư vấn', fields: [] }]);
   fetchWorkspaceSubmissions.mockResolvedValue({ items: [formSubmission], total: 1, page: 1, limit: 20 });
@@ -101,9 +109,9 @@ describe('LandingLeadsListPage — màn "Khách để lại thông tin" gộp 2 
     expect(landingTab).toHaveAttribute('aria-selected', 'true');
     expect(formsTab).toHaveAttribute('aria-selected', 'false');
 
-    // Nội dung tab landing = trang cũ: bảng lead với cột "Đồng ý tiếp thị".
-    expect(screen.getByText('Khach Tu Landing')).toBeInTheDocument();
-    expect(screen.getByText('Đồng ý tiếp thị')).toBeInTheDocument();
+    // Nội dung tab landing mới (11/2026): thẻ từng landing, bấm thẻ mới mở modal chứa bảng.
+    expect(screen.getByRole('option', { name: /Khoa hoc 1/ })).toBeInTheDocument();
+    expect(screen.queryByText('Khach Tu Landing')).not.toBeInTheDocument();
     // Tab biểu mẫu chưa mở → không gọi API bài nộp.
     expect(fetchWorkspaceSubmissions).not.toHaveBeenCalled();
   });
@@ -126,7 +134,7 @@ describe('LandingLeadsListPage — màn "Khách để lại thông tin" gộp 2 
     expect(screen.getByTestId('location')).toHaveTextContent('/app/landing-leads?tab=forms');
 
     fireEvent.click(screen.getByRole('tab', { name: 'Từ landing page' }));
-    expect(await screen.findByText('Khach Tu Landing')).toBeInTheDocument();
+    expect(await screen.findByRole('option', { name: /Khoa hoc 1/ })).toBeInTheDocument();
     expect(screen.getByTestId('location')).toHaveTextContent(/^\/app\/landing-leads$/);
   });
 
@@ -134,7 +142,7 @@ describe('LandingLeadsListPage — màn "Khách để lại thông tin" gộp 2 
     renderPage('/app/landing-leads?tab=abc');
 
     expect(screen.getByRole('tab', { name: 'Từ landing page' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText('Khach Tu Landing')).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Khoa hoc 1/ })).toBeInTheDocument();
   });
 
   describe('ẩn tab theo quyền nhân viên', () => {
@@ -143,7 +151,7 @@ describe('LandingLeadsListPage — màn "Khách để lại thông tin" gộp 2 
       renderPage('/app/landing-leads?tab=forms');
 
       expect(screen.queryByRole('tab', { name: 'Từ biểu mẫu' })).not.toBeInTheDocument();
-      expect(screen.getByText('Khach Tu Landing')).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: /Khoa hoc 1/ })).toBeInTheDocument();
       // Đợi một nhịp để chắc không có lời gọi trễ.
       await waitFor(() => expect(fetchWorkspaceSubmissions).not.toHaveBeenCalled());
       expect(fetchForms).not.toHaveBeenCalled();

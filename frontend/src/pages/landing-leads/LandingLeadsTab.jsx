@@ -98,15 +98,15 @@ export default function LandingLeadsTab() {
     setPage(1);
   }, [selectedSlug, groupModalSlug, setPage]);
 
-  // Đóng modal nhóm bằng Escape.
+  // Đóng modal nhóm bằng Escape (nhường cho modal chi tiết khách nếu đang mở).
   useEffect(() => {
     if (!groupModalSlug) return undefined;
     const onKey = (e) => {
-      if (e.key === 'Escape') setGroupModalSlug(null);
+      if (e.key === 'Escape' && !selectedLead) setGroupModalSlug(null);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [groupModalSlug]);
+  }, [groupModalSlug, selectedLead]);
 
   const appliedCount = useMemo(() => {
     let n = 0;
