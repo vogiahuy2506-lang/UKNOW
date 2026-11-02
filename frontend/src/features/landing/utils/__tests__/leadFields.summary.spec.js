@@ -7,11 +7,13 @@ import {
 } from '../leadFields.js';
 
 /**
- * Nghiệm thu 09/09 (test-slug): lead có Nghề nghiệp "Freelancer" lưu đúng nhưng cột "Thông tin
- * thêm" ghi "Không có" — cột chỉ gom cf_*, không cột nào hiển thị occupation/interestArea.
+ * Quy định 11/2026: BỎ 2 trường cố định Nghề nghiệp / Lĩnh vực quan tâm khỏi
+ * bảng + thẻ. renderLeadExtraInfo chỉ gom các trường cf_* / catchall trong
+ * customFields — occupation / interestArea (kể cả interest_area snake_case)
+ * đều bị bỏ qua.
  */
-describe('renderLeadExtraInfo — Nghề nghiệp + Lĩnh vực đứng trước trường thêm', () => {
-  it('có occupation + interestArea + cf_* → ba phần, thứ tự cố định', () => {
+describe('renderLeadExtraInfo — chỉ gom trường thêm, bỏ Nghề nghiệp / Lĩnh vực', () => {
+  it('có occupation + interestArea + cf_* → chỉ in cf_*, bỏ 2 trường cố định', () => {
     const row = {
       occupation: 'Freelancer',
       interestArea: 'AI cho Giáo dục',
@@ -19,20 +21,18 @@ describe('renderLeadExtraInfo — Nghề nghiệp + Lĩnh vực đứng trước
         cf_sugg_01_text: { type: 'text', labelVi: 'Công ty', labelEn: 'Company', value: 'ACME', displayVi: 'ACME', displayEn: 'ACME' },
       },
     };
-    expect(renderLeadExtraInfo(row, [], 'vi')).toBe('Nghề nghiệp: Freelancer · Lĩnh vực: AI cho Giáo dục · Công ty: ACME');
-    // Nhãn cf_* theo locale là việc của renderCustomFieldsSummary (hiện giữ labelVi) — chỉ chốt
-    // hai tiền tố mới đổi theo locale, không ghim nhãn trường thêm.
-    expect(renderLeadExtraInfo(row, [], 'en')).toMatch(/^Occupation: Freelancer · Interest: AI cho Giáo dục · /);
+    expect(renderLeadExtraInfo(row, [], 'vi')).toBe('Công ty: ACME');
+    expect(renderLeadExtraInfo(row, [], 'en')).toBe('Company: ACME');
   });
 
-  it('chỉ có occupation, không cf_* → một phần; rỗng hết → chuỗi rỗng (trang hiện "Không có")', () => {
-    expect(renderLeadExtraInfo({ occupation: 'Freelancer', customFields: {} }, [], 'vi')).toBe('Nghề nghiệp: Freelancer');
+  it('chỉ có occupation, không cf_* → chuỗi rỗng (trang hiện "Không có")', () => {
+    expect(renderLeadExtraInfo({ occupation: 'Freelancer', customFields: {} }, [], 'vi')).toBe('');
     expect(renderLeadExtraInfo({ occupation: '', interestArea: '  ', customFields: {} }, [], 'vi')).toBe('');
     expect(renderLeadExtraInfo(null, [], 'vi')).toBe('');
   });
 
-  it('nhận cả khoá snake_case interest_area từ dòng chưa map', () => {
-    expect(renderLeadExtraInfo({ interest_area: 'Tất cả các chủ đề AI' }, [], 'vi')).toBe('Lĩnh vực: Tất cả các chủ đề AI');
+  it('khoá snake_case interest_area cũng bị bỏ qua', () => {
+    expect(renderLeadExtraInfo({ interest_area: 'Tất cả các chủ đề AI' }, [], 'vi')).toBe('');
   });
 });
 
@@ -69,7 +69,8 @@ describe('renderCustomFieldsSummary — snapshot backend', () => {
 
 /**
  * Modal chi tiết khách (10/10/2026) hiện từng trường; ô bảng hiện chuỗi tóm tắt. Hai nơi dùng
- * CHUNG getLeadExtraEntries nên không được lệch nhau.
+ * CHUNG getLeadExtraEntries nên không được lệch nhau. Quy định 11/2026: bỏ Nghề nghiệp /
+ * Lĩnh vực — chỉ còn cf_* / catchall.
  */
 describe('getLeadExtraEntries — nguồn chung cho ô bảng và modal chi tiết', () => {
   const row = {
@@ -83,10 +84,8 @@ describe('getLeadExtraEntries — nguồn chung cho ô bảng và modal chi ti�
   };
   const defs = [{ key: 'cf_size', type: 'select', labelVi: 'Cỡ', options: [{ value: 'opt_1', labelVi: 'Nhỏ' }] }];
 
-  it('trả từng trường theo thứ tự cố định: Nghề nghiệp, Lĩnh vực, rồi cf_*; bỏ trường rỗng', () => {
+  it('trả từng trường cf_*; bỏ trường rỗng và bỏ Nghề nghiệp / Lĩnh vực', () => {
     expect(getLeadExtraEntries(row, defs, 'vi')).toEqual([
-      { key: 'occupation', label: 'Nghề nghiệp', value: 'Kế toán' },
-      { key: 'interestArea', label: 'Lĩnh vực', value: 'AI cho Giáo dục' },
       { key: 'cf_company', label: 'Công ty', value: 'ACME' },
       { key: 'cf_size', label: 'Cỡ', value: 'Nhỏ' },
     ]);
@@ -94,7 +93,7 @@ describe('getLeadExtraEntries — nguồn chung cho ô bảng và modal chi ti�
 
   it('chuỗi tóm tắt của ô bảng đúng bằng ghép các trường — không thể lệch với modal', () => {
     expect(renderLeadExtraInfo(row, defs, 'vi')).toBe(formatLeadExtraEntries(getLeadExtraEntries(row, defs, 'vi')));
-    expect(renderLeadExtraInfo(row, defs, 'vi')).toBe('Nghề nghiệp: Kế toán · Lĩnh vực: AI cho Giáo dục · Công ty: ACME · Cỡ: Nhỏ');
+    expect(renderLeadExtraInfo(row, defs, 'vi')).toBe('Công ty: ACME · Cỡ: Nhỏ');
   });
 
   it('dòng rỗng / null → danh sách rỗng', () => {

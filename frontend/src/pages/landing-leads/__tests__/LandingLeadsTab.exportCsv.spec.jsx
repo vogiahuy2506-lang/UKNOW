@@ -76,14 +76,22 @@ beforeEach(() => {
 });
 
 describe('LandingLeadsTab — nút "Xuất CSV" (PR-8c)', () => {
+  function openGroupModal() {
+    // Quy định 11/2026: bấm vào thẻ landing mới mở modal chi tiết;
+    // nút Xuất Excel / Xuất CSV nằm trong modal, không còn ở ngoài.
+    fireEvent.click(screen.getByRole('option', { name: /Khoá học 1/ }));
+  }
+
   it('có cả "Xuất Excel" (sẵn có) lẫn "Xuất CSV"', () => {
     renderTab();
+    openGroupModal();
     expect(screen.getByRole('button', { name: 'Xuất Excel' })).toBeInTheDocument();
     expect(screen.getByTestId('landing-leads-export-csv')).toHaveTextContent('Xuất CSV');
   });
 
   it('bấm → xuất THEO THẺ ĐANG CHỌN (effectiveFilters), lang theo giao diện, rồi tải file', async () => {
     renderTab();
+    openGroupModal();
 
     fireEvent.click(screen.getByTestId('landing-leads-export-csv'));
 
@@ -100,6 +108,7 @@ describe('LandingLeadsTab — nút "Xuất CSV" (PR-8c)', () => {
     const exportExcel = vi.fn().mockResolvedValue({ truncated: false });
     mockList({ exportExcel });
     renderTab();
+    openGroupModal();
 
     fireEvent.click(screen.getByRole('button', { name: 'Xuất Excel' }));
 

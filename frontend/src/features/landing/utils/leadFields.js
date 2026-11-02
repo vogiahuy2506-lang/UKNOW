@@ -44,8 +44,12 @@ export function getLeadInitials(row) {
 export function normalizeCustomFieldEntry(key, entry, locale = 'vi') {
   const isEn = locale === 'en';
   if (entry && typeof entry === 'object') {
-    const label = entry.labelVi || entry.labelEn || key;
-    const display = entry.displayVi || entry.displayEn;
+    const label = isEn
+      ? (entry.labelEn || entry.labelVi || key)
+      : (entry.labelVi || entry.labelEn || key);
+    const display = isEn
+      ? (entry.displayEn || entry.displayVi)
+      : (entry.displayVi || entry.displayEn);
     const raw = entry.value !== undefined ? entry.value : display;
     let displayStr = '';
     if (typeof raw === 'boolean') {
@@ -157,7 +161,9 @@ export function getCustomFieldEntries(customFields, definitions = [], locale = '
       return { key, label, value: display };
     }
     // Dạng (B) — giá trị thuần, tra nhãn/option từ definitions.
-    const label = def?.labelVi || def?.labelEn || key;
+    const label = locale === 'en'
+      ? (def?.labelEn || def?.labelVi || key)
+      : (def?.labelVi || def?.labelEn || key);
     const entry = { value: raw };
     if (def && (def.type === 'select' || def.type === 'radio') && Array.isArray(def.options)) {
       const opt = def.options.find((o) => o.value === raw);
