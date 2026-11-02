@@ -11,6 +11,18 @@ export const CUSTOM_FIELD_KEY_RE = /^cf_[a-z0-9_]{4,40}$/;
 export const CUSTOM_FIELD_TYPES = Object.freeze(['text', 'textarea', 'select', 'radio', 'checkbox']);
 export const FORBIDDEN_FIELD_KEYS = Object.freeze(new Set(['__proto__', 'prototype', 'constructor']));
 
+/**
+ * Bắt toàn bộ trường ngoài của form landing dán tay (vd trang senna:
+ * `power-class`, `hero-faction`, `gear`, `hero-alias`, `power-slider`, `hero-quote` —
+ * không phải `cf_*`, không hề khai báo trong form config). Trước đây
+ * `buildTrustedCustomFieldsSnapshot` lặng lẽ BỎ QUA mọi khoá lạ (chỉ `console.warn`),
+ * khiến dữ liệu khách điền mất hẳn. Giờ giữ lại dưới dạng trường text tự do
+ * (nhãn suy từ `customFieldLabels` capture script gửi lên, rơi về viết lại từ key).
+ */
+export const CATCHALL_FIELD_KEY_RE = /^[A-Za-z0-9_\-]{1,80}$/;
+export const MAX_CATCHALL_FIELDS = 50;
+export const CATCHALL_TEXT_MAX = 2000;
+
 // Xuất 4 hằng số này (16/09, PLAN_TU_KHAI_BAO_TRUONG_FORM_LANDING) để
 // landingCaptureFieldAutoDeclare.util.js tự kẹp nhãn/mã lựa chọn trong đúng biên
 // validateCustomFieldInput đòi hỏi — tránh đoán số ma, tránh gọi mergeLeadFormIntoCustomConfig
@@ -465,11 +477,18 @@ function utf8Bytes(value) {
 /**
  * Validate custom submit values theo schema đã publish; dựng snapshot server-owned.
  *
+ * Giữ tương thích: khoá `cf_*` đã khai báo → validate chặt theo schema.
+ * Khoá LẠ ngoài schema (form dán tay kiểu senna: `power-class`, `hero-faction`,
+ * `gear`, `hero-alias`...) → GIỮ LẠI dạng text tự do (catchall) thay vì bỏ qua,
+ * để "bao nhiêu trường thì thành bấy nhiêu cột". Nhãn lấy từ `opts.labels`
+ * (capture script gửi lên) rồi rơi về viết lại từ key.
+ *
  * @param {object} leadFormConfig normalized config
  * @param {unknown} clientCustomFields
+ * @param {{ labels?: Record<string,string> }} [opts]
  * @returns {object} snapshot object
  */
-export function buildTrustedCustomFieldsSnapshot(leadFormConfig, clientCustomFields) {
+export function buildTrustedCustomFieldsSnapshot(leadFormConfig, clientCustomFields, opts = {}) {
   const config = normalizePersistedLeadForm(leadFormConfig);
   const schemaFields = config.customFields || [];
   const schemaByKey = new Map(schemaFields.map((f) => [f.key, f]));
@@ -485,19 +504,13 @@ export function buildTrustedCustomFieldsSnapshot(leadFormConfig, clientCustomFie
   }
 
   const clientKeys = Object.keys(clientCustomFields);
+  const labels = (opts && typeof opts.labels === 'object' && opts.labels !== null) ? opts.labels : {};
   for (const key of clientKeys) {
     assertSafeKey(key);
     if (!schemaByKey.has(key)) {
-      // ĐÍNH CHÍNH 16/09 — chú thích cũ ở đây viết "cf_* hiện KHÔNG ai khai báo được nữa" là
-      // LẠC HẬU: panel khai báo có thật (`LeadFormConfigPanel.jsx`, Cài đặt trang → Form đăng
-      // ký), khoá sinh tự động `cf_<slug>_<rand>` (`landingLeadFormConfig.js:93`). Khoá lạ ở đây
-      // là ô AI/admin thêm vào HTML nhưng CHƯA khai báo (hoặc gõ sai tên) — vẫn đúng phải bỏ
-      // qua, không 400 (400 từng làm MẤT CẢ LEAD tên/email/phone chỉ vì 1 khoá lạ đi kèm, Review
-      // 08/09 tối, PLAN_FORM_LANDING_AI_GIU_FORM_2026-09-06.md PR-2b) — nhưng giờ có
-      // `landingCaptureFieldAudit.util.js` soi + cảnh báo lúc LƯU landing (không phải lúc nhận
-      // bài nộp này) để chủ trang biết trước có ô sẽ rơi dữ liệu, thay vì chỉ log ở đây không ai
-      // thấy.
-      console.warn(`[landingLeadFormConfig] Bỏ qua customField lạ không thuộc form (key="${key}")`);
+      // Khoá lạ ngoài schema (form dán tay kiểu senna: `power-class`, `hero-faction`,
+      // `gear`, `hero-alias`...) → GIỮ LẠI dạng catchall thay vì bỏ qua (quyết định 11/2026:
+      // "bao nhiêu trường thì thành bấy nhiêu cột"). Không 400 để không mất cả lead.
       continue;
     }
   }
@@ -517,7 +530,66 @@ export function buildTrustedCustomFieldsSnapshot(leadFormConfig, clientCustomFie
       displayEn,
     };
   }
+
+  // Catchall: mọi khoá ngoài schema mà client gửi lên (form dán tay không khai báo).
+  const seenCatchall = new Set();
+  for (const key of clientKeys) {
+    if (schemaByKey.has(key)) continue;
+    if (FORBIDDEN_FIELD_KEYS.has(key)) continue;
+    if (!CATCHALL_FIELD_KEY_RE.test(key)) continue;
+    if (seenCatchall.has(key)) continue;
+    if (Object.keys(snapshot).length >= MAX_CUSTOM_FIELDS + MAX_CATCHALL_FIELDS) break;
+    seenCatchall.add(key);
+    const raw = clientCustomFields[key];
+    const text = catchallToText(raw);
+    if (!text) continue;
+    const label = String(labels[key] || '').trim().slice(0, LABEL_VI_MAX) || humanizeFieldKey(key);
+    snapshot[key] = {
+      type: 'text',
+      labelVi: label,
+      labelEn: null,
+      value: text,
+      displayVi: text,
+      displayEn: text,
+    };
+  }
   return snapshot;
+}
+
+/**
+ * Chuẩn hoá giá trị catchall về chuỗi hiển thị (mảng radio/checkbox-group → nối ", ").
+ *
+ * @param {unknown} raw
+ * @returns {string}
+ */
+function catchallToText(raw) {
+  if (raw == null) return '';
+  if (typeof raw === 'boolean') return raw ? 'Có' : 'Không';
+  if (typeof raw === 'number') return Number.isFinite(raw) ? String(raw) : '';
+  if (Array.isArray(raw)) {
+    const parts = raw.map((v) => (v == null ? '' : String(v).trim())).filter(Boolean);
+    return parts.join(', ').slice(0, CATCHALL_TEXT_MAX);
+  }
+  if (typeof raw === 'object') return '';
+  return String(raw).trim().slice(0, CATCHALL_TEXT_MAX);
+}
+
+/**
+ * Viết lại key kỹ thuật thành nhãn đọc được (rơi về khi capture script không gửi label).
+ * vd `power-class` → `Power class`, `hero_alias` → `Hero alias`.
+ *
+ * @param {string} key
+ * @returns {string}
+ */
+function humanizeFieldKey(key) {
+  const spaced = String(key || '')
+    .replace(/^cf_/i, '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .trim();
+  if (!spaced) return String(key || 'Trường thêm');
+  const out = spaced.charAt(0).toUpperCase() + spaced.slice(1);
+  return out.slice(0, LABEL_VI_MAX);
 }
 
 function normalizeCustomSubmitValue(field, raw) {
@@ -589,7 +661,8 @@ export function customFieldsSnapshotToPrimitives(snapshot) {
   if (!isPlainObject(snapshot)) return {};
   const out = {};
   for (const key of Object.keys(snapshot)) {
-    if (!CUSTOM_FIELD_KEY_RE.test(key) || FORBIDDEN_FIELD_KEYS.has(key)) continue;
+    if (FORBIDDEN_FIELD_KEYS.has(key)) continue;
+    if (!CUSTOM_FIELD_KEY_RE.test(key) && !CATCHALL_FIELD_KEY_RE.test(key)) continue;
     const entry = snapshot[key];
     if (isPlainObject(entry) && Object.prototype.hasOwnProperty.call(entry, 'value')) {
       const value = entry.value;
@@ -611,7 +684,8 @@ export function sanitizeCustomFieldsSnapshotForAdmin(snapshot) {
   if (!isPlainObject(snapshot)) return {};
   const out = {};
   for (const key of Object.keys(snapshot)) {
-    if (!CUSTOM_FIELD_KEY_RE.test(key) || FORBIDDEN_FIELD_KEYS.has(key)) continue;
+    if (FORBIDDEN_FIELD_KEYS.has(key)) continue;
+    if (!CUSTOM_FIELD_KEY_RE.test(key) && !CATCHALL_FIELD_KEY_RE.test(key)) continue;
     const entry = snapshot[key];
     if (!isPlainObject(entry)) continue;
     out[key] = {

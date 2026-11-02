@@ -159,6 +159,15 @@ function autoMapFormInputsByIdOrLabel(form) {
 // document.currentScript). IIFE bên dưới chỉ gọi buildFounderaiCapturePayload(form, config).
 // ----------------------------------------------------------------
 var FOUNDERAI_CUSTOM_FIELD_KEY_RE = /^cf_[a-z0-9_]{4,40}$/;
+// Khoá giữ lại dạng catchall (form dán tay kiểu senna: power-class, hero-faction...).
+var FOUNDERAI_CATCHALL_KEY_RE = /^[A-Za-z0-9_\-]{1,80}$/;
+var FOUNDERAI_RESERVED_KEYS = {
+  name: 1, fullName: 1, full_name: 1, lastName: 1, firstName: 1, last_name: 1, first_name: 1,
+  email: 1, phone: 1, tel: 1, phoneNumber: 1, occupation: 1, interestArea: 1, interest_area: 1,
+  marketingConsent: 1, marketing_consent: 1, landingPageSlug: 1, landing_page_slug: 1,
+  visitorId: 1, referrer: 1, utmSource: 1, utmMedium: 1, utmCampaign: 1, utmContent: 1, utmTerm: 1,
+  customFields: 1, customFieldLabels: 1, g_recaptcha_response: 1, _csrf: 1
+};
 
 /**
  * Đọc trạng thái đồng ý marketing (Nghị định 330/2026) từ field name="marketingConsent".
@@ -183,14 +192,16 @@ function readFounderaiMarketingConsent(form) {
  *   - phone (optional)
  *   - landingPageSlug (từ config.slug)
  *   - marketingConsent: xem readFounderaiMarketingConsent
- *   - customFields: gom từ mọi input có name khớp /^cf_[a-z0-9_]{4,40}$/
+ *   - customFields: gom TOÀN BỘ trường ngoài của form dán tay (senna: hero-alias,
+ *     hero-realname, power-class, hero-faction, gear, power-slider, hero-quote...),
+ *     không chỉ cf_*. Khoá cf_* khớp schema thì validate chặt ở BE; khoá lạ giữ lại
+ *     dạng catchall text để "bao nhiêu trường thì thành bấy nhiêu cột".
  *     • input/select/textarea  → giá trị string đã trim
  *     • checkbox               → true (nếu checked) / false (nếu không — FormData bỏ qua khi uncheck)
  *     • radio (single checked) → value
  *     • select-multiple         → mảng string (BE nhận primitive qua `values`)
- *     Field không thuộc schema landing page bị backend BỎ QUA (không lưu, không lỗi cho
- *     phần còn lại của lead) — khai báo schema cf_* cho từng landing page trong Cài đặt
- *     trang → section "Form đăng ký" (leadFormConfig.customFields).
+ *   - customFieldLabels: nhãn đọc được của từng khoá catchall (label[for]/label bọc/
+ *     placeholder/aria-label), BE dùng làm labelVi cho cột động.
  *
  * @param {HTMLFormElement} form
  * @param {{ slug?: string }} config
@@ -212,9 +223,66 @@ function buildFounderaiCapturePayload(form, config) {
   var interestArea = '';
   var hasInterestAreaField = false;
   var customFields = {};
+  var customFieldLabels = {};
+
+  function pushCustomValue(key, val) {
+    if (Object.prototype.hasOwnProperty.call(customFields, key)) {
+      // Đã có key này → gom thành mảng (select-multiple / checkbox-group).
+      if (Array.isArray(customFields[key])) {
+        customFields[key].push(val);
+      } else {
+        customFields[key] = [customFields[key], val];
+      }
+    } else {
+      customFields[key] = val;
+    }
+  }
+
+  function resolveFieldLabel(el, fallbackKey) {
+    try {
+      var id = el && el.id ? String(el.id).trim() : '';
+      if (id && form && typeof form.querySelector === 'function') {
+        var lbl = null;
+        try { lbl = form.querySelector('label[for="' + id.replace(/"/g, '\\"') + '"]'); } catch (e) { lbl = null; }
+        if (lbl && lbl.textContent && String(lbl.textContent).trim()) return String(lbl.textContent).trim().slice(0, 100);
+      }
+      if (el && typeof el.closest === 'function') {
+        var wrap = el.closest('label');
+        if (wrap && wrap.textContent && String(wrap.textContent).trim()) {
+          // Bỏ phần giá trị của chính input để khỏi lẫn vào nhãn.
+          var t = String(wrap.textContent).trim().replace(/\s+/g, ' ');
+          return t.slice(0, 100);
+        }
+      }
+      // label bọc ngoài kiểu div > label + input: tìm label cùng fieldset/div cha gần nhất.
+      if (el && el.parentElement && typeof el.parentElement.querySelector === 'function') {
+        var sib = el.parentElement.querySelector('label');
+        if (sib && sib.textContent && String(sib.textContent).trim()) return String(sib.textContent).trim().slice(0, 100);
+      }
+      var ph = el ? String(el.getAttribute ? (el.getAttribute('placeholder') || '') : (el.placeholder || '')) : '';
+      if (ph.trim()) return ph.trim().slice(0, 100);
+      var aria = el ? String(el.getAttribute ? (el.getAttribute('aria-label') || '') : '') : '';
+      if (aria.trim()) return aria.trim().slice(0, 100);
+    } catch (e) { /* ignore */ }
+    return String(fallbackKey || '');
+  }
+
+  function rememberLabel(key, el) {
+    if (!key || Object.prototype.hasOwnProperty.call(customFieldLabels, key)) return;
+    var label = resolveFieldLabel(el, key);
+    if (label) customFieldLabels[key] = label;
+  }
+
+  function findFieldEl(key) {
+    try {
+      if (!form || typeof form.querySelector !== 'function') return null;
+      return form.querySelector('[name="' + String(key).replace(/"/g, '\\"') + '"]');
+    } catch (e) { return null; }
+  }
 
   // Duyệt FormData: phân biệt checkbox uncheck (FormData không chứa key) — cần quét DOM.
   // Lưu ý: nếu cùng key xuất hiện nhiều lần (vd: select-multiple, checkbox-group), ta gom mảng.
+  // Bao nhiêu trường thì gom bấy nhiêu: ngoài cf_* còn giữ catchall (power-class, hero-faction...).
   fd.forEach(function (value, key) {
     var v = value == null ? '' : String(value);
     var k = String(key);
@@ -246,38 +314,72 @@ function buildFounderaiCapturePayload(form, config) {
     }
 
     if (FOUNDERAI_CUSTOM_FIELD_KEY_RE.test(k)) {
-      if (Object.prototype.hasOwnProperty.call(customFields, k)) {
-        // Đã có key này → gom thành mảng (select-multiple / checkbox-group).
-        if (Array.isArray(customFields[k])) {
-          customFields[k].push(trimmed);
-        } else {
-          customFields[k] = [customFields[k], trimmed];
-        }
-      } else {
-        customFields[k] = trimmed;
-      }
+      pushCustomValue(k, trimmed);
+      rememberLabel(k, findFieldEl(k));
+    } else if (
+      !Object.prototype.hasOwnProperty.call(FOUNDERAI_RESERVED_KEYS, k) &&
+      FOUNDERAI_CATCHALL_KEY_RE.test(k)
+    ) {
+      // Trường ngoài schema (form dán tay kiểu senna): giữ lại để BE lưu catchall.
+      pushCustomValue(k, trimmed);
+      rememberLabel(k, findFieldEl(k));
     }
   });
+
+  // Range/slider (power-slider...) đôi khi bị browser bỏ qua trong FormData khi chưa tương
+  // tác — quét DOM để không mất cột.
+  try {
+    var rangeNodes = form.querySelectorAll('input[type="range"][name]');
+    for (var ri = 0; ri < rangeNodes.length; ri++) {
+      var rg = rangeNodes[ri];
+      var rgKey = String(rg.name || '');
+      if (!rgKey) continue;
+      if (Object.prototype.hasOwnProperty.call(customFields, rgKey)) continue;
+      if (Object.prototype.hasOwnProperty.call(FOUNDERAI_RESERVED_KEYS, rgKey)) continue;
+      if (!FOUNDERAI_CUSTOM_FIELD_KEY_RE.test(rgKey) && !FOUNDERAI_CATCHALL_KEY_RE.test(rgKey)) continue;
+      pushCustomValue(rgKey, String(rg.value == null ? '' : rg.value).trim());
+      rememberLabel(rgKey, rg);
+    }
+  } catch (e) { /* ignore */ }
 
   // Bổ sung checkbox chưa check (FormData không có key khi uncheck).
   var cbNodes = form.querySelectorAll('input[type="checkbox"][name]');
   for (var i = 0; i < cbNodes.length; i++) {
     var cb = cbNodes[i];
     var cbKey = String(cb.name || '');
-    if (!FOUNDERAI_CUSTOM_FIELD_KEY_RE.test(cbKey)) continue;
+    if (!FOUNDERAI_CUSTOM_FIELD_KEY_RE.test(cbKey) && !FOUNDERAI_CATCHALL_KEY_RE.test(cbKey)) continue;
+    if (Object.prototype.hasOwnProperty.call(FOUNDERAI_RESERVED_KEYS, cbKey)) continue;
     // Checkbox đã có trong customFields → user checked, giữ true.
     if (Object.prototype.hasOwnProperty.call(customFields, cbKey)) {
       if (customFields[cbKey] === '' || customFields[cbKey] === 'on') {
         customFields[cbKey] = true;
       }
+      rememberLabel(cbKey, cb);
       continue;
     }
     // Checkbox không có trong FormData → uncheck, set false (kể cả schema checkbox không required).
     customFields[cbKey] = false;
+    rememberLabel(cbKey, cb);
+  }
+
+  // Form dán tay kiểu senna có thể không đặt name chuẩn (hero-realname thay vì name):
+  // suy ra họ tên từ trường ngoài quen thuộc để lead không bị BE từ chối thiếu tên.
+  if (!name) {
+    var nameFallbackKeys = ['hero-realname', 'hero_realname', 'hero-alias', 'hero_alias', 'fullname', 'full_name', 'nickname', 'nick_name', 'realname', 'real_name', 'alias', 'hoten', 'ho_ten'];
+    for (var ni = 0; ni < nameFallbackKeys.length; ni++) {
+      var nk = nameFallbackKeys[ni];
+      if (Object.prototype.hasOwnProperty.call(customFields, nk)) {
+        var nv = customFields[nk];
+        if (Array.isArray(nv)) nv = nv.length > 0 ? nv[0] : '';
+        nv = String(nv == null ? '' : nv).trim();
+        if (nv) { name = nv; break; }
+      }
+    }
   }
 
   // Nếu không có custom field nào → không gửi key rỗng (BE coi như {}).
   var hasCustom = Object.keys(customFields).length > 0;
+  var hasLabels = Object.keys(customFieldLabels).length > 0;
 
   return {
     name: name,
@@ -286,6 +388,7 @@ function buildFounderaiCapturePayload(form, config) {
     landingPageSlug: slugValue,
     marketingConsent: readFounderaiMarketingConsent(form),
     customFields: hasCustom ? customFields : undefined,
+    customFieldLabels: hasLabels ? customFieldLabels : undefined,
     occupation: hasOccupationField ? occupation : undefined,
     interestArea: hasInterestAreaField ? interestArea : undefined,
   };
@@ -333,6 +436,22 @@ function pickAllAutoCaptureForms(forms) {
     if (fb && typeof fb.querySelector === 'function' && fb.querySelector('input[type="email"], input[type="tel"]')) {
       matched.push(fb);
     }
+  }
+  if (matched.length > 0) return matched;
+  // Fallback cho form dán tay kiểu senna: không có ô email/phone chuẩn nhưng có nhiều
+  // ô điền thông tin (hero-alias, hero-realname, power-class...). Form tìm kiếm/newsletter
+  // thường chỉ có 1 ô nên yêu cầu >= 2 ô điền được để tránh bắt nhầm.
+  for (var m = 0; m < list.length; m++) {
+    var cand = list[m];
+    if (!cand || typeof cand.querySelectorAll !== 'function') continue;
+    var fields = cand.querySelectorAll('input:not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="hidden"]), select, textarea');
+    var count = 0;
+    for (var f = 0; f < fields.length; f++) {
+      var t = String(fields[f].type || '').toLowerCase();
+      if (t === 'submit' || t === 'button' || t === 'reset') continue;
+      count++;
+    }
+    if (count >= 2) matched.push(cand);
   }
   return matched;
 }
@@ -511,7 +630,14 @@ if (typeof window !== 'undefined') {
     var payload = buildFounderaiCapturePayload(form, { slug: slug });
     log('payload', payload);
 
-    if (!payload.email) {
+    // Form dán tay kiểu senna có thể KHÔNG có ô email chuẩn: chỉ bắt buộc email khi
+    // form thực sự có trường email (name="email" hoặc type="email"). Không chặn cả
+    // lead chỉ vì thiếu email — BE vẫn lưu khi có tên/trường ngoài.
+    var hasEmailField = false;
+    try {
+      hasEmailField = !!form.querySelector('[name="email"], input[type="email"]');
+    } catch (e) { hasEmailField = !!payload.email; }
+    if (hasEmailField && !payload.email) {
       showError(form, 'Vui lòng nhập email hợp lệ.');
       if (submitBtn) submitBtn.disabled = false;
       return;

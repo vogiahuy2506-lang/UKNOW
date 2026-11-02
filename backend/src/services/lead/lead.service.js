@@ -221,7 +221,9 @@ class LeadService {
     const lastName = String(body?.lastName ?? body?.last_name ?? '').trim();
     const firstName = String(body?.firstName ?? body?.first_name ?? '').trim();
     const email = String(body?.email ?? '').trim().toLowerCase();
-    const phone = normalizePhone(body?.phone);
+    // Cột phone VARCHAR(50): form dán tay có thể đặt nhầm name="phone" cho textarea dài
+    // (vd trang senna) → cắt để không vỡ INSERT, bản đầy đủ vẫn nằm trong catchall.
+    const phone = normalizePhone(body?.phone).slice(0, 50);
 
     // Ưu tiên: name (full name chung) > lastName + firstName split
     const effectiveName = rawName || `${lastName} ${firstName}`.trim();
@@ -230,16 +232,15 @@ class LeadService {
       err.statusCode = 400;
       throw err;
     }
-    if (!email || !EMAIL_RE.test(email)) {
+    // Form dán tay kiểu senna có thể không có ô email (hoặc ô phone bị đặt nhầm name):
+    // chỉ validate định dạng khi khách CÓ nhập, không ném 400 làm mất cả lead.
+    if (email && !EMAIL_RE.test(email)) {
       const err = new Error('Email không hợp lệ');
       err.statusCode = 400;
       throw err;
     }
-    if (phone && phone.replace(/\D/g, '').length < 7) {
-      const err = new Error('Số điện thoại không hợp lệ');
-      err.statusCode = 400;
-      throw err;
-    }
+    // SĐT lạ (vd textarea khẩu hiệu bị đặt nhầm name="phone") → giữ lại để không mất
+    // lead, không ném 400. Chỉ chuẩn hoá khoảng trắng, không cắt dữ liệu.
 
     // Nghị định 330/2026: parse marketingConsent phòng thủ theo 3 trạng thái (true / false / null = chưa hỏi)
     // Không ép khách phải đồng ý để được gửi form (không ném 400 khi false)
@@ -273,7 +274,9 @@ class LeadService {
     const interestArea = isInterestAreaVisible(leadForm)
       ? normalizeInterestAreaValue(body?.interestArea ?? body?.interest_area)
       : '';
-    const customFieldsSnapshot = buildTrustedCustomFieldsSnapshot(leadForm, body?.customFields);
+    const customFieldsSnapshot = buildTrustedCustomFieldsSnapshot(leadForm, body?.customFields, {
+      labels: body?.customFieldLabels,
+    });
 
     const utmSource = body?.utmSource != null ? String(body.utmSource).trim().slice(0, 255) || null : null;
     const utmMedium = body?.utmMedium != null ? String(body.utmMedium).trim().slice(0, 255) || null : null;
