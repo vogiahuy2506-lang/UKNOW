@@ -3,9 +3,12 @@ import {
   applyLeadFormDraftToConfig,
   buildLeadFormDraftFromBrief,
   buildTrustedCustomFieldsSnapshot,
+  customFieldsSnapshotToPrimitives,
   defaultLeadFormConfig,
   mergeLeadFormIntoCustomConfig,
   normalizePersistedLeadForm,
+  repairMojibake,
+  sanitizeCustomFieldsSnapshotForAdmin,
   toPublicLeadFormConfig,
   validateAdminLeadFormConfig,
 } from '../landingLeadFormConfig.util.js';
@@ -227,6 +230,46 @@ describe('landingLeadFormConfig.util', () => {
     };
     const snap = buildTrustedCustomFieldsSnapshot(config, { cf_random_abcd: 'nice' });
     expect(snap.cf_random_abcd).toMatchObject({ value: 'nice', labelVi: 'Random abcd' });
+  });
+
+  it('repairMojibake phục hồi chính xác chuỗi tiếng Việt bị lỗi mã hóa Latin-1', () => {
+    expect(repairMojibake(null)).toBeNull();
+    expect(repairMojibake('')).toBe('');
+    expect(repairMojibake('Tiếng Việt chuẩn')).toBe('Tiếng Việt chuẩn');
+
+    const sample1 = Buffer.from('Áo Choàng Bay, Kiếm Plasma', 'utf8').toString('latin1');
+    const sample2 = Buffer.from('Anh Hùng Chính Nghĩa (Justice Hero)', 'utf8').toString('latin1');
+    const sample3 = Buffer.from('Siêu Thể Lực (Physical)', 'utf8').toString('latin1');
+
+    expect(repairMojibake(sample1)).toBe('Áo Choàng Bay, Kiếm Plasma');
+    expect(repairMojibake(sample2)).toBe('Anh Hùng Chính Nghĩa (Justice Hero)');
+    expect(repairMojibake(sample3)).toBe('Siêu Thể Lực (Physical)');
+  });
+
+  it('buildTrustedCustomFieldsSnapshot và sanitizeCustomFieldsSnapshotForAdmin tự động phục hồi mojibake', () => {
+    const config = {
+      version: 1,
+      fixedFields: { occupation: { visible: false }, interestArea: { visible: false } },
+      customFields: [],
+    };
+    const corruptedVal = Buffer.from('Áo Choàng Bay, Kiếm Plasma', 'utf8').toString('latin1');
+    const corruptedLabel = Buffer.from('Trang Bị & Vũ Khí', 'utf8').toString('latin1');
+
+    const snap = buildTrustedCustomFieldsSnapshot(config, {
+      gear: corruptedVal,
+    }, {
+      labels: { gear: corruptedLabel },
+    });
+
+    expect(snap.gear.value).toBe('Áo Choàng Bay, Kiếm Plasma');
+    expect(snap.gear.labelVi).toBe('Trang Bị & Vũ Khí');
+
+    const primitives = customFieldsSnapshotToPrimitives(snap);
+    expect(primitives.gear).toBe('Áo Choàng Bay, Kiếm Plasma');
+
+    const adminDto = sanitizeCustomFieldsSnapshotForAdmin(snap);
+    expect(adminDto.gear.value).toBe('Áo Choàng Bay, Kiếm Plasma');
+    expect(adminDto.gear.labelVi).toBe('Trang Bị & Vũ Khí');
   });
 
   it('AI draft basic/extended/custom', () => {

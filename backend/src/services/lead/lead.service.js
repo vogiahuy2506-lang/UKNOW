@@ -12,6 +12,7 @@ import {
   normalizeInterestAreaValue,
   normalizeOccupationValue,
   normalizePersistedLeadForm,
+  repairMojibake,
   sanitizeCustomFieldsSnapshotForAdmin,
   toPublicLeadFormConfig,
 } from '../../utils/landingLeadFormConfig.util.js';
@@ -217,9 +218,9 @@ class LeadService {
    * @returns {Promise<{ row: object, item: object }>}
    */
   async createPublicLead(body) {
-    const rawName = String(body?.name ?? body?.fullName ?? '').trim();
-    const lastName = String(body?.lastName ?? body?.last_name ?? '').trim();
-    const firstName = String(body?.firstName ?? body?.first_name ?? '').trim();
+    const rawName = repairMojibake(String(body?.name ?? body?.fullName ?? '').trim());
+    const lastName = repairMojibake(String(body?.lastName ?? body?.last_name ?? '').trim());
+    const firstName = repairMojibake(String(body?.firstName ?? body?.first_name ?? '').trim());
     const email = String(body?.email ?? '').trim().toLowerCase();
     // Production leads.phone là VARCHAR(30) (schema.sql) — form dán tay có thể đặt
     // nhầm name="phone" cho textarea dài (HeroHQ 11/2026: ô khẩu hiệu hero-quote
@@ -236,7 +237,7 @@ class LeadService {
       const phoneDigits = normalizedRawPhone.replace(/\D/g, '');
       const phoneHasLetters = /[A-Za-zÀ-ỹ]{3,}/.test(normalizedRawPhone);
       if (phoneHasLetters) {
-        misplacedPhoneValue = String(body.phone).trim().slice(0, 2000);
+        misplacedPhoneValue = repairMojibake(String(body.phone).trim().slice(0, 2000));
         phone = '';
       } else if (phoneDigits.length < 7) {
         const err = new Error('Số điện thoại không hợp lệ');

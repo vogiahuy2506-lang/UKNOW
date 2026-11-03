@@ -143,6 +143,18 @@ function inferAutoName(el, form) {
 function autoMapFormInputsByIdOrLabel(form) {
   if (!form) return;
   var fields = form.querySelectorAll('input, select, textarea');
+  // Sửa ô textarea bị đặt nhầm name="phone" / "email" (vd ô khẩu hiệu hero-quote của HeroHQ)
+  for (var ti = 0; ti < fields.length; ti++) {
+    var tel = fields[ti];
+    if (String(tel.tagName || '').toLowerCase() === 'textarea') {
+      var tname = String(tel.name || '').toLowerCase();
+      if (tname === 'phone' || tname === 'tel' || tname === 'phonenumber' || tname === 'email') {
+        tel.name = tel.id || 'quote';
+      }
+    }
+  }
+
+  var hasExplicitName = !!form.querySelector('input[name="name"], input[name="fullName"], input[name="full_name"]');
   for (var i = 0; i < fields.length; i++) {
     var el = fields[i];
     if (el.name) continue;
@@ -151,8 +163,13 @@ function autoMapFormInputsByIdOrLabel(form) {
     if (type === 'submit' || type === 'button' || type === 'reset') continue;
     var guessed = inferAutoName(el, form);
     if (guessed) {
-      el.name = guessed;
-      continue;
+      if (guessed === 'name' && hasExplicitName) {
+        guessed = null;
+      } else {
+        el.name = guessed;
+        if (guessed === 'name') hasExplicitName = true;
+        continue;
+      }
     }
     // Fallback catchall (HeroHQ 11/2026: hero-alias / power-slider chỉ có id, không
     // có name nên FormData bỏ qua → mất hẳn cột). BE đã giữ khoá lạ dạng catchall
@@ -223,6 +240,8 @@ function readFounderaiMarketingConsent(form) {
 function buildFounderaiCapturePayload(form, config) {
   var cfg = config || {};
   var slugValue = cfg.slug || '';
+  // Đảm bảo auto-map đã chạy trước khi đọc FormData (phòng trường hợp input sinh động sau bind)
+  try { autoMapFormInputsByIdOrLabel(form); } catch (e) { /* ignore */ }
   var fd = new FormData(form);
   var name = '';
   var email = '';
@@ -251,26 +270,62 @@ function buildFounderaiCapturePayload(form, config) {
     }
   }
 
+  function cleanLabelText(node) {
+    if (!node) return '';
+    try {
+      var clone = node.cloneNode(true);
+      var bads = clone.querySelectorAll('button, svg, script, style, i');
+      for (var b = 0; b < bads.length; b++) bads[b].parentNode.removeChild(bads[b]);
+      var txt = String(clone.textContent || '').replace(/\s+/g, ' ').trim();
+      txt = txt.replace(/[\s*:]+$/, '').trim();
+      return txt.slice(0, 100);
+    } catch (e) {
+      return String(node.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 100);
+    }
+  }
+
+  function findGroupLabel(el) {
+    var p = el ? el.parentElement : null;
+    var depth = 0;
+    while (p && p !== form && depth < 4) {
+      if (p.tagName && p.tagName.toLowerCase() === 'fieldset') {
+        var leg = p.querySelector('legend');
+        if (leg && cleanLabelText(leg)) return cleanLabelText(leg);
+      }
+      var lbl = p.querySelector('label, h3, h4, h5, legend');
+      if (lbl && !lbl.contains(el) && cleanLabelText(lbl)) {
+        return cleanLabelText(lbl);
+      }
+      p = p.parentElement;
+      depth++;
+    }
+    return '';
+  }
+
   function resolveFieldLabel(el, fallbackKey) {
     try {
+      var isChoice = el && (el.type === 'radio' || el.type === 'checkbox');
+      if (isChoice) {
+        var grp = findGroupLabel(el);
+        if (grp) return grp;
+      }
       var id = el && el.id ? String(el.id).trim() : '';
       if (id && form && typeof form.querySelector === 'function') {
         var lbl = null;
         try { lbl = form.querySelector('label[for="' + id.replace(/"/g, '\\"') + '"]'); } catch (e) { lbl = null; }
-        if (lbl && lbl.textContent && String(lbl.textContent).trim()) return String(lbl.textContent).trim().slice(0, 100);
+        if (lbl && cleanLabelText(lbl)) return cleanLabelText(lbl);
+      }
+      if (el && el.parentElement) {
+        var sib = el.parentElement.querySelector('label');
+        if (sib && cleanLabelText(sib)) return cleanLabelText(sib);
+        if (el.parentElement.parentElement) {
+          var psib = el.parentElement.parentElement.querySelector('label');
+          if (psib && !psib.contains(el) && cleanLabelText(psib)) return cleanLabelText(psib);
+        }
       }
       if (el && typeof el.closest === 'function') {
         var wrap = el.closest('label');
-        if (wrap && wrap.textContent && String(wrap.textContent).trim()) {
-          // Bỏ phần giá trị của chính input để khỏi lẫn vào nhãn.
-          var t = String(wrap.textContent).trim().replace(/\s+/g, ' ');
-          return t.slice(0, 100);
-        }
-      }
-      // label bọc ngoài kiểu div > label + input: tìm label cùng fieldset/div cha gần nhất.
-      if (el && el.parentElement && typeof el.parentElement.querySelector === 'function') {
-        var sib = el.parentElement.querySelector('label');
-        if (sib && sib.textContent && String(sib.textContent).trim()) return String(sib.textContent).trim().slice(0, 100);
+        if (wrap && cleanLabelText(wrap)) return cleanLabelText(wrap);
       }
       var ph = el ? String(el.getAttribute ? (el.getAttribute('placeholder') || '') : (el.placeholder || '')) : '';
       if (ph.trim()) return ph.trim().slice(0, 100);
@@ -387,7 +442,12 @@ function buildFounderaiCapturePayload(form, config) {
     if (avatarSeed && !Object.prototype.hasOwnProperty.call(customFields, 'hero-avatar')) {
       pushCustomValue('hero-avatar', avatarSeed.slice(0, 200));
       var avatarEl = (typeof document !== 'undefined') ? document.getElementById('preview-avatar') : null;
-      rememberLabel('hero-avatar', avatarEl || findFieldEl('hero-avatar'));
+      var avLabel = '';
+      if (avatarEl && avatarEl.parentElement) {
+        var avHead = avatarEl.parentElement.querySelector('label, h3, h4, [class*="label"]');
+        if (avHead) avLabel = cleanLabelText(avHead);
+      }
+      customFieldLabels['hero-avatar'] = avLabel || 'Diện mạo (Avatar)';
     }
   } catch (e) { /* ignore */ }
 
@@ -699,7 +759,7 @@ if (typeof window !== 'undefined') {
 
     fetch(apiBase + '/public/leads', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
       body: JSON.stringify(payload),
       credentials: 'omit',
     })
@@ -775,7 +835,8 @@ if (typeof window !== 'undefined') {
       // Bước 2: Inject landingPageSlug.
       injectHiddenField(form, 'landingPageSlug', slug);
 
-      // Bước 3: novalidate để tránh browser validation che mất error message ta tự show.
+      // Bước 3: novalidate + accept-charset UTF-8 để bảo toàn tiếng Việt có dấu.
+      form.setAttribute('accept-charset', 'UTF-8');
       form.setAttribute('novalidate', 'novalidate');
 
       // Bước 4: Capture submit — dùng capture phase (third param = true) để

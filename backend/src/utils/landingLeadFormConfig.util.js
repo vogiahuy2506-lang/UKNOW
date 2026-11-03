@@ -543,7 +543,8 @@ export function buildTrustedCustomFieldsSnapshot(leadFormConfig, clientCustomFie
     const raw = clientCustomFields[key];
     const text = catchallToText(raw);
     if (!text) continue;
-    const label = String(labels[key] || '').trim().slice(0, LABEL_VI_MAX) || humanizeFieldKey(key);
+    const rawLabel = String(labels[key] || '').trim();
+    const label = (rawLabel ? repairMojibake(rawLabel).slice(0, LABEL_VI_MAX) : '') || humanizeFieldKey(key);
     snapshot[key] = {
       type: 'text',
       labelVi: label,
@@ -557,6 +558,29 @@ export function buildTrustedCustomFieldsSnapshot(leadFormConfig, clientCustomFie
 }
 
 /**
+ * Tự động phục hồi chuỗi tiếng Việt bị lỗi mã hóa do latin1 / Windows-1252 (mojibake).
+ * Ví dụ: "Ã o ChoÃ ng Bay" -> "Áo Choàng Bay", "SiÃªu Thá»ƒ L±c" -> "Siêu Thể Lực"
+ *
+ * @param {string} str
+ * @returns {string}
+ */
+export function repairMojibake(str) {
+  if (typeof str !== 'string' || !str) return str;
+  // Dấu hiệu mojibake đặc trưng khi UTF-8 tiếng Việt bị đọc nhầm bằng Latin1/CP1252:
+  // - 2-byte UTF-8 tiếng Việt: U+00C2 - U+00C6 theo sau bởi byte 0x80-0xBF
+  // - 3-byte UTF-8 tiếng Việt (Latin Extended Additional U+1EA0 - U+1EF9): U+00E1 theo sau bởi 0xAA-0xBB và 0x80-0xBF
+  if (/(?:[\u00C2\u00C3\u00C4\u00C5\u00C6][\u0080-\u00BF]|\u00E1[\u00AA-\u00BB][\u0080-\u00BF])/.test(str)) {
+    try {
+      const candidate = Buffer.from(str, 'latin1').toString('utf8');
+      if (!candidate.includes('\uFFFD')) {
+        return candidate;
+      }
+    } catch { /* ignore */ }
+  }
+  return str;
+}
+
+/**
  * Chuẩn hoá giá trị catchall về chuỗi hiển thị (mảng radio/checkbox-group → nối ", ").
  *
  * @param {unknown} raw
@@ -567,11 +591,11 @@ function catchallToText(raw) {
   if (typeof raw === 'boolean') return raw ? 'Có' : 'Không';
   if (typeof raw === 'number') return Number.isFinite(raw) ? String(raw) : '';
   if (Array.isArray(raw)) {
-    const parts = raw.map((v) => (v == null ? '' : String(v).trim())).filter(Boolean);
+    const parts = raw.map((v) => (v == null ? '' : repairMojibake(String(v)).trim())).filter(Boolean);
     return parts.join(', ').slice(0, CATCHALL_TEXT_MAX);
   }
   if (typeof raw === 'object') return '';
-  return String(raw).trim().slice(0, CATCHALL_TEXT_MAX);
+  return repairMojibake(String(raw)).trim().slice(0, CATCHALL_TEXT_MAX);
 }
 
 /**
@@ -624,13 +648,15 @@ function normalizeCustomSubmitValue(field, raw) {
     if (text.length > TEXT_VALUE_MAX) {
       throw configError(`${field.labelVi} tối đa ${TEXT_VALUE_MAX} ký tự`);
     }
-    return { value: text, displayVi: text, displayEn: text };
+    const val = repairMojibake(text);
+    return { value: val, displayVi: val, displayEn: val };
   }
   if (field.type === 'textarea') {
     if (text.length > TEXTAREA_VALUE_MAX) {
       throw configError(`${field.labelVi} tối đa ${TEXTAREA_VALUE_MAX} ký tự`);
     }
-    return { value: text, displayVi: text, displayEn: text };
+    const val = repairMojibake(text);
+    return { value: val, displayVi: val, displayEn: val };
   }
 
   if (field.type === 'select' || field.type === 'radio') {
@@ -655,7 +681,7 @@ function normalizeCustomSubmitValue(field, raw) {
  * Snapshot JSONB → `{ key: primitive }` cho campaign item.
  *
  * @param {unknown} snapshot
- * @returns {Record<string, string|boolean>}
+ * @returns {Record<string, string|boolean|number>}
  */
 export function customFieldsSnapshotToPrimitives(snapshot) {
   if (!isPlainObject(snapshot)) return {};
@@ -666,8 +692,10 @@ export function customFieldsSnapshotToPrimitives(snapshot) {
     const entry = snapshot[key];
     if (isPlainObject(entry) && Object.prototype.hasOwnProperty.call(entry, 'value')) {
       const value = entry.value;
-      if (typeof value === 'boolean' || typeof value === 'string' || typeof value === 'number') {
+      if (typeof value === 'boolean' || typeof value === 'number') {
         out[key] = value;
+      } else if (typeof value === 'string') {
+        out[key] = repairMojibake(value);
       }
     }
   }
@@ -676,6 +704,7 @@ export function customFieldsSnapshotToPrimitives(snapshot) {
 
 /**
  * Snapshot JSONB → DTO admin (label/value/display, không metadata nội bộ thừa).
+ * Tự động phục hồi mojibake cho các trường snapshot đã lưu từ trước.
  *
  * @param {unknown} snapshot
  * @returns {Record<string, object>}
@@ -688,12 +717,14 @@ export function sanitizeCustomFieldsSnapshotForAdmin(snapshot) {
     if (!CUSTOM_FIELD_KEY_RE.test(key) && !CATCHALL_FIELD_KEY_RE.test(key)) continue;
     const entry = snapshot[key];
     if (!isPlainObject(entry)) continue;
+    const rawVal = entry.value === true || entry.value === false ? entry.value : String(entry.value ?? '');
+    const val = typeof rawVal === 'string' ? repairMojibake(rawVal) : rawVal;
     out[key] = {
       type: CUSTOM_FIELD_TYPES.includes(entry.type) ? entry.type : 'text',
-      labelVi: asTrimmed(entry.labelVi, LABEL_VI_MAX) || key,
+      labelVi: repairMojibake(asTrimmed(entry.labelVi, LABEL_VI_MAX)) || key,
       labelEn: asTrimmed(entry.labelEn, LABEL_EN_MAX) || null,
-      value: entry.value === true || entry.value === false ? entry.value : String(entry.value ?? ''),
-      displayVi: asTrimmed(entry.displayVi, TEXTAREA_VALUE_MAX),
+      value: val,
+      displayVi: repairMojibake(asTrimmed(entry.displayVi, TEXTAREA_VALUE_MAX)),
       displayEn: asTrimmed(entry.displayEn, TEXTAREA_VALUE_MAX),
     };
   }
