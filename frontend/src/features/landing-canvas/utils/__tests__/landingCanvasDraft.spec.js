@@ -149,12 +149,21 @@ describe('landingCanvasDraft — ghi / đọc', () => {
     const key = buildDraftKey({ userId: 1, ownerId: 1 }, null);
     // CI (Linux) + local (Windows) khác nhau ở chỗ spyOn instance có chặn được
     // setItem hay không — thay hẳn object localStorage bằng stub để chắc chắn.
+    // Lưu ý: Object.create(orig) làm getItem mất internal slot nên đọc ra null —
+    // phải ủy quyền tường minh từng hàm sang orig.
     const orig = window.localStorage;
-    const realSet = orig.setItem.bind(orig);
-    const stub = Object.create(orig);
-    stub.setItem = function (k, v) {
-      if (String(v).includes('prev-a')) throw new DOMException('full', 'QuotaExceededError');
-      return realSet(k, v);
+    const stub = {
+      get length() {
+        return orig.length;
+      },
+      key: (...a) => orig.key(...a),
+      getItem: (...a) => orig.getItem(...a),
+      removeItem: (...a) => orig.removeItem(...a),
+      clear: (...a) => orig.clear(...a),
+      setItem(k, v) {
+        if (String(v).includes('prev-a')) throw new DOMException('full', 'QuotaExceededError');
+        return orig.setItem(k, v);
+      },
     };
     Object.defineProperty(window, 'localStorage', { configurable: true, enumerable: true, writable: true, value: stub });
     try {
