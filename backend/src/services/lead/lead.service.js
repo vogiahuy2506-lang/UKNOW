@@ -221,9 +221,31 @@ class LeadService {
     const lastName = String(body?.lastName ?? body?.last_name ?? '').trim();
     const firstName = String(body?.firstName ?? body?.first_name ?? '').trim();
     const email = String(body?.email ?? '').trim().toLowerCase();
-    // Cột phone VARCHAR(50): form dán tay có thể đặt nhầm name="phone" cho textarea dài
-    // (vd trang senna) → cắt để không vỡ INSERT, bản đầy đủ vẫn nằm trong catchall.
-    const phone = normalizePhone(body?.phone).slice(0, 50);
+    // Production leads.phone là VARCHAR(30) (schema.sql) — form dán tay có thể đặt
+    // nhầm name="phone" cho textarea dài (HeroHQ 11/2026: ô khẩu hiệu hero-quote
+    // name="phone" gửi cả câu slogan ~60 ký tự → 500 "value too long" làm mất CẢ lead).
+    // Chỉ giữ vào cột phone khi trông như SĐT thật (không cụm chữ ≥3 ký tự, ≥7 chữ số);
+    // ngược lại để phone rỗng và cứu nguyên văn vào customFields catchall
+    // (khóa hero-quote/note) để không mất dữ liệu mà cột phone vẫn sạch.
+    // Migration 312 nới trần lên VARCHAR(50) cho khớp bootstrap/test.
+    const rawPhoneInput = body?.phone != null ? String(body.phone) : '';
+    const normalizedRawPhone = normalizePhone(rawPhoneInput);
+    let phone = '';
+    let misplacedPhoneValue = '';
+    if (normalizedRawPhone) {
+      const phoneDigits = normalizedRawPhone.replace(/\D/g, '');
+      const phoneHasLetters = /[A-Za-zÀ-ỹ]{3,}/.test(normalizedRawPhone);
+      if (phoneHasLetters) {
+        misplacedPhoneValue = String(body.phone).trim().slice(0, 2000);
+        phone = '';
+      } else if (phoneDigits.length < 7) {
+        const err = new Error('Số điện thoại không hợp lệ');
+        err.statusCode = 400;
+        throw err;
+      } else {
+        phone = normalizedRawPhone.slice(0, 50);
+      }
+    }
 
     // Ưu tiên: name (full name chung) > lastName + firstName split
     const effectiveName = rawName || `${lastName} ${firstName}`.trim();
@@ -274,8 +296,23 @@ class LeadService {
     const interestArea = isInterestAreaVisible(leadForm)
       ? normalizeInterestAreaValue(body?.interestArea ?? body?.interest_area)
       : '';
-    const customFieldsSnapshot = buildTrustedCustomFieldsSnapshot(leadForm, body?.customFields, {
-      labels: body?.customFieldLabels,
+    const customFieldsInput = (body?.customFields && typeof body.customFields === 'object' && !Array.isArray(body.customFields))
+      ? { ...body.customFields }
+      : {};
+    const customLabelsInput = (body?.customFieldLabels && typeof body.customFieldLabels === 'object' && !Array.isArray(body.customFieldLabels))
+      ? { ...body.customFieldLabels }
+      : {};
+    if (misplacedPhoneValue) {
+      // Đừng đè cột catchall thật nếu form đã gửi hero-quote/note riêng — dồn vào khóa trống đầu tiên.
+      const rescueKey = ['hero-quote', 'hero_quote', 'quote', 'note', 'ghi-chu'].find((k) => {
+        const v = customFieldsInput[k];
+        return v == null || String(v).trim() === '';
+      }) || 'note-du-phong';
+      customFieldsInput[rescueKey] = misplacedPhoneValue;
+      if (!customLabelsInput[rescueKey]) customLabelsInput[rescueKey] = 'Khẩu hiệu xuất trận';
+    }
+    const customFieldsSnapshot = buildTrustedCustomFieldsSnapshot(leadForm, customFieldsInput, {
+      labels: customLabelsInput,
     });
 
     const utmSource = body?.utmSource != null ? String(body.utmSource).trim().slice(0, 255) || null : null;

@@ -1,0 +1,2 @@
+-- allow-destructive-ddl: nới leads.phone VARCHAR(30) -> VARCHAR(50) cho khớp bootstrap/test; tăng trần varchar là metadata-only, không rewrite bảng, không mất dữ liệu. Production vẫn VARCHAR(30) trong khi bootstrap.sql và lead.service.js giả định VARCHAR(50); form HeroHQ đặt nhầm name="phone" cho textarea khẩu hiệu (~60 ký tự) gây INSERT 500 làm mất cả lead.
+ALTER TABLE leads ALTER COLUMN phone TYPE VARCHAR(50);

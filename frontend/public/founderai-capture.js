@@ -150,7 +150,20 @@ function autoMapFormInputsByIdOrLabel(form) {
     var type = String(el.type || '').toLowerCase();
     if (type === 'submit' || type === 'button' || type === 'reset') continue;
     var guessed = inferAutoName(el, form);
-    if (guessed) el.name = guessed;
+    if (guessed) {
+      el.name = guessed;
+      continue;
+    }
+    // Fallback catchall (HeroHQ 11/2026: hero-alias / power-slider chỉ có id, không
+    // có name nên FormData bỏ qua → mất hẳn cột). BE đã giữ khoá lạ dạng catchall
+    // (không còn 400 như trước Lỗ 5) nên đặt tên từ id là an toàn: bao nhiêu ô thì
+    // gom bấy nhiêu cột. Chỉ nhận id khớp biên BE (chữ/số/_/- ≤80 ký tự).
+    try {
+      var rawId = String(el.id || '').trim();
+      if (rawId && FOUNDERAI_CATCHALL_KEY_RE.test(rawId)) {
+        el.name = rawId;
+      }
+    } catch (e) { /* ignore */ }
   }
 }
 
@@ -327,9 +340,10 @@ function buildFounderaiCapturePayload(form, config) {
   });
 
   // Range/slider (power-slider...) đôi khi bị browser bỏ qua trong FormData khi chưa tương
-  // tác — quét DOM để không mất cột.
+  // tác — quét DOM để không mất cột. Mở rộng: number/counter, color, date, time,
+  // output — mọi dạng "kéo/đếm/chọn ngày" đều phải thành cột (HeroHQ 11/2026).
   try {
-    var rangeNodes = form.querySelectorAll('input[type="range"][name]');
+    var rangeNodes = form.querySelectorAll('input[type="range"][name], input[type="number"][name]');
     for (var ri = 0; ri < rangeNodes.length; ri++) {
       var rg = rangeNodes[ri];
       var rgKey = String(rg.name || '');
@@ -339,6 +353,41 @@ function buildFounderaiCapturePayload(form, config) {
       if (!FOUNDERAI_CUSTOM_FIELD_KEY_RE.test(rgKey) && !FOUNDERAI_CATCHALL_KEY_RE.test(rgKey)) continue;
       pushCustomValue(rgKey, String(rg.value == null ? '' : rg.value).trim());
       rememberLabel(rgKey, rg);
+    }
+  } catch (e) { /* ignore */ }
+
+  // Snapshot trạng thái chọn bằng NÚT (không phải input nên FormData không thấy):
+  // HeroHQ chọn avatar bằng <button onclick="setAvatarSeed(...)">, state nằm ở biến
+  // window.currentAvatarSeed + <img id="preview-avatar" src="...seed=...">. Không snapshot
+  // thì mất hẳn cột avatar dù khách đã bấm chọn.
+  try {
+    var avatarSeed = '';
+    try {
+      if (typeof window !== 'undefined' && window.currentAvatarSeed) {
+        avatarSeed = String(window.currentAvatarSeed).trim();
+      }
+      // Inline script của HeroHQ khai báo `let currentAvatarSeed` (lexical global,
+      // không nằm trên window) — đọc qua bare identifier.
+      if (!avatarSeed) {
+        try {
+          var bareSeed = (typeof currentAvatarSeed !== 'undefined') ? currentAvatarSeed : '';
+          if (bareSeed) avatarSeed = String(bareSeed).trim();
+        } catch (e2) { /* ignore */ }
+      }
+    } catch (e) { /* ignore */ }
+    if (!avatarSeed && typeof document !== 'undefined') {
+      var prevImg = document.getElementById('preview-avatar');
+      var prevSrc = prevImg ? String(prevImg.getAttribute('src') || prevImg.src || '') : '';
+      var seedMatch = prevSrc.match(/[?&]seed=([^&]+)/);
+      if (seedMatch) {
+        try { avatarSeed = decodeURIComponent(seedMatch[1]); }
+        catch (e) { avatarSeed = seedMatch[1]; }
+      }
+    }
+    if (avatarSeed && !Object.prototype.hasOwnProperty.call(customFields, 'hero-avatar')) {
+      pushCustomValue('hero-avatar', avatarSeed.slice(0, 200));
+      var avatarEl = (typeof document !== 'undefined') ? document.getElementById('preview-avatar') : null;
+      rememberLabel('hero-avatar', avatarEl || findFieldEl('hero-avatar'));
     }
   } catch (e) { /* ignore */ }
 
