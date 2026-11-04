@@ -116,6 +116,48 @@ export function summarizeRecommItems(items, nowMs) {
     + ` msg=${withMsg.length} msgTypes=${countBy(withMsg.map((info) => info?.recommType))} msgAgeDays=${age}`;
 }
 
+/**
+ * Nhận diện một item từ getFriendRecommendations() có phải là lời mời kết bạn ĐẾN hay không.
+ *
+ * Tiêu chí nhận diện (gỡ bỏ bẫy lời mời cũ bị Zalo trả lệch type hoặc đã xem trên điện thoại):
+ *  1. dataInfo.recommType là 2 (kể cả số lẫn chuỗi "2")
+ *  2. recommItemType cấp ngoài là 2 (kể cả số lẫn chuỗi "2")
+ *  3. Hoặc có lời nhắn xin kết bạn từ người gửi (recommInfo.message không rỗng; gợi ý bạn của Zalo không bao giờ có tin nhắn)
+ *  4. Hoặc cờ isSeenFriendReq === true (đã mở xem lời mời trên app điện thoại)
+ *
+ * @param {{ recommItemType?: number|string, dataInfo?: object }} item
+ * @returns {boolean}
+ */
+export function isReceivedFriendRequestItem(item) {
+  const info = item?.dataInfo;
+  if (!info) return false;
+  const userId = String(info.userId ?? '').trim();
+  if (!userId) return false;
+
+  // 1. dataInfo.recommType là 2 (kể cả số lẫn chuỗi)
+  if (Number(info.recommType) === RECOMM_TYPE_RECEIVED_FRIEND_REQUEST) {
+    return true;
+  }
+
+  // 2. recommItemType là 2 (kể cả số lẫn chuỗi)
+  if (Number(item?.recommItemType) === RECOMM_TYPE_RECEIVED_FRIEND_REQUEST) {
+    return true;
+  }
+
+  // 3. Có lời nhắn xin kết bạn
+  const msg = String(info.recommInfo?.message ?? '').trim();
+  if (msg.length > 0) {
+    return true;
+  }
+
+  // 4. Cờ đã xem lời mời kết bạn trên di động
+  if (info.isSeenFriendReq === true) {
+    return true;
+  }
+
+  return false;
+}
+
 class ZaloFriendAutoAcceptService {
   constructor() {
     /** @type {Set<string>} nick đang có sweep chạy. */
@@ -184,11 +226,21 @@ class ZaloFriendAutoAcceptService {
       return { skipped: 'list_failed', error: err?.message || String(err) };
     }
 
-    // Hình dạng THẬT: { recommItems: [{ recommItemType, dataInfo }] }. recommType 2 = lời mời ĐẾN; 1 = gợi ý — KHÔNG đụng.
+    // Hình dạng THẬT: { recommItems: [{ recommItemType, dataInfo }] }.
+    // Nhận diện lời mời ĐẾN bằng isReceivedFriendRequestItem: chuẩn hóa kiểu số/chuỗi, lời mời cũ đã xem, lời mời có lời nhắn.
+    // Gợi ý kết bạn thuần túy của Zalo (loại 1 không lời nhắn) -> KHÔNG đụng.
     const items = Array.isArray(response?.recommItems) ? response.recommItems : [];
-    const pending = items
-      .map((item) => item?.dataInfo)
-      .filter((info) => info?.recommType === RECOMM_TYPE_RECEIVED_FRIEND_REQUEST && String(info?.userId ?? '').trim() !== '');
+    const seenUserIds = new Set();
+    const pending = [];
+    for (const item of items) {
+      if (isReceivedFriendRequestItem(item)) {
+        const uid = String(item.dataInfo?.userId ?? '').trim();
+        if (uid && !seenUserIds.has(uid)) {
+          seenUserIds.add(uid);
+          pending.push(item.dataInfo);
+        }
+      }
+    }
 
     let accepted = 0;
     let failed = 0;

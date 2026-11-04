@@ -26,7 +26,7 @@ jest.unstable_mockModule('../../chatbot/zaloPersonalSync.service.js', () => ({
   default: { persistFriends: mockPersistFriends },
 }));
 
-const { default: service, summarizeRecommItems } = await import('../zaloFriendAutoAccept.service.js');
+const { default: service, summarizeRecommItems, isReceivedFriendRequestItem } = await import('../zaloFriendAutoAccept.service.js');
 
 const ENV_KEYS = [
   'ZALO_AUTO_ACCEPT_PER_HOUR',
@@ -653,3 +653,47 @@ describe('summarizeRecommItems', () => {
     expect(summarizeRecommItems([], NOW)).toBe('types={} itemTypes={} src={} way={} seen=0 msg=0 msgTypes={} msgAgeDays=-');
   });
 });
+
+describe('isReceivedFriendRequestItem — nhận diện lời mời kết bạn đến (kể cả cũ)', () => {
+  it('nhận diện recommType là 2 số', () => {
+    expect(isReceivedFriendRequestItem({ recommItemType: 1, dataInfo: { userId: 'u1', recommType: 2 } })).toBe(true);
+  });
+
+  it('nhận diện recommType là chuỗi "2" (Zalo trả chuỗi trên một số phiên bản web/app)', () => {
+    expect(isReceivedFriendRequestItem({ recommItemType: 1, dataInfo: { userId: 'u2', recommType: '2' } })).toBe(true);
+  });
+
+  it('nhận diện recommItemType cấp ngoài là 2 (ReceivedFriendRequest)', () => {
+    expect(isReceivedFriendRequestItem({ recommItemType: 2, dataInfo: { userId: 'u3', recommType: 1 } })).toBe(true);
+    expect(isReceivedFriendRequestItem({ recommItemType: '2', dataInfo: { userId: 'u3', recommType: 1 } })).toBe(true);
+  });
+
+  it('nhận diện khi có lời nhắn xin kết bạn (chỉ người gửi kết bạn mới có lời nhắn)', () => {
+    expect(isReceivedFriendRequestItem({
+      recommItemType: 1,
+      dataInfo: { userId: 'u4', recommType: 1, recommInfo: { message: 'Chào anh, mình kết bạn trao đổi công việc nhé' } }
+    })).toBe(true);
+  });
+
+  it('nhận diện lời mời cũ đã mở xem trên điện thoại (isSeenFriendReq: true)', () => {
+    expect(isReceivedFriendRequestItem({
+      recommItemType: 1,
+      dataInfo: { userId: 'u5', recommType: 1, isSeenFriendReq: true }
+    })).toBe(true);
+  });
+
+  it('bỏ qua gợi ý kết bạn thuần túy (recommType 1, recommItemType 1, không lời nhắn, chưa xem)', () => {
+    expect(isReceivedFriendRequestItem({
+      recommItemType: 1,
+      dataInfo: { userId: 'u6', recommType: 1, isSeenFriendReq: false, recommInfo: { message: '' } }
+    })).toBe(false);
+  });
+
+  it('bỏ qua mục thiếu userId hoặc không hợp lệ', () => {
+    expect(isReceivedFriendRequestItem(null)).toBe(false);
+    expect(isReceivedFriendRequestItem({})).toBe(false);
+    expect(isReceivedFriendRequestItem({ dataInfo: null })).toBe(false);
+    expect(isReceivedFriendRequestItem({ dataInfo: { userId: '   ', recommType: 2 } })).toBe(false);
+  });
+});
+

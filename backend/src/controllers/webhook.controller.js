@@ -46,7 +46,13 @@ class WebhookController {
 
   _verifySignature(req) {
     const secret = process.env.WC_WEBHOOK_SECRET;
-    if (!secret) return true; // chưa cấu hình – bỏ qua xác thực
+    if (!secret) {
+      if (process.env.NODE_ENV === 'production') {
+        console.error('[Webhook] WC_WEBHOOK_SECRET chưa được cấu hình trên production – từ chối webhook để đảm bảo an toàn');
+        return false;
+      }
+      return true; // môi trường test/dev: cho phép bypass khi chưa set secret
+    }
 
     const receivedSig = req.headers['x-wc-webhook-signature'];
     if (!receivedSig) {

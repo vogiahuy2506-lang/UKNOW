@@ -1118,6 +1118,17 @@ export const initScheduler = () => {
 
   console.log('[Scheduler] Đã khởi tạo Zalo tự động đồng ý kết bạn: phút 7/17/27/...');
 
+  // Khởi động xong: quét bù sớm sau 45s để duyệt ngay các lời mời cũ mà không cần đợi cron 10 phút
+  if (process.env.NODE_ENV !== 'test') {
+    setTimeout(async () => {
+      try {
+        await sweepZaloFriendAutoAccept();
+      } catch (err) {
+        console.error('[Scheduler] Quét bù Zalo kết bạn sau khởi động lỗi:', err?.message || err);
+      }
+    }, 45_000);
+  }
+
   // ── Bộ dọn đặt chỗ hạn mức gửi tin (send_quota_reservations) — mỗi phút, giây 40 ──
   // PLAN_SAN_SANG_BAT_ENFORCE_HAN_MUC_2026-10-19 PR-E1. `reserved` hết lease → `released` (trả hạn mức + ví);
   // `sending` treo quá SEND_QUOTA_SENDING_UNCERTAIN_SECONDS (mặc định 1800s) → `uncertain` (KHÔNG BAO GIỜ `released`).
