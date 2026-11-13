@@ -45,13 +45,6 @@ router.get('/KlgV4OVxHJrppf8XXBaeArFAIJI_I6XjCJWu.html', (req, res) => {
 // ── Chatbot Webhooks ─────────────────────
 
 /**
- * GET/POST /api/webhooks/zalo-oa
- * Webhook chung cho Zalo OA (định tuyến theo recipient.id tới chatbot đang active)
- */
-router.get('/zalo-oa', chatbotChannelWebhookController.verifyZaloOA.bind(chatbotChannelWebhookController));
-router.post('/zalo-oa', chatbotChannelWebhookController.handleZaloOA.bind(chatbotChannelWebhookController));
-
-/**
  * GET/POST /api/webhooks/chatbot/zalo-oa/:token
  * Webhook cho Zalo OA của chatbot cụ thể (legacy token routing)
  */

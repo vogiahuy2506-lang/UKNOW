@@ -363,7 +363,7 @@ export default function ZaloOaChannelModal({ open, onClose, chatbotId }) {
                           disabled={isToggling}
                           onClick={() => handleToggleAccount(acc)}
                           className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                            acc.is_active ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'
+                            acc.is_active ? 'bg-blue-600' : 'bg-slate-300 dark:bg-dk-raised'
                           } ${isToggling ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                           <span
