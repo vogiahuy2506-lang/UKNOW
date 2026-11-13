@@ -1853,6 +1853,10 @@ CREATE TABLE IF NOT EXISTS channel_connections (
   fb_user_id          TEXT,
   fb_page_id          TEXT,
   fb_page_name        TEXT,
+  -- Migration 313: Ho tro nhieu Zalo OA tren cung mot workspace
+  zalo_oa_id          VARCHAR(64),
+  zalo_oa_name        VARCHAR(255),
+  zalo_oa_avatar      TEXT,
   created_at          TIMESTAMPTZ DEFAULT NOW(),
   updated_at          TIMESTAMPTZ DEFAULT NOW(),
   -- Migration 231: widen UNIQUE to support multiple Facebook Pages per user.
@@ -1864,6 +1868,8 @@ CREATE INDEX IF NOT EXISTS idx_channel_conn_channel ON channel_connections(chann
 CREATE INDEX IF NOT EXISTS idx_channel_connections_webhook_token ON channel_connections(webhook_token) WHERE webhook_token IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_channel_conn_fb_user ON channel_connections(fb_user_id) WHERE fb_user_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_channel_conn_fb_page ON channel_connections(fb_page_id) WHERE fb_page_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_channel_user_zalo_oa ON channel_connections (id_user, channel, zalo_oa_id) WHERE channel = 'zalo_oa';
+CREATE INDEX IF NOT EXISTS idx_channel_conn_zalo_oa_id ON channel_connections (zalo_oa_id) WHERE zalo_oa_id IS NOT NULL;
 
 -- ─── Facebook token tracking (migration 233) ─────────────────────────
 -- Mirror của 233_facebook_token_tracking.sql: commit gốc (06209dca) thêm migration mà không đưa bảng
@@ -2110,9 +2116,13 @@ CREATE TABLE IF NOT EXISTS chatbot_channel_connections (
 );
 -- Partial UNIQUE indexes (CREATE UNIQUE INDEX is the only form that supports
 -- `WHERE` — PostgreSQL does NOT allow `ADD CONSTRAINT ... UNIQUE ... WHERE`).
-CREATE UNIQUE INDEX IF NOT EXISTS uq_chatbot_channel_legacy_idx
+-- Migration 313: tach rieng facebook va zalo_oa (zalo_oa ho tro multi-account theo external_channel_id)
+CREATE UNIQUE INDEX IF NOT EXISTS uq_chatbot_channel_legacy_facebook
   ON chatbot_channel_connections(id_chatbot, channel_type)
-  WHERE channel_type IN ('zalo_oa', 'facebook');
+  WHERE channel_type = 'facebook';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_chatbot_channel_zalo_oa
+  ON chatbot_channel_connections(id_chatbot, channel_type, external_channel_id)
+  WHERE channel_type = 'zalo_oa';
 CREATE UNIQUE INDEX IF NOT EXISTS uq_chatbot_channel_whatsapp_idx
   ON chatbot_channel_connections(id_chatbot, channel_type, external_channel_id)
   WHERE channel_type IN ('whatsapp', 'whatsapp_baileys');
@@ -4413,3 +4423,31 @@ CREATE INDEX IF NOT EXISTS idx_tiktok_scheduled_posts_user_time
 INSERT INTO notification_event_settings (event_type, in_app_enabled, email_enabled, user_can_disable_email)
 VALUES ('campaign_sending_slow', true, false, true)
 ON CONFLICT (event_type) DO NOTHING;
+
+-- --- Migration 313: Zalo OA multi-account & per-chatbot settings ---
+CREATE TABLE IF NOT EXISTS system_domain_verifications (
+    id SERIAL PRIMARY KEY,
+    platform VARCHAR(32) NOT NULL DEFAULT 'zalo',
+    domain VARCHAR(255) NOT NULL,
+    verification_code TEXT NOT NULL,
+    file_name VARCHAR(255),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE (platform, domain)
+);
+
+CREATE TABLE IF NOT EXISTS chatbot_zalo_oa_settings (
+    id SERIAL PRIMARY KEY,
+    id_chatbot INTEGER NOT NULL REFERENCES custom_chatbots(id) ON DELETE CASCADE,
+    id_channel_connection INTEGER NOT NULL REFERENCES channel_connections(id) ON DELETE CASCADE,
+    id_user INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    is_active BOOLEAN DEFAULT true,
+    settings JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE (id_chatbot, id_channel_connection)
+);
+
+CREATE INDEX IF NOT EXISTS idx_chatbot_zalo_oa_active
+  ON chatbot_zalo_oa_settings (id_channel_connection, is_active)
+  WHERE is_active = true;
