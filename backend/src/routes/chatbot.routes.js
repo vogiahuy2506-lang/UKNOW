@@ -1,6 +1,7 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import chatbotController from '../controllers/chatbot.controller.js';
+import zaloOaSettingsController from '../controllers/zaloOaSettings.controller.js';
 import unifiedInboxController from '../controllers/unifiedInbox.controller.js';
 import zaloPersonalSyncController from '../controllers/zaloPersonalSync.controller.js';
 import aiActivityController from '../controllers/chatbot/aiActivity.controller.js';
@@ -229,6 +230,8 @@ router.delete('/custom-chatbots/:chatbotId', requirePermission('chatbots_manage'
 // Chatbot Channel Connections
 router.get('/custom-chatbots/:chatbotId/channels', requirePermission('chatbot_channels_manage'), chatbotController.getChatbotChannels.bind(chatbotController));
 router.get('/custom-chatbots/:chatbotId/facebook-pages', requirePermission('chatbot_channels_manage'), chatbotController.getFacebookPagesForChatbot.bind(chatbotController));
+router.get('/custom-chatbots/:chatbotId/zalo-oa-accounts', requirePermission('chatbot_channels_manage'), zaloOaSettingsController.listAccountsForChatbot.bind(zaloOaSettingsController));
+router.post('/custom-chatbots/:chatbotId/zalo-oa-accounts/:connectionId/toggle', requirePermission('chatbot_channels_manage'), zaloOaSettingsController.toggleAccountForChatbot.bind(zaloOaSettingsController));
 router.post('/custom-chatbots/:chatbotId/channels/zalo-oa', requirePermission('chatbot_channels_manage'), chatbotController.connectChatbotZaloOA.bind(chatbotController));
 router.post('/custom-chatbots/:chatbotId/channels/facebook', requirePermission('chatbot_channels_manage'), chatbotController.connectChatbotFacebook.bind(chatbotController));
 router.delete('/custom-chatbots/:chatbotId/channels/:channelType', requirePermission('chatbot_channels_manage'), chatbotController.disconnectChatbotChannel.bind(chatbotController));

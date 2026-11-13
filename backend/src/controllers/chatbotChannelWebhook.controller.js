@@ -75,6 +75,17 @@ class ChatbotChannelWebhookController {
       const { token } = req.params;
       const { verify_token, challenge } = req.query;
 
+      if (!token) {
+        const verifyToken = resolveWebhookVerifyToken({
+          channelToken: null,
+          envNames: ZALO_OA_VERIFY_TOKEN_ENV_NAMES,
+        });
+        if (!verifyToken || (verify_token && timingSafeStringEqual(verify_token, verifyToken))) {
+          return res.send(challenge || 'ok');
+        }
+        return res.status(403).send('Invalid verify token');
+      }
+
       const channel = await chatbotChannelRepository.findByWebhookToken(token);
 
       if (!channel || channel.channel_type !== 'zalo_oa') {
@@ -136,10 +147,21 @@ class ChatbotChannelWebhookController {
     res.send('ok');
 
     try {
-      const channel = await chatbotChannelRepository.findByWebhookToken(token);
+      let channel;
+      if (token) {
+        channel = await chatbotChannelRepository.findByWebhookToken(token);
+      }
+
+      // Nếu không tìm thấy kênh theo token hoặc gọi webhook dùng chung (/zalo-oa hoặc /api/v1/zalo/webhook)
+      if (!channel) {
+        const oaId = req.body?.recipient?.id || req.body?.recipient?.openid || req.body?.oa_id;
+        if (oaId) {
+          channel = await chatbotChannelRepository.findActiveByExternalChannelId('zalo_oa', String(oaId));
+        }
+      }
 
       if (!channel || channel.channel_type !== 'zalo_oa') {
-        console.warn('[ZaloOA] Channel not found for token');
+        console.warn('[ZaloOA] Channel not found for token or OA ID');
         return;
       }
 

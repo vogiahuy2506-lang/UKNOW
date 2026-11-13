@@ -318,6 +318,15 @@ export const CRON_JOBS = [
     optional: true,
   },
   {
+    code: 'zalo_oa_token_refresh',
+    label: 'Làm mới token Zalo OA',
+    schedule: 'Mỗi 4 giờ (phút :20)',
+    description: 'Làm mới Access Token của Zalo Official Account bằng Refresh Token trước khi hết hạn (token sống 25 giờ).',
+    impact: 'Token hết hạn → chatbot Zalo OA không gửi được tin nhắn phản hồi cho khách.',
+    tracked: true,
+    optional: true,
+  },
+  {
     code: 'chatbot_digest_monthly',
     label: 'Tổng hợp hội thoại chatbot theo tháng',
     schedule: '08:00 ngày 1 hàng tháng',

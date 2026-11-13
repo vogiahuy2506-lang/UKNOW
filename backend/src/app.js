@@ -34,6 +34,9 @@ import webhookRoutes from './routes/webhook.routes.js';
 import coursesRoutes from './routes/courses.routes.js';
 import productsRoutes from './routes/products.routes.js';
 import zaloSettingsRoutes from './routes/zaloSettings.routes.js';
+import zaloOaRoutes from './routes/zaloOa.routes.js';
+import zaloDomainVerifyController from './controllers/zaloDomainVerify.controller.js';
+import chatbotChannelWebhookController from './controllers/chatbotChannelWebhook.controller.js';
 import zaloTemplateRoutes from './routes/zaloTemplate.routes.js';
 import whatsappSettingsRoutes from './routes/whatsappSettings.routes.js';
 import whatsappBaileysRoutes from './routes/whatsappBaileys.routes.js';
@@ -203,7 +206,16 @@ export function createApp() {
   app.use('/api/webhooks', webhookLimiter, webhookRoutes);
   app.use('/api/courses', coursesRoutes);
   app.use('/api/products', productsRoutes);
+  // Webhook Zalo OA chuẩn theo tài liệu hướng dẫn (/api/v1/zalo/webhook)
+  app.get('/api/v1/zalo/webhook', chatbotChannelWebhookController.verifyZaloOA.bind(chatbotChannelWebhookController));
+  app.post('/api/v1/zalo/webhook', webhookLimiter, chatbotChannelWebhookController.handleZaloOA.bind(chatbotChannelWebhookController));
+
+  // Xác thực tên miền Zalo Developers (HTML file verification)
+  app.get('/zalo-platform-site-verification:suffix*.html', zaloDomainVerifyController.serveVerificationFile.bind(zaloDomainVerifyController));
+  app.get('/:filename(zalo-platform-site-verification.*\\.html)', zaloDomainVerifyController.serveVerificationFile.bind(zaloDomainVerifyController));
+
   app.use('/api/zalo', zaloSettingsRoutes);
+  app.use('/api/zalo-oa', zaloOaRoutes);
   app.use('/api/zalo-templates', zaloTemplateRoutes);
   app.use('/api/settings', facebookSettingsRoutes);
   app.use('/api/settings', tiktokSettingsRoutes);

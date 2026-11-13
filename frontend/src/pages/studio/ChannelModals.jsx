@@ -9,6 +9,7 @@ import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import WhatsAppChannelModal from '../../features/chatbot/components/WhatsAppChannelModal';
 import TelegramChannelModal from '../../features/chatbot/components/TelegramChannelModal';
 import FacebookChannelModal from '../../features/chatbot/components/FacebookChannelModal';
+import ZaloOaChannelModal from '../../features/chatbot/components/ZaloOaChannelModal';
 import { useI18n } from '../../i18n';
 
 /* ─── ChannelModal — cấu hình từng kênh ─────────────────────────────── */
@@ -58,7 +59,17 @@ export function ChannelModal({ open, channel, chatbot, onClose }) {
     );
   }
 
-  // Zalo OA vẫn gỡ (chưa từng có một lần nối nào); Facebook xem nhánh trên.
+  // Zalo OA: Hỗ trợ nhiều OA trong workspace, bật/tắt riêng cho từng chatbot
+  if (channel === 'zalo_oa') {
+    return (
+      <ZaloOaChannelModal
+        open={open}
+        onClose={onClose}
+        chatbotId={chatbot.id}
+      />
+    );
+  }
+
   if (channel !== 'zalo_personal') return null;
 
   return (

@@ -224,6 +224,45 @@ const chatbotApiService = {
     return response.data;
   },
 
+  // ── Zalo OA Multi-Account & Per-Chatbot Settings ──────────────────────────
+  async getZaloOaAccountsForChatbot(chatbotId) {
+    const response = await api.get(`/ai/chatbot/custom-chatbots/${chatbotId}/zalo-oa-accounts`);
+    return response.data;
+  },
+
+  async toggleZaloOaAccountForChatbot(chatbotId, connectionId, isActive) {
+    const response = await api.post(
+      `/ai/chatbot/custom-chatbots/${chatbotId}/zalo-oa-accounts/${connectionId}/toggle`,
+      { is_active: isActive }
+    );
+    return response.data;
+  },
+
+  async listWorkspaceZaloOaAccounts() {
+    const response = await api.get('/zalo-oa/accounts');
+    return response.data;
+  },
+
+  async connectWorkspaceZaloOaAccount(data) {
+    const response = await api.post('/zalo-oa/accounts', data);
+    return response.data;
+  },
+
+  async disconnectWorkspaceZaloOaAccount(connectionId) {
+    const response = await api.delete(`/zalo-oa/accounts/${connectionId}`);
+    return response.data;
+  },
+
+  async getZaloDomainVerification() {
+    const response = await api.get('/zalo-oa/domain-verify');
+    return response.data;
+  },
+
+  async saveZaloDomainVerification(code) {
+    const response = await api.post('/zalo-oa/domain-verify', { verification_code: code });
+    return response.data;
+  },
+
   // ── WhatsApp per-chatbot enable (DeployTab modal) ──────────────────────────
 
   // List all WhatsApp accounts owned by the user, optionally scoped to one chatbot.

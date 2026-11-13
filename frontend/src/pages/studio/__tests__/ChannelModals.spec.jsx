@@ -23,19 +23,23 @@ vi.mock('../../../features/chatbot/services/chatbotApi.service', () => ({
 vi.mock('../../../features/chatbot/components/WhatsAppChannelModal', () => ({ default: () => null }));
 vi.mock('../../../features/chatbot/components/TelegramChannelModal', () => ({ default: () => null }));
 vi.mock('../../../features/chatbot/components/FacebookChannelModal', () => ({ default: () => null }));
+vi.mock('../../../features/chatbot/components/ZaloOaChannelModal', () => ({ default: () => <div data-testid="mock-zalo-oa-modal" /> }));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('../../../i18n', async () => (await import('./studioTestI18n.js')).i18nMock);
 
 const chatbot = { id: 7, name: 'Chatbot Kiểm Thử' };
 
-describe('ChannelModal — Zalo OA vẫn gỡ khỏi Studio (S-04)', () => {
+describe('ChannelModal — Zalo OA & các kênh trong Studio', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it.each(['zalo_oa', 'zalo'])('channel="%s" → không vẽ hộp nào và không gọi API cấu hình kênh đó', (channel) => {
-    const { container } = render(<ChannelModal open channel={channel} chatbot={chatbot} onClose={() => {}} />);
+  it('channel="zalo_oa" → vẽ ZaloOaChannelModal cho chatbot', () => {
+    const { getByTestId } = render(<ChannelModal open channel="zalo_oa" chatbot={chatbot} onClose={() => {}} />);
+    expect(getByTestId('mock-zalo-oa-modal')).toBeTruthy();
+  });
 
+  it('channel="unsupported_channel" → không vẽ hộp nào', () => {
+    const { container } = render(<ChannelModal open channel="unsupported_channel" chatbot={chatbot} onClose={() => {}} />);
     expect(container.firstChild).toBeNull();
-    expect(chatbotApi.getZaloOaConfig).not.toHaveBeenCalled();
   });
 
   it('không còn chữ "Test webhook" / "Kết nối tài khoản Facebook" ở hộp kênh nào còn lại (Zalo cá nhân)', () => {

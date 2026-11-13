@@ -53,6 +53,14 @@ const EMBED_OPTIONS = [
 // `countField` đọc số tài khoản đang bật từ API danh sách chatbot.
 const CHANNEL_TILES = [
   {
+    key: 'zalo_oa',
+    title: 'Zalo OA',
+    tooltip: 'Kết nối Zalo Official Account với trợ lý AI',
+    icon: 'OA',
+    iconClass: 'bg-blue-600 text-white shadow-sm',
+    countField: 'zalo_oa_count',
+  },
+  {
     key: 'facebook',
     title: 'Facebook',
     tooltipKey: 'chatbot.studio.tipFacebook',
@@ -240,7 +248,7 @@ export default function DeployTab({
                     locked={locked}
                     onClick={() => (locked ? setLockedChannelModal(tile.availabilityKey) : setChannelModal(tile.key))}
                     iconBg={tile.iconClass}
-                    tooltip={locked ? t('channelUnavailable.lockedTip', { channel: tileLabel }) : t(tile.tooltipKey)}
+                    tooltip={locked ? t('channelUnavailable.lockedTip', { channel: tileLabel }) : (tile.tooltipKey ? t(tile.tooltipKey) : (tile.tooltip || tileLabel))}
                     label={tileLabel}
                     sublabel={locked
                       ? t('channelUnavailable.lockedBadge')

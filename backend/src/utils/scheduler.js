@@ -1820,6 +1820,41 @@ export const initScheduler = () => {
     console.log('[Scheduler] Facebook token refresh TẮT (FACEBOOK_TOKEN_REFRESH_ENABLED=false)');
   }
 
+  // ── Zalo OA Token Auto-Refresh — mỗi 4 giờ (Zalo access token hết hạn sau 25 giờ) ──
+  const zaloOaTokenRefreshEnabled = String(process.env.ZALO_OA_TOKEN_REFRESH_ENABLED ?? 'true').toLowerCase() !== 'false';
+  if (zaloOaTokenRefreshEnabled) {
+    const refreshZaloOaTokens = async () => {
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      try {
+        await cronJobRunRepository.recordRun('zalo_oa_token_refresh', async () => {
+          const zaloOaTokenRefreshService = (await import('../services/chatbot/zaloOaTokenRefresh.service.js')).default;
+          const result = await zaloOaTokenRefreshService.refreshAllExpiringTokens(6);
+          if (result.refreshed > 0 || result.failed > 0) {
+            console.log(
+              `[Scheduler][ZaloOA] Token refresh: checked=${result.checked} ` +
+              `refreshed=${result.refreshed} failed=${result.failed}`
+            );
+          }
+          return {
+            total: result.checked,
+            refreshed: result.refreshed,
+            failed: result.failed,
+            synced: result.refreshed,
+          };
+        });
+      } catch (error) {
+        console.error('[Scheduler] Lỗi refresh Zalo OA tokens:', error.message);
+      }
+    };
+
+    // Chạy mỗi 4 giờ một lần (phút :20)
+    cron.schedule('20 */4 * * *', async () => {
+      await refreshZaloOaTokens();
+    }, { timezone: HANOI_TIME_ZONE });
+
+    console.log('[Scheduler] Đã khởi tạo Zalo OA token refresh: mỗi 4 giờ (phút :20)');
+  }
+
   // ── TikTok Business Token Auto-Refresh — 02:00 hàng ngày ────────────────
   // Access_token hết hạn sau 24h, refresh_token sau 365d. Cron refresh tất cả
   // account có access_token_expires_at < now() + 2h (buffer). Pattern copy y
