@@ -34,6 +34,7 @@
     "test:coverage": "npm run test:coverage:unit && npm run test:coverage:integration && node scripts/mergeCoverage.js"
   },
   "jest": {
+    "workerIdleMemoryLimit": "1GB",
     "transform": {},
     "clearMocks": true,
     "transformIgnorePatterns": [
