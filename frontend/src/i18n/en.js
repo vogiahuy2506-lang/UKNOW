@@ -6753,6 +6753,7 @@ export default {
       emptyNoBotTitle: 'No chatbots yet',
       emptyNoBotDesc: 'Create your first chatbot',
       tipFacebook: 'Facebook Messenger — let the chatbot reply to messages on your Page',
+      tipZaloOa: 'Zalo Official Account — let the chatbot reply to messages on your Zalo OA',
       tipZaloPersonal: 'Personal Zalo — turn on the chatbot per account',
       tipWhatsApp: 'WhatsApp Business — assign AI replies per account',
       tipTelegram: 'Personal Telegram — scan a QR code to link, then turn on the chatbot per account',

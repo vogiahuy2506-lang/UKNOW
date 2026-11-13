@@ -116,11 +116,11 @@ describe('DeployTab — P12 quyền kênh Zalo', () => {
     expect(screen.getByTestId('deploy-channel-zalo_personal')).not.toHaveAttribute('aria-disabled');
   });
 
-  it('khôi phục 05/10/2026: có ô Facebook; Zalo OA vẫn không có (kể cả khi gói có đủ kênh)', () => {
+  it('có ô Zalo OA và Facebook khi triển khai chatbot', () => {
     render(<DeployTab chatbot={bot} onOpenWidgetSettings={() => {}} />);
     expect(screen.getByText('Facebook')).toBeTruthy();
-    expect(screen.queryByText('Zalo OA')).toBeNull();
-    // Ba ô nhắn tin còn lại ngoài Facebook.
+    expect(screen.getByText('Zalo OA')).toBeTruthy();
+    // Các ô nhắn tin còn lại
     expect(screen.getByText('Zalo cá nhân')).toBeTruthy();
     expect(screen.getByText('Telegram')).toBeTruthy();
     expect(screen.getByText('WhatsApp')).toBeTruthy();
@@ -137,7 +137,7 @@ describe('DeployTab — P12 quyền kênh Zalo', () => {
     );
     expect(container.querySelector('.bg-amber-500')).toBeNull();
     expect(screen.getByText('Đang bật: 2 tài khoản')).toBeTruthy();
-    // Facebook + Telegram + WhatsApp chưa bật → ba chữ "Chưa bật".
-    expect(screen.getAllByText('Chưa bật')).toHaveLength(3);
+    // Zalo OA + Facebook + Telegram + WhatsApp chưa bật → bốn chữ "Chưa bật".
+    expect(screen.getAllByText('Chưa bật')).toHaveLength(4);
   });
 });

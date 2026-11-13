@@ -6766,6 +6766,7 @@ export default {
       emptyNoBotTitle: 'Chưa có chatbot',
       emptyNoBotDesc: 'Tạo chatbot đầu tiên của bạn',
       tipFacebook: 'Facebook Messenger — Bật chatbot trả lời tin nhắn trên Fanpage',
+      tipZaloOa: 'Zalo Official Account — Bật chatbot trả lời tin nhắn trên Zalo OA',
       tipZaloPersonal: 'Zalo cá nhân — Bật chatbot cho từng tài khoản',
       tipWhatsApp: 'WhatsApp Business — Gán AI reply cho từng tài khoản',
       tipTelegram: 'Telegram cá nhân — Quét QR để liên kết, bật chatbot cho từng tài khoản',

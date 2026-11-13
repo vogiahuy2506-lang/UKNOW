@@ -55,7 +55,7 @@ const CHANNEL_TILES = [
   {
     key: 'zalo_oa',
     title: 'Zalo OA',
-    tooltip: 'Kết nối Zalo Official Account với trợ lý AI',
+    tooltipKey: 'chatbot.studio.tipZaloOa',
     icon: 'OA',
     iconClass: 'bg-blue-600 text-white shadow-sm',
     countField: 'zalo_oa_count',
