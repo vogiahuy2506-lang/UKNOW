@@ -142,6 +142,25 @@ describe('sweepAccount — chọn đúng lời mời để đồng ý', () => {
     expect(api.acceptFriendRequest).toHaveBeenCalledTimes(1);
     expect(api.acceptFriendRequest).toHaveBeenCalledWith('101');
   });
+
+  it('lời mời cũ không đủ metadata được xác minh qua getFriendRequestStatus và đồng ý', async () => {
+    // 201: recommType 1 (bị Zalo hạ type), không lời nhắn, nhưng reqstatus xác nhận is_requesting = 1
+    // 202: recommType 1, reqstatus trả is_requesting = 0 (gợi ý bạn bè) -> không đồng ý
+    const api = makeApi([recommItem(201, 1), recommItem(202, 1)]);
+    api.getFriendRequestStatus = jest.fn((uid) => {
+      if (uid === '201') return Promise.resolve({ is_requesting: 1, is_requested: 0, is_friend: 0 });
+      return Promise.resolve({ is_requesting: 0, is_requested: 0, is_friend: 0 });
+    });
+    mockGetAccountApi.mockReturnValue(api);
+
+    const result = await service.sweepAccount(7, { sleep: instantSleep(), now: () => NOON });
+
+    expect(api.getFriendRequestStatus).toHaveBeenCalledWith('201');
+    expect(api.getFriendRequestStatus).toHaveBeenCalledWith('202');
+    expect(api.acceptFriendRequest).toHaveBeenCalledTimes(1);
+    expect(api.acceptFriendRequest).toHaveBeenCalledWith('201');
+    expect(result.accepted).toBe(1);
+  });
 });
 
 describe('sweepAccount — điều kiện chạy', () => {
@@ -717,6 +736,52 @@ describe('isReceivedFriendRequestItem — nhận diện lời mời kết bạn 
       recommItemType: 1,
       dataInfo: { userId: 'u6', recommType: 1, isSeenFriendReq: false, recommInfo: { message: '' } }
     })).toBe(false);
+  });
+
+  it('nhận diện lời mời khi có cờ is_requesting / isRequesting (chuẩn Zalo)', () => {
+    expect(isReceivedFriendRequestItem({
+      recommItemType: 1,
+      dataInfo: { userId: 'u7a', recommType: 1, is_requesting: 1 }
+    })).toBe(true);
+    expect(isReceivedFriendRequestItem({
+      recommItemType: 1,
+      dataInfo: { userId: 'u7b', recommType: 1, is_requesting: '1' }
+    })).toBe(true);
+    expect(isReceivedFriendRequestItem({
+      recommItemType: 1,
+      dataInfo: { userId: 'u7c', recommType: 1, is_requesting: true }
+    })).toBe(true);
+    expect(isReceivedFriendRequestItem({
+      recommItemType: 1,
+      dataInfo: { userId: 'u7d', recommType: 1, isRequesting: 1 }
+    })).toBe(true);
+  });
+
+  it('nhận diện lời mời khi có customText phù hợp và không phải "gợi ý"', () => {
+    expect(isReceivedFriendRequestItem({
+      recommItemType: 1,
+      dataInfo: { userId: 'u8a', recommType: 1, recommInfo: { customText: 'Muốn kết bạn với bạn' } }
+    })).toBe(true);
+    expect(isReceivedFriendRequestItem({
+      recommItemType: 1,
+      dataInfo: { userId: 'u8b', recommType: 1, recommInfo: { customText: 'Đã gửi lời mời kết bạn' } }
+    })).toBe(true);
+    // Có từ gợi ý -> không nhận diện nhầm
+    expect(isReceivedFriendRequestItem({
+      recommItemType: 1,
+      dataInfo: { userId: 'u8c', recommType: 1, recommInfo: { customText: 'Gợi ý kết bạn từ danh bạ' } }
+    })).toBe(false);
+  });
+
+  it('nhận diện reqStatus/friendStatus là 2', () => {
+    expect(isReceivedFriendRequestItem({
+      recommItemType: 1,
+      dataInfo: { userId: 'u9a', recommType: 1, reqStatus: 2 }
+    })).toBe(true);
+    expect(isReceivedFriendRequestItem({
+      recommItemType: 1,
+      dataInfo: { userId: 'u9b', recommType: 1, friendStatus: 2 }
+    })).toBe(true);
   });
 
   it('bỏ qua mục thiếu userId hoặc không hợp lệ', () => {

@@ -36,6 +36,9 @@ const FRIEND_EVENT_TYPE_REQUEST = 2;
 /** zca-js `FriendRecommendationsType.ReceivedFriendRequest` (dist/apis/getFriendRecommendations.js). */
 const RECOMM_TYPE_RECEIVED_FRIEND_REQUEST = 2;
 
+/** Từ khóa trong customText biểu thị lời mời kết bạn (loại trừ từ "gợi ý"). */
+const FRIEND_REQ_CUSTOM_TEXT_REGEX = /(?:lời mời kết bạn|muốn kết bạn|gửi lời mời|yêu cầu kết bạn|đã gửi lời mời|muốn làm quen|friend request)/i;
+
 const HOUR_WINDOW_MS = 60 * 60 * 1000;
 /** Gộp các sự kiện REQUEST liền nhau của một nick thành một sweep. */
 const EVENT_DEBOUNCE_MS = 10_000;
@@ -166,6 +169,26 @@ export function isReceivedFriendRequestItem(item) {
     return true;
   }
 
+  // 6. Cờ is_requesting (chuẩn Zalo: đối phương đang gửi yêu cầu kết bạn cho mình)
+  const requesting = info.is_requesting ?? item?.is_requesting ?? info.isRequesting ?? item?.isRequesting;
+  if (requesting === true || requesting === 1 || requesting === '1' || requesting === 'true') {
+    return true;
+  }
+
+  // 7. Văn bản customText thể hiện yêu cầu kết bạn (loại trừ trường hợp có từ "gợi ý")
+  const customText = String(info.recommInfo?.customText ?? info.customText ?? item?.customText ?? '').trim();
+  if (customText && FRIEND_REQ_CUSTOM_TEXT_REGEX.test(customText) && !/gợi ý|goi y/i.test(customText)) {
+    return true;
+  }
+
+  // 8. Trạng thái reqStatus/friendStatus là 2 (ReceivedFriendRequest)
+  if (
+    Number(info.reqStatus) === RECOMM_TYPE_RECEIVED_FRIEND_REQUEST
+    || Number(info.friendStatus) === RECOMM_TYPE_RECEIVED_FRIEND_REQUEST
+  ) {
+    return true;
+  }
+
   return false;
 }
 
@@ -243,13 +266,39 @@ class ZaloFriendAutoAcceptService {
     const items = Array.isArray(response?.recommItems) ? response.recommItems : [];
     const seenUserIds = new Set();
     const pending = [];
+    const unconfirmed = [];
+
     for (const item of items) {
+      const info = item?.dataInfo || item;
+      const uid = String(info?.userId ?? info?.uid ?? '').trim();
+      if (!uid || seenUserIds.has(uid)) continue;
+
       if (isReceivedFriendRequestItem(item)) {
-        const info = item?.dataInfo || item;
+        seenUserIds.add(uid);
+        pending.push(info);
+      } else {
+        unconfirmed.push(info);
+      }
+    }
+
+    // Với các mục chưa đủ thông tin nhận diện (lời mời từ rất lâu bị Zalo hạ type hoặc mất lời nhắn):
+    // Truy vấn trạng thái reqstatus để nhặt bù lời mời cũ, dừng khi đã gom đủ trần giờ (config.perHour)
+    if (pending.length < config.perHour && typeof api.getFriendRequestStatus === 'function') {
+      for (const info of unconfirmed) {
+        if (pending.length >= config.perHour) break;
         const uid = String(info?.userId ?? info?.uid ?? '').trim();
-        if (uid && !seenUserIds.has(uid)) {
-          seenUserIds.add(uid);
-          pending.push(info);
+        try {
+          const status = await api.getFriendRequestStatus(uid);
+          const isReq = status?.is_requesting === 1
+            || status?.is_requesting === true
+            || status?.is_requesting === '1'
+            || status?.isSeenFriendReq === true;
+          if (isReq && !seenUserIds.has(uid)) {
+            seenUserIds.add(uid);
+            pending.push(info);
+          }
+        } catch {
+          // Bỏ qua lỗi gọi getFriendRequestStatus của 1 user để không ngắt toàn bộ tiến trình
         }
       }
     }
