@@ -93,19 +93,26 @@ export class LocalStorageBackend {
         if (settled) return;
         settled = true;
         if (error) {
-          // Cần chờ fd release trước khi unlink. Có thể dùng 'finish' (nếu gọi .end()) hoặc
-          // 'close' (luôn emit kể cả khi destroyed). Subscribe cả hai rồi unlink 1 lần.
+          // Cần chờ fd release và unlink xong trước khi reject, để client nhận được 413 thì tệp dở đã bị xoá hoàn toàn.
           let unlinked = false;
-          const doUnlink = () => {
+          const doUnlinkAndReject = async () => {
             if (unlinked) return;
             unlinked = true;
-            fs.unlink(absPath).catch(() => {});
+            try {
+              await fs.unlink(absPath);
+            } catch {}
+            reject(error);
           };
-          out.once('close', doUnlink);
-          // Nếu stream chưa mở file (destroy quá sớm), 'close' vẫn fire — nhưng file chưa
-          // từng tồn tại nên unlink ENOENT được catch nuốt.
-          out.end();
-          reject(error);
+
+          if (out.closed) {
+            doUnlinkAndReject();
+          } else {
+            out.once('close', doUnlinkAndReject);
+            out.once('error', doUnlinkAndReject);
+            const timer = setTimeout(doUnlinkAndReject, 1000);
+            timer.unref?.();
+            out.destroy();
+          }
         } else {
           resolve({ size: written });
         }

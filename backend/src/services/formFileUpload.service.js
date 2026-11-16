@@ -270,6 +270,7 @@ export async function receiveLocalUpload({ form, uploadId, contentType, contentL
     result = await backend.putStream(session.objectKey, stream, { maxBytes: Number(session.maxBytes) });
   } catch (error) {
     if (error?.code === 'FILE_TOO_LARGE') {
+      await backend.delete(session.objectKey).catch(() => {});
       throw httpError('Tệp vượt quá dung lượng tối đa cho phép', 413, 'FILE_TOO_LARGE');
     }
     throw error;
