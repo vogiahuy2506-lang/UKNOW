@@ -675,10 +675,40 @@ describe('isReceivedFriendRequestItem — nhận diện lời mời kết bạn 
     })).toBe(true);
   });
 
-  it('nhận diện lời mời cũ đã mở xem trên điện thoại (isSeenFriendReq: true)', () => {
+  it('nhận diện lời mời cũ đã mở xem trên điện thoại (isSeenFriendReq: true, 1, "1", "true")', () => {
     expect(isReceivedFriendRequestItem({
       recommItemType: 1,
       dataInfo: { userId: 'u5', recommType: 1, isSeenFriendReq: true }
+    })).toBe(true);
+    expect(isReceivedFriendRequestItem({
+      recommItemType: 1,
+      dataInfo: { userId: 'u5b', recommType: 1, isSeenFriendReq: 1 }
+    })).toBe(true);
+    expect(isReceivedFriendRequestItem({
+      recommItemType: 1,
+      dataInfo: { userId: 'u5c', recommType: 1, isSeenFriendReq: '1' }
+    })).toBe(true);
+    expect(isReceivedFriendRequestItem({
+      recommItemType: 1,
+      dataInfo: { userId: 'u5d', recommType: 1, isSeenFriendReq: 'true' }
+    })).toBe(true);
+  });
+
+  it('nhận diện lời mời có fReqInfo hoặc tin nhắn trong fReqInfo/message', () => {
+    expect(isReceivedFriendRequestItem({
+      recommItemType: 1,
+      dataInfo: { userId: 'u5e', recommType: 1, fReqInfo: { time: 12345 } }
+    })).toBe(true);
+    expect(isReceivedFriendRequestItem({
+      recommItemType: 1,
+      dataInfo: { userId: 'u5f', recommType: 1, fReqInfo: { message: 'Chào bạn' } }
+    })).toBe(true);
+  });
+
+  it('nhận diện item phẳng không bọc trong dataInfo', () => {
+    expect(isReceivedFriendRequestItem({
+      userId: 'u5g',
+      recommType: 2
     })).toBe(true);
   });
 

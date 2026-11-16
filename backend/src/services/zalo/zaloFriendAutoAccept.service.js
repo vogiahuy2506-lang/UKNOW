@@ -121,17 +121,18 @@ export function summarizeRecommItems(items, nowMs) {
  *
  * Tiêu chí nhận diện (gỡ bỏ bẫy lời mời cũ bị Zalo trả lệch type hoặc đã xem trên điện thoại):
  *  1. dataInfo.recommType là 2 (kể cả số lẫn chuỗi "2")
- *  2. recommItemType cấp ngoài là 2 (kể cả số lẫn chuỗi "2")
- *  3. Hoặc có lời nhắn xin kết bạn từ người gửi (recommInfo.message không rỗng; gợi ý bạn của Zalo không bao giờ có tin nhắn)
- *  4. Hoặc cờ isSeenFriendReq === true (đã mở xem lời mời trên app điện thoại)
+ *  2. recommItemType cấp ngoài là 2 (kể cả số lẫn chuỗi "2") hoặc type mang giá trị 2
+ *  3. Hoặc có lời nhắn xin kết bạn từ người gửi (recommInfo/fReqInfo/message không rỗng; gợi ý bạn của Zalo không bao giờ có tin nhắn)
+ *  4. Hoặc có trường fReqInfo (Friend Request Info đặc trưng của lời mời kết bạn)
+ *  5. Hoặc cờ isSeenFriendReq (đã mở xem lời mời trên app điện thoại, hỗ trợ boolean true, số 1 hoặc chuỗi "1"/"true")
  *
  * @param {{ recommItemType?: number|string, dataInfo?: object }} item
  * @returns {boolean}
  */
 export function isReceivedFriendRequestItem(item) {
-  const info = item?.dataInfo;
+  const info = item?.dataInfo || item;
   if (!info) return false;
-  const userId = String(info.userId ?? '').trim();
+  const userId = String(info.userId ?? info.uid ?? '').trim();
   if (!userId) return false;
 
   // 1. dataInfo.recommType là 2 (kể cả số lẫn chuỗi)
@@ -139,19 +140,29 @@ export function isReceivedFriendRequestItem(item) {
     return true;
   }
 
-  // 2. recommItemType là 2 (kể cả số lẫn chuỗi)
-  if (Number(item?.recommItemType) === RECOMM_TYPE_RECEIVED_FRIEND_REQUEST) {
+  // 2. recommItemType cấp ngoài là 2 (kể cả số lẫn chuỗi "2") hoặc type là 2
+  if (
+    Number(item?.recommItemType) === RECOMM_TYPE_RECEIVED_FRIEND_REQUEST
+    || Number(item?.recommType) === RECOMM_TYPE_RECEIVED_FRIEND_REQUEST
+    || Number(info.type) === RECOMM_TYPE_RECEIVED_FRIEND_REQUEST
+  ) {
     return true;
   }
 
-  // 3. Có lời nhắn xin kết bạn
-  const msg = String(info.recommInfo?.message ?? '').trim();
+  // 3. Có lời nhắn xin kết bạn (hỗ trợ nhiều vị trí: recommInfo.message, fReqInfo.message, message)
+  const msg = String(info.recommInfo?.message ?? info.fReqInfo?.message ?? info.message ?? item?.message ?? '').trim();
   if (msg.length > 0) {
     return true;
   }
 
-  // 4. Cờ đã xem lời mời kết bạn trên di động
-  if (info.isSeenFriendReq === true) {
+  // 4. Có trường fReqInfo từ người gửi kết bạn
+  if (info.fReqInfo && typeof info.fReqInfo === 'object') {
+    return true;
+  }
+
+  // 5. Cờ đã xem lời mời kết bạn trên di động (hỗ trợ boolean, số 1 hoặc chuỗi "1"/"true")
+  const seen = info.isSeenFriendReq ?? item?.isSeenFriendReq ?? info.isSeen ?? item?.isSeen;
+  if (seen === true || seen === 1 || seen === '1' || seen === 'true') {
     return true;
   }
 
@@ -234,10 +245,11 @@ class ZaloFriendAutoAcceptService {
     const pending = [];
     for (const item of items) {
       if (isReceivedFriendRequestItem(item)) {
-        const uid = String(item.dataInfo?.userId ?? '').trim();
+        const info = item?.dataInfo || item;
+        const uid = String(info?.userId ?? info?.uid ?? '').trim();
         if (uid && !seenUserIds.has(uid)) {
           seenUserIds.add(uid);
-          pending.push(item.dataInfo);
+          pending.push(info);
         }
       }
     }
