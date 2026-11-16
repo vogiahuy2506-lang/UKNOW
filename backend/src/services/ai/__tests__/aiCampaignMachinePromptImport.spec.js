@@ -20,7 +20,7 @@ describe('isPlanTemplateDraftRequest — chỉ còn ở bộ lọc lịch sử',
     const users = listJs(srcRoot)
       .filter((file) => !file.endsWith('aiCampaignWizard.service.js'))
       .filter((file) => fs.readFileSync(file, 'utf8').includes('isPlanTemplateDraftRequest'));
-    expect(users.map((f) => path.relative(srcRoot, f))).toEqual(['services/ai/aiCampaign.service.js']);
+    expect(users.map((f) => path.relative(srcRoot, f).replace(/\\/g, '/'))).toEqual(['services/ai/aiCampaign.service.js']);
 
     const source = fs.readFileSync(users[0], 'utf8');
     const calls = source.split('\n').filter((line) => line.includes('isPlanTemplateDraftRequest('));

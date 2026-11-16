@@ -117,6 +117,9 @@ describe('dockerRequest / getSystemLogs over the configured endpoint', () => {
   });
 
   it('reads through a unix:// endpoint', async () => {
+    // Unix domain socket chỉ hỗ trợ trên POSIX (Linux/macOS). Trên Windows Node server.listen(path) là named pipe.
+    if (process.platform === 'win32') return;
+
     let socketPath = path.join(os.tmpdir(), `uknow-sm-${process.pid}-${Date.now()}.sock`);
     if (socketPath.length > 100) socketPath = `/tmp/uknow-sm-${process.pid}-${Date.now()}.sock`;
     const server = http.createServer((req, res) => {
